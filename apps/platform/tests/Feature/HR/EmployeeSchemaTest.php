@@ -195,4 +195,49 @@ class EmployeeSchemaTest extends TestCase
             }
         }
     }
+
+    /**
+     * Phase 8A.7 scope-creep guard: `employees` itself must never gain
+     * a document/file column -- document metadata lives entirely on
+     * `employee_documents`, never directly on Employee.
+     */
+    #[Test]
+    public function employees_table_has_no_document_columns(): void
+    {
+        $forbiddenColumns = ['document_id', 'file_path', 'storage_path', 'primary_document_id'];
+
+        foreach ($forbiddenColumns as $column) {
+            $this->assertFalse(
+                Schema::hasColumn('employees', $column),
+                "employees.{$column} must not exist -- document metadata belongs to EmployeeDocument, not Employee.",
+            );
+        }
+    }
+
+    /**
+     * Phase 8A.7 scope-creep guard: `employee_documents` must not claim
+     * capabilities that do not actually exist in this repository --
+     * no checksum/integrity column (never honestly computable without
+     * this checkpoint reading real file bytes, which it never does) and
+     * no malware-scan/quarantine column (no scanner exists anywhere in
+     * this repository; claiming one via a schema column would be
+     * dishonest, per the checkpoint's own "do not invent fake malware
+     * scanning" rule).
+     */
+    #[Test]
+    public function employee_documents_table_has_no_unimplemented_integrity_or_scan_columns(): void
+    {
+        $forbiddenColumns = [
+            'checksum', 'hash', 'sha256', 'virus_scan_status',
+            'malware_scan_status', 'quarantine_status', 'scan_status',
+            'is_expired', 'signed_url', 'public_url',
+        ];
+
+        foreach ($forbiddenColumns as $column) {
+            $this->assertFalse(
+                Schema::hasColumn('employee_documents', $column),
+                "employee_documents.{$column} must not exist -- no such capability actually exists in this repository (Phase 8A.7 dependency-discovery finding).",
+            );
+        }
+    }
 }

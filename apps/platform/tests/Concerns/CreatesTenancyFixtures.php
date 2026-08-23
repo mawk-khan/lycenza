@@ -15,6 +15,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmployeeCertification;
+use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Domain\HR\Infrastructure\EmployeeExperience;
 use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
@@ -313,6 +314,19 @@ trait CreatesTenancyFixtures
         return app(TenantContext::class)->withSchool(
             $employee->school,
             fn () => EmployeeCertification::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 8A.7: Employee Documents ---------------------------------
+
+    protected function createEmployeeDocument(Employee $employee, array $attributes = []): EmployeeDocument
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeDocument::factory()->create(array_merge([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
             ], $attributes)),

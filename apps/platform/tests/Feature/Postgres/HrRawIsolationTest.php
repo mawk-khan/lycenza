@@ -22,8 +22,9 @@ use Tests\TestCase;
  * `hr_employee_number_counters` (8A.1), `employee_personal_details`/
  * `employee_addresses`/`employee_emergency_contacts` (8A.2),
  * `hr_departments`/`positions` (8A.3), `employment_records`/
- * `employee_assignments` (8A.4), and `employee_qualifications`/
- * `employee_experience_records`/`employee_certifications` (8A.6).
+ * `employee_assignments` (8A.4), `employee_qualifications`/
+ * `employee_experience_records`/`employee_certifications` (8A.6), and
+ * `employee_documents` (8A.7).
  */
 class HrRawIsolationTest extends TestCase
 {
@@ -1194,6 +1195,105 @@ class HrRawIsolationTest extends TestCase
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
         $affected = DB::connection('pgsql')->delete('delete from employee_certifications where id = ?', [$certificationB->id]);
+
+        $this->assertSame(0, $affected);
+    }
+
+    // --- Phase 8A.7: employee_documents -------------------------------------
+
+    #[Test]
+    public function employee_documents_table_has_rls_enabled_and_forced(): void
+    {
+        $row = DB::connection('pgsql_admin')->selectOne(
+            'select relrowsecurity, relforcerowsecurity from pg_class '.
+            "where relname = 'employee_documents' and relnamespace = 'public'::regnamespace",
+        );
+
+        $this->assertTrue($row->relrowsecurity);
+        $this->assertTrue($row->relforcerowsecurity);
+    }
+
+    #[Test]
+    public function raw_select_on_employee_documents_with_no_school_context_returns_zero_rows(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+        $this->createEmployeeDocument($employee);
+
+        DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
+
+        $count = DB::connection('pgsql')->selectOne('select count(*) as c from employee_documents')->c;
+
+        $this->assertSame(0, (int) $count);
+    }
+
+    #[Test]
+    public function raw_select_with_school_a_context_sees_only_school_as_documents(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeA = $this->createEmployee($schoolA);
+        $employeeB = $this->createEmployee($schoolB);
+        $documentA = $this->createEmployeeDocument($employeeA);
+        $this->createEmployeeDocument($employeeB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $rows = DB::connection('pgsql')->select('select id from employee_documents');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame($documentA->id, $rows[0]->id);
+    }
+
+    #[Test]
+    public function raw_insert_of_a_document_for_a_different_school_than_the_active_context_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolB, $employeeB): void {
+            DB::connection('pgsql')->insert(
+                'insert into employee_documents (id, school_id, employee_id, category, storage_disk, storage_path, original_filename, mime_type, size_bytes, uploaded_at, created_at, updated_at) '.
+                'values (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now(), now())',
+                [(string) Str::orderedUuid(), $schoolB->id, $employeeB->id, 'other', 'local', 'employee-documents/rogue.pdf', 'rogue.pdf', 'application/pdf', 1000],
+            );
+        });
+    }
+
+    #[Test]
+    public function raw_update_of_a_document_across_schools_affects_zero_rows_not_an_error(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $documentB = $this->createEmployeeDocument($employeeB, ['category' => 'other']);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->update(
+            'update employee_documents set category = ? where id = ?',
+            ['id_proof', $documentB->id],
+        );
+
+        $this->assertSame(0, $affected);
+    }
+
+    #[Test]
+    public function raw_delete_of_a_document_across_schools_affects_zero_rows(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $documentB = $this->createEmployeeDocument($employeeB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->delete('delete from employee_documents where id = ?', [$documentB->id]);
 
         $this->assertSame(0, $affected);
     }

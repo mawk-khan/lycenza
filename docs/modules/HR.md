@@ -904,6 +904,155 @@ passed / 349 assertions).
 scheduled jobs/notifications/AI; payroll/attendance/leave/
 recruitment/performance.
 
+## Employee Documents (8A.7, implemented)
+
+**Dependency discovery, performed before any schema was written**: no
+shared Documents module exists anywhere in this repository. Confirmed
+by direct inspection, not assumption: no `documents` table/migration/
+model exists on this branch or on current `main` (`main` at
+`e0c4e1b90f2be87ba4903fba39237dfaa6b3e315`, inspected read-only —
+`git diff <8A-branch-base>..main` shows only Students/Guardians work
+since the branch point, zero Documents-related paths). ADR 0011
+(object storage strategy) and ADR 0012 (file/document domain
+architecture) are both "Accepted" as design *decisions*, still
+unimplemented — exactly as ADR 0028 already recorded in 8A.0. The only
+existing storage primitive is
+`App\Support\Tenancy\TenantStoragePath::for()`: a pure tenant-safe
+path-building function (prefixes `schools/{id}/...`, rejects `..`/
+leading-slash/null-byte/encoded traversal). It provides no document
+identity, metadata lifecycle, authorization, audit, malware scanning,
+retention, or content validation — a path helper is not a Documents
+module, and this checkpoint does not mistake it for one. This is
+**Case C** (no reusable Documents capability exists anywhere
+discovered).
+
+**Decision**: implement only the narrow, HR-scoped `employee_documents`
+metadata table HR.md's own 8A.0-era "Documents — narrow scope, not a
+parallel system" section already committed to — not a fresh
+architectural decision made under this checkpoint's pressure, but the
+already-accepted design being built for the first time. This is
+explicitly **metadata only**: `employee_documents` never holds file
+bytes, and no code in this checkpoint ever calls
+`Illuminate\Support\Facades\Storage`. `storage_disk`/`storage_path`
+describe where a file already lives or will live; placing one there is
+a future, appropriately-authorized process's responsibility, not
+8A.7's.
+
+**Schema**: `employee_documents` (School-owned, `TenantRls`-protected,
+composite FK `(employee_id, school_id) -> employees(id, school_id)`,
+`cascadeOnDelete`): `category` (id_proof|address_proof|
+employment_contract|appointment_letter|qualification_evidence|
+experience_evidence|certification_evidence|background_check|
+policy_acknowledgement|other — plain, application-validated string,
+matching `qualification_type`/`employment_type`'s exact convention;
+deliberately not a new School-configurable reference table, avoiding
+the EmployeeCategory-shaped taxonomy trap), `classification_tier`
+(database-**restricted to `restricted`/`highly_sensitive` only** — a
+CHECK constraint, not merely a default; `directory` is not a legal
+value for an Employee document, a stronger reading of "should never
+default to Directory" chosen deliberately here since no real HR
+document plausibly belongs at Directory tier), `storage_disk`/
+`storage_path`, `original_filename`, `mime_type`, `size_bytes`,
+`uploaded_by_user_id` (nullable FK to `users`, `nullOnDelete()`,
+matching `school_audit_events.actor_user_id`'s exact pattern),
+`uploaded_at`, `issued_on`/`expires_on` (both nullable, CHECK
+`expires_on >= issued_on` when both present — added beyond HR.md's
+original 8A.0-era field list, per this checkpoint's own brief, for
+documents that carry their own expiry such as a licence scan or an ID
+proof), `status` (active|archived, default active, **never
+hard-deleted** — HR.md's own already-written text for this table,
+verbatim).
+
+**Deliberately absent, and why**: no `checksum` (cannot be honestly
+computed without this checkpoint ever reading real file bytes, which
+it never does); no malware-scan/quarantine column (no scanner exists
+anywhere in this repository — claiming one via a schema column would
+be dishonest); no `document_id`/shared-Document FK (no shared
+`documents` table exists to reference); no `verification_status`
+(conflating "a document exists" with "the underlying credential is
+verified" is exactly what 8A.6's `EmployeeQualification`/
+`EmployeeCertification.verification_status` already owns exclusively —
+uploading/attaching evidence must never auto-verify a structured HR
+record); no `is_expired`/signed-URL/public-URL column (derived or
+simply never generated).
+
+**Sole write path**: `App\Domain\HR\Application\EmployeeDocumentService`
+— `register()`/`update()`/`archive()` only, no `remove()` (matches the
+reference-entity lifecycle pattern (rule 73) GradeLevel/Department/
+Position/etc already use, not the hard-delete pattern 8A.2/8A.6's
+simpler child records use). `register()` never accepts a final
+`storage_path` from the caller — it always derives one via
+`TenantStoragePath::for($employee->school, $fragment)` from a
+caller-supplied relative fragment, so a caller can never control the
+persisted path outside the Employee's own School prefix, structurally
+rather than by convention. `storage_disk`/`storage_path` are immutable
+after registration — `update()` strips them alongside `school_id`/
+`employee_id`, so a caller cannot silently re-point an existing
+metadata row at different file content. A classification-tier change
+via `update()` is allowed (HR staff may need to correct an
+over/under-classification) but is captured in audit metadata
+(`classificationChanged`), making it visible rather than silent —
+reviewed explicitly during this checkpoint's security review, not
+overlooked.
+
+**No file-handling capability exists, structurally proven**:
+`EmployeeDocumentService`'s public surface is exactly `{register,
+update, archive}` (a reflection-based test asserts this), and its
+source contains no `Storage::` call (asserted directly). A companion
+test confirms no generic `documents` table exists anywhere in the
+schema. Together these are 8A.7's own "Documents dependency" proof
+(the brief's own required structural evidence that no duplicate
+generic Documents platform was silently introduced) — not just a
+prose claim.
+
+**Document evidence association**: `EmployeeDocument` is owned
+directly by `Employee` only — no `qualification.document_id`/
+`experience.document_id`/`certification.document_id` column was
+added, and no FK exists in the reverse direction either. A document's
+`category` value (e.g. `qualification_evidence`) is the only, loose,
+non-relational indicator of its purpose — exactly the same pattern
+HR.md's original text already used ("qualification certificate" as an
+example `category` value). Qualification/Experience/Certification:
+none (no FK either direction).
+
+**Privacy**: Directory — none (structurally impossible, not merely
+undefaulted). Restricted — the default and floor for every Employee
+document. Highly Sensitive — legal, selectable at registration/update
+time, for government identity evidence, background-check evidence, and
+similar. No API/UI/read endpoint exists in this checkpoint at all
+(matches every 8A.1–8A.6 checkpoint's "no controllers" scope), so there
+is no exposure surface yet to review — sensitive-data read
+authorization is explicitly deferred to 8A.10.
+
+**Audit**: `hr.employee_document.created`/`.updated`/`.archived`
+(`AuditRecorder::school()`) — metadata limited to ids, `category`,
+`classification_tier`, changed field *names*, and a
+`classificationChanged` flag — never `original_filename`, never
+`storage_path`, never file content. No parallel HR audit subsystem.
+
+**Tests added**: 22 in `EmployeeDocumentTest` (identity, ownership,
+classification CHECK constraint, expiry-range validity, storage-path
+derivation and traversal rejection, immutability of
+`storage_disk`/`storage_path`, audit minimization, no-authorization-
+coupling, and the two structural Documents-dependency proofs), 2
+schema-creep guards appended to `EmployeeSchemaTest` (no document
+columns on `employees`; no unimplemented integrity/scan columns on
+`employee_documents`), and 6 raw-SQL RLS/composite-FK tests appended to
+`HrRawIsolationTest` — 30 new tests total (321 passed, 537 assertions
+for the full precise-path HR suite, up from the 8A.6 baseline of 291
+passed / 481 assertions).
+
+**Deferred, correctly**: real file upload/storage-write capability
+(depends on a real shared Documents module or an explicitly-designed
+secure upload pipeline, neither of which exists yet); malware
+scanning; checksum/content-integrity tracking; document retention
+policy; `EmployeeCategory`; UI/controllers/routes; public/mobile API;
+OCR/AI/document intelligence; auto-verification of
+Qualification/Certification from an attached document (a file existing
+does not prove authenticity — verification remains an explicit,
+separate HR domain action); full `hr.*` capability enforcement
+(8A.10).
+
 ## Employee lifecycle — state responsibility matrix
 
 Rejecting one overloaded status enum (brief's explicit warning) in
@@ -1110,7 +1259,7 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.4  Employment Records & Employee Assignments                   (EmploymentRecord, EmployeeAssignment, primary-assignment invariant)
 8A.5  Reporting Hierarchy                                         (manager_assignment_id validation, cycle prevention, resolution queries — no new tables) [implemented]
 8A.6  Qualifications, Experience & Certifications                 (EmployeeQualification, EmployeeExperience, EmployeeCertification) [implemented]
-8A.7  Employee Documents                                          (employee_documents — narrow scope, see "Documents" above)
+8A.7  Employee Documents                                          (employee_documents — narrow scope, see "Documents" above) [implemented]
 8A.8  Employee Directory                                          (search/filter/paginate API + list UI)
 8A.9  Employee Profile Workspace                                  (tabbed detail UI — first of its kind in this codebase)
 8A.10 HR Permissions & Sensitive-Data Controls                    (capability seeder rollout, field-suppression proof)

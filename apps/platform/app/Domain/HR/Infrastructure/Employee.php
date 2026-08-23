@@ -121,6 +121,12 @@ class Employee extends Model
         return $this->hasMany(EmployeeCertification::class);
     }
 
+    /** @return HasMany<EmployeeDocument, $this> */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(EmployeeDocument::class);
+    }
+
     public function isActive(): bool
     {
         return $this->record_status === 'active';
