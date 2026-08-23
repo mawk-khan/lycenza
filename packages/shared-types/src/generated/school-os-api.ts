@@ -619,6 +619,233 @@ export interface paths {
         patch: operations["updateSubjectOffering"];
         trace?: never;
     };
+    "/schools/{schoolId}/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a School's Students. Requires students.view. */
+        get: operations["listStudents"];
+        put?: never;
+        /** Creates a Student. Requires students.manage. Idempotency-Key required. */
+        post: operations["createStudent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/students/{studentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Student. Requires students.view. */
+        get: operations["getStudent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates Student identity fields. Requires students.manage. */
+        patch: operations["updateStudent"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/students/{studentId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Changes a Student's status (active/inactive). Requires students.manage. Idempotency-Key required. */
+        post: operations["changeStudentStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/students/{studentId}/guardians": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a Student's Guardian relationships. Requires students.view. */
+        get: operations["listStudentGuardianRelationships"];
+        put?: never;
+        /** Links a Guardian to a Student. Requires BOTH students.manage AND guardians.manage (the operation mutates both domain identities' relationship at once). Idempotency-Key required. */
+        post: operations["linkGuardianToStudent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/student-guardian-relationships/{relationshipId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlinks (hard-deletes the relationship row -- there is no soft-deactivation column). Preserves both the Student and Guardian identity rows, and any other relationship. Requires BOTH students.manage AND guardians.manage. */
+        delete: operations["unlinkGuardianFromStudent"];
+        options?: never;
+        head?: never;
+        /** Updates relationshipType/authority flags (never isPrimary -- see the .../primary action). Requires BOTH students.manage AND guardians.manage. */
+        patch: operations["updateStudentGuardianRelationship"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/student-guardian-relationships/{relationshipId}/primary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Promotes this relationship to primary for its Student, demoting whichever relationship was previously primary in the same transaction. Requires BOTH students.manage AND guardians.manage. Idempotency-Key required. */
+        post: operations["setPrimaryGuardian"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/guardians": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a School's Guardians. Requires guardians.view. */
+        get: operations["listGuardians"];
+        put?: never;
+        /** Creates a Guardian (identity only -- contact information is a separate call, see .../contacts below). Requires guardians.manage. Idempotency-Key required. */
+        post: operations["createGuardian"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/guardian-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exact-match, same-School-only, HMAC-keyed candidate lookup by contact value -- "does a Guardian with this email/mobile already exist here." Never decrypts every contact row, never crosses Schools, never auto-merges; may return multiple candidates (household-shared contact). Requires guardians.view. */
+        post: operations["findGuardianCandidates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/guardians/{guardianId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Guardian, including its contacts and linked Students. Requires guardians.view. */
+        get: operations["getGuardian"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates Guardian identity fields. Requires guardians.manage. */
+        patch: operations["updateGuardian"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/guardians/{guardianId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Changes a Guardian's status (active/inactive). Requires guardians.manage. Idempotency-Key required. */
+        post: operations["changeGuardianStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/guardians/{guardianId}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds a Guardian contact (email/mobile) -- encrypted at rest with a keyed exact-match lookup digest (ADR 0028), never stored as plaintext. Requires guardians.manage. Idempotency-Key required. */
+        post: operations["addGuardianContact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/guardian-contacts/{contactId}/primary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Promotes this contact to primary for its type, demoting whichever contact was previously primary in the same transaction. Requires guardians.manage. Idempotency-Key required. */
+        post: operations["setPrimaryGuardianContact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/guardian-contacts/{contactId}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivates a contact (not deleted). Requires guardians.manage. Idempotency-Key required. */
+        post: operations["deactivateGuardianContact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -943,6 +1170,142 @@ export interface components {
             sequence?: number | null;
             weekly_periods_target?: number | null;
         };
+        /** @description List-row shape -- deliberately excludes dateOfBirth (Highly Sensitive children's data, docs/security/DATA-CLASSIFICATION.md: minimized default visibility in broad list views). See Student for the full single-record shape. */
+        StudentSummary: {
+            /** Format: uuid */
+            id: string;
+            studentNumber: string;
+            firstName: string;
+            middleName?: string | null;
+            lastName?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        /** @description Full single-record shape (show/create/update responses only -- never the list response, see StudentSummary). */
+        Student: {
+            /** Format: uuid */
+            id: string;
+            studentNumber: string;
+            firstName: string;
+            middleName?: string | null;
+            lastName?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** Format: date */
+            dateOfBirth: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description student_number uniqueness is enforced by StudentService/the database (school_id, student_number), not by this contract -- a duplicate is a 422 with code DUPLICATE_STUDENT_NUMBER. */
+        StudentInput: {
+            student_number: string;
+            first_name: string;
+            middle_name?: string | null;
+            last_name?: string | null;
+            /** Format: date */
+            date_of_birth: string;
+        };
+        GuardianSummary: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            middleName?: string | null;
+            lastName?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        /** @description Full single-record shape (show response only). */
+        Guardian: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            middleName?: string | null;
+            lastName?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            contacts: components["schemas"]["GuardianContact"][];
+            students: {
+                /** Format: uuid */
+                relationshipId: string;
+                student: {
+                    /** Format: uuid */
+                    id: string;
+                    studentNumber: string;
+                    firstName: string;
+                    lastName?: string | null;
+                };
+                relationshipType: components["schemas"]["RelationshipType"];
+                isPrimary: boolean;
+                isLegalGuardian: boolean;
+                isEmergencyContact: boolean;
+                isAuthorizedPickup: boolean;
+            }[];
+        };
+        GuardianInput: {
+            first_name: string;
+            middle_name?: string | null;
+            last_name?: string | null;
+        };
+        /** @enum {string} */
+        ContactType: "email" | "mobile";
+        /** @enum {string} */
+        RelationshipType: "mother" | "father" | "parent" | "step_parent" | "grandparent" | "legal_guardian" | "foster_guardian" | "sibling" | "relative" | "other";
+        /** @description Approved fields only -- never encrypted_value, lookup_hash, or lookup_key_version (docs/modules/STUDENT-GUARDIAN-IDENTITY.md, "Sensitive response exclusions"). `value` is the decrypted plaintext, returned only to an actor already holding guardians.view. */
+        GuardianContact: {
+            /** Format: uuid */
+            id: string;
+            type: components["schemas"]["ContactType"];
+            value: string;
+            label?: string | null;
+            isPrimary: boolean;
+            isActive: boolean;
+            /** Format: date-time */
+            verifiedAt?: string | null;
+        };
+        /** @description `value` for type=mobile must already be E.164 (docs/modules/STUDENT-GUARDIAN-IDENTITY.md, "Guardian contact mutation") -- a local number is rejected, never silently converted. */
+        GuardianContactInput: {
+            type: components["schemas"]["ContactType"];
+            value: string;
+            label?: string | null;
+            /** @default false */
+            is_primary: boolean;
+        };
+        GuardianCandidateLookupInput: {
+            type: components["schemas"]["ContactType"];
+            value: string;
+        };
+        StudentGuardianRelationship: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            studentId: string;
+            guardian: components["schemas"]["GuardianSummary"];
+            relationshipType: components["schemas"]["RelationshipType"];
+            isPrimary: boolean;
+            isLegalGuardian: boolean;
+            isEmergencyContact: boolean;
+            isAuthorizedPickup: boolean;
+        };
+        /** @description Deliberately excludes is_primary -- see the .../primary action (StudentGuardianRelationshipService.link() never auto-promotes). */
+        StudentGuardianRelationshipLinkInput: {
+            /** Format: uuid */
+            guardian_id: string;
+            relationship_type: components["schemas"]["RelationshipType"];
+            /** @default false */
+            is_legal_guardian: boolean;
+            /** @default false */
+            is_emergency_contact: boolean;
+            /** @default false */
+            is_authorized_pickup: boolean;
+        };
+        StudentGuardianRelationshipUpdateInput: {
+            relationship_type?: components["schemas"]["RelationshipType"];
+            is_legal_guardian?: boolean;
+            is_emergency_contact?: boolean;
+            is_authorized_pickup?: boolean;
+        };
     };
     responses: never;
     parameters: {
@@ -955,6 +1318,10 @@ export interface components {
         AcademicYearId: string;
         /** @description When true, includes inactive/archived reference rows (default excludes them). */
         IncludeInactive: boolean;
+        StudentId: string;
+        GuardianId: string;
+        RelationshipId: string;
+        ContactId: string;
     };
     requestBodies: never;
     headers: {
@@ -2718,6 +3085,620 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["SubjectOffering"];
+                    };
+                };
+            };
+        };
+    };
+    listStudents: {
+        parameters: {
+            query?: {
+                /** @description Exact match. */
+                student_number?: string;
+                /** @description Matches first or last name. */
+                name?: string;
+                status?: "active" | "inactive";
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StudentSummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+        };
+    };
+    createStudent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Student"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate Student Number within this School). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getStudent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: components["parameters"]["StudentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Student"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateStudent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: components["parameters"]["StudentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StudentInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Student"];
+                    };
+                };
+            };
+        };
+    };
+    changeStudentStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: components["parameters"]["StudentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    status: "active" | "inactive";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Student"];
+                    };
+                };
+            };
+        };
+    };
+    listStudentGuardianRelationships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: components["parameters"]["StudentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StudentGuardianRelationship"][];
+                    };
+                };
+            };
+        };
+    };
+    linkGuardianToStudent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: components["parameters"]["StudentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentGuardianRelationshipLinkInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StudentGuardianRelationship"];
+                    };
+                };
+            };
+            /** @description Validation failure -- a nonexistent/cross-School guardianId (indistinguishable message either way), a duplicate relationship for this (Student, Guardian) pair, or an invalid relationshipType. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    unlinkGuardianFromStudent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                relationshipId: components["parameters"]["RelationshipId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlinked. No content. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateStudentGuardianRelationship: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                relationshipId: components["parameters"]["RelationshipId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StudentGuardianRelationshipUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StudentGuardianRelationship"];
+                    };
+                };
+            };
+        };
+    };
+    setPrimaryGuardian: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                relationshipId: components["parameters"]["RelationshipId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StudentGuardianRelationship"];
+                    };
+                };
+            };
+        };
+    };
+    listGuardians: {
+        parameters: {
+            query?: {
+                /** @description Matches first or last name. */
+                name?: string;
+                status?: "active" | "inactive";
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GuardianSummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+        };
+    };
+    createGuardian: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GuardianSummary"];
+                    };
+                };
+            };
+        };
+    };
+    findGuardianCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianCandidateLookupInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GuardianSummary"][];
+                    };
+                };
+            };
+            /** @description Malformed email/mobile input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getGuardian: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                guardianId: components["parameters"]["GuardianId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Guardian"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateGuardian: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                guardianId: components["parameters"]["GuardianId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["GuardianInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GuardianSummary"];
+                    };
+                };
+            };
+        };
+    };
+    changeGuardianStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                guardianId: components["parameters"]["GuardianId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    status: "active" | "inactive";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GuardianSummary"];
+                    };
+                };
+            };
+        };
+    };
+    addGuardianContact: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                guardianId: components["parameters"]["GuardianId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianContactInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GuardianContact"];
+                    };
+                };
+            };
+            /** @description Malformed email/mobile, or conflicts with an existing contact/primary for this Guardian. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setPrimaryGuardianContact: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                contactId: components["parameters"]["ContactId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GuardianContact"];
+                    };
+                };
+            };
+        };
+    };
+    deactivateGuardianContact: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                contactId: components["parameters"]["ContactId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GuardianContact"];
                     };
                 };
             };

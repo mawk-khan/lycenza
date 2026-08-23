@@ -3,12 +3,14 @@
 Status: `students`, `guardians`, their first-class relationship
 (`student_guardian_relationships`, Phase 1A.2), Guardian contact
 information with a searchable-encrypted-PII architecture
-(`guardian_contacts`, Phase 1A.3), and `students.*`/`guardians.*`
+(`guardian_contacts`, Phase 1A.3), `students.*`/`guardians.*`
 authorization capabilities plus the supported Application-layer
 mutation services (`StudentService`, `GuardianService`,
-`StudentGuardianRelationshipService`, Phase 1A.4) exist. No API, UI,
-domain events, addresses, User/persona linking, or verification
-workflows (OTP/email/SMS) exist yet — see "Deferred" below. This
+`StudentGuardianRelationshipService`, Phase 1A.4), and the
+administrative `/api/v1` HTTP surface exposing all of the above to
+authenticated School staff (Phase 1A.5) exist. No Vue UI, domain
+events, addresses, User/persona linking, or verification workflows
+(OTP/email/SMS) exist yet — see "Deferred" below. This
 document will grow as later Phase 1A checkpoints add those pieces; it
 intentionally does not describe work that has not landed.
 
@@ -424,18 +426,20 @@ indexes" above and `tests/Feature/Postgres/GuardianContactIntegrityTest.php`.
   this is possible later without a schema change, but no rotation
   workflow (a backfill job re-hashing every row under a new key) is
   implemented — see ADR 0028.
-- **API, UI, domain events** — none exist yet (Phase 1A.4 added audit
-  events for the new Student/Guardian/relationship mutations, matching
-  GuardianContact's Phase 1A.3 precedent, but deliberately no
+- **Vue administrative UI** — the HTTP boundary exists (Phase 1A.5,
+  see "Administrative HTTP boundary" below) but nothing renders it yet;
+  the next Phase 1A checkpoint.
+- **Public/mobile/parent-portal API** — the `/api/v1` surface added in
+  Phase 1A.5 is the same *administrative* surface every other School
+  OS module uses (Campus, Academic Year, ...), reached by authenticated
+  School staff via Sanctum, not a new public contract. A Guardian/
+  Student-facing portal API remains unbuilt and explicitly out of
+  scope.
+- **Domain events** — none exist yet (Phase 1A.4/1A.5 added audit
+  events for every Student/Guardian/relationship/contact mutation,
+  matching GuardianContact's Phase 1A.3 precedent, but deliberately no
   transactional-outbox domain events — see "Application services"
   below for why).
-- **Form/shape validation** (required fields, string lengths, date
-  formats) for the new Application services — deferred to the
-  controller layer that will call them (Phase 1A.5), matching
-  `AcademicYearController::store()`'s `$request->validate()` pattern.
-  The services validate genuine *domain* invariants only (duplicate
-  Student Number, valid status values, same-School Student/Guardian) —
-  not basic input shape, which has no meaning without an HTTP request
   to validate.
 
 ## Authorization (Phase 1A.4)
@@ -695,3 +699,360 @@ module reacting to `student_guardian.linked` to notify a newly-linked
 Guardian) is the point to add the event **and** register it in
 `WebhookEventRegistry` if it should ever be externally subscribable
 (rule 45) — not before.
+
+## Administrative HTTP boundary (Phase 1A.5)
+
+### Which HTTP architecture, and why
+
+The existing `/api/v1/schools/{schoolId}/...` surface (`routes/api.php`,
+`docs/architecture/API.md`) is **not** a public/mobile-only API — it is
+already the *administrative* HTTP surface every other School OS module
+uses (Campus, Academic Year, Grade Level, Subject, webhook
+management, ...): Sanctum-authenticated, `school-membership`-scoped,
+capability-gated. Student/Guardian identity reuses this exact
+architecture rather than inventing a second one — a new top-level
+`/api/v2` or a bespoke "admin API" would have been the kind of
+speculative parallel architecture CLAUDE.md rule 2 rejects. A genuine
+public parent/student-portal API remains a distinct, unbuilt surface
+(see "Deferred" above) — nothing in this checkpoint exposes Student/
+Guardian data outside authenticated School staff.
+
+Every new route lives inside the existing
+`Route::middleware(['auth:sanctum', 'school-membership'])->prefix('schools/{school}')`
+group in `routes/api.php` — `school-membership`
+(`App\Http\Middleware\Api\EnsureSchoolMembershipContext`) re-verifies a
+real, active `SchoolMembership` for the route's `{school}` id (never
+trusting it merely because it parses as a UUID, rule 19) and sets
+`TenantContext` for the whole request before any controller code runs,
+exactly like every other nested resource. Controllers never call
+`TenantContext::withSchool()` themselves (unlike Application services
+or tests) — the ambient request-scoped context set by this middleware
+is already active by the time a controller method runs.
+
+### Controller structure and thinness
+
+Four new controllers, one per resource concern, each thin by
+construction — matching `CampusController`/`AcademicYearController`/
+`RoomController`'s established shape exactly:
+
+- `App\Domain\Students\Http\Controllers\StudentController`
+- `App\Domain\Guardians\Http\Controllers\GuardianController`
+- `App\Domain\Guardians\Http\Controllers\GuardianContactController`
+- `App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController`
+
+Every mutation delegates entirely to the Phase 1A.4/1A.3 Application
+services (`StudentService`, `GuardianService`,
+`StudentGuardianRelationshipService`, `GuardianContactService`) — no
+controller computes a lookup hash, encrypts/decrypts a value itself,
+writes a relationship row directly, or duplicates the Student Number
+uniqueness check. `Student::guardians()->attach()`/`sync()`/
+`syncWithoutDetaching()` are never called anywhere in the HTTP layer
+(confirmed by a repository-wide grep before commit, and by Phase
+1A.3's still-passing regression test proving that path fails closed).
+
+### Validation convention
+
+Inline `$request->validate([...])` per action (the established
+convention — no Form Request classes, no API Resource classes, no DTO
+framework exist anywhere in this codebase, and none were introduced
+here). Every write uses an explicit whitelisted array — never
+`Model::create($request->all())`/`$model->update($request->all())` —
+so a client cannot inject `id`, `school_id`, `created_at`, or any other
+unlisted field regardless of what the request body contains.
+
+`school_id` is **never** read from client input anywhere in this HTTP
+layer: it always derives from the route-bound, membership-verified
+`School $school` (Student/Guardian create) or from the resolved
+parent/child model's own `school_id` (relationship linking derives it
+from `$student->school_id`, already tenant-verified by `Student::query()->findOrFail()`'s
+own `SchoolScope`).
+
+### Pagination
+
+`GET .../students` and `GET .../guardians` are the first real
+implementations of the `page`/`per_page` convention `docs/architecture/API.md`
+already documented but no prior endpoint needed (every Phase 0D
+catalog — Campus, Academic Year, Subject, ... — is small enough per
+School that `->get()` was sufficient; Students/Guardians are not).
+Laravel's `paginate()`, `per_page` bounded `[1, 100]` (default `25`,
+matching the OpenAPI `PerPage` parameter exactly), response shape
+`{ data: [...], meta: { page, perPage, total } }` matching the
+`PaginationMeta` OpenAPI schema. `page` is read directly from the
+query string by Laravel's paginator (no separate validation needed —
+an out-of-range page number returns an empty `data` array, never an
+error).
+
+### Tenant-safe resource resolution
+
+Every singular resource (`Student`, `Guardian`, `GuardianContact`,
+`StudentGuardianRelationship`) is resolved via
+`Model::query()->findOrFail($id)` — never implicit route-model
+binding (matching every existing controller's established reason: the
+`school-membership` middleware must have already run and set
+`TenantContext` before `BelongsToSchool`'s `SchoolScope` can safely
+apply; implicit binding resolves too early in the middleware pipeline
+for that to be guaranteed). Because `SchoolScope` is a global Eloquent
+scope, a foreign-School id is invisible to the query — `findOrFail()`
+throws `ModelNotFoundException`, which Laravel renders as a plain `404`
+indistinguishable from a genuinely nonexistent id. **No controller
+anywhere in this checkpoint returns a message like "this record belongs
+to another School"** — that would leak cross-tenant existence (rule
+25). `StudentGuardianRelationshipApiTest::a_foreign_school_student_is_inaccessible_for_linking`
+and the equivalent Student/Guardian/contact tests prove a foreign-School
+id and a genuinely random UUID produce byte-identical `404` responses.
+
+A relationship's `guardian_id` request-body field (not a route
+parameter) uses Laravel's own `Rule::exists('guardians', 'id')->where('school_id', $school->id)`
+validation rule instead — a foreign-School or nonexistent id both fail
+with the identical generic "the selected guardian id is invalid" `422`
+validation message, the same non-disclosure property applied to a body
+field instead of a path segment.
+
+Nesting follows `RoomController`/`AcademicTermController`'s exact
+established split: index/store nest under the owning parent
+(`GET/POST .../guardians/{guardian}/contacts`, `GET/POST
+.../students/{student}/guardians`) because creation genuinely requires
+knowing the parent; singular show/update/setPrimary/destroy-shaped
+actions resolve by their own id via a flat, top-level path
+(`.../guardian-contacts/{contact}/...`,
+`.../student-guardian-relationships/{relationship}`), never
+re-nested under the parent that created them.
+
+### Route inventory
+
+| Method | Path | Capability | Idempotent |
+|---|---|---|---|
+| GET | `/schools/{school}/students` | `students.view` | |
+| POST | `/schools/{school}/students` | `students.manage` | ✓ |
+| GET | `/schools/{school}/students/{student}` | `students.view` | |
+| PATCH | `/schools/{school}/students/{student}` | `students.manage` | |
+| POST | `/schools/{school}/students/{student}/status` | `students.manage` | ✓ |
+| GET | `/schools/{school}/students/{student}/guardians` | `students.view` | |
+| POST | `/schools/{school}/students/{student}/guardians` | `students.manage` **+** `guardians.manage` | ✓ |
+| PATCH | `/schools/{school}/student-guardian-relationships/{relationship}` | `students.manage` **+** `guardians.manage` | |
+| POST | `/schools/{school}/student-guardian-relationships/{relationship}/primary` | `students.manage` **+** `guardians.manage` | ✓ |
+| DELETE | `/schools/{school}/student-guardian-relationships/{relationship}` | `students.manage` **+** `guardians.manage` | |
+| GET | `/schools/{school}/guardians` | `guardians.view` | |
+| POST | `/schools/{school}/guardians` | `guardians.manage` | ✓ |
+| POST | `/schools/{school}/guardian-candidates` | `guardians.view` | |
+| GET | `/schools/{school}/guardians/{guardian}` | `guardians.view` | |
+| PATCH | `/schools/{school}/guardians/{guardian}` | `guardians.manage` | |
+| POST | `/schools/{school}/guardians/{guardian}/status` | `guardians.manage` | ✓ |
+| POST | `/schools/{school}/guardians/{guardian}/contacts` | `guardians.manage` | ✓ |
+| POST | `/schools/{school}/guardian-contacts/{contact}/primary` | `guardians.manage` | ✓ |
+| POST | `/schools/{school}/guardian-contacts/{contact}/deactivate` | `guardians.manage` | ✓ |
+
+`idempotent` follows the established precedent exactly: every
+create/state-transition POST gets it (matching `academic-years.store`/
+`.activate`/`.close`, `campuses.store`); PATCH updates never do
+(matching `campuses.update`); DELETE never does (an already-deleted
+resource 404s harmlessly on retry — the same natural idempotency
+`WebhookSubscriptionController::destroy()` relies on).
+
+Every GET action authorizes via `$this->authorizeCapability(...)`
+called as the controller method's first line (matching
+`AcademicYearController::index()`/`show()`); every mutation action
+authorizes via **both** the `capability:` route middleware above
+**and** the identical `$this->authorizeCapability(...)` call inside the
+controller — deliberately redundant defense-in-depth, the same
+double-check `CampusController::store()`/`update()` already perform.
+The dual-capability relationship-mutation routes stack two separate
+`capability:` middleware entries (`'capability:students.manage',
+'capability:guardians.manage'`) — no new middleware was written;
+`EnsureCapability` already supports being applied more than once per
+route with different arguments.
+
+### Student HTTP surface
+
+**List** (`GET .../students`) — filters: `student_number` (exact
+match), `name` (`ILIKE '%term%'` against `first_name`/`last_name` —
+deliberately simple; no `pg_trgm`/GIN index was added, since no
+existing search implementation in this codebase established that
+pattern yet and adding one would be new infrastructure for a need this
+checkpoint doesn't yet have evidence of — documented here as a known
+future scaling concern, not a gap), `status` (`active`/`inactive`),
+`per_page`. Response rows: `id`, `studentNumber`, `firstName`,
+`middleName`, `lastName`, `status` — **deliberately excludes
+`dateOfBirth`** (a summary/list view of Highly Sensitive children's
+data, `docs/security/DATA-CLASSIFICATION.md`: "minimized default
+visibility... not included in broad list/summary views by default").
+
+**Show** (`GET .../students/{student}`) — full detail: adds
+`dateOfBirth`, `createdAt`, `updatedAt` to the list row's fields — a
+single-record view is exactly the case DATA-CLASSIFICATION.md
+describes as appropriate for a Highly Sensitive field, and it is
+already gated by the same `students.view` capability check.
+
+**Create** (`POST .../students`) — `student_number`, `first_name`,
+`middle_name` (nullable), `last_name` (nullable), `date_of_birth`
+required/validated at the HTTP layer for shape only; the *duplicate
+Student Number* domain check is `StudentService`'s alone (no
+`Rule::unique()` duplicated here — the brief explicitly forbids
+duplicating this logic in the controller). Returns the full detail
+shape, `201`.
+
+**Update** (`PATCH .../students/{student}`) — same fields, all
+`sometimes`; never `id`/`school_id`/`created_at`/`status` (status has
+its own endpoint).
+
+**Status** (`POST .../students/{student}/status`) — `status` validated
+`in:active,inactive` at the HTTP layer (a clean `422` for anything
+else, before `StudentService::changeStatus()`'s own
+`InvalidStudentStatusException` would even be reached — both layers
+validate the same invariant, matching `CampusController`'s established
+`status` field pattern).
+
+### Guardian HTTP surface
+
+**List** (`GET .../guardians`) — filters: `name` (ILIKE, same caveat as
+Student), `status`, `per_page`. Rows: `id`, `firstName`, `middleName`,
+`lastName`, `status` — no contacts, no relationships (a list view
+should not eagerly expose every Guardian's contact information).
+
+**Show** (`GET .../guardians/{guardian}`) — full detail: identity
+fields **plus** `contacts` (every contact, see representation below)
+**plus** `students` (one entry per linked `StudentGuardianRelationship`:
+`relationshipId`, a minimal `student` summary, `relationshipType`, and
+the four boolean authority flags).
+
+**Create** (`POST .../guardians`) — `first_name`, `middle_name`
+(nullable), `last_name` (nullable). Guardian creation and contact
+creation remain two separate endpoints/calls (this checkpoint's brief:
+"prefer understandable domain operations over a giant ERP payload") —
+a future UI performs create-Guardian, then add-contact, then
+link-to-Student as three explicit calls, not one nested mega-payload.
+
+**Update** (`PATCH .../guardians/{guardian}`) — same fields,
+`sometimes`.
+
+**Status** (`POST .../guardians/{guardian}/status`) — identical shape
+to Student's.
+
+**Contact display** — approved fields only, explicitly listed (never
+`GuardianContact::toArray()`): `id`, `type`, `value` (the *decrypted*
+plaintext — reading `$contact->encrypted_value` directly returns the
+decrypted value in-memory via Laravel's `encrypted` Eloquent cast; the
+model's own `$hidden` only suppresses `toArray()`/`toJson()`, so
+building the response array explicitly, field by field, is what
+actually keeps ciphertext out — this checkpoint never calls
+`toArray()`/`toJson()` on a `GuardianContact` anywhere), `label`,
+`isPrimary`, `isActive`, `verifiedAt`. `encrypted_value`, `lookup_hash`,
+and `lookup_key_version` are referenced nowhere in the HTTP layer.
+
+**Contact mutation** (`POST .../guardians/{guardian}/contacts`,
+`.../guardian-contacts/{contact}/primary`,
+`.../guardian-contacts/{contact}/deactivate`) — thin wrappers over
+`GuardianContactService`'s unchanged `create()`/`setPrimary()`/
+`deactivate()` (Phase 1A.3, never rewritten). The controller's only
+cryptography-adjacent responsibility is translating the two failure
+modes that service can raise into the established validation response
+shape rather than a raw `500`: `InvalidArgumentException` (malformed
+email/phone from `EmailNormalizer`/`PhoneNormalizer`) and
+`Illuminate\Database\UniqueConstraintViolationException` (duplicate
+contact, or an existing active primary of the same type) both become
+`Illuminate\Validation\ValidationException::withMessages([...])` — no
+new exception classes were added, and `GuardianContactService` itself
+is untouched. No verification workflow exists — `verified_at` remains
+metadata only, exactly as Phase 1A.3 left it. Phone input is **never**
+silently converted (`9876543210` is rejected, not rewritten to
+`+919876543210`) — `PhoneNormalizer`'s E.164-only contract is
+unchanged; a future UI may offer country-aware formatting help, this
+backend boundary does not guess.
+
+**Candidate lookup** (`POST .../guardian-candidates`) — `type`
+(`email`/`mobile`, validated via `Rule::enum(ContactType::class)`),
+`value`. Calls `GuardianContactService::findCandidatesBySchool()`
+unchanged: same-School only, exact HMAC-keyed match, never decrypts
+every contact row to search, may legitimately return multiple
+Guardians (household sharing), never auto-merges. Response is a bare
+array of Guardian identity summaries (`id`/`firstName`/`middleName`/
+`lastName`/`status`) — no contact values, no `lookup_hash`, no
+relationship data; just enough for staff to recognize and pick an
+existing record.
+
+### Relationship HTTP surface
+
+`App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController`
+is a thin wrapper over `StudentGuardianRelationshipService` (Phase
+1A.4) — the only sanctioned mutation path, unchanged.
+
+- **List** (`GET .../students/{student}/guardians`) — every
+  relationship for one Student; requires only `students.view` (reading
+  a Student's own relationships is part of reading that Student, not a
+  Guardian-management concern).
+- **Link** (`POST .../students/{student}/guardians`) —
+  `guardian_id` (`Rule::exists` scoped to the current School, see
+  above), `relationship_type` (`Rule::enum(RelationshipType::class)`),
+  the three non-primary authority flags. Deliberately does **not**
+  accept `is_primary` — mirrors `StudentGuardianRelationshipService::link()`'s
+  own split (`setPrimary()` is the only path to promotion). The
+  database's `unique(school_id, student_id, guardian_id)` violation
+  (translated by the service into `DuplicateRelationshipException`)
+  renders automatically as a clean `422` with code
+  `DUPLICATE_STUDENT_GUARDIAN_RELATIONSHIP` — no controller-level catch
+  needed, since that exception already defines `getStatusCode()`/
+  `errorCode()`.
+- **Update** (`PATCH .../student-guardian-relationships/{relationship}`)
+  — `relationship_type`, the three flags; never `is_primary`.
+- **Set primary** (`POST .../student-guardian-relationships/{relationship}/primary`)
+  — thin wrapper over `setPrimary()`'s atomic demote-then-promote.
+- **Unlink** (`DELETE .../student-guardian-relationships/{relationship}`)
+  — thin wrapper over `unlink()`'s hard delete; returns `204` with no
+  body (matching `WebhookSubscriptionController::destroy()`'s exact
+  precedent).
+
+Every mutation action requires **both** `students.manage` and
+`guardians.manage` (Phase 1A.4's accepted design) — proven by
+`StudentGuardianRelationshipApiTest::students_manage_alone_is_denied`/
+`guardians_manage_alone_is_denied`, which construct a role holding
+exactly one of the two capabilities and confirm the request is still
+`403`.
+
+### Error behavior
+
+No new error envelope — every domain exception already defined by
+Phase 1A.3/1A.4 (`DuplicateStudentNumberException`,
+`InvalidStudentStatusException`, `InvalidGuardianStatusException`,
+`DuplicateRelationshipException`, `CrossSchoolRelationshipException`,
+`ConcurrentPrimaryGuardianConflictException`) defines `getStatusCode()`/
+`errorCode()` and is rendered automatically by `bootstrap/app.php`'s
+existing generic exception handler — this checkpoint added **zero**
+new `render()` logic. `ContactLookupKeyNotConfiguredException`
+(missing `CONTACT_LOOKUP_HMAC_KEY`) deliberately has **no**
+`getStatusCode()`/`errorCode()` and therefore falls through to a plain
+`500` — correct, since a missing server secret is an operator
+misconfiguration, not a client-correctable input error. `RelationshipType`/
+`ContactType`/Student-and-Guardian-`status` invalid values are caught
+by `Rule::enum(...)`/`Rule::in(...)` at the HTTP layer before ever
+reaching a domain exception, producing a standard `422` validation
+response with per-field `errors`. No raw `QueryException`/SQLSTATE/
+constraint name is ever returned to a client — proven directly by
+`StudentApiTest::a_duplicate_student_number_is_mapped_to_a_clean_422`
+asserting the response message never contains `SQLSTATE` or the
+constraint's name.
+
+### Sensitive response exclusions (summary)
+
+Never present anywhere in an HTTP response, for any capability, in
+this checkpoint: `encrypted_value`, `lookup_hash`, `lookup_key_version`,
+a raw candidate-lookup digest, `school_id` on Student/Guardian/contact/
+relationship responses (the caller already supplied it in the URL —
+echoing it back adds nothing), any RLS/`TenantContext` internal state,
+audit-log internals. `dateOfBirth` is present only in the single-record
+Student `show`/`create`/`update` responses, never in the list.
+
+### Audit / RLS regression
+
+No new audit infrastructure and no schema/migration changes in this
+checkpoint — every mutation's audit event is the one Phase 1A.4/1A.3
+already defined (`StudentService`/`GuardianService`/
+`StudentGuardianRelationshipService`/`GuardianContactService` audit
+internally; **no controller calls `AuditRecorder` directly**, avoiding
+a duplicate audit entry per request). The existing raw-PostgreSQL RLS
+suites (`StudentGuardianRlsIsolationTest`,
+`StudentGuardianRelationshipIntegrityTest`,
+`GuardianContactIntegrityTest`) were re-run unmodified and remain
+green — this checkpoint proves the HTTP layer adds no privileged
+database connection or tenancy bypass on top of the RLS foundation
+Phase 1A/1A.2/1A.3 already established; RLS remains the authoritative
+defense-in-depth layer beneath every capability check above it.

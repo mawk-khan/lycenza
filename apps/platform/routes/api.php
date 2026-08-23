@@ -8,6 +8,10 @@ use App\Domain\AcademicStructure\Http\Controllers\RoomController;
 use App\Domain\AcademicStructure\Http\Controllers\SectionController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
+use App\Domain\Guardians\Http\Controllers\GuardianContactController;
+use App\Domain\Guardians\Http\Controllers\GuardianController;
+use App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController;
+use App\Domain\Students\Http\Controllers\StudentController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
 use App\Http\Controllers\Api\Internal\AiToolController;
 use App\Http\Controllers\Api\Internal\HealthController;
@@ -231,6 +235,94 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/subject-offerings/{subjectOffering}', [SubjectOfferingController::class, 'update'])
                 ->middleware(['capability:academics.subjects.manage', 'throttle:school-api-mutations'])
                 ->name('schools.subject-offerings.update');
+
+            // --- Phase 1A.5: Student & Guardian Identity administrative
+            // HTTP surface (docs/modules/STUDENT-GUARDIAN-IDENTITY.md,
+            // "Administrative HTTP boundary"). Read actions authorize
+            // via the AuthorizesCapability trait inline (matching
+            // AcademicYearController's index/show); mutation actions
+            // authorize via the `capability:` route middleware
+            // (matching CampusController's store/update) -- the same
+            // split every controller above already uses. Index/store
+            // nest under their owning parent (a GuardianContact always
+            // belongs to one Guardian, a StudentGuardianRelationship's
+            // creation always names a Student); singular show/update/
+            // delete-shaped actions resolve by their own id via a flat,
+            // top-level path -- exactly RoomController's/
+            // AcademicTermController's established "nested for
+            // index/store, flat for singular actions" split.
+
+            Route::get('/students', [StudentController::class, 'index'])
+                ->name('schools.students.index');
+            Route::post('/students', [StudentController::class, 'store'])
+                ->middleware(['capability:students.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.students.store');
+            Route::get('/students/{student}', [StudentController::class, 'show'])
+                ->name('schools.students.show');
+            Route::patch('/students/{student}', [StudentController::class, 'update'])
+                ->middleware(['capability:students.manage', 'throttle:school-api-mutations'])
+                ->name('schools.students.update');
+            Route::post('/students/{student}/status', [StudentController::class, 'changeStatus'])
+                ->middleware(['capability:students.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.students.status');
+
+            Route::get('/students/{student}/guardians', [StudentGuardianRelationshipController::class, 'index'])
+                ->name('schools.students.guardians.index');
+            // Both students.manage AND guardians.manage -- the
+            // operation mutates both domain identities' relationship at
+            // once (Phase 1A.4's accepted capability design,
+            // docs/modules/STUDENT-GUARDIAN-IDENTITY.md
+            // "Authorization"). Two stacked `capability:` middleware
+            // entries, not a new middleware -- EnsureCapability already
+            // supports being applied more than once per route with
+            // different arguments.
+            Route::post('/students/{student}/guardians', [StudentGuardianRelationshipController::class, 'store'])
+                ->middleware(['capability:students.manage', 'capability:guardians.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.students.guardians.store');
+            Route::patch('/student-guardian-relationships/{relationship}', [StudentGuardianRelationshipController::class, 'update'])
+                ->middleware(['capability:students.manage', 'capability:guardians.manage', 'throttle:school-api-mutations'])
+                ->name('schools.student-guardian-relationships.update');
+            Route::post('/student-guardian-relationships/{relationship}/primary', [StudentGuardianRelationshipController::class, 'setPrimary'])
+                ->middleware(['capability:students.manage', 'capability:guardians.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.student-guardian-relationships.primary');
+            // No `idempotent` -- deleting an already-deleted relationship
+            // 404s harmlessly on retry, the same natural idempotency
+            // WebhookSubscriptionController::destroy() relies on above.
+            Route::delete('/student-guardian-relationships/{relationship}', [StudentGuardianRelationshipController::class, 'destroy'])
+                ->middleware(['capability:students.manage', 'capability:guardians.manage', 'throttle:school-api-mutations'])
+                ->name('schools.student-guardian-relationships.destroy');
+
+            Route::get('/guardians', [GuardianController::class, 'index'])
+                ->name('schools.guardians.index');
+            Route::post('/guardians', [GuardianController::class, 'store'])
+                ->middleware(['capability:guardians.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.guardians.store');
+            // Exact-match candidate lookup (Phase 1A.3's
+            // GuardianContactService::findCandidatesBySchool()) -- a
+            // POST action, not a resource, hence the flat
+            // `guardian-candidates` path rather than nesting under
+            // `/guardians`. guardians.view only (read-only candidate
+            // detection, never a mutation).
+            Route::post('/guardian-candidates', [GuardianController::class, 'candidates'])
+                ->name('schools.guardian-candidates');
+            Route::get('/guardians/{guardian}', [GuardianController::class, 'show'])
+                ->name('schools.guardians.show');
+            Route::patch('/guardians/{guardian}', [GuardianController::class, 'update'])
+                ->middleware(['capability:guardians.manage', 'throttle:school-api-mutations'])
+                ->name('schools.guardians.update');
+            Route::post('/guardians/{guardian}/status', [GuardianController::class, 'changeStatus'])
+                ->middleware(['capability:guardians.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.guardians.status');
+
+            Route::post('/guardians/{guardian}/contacts', [GuardianContactController::class, 'store'])
+                ->middleware(['capability:guardians.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.guardians.contacts.store');
+            Route::post('/guardian-contacts/{contact}/primary', [GuardianContactController::class, 'setPrimary'])
+                ->middleware(['capability:guardians.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.guardian-contacts.primary');
+            Route::post('/guardian-contacts/{contact}/deactivate', [GuardianContactController::class, 'deactivate'])
+                ->middleware(['capability:guardians.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.guardian-contacts.deactivate');
         });
 });
 

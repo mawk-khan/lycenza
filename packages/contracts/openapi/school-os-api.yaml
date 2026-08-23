@@ -1260,6 +1260,417 @@ paths:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SubjectOffering" } } }
 
+  # --- Phase 1A.5: Student & Guardian Identity administrative surface
+  # (docs/modules/STUDENT-GUARDIAN-IDENTITY.md, "Administrative HTTP
+  # boundary"). Same authenticated/capability-gated administrative
+  # architecture as every path above -- not a separate public API.
+
+  /schools/{schoolId}/students:
+    get:
+      operationId: listStudents
+      summary: List a School's Students. Requires students.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: student_number, in: query, required: false, schema: { type: string }, description: Exact match. }
+        - { name: name, in: query, required: false, schema: { type: string }, description: Matches first or last name. }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, inactive] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/StudentSummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+    post:
+      operationId: createStudent
+      summary: Creates a Student. Requires students.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudentInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Student" } } }
+        "422":
+          description: Validation failure (e.g. duplicate Student Number within this School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/students/{studentId}:
+    get:
+      operationId: getStudent
+      summary: Fetch one Student. Requires students.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/StudentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Student" } } }
+        "404":
+          description: Not found (including a cross-School id -- indistinguishable from nonexistent).
+    patch:
+      operationId: updateStudent
+      summary: Updates Student identity fields. Requires students.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/StudentId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudentInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Student" } } }
+
+  /schools/{schoolId}/students/{studentId}/status:
+    post:
+      operationId: changeStudentStatus
+      summary: Changes a Student's status (active/inactive). Requires students.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/StudentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, inactive] }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Student" } } }
+
+  /schools/{schoolId}/students/{studentId}/guardians:
+    get:
+      operationId: listStudentGuardianRelationships
+      summary: List a Student's Guardian relationships. Requires students.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/StudentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/StudentGuardianRelationship" } } } }
+    post:
+      operationId: linkGuardianToStudent
+      summary: >
+        Links a Guardian to a Student. Requires BOTH students.manage AND
+        guardians.manage (the operation mutates both domain identities'
+        relationship at once). Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/StudentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudentGuardianRelationshipLinkInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StudentGuardianRelationship" } } }
+        "422":
+          description: >
+            Validation failure -- a nonexistent/cross-School guardianId
+            (indistinguishable message either way), a duplicate
+            relationship for this (Student, Guardian) pair, or an
+            invalid relationshipType.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/student-guardian-relationships/{relationshipId}:
+    patch:
+      operationId: updateStudentGuardianRelationship
+      summary: >
+        Updates relationshipType/authority flags (never isPrimary --
+        see the .../primary action). Requires BOTH students.manage AND
+        guardians.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RelationshipId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StudentGuardianRelationshipUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StudentGuardianRelationship" } } }
+    delete:
+      operationId: unlinkGuardianFromStudent
+      summary: >
+        Unlinks (hard-deletes the relationship row -- there is no
+        soft-deactivation column). Preserves both the Student and
+        Guardian identity rows, and any other relationship. Requires
+        BOTH students.manage AND guardians.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RelationshipId" }
+      responses:
+        "204":
+          description: Unlinked. No content.
+
+  /schools/{schoolId}/student-guardian-relationships/{relationshipId}/primary:
+    post:
+      operationId: setPrimaryGuardian
+      summary: >
+        Promotes this relationship to primary for its Student, demoting
+        whichever relationship was previously primary in the same
+        transaction. Requires BOTH students.manage AND
+        guardians.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RelationshipId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StudentGuardianRelationship" } } }
+
+  /schools/{schoolId}/guardians:
+    get:
+      operationId: listGuardians
+      summary: List a School's Guardians. Requires guardians.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: name, in: query, required: false, schema: { type: string }, description: Matches first or last name. }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, inactive] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/GuardianSummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+    post:
+      operationId: createGuardian
+      summary: >
+        Creates a Guardian (identity only -- contact information is a
+        separate call, see .../contacts below). Requires
+        guardians.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardianInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GuardianSummary" } } }
+
+  /schools/{schoolId}/guardian-candidates:
+    post:
+      operationId: findGuardianCandidates
+      summary: >
+        Exact-match, same-School-only, HMAC-keyed candidate lookup by
+        contact value -- "does a Guardian with this email/mobile
+        already exist here." Never decrypts every contact row, never
+        crosses Schools, never auto-merges; may return multiple
+        candidates (household-shared contact). Requires guardians.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardianCandidateLookupInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/GuardianSummary" } } } }
+        "422":
+          description: Malformed email/mobile input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/guardians/{guardianId}:
+    get:
+      operationId: getGuardian
+      summary: >
+        Fetch one Guardian, including its contacts and linked Students.
+        Requires guardians.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/GuardianId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Guardian" } } }
+        "404":
+          description: Not found (including a cross-School id -- indistinguishable from nonexistent).
+    patch:
+      operationId: updateGuardian
+      summary: Updates Guardian identity fields. Requires guardians.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/GuardianId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardianInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GuardianSummary" } } }
+
+  /schools/{schoolId}/guardians/{guardianId}/status:
+    post:
+      operationId: changeGuardianStatus
+      summary: Changes a Guardian's status (active/inactive). Requires guardians.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/GuardianId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, inactive] }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GuardianSummary" } } }
+
+  /schools/{schoolId}/guardians/{guardianId}/contacts:
+    post:
+      operationId: addGuardianContact
+      summary: >
+        Adds a Guardian contact (email/mobile) -- encrypted at rest
+        with a keyed exact-match lookup digest (ADR 0028), never
+        stored as plaintext. Requires guardians.manage.
+        Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/GuardianId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardianContactInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GuardianContact" } } }
+        "422":
+          description: Malformed email/mobile, or conflicts with an existing contact/primary for this Guardian.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/guardian-contacts/{contactId}/primary:
+    post:
+      operationId: setPrimaryGuardianContact
+      summary: >
+        Promotes this contact to primary for its type, demoting
+        whichever contact was previously primary in the same
+        transaction. Requires guardians.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/ContactId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GuardianContact" } } }
+
+  /schools/{schoolId}/guardian-contacts/{contactId}/deactivate:
+    post:
+      operationId: deactivateGuardianContact
+      summary: Deactivates a contact (not deleted). Requires guardians.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/ContactId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GuardianContact" } } }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1311,6 +1722,26 @@ components:
       required: false
       description: When true, includes inactive/archived reference rows (default excludes them).
       schema: { type: boolean, default: false }
+    StudentId:
+      name: studentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GuardianId:
+      name: guardianId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RelationshipId:
+      name: relationshipId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ContactId:
+      name: contactId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   headers:
     XRequestId:
@@ -1665,3 +2096,183 @@ components:
         is_required: { type: boolean, default: true }
         sequence: { type: integer, nullable: true }
         weekly_periods_target: { type: integer, nullable: true }
+
+    # --- Phase 1A.5: Student & Guardian Identity administrative surface
+
+    StudentSummary:
+      type: object
+      required: [id, studentNumber, firstName, status]
+      description: >
+        List-row shape -- deliberately excludes dateOfBirth (Highly
+        Sensitive children's data, docs/security/DATA-CLASSIFICATION.md:
+        minimized default visibility in broad list views). See Student
+        for the full single-record shape.
+      properties:
+        id: { type: string, format: uuid }
+        studentNumber: { type: string }
+        firstName: { type: string }
+        middleName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    Student:
+      type: object
+      required: [id, studentNumber, firstName, status, dateOfBirth, createdAt, updatedAt]
+      description: >
+        Full single-record shape (show/create/update responses only --
+        never the list response, see StudentSummary).
+      properties:
+        id: { type: string, format: uuid }
+        studentNumber: { type: string }
+        firstName: { type: string }
+        middleName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+        dateOfBirth: { type: string, format: date }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    StudentInput:
+      type: object
+      required: [student_number, first_name, date_of_birth]
+      description: >
+        student_number uniqueness is enforced by StudentService/the
+        database (school_id, student_number), not by this contract --
+        a duplicate is a 422 with code DUPLICATE_STUDENT_NUMBER.
+      properties:
+        student_number: { type: string, maxLength: 255 }
+        first_name: { type: string, maxLength: 255 }
+        middle_name: { type: string, maxLength: 255, nullable: true }
+        last_name: { type: string, maxLength: 255, nullable: true }
+        date_of_birth: { type: string, format: date }
+
+    GuardianSummary:
+      type: object
+      required: [id, firstName, status]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        middleName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    Guardian:
+      type: object
+      required: [id, firstName, status, contacts, students]
+      description: Full single-record shape (show response only).
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        middleName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+        contacts: { type: array, items: { $ref: "#/components/schemas/GuardianContact" } }
+        students:
+          type: array
+          items:
+            type: object
+            required: [relationshipId, student, relationshipType, isPrimary, isLegalGuardian, isEmergencyContact, isAuthorizedPickup]
+            properties:
+              relationshipId: { type: string, format: uuid }
+              student:
+                type: object
+                required: [id, studentNumber, firstName]
+                properties:
+                  id: { type: string, format: uuid }
+                  studentNumber: { type: string }
+                  firstName: { type: string }
+                  lastName: { type: string, nullable: true }
+              relationshipType: { $ref: "#/components/schemas/RelationshipType" }
+              isPrimary: { type: boolean }
+              isLegalGuardian: { type: boolean }
+              isEmergencyContact: { type: boolean }
+              isAuthorizedPickup: { type: boolean }
+
+    GuardianInput:
+      type: object
+      required: [first_name]
+      properties:
+        first_name: { type: string, maxLength: 255 }
+        middle_name: { type: string, maxLength: 255, nullable: true }
+        last_name: { type: string, maxLength: 255, nullable: true }
+
+    ContactType:
+      type: string
+      enum: [email, mobile]
+
+    RelationshipType:
+      type: string
+      enum: [mother, father, parent, step_parent, grandparent, legal_guardian, foster_guardian, sibling, relative, other]
+
+    GuardianContact:
+      type: object
+      required: [id, type, value, isPrimary, isActive]
+      description: >
+        Approved fields only -- never encrypted_value, lookup_hash, or
+        lookup_key_version (docs/modules/STUDENT-GUARDIAN-IDENTITY.md,
+        "Sensitive response exclusions"). `value` is the decrypted
+        plaintext, returned only to an actor already holding
+        guardians.view.
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: "#/components/schemas/ContactType" }
+        value: { type: string }
+        label: { type: string, nullable: true }
+        isPrimary: { type: boolean }
+        isActive: { type: boolean }
+        verifiedAt: { type: string, format: date-time, nullable: true }
+
+    GuardianContactInput:
+      type: object
+      required: [type, value]
+      description: >
+        `value` for type=mobile must already be E.164
+        (docs/modules/STUDENT-GUARDIAN-IDENTITY.md, "Guardian contact
+        mutation") -- a local number is rejected, never silently
+        converted.
+      properties:
+        type: { $ref: "#/components/schemas/ContactType" }
+        value: { type: string, maxLength: 255 }
+        label: { type: string, maxLength: 255, nullable: true }
+        is_primary: { type: boolean, default: false }
+
+    GuardianCandidateLookupInput:
+      type: object
+      required: [type, value]
+      properties:
+        type: { $ref: "#/components/schemas/ContactType" }
+        value: { type: string, maxLength: 255 }
+
+    StudentGuardianRelationship:
+      type: object
+      required: [id, studentId, guardian, relationshipType, isPrimary, isLegalGuardian, isEmergencyContact, isAuthorizedPickup]
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        guardian: { $ref: "#/components/schemas/GuardianSummary" }
+        relationshipType: { $ref: "#/components/schemas/RelationshipType" }
+        isPrimary: { type: boolean }
+        isLegalGuardian: { type: boolean }
+        isEmergencyContact: { type: boolean }
+        isAuthorizedPickup: { type: boolean }
+
+    StudentGuardianRelationshipLinkInput:
+      type: object
+      required: [guardian_id, relationship_type]
+      description: >
+        Deliberately excludes is_primary -- see the .../primary action
+        (StudentGuardianRelationshipService.link() never auto-promotes).
+      properties:
+        guardian_id: { type: string, format: uuid }
+        relationship_type: { $ref: "#/components/schemas/RelationshipType" }
+        is_legal_guardian: { type: boolean, default: false }
+        is_emergency_contact: { type: boolean, default: false }
+        is_authorized_pickup: { type: boolean, default: false }
+
+    StudentGuardianRelationshipUpdateInput:
+      type: object
+      properties:
+        relationship_type: { $ref: "#/components/schemas/RelationshipType" }
+        is_legal_guardian: { type: boolean }
+        is_emergency_contact: { type: boolean }
+        is_authorized_pickup: { type: boolean }
