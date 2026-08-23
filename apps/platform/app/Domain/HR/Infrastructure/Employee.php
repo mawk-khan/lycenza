@@ -10,13 +10,18 @@ use Database\Factories\EmployeeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Phase 8A.1 -- the Employee core aggregate (docs/modules/HR.md, ADR
- * 0028). Deliberately carries no employment/assignment/personal-detail
- * fields -- those belong to later checkpoints (8A.2 Personal Details,
- * 8A.4 Employment Records & Assignments). This is the minimal identity
- * record every later HR checkpoint builds on.
+ * 0028). Deliberately carries no employment/assignment fields -- those
+ * belong to a later checkpoint (8A.4 Employment Records & Assignments).
+ * This is the minimal identity record every later HR checkpoint builds
+ * on. Phase 8A.2 adds its Restricted-tier personal-details/address/
+ * emergency-contact extensions (relations below) without adding any
+ * new column here -- Employee itself stays exactly as small as 8A.1
+ * left it.
  *
  * `employee_number` is immutable once set (see booted() below) -- the
  * only sanctioned way to create an Employee is
@@ -61,6 +66,24 @@ class Employee extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** @return HasOne<EmployeePersonalDetail, $this> */
+    public function personalDetail(): HasOne
+    {
+        return $this->hasOne(EmployeePersonalDetail::class);
+    }
+
+    /** @return HasMany<EmployeeAddress, $this> */
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(EmployeeAddress::class);
+    }
+
+    /** @return HasMany<EmployeeEmergencyContact, $this> */
+    public function emergencyContacts(): HasMany
+    {
+        return $this->hasMany(EmployeeEmergencyContact::class);
     }
 
     public function isActive(): bool

@@ -261,6 +261,92 @@ five genuinely separate OS processes racing the same School
 `AcademicYearActivationConcurrencyTest`'s pattern) — all five receive
 distinct, gapless numbers.
 
+## Personal details, contacts & addresses (8A.2, implemented)
+
+Three new Restricted-tier tables extend Employee (entity model's
+`EmployeePersonalDetail`/`EmployeeAddress`/`EmployeeEmergencyContact`),
+all School-owned, `TenantRls`-protected, composite-FK-safe against
+`employees(id, school_id)` (rule 70), cascadeOnDelete on `employee_id`
+(these rows have no meaning independent of their owning Employee).
+Employee itself gained no new columns — only three relations
+(`personalDetail()`, `addresses()`, `emergencyContacts()`).
+
+**`employee_personal_details`** (1:1, `unique(employee_id)`): `date_of_birth`
+(plain `date`, no derived-age storage), `nationality`, `marital_status`,
+`preferred_language` (all plain nullable strings — not frozen into
+enums, since none are branched on by application logic),
+`personal_email`/`personal_phone`/`alternate_phone` (personal contact
+info lives here, not a separate contact table — the entity model lists
+no such table, and the privacy matrix already groups personal
+phone/email with DOB/address/emergency-contacts as one Restricted
+group). No government identifiers, tax identifiers, bank details, or
+health data — those stay Highly Sensitive and unmodeled, per the
+existing authorization design's explicit deferral.
+`App\Domain\HR\Application\EmployeePersonalDetailService::setDetails()`
+is the sole write path (`updateOrCreate()` keyed on `employee_id`,
+mirroring `App\Support\Settings\SchoolSettingsService`'s upsert
+pattern) — the unique constraint is the database-level backstop
+against a genuine race producing two rows.
+
+**`employee_addresses`** (1:N): field names
+(`address_line1`/`address_line2`/`city`/`state_region`/`postal_code`/
+`country_code`) are a direct copy of `schools`' own established address
+shape, not a new convention invented for HR — `country_code` is a raw
+ISO 3166-1 alpha-2 string (no `countries` reference table exists or is
+introduced here), default `'IN'`. `address_type`
+(`current`/`permanent`/`mailing`/`other`) is a plain, application-
+validated string, matching the `record_status`/`academic_years.status`
+convention of not database-CHECK-constraining this kind of column.
+**Invariant** (HR.md was silent on exact cardinality; decided here): at
+most one address of each of `current`/`permanent`/`mailing` per
+Employee, but arbitrarily many `other` — enforced with a partial unique
+index (`employee_addresses_one_per_type_per_employee ... WHERE
+address_type <> 'other'`), the same database-enforced pattern
+`academic_years_one_active_per_school` established, rather than a
+separate `is_primary` boolean duplicating the same invariant through a
+second mechanism.
+
+**`employee_emergency_contacts`** (1:N): `name`, `relationship` (plain
+flexible string, never branched on — not an enum), `phone` (required),
+`alternate_phone`/`email` (optional), `is_primary` (boolean). No field
+requires the contact to be a User/Guardian/Employee/other School OS
+identity — an emergency contact is simply an external person; no
+generic Party/Person subsystem was introduced. **Invariant**: at most
+one `is_primary = true` row per Employee, enforced with a partial
+unique index (`employee_emergency_contacts_one_primary_per_employee
+... WHERE is_primary = true`).
+`App\Domain\HR\Application\EmployeeEmergencyContactService::setPrimary()`
+is the sole promotion path — demotes whatever was previously primary
+and promotes the target contact in one transaction, mirroring
+`AcademicYearService::activate()`'s exact demote-then-promote shape,
+with the partial unique index as the concurrency backstop. `add()`/
+`update()` never accept a caller-supplied `is_primary` value.
+
+**Ownership/IDOR protection**: every write method on
+`EmployeeAddressService`/`EmployeeEmergencyContactService` takes the
+authoritative `Employee` the caller already resolved from trusted
+context, strips any caller-supplied `school_id`/`employee_id` from the
+attributes array, and — for `update()`/`remove()`/`setPrimary()` — re-
+verifies the target record's actual `employee_id` matches before
+touching it (`App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException`
+otherwise). This is the same "never trust a caller-supplied id" rule
+19/24 already establish for `school_id`, applied to a child record's
+parent reference.
+
+**Audit**: every mutation calls the existing `AuditRecorder::school()`
+(`employee.personal_details.updated`, `employee.address.created`/
+`.updated`/`.removed`, `employee.emergency_contact.created`/`.updated`/
+`.removed`/`.primary_changed`) with metadata limited to ids and changed
+field *names* — no personal-data values (email/phone/address text/DOB)
+are ever written into audit metadata. No parallel HR audit subsystem.
+
+**Domain events**: none added. HR.md's own Domain events list does not
+include a personal-details/address/emergency-contact event, and
+introducing one for every field mutation here would be exactly the
+speculative-event pattern rule 27 (of the 8A.2 brief) warns against —
+`AuditRecorder` is sufficient for this checkpoint's actual
+requirement.
+
 ## Temporal data strategy
 
 Following the exact naming convention `academic_years`/

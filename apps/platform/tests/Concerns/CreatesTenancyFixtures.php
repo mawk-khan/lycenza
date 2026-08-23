@@ -11,6 +11,9 @@ use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\HR\Infrastructure\EmployeeAddress;
+use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
+use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -193,6 +196,41 @@ trait CreatesTenancyFixtures
         return app(TenantContext::class)->withSchool(
             $school,
             fn () => Employee::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    // --- Phase 8A.2: Personal details, addresses, emergency contacts --
+
+    protected function createEmployeePersonalDetail(Employee $employee, array $attributes = []): EmployeePersonalDetail
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeePersonalDetail::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeAddress(Employee $employee, array $attributes = []): EmployeeAddress
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeAddress::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeEmergencyContact(Employee $employee, array $attributes = []): EmployeeEmergencyContact
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeEmergencyContact::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
         );
     }
 }
