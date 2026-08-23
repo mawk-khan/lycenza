@@ -1246,6 +1246,163 @@ mobile API; payroll/attendance/leave/recruitment/performance;
 AI/automation; organizational name/code text search;
 `pg_trgm` index.
 
+## Employee Profile Workspace (8A.9, implemented)
+
+**Read/query foundation only — no controller, route, or UI**, same
+decision and same evidence as 8A.8: `CapabilityAndRoleSeeder` still
+registers no `hr.*` capability. The Profile Workspace is the
+Restricted-tier counterpart to 8A.8's Directory-tier
+`EmployeeDirectoryService`, and exposing it through HTTP now would
+mean either an ungated Restricted-data endpoint or pulling 8A.10's
+capability-seeder rollout forward prematurely. `EmployeeProfileWorkspaceService`
+is implemented as pure read/query architecture; UI/API wiring is
+deferred until 8A.10 provides the capability boundary.
+
+**Profile Workspace ≠ Directory.** `EmployeeDirectoryEntry` (8A.8) is
+never reused or extended here — the Profile Workspace is a completely
+separate set of DTOs (`EmployeeProfileWorkspace` and 11 section types),
+built from their own explicit, scoped queries, never
+`Employee::with([...everything...])->toArray()`. Where Directory
+collapses an Employee to one current-only row, the Profile Workspace
+deliberately preserves full history (all EmploymentRecords, all
+Assignments including secondary ones) — it answers "what is this
+Employee's whole HR record," not "who currently works here."
+
+**Sections** (docblocks on each class are the authoritative field
+contract): `summary` (identity + current state, singleton),
+`personalDetails`/`contact` (both nullable singletons — DOB/
+nationality/marital status/preferred language split from personal
+email/phone/alternate phone into two sections, matching the brief's
+own B/C section split), `addresses`/`emergencyContacts` (lists),
+`employmentHistory`/`assignments` (lists, full history, not just
+current), `qualifications`/`experience`/`certifications` (lists),
+`documents` (list, Restricted only — see below). Optional singleton
+sections are `null` when no row exists; repeatable sections are `[]`
+when empty — the workspace always builds successfully, never throws
+for legitimately absent HR data.
+
+**Restricted data intentionally included** (this IS the Restricted
+HR-internal view, unlike Directory): personal details, personal
+contact (still never renamed to "work contact" — the 8A.8 work-contact
+gap is unchanged), addresses, emergency contacts, qualification/
+experience/certification detail including `credential_number` and
+verification state, and Restricted-tier `EmployeeDocument` metadata.
+
+**Highly Sensitive data excluded — the core 8A.9 acceptance gate**:
+`EmployeeDocument` rows with `classification_tier = 'highly_sensitive'`
+are excluded at the DATABASE QUERY level
+(`where('classification_tier', 'restricted')` inside
+`EmployeeProfileWorkspaceService`) — never fetched at all, let alone
+filtered out afterward. A dedicated test creates one restricted and one
+highly-sensitive document for the same Employee and proves only the
+restricted one appears. No government identifier/bank/health data
+exists anywhere in the underlying schema to expose in the first place
+— 8A.9 reads existing data only, adds no new Highly Sensitive fields.
+
+**Document metadata is deliberately narrow**, even within the
+Restricted set: `EmployeeProfileDocumentEntry` exposes only `id`,
+`category`, `classification_tier` (always `restricted` here),
+`issued_on`, `expires_on`, `status` — permanently excluding
+`original_filename`/`mime_type`/`size_bytes`/`storage_disk`/
+`storage_path` (operational file/storage metadata, not HR-facing) and
+`uploaded_by_user_id` (8A.7's own provenance-integrity fix — original-
+registration provenance, not general-workspace-appropriate data). Both
+`active` and `archived` documents appear (history is not hidden here,
+unlike Directory's default). No file content, no upload, no download,
+no signed/public URL exists anywhere in this checkpoint.
+
+**Employment history**: every `EmploymentRecord` the Employee has ever
+had, ordered `starts_on DESC, id`, each flagged `is_current` (same
+`starts_on <= today <= ends_on-or-infinity` rule 8A.8 already
+established, computed once against the already-loaded in-memory
+collection — no extra query). Rehire produces two Employment entries
+under the same, single Employee profile — proven directly. A
+future-dated Employment is never flagged current.
+
+**Assignment history**: every `EmployeeAssignment` across all of the
+Employee's EmploymentRecords — secondary Assignments are never hidden
+here, unlike Directory — each carrying an explicit
+`employment_record_id` association (not nested) and its own
+`is_current`/`is_primary` flags. The current primary Assignment alone
+drives `summary`'s organizational fields; historical and secondary
+Assignments remain visible but never overwrite the summary.
+`EmployeeProfileAssignmentEntry` deliberately carries no manager
+field — manager disclosure lives exclusively on `summary`.
+
+**Reporting manager**: exactly one hop from the current primary
+Assignment's live `manager_assignment_id` pointer (8A.5), identical
+reasoning to 8A.8 — no recursion, no historical-manager reconstruction
+claim, only Directory-tier manager identity exposed.
+
+**Verification information**: qualification/certification
+`verification_status`/`verified_at` are included as real Restricted
+HR data; no `verified_by_user_id` is synthesized — 8A.6's own
+`AuditRecorder`-actor-identity design is left exactly as committed.
+
+**Tenant-safe resolution**: `EmployeeProfileWorkspaceService::build(School
+$school, string $employeeId)` resolves the Employee itself (not just
+its children) under `TenantContext::withSchool($school, ...)` plus an
+explicit `where('school_id', $school->id)`, returning `null` — never
+an exception, never a distinguishing message — for both a genuinely
+nonexistent id and a valid id belonging to a different School.
+Proven directly: both cases return the identical `null` result, and a
+School B Employee fully populated across every section still yields
+`null` when requested from School A context. Archived Employees ARE
+resolvable (unlike Directory's default active-only filter) — historical
+HR access to a separated Employee is a legitimate, expected use case.
+Ambient `TenantContext` is proven restored to its pre-call state after
+`build()` returns.
+
+**Batch-hydration**: Department/Position/Campus lookups for all of an
+Employee's Assignments are batched via `whereIn`, exactly like
+`EmployeeDirectoryService::hydrate()` — never one query per Assignment.
+A single Employee's full profile build issues a small, fixed number of
+queries regardless of history depth.
+
+**No mutation.** `EmployeeProfileWorkspaceService` has exactly one
+public method (`build()`) and no write path of any kind — the existing
+per-domain services (`EmployeePersonalDetailService`,
+`EmployeeAddressService`, `EmployeeAssignmentService`, etc.) remain the
+only sanctioned mutation paths; no aggregate
+"update everything" method was introduced, avoiding the mass-
+assignment/authorization risk that would create.
+
+**Ordering**: addresses (`address_type`, `id`), emergency contacts
+(`is_primary` desc, `name`, `id`), employment/assignments (`starts_on`
+desc, `id`), qualifications/experience (`starts_on` desc, `id`),
+certifications (`issued_on` desc, `id`), documents (`uploaded_at` desc,
+`id`) — every repeatable section deterministic, never database natural
+row order.
+
+**No new migration.** `MIGRATIONS: NONE` — entirely derived from
+already-committed 8A.1–8A.7 tables, same as 8A.8.
+
+**Audit**: none added — matches 8A.8's documented no-read-audit
+convention; a future Restricted/Highly-Sensitive *read* audit
+requirement remains 8A.10's concern.
+
+**Tests added**: 27 in `EmployeeProfileWorkspaceServiceTest` — profile
+root (identity, unlinked User, archived Employee, missing-section
+safety, summary shape), personal/contact/addresses/emergency-contacts
+(shape + ordering), employment history (all records, current
+selection, future-not-current), assignments (all including secondary,
+historical preservation, primary-drives-summary), rehire (two
+Employment entries under one profile), manager (one-hop identity,
+Assignment-entries-never-carry-manager), professional records
+(qualifications/experience/certifications, structural Experience-vs-
+Employment distinction), documents (Restricted shape, Highly-Sensitive
+exclusion with mixed-classification data, storage/provenance-field
+negative test with sentinels, active+archived both visible), and
+tenant isolation (cross-School null result, nonexistent-vs-cross-School
+indistinguishability, ambient-context restoration) — 378 passed, 705
+assertions for the full precise-path HR suite, up from the 8A.8
+baseline of 351 passed / 610 assertions.
+
+**Deferred, correctly**: HR Permissions & Sensitive-Data Controls
+(8A.10); any Profile mutation UI or aggregate update endpoint; document
+upload/download; `EmployeeCategory`; imports; public/mobile API;
+payroll/attendance/leave/recruitment/performance; AI/automation.
+
 ## Employee lifecycle — state responsibility matrix
 
 Rejecting one overloaded status enum (brief's explicit warning) in
@@ -1454,7 +1611,7 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.6  Qualifications, Experience & Certifications                 (EmployeeQualification, EmployeeExperience, EmployeeCertification) [implemented]
 8A.7  Employee Documents                                          (employee_documents — narrow scope, see "Documents" above) [implemented]
 8A.8  Employee Directory                                          (search/filter/paginate query layer — API+UI deferred, see "Employee Directory (8A.8, implemented)") [implemented]
-8A.9  Employee Profile Workspace                                  (tabbed detail UI — first of its kind in this codebase)
+8A.9  Employee Profile Workspace                                  (Restricted-tier read model — tabbed UI deferred, see "Employee Profile Workspace (8A.9, implemented)") [implemented]
 8A.10 HR Permissions & Sensitive-Data Controls                    (capability seeder rollout, field-suppression proof)
 8A.11 Audit & Activity Timeline                                   (AuditRecorder wiring across all HR mutations + a read timeline view)
 8A.12 Employee Import & Duplicate Controls                        (narrow CSV/XLSX importer, preview/dry-run/row errors)
