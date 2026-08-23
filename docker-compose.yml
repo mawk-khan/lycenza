@@ -1,0 +1,133 @@
+# Local development environment only. Not used for staging/production.
+# See docs/architecture/adr/0006-redis-queue-strategy.md,
+# docs/architecture/adr/0011-object-storage-strategy.md and
+# docs/architecture/ARCHITECTURE.md.
+#
+# Usage:
+#   docker compose up -d postgres redis minio
+#   docker compose run --rm platform composer install
+#   docker compose run --rm platform php artisan migrate
+#   docker compose up platform vite ai
+
+name: school-os
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: school_os
+      POSTGRES_USER: school_os
+      POSTGRES_PASSWORD: school_os
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U school_os -d school_os"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: school_os
+      MINIO_ROOT_PASSWORD: school_os_secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  platform:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/platform.Dockerfile
+    working_dir: /var/www/app
+    volumes:
+      - ./apps/platform:/var/www/app
+    env_file:
+      - ./apps/platform/.env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      AWS_ENDPOINT: http://minio:9000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  queue:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/platform.Dockerfile
+    working_dir: /var/www/app
+    volumes:
+      - ./apps/platform:/var/www/app
+    env_file:
+      - ./apps/platform/.env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      AWS_ENDPOINT: http://minio:9000
+    command: ["php", "artisan", "queue:work", "--tries=3"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  vite:
+    image: node:22-alpine
+    working_dir: /var/www/app
+    volumes:
+      - ./apps/platform:/var/www/app
+    ports:
+      - "5173:5173"
+    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
+
+  ai:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/ai.Dockerfile
+    working_dir: /srv/ai
+    volumes:
+      - ./services/ai:/srv/ai
+    env_file:
+      - ./services/ai/.env
+    environment:
+      REDIS_URL: redis://redis:6379/1
+    ports:
+      - "8100:8100"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

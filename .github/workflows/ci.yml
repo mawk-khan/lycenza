@@ -1,0 +1,202 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least-privilege by default; individual jobs can widen only what they need.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets-scan:
+    name: Secrets scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  platform:
+    name: Laravel (apps/platform)
+    runs-on: ubuntu-latest
+    services:
+      # Bootstrap superuser only -- the school_os_app runtime role
+      # (ADR 0021) is created by the "Provision database roles" step
+      # below, mirroring infrastructure/docker/postgres/init/*.sql
+      # exactly, so CI re-verifies the same role separation local dev
+      # runs under, not a weaker CI-only shortcut.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: school_os_test
+          POSTGRES_USER: school_os
+          POSTGRES_PASSWORD: school_os
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U school_os -d school_os_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: valkey/valkey:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: apps/platform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_pgsql, pgsql, bcmath, zip, gd
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: apps/platform/vendor
+          key: composer-${{ hashFiles('apps/platform/composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist
+
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+
+      - name: Provision database roles (ADR 0021)
+        env:
+          PGPASSWORD: school_os
+        run: |
+          psql -h 127.0.0.1 -U school_os -d school_os_test -v ON_ERROR_STOP=1 \
+            -f ../../infrastructure/docker/postgres/init/01-roles.sql
+
+      - name: Migrate test database via the admin connection
+        env:
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: school_os_test
+          DB_USERNAME: school_os_app
+          DB_PASSWORD: school_os_app_local_only_password
+          DB_ADMIN_USERNAME: school_os
+          DB_ADMIN_PASSWORD: school_os
+        run: php artisan migrate --database=pgsql_admin --force
+
+      - name: Seed capability/role catalog
+        env:
+          DB_HOST: 127.0.0.1
+          DB_DATABASE: school_os_test
+          DB_USERNAME: school_os_app
+          DB_PASSWORD: school_os_app_local_only_password
+        run: php artisan db:seed --class=CapabilityAndRoleSeeder --force
+
+      - name: Pint (formatting)
+        run: vendor/bin/pint --test
+
+      - name: Larastan (static analysis)
+        run: vendor/bin/phpstan analyse --memory-limit=512M
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/platform/package-lock.json
+
+      - run: npm ci
+      - name: TypeScript type-check
+        run: npm run type-check
+      - name: ESLint
+        run: npm run lint
+      - name: Prettier (formatting)
+        run: npm run format:check
+      - name: Frontend build (produces Vite manifest for Inertia tests)
+        run: npm run build
+
+      - name: PHPUnit
+        env:
+          # Runtime connection deliberately uses school_os_app (ADR
+          # 0021), never the school_os superuser -- see ADR 0024.
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: school_os_test
+          DB_USERNAME: school_os_app
+          DB_PASSWORD: school_os_app_local_only_password
+          DB_ADMIN_USERNAME: school_os
+          DB_ADMIN_PASSWORD: school_os
+          REDIS_HOST: 127.0.0.1
+        run: php artisan test
+
+  ai-service:
+    name: AI Gateway (services/ai)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/ai/requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: mypy (type-check)
+        run: mypy app
+
+      - name: pytest
+        run: pytest -q
+
+  mobile:
+    name: Flutter (apps/mobile)
+    runs-on: ubuntu-latest
+    # NOTE: this job's correctness has NOT been verified locally — the
+    # Flutter SDK was unavailable in the environment this repo was
+    # scaffolded in. Verify on first real change to apps/mobile.
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  shared-types:
+    name: Contracts -> shared TypeScript types
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/shared-types
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packages/shared-types/package-lock.json
+
+      - run: npm ci
+      - name: Regenerate types and fail on drift
+        run: |
+          npm run generate
+          git diff --exit-code -- src/generated
+      - run: npm run type-check

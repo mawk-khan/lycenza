@@ -1,0 +1,16 @@
+# Keeps the build context small and avoids scanning runtime-written,
+# occasionally root-owned directories (e.g. storage/inertia-devtools,
+# storage/logs) that can break `docker build`'s context upload. Source
+# code for apps/platform and services/ai is mounted as a volume at
+# runtime (see docker-compose.yml), not baked into these dev images, so
+# excluding it from the build context here is safe.
+apps/platform/vendor
+apps/platform/node_modules
+apps/platform/storage
+apps/platform/public/build
+apps/platform/.env
+services/ai/.venv
+services/ai/__pycache__
+services/ai/.env
+packages/shared-types/node_modules
+.git
