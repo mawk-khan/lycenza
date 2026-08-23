@@ -4,6 +4,7 @@ use App\Domain\Communications\Http\Controllers\AnnouncementController;
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
+use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\DashboardController;
@@ -75,8 +76,18 @@ Route::middleware('auth')->group(function (): void {
     // live inside CommunicationHubController itself (AuthorizesCapability
     // trait).
     Route::prefix('app/communications')->name('app.communications.')->group(function (): void {
-        Route::get('/', [CommunicationHubController::class, 'index'])->name('index');
-        Route::post('/', [CommunicationHubController::class, 'store'])->name('store');
+        // Phase 5A.8 §33: the Hub's root is now the operational Inbox
+        // (App\Domain\Communications\Http\Controllers\CommunicationInboxController),
+        // not the conversation list -- that moved to `/conversations`
+        // below (brief §33's own suggested route shape).
+        Route::get('/', [CommunicationInboxController::class, 'index'])->name('index');
+        Route::get('/unread', [CommunicationInboxController::class, 'unread'])->name('unread');
+        Route::get('/sent', [CommunicationInboxController::class, 'sent'])->name('sent');
+        Route::get('/failed', [CommunicationInboxController::class, 'failed'])->name('failed');
+        Route::get('/search', [CommunicationInboxController::class, 'search'])->name('search');
+
+        Route::get('/conversations', [CommunicationHubController::class, 'conversations'])->name('conversations');
+        Route::post('/conversations', [CommunicationHubController::class, 'store'])->name('store');
 
         // Phase 5A.2: registered BEFORE the '/{thread}' wildcard below
         // so 'announcements' never matches as a thread id.

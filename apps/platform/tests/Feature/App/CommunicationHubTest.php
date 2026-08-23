@@ -46,8 +46,11 @@ class CommunicationHubTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $this->activate($user, $school);
 
-        $this->get('/app/communications')->assertInertia(fn ($page) => $page
-            ->component('App/Communications/Index')
+        // Phase 5A.8 §33: the conversation list relocated to
+        // `/app/communications/conversations` -- `/app/communications`
+        // is now the operational Inbox (see CommunicationInboxTest).
+        $this->get('/app/communications/conversations')->assertInertia(fn ($page) => $page
+            ->component('App/Communications/Conversations')
             ->where('threads.data', [])
             ->where('canSend', true)
         );
@@ -61,7 +64,7 @@ class CommunicationHubTest extends TestCase
         $this->createMembership($teacher, $school);
         $this->activate($admin, $school);
 
-        $create = $this->post('/app/communications', [
+        $create = $this->post('/app/communications/conversations', [
             'subject' => 'Field trip',
             'thread_type' => 'direct',
             'participant_user_ids' => [$teacher->id],
@@ -71,8 +74,8 @@ class CommunicationHubTest extends TestCase
 
         $this->post("{$threadUrl}/messages", ['body' => 'Are we still on for Friday?']);
 
-        $this->get('/app/communications')->assertInertia(fn ($page) => $page
-            ->component('App/Communications/Index')
+        $this->get('/app/communications/conversations')->assertInertia(fn ($page) => $page
+            ->component('App/Communications/Conversations')
             ->has('threads.data', 1)
         );
 

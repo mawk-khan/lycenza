@@ -156,6 +156,13 @@ class AnnouncementController extends Controller
 
         abort_unless($isCreator || $isRecipient || $canManage, 403);
 
+        // Brief §14: only the genuine recipient's own in-app read
+        // state moves -- the creator/manager viewing their own
+        // announcement never marks a recipient's delivery read.
+        if ($isRecipient) {
+            $service->markRead($model, $actor);
+        }
+
         $requestedChannels = $model->requestedChannels->pluck('channel')->all();
         // Brief §17: a scheduling preview is estimated/non-authoritative
         // for a SCHEDULED announcement too, computed the same live way

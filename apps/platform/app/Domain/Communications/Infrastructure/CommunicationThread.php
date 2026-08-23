@@ -29,6 +29,15 @@ class CommunicationThread extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
+    /**
+     * Phase 5A.8 §46: microsecond precision (paired with this
+     * checkpoint's migration widening `last_activity_at`/`created_at`/
+     * `updated_at` to `timestamp(6)`) -- see
+     * CommunicationInboxReadModel's docblock and
+     * CommunicationMessage::$dateFormat (Phase 5A.7) for why.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = [
         'school_id', 'campus_id', 'thread_type', 'subject', 'status',
         'created_by_user_id', 'last_activity_at',

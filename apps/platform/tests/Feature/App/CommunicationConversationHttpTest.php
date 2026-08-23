@@ -79,7 +79,7 @@ class CommunicationConversationHttpTest extends TestCase
         $thread = app(CommunicationThreadService::class)->createThread($school, $creator, 'direct', null, [$recipient->id]);
 
         $this->activate($creator, $school);
-        $this->actingAs($creator)->post("/app/communications/{$thread->id}/archive")->assertRedirect('/app/communications');
+        $this->actingAs($creator)->post("/app/communications/{$thread->id}/archive")->assertRedirect('/app/communications/conversations');
 
         $context = app(TenantContext::class);
         $creatorParticipant = $context->withSchool($school, fn () => $thread->participants()->where('user_id', $creator->id)->first());
@@ -89,7 +89,7 @@ class CommunicationConversationHttpTest extends TestCase
         // Archiving is participant-specific -- never a thread-global flag.
         $this->assertFalse($recipientParticipant->archived);
 
-        $this->actingAs($creator)->post("/app/communications/{$thread->id}/unarchive")->assertRedirect('/app/communications');
+        $this->actingAs($creator)->post("/app/communications/{$thread->id}/unarchive")->assertRedirect('/app/communications/conversations');
         $creatorParticipant = $context->withSchool($school, fn () => $thread->participants()->where('user_id', $creator->id)->first());
         $this->assertFalse($creatorParticipant->archived);
     }
@@ -116,11 +116,11 @@ class CommunicationConversationHttpTest extends TestCase
         $this->activate($creator, $school);
         $this->actingAs($creator)->post("/app/communications/{$thread->id}/archive");
 
-        $this->actingAs($creator)->get('/app/communications')->assertInertia(
+        $this->actingAs($creator)->get('/app/communications/conversations')->assertInertia(
             fn ($page) => $page->where('threads.data', []),
         );
 
-        $this->actingAs($creator)->get('/app/communications?archived=1')->assertInertia(
+        $this->actingAs($creator)->get('/app/communications/conversations?archived=1')->assertInertia(
             fn ($page) => $page->has('threads.data', 1),
         );
     }

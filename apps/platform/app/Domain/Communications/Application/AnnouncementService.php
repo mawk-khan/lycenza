@@ -26,6 +26,7 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
+use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Models\Campus;
 use App\Models\School;
@@ -492,6 +493,50 @@ class AnnouncementService
 
                 return $fresh;
             });
+        });
+    }
+
+    /**
+     * Phase 5A.8 §14 -- announcement in-app read state. Reuses the
+     * `communication_deliveries.read_at`/`status='read'` column and
+     * enum value already reserved by Phase 5A.1's schema (see that
+     * table's migration) but never written by any code path until now
+     * -- the narrowest possible addition, not a new column. Scoped to
+     * the CALLING actor's own IN_APP delivery row only (found via
+     * their own `CommunicationRecipient` row for this announcement's
+     * message) -- never any other recipient's, and a no-op for a
+     * non-recipient (nothing to mark) or an unpublished announcement
+     * (no message/recipients exist yet). Only promotes a 'delivered'
+     * IN_APP row to 'read' -- never touches a 'failed'/other terminal
+     * status. Deliberately NOT audited, matching
+     * CommunicationThreadService::markRead()'s exact reasoning
+     * (Phase 5A.7): per-viewer UI convenience state, not a fact worth
+     * a permanent audit trail entry. In-app read state is distinct
+     * from email delivery/open status -- this never touches the EMAIL
+     * channel's own delivery row.
+     */
+    public function markRead(CommunicationAnnouncement $announcement, User $actor): void
+    {
+        if ($announcement->message_id === null) {
+            return;
+        }
+
+        $this->context->withSchool($announcement->school, function () use ($announcement, $actor) {
+            $recipient = CommunicationRecipient::query()
+                ->where('message_id', $announcement->message_id)
+                ->where('recipient_user_id', $actor->id)
+                ->first();
+
+            if ($recipient === null) {
+                return;
+            }
+
+            $now = now();
+
+            $recipient->deliveries()
+                ->where('channel', CommunicationChannel::InApp->value)
+                ->where('status', 'delivered')
+                ->update(['status' => 'read', 'read_at' => $now]);
         });
     }
 

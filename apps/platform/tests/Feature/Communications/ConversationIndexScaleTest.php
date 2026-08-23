@@ -41,15 +41,21 @@ class ConversationIndexScaleTest extends TestCase
             $queryCount++;
         });
 
-        $this->actingAs($creator)->get('/app/communications')->assertOk();
+        // Phase 5A.8 §33: the conversation list relocated to
+        // `/app/communications/conversations` -- see
+        // CommunicationInboxScaleTest for the (now-separate) Inbox
+        // page's own bounded-query proof.
+        $this->actingAs($creator)->get('/app/communications/conversations')->assertOk();
 
         // A handful of fixed queries (thread page, participants eager
         // load, users eager load, summarize()'s 2 queries,
-        // totalUnreadCount()'s 3 queries, capability checks, session/
-        // auth bookkeeping) -- NOT one query per thread. 15 threads
-        // comfortably fits well under this ceiling; growing the
-        // thread count must not grow the query count.
-        $this->assertLessThan(30, $queryCount, "Expected a bounded query count, got {$queryCount}.");
+        // totalUnreadCount()'s 3 queries, Phase 5A.8's added
+        // unreadAnnouncementCount() aggregate for the shared nav badge,
+        // capability checks, session/auth bookkeeping) -- NOT one query
+        // per thread. 15 threads comfortably fits well under this
+        // ceiling; growing the thread count must not grow the query
+        // count.
+        $this->assertLessThan(35, $queryCount, "Expected a bounded query count, got {$queryCount}.");
     }
 
     private function activate($user, $school): void

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Communications\Http\Controllers;
 
+use App\Domain\Communications\Application\CommunicationInboxReadModel;
 use App\Domain\Communications\Application\CommunicationMessageService;
 use App\Domain\Communications\Application\CommunicationThreadService;
 use App\Domain\Communications\Application\ConversationReadModel;
@@ -42,7 +43,15 @@ class CommunicationHubController extends Controller
 {
     use AuthorizesCapability;
 
-    public function index(TenantContext $context, ConversationReadModel $readModel, Request $request): Response
+    /**
+     * Phase 5A.8 §33: relocated from the Hub's root (`GET /app/communications`,
+     * now the operational Inbox --
+     * App\Domain\Communications\Http\Controllers\CommunicationInboxController)
+     * to `GET /app/communications/conversations`. Behavior is
+     * unchanged from Phase 5A.7 -- same query, same pagination, same
+     * filters, same unread badge.
+     */
+    public function conversations(TenantContext $context, ConversationReadModel $readModel, Request $request): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.view', $school);
@@ -66,8 +75,9 @@ class CommunicationHubController extends Controller
         $threads = $query->orderByDesc('last_activity_at')->paginate(20)->withQueryString();
 
         $summaries = $readModel->summarize($school, $threads->pluck('id')->all(), $actor->id);
+        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
 
-        return Inertia::render('App/Communications/Index', [
+        return Inertia::render('App/Communications/Conversations', [
             'threads' => $threads->through(fn (CommunicationThread $t) => $this->presentThreadSummary($t, $actor->id, $summaries->get($t->id))),
             'meta' => [
                 'currentPage' => $threads->currentPage(),
@@ -75,12 +85,20 @@ class CommunicationHubController extends Controller
                 'total' => $threads->total(),
             ],
             'filters' => ['archived' => $showArchived, 'q' => $search ?: null],
-            'totalUnreadCount' => $readModel->totalUnreadCount($school, $actor->id),
+            // Phase 5A.8: the SAME combined (conversations + announcements)
+            // total this page's sidebar shares with every other Hub
+            // page -- see CommunicationInboxController::navFlags()'s
+            // docblock for why this bundle is duplicated, not shared,
+            // across the two controllers.
+            'totalUnreadCount' => $readModel->totalUnreadCount($school, $actor->id) + app(CommunicationInboxReadModel::class)->unreadAnnouncementCount($school, $actor),
             'canSend' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.send', $school),
+            'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
+            'canManage' => $canManage,
             // Phase 5A.5 §26: channel-policy administration is gated
             // the same as thread/participant management -- reused, not
             // a new capability.
-            'canManageChannelPolicy' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school),
+            'canManageChannelPolicy' => $canManage,
+            'canManageTemplates' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.templates.manage', $school),
         ]);
     }
 
@@ -275,7 +293,7 @@ class CommunicationHubController extends Controller
             $service->unarchiveForParticipant($participant, $actor);
         }
 
-        return redirect('/app/communications');
+        return redirect('/app/communications/conversations');
     }
 
     /**

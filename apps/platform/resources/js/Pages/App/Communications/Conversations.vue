@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import HubNav from '@/Components/App/Communications/HubNav.vue';
 
 interface ThreadSummary {
     id: string;
@@ -32,7 +33,10 @@ interface Props {
     filters: { archived: boolean; q: string | null };
     totalUnreadCount: number;
     canSend: boolean;
+    canAnnounce: boolean;
+    canManage: boolean;
     canManageChannelPolicy: boolean;
+    canManageTemplates: boolean;
 }
 
 const props = defineProps<Props>();
@@ -90,7 +94,7 @@ function submitCompose() {
     }
     submitting.value = true;
     router.post(
-        '/app/communications',
+        '/app/communications/conversations',
         {
             subject: subject.value || null,
             thread_type: threadType.value,
@@ -106,7 +110,7 @@ function submitCompose() {
 
 function toggleArchivedView() {
     router.get(
-        '/app/communications',
+        '/app/communications/conversations',
         { archived: props.filters.archived ? undefined : 1 },
         { preserveState: true },
     );
@@ -115,7 +119,7 @@ function toggleArchivedView() {
 const searchInput = ref(props.filters.q ?? '');
 function submitSearch() {
     router.get(
-        '/app/communications',
+        '/app/communications/conversations',
         {
             q: searchInput.value || undefined,
             archived: props.filters.archived ? 1 : undefined,
@@ -128,15 +132,12 @@ function submitSearch() {
 <template>
     <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
         <div class="flex items-center justify-between">
-            <h1 class="text-xl font-semibold">
-                Communication Hub
-                <span
-                    v-if="totalUnreadCount > 0"
-                    class="ml-1 rounded-full bg-slate-900 px-1.5 py-0.5 align-middle text-xs font-medium text-white"
+            <div>
+                <a class="text-xs text-slate-400 underline" href="/app/communications"
+                    >← Communication Hub</a
                 >
-                    {{ totalUnreadCount }}
-                </span>
-            </h1>
+                <h1 class="mt-1 text-xl font-semibold">Conversations</h1>
+            </div>
             <button
                 v-if="canSend"
                 class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
@@ -147,39 +148,13 @@ function submitSearch() {
         </div>
 
         <div class="mt-6 grid grid-cols-1 gap-8 sm:grid-cols-[160px_1fr]">
-            <nav class="text-sm">
-                <ul class="space-y-1">
-                    <li class="rounded bg-slate-100 px-2 py-1 font-medium text-slate-900">Inbox</li>
-                    <li>
-                        <a
-                            class="block px-2 py-1 text-slate-600 hover:text-slate-900"
-                            href="/app/communications/announcements"
-                            >Announcements</a
-                        >
-                    </li>
-                    <li>
-                        <a
-                            class="block px-2 py-1 text-slate-600 hover:text-slate-900"
-                            href="/app/communications/templates"
-                            >Templates</a
-                        >
-                    </li>
-                    <li>
-                        <a
-                            class="block px-2 py-1 text-slate-600 hover:text-slate-900"
-                            href="/app/communications/preferences"
-                            >Preferences</a
-                        >
-                    </li>
-                    <li v-if="canManageChannelPolicy">
-                        <a
-                            class="block px-2 py-1 text-slate-600 hover:text-slate-900"
-                            href="/app/communications/settings/channels"
-                            >Settings</a
-                        >
-                    </li>
-                </ul>
-            </nav>
+            <HubNav
+                active="conversations"
+                :total-unread-count="totalUnreadCount"
+                :can-announce="canAnnounce"
+                :can-manage="canManage"
+                :can-manage-templates="canManageTemplates"
+            />
 
             <div>
                 <form
@@ -343,7 +318,7 @@ function submitSearch() {
                 >
                     <Link
                         v-if="meta.currentPage > 1"
-                        :href="`/app/communications?page=${meta.currentPage - 1}`"
+                        :href="`/app/communications/conversations?page=${meta.currentPage - 1}`"
                         class="underline"
                         >← Newer</Link
                     >
@@ -356,7 +331,7 @@ function submitSearch() {
                     >
                     <Link
                         v-if="meta.currentPage < meta.lastPage"
-                        :href="`/app/communications?page=${meta.currentPage + 1}`"
+                        :href="`/app/communications/conversations?page=${meta.currentPage + 1}`"
                         class="underline"
                         >Older →</Link
                     >
