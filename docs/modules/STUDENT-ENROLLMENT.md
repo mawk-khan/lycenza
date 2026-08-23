@@ -1,11 +1,13 @@
-# Student Enrollment (Phase 1B.1 / 1B.2)
+# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3)
 
-Status: **schema + sanctioned write path.** Phase 1B.1 shipped the
-schema/model/RLS/composite-FK foundation; Phase 1B.2 adds
-`App\Domain\Students\Application\StudentEnrollmentService`, the only
-sanctioned way to create a StudentEnrollment. Still no controllers, no
-API, no UI, no authorization, and no lifecycle transitions
-(complete/withdraw/transfer/cancel) yet — see "Deferred" below.
+Status: **schema + sanctioned write path + lifecycle transitions.**
+Phase 1B.1 shipped the schema/model/RLS/composite-FK foundation; Phase
+1B.2 added `StudentEnrollmentService::enroll()`, the only sanctioned
+way to create a StudentEnrollment; Phase 1B.3 adds the four terminal
+lifecycle transitions (`complete()`/`withdraw()`/`cancel()`) and the
+atomic same-Academic-Year placement transfer (`transferPlacement()`).
+Still no controllers, no API, no UI, no authorization, and no
+promotion/academic-year rollover yet — see "Deferred" below.
 
 ## Identity vs enrollment boundary
 
@@ -354,12 +356,204 @@ reference).
   expose a delete endpoint either (CLAUDE.md rule 73), so this is
   likewise defensive-only.
 
+## Lifecycle transitions (Phase 1B.3)
+
+No generic status setter exists (no
+`changeStatus($enrollment, $status)`) — every transition is its own
+method on `StudentEnrollmentService` with its own eligibility and date
+rules, matching `AcademicYearService::activate()`/`close()`'s
+established shape rather than an open-ended workflow framework.
+
+**Transition matrix:**
+
+```text
+ACTIVE
+ ├── COMPLETED    (complete())
+ ├── WITHDRAWN    (withdraw())
+ ├── CANCELLED    (cancel())
+ └── TRANSFERRED  (transferPlacement(), + a new ACTIVE row elsewhere)
+```
+
+`completed`/`withdrawn`/`cancelled`/`transferred` are all **terminal**
+— none of them transitions again through the sanctioned service,
+including back to `active`. Re-enrollment is always a brand-new
+StudentEnrollment row, never a reactivated old one (the historical-
+record principle above). Every lifecycle method reloads and
+`lockForUpdate()`s the authoritative row inside its own transaction
+before evaluating the transition — it never trusts a possibly-stale
+`$enrollment->status` the caller already holds — then performs a
+conditional `WHERE status = 'active'` UPDATE and checks the
+affected-row count, exactly mirroring `AcademicYearService::activate()`'s
+"reload, lock, conditionally transition, detect a lost race" pattern.
+Proven directly in
+`StudentEnrollmentLifecycleTest::the_service_reloads_the_authoritative_row_rather_than_trusting_a_stale_in_memory_status`.
+An invalid transition (including a terminal status attempting to
+transition again) throws `InvalidEnrollmentTransitionException`.
+
+### Completion
+
+`complete(StudentEnrollment $enrollment, string $endedOn, ?User $actor = null)`
+— normal end of an Enrollment's teaching period. Requires the
+Enrollment to currently be `active`; `$endedOn` must not precede
+`starts_on` (checked before the write, same invariant the database's
+own CHECK constraint enforces). Sets `status = 'completed'` and
+`ends_on = $endedOn`; every academic placement field
+(`academic_year_id`/`campus_id`/`grade_level_id`/`section_id`) and
+every Student identity field are left untouched. Records
+`student_enrollment.completed`. Deliberately does **not** create the
+next AcademicYear's Enrollment, change GradeLevel, allocate a Section,
+allocate a roll number, or touch `Student.status` — that orchestration
+belongs to a future dedicated rollover checkpoint.
+
+### Withdrawal
+
+`withdraw(StudentEnrollment $enrollment, string $endedOn, ?User $actor = null)`
+— the Student left this placement before it ran its normal course.
+Same eligibility/date/placement-preservation rules as `complete()`.
+Never touches `Student.status` or any Guardian relationship — the
+current architectural default is `Student identity != Enrollment
+status`; no already-accepted Student-domain rule requires otherwise
+today (`Student.status` only has `active`/`inactive`, established in
+Phase 1A — there is no `withdrawn`/`transferred`/`graduated` Student
+status in this codebase to even set). The row is never deleted.
+Records `student_enrollment.withdrawn`.
+
+### Cancellation
+
+`cancel(StudentEnrollment $enrollment, string $endedOn, ?User $actor = null)`
+— identical mechanics to `withdraw()`, distinguished only by intent.
+No existing code or documentation anywhere in this repository defines
+`cancelled` vs `withdrawn` semantics, so this checkpoint adopts the
+narrow interpretation below rather than inventing an elaborate
+cancellation-reason/approval workflow:
+
+- **withdrawn**: the Enrollment placement WAS operational, and the
+  Student subsequently left it.
+- **cancelled**: the Enrollment should not continue as an operational
+  placement; retained purely as an administrative historical record.
+
+Both require `active → cancelled`/`withdrawn` only, both preserve
+placement and Student identity, and neither deletes the row. Records
+`student_enrollment.cancelled`.
+
+### Transfer (same-Academic-Year placement move)
+
+`transferPlacement(StudentEnrollment $sourceEnrollment, Section $targetSection, string $rollNumber, string $effectiveDate, ?User $actor = null)`
+— moves a Student from their current `active` Enrollment into a
+different Section, atomically, as TWO historical rows: the source row
+is marked `transferred` (its own `academic_year_id`/`campus_id`/
+`grade_level_id`/`section_id` are never rewritten), and a brand-new
+`active` row is created for the target Section using the exact same
+trusted placement-derivation rule `enroll()` uses (the target Section
+is the sole placement input — a caller cannot independently supply a
+different AcademicYear/Campus/GradeLevel for the new row than what the
+target Section actually has).
+
+**Source/target requirements**, checked before any write:
+
+- **Same School** (`CrossSchoolEnrollmentException` otherwise) — the
+  composite FKs/RLS remain the authoritative backstop regardless; this
+  is a fail-fast, in-memory check ahead of them, matching `enroll()`'s
+  own cross-School check.
+- **Same AcademicYear** (`CrossAcademicYearTransferException`
+  otherwise) — Phase 1B.3's transfer is an intra-year placement move
+  only. A different AcademicYear is promotion/rollover/re-enrollment,
+  deliberately deferred (see "Deferred" below) — never a disguised
+  transfer.
+- **Same GradeLevel** (`IntraYearGradeChangeException` otherwise) —
+  this checkpoint's chosen safer default. No existing Academic
+  Structure rule anywhere in this codebase either permits or forbids
+  intra-year GradeLevel movement, so this checkpoint does not invent
+  one; a same-year transfer may change Section/Campus but must never
+  silently become an academic promotion/reclassification. A genuine
+  GradeLevel change is deferred to a future promotion/reclassification
+  checkpoint.
+- **Campus**: a same-School, same-year, same-GradeLevel transfer to a
+  Section on a *different* Campus IS allowed — there is no separate
+  campus-transfer check or path, because the target Section already
+  authoritatively owns its Campus; the new row simply derives whatever
+  Campus that Section has, exactly like `enroll()` already does for a
+  fresh Enrollment.
+
+**Roll number**: normalized (trimmed, blank rejected) exactly like
+`enroll()`; a conflict with an existing roll number in the target
+Section/AcademicYear is translated to
+`DuplicateEnrollmentRollNumberException` via the same
+`UniqueConstraintViolationException::$index` disambiguation Phase
+1B.2 established.
+
+**Date semantics** — `starts_on`/`ends_on` are both **inclusive**:
+`starts_on` is the first calendar date a placement is effective,
+`ends_on` is the *last* calendar date it is effective (never the day
+it stops). An intra-year transfer with `$effectiveDate` as the first
+date the NEW placement is effective therefore sets:
+
+```text
+old Enrollment.ends_on   = $effectiveDate minus one calendar day
+new Enrollment.starts_on = $effectiveDate
+```
+
+so the two placements never overlap and there is no gap between them.
+If `$effectiveDate` is on or before the source Enrollment's own
+`starts_on` (which would compute a source `ends_on` earlier than its
+own `starts_on` — an impossible historical interval), the operation is
+rejected with `InvalidEnrollmentDateRangeException` before any write,
+the same invariant the database's `ends_on >= starts_on` CHECK
+constraint enforces at the storage layer.
+
+**Atomicity**: the entire operation — locking and reloading the source
+row, verifying eligibility, computing/validating dates, transitioning
+the source row to `transferred`, recording its audit event, and
+creating the new `active` row (with its own `student_enrollment.created`
+audit event) — runs inside ONE `DB::transaction()`. If creating the new
+Enrollment fails for any reason (duplicate roll number in the target
+Section, an unexpected active-enrollment conflict, an FK/integrity
+failure), the WHOLE transaction rolls back: the source Enrollment is
+left exactly as it was before the attempt (still `active`, its
+original `ends_on`), no new row is created, and — because
+`SchoolAuditEvent` shares the same database connection/transaction as
+every other write in this service — the `student_enrollment.transferred`
+audit event for the source row's (attempted) transition rolls back
+with it too, so no false lifecycle audit record ever survives a failed
+transfer. Proven directly in
+`StudentEnrollmentLifecycleTest::a_transfer_rolls_back_entirely_when_the_target_roll_number_conflicts`
+(and the cross-year/cross-School/cross-grade rejection tests
+alongside it), which also proves the connection remains fully usable
+immediately afterward — the same `TenantContext::withSchool()`
+`DB::transaction()`-wrapping pattern Phase 1B.2 established for
+`enroll()` closes the Phase 1B.1 P3 footgun for this write path too,
+without any change to `TenantContext` itself.
+
+Inside the transaction, the source row is transitioned OUT of `active`
+status BEFORE the new row is inserted — so by the time the new `active`
+row's INSERT runs, the Phase 1B.1 partial unique index
+(`student_enrollments_one_active_per_student_year`) sees zero
+conflicting rows for that Student/AcademicYear pair, and the invariant
+("at most one active Enrollment per Student per AcademicYear") is
+never violated even momentarily from an external observer's
+perspective, since the whole sequence is one transaction.
+
+### Audit events (Phase 1B.3 additions)
+
+```text
+student_enrollment.completed
+student_enrollment.withdrawn
+student_enrollment.cancelled
+student_enrollment.transferred
+```
+
+Metadata carries only ids/statuses/dates (e.g. `studentId`,
+`academicYearId`, `sectionId`, `endsOn`; `transferred` additionally
+carries `fromSectionId`/`toSectionId`) — never a Student's name, date
+of birth, or Guardian PII, and roll number remains excluded, matching
+Phase 1B.2's precedent. A successful transfer also naturally emits the
+existing `student_enrollment.created` event for the new row through
+the same shared creation path `enroll()` uses — never double-recorded,
+since there is exactly one `create()` call per Enrollment row
+regardless of which method reached it.
+
 ## Deferred (not yet implemented)
 
-- **Enrollment lifecycle transitions** (`active → completed`/
-  `withdrawn`/`transferred`/`cancelled`) — `StudentEnrollmentService::enroll()`
-  only creates a fresh `active` Enrollment; there is no supported way to
-  change an existing row's `status`/`ends_on` yet. Phase 1B.3.
 - **Authorization** (`enrollments.view`/`enrollments.manage` or
   equivalent capability family) — no controller exists yet to gate.
   A future HTTP checkpoint.
