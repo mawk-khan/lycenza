@@ -10,10 +10,12 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
+use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -231,6 +233,24 @@ trait CreatesTenancyFixtures
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
             ], $attributes)),
+        );
+    }
+
+    // --- Phase 8A.3: Departments & Positions ---------------------------
+
+    protected function createDepartment(School $school, array $attributes = []): Department
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Department::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createPosition(School $school, array $attributes = []): Position
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Position::factory()->for($school, 'school')->create($attributes),
         );
     }
 }

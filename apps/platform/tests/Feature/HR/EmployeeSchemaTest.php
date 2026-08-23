@@ -5,6 +5,7 @@ namespace Tests\Feature\HR;
 use App\Domain\HR\Application\Exceptions\EmployeeNumberIsImmutableException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
@@ -114,5 +115,25 @@ class EmployeeSchemaTest extends TestCase
 
         $this->assertSame('archived', $archivedEmployee->record_status);
         $this->assertFalse($archivedEmployee->isActive());
+    }
+
+    /**
+     * Phase 8A.3 scope-creep guard: organizational placement
+     * (department/position/campus) and reporting hierarchy (manager)
+     * belong to EmployeeAssignment (8A.4+), never to employees itself
+     * (docs/modules/HR.md's Employee != Assignment principle). This
+     * fails loudly if a future checkpoint accidentally adds one of
+     * these columns directly to employees instead of through
+     * EmployeeAssignment.
+     */
+    #[Test]
+    public function employees_table_has_no_organizational_placement_columns(): void
+    {
+        foreach (['department_id', 'position_id', 'campus_id', 'manager_id'] as $column) {
+            $this->assertFalse(
+                Schema::hasColumn('employees', $column),
+                "employees.{$column} must not exist -- organizational placement belongs to EmployeeAssignment, not Employee.",
+            );
+        }
     }
 }

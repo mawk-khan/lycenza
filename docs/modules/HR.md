@@ -424,6 +424,62 @@ discovery):
   child composite FKs) + `TenantRls::enable()`, exactly like
   `academic_departments`.
 
+## Department and Position (8A.3, implemented)
+
+`hr_departments` and `positions` are built exactly as specified above,
+with the following as-built detail:
+
+- **Hierarchy cycle safety**: self-parenting
+  (`parent_department_id = id`) is rejected by a PostgreSQL CHECK
+  constraint (`hr_departments_no_self_parent_check`) — database-
+  enforced, mirroring `academic_years_date_range_check`'s use of a
+  plain CHECK for a simple invariant. An indirect cycle (A's new parent
+  is B, whose existing ancestry already leads back to A) cannot be
+  expressed as a CHECK constraint, so
+  `App\Domain\HR\Application\DepartmentService::reparent()` walks the
+  proposed parent's ancestry chain and rejects it at the application
+  layer (`DepartmentHierarchyCycleException`) before writing — a
+  deterministic, bounded walk (each Department has at most one parent),
+  not a generic graph engine.
+- **Campus/parent ownership**: `campus_id` and `parent_department_id`
+  composite-FK to `campuses(id, school_id)`/`hr_departments(id,
+  school_id)` respectively (`nullOnDelete()` on both — losing a Campus
+  or a parent Department demotes the child to School-wide/top-level
+  rather than blocking the deletion or cascading it away). `positions`
+  has neither column at all, per its explicit not-Campus-scoped
+  design.
+- **Write path**: `App\Domain\HR\Application\DepartmentService`/
+  `PositionService` are the sole sanctioned write paths, mirroring
+  `EmployeeService`'s shape exactly. Both accept the authoritative
+  School/Campus/parent-Department as real, already-resolved model
+  instances — never a raw caller-supplied id — and `create()` validates
+  Campus/parent same-School ownership before writing
+  (`DepartmentCampusMismatchException`/`DepartmentParentMismatchException`
+  otherwise). `update()` only ever touches `name`/`code`/`description`
+  — status changes go through dedicated `archive()`/`reactivate()`
+  methods, and campus/parent changes go through `reparent()` (no
+  "recampus" action exists yet; not required by this checkpoint).
+- **Position != authorization Role**: verified, not just asserted —
+  `positions` has no foreign key to `roles`/`capabilities`/
+  `membership_role_assignments`/`platform_role_assignments`, and
+  `PositionTest::the_full_position_lifecycle_never_touches_an_authorization_table()`
+  proves every `PositionService` method leaves every authorization
+  table's row count byte-for-byte unchanged.
+- **AcademicDepartment vs HR Department**: confirmed distinct, already
+  documented reciprocally in both models' docblocks
+  (`App\Domain\AcademicStructure\Infrastructure\AcademicDepartment` /
+  `App\Domain\HR\Infrastructure\Department`) — the former groups
+  Subjects academically, the latter represents staff organizational
+  ownership. Neither references the other; no linkage was added.
+- **`EmployeeCategory` deferred**: the checkpoint roadmap below
+  originally bundled `employee_categories` into 8A.3, but no
+  field-level design for it exists anywhere in this document (unlike
+  Department/Position, which this section fully specifies) — 8A.3's
+  actual brief scoped this checkpoint to Department/Position only.
+  Building `employee_categories` now would mean inventing its schema
+  unguided, which is deferred rather than done speculatively; the
+  roadmap line below is corrected to reflect this.
+
 ## Reporting hierarchy strategy
 
 **Decision: `employee_assignments.manager_assignment_id`**, not
@@ -645,7 +701,7 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.0  HR Architecture & Domain Contract                          (this checkpoint — docs/ADR only)
 8A.1  Employee Core Schema                                        (Employee, employee_number allocation + concurrency proof, User linkage)
 8A.2  Personal Details, Contacts & Addresses                      (EmployeePersonalDetail, EmployeeAddress, EmployeeEmergencyContact)
-8A.3  Departments & Positions                                     (hr_departments, positions, employee_categories)
+8A.3  Departments & Positions                                     (hr_departments, positions -- employee_categories deferred, see "Department and Position (8A.3, implemented)" above)
 8A.4  Employment Records & Employee Assignments                   (EmploymentRecord, EmployeeAssignment, primary-assignment invariant)
 8A.5  Reporting Hierarchy                                         (manager_assignment_id validation, cycle prevention, resolution queries — no new tables)
 8A.6  Qualifications, Experience & Certifications                 (EmployeeQualification, EmployeeExperience, EmployeeCertification)

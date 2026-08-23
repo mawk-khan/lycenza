@@ -13,14 +13,15 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * Phase 8A.1/8A.2: the HR-table-specific counterpart to
+ * Phase 8A.1/8A.2/8A.3: the HR-table-specific counterpart to
  * tests/Feature/Postgres/RawIsolationTest -- proof against REAL
  * PostgreSQL RLS, independent of Eloquent/SchoolScope entirely
  * (docs/modules/HR.md "Test strategy"). Every query uses
  * DB::connection('pgsql') directly, the exact connection every real
  * request/queue job uses (ADR 0021). Covers `employees`/
- * `hr_employee_number_counters` (8A.1) plus `employee_personal_details`/
- * `employee_addresses`/`employee_emergency_contacts` (8A.2).
+ * `hr_employee_number_counters` (8A.1), `employee_personal_details`/
+ * `employee_addresses`/`employee_emergency_contacts` (8A.2), and
+ * `hr_departments`/`positions` (8A.3).
  */
 class HrRawIsolationTest extends TestCase
 {
@@ -442,6 +443,192 @@ class HrRawIsolationTest extends TestCase
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
         $affected = DB::connection('pgsql')->delete('delete from employee_emergency_contacts where id = ?', [$contactB->id]);
+
+        $this->assertSame(0, $affected);
+    }
+
+    // --- Phase 8A.3: hr_departments --------------------------------------
+
+    #[Test]
+    public function hr_departments_table_has_rls_enabled_and_forced(): void
+    {
+        $row = DB::connection('pgsql_admin')->selectOne(
+            'select relrowsecurity, relforcerowsecurity from pg_class '.
+            "where relname = 'hr_departments' and relnamespace = 'public'::regnamespace",
+        );
+
+        $this->assertTrue($row->relrowsecurity);
+        $this->assertTrue($row->relforcerowsecurity);
+    }
+
+    #[Test]
+    public function raw_select_on_hr_departments_with_no_school_context_returns_zero_rows(): void
+    {
+        $school = $this->createSchool();
+        $this->createDepartment($school);
+
+        DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
+
+        $count = DB::connection('pgsql')->selectOne('select count(*) as c from hr_departments')->c;
+
+        $this->assertSame(0, (int) $count);
+    }
+
+    #[Test]
+    public function raw_select_with_school_a_context_sees_only_school_as_departments(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $departmentA = $this->createDepartment($schoolA);
+        $this->createDepartment($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $rows = DB::connection('pgsql')->select('select id from hr_departments');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame($departmentA->id, $rows[0]->id);
+    }
+
+    #[Test]
+    public function raw_insert_of_a_department_for_a_different_school_than_the_active_context_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolB): void {
+            DB::connection('pgsql')->insert(
+                'insert into hr_departments (id, school_id, name, code, status, created_at, updated_at) '.
+                'values (?, ?, ?, ?, ?, now(), now())',
+                [(string) Str::orderedUuid(), $schoolB->id, 'Rogue Department', 'ROGUE', 'active'],
+            );
+        });
+    }
+
+    #[Test]
+    public function raw_update_of_a_department_across_schools_affects_zero_rows_not_an_error(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $departmentB = $this->createDepartment($schoolB, ['name' => 'Original Name']);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->update(
+            'update hr_departments set name = ? where id = ?',
+            ['Hacked Name', $departmentB->id],
+        );
+
+        $this->assertSame(0, $affected);
+    }
+
+    #[Test]
+    public function raw_delete_of_a_department_across_schools_affects_zero_rows(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $departmentB = $this->createDepartment($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->delete('delete from hr_departments where id = ?', [$departmentB->id]);
+
+        $this->assertSame(0, $affected);
+    }
+
+    // --- Phase 8A.3: positions --------------------------------------------
+
+    #[Test]
+    public function positions_table_has_rls_enabled_and_forced(): void
+    {
+        $row = DB::connection('pgsql_admin')->selectOne(
+            'select relrowsecurity, relforcerowsecurity from pg_class '.
+            "where relname = 'positions' and relnamespace = 'public'::regnamespace",
+        );
+
+        $this->assertTrue($row->relrowsecurity);
+        $this->assertTrue($row->relforcerowsecurity);
+    }
+
+    #[Test]
+    public function raw_select_on_positions_with_no_school_context_returns_zero_rows(): void
+    {
+        $school = $this->createSchool();
+        $this->createPosition($school);
+
+        DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
+
+        $count = DB::connection('pgsql')->selectOne('select count(*) as c from positions')->c;
+
+        $this->assertSame(0, (int) $count);
+    }
+
+    #[Test]
+    public function raw_select_with_school_a_context_sees_only_school_as_positions(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $positionA = $this->createPosition($schoolA);
+        $this->createPosition($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $rows = DB::connection('pgsql')->select('select id from positions');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame($positionA->id, $rows[0]->id);
+    }
+
+    #[Test]
+    public function raw_insert_of_a_position_for_a_different_school_than_the_active_context_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolB): void {
+            DB::connection('pgsql')->insert(
+                'insert into positions (id, school_id, name, code, status, created_at, updated_at) '.
+                'values (?, ?, ?, ?, ?, now(), now())',
+                [(string) Str::orderedUuid(), $schoolB->id, 'Rogue Position', 'ROGUE', 'active'],
+            );
+        });
+    }
+
+    #[Test]
+    public function raw_update_of_a_position_across_schools_affects_zero_rows_not_an_error(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $positionB = $this->createPosition($schoolB, ['name' => 'Original Name']);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->update(
+            'update positions set name = ? where id = ?',
+            ['Hacked Name', $positionB->id],
+        );
+
+        $this->assertSame(0, $affected);
+    }
+
+    #[Test]
+    public function raw_delete_of_a_position_across_schools_affects_zero_rows(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $positionB = $this->createPosition($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->delete('delete from positions where id = ?', [$positionB->id]);
 
         $this->assertSame(0, $affected);
     }
