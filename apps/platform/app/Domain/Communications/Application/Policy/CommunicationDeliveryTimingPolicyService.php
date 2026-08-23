@@ -33,10 +33,18 @@ use Illuminate\Support\Carbon;
  *
  * Priority (NORMAL/IMPORTANT/URGENT/CRITICAL) and Requirement
  * (OPTIONAL/REQUIRED) are never consulted here -- brief §6: neither
- * concept means "bypass quiet hours" in this checkpoint. A future
- * explicit, separately-authorized emergency-bypass concept would slot
- * in as an additional, clearly-named precedence step -- not implemented
- * here.
+ * concept means "bypass quiet hours" in this checkpoint.
+ *
+ * Phase 5A.10 added the ONE explicit precedence step this class's own
+ * docblock previously reserved: `$emergencyBypassRequested` is true
+ * ONLY when the caller has already determined, from an explicit
+ * `CommunicationDispatchMode::Emergency` value on the announcement
+ * itself, that a bypass may be considered -- this method never infers
+ * emergency status from priority/requirement/anything else, and even
+ * when true, the bypass is granted only if the School has separately,
+ * explicitly enabled `emergency_bypass_allowed` for this channel
+ * (default false -- brief §37). If either condition is false, behavior
+ * is byte-for-byte identical to Phase 5A.9.
  *
  * Resolved fresh per request/command run (never a singleton), with a
  * private in-memory cache for the lifetime of that one instance --
@@ -49,7 +57,7 @@ class CommunicationDeliveryTimingPolicyService
 
     public function __construct(private readonly TenantContext $context) {}
 
-    public function evaluate(School $school, CommunicationChannel $channel, Carbon $at): CommunicationTimingDecision
+    public function evaluate(School $school, CommunicationChannel $channel, Carbon $at, bool $emergencyBypassRequested = false): CommunicationTimingDecision
     {
         if ($channel !== CommunicationChannel::Email) {
             return CommunicationTimingDecision::sendNow();
@@ -79,6 +87,14 @@ class CommunicationDeliveryTimingPolicyService
 
         if (! $this->isWithinQuietWindow($nowSeconds, $startSeconds, $endSeconds)) {
             return CommunicationTimingDecision::sendNow();
+        }
+
+        // Phase 5A.10 §15: only reached once we're already confirmed
+        // to be inside quiet hours. Emergency dispatch mode alone is
+        // never sufficient -- the School must also have opted this
+        // channel in.
+        if ($emergencyBypassRequested && $policy->emergency_bypass_allowed) {
+            return CommunicationTimingDecision::emergencyBypass();
         }
 
         $availableAtLocal = $local->copy()->setTimeFromTimeString($policy->quiet_hours_end);

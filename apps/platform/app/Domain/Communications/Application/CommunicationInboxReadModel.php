@@ -307,6 +307,7 @@ class CommunicationInboxReadModel
                     status: $a->status,
                     hasAttachments: $a->message_id !== null && $messageIdsWithAttachments->has($a->message_id),
                     route: "/app/communications/announcements/{$a->id}",
+                    isEmergency: $a->dispatch_mode === 'emergency',
                 );
             });
 
@@ -366,6 +367,7 @@ class CommunicationInboxReadModel
                 status: $a->status,
                 hasAttachments: $a->message_id !== null && $messageIdsWithAttachments->has($a->message_id),
                 route: "/app/communications/announcements/{$a->id}",
+                isEmergency: $a->dispatch_mode === 'emergency',
             ));
         });
     }

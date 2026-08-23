@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 interface TemplatePrefill {
     id: string;
@@ -13,6 +13,7 @@ interface Props {
     emailChannelEnabled: boolean;
     schoolTimezone: string;
     canMarkRequired: boolean;
+    canDispatchEmergency: boolean;
     template: TemplatePrefill | null;
 }
 
@@ -28,10 +29,25 @@ const audienceType = ref<'school_wide' | 'individual'>('school_wide');
 const memberIds = ref('');
 const emailSelected = ref(false);
 const requirement = ref<'optional' | 'required'>('optional');
+// Phase 5A.10 §40: never a default -- always an explicit choice, and
+// never inherited from a template (brief §13: templates carry no
+// dispatch-mode authority).
+const dispatchMode = ref<'standard' | 'emergency'>('standard');
+const emergencyJustification = ref('');
+const emergencyAcknowledged = ref(false);
 const submitting = ref(false);
+
+// Phase 5A.10 §39: the backend independently enforces this invariant
+// too -- this is a UX convenience, not the authorization boundary.
+watch(dispatchMode, (mode) => {
+    if (mode === 'emergency') {
+        requirement.value = 'required';
+    }
+});
 
 function submit() {
     submitting.value = true;
+    const isEmergency = props.canDispatchEmergency && dispatchMode.value === 'emergency';
     router.post(
         '/app/communications/announcements',
         {
@@ -50,6 +66,9 @@ function submit() {
                 props.emailChannelEnabled && emailSelected.value ? ['in_app', 'email'] : ['in_app'],
             source_template_id: props.template?.id ?? null,
             requirement: props.canMarkRequired ? requirement.value : 'optional',
+            dispatch_mode: isEmergency ? 'emergency' : 'standard',
+            emergency_justification: isEmergency ? emergencyJustification.value : null,
+            emergency_acknowledged: isEmergency ? emergencyAcknowledged.value : undefined,
         },
         {
             onFinish: () => {
@@ -164,6 +183,7 @@ function submit() {
                             v-model="requirement"
                             type="radio"
                             value="optional"
+                            :disabled="dispatchMode === 'emergency'"
                             class="mt-0.5 border-slate-300"
                         />
                         <span>
@@ -178,6 +198,7 @@ function submit() {
                             v-model="requirement"
                             type="radio"
                             value="required"
+                            :disabled="dispatchMode === 'emergency'"
                             class="mt-0.5 border-slate-300"
                         />
                         <span>
@@ -189,12 +210,65 @@ function submit() {
                             >
                         </span>
                     </label>
+                    <p v-if="dispatchMode === 'emergency'" class="text-xs text-slate-400">
+                        Locked to Required because this is an Emergency communication.
+                    </p>
+                </div>
+            </div>
+
+            <div v-if="canDispatchEmergency" class="rounded border border-red-200 bg-red-50 p-3">
+                <label class="flex items-start gap-2 text-sm font-medium text-red-800">
+                    <input
+                        :checked="dispatchMode === 'emergency'"
+                        type="checkbox"
+                        class="mt-0.5 rounded border-red-300"
+                        @change="
+                            dispatchMode = ($event.target as HTMLInputElement).checked
+                                ? 'emergency'
+                                : 'standard'
+                        "
+                    />
+                    Emergency communication
+                </label>
+                <p class="mt-1 text-xs text-red-700">
+                    This will mark the announcement as an emergency communication and may bypass
+                    configured quiet hours on channels where the school has explicitly enabled that
+                    bypass. It will automatically become Required.
+                </p>
+
+                <div v-if="dispatchMode === 'emergency'" class="mt-3 space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-red-800"
+                            >Internal justification</label
+                        >
+                        <textarea
+                            v-model="emergencyJustification"
+                            rows="2"
+                            maxlength="500"
+                            required
+                            placeholder="Short internal reason -- not necessarily shown to recipients."
+                            class="mt-1 w-full rounded border border-red-300 px-2 py-1 text-sm"
+                        ></textarea>
+                    </div>
+                    <label class="flex items-start gap-2 text-xs text-red-800">
+                        <input
+                            v-model="emergencyAcknowledged"
+                            type="checkbox"
+                            required
+                            class="mt-0.5 rounded border-red-300"
+                        />
+                        I understand this communication is intended for an emergency situation.
+                    </label>
                 </div>
             </div>
 
             <button
                 type="submit"
-                :disabled="submitting"
+                :disabled="
+                    submitting ||
+                    (dispatchMode === 'emergency' &&
+                        (!emergencyJustification.trim() || !emergencyAcknowledged))
+                "
                 class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >
                 Save Draft

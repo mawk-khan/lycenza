@@ -24,17 +24,19 @@ use Illuminate\Database\Eloquent\Model;
  * @property bool $enabled
  * @property string|null $quiet_hours_start
  * @property string|null $quiet_hours_end
+ * @property bool $emergency_bypass_allowed
  */
 class CommunicationDeliveryTimingPolicy extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
-    protected $fillable = ['school_id', 'channel', 'enabled', 'quiet_hours_start', 'quiet_hours_end'];
+    protected $fillable = ['school_id', 'channel', 'enabled', 'quiet_hours_start', 'quiet_hours_end', 'emergency_bypass_allowed'];
 
     protected function casts(): array
     {
         return [
             'enabled' => 'boolean',
+            'emergency_bypass_allowed' => 'boolean',
         ];
     }
 

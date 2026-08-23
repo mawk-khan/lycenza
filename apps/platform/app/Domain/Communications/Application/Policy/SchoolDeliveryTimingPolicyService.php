@@ -31,8 +31,9 @@ class SchoolDeliveryTimingPolicyService
         bool $enabled,
         ?string $quietHoursStart,
         ?string $quietHoursEnd,
+        bool $emergencyBypassAllowed = false,
     ): CommunicationDeliveryTimingPolicy {
-        return $this->context->withSchool($school, function () use ($school, $actor, $channel, $enabled, $quietHoursStart, $quietHoursEnd) {
+        return $this->context->withSchool($school, function () use ($school, $actor, $channel, $enabled, $quietHoursStart, $quietHoursEnd, $emergencyBypassAllowed) {
             $existing = CommunicationDeliveryTimingPolicy::query()
                 ->where('school_id', $school->id)
                 ->where('channel', $channel->value)
@@ -45,6 +46,7 @@ class SchoolDeliveryTimingPolicyService
                     'enabled' => $enabled,
                     'quiet_hours_start' => $quietHoursStart,
                     'quiet_hours_end' => $quietHoursEnd,
+                    'emergency_bypass_allowed' => $emergencyBypassAllowed,
                 ],
             );
 
@@ -59,6 +61,7 @@ class SchoolDeliveryTimingPolicyService
                 'enabled' => $enabled,
                 'quietHoursStart' => $quietHoursStart,
                 'quietHoursEnd' => $quietHoursEnd,
+                'emergencyBypassAllowed' => $emergencyBypassAllowed,
             ]);
 
             return $policy;

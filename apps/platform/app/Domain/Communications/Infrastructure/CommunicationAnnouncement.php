@@ -3,6 +3,7 @@
 namespace App\Domain\Communications\Infrastructure;
 
 use App\Domain\Communications\Domain\CommunicationAudienceType;
+use App\Domain\Communications\Domain\CommunicationDispatchMode;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Models\Campus;
@@ -29,6 +30,10 @@ use Illuminate\Support\Carbon;
  * @property string $priority
  * @property string $status
  * @property string $requirement
+ * @property string $dispatch_mode
+ * @property string|null $emergency_justification
+ * @property string|null $emergency_declared_by_user_id
+ * @property Carbon|null $emergency_declared_at
  * @property string $audience_type
  * @property Carbon|null $scheduled_at
  * @property string|null $scheduled_by_user_id
@@ -44,7 +49,8 @@ class CommunicationAnnouncement extends Model
 
     protected $fillable = [
         'school_id', 'campus_id', 'created_by_user_id', 'title', 'body', 'priority',
-        'status', 'requirement', 'audience_type', 'scheduled_at', 'scheduled_by_user_id', 'source_template_id',
+        'status', 'requirement', 'dispatch_mode', 'emergency_justification', 'emergency_declared_by_user_id',
+        'emergency_declared_at', 'audience_type', 'scheduled_at', 'scheduled_by_user_id', 'source_template_id',
         'message_id', 'recipient_count', 'published_at', 'cancelled_at',
     ];
 
@@ -54,6 +60,7 @@ class CommunicationAnnouncement extends Model
             'scheduled_at' => 'datetime',
             'published_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'emergency_declared_at' => 'datetime',
         ];
     }
 
@@ -84,6 +91,12 @@ class CommunicationAnnouncement extends Model
     public function scheduledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'scheduled_by_user_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function emergencyDeclaredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'emergency_declared_by_user_id');
     }
 
     /** @return BelongsTo<CommunicationTemplate, $this> */
@@ -140,6 +153,23 @@ class CommunicationAnnouncement extends Model
     public function audienceTypeEnum(): CommunicationAudienceType
     {
         return CommunicationAudienceType::from($this->audience_type);
+    }
+
+    /**
+     * Phase 5A.10 -- deliberately a THIRD, separate enum from both
+     * priority and requirement. CRITICAL priority does not imply
+     * Emergency; REQUIRED requirement does not imply Emergency (though
+     * Emergency itself must be Required -- enforced in
+     * App\Domain\Communications\Application\AnnouncementService).
+     */
+    public function dispatchModeEnum(): CommunicationDispatchMode
+    {
+        return CommunicationDispatchMode::from($this->dispatch_mode);
+    }
+
+    public function isEmergency(): bool
+    {
+        return $this->dispatch_mode === CommunicationDispatchMode::Emergency->value;
     }
 
     public function isDraft(): bool

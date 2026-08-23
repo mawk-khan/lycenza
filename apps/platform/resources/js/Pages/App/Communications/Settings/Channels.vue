@@ -15,6 +15,7 @@ interface TimingPolicy {
     enabled: boolean;
     quietHoursStart: string | null;
     quietHoursEnd: string | null;
+    emergencyBypassAllowed: boolean;
 }
 
 interface Props {
@@ -50,6 +51,7 @@ function save() {
 const quietHoursEnabled = ref(props.timingPolicy.enabled);
 const quietHoursStart = ref(props.timingPolicy.quietHoursStart ?? '20:00');
 const quietHoursEnd = ref(props.timingPolicy.quietHoursEnd ?? '07:00');
+const emergencyBypassAllowed = ref(props.timingPolicy.emergencyBypassAllowed);
 const savingTiming = ref(false);
 const timingError = ref<string | null>(null);
 
@@ -63,6 +65,7 @@ function saveTiming() {
             enabled: quietHoursEnabled.value,
             quiet_hours_start: quietHoursStart.value,
             quiet_hours_end: quietHoursEnd.value,
+            emergency_bypass_allowed: emergencyBypassAllowed.value,
         },
         {
             preserveScroll: true,
@@ -163,7 +166,8 @@ function saveTiming() {
                 Delays EMAIL transport during a daily quiet window. The in-app Communication Hub
                 record is never delayed -- this only affects when email is sent. Required and
                 Critical communications are still delayed like any other -- quiet hours are not
-                bypassed automatically.
+                bypassed automatically. Only an explicitly declared Emergency communication may
+                bypass this window, and only if enabled below.
             </p>
 
             <label class="mt-3 flex items-center gap-2 text-sm">
@@ -199,6 +203,23 @@ function saveTiming() {
                 Times are in this school's timezone ({{ schoolTimezone }}). A window that crosses
                 midnight (e.g. 8:00 PM to 7:00 AM) is supported.
             </p>
+
+            <div class="mt-4 border-t border-slate-100 pt-3">
+                <label class="flex items-center gap-2 text-sm">
+                    <input
+                        v-model="emergencyBypassAllowed"
+                        type="checkbox"
+                        class="rounded border-slate-300"
+                    />
+                    Emergency bypass
+                </label>
+                <p class="mt-1 text-xs text-slate-400">
+                    Allows an explicitly authorized, explicitly declared Emergency communication to
+                    bypass Email quiet hours on this channel. Off by default. Standard
+                    communications -- including Required and Critical ones -- are never affected by
+                    this setting.
+                </p>
+            </div>
 
             <p v-if="timingError" class="mt-2 text-xs text-red-600">{{ timingError }}</p>
 

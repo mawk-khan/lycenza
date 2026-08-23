@@ -12,6 +12,8 @@ interface AnnouncementDetail {
     status: string;
     priority: string;
     requirement: string;
+    dispatchMode: string;
+    emergencyJustification: string | null;
     scheduledAt: string | null;
     sourceTemplateId: string | null;
     publishedAt: string | null;
@@ -137,12 +139,18 @@ const publishing = ref(false);
 const cancelling = ref(false);
 const scheduling = ref(false);
 const scheduledAtInput = ref('');
+// Phase 5A.10 §22/§32: a deliberate, SEPARATE re-confirmation right
+// before an Emergency publish -- distinct from the composer-time
+// acknowledgement already captured when Emergency was first declared.
+const publishAcknowledged = ref(false);
 
 function publish() {
     publishing.value = true;
     router.post(
         `/app/communications/announcements/${props.announcement.id}/publish`,
-        {},
+        props.announcement.dispatchMode === 'emergency'
+            ? { acknowledged: publishAcknowledged.value }
+            : {},
         { onFinish: () => (publishing.value = false) },
     );
 }
@@ -240,11 +248,25 @@ function formatFileSize(bytes: number): string {
                 {{ announcement.status }}
             </span>
             <span
+                v-if="announcement.dispatchMode === 'emergency'"
+                class="rounded bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white"
+            >
+                ⚠ emergency
+            </span>
+            <span
                 v-if="announcement.requirement === 'required'"
                 class="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700"
             >
                 required
             </span>
+        </div>
+
+        <div
+            v-if="announcement.emergencyJustification"
+            class="mt-3 rounded border border-red-200 bg-red-50 p-3 text-xs text-red-800"
+        >
+            <p class="font-medium">Internal justification (restricted)</p>
+            <p class="mt-1 whitespace-pre-wrap">{{ announcement.emergencyJustification }}</p>
         </div>
         <p class="mt-1 text-xs text-slate-500">
             by {{ announcement.createdByName ?? 'Unknown' }}
@@ -428,11 +450,34 @@ function formatFileSize(bytes: number): string {
             </div>
         </div>
 
+        <div
+            v-if="
+                canEdit &&
+                announcement.status === 'draft' &&
+                announcement.dispatchMode === 'emergency'
+            "
+            class="mt-6 rounded border border-red-200 bg-red-50 p-3"
+        >
+            <label class="flex items-start gap-2 text-xs text-red-800">
+                <input
+                    v-model="publishAcknowledged"
+                    type="checkbox"
+                    required
+                    class="mt-0.5 rounded border-red-300"
+                />
+                I understand this will publish an Emergency communication and may bypass configured
+                quiet hours on channels the school has explicitly enabled that for.
+            </label>
+        </div>
+
         <div v-if="canEdit || canCancel" class="mt-6 flex gap-2">
             <button
                 v-if="canEdit && announcement.status === 'draft'"
                 type="button"
-                :disabled="publishing"
+                :disabled="
+                    publishing ||
+                    (announcement.dispatchMode === 'emergency' && !publishAcknowledged)
+                "
                 class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                 @click="publish"
             >

@@ -111,6 +111,20 @@ class CapabilityAndRoleSeeder extends Seeder
             // publish()/cancel() already do -- no new capability for
             // those (brief §36).
             ['key' => 'communications.templates.manage', 'label' => 'Create and manage Communication Hub templates', 'namespace' => 'school'],
+
+            // Phase 5A.10 -- Emergency Communication Policy foundation.
+            // A distinct, elevated capability from `communications.announce`
+            // -- Emergency mode can (only where the School has also
+            // separately opted in per channel) bypass the School's own
+            // configured quiet hours, a materially different blast
+            // radius/urgency than an ordinary announcement (brief §11).
+            // Granted ONLY to the single narrowest school-scoped role,
+            // `school_admin` -- `principal` already lacks
+            // `communications.manage`/`.audit.view` in this seeder, so
+            // withholding this capability from `principal` too is
+            // consistent with the existing trust boundary between the
+            // two roles, not a new one.
+            ['key' => 'communications.emergency', 'label' => 'Declare Communication Hub announcements as Emergency', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -144,7 +158,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.subjects.view', 'academics.subjects.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',
-                    'communications.templates.manage',
+                    'communications.templates.manage', 'communications.emergency',
                 ],
             ],
             'principal' => [

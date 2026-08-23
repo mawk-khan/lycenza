@@ -17,6 +17,7 @@ class CommunicationDeliveryTimingPolicyFactory extends Factory
             'enabled' => true,
             'quiet_hours_start' => '20:00:00',
             'quiet_hours_end' => '07:00:00',
+            'emergency_bypass_allowed' => false,
         ];
     }
 }

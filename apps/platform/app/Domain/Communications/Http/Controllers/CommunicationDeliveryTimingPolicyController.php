@@ -40,6 +40,10 @@ class CommunicationDeliveryTimingPolicyController extends Controller
             // the policy is being enabled.
             'quiet_hours_start' => [new RequiredIf((bool) $request->boolean('enabled')), 'nullable', 'date_format:H:i'],
             'quiet_hours_end' => [new RequiredIf((bool) $request->boolean('enabled')), 'nullable', 'date_format:H:i', 'different:quiet_hours_start'],
+            // Phase 5A.10 §37: defaults to false whenever omitted --
+            // this endpoint can never be used to silently turn bypass
+            // on for a School that didn't explicitly request it.
+            'emergency_bypass_allowed' => ['sometimes', 'boolean'],
         ]);
 
         $service->setPolicy(
@@ -49,6 +53,7 @@ class CommunicationDeliveryTimingPolicyController extends Controller
             (bool) $validated['enabled'],
             $validated['quiet_hours_start'] ?? null,
             $validated['quiet_hours_end'] ?? null,
+            (bool) ($validated['emergency_bypass_allowed'] ?? false),
         );
 
         return redirect('/app/communications/settings/channels');

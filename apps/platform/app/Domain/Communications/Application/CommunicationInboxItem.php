@@ -33,6 +33,13 @@ final class CommunicationInboxItem
         public readonly ?string $status,
         public readonly bool $hasAttachments,
         public readonly string $route,
+        // Phase 5A.10 §41: always `false` for a conversation/template
+        // item -- only an announcement can ever be Emergency. Purely a
+        // presentation flag mirrored from
+        // App\Domain\Communications\Infrastructure\CommunicationAnnouncement::isEmergency() --
+        // never the internal justification, which stays restricted to
+        // the announcement detail page's own server-side check.
+        public readonly bool $isEmergency = false,
     ) {}
 
     /**
@@ -53,6 +60,7 @@ final class CommunicationInboxItem
             'status' => $this->status,
             'hasAttachments' => $this->hasAttachments,
             'route' => $this->route,
+            'isEmergency' => $this->isEmergency,
         ];
     }
 }

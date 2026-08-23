@@ -9,6 +9,7 @@ use App\Domain\Communications\Application\Exceptions\CommunicationException;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Domain\Communications\Domain\CommunicationDispatchMode;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
@@ -97,6 +98,9 @@ class AnnouncementController extends Controller
             // Brief §8: only a communications.manage-capable sender may
             // ever mark a communication Required.
             'canMarkRequired' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.manage', $school),
+            // Phase 5A.10 §11: a distinct, elevated capability -- never
+            // inferred from `canMarkRequired`/`communications.announce`.
+            'canDispatchEmergency' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.emergency', $school),
             'template' => $template === null ? null : [
                 'id' => $template->id,
                 'title' => $template->subject,
@@ -111,8 +115,9 @@ class AnnouncementController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.announce', $school);
         $canMarkRequired = app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.manage', $school);
+        $canDispatchEmergency = app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.emergency', $school);
 
-        $validated = $this->validateComposer($request, $canMarkRequired);
+        $validated = $this->validateComposer($request, $canMarkRequired, $canDispatchEmergency);
 
         try {
             $announcement = $service->createDraft(
@@ -126,6 +131,8 @@ class AnnouncementController extends Controller
                 channels: $this->channelsFromInput($validated),
                 sourceTemplateId: $this->verifiedTemplateId($validated['source_template_id'] ?? null),
                 requirement: CommunicationRequirement::from($validated['requirement'] ?? 'optional'),
+                dispatchMode: CommunicationDispatchMode::from($validated['dispatch_mode'] ?? 'standard'),
+                emergencyJustification: $validated['emergency_justification'] ?? null,
             );
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages(['member_user_ids' => [$e->getMessage()]]);
@@ -171,13 +178,18 @@ class AnnouncementController extends Controller
         $preview = $model->isEditable() ? $service->previewAudience($model) : null;
 
         $canEditOrSchedule = ($isCreator || $canManage) && $model->isEditable();
+        $canDispatchEmergency = app(CapabilityResolver::class)->canInSchool($actor, 'communications.emergency', $school);
 
         return Inertia::render('App/Communications/Announcements/Show', [
-            'announcement' => $this->presentDetail($model),
+            // Phase 5A.10 §41: `emergencyJustification` is restricted
+            // server-side -- never sent to the payload at all for an
+            // unauthorized viewer, rather than sent and hidden in Vue.
+            'announcement' => $this->presentDetail($model, includeEmergencyJustification: $canManage || $canDispatchEmergency),
             'requestedChannels' => $requestedChannels,
             'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
             'schoolTimezone' => $school->timezone,
             'canMarkRequired' => $canManage,
+            'canDispatchEmergency' => $canDispatchEmergency,
             'preview' => $preview === null ? null : [
                 'count' => $preview->count(),
                 'categoryBreakdown' => $preview->categoryBreakdown,
@@ -205,7 +217,16 @@ class AnnouncementController extends Controller
         $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
 
-        $validated = $this->validateComposer($request, $canManage);
+        // Phase 5A.10 §12/§27: computed fresh for THIS actor on every
+        // update -- an unauthorized editor's payload can never contain
+        // `dispatch_mode=emergency` at all (rejected by validateComposer()'s
+        // Rule::in() below), whether or not the draft is already
+        // Emergency. Omitting the field from their request (which the
+        // Vue composer does automatically) simply leaves the existing
+        // value untouched.
+        $canDispatchEmergency = app(CapabilityResolver::class)->canInSchool($actor, 'communications.emergency', $school);
+
+        $validated = $this->validateComposer($request, $canManage, $canDispatchEmergency);
 
         try {
             $service->updateDraft(
@@ -217,6 +238,8 @@ class AnnouncementController extends Controller
                 $model->audienceTypeEnum() === CommunicationAudienceType::Individual ? ($validated['member_user_ids'] ?? []) : null,
                 channels: isset($validated['channels']) ? $this->channelsFromInput($validated) : null,
                 requirement: isset($validated['requirement']) ? CommunicationRequirement::from($validated['requirement']) : null,
+                dispatchMode: isset($validated['dispatch_mode']) ? CommunicationDispatchMode::from($validated['dispatch_mode']) : null,
+                emergencyJustification: $validated['emergency_justification'] ?? null,
             );
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages(['body' => [$e->getMessage()]]);
@@ -225,7 +248,7 @@ class AnnouncementController extends Controller
         return redirect("/app/communications/announcements/{$model->id}");
     }
 
-    public function publish(TenantContext $context, AnnouncementService $service, string $announcement): RedirectResponse
+    public function publish(Request $request, TenantContext $context, AnnouncementService $service, string $announcement): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.announce', $school);
@@ -234,6 +257,32 @@ class AnnouncementController extends Controller
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
         $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
+
+        // Phase 5A.10 §12/§21: PUBLISHING an already-Emergency draft is
+        // the moment its bypass-capable semantics actually take effect
+        // -- gated by the SAME elevated capability that was required to
+        // declare it, not only the capability that declared it earlier.
+        // Do not treat acknowledgement (below) as authorization -- this
+        // capability check is independent of it (brief §22).
+        if ($model->isEmergency()) {
+            $this->authorizeCapability('communications.emergency', $school);
+        }
+
+        // Phase 5A.10 §22/§38: a deliberate, explicit, server-enforced
+        // re-confirmation immediately before an Emergency publish --
+        // required ONLY for an Emergency announcement, never for a
+        // STANDARD one. A bare `accepted` validation rule is one of
+        // Laravel's IMPLICIT rules (it runs even when the field is
+        // entirely absent from the request), so it cannot be made
+        // conditional via `Rule::requiredIf()` alone -- an ordinary
+        // STANDARD publish() (still posting an empty body, unchanged
+        // from Phase 5A.4) would fail validation. A plain imperative
+        // check avoids that trap entirely.
+        if ($model->isEmergency() && ! $request->boolean('acknowledged')) {
+            throw ValidationException::withMessages([
+                'acknowledged' => ['You must acknowledge this Emergency communication before publishing.'],
+            ]);
+        }
 
         try {
             $service->publish($model, $actor);
@@ -308,7 +357,7 @@ class AnnouncementController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function validateComposer(Request $request, bool $canMarkRequired): array
+    private function validateComposer(Request $request, bool $canMarkRequired, bool $canDispatchEmergency = false): array
     {
         // Brief §17/§40: 'email' is only an ACCEPTABLE value when the
         // channel is currently enabled -- a forged HTTP payload
@@ -329,6 +378,16 @@ class AnnouncementController extends Controller
         // communication.
         $allowedRequirements = array_merge(['optional'], $canMarkRequired ? ['required'] : []);
 
+        // Phase 5A.10 §12/§27: the SAME dynamic-allowed-values pattern
+        // as `requirement` above, but for `communications.emergency`.
+        // 'standard' is always acceptable (downgrading an Emergency
+        // draft never needs the elevated capability -- it removes
+        // authority rather than granting it); 'emergency' is rejected
+        // (422) from anyone who lacks the capability, whether they are
+        // trying to newly declare it OR merely resubmitting an
+        // already-Emergency draft's unchanged value.
+        $allowedDispatchModes = array_merge(['standard'], $canDispatchEmergency ? ['emergency'] : []);
+
         return $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:10000'],
@@ -340,6 +399,16 @@ class AnnouncementController extends Controller
             'channels.*' => ['string', Rule::in($allowedChannels)],
             'source_template_id' => ['nullable', 'string'],
             'requirement' => ['sometimes', 'string', Rule::in($allowedRequirements)],
+            'dispatch_mode' => ['sometimes', 'string', Rule::in($allowedDispatchModes)],
+            'emergency_justification' => ['required_if:dispatch_mode,emergency', 'nullable', 'string', 'max:500'],
+            // Phase 5A.10 §22: a deliberate composer-time confirmation,
+            // distinct from the publish-time one in publish() -- never
+            // itself treated as authorization. `accepted_if` (unlike a
+            // bare `accepted`, which is one of Laravel's IMPLICIT rules
+            // and runs even when the field is entirely absent) only
+            // requires this when dispatch_mode is actually 'emergency'
+            // -- every ordinary STANDARD submission is unaffected.
+            'emergency_acknowledged' => ['accepted_if:dispatch_mode,emergency'],
         ]);
     }
 
@@ -504,6 +573,11 @@ class AnnouncementController extends Controller
             'status' => $a->status,
             'priority' => $a->priority,
             'requirement' => $a->requirement,
+            // Phase 5A.10 §41: the dispatch mode itself is safe to show
+            // any authorized viewer (a recipient may see an
+            // announcement is marked Emergency) -- only the internal
+            // justification is restricted (see presentDetail()).
+            'dispatchMode' => $a->dispatch_mode,
             'scheduledAt' => $a->scheduled_at?->toIso8601String(),
             'sourceTemplateId' => $a->source_template_id,
             'requestedChannels' => $a->relationLoaded('requestedChannels')
@@ -517,10 +591,14 @@ class AnnouncementController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function presentDetail(CommunicationAnnouncement $a): array
+    private function presentDetail(CommunicationAnnouncement $a, bool $includeEmergencyJustification = false): array
     {
         return array_merge($this->presentSummary($a), [
             'body' => $a->body,
+            // Phase 5A.10 §41: never included at all for an
+            // unauthorized viewer -- restricted server-side, not
+            // merely hidden in Vue.
+            'emergencyJustification' => $includeEmergencyJustification ? $a->emergency_justification : null,
         ]);
     }
 

@@ -64,6 +64,7 @@ class CommunicationChannelPolicyController extends Controller
                 'enabled' => $timing !== null && $timing->enabled,
                 'quietHoursStart' => $timing?->quiet_hours_start !== null ? substr((string) $timing->quiet_hours_start, 0, 5) : null,
                 'quietHoursEnd' => $timing?->quiet_hours_end !== null ? substr((string) $timing->quiet_hours_end, 0, 5) : null,
+                'emergencyBypassAllowed' => $timing !== null && $timing->emergency_bypass_allowed,
             ],
             'schoolTimezone' => $school->timezone,
         ]);

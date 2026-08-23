@@ -12,6 +12,7 @@ export interface InboxItem {
     status: string | null;
     hasAttachments: boolean;
     route: string;
+    isEmergency: boolean;
 }
 
 interface Props {
@@ -61,6 +62,11 @@ const typeLabels: Record<InboxItem['type'], string> = {
                         >
                             {{ item.title }}
                         </span>
+                        <span
+                            v-if="item.isEmergency"
+                            class="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white"
+                            >⚠ Emergency</span
+                        >
                         <span
                             v-if="item.requirement === 'required'"
                             class="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700"

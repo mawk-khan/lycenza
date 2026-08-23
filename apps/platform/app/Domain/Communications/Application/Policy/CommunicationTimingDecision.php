@@ -11,6 +11,12 @@ use Illuminate\Support\Carbon;
  * the ONE canonical value written to
  * App\Domain\Communications\Infrastructure\CommunicationDelivery::next_attempt_at,
  * which already stores every other delivery timing value in UTC.
+ *
+ * Phase 5A.10 added `emergencyBypass()` -- `shouldDefer = false`,
+ * identical in effect to `sendNow()` (every existing caller that only
+ * branches on `shouldDefer` continues to work unchanged), but with a
+ * distinct `reason` so the bypass is auditable/traceable separately
+ * from an ordinary "outside quiet hours" send.
  */
 final class CommunicationTimingDecision
 {
@@ -28,5 +34,10 @@ final class CommunicationTimingDecision
     public static function deferUntil(Carbon $availableAt): self
     {
         return new self(true, $availableAt, CommunicationTimingReason::QuietHours);
+    }
+
+    public static function emergencyBypass(): self
+    {
+        return new self(false, null, CommunicationTimingReason::EmergencyQuietHoursBypass);
     }
 }

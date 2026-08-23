@@ -148,6 +148,14 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
      * delivery-creation time (brief §29's immutable-planning
      * invariant) -- it only ever widens a freshly-computed retry
      * candidate, never touches a delivery that hasn't just failed.
+     *
+     * Phase 5A.10: the retry candidate is evaluated with the SAME
+     * emergency-bypass eligibility the original delivery had -- an
+     * Emergency announcement's transiently-failed EMAIL retry is not
+     * silently downgraded to ordinary quiet-hours deferral. This is a
+     * single extra per-delivery lookup (recipient -> message ->
+     * announcement), not a per-recipient one -- a retry is already an
+     * inherently single-delivery operation.
      */
     private function scheduleRetry(CommunicationDelivery $delivery, int $attemptNumber, CommunicationDeliveryTimingPolicyService $timingPolicy, School $school): void
     {
@@ -155,7 +163,7 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
         $delaySeconds = $schedule[min($attemptNumber - 1, count($schedule) - 1)];
         $candidate = now()->addSeconds($delaySeconds);
 
-        $timingDecision = $timingPolicy->evaluate($school, $delivery->channelEnum(), $candidate);
+        $timingDecision = $timingPolicy->evaluate($school, $delivery->channelEnum(), $candidate, $this->isEmergencyDelivery($delivery));
 
         $delivery->update([
             'status' => 'queued',
@@ -163,6 +171,11 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
             'processing_lease_expires_at' => null,
             'next_attempt_at' => $timingDecision->shouldDefer ? $timingDecision->availableAt : $candidate,
         ]);
+    }
+
+    private function isEmergencyDelivery(CommunicationDelivery $delivery): bool
+    {
+        return $delivery->recipient?->message?->announcement?->isEmergency() ?? false;
     }
 
     /**

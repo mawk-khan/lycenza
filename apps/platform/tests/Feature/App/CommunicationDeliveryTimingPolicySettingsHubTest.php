@@ -47,8 +47,58 @@ class CommunicationDeliveryTimingPolicySettingsHubTest extends TestCase
         $this->get('/app/communications/settings/channels')->assertInertia(fn ($page) => $page
             ->where('timingPolicy.channel', 'email')
             ->where('timingPolicy.enabled', false)
+            // Phase 5A.10 §37: the safe default -- deploying this
+            // checkpoint must not silently enable bypass for anyone.
+            ->where('timingPolicy.emergencyBypassAllowed', false)
             ->where('schoolTimezone', $school->timezone)
         );
+    }
+
+    #[Test]
+    public function omitting_emergency_bypass_allowed_defaults_to_false(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        $this->put('/app/communications/settings/timing', [
+            'channel' => 'email', 'enabled' => true, 'quiet_hours_start' => '20:00', 'quiet_hours_end' => '07:00',
+        ])->assertRedirect();
+
+        $policy = $this->policyFor($school);
+        $this->assertNotNull($policy);
+        $this->assertFalse($policy->emergency_bypass_allowed);
+    }
+
+    #[Test]
+    public function a_school_admin_can_enable_emergency_bypass(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        $this->put('/app/communications/settings/timing', [
+            'channel' => 'email', 'enabled' => true, 'quiet_hours_start' => '20:00', 'quiet_hours_end' => '07:00',
+            'emergency_bypass_allowed' => true,
+        ])->assertRedirect();
+
+        $policy = $this->policyFor($school);
+        $this->assertNotNull($policy);
+        $this->assertTrue($policy->emergency_bypass_allowed);
+    }
+
+    #[Test]
+    public function school_a_admin_cannot_enable_school_bs_emergency_bypass(): void
+    {
+        [$adminA, $schoolA] = $this->createSchoolAdmin('school_admin');
+        $schoolB = $this->createSchool();
+        $this->createDeliveryTimingPolicy($schoolB, ['enabled' => true, 'emergency_bypass_allowed' => false]);
+        $this->activate($adminA, $schoolA);
+
+        $this->put('/app/communications/settings/timing', [
+            'channel' => 'email', 'enabled' => true, 'quiet_hours_start' => '20:00', 'quiet_hours_end' => '07:00',
+            'emergency_bypass_allowed' => true,
+        ])->assertRedirect();
+
+        $this->assertFalse($this->policyFor($schoolB)->emergency_bypass_allowed);
     }
 
     #[Test]

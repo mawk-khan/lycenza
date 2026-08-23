@@ -5,6 +5,9 @@ namespace App\Domain\Communications\Application;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
+use App\Domain\Communications\Application\Exceptions\EmergencyCannotBeScheduledException;
+use App\Domain\Communications\Application\Exceptions\EmergencyJustificationRequiredException;
+use App\Domain\Communications\Application\Exceptions\EmergencyMustBeRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmptyAudienceException;
 use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransitionException;
 use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberException;
@@ -12,8 +15,10 @@ use App\Domain\Communications\Application\Exceptions\InvalidScheduledTimeExcepti
 use App\Domain\Communications\Application\Exceptions\UnsupportedAnnouncementChannelException;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
 use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService;
+use App\Domain\Communications\Application\Policy\CommunicationTimingReason;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Domain\Communications\Domain\CommunicationDispatchMode;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Domain\Communications\Events\CommunicationAnnouncementCancelled;
@@ -111,8 +116,22 @@ class AnnouncementService
         array $channels = [],
         ?string $sourceTemplateId = null,
         CommunicationRequirement $requirement = CommunicationRequirement::Optional,
+        CommunicationDispatchMode $dispatchMode = CommunicationDispatchMode::Standard,
+        ?string $emergencyJustification = null,
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement) {
+        // Phase 5A.10 §6/§23: validated BEFORE any write, independent
+        // of whatever the controller already validated -- an
+        // Application-layer caller (including a direct service test)
+        // gets the same guarantee an HTTP caller does. Authorization
+        // (whether this $creator may even set Emergency at all) is the
+        // CALLER's responsibility -- App\Domain\Communications\Http\Controllers\AnnouncementController
+        // -- exactly like `communications.announce` itself is never
+        // re-checked in this service.
+        $this->assertValidDispatchMode($dispatchMode, $requirement, $emergencyJustification);
+
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement, $dispatchMode, $emergencyJustification) {
+            $isEmergency = $dispatchMode === CommunicationDispatchMode::Emergency;
+
             $announcement = CommunicationAnnouncement::query()->create([
                 'school_id' => $school->id,
                 'campus_id' => $campus?->id,
@@ -124,6 +143,10 @@ class AnnouncementService
                 'audience_type' => $audienceType->value,
                 'source_template_id' => $sourceTemplateId,
                 'requirement' => $requirement->value,
+                'dispatch_mode' => $dispatchMode->value,
+                'emergency_justification' => $isEmergency ? $emergencyJustification : null,
+                'emergency_declared_by_user_id' => $isEmergency ? $creator->id : null,
+                'emergency_declared_at' => $isEmergency ? now() : null,
             ]);
 
             if ($audienceType === CommunicationAudienceType::Individual) {
@@ -136,12 +159,20 @@ class AnnouncementService
                 'audienceType' => $audienceType->value,
             ]);
 
+            if ($isEmergency) {
+                $this->auditEmergencyDeclared($announcement, $creator, $requirement, $emergencyJustification);
+            }
+
             event(new CommunicationAnnouncementCreated($school->id, $announcement->id, $audienceType->value, $creator->id));
 
             return $announcement->fresh();
         }));
     }
 
+    /**
+     * @param  array<int, string>|null  $individualMemberUserIds  null leaves the current member list untouched
+     * @param  array<int, CommunicationChannel>|null  $channels  null leaves the current channel selection untouched
+     */
     /**
      * @param  array<int, string>|null  $individualMemberUserIds  null leaves the current member list untouched
      * @param  array<int, CommunicationChannel>|null  $channels  null leaves the current channel selection untouched
@@ -155,8 +186,10 @@ class AnnouncementService
         ?array $individualMemberUserIds = null,
         ?array $channels = null,
         ?CommunicationRequirement $requirement = null,
+        ?CommunicationDispatchMode $dispatchMode = null,
+        ?string $emergencyJustification = null,
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement) {
+        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification) {
             // Phase 5A.4 §31: a SCHEDULED announcement remains editable
             // up until it is claimed for publication -- the exact same
             // content-editing rules as a draft (its own canonical
@@ -165,13 +198,52 @@ class AnnouncementService
                 throw new InvalidAnnouncementTransitionException($announcement->status, 'edit');
             }
 
-            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement) {
-                $announcement->update(array_filter([
+            // Phase 5A.10 §6/§27/§28: validated against the EFFECTIVE
+            // combination -- whichever value this call is changing, or
+            // else the announcement's current stored value -- so an
+            // edit to an unrelated field (e.g. title) on an
+            // already-Emergency draft can never silently leave it in
+            // an invalid state, and setting Emergency on an already-
+            // SCHEDULED announcement is rejected the same way
+            // schedule() itself rejects scheduling an Emergency draft.
+            $effectiveRequirement = $requirement ?? $announcement->requirementEnum();
+            $effectiveDispatchMode = $dispatchMode ?? $announcement->dispatchModeEnum();
+            $effectiveJustification = $dispatchMode !== null ? $emergencyJustification : $announcement->emergency_justification;
+
+            if ($effectiveDispatchMode === CommunicationDispatchMode::Emergency && ! $announcement->isDraft()) {
+                throw new EmergencyCannotBeScheduledException;
+            }
+
+            $this->assertValidDispatchMode($effectiveDispatchMode, $effectiveRequirement, $effectiveJustification);
+
+            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification, $effectiveRequirement) {
+                $updates = array_filter([
                     'title' => $title,
                     'body' => $body,
                     'priority' => $priority?->value,
                     'requirement' => $requirement?->value,
-                ], fn ($value) => $value !== null));
+                ], fn ($value) => $value !== null);
+
+                $becameEmergency = false;
+
+                if ($dispatchMode !== null) {
+                    $updates['dispatch_mode'] = $dispatchMode->value;
+
+                    if ($dispatchMode === CommunicationDispatchMode::Emergency) {
+                        $becameEmergency = true;
+                        $updates['emergency_justification'] = $emergencyJustification;
+                        $updates['emergency_declared_by_user_id'] = $actor->id;
+                        $updates['emergency_declared_at'] = now();
+                    } else {
+                        // Brief §27: removing Emergency also clears its
+                        // justification/declaration metadata.
+                        $updates['emergency_justification'] = null;
+                        $updates['emergency_declared_by_user_id'] = null;
+                        $updates['emergency_declared_at'] = null;
+                    }
+                }
+
+                $announcement->update($updates);
 
                 if ($individualMemberUserIds !== null && $announcement->audienceTypeEnum() === CommunicationAudienceType::Individual) {
                     $this->syncAudienceMembers($announcement, $individualMemberUserIds);
@@ -182,6 +254,10 @@ class AnnouncementService
                 }
 
                 $this->audit->school($announcement->school, 'announcement.updated', actor: $actor, subject: $announcement);
+
+                if ($becameEmergency) {
+                    $this->auditEmergencyDeclared($announcement, $actor, $effectiveRequirement, $emergencyJustification);
+                }
 
                 return $announcement->fresh();
             });
@@ -316,6 +392,14 @@ class AnnouncementService
 
                 $requestedChannels = $this->requestedChannels($fresh);
                 $requirement = $fresh->requirementEnum();
+                // Phase 5A.10 §9/§21: read from the ALREADY-PERSISTED,
+                // already-validated announcement row -- never re-derived
+                // from priority/requirement/anything else. This is the
+                // ONE place `publish()` learns whether emergency
+                // quiet-hours bypass may even be CONSIDERED; the School's
+                // own per-channel `emergency_bypass_allowed` setting
+                // (brief §15) still decides whether it actually applies.
+                $emergencyBypassRequested = $fresh->isEmergency();
 
                 // Phase 5A.9 -- evaluated ONCE per requested channel for
                 // this whole publish() call, not once per recipient
@@ -329,7 +413,22 @@ class AnnouncementService
                 $now = now();
                 $timingDecisions = [];
                 foreach ($requestedChannels as $channel) {
-                    $timingDecisions[$channel->value] = $this->timingPolicy->evaluate($fresh->school, $channel, $now);
+                    $timingDecisions[$channel->value] = $this->timingPolicy->evaluate($fresh->school, $channel, $now, $emergencyBypassRequested);
+                }
+
+                // Phase 5A.10 §16/§24/§44: one audit event per BYPASSED
+                // channel (never per recipient -- brief §24's own
+                // "avoid one generic audit event per recipient" -- the
+                // timing decision is already per-channel, not
+                // per-recipient, so this is the natural, non-duplicated
+                // granularity), giving an operator durable, traceable
+                // evidence that quiet hours were bypassed and why.
+                foreach ($timingDecisions as $channelValue => $decision) {
+                    if ($decision->reason === CommunicationTimingReason::EmergencyQuietHoursBypass) {
+                        $this->audit->school($fresh->school, 'communication.emergency_quiet_hours_bypass_used', actor: $actor, subject: $fresh, metadata: [
+                            'channel' => $channelValue,
+                        ]);
+                    }
                 }
 
                 foreach (array_chunk($resolved->userIds, self::CHUNK_SIZE) as $chunk) {
@@ -417,6 +516,13 @@ class AnnouncementService
                     'resolvedCount' => count($resolved->userIds),
                 ]);
 
+                if ($emergencyBypassRequested) {
+                    $this->audit->school($fresh->school, 'announcement.emergency_published', actor: $actor, subject: $fresh, metadata: [
+                        'requestedChannels' => array_map(fn (CommunicationChannel $c) => $c->value, $requestedChannels),
+                        'resolvedCount' => count($resolved->userIds),
+                    ]);
+                }
+
                 event(new CommunicationAnnouncementPublished(
                     $fresh->school_id,
                     $fresh->id,
@@ -452,6 +558,13 @@ class AnnouncementService
         return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $scheduledAtUtc) {
             if ($scheduledAtUtc->isPast()) {
                 throw new InvalidScheduledTimeException;
+            }
+
+            // Phase 5A.10 §28: Emergency is an immediate exceptional
+            // dispatch mode -- it never enters the normal scheduled
+            // state. A future scheduled advisory must remain STANDARD.
+            if ($announcement->isEmergency()) {
+                throw new EmergencyCannotBeScheduledException;
             }
 
             return DB::transaction(function () use ($announcement, $actor, $scheduledAtUtc) {
@@ -572,8 +685,52 @@ class AnnouncementService
     }
 
     /**
-     * @param  array<int, string>  $userIds
+     * Phase 5A.10 §6: the ONE place the `EMERGENCY requires REQUIRED`
+     * and `EMERGENCY requires a justification` invariants are checked
+     * -- called from both createDraft() and updateDraft() against
+     * whichever combination of values is EFFECTIVE for that call, so
+     * neither entry point can independently drift from the other.
      */
+    private function assertValidDispatchMode(
+        CommunicationDispatchMode $dispatchMode,
+        CommunicationRequirement $requirement,
+        ?string $justification,
+    ): void {
+        if ($dispatchMode !== CommunicationDispatchMode::Emergency) {
+            return;
+        }
+
+        if ($requirement !== CommunicationRequirement::Required) {
+            throw new EmergencyMustBeRequiredException;
+        }
+
+        if ($justification === null || trim($justification) === '') {
+            throw new EmergencyJustificationRequiredException;
+        }
+    }
+
+    /**
+     * Phase 5A.10 §24/§25: a dedicated, distinct audit event from
+     * `announcement.created`/`announcement.updated` -- "who explicitly
+     * declared this Emergency, and when, with what justification" must
+     * be answerable from the audit trail alone, not reconstructed from
+     * mutable current announcement state. Never logs recipient
+     * addresses or message body -- only the announcement's own id and
+     * the operational justification text (tenant-owned, restricted to
+     * `communications.audit.view`, never a generic application log).
+     */
+    private function auditEmergencyDeclared(
+        CommunicationAnnouncement $announcement,
+        User $actor,
+        CommunicationRequirement $requirement,
+        ?string $justification,
+    ): void {
+        $this->audit->school($announcement->school, 'announcement.emergency_declared', actor: $actor, subject: $announcement, metadata: [
+            'requirement' => $requirement->value,
+            'justification' => $justification,
+        ]);
+    }
+
     /**
      * @param  array<int, string>  $userIds
      * @return Collection<string, SchoolMembership> user_id => active membership, reused by publish() for
