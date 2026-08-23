@@ -749,30 +749,20 @@ No read method mutates state — no "fix stale placement while reading,"
 no automatic status completion, no automatic rollover, no lazy
 roll-number correction. Reads are reads.
 
-## Cross-cutting P1 finding: intermittent full-suite flakiness (Phase 1B.4)
+## Cross-cutting TenantContext flakiness — resolved (Phase 1B.4A)
 
-While verifying this checkpoint, running the FULL platform regression
-suite repeatedly (not just once) surfaced a genuine, if intermittent,
-failure: roughly 1-in-5 full-suite runs fail with a `QueryException`
-(`SQLSTATE[25P02]: current transaction is aborted`) originating from
-`TenantContext::clear()`'s unconditional `RESET app.current_school_id`
-statement, thrown from inside a DIFFERENT, unrelated test class than
-any Phase 1B test — never reproduced when running Phase 1B's own test
-files alone or in combination with each other (100+ isolated/combined
-runs, always clean). A controlled comparison (5 consecutive full-suite
-runs against the Phase 1B.3 baseline, all clean, vs. roughly 5 failures
-across ~28 full-suite runs with Phase 1B.4's files present) shows this
-checkpoint's new test files measurably change *when* this pre-existing
-`TenantContext` fragility (already flagged as a P3 in the Phase 1B.1
-report) gets triggered — most plausibly by shifting PHPUnit's directory-
-scan discovery order, changing which pre-existing raw-SQL/RLS-session-
-manipulating tests (a pattern several modules use, not unique to
-Enrollment) end up adjacent to which other tests — not by introducing
-a new defect in Phase 1B's own write paths (which remain 100% reliably
-green across every targeted run). See the Phase 1B.4 checkpoint report
-("Findings", P1) for the full evidence and recommended next step
-(a dedicated test-infrastructure hardening checkpoint, before this
-branch's next push/merge gate).
+Verifying Phase 1B.4 surfaced a genuine, intermittent, pre-existing
+`TenantContext` cleanup defect (an aborted PostgreSQL transaction
+causing a secondary `RESET app.current_school_id` failure to mask the
+real original exception) that caused occasional full-suite ordering
+flakiness — never reproduced within Phase 1B's own tests specifically,
+and not a defect in this module's write paths. It was root-caused and
+fixed as a dedicated platform-level checkpoint, Phase 1B.4A — see
+`docs/architecture/TENANCY.md` ("TenantContext cleanup and
+aborted-transaction safety") for the full mechanism and fix, and the
+Phase 1B.4A checkpoint report for the verification evidence (3
+consecutive clean full-suite runs, a random-order run, and a 20/20
+targeted stress loop, all green).
 
 ## Deferred (not yet implemented)
 
