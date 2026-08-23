@@ -6,6 +6,7 @@ use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -50,9 +51,22 @@ class CommunicationDeliveryFactory
      * moment this row was written, independent of any later change to
      * the recipient's stored contact details.
      *
+     * Phase 5A.9 -- `$availableAt`, when provided, means the delivery
+     * plan already knows this recipient+channel must not transport
+     * before that UTC instant (a quiet-hours deferral decided by
+     * App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService,
+     * never computed here). The row is created directly in the SAME
+     * `queued` + `next_attempt_at` state
+     * App\Jobs\ProcessCommunicationDeliveryJob::scheduleRetry() already
+     * uses for a retry backoff -- no new status value, and
+     * App\Console\Commands\RedispatchDueCommunicationDeliveries picks
+     * it up once due without any changes of its own (brief §20/§23).
+     * `null` (the default) preserves the exact pre-5A.9 immediate-send
+     * behavior.
+     *
      * @param  array<string, mixed>|null  $destinationSnapshot
      */
-    public function createDelivery(CommunicationRecipient $recipient, CommunicationChannel $channel, ?array $destinationSnapshot = null): CommunicationDelivery
+    public function createDelivery(CommunicationRecipient $recipient, CommunicationChannel $channel, ?array $destinationSnapshot = null, ?Carbon $availableAt = null): CommunicationDelivery
     {
         try {
             // Wrapped in its own DB::transaction() so a constraint
@@ -65,9 +79,10 @@ class CommunicationDeliveryFactory
                 'school_id' => $recipient->school_id,
                 'recipient_id' => $recipient->id,
                 'channel' => $channel->value,
-                'status' => 'pending',
+                'status' => $availableAt !== null ? 'queued' : 'pending',
                 'destination_snapshot' => $destinationSnapshot,
                 'queued_at' => now(),
+                'next_attempt_at' => $availableAt,
             ]));
         } catch (UniqueConstraintViolationException) {
             return CommunicationDelivery::query()

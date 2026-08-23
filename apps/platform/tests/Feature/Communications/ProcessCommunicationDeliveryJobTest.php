@@ -3,6 +3,7 @@
 namespace Tests\Feature\Communications;
 
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
+use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Support\Tenancy\TenantContext;
@@ -36,6 +37,7 @@ class ProcessCommunicationDeliveryJobTest extends TestCase
         (new ProcessCommunicationDeliveryJob($school->id, $delivery->id))->handle(
             app(CommunicationChannelRegistry::class),
             app(TenantContext::class),
+            app(CommunicationDeliveryTimingPolicyService::class),
         );
 
         $fresh = app(TenantContext::class)->withSchool($school, fn () => $delivery->fresh());
@@ -57,12 +59,13 @@ class ProcessCommunicationDeliveryJobTest extends TestCase
 
         $registry = app(CommunicationChannelRegistry::class);
         $context = app(TenantContext::class);
+        $timingPolicy = app(CommunicationDeliveryTimingPolicyService::class);
 
-        (new ProcessCommunicationDeliveryJob($school->id, $delivery->id))->handle($registry, $context);
+        (new ProcessCommunicationDeliveryJob($school->id, $delivery->id))->handle($registry, $context, $timingPolicy);
         // Second run: the delivery is already `delivered` (terminal),
         // so the atomic claim's WHERE status IN ('pending','queued')
         // matches 0 rows -- no second attempt is recorded.
-        (new ProcessCommunicationDeliveryJob($school->id, $delivery->id))->handle($registry, $context);
+        (new ProcessCommunicationDeliveryJob($school->id, $delivery->id))->handle($registry, $context, $timingPolicy);
 
         $attemptCount = $context->withSchool(
             $school,
@@ -89,6 +92,7 @@ class ProcessCommunicationDeliveryJobTest extends TestCase
         (new ProcessCommunicationDeliveryJob($school->id, $delivery->id))->handle(
             app(CommunicationChannelRegistry::class),
             app(TenantContext::class),
+            app(CommunicationDeliveryTimingPolicyService::class),
         );
 
         $fresh = app(TenantContext::class)->withSchool($school, fn () => $delivery->fresh());

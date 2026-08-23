@@ -11,6 +11,7 @@ use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberExcept
 use App\Domain\Communications\Application\Exceptions\InvalidScheduledTimeException;
 use App\Domain\Communications\Application\Exceptions\UnsupportedAnnouncementChannelException;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
+use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
@@ -91,6 +92,7 @@ class AnnouncementService
         private readonly CommunicationDeliveryFactory $deliveryFactory,
         private readonly EmailAddressResolver $emailAddressResolver,
         private readonly CommunicationChannelPolicyService $channelPolicy,
+        private readonly CommunicationDeliveryTimingPolicyService $timingPolicy,
     ) {}
 
     /**
@@ -315,6 +317,21 @@ class AnnouncementService
                 $requestedChannels = $this->requestedChannels($fresh);
                 $requirement = $fresh->requirementEnum();
 
+                // Phase 5A.9 -- evaluated ONCE per requested channel for
+                // this whole publish() call, not once per recipient
+                // (brief §60: "one policy lookup -> evaluate many
+                // deliveries"). The decision (SEND_NOW, or DEFER until a
+                // fixed UTC instant) is identical for every recipient of
+                // a given channel at a given `now`, so there is no
+                // reason to re-evaluate it inside the recipient loop
+                // below. IN_APP always resolves to SEND_NOW without any
+                // query (brief §5).
+                $now = now();
+                $timingDecisions = [];
+                foreach ($requestedChannels as $channel) {
+                    $timingDecisions[$channel->value] = $this->timingPolicy->evaluate($fresh->school, $channel, $now);
+                }
+
                 foreach (array_chunk($resolved->userIds, self::CHUNK_SIZE) as $chunk) {
                     // Reused for BOTH the historical snapshot AND the
                     // policy engine's eligibility/preference lookups
@@ -365,13 +382,27 @@ class AnnouncementService
                             // inconsistent with it.
                             $recipient ??= $this->deliveryFactory->createRecipient($fresh->school_id, $message->id, $userId);
 
-                            $deliveryIds[] = $this->deliveryFactory->createDelivery(
+                            $timingDecision = $timingDecisions[$channel->value];
+
+                            $delivery = $this->deliveryFactory->createDelivery(
                                 $recipient,
                                 $channel,
                                 $channel === CommunicationChannel::Email
                                     ? $this->emailDestinationSnapshot($users?->get($userId))
                                     : null,
-                            )->id;
+                                $timingDecision->shouldDefer ? $timingDecision->availableAt : null,
+                            );
+
+                            // Phase 5A.9 §22/§23: a deferred delivery is
+                            // never dispatched to the queue now -- it
+                            // already carries the `queued` status +
+                            // `next_attempt_at` App\Console\Commands\
+                            // RedispatchDueCommunicationDeliveries scans
+                            // for, and will be picked up once due,
+                            // exactly like a retry backoff already is.
+                            if (! $timingDecision->shouldDefer) {
+                                $deliveryIds[] = $delivery->id;
+                            }
                         }
                     }
                 }

@@ -10,6 +10,7 @@ use App\Domain\Communications\Infrastructure\CommunicationChannelPolicy;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
+use App\Domain\Communications\Infrastructure\CommunicationDeliveryTimingPolicy;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationPreference;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
@@ -163,6 +164,16 @@ trait CreatesCommunicationFixtures
         return app(TenantContext::class)->withSchool(
             $school,
             fn () => CommunicationChannelPolicy::factory()->create(array_merge([
+                'school_id' => $school->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createDeliveryTimingPolicy(School $school, array $attributes = []): CommunicationDeliveryTimingPolicy
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationDeliveryTimingPolicy::factory()->create(array_merge([
                 'school_id' => $school->id,
             ], $attributes)),
         );

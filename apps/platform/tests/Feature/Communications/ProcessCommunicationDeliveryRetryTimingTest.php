@@ -4,9 +4,9 @@ namespace Tests\Feature\Communications;
 
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
 use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService;
-use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
@@ -15,26 +15,27 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * Phase 5A.3 §21: a retryable transient failure is scheduled for a
- * bounded, backed-off re-attempt rather than immediately terminal --
- * proven here by forcing Mail::shouldReceive()-style failure via a
- * fake mailer transport exception, since Mail::fake() alone never
- * throws. A deterministic failure (already covered by
- * EmailChannelDriverTest) never reaches this retry path at all.
+ * Phase 5A.9 §33/§57 -- a retry backoff timestamp that itself falls
+ * inside a quiet-hours window is pushed out to the next permitted
+ * instant, so every provider attempt (not just the first) respects
+ * current timing eligibility.
  */
-class ProcessCommunicationDeliveryRetryTest extends TestCase
+class ProcessCommunicationDeliveryRetryTimingTest extends TestCase
 {
     use CreatesCommunicationFixtures, CreatesTenancyFixtures;
 
     #[Test]
-    public function a_transient_transport_failure_schedules_a_bounded_backed_off_retry_not_an_immediate_terminal_failure(): void
+    public function a_retry_backoff_that_would_land_inside_quiet_hours_is_pushed_to_the_next_permitted_instant(): void
     {
         Config::set('communications.channels.email.enabled', true);
         Config::set('communications.delivery.max_attempts', 3);
-        Config::set('communications.delivery.retry_backoff_seconds', [30, 120, 300]);
+        // A 300-second backoff pushes the retry candidate well past
+        // 06:59:30 -> into the still-quiet 07:00 boundary region.
+        Config::set('communications.delivery.retry_backoff_seconds', [300]);
         Config::set('mail.mailers.array.transport', 'failing-test-transport');
 
         [$sender, $school] = $this->createSchoolAdmin('school_admin');
+        $this->createDeliveryTimingPolicy($school, ['enabled' => true, 'quiet_hours_start' => '20:00:00', 'quiet_hours_end' => '07:00:00']);
         $recipientUser = $this->createUser();
         $this->createMembership($recipientUser, $school);
         $thread = $this->createThread($school, $sender);
@@ -44,6 +45,10 @@ class ProcessCommunicationDeliveryRetryTest extends TestCase
             'channel' => 'email',
             'destination_snapshot' => ['email' => 'someone@school-os.test'],
         ]);
+
+        // 22:00:00 + a 300s backoff candidate (22:05:00) is itself
+        // still well inside the 20:00-07:00 quiet window.
+        $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
         Mail::shouldReceive('mailer')->andThrow(new \RuntimeException('simulated transient transport failure'));
 
@@ -57,24 +62,23 @@ class ProcessCommunicationDeliveryRetryTest extends TestCase
         $fresh = $context->withSchool($school, fn () => $delivery->fresh());
 
         $this->assertSame('queued', $fresh->status);
-        $this->assertSame(1, $fresh->attempts);
         $this->assertNotNull($fresh->next_attempt_at);
-        $this->assertTrue($fresh->next_attempt_at->isFuture());
-
-        $attempt = $context->withSchool($school, fn () => CommunicationDeliveryAttempt::query()
-            ->where('communication_delivery_id', $delivery->id)->first());
-        $this->assertSame('transient_failure', $attempt->outcome);
-        $this->assertSame('email_transport_unavailable', $attempt->failure_code);
+        // The naive backoff candidate (22:05:00) is inside quiet hours
+        // -- the actual persisted next_attempt_at must be pushed all
+        // the way out to the window's end instead.
+        $this->assertTrue($fresh->next_attempt_at->equalTo(Carbon::parse('2026-08-24 07:00:00', 'Asia/Kolkata')));
     }
 
     #[Test]
-    public function a_retryable_failure_becomes_terminal_once_max_attempts_is_reached(): void
+    public function a_retry_backoff_that_lands_outside_quiet_hours_is_used_unmodified(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Config::set('communications.delivery.max_attempts', 2);
-        Config::set('communications.delivery.retry_backoff_seconds', [1]);
+        Config::set('communications.delivery.max_attempts', 3);
+        Config::set('communications.delivery.retry_backoff_seconds', [30]);
+        Config::set('mail.mailers.array.transport', 'failing-test-transport');
 
         [$sender, $school] = $this->createSchoolAdmin('school_admin');
+        $this->createDeliveryTimingPolicy($school, ['enabled' => true, 'quiet_hours_start' => '20:00:00', 'quiet_hours_end' => '07:00:00']);
         $recipientUser = $this->createUser();
         $this->createMembership($recipientUser, $school);
         $thread = $this->createThread($school, $sender);
@@ -83,8 +87,11 @@ class ProcessCommunicationDeliveryRetryTest extends TestCase
         $delivery = $this->createDelivery($recipient, [
             'channel' => 'email',
             'destination_snapshot' => ['email' => 'someone@school-os.test'],
-            'attempts' => 1,
         ]);
+
+        // 12:00:00 + 30s candidate is nowhere near the quiet window.
+        $this->travelTo(Carbon::parse('2026-08-23 12:00:00', 'Asia/Kolkata'));
+        $expectedCandidate = now()->copy()->addSeconds(30);
 
         Mail::shouldReceive('mailer')->andThrow(new \RuntimeException('simulated transient transport failure'));
 
@@ -97,51 +104,46 @@ class ProcessCommunicationDeliveryRetryTest extends TestCase
         $context = app(TenantContext::class);
         $fresh = $context->withSchool($school, fn () => $delivery->fresh());
 
-        $this->assertSame('failed', $fresh->status);
-        $this->assertSame(2, $fresh->attempts);
-        $this->assertNull($fresh->next_attempt_at);
+        $this->assertSame('queued', $fresh->status);
+        $this->assertTrue($fresh->next_attempt_at->equalTo($expectedCandidate));
     }
 
     #[Test]
-    public function redispatch_command_requeues_a_delivery_whose_retry_is_due_and_ignores_one_not_yet_due(): void
+    public function a_quiet_hours_deferred_delivery_is_sent_exactly_once_even_if_redispatch_races(): void
     {
+        Config::set('communications.channels.email.enabled', true);
+        Mail::fake();
+
         [$sender, $school] = $this->createSchoolAdmin('school_admin');
+        $this->createDeliveryTimingPolicy($school, ['enabled' => true, 'quiet_hours_start' => '20:00:00', 'quiet_hours_end' => '07:00:00']);
         $recipientUser = $this->createUser();
         $this->createMembership($recipientUser, $school);
         $thread = $this->createThread($school, $sender);
         $message = $this->createMessage($thread, $sender);
         $recipient = $this->createRecipient($message, $recipientUser);
 
-        $due = $this->createDelivery($recipient, [
+        $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
+
+        // Simulates exactly what AnnouncementService::publish() would
+        // have written for a quiet-hours-deferred first attempt.
+        $delivery = $this->createDelivery($recipient, [
             'channel' => 'email',
             'status' => 'queued',
-            'attempts' => 1,
-            'next_attempt_at' => now()->subMinute(),
+            'attempts' => 0,
+            'next_attempt_at' => Carbon::parse('2026-08-24 07:00:00', 'Asia/Kolkata')->utc(),
             'destination_snapshot' => ['email' => 'someone@school-os.test'],
         ]);
 
-        $recipient2 = $this->createRecipient($message, $this->createUser());
-        $notDue = $this->createDelivery($recipient2, [
-            'channel' => 'email',
-            'status' => 'queued',
-            'attempts' => 1,
-            'next_attempt_at' => now()->addHour(),
-            'destination_snapshot' => ['email' => 'someone-else@school-os.test'],
-        ]);
+        $this->travelTo(Carbon::parse('2026-08-24 07:00:01', 'Asia/Kolkata'));
 
-        Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
-
+        $this->artisan('platform:communication-deliveries-redispatch')->assertExitCode(0);
         $this->artisan('platform:communication-deliveries-redispatch')->assertExitCode(0);
 
         $context = app(TenantContext::class);
-        $dueFresh = $context->withSchool($school, fn () => $due->fresh());
-        $notDueFresh = $context->withSchool($school, fn () => $notDue->fresh());
+        $fresh = $context->withSchool($school, fn () => $delivery->fresh());
 
-        // The due delivery was picked up, processed (sync queue), and
-        // moved out of `queued`. The not-yet-due delivery is untouched.
-        $this->assertNotSame('queued', $dueFresh->status);
-        $this->assertSame('queued', $notDueFresh->status);
+        $this->assertSame('sent', $fresh->status);
+        $this->assertSame(1, $fresh->attempts);
         Mail::assertSentCount(1);
     }
 }

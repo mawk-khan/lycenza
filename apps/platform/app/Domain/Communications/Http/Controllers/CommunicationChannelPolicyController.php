@@ -5,6 +5,7 @@ namespace App\Domain\Communications\Http\Controllers;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
 use App\Domain\Communications\Application\Policy\SchoolChannelPolicyService;
 use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Domain\Communications\Infrastructure\CommunicationDeliveryTimingPolicy;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
@@ -44,9 +45,27 @@ class CommunicationChannelPolicyController extends Controller
             ];
         }
 
+        // Phase 5A.9 -- read side of the Email quiet-hours settings
+        // section on this same page; the write side is a separate
+        // controller (CommunicationDeliveryTimingPolicyController)
+        // since it has its own validation/service, mirroring how
+        // channel policy and timing policy are two distinct write
+        // paths despite sharing one settings page.
+        $timing = CommunicationDeliveryTimingPolicy::query()
+            ->where('school_id', $school->id)
+            ->where('channel', CommunicationChannel::Email->value)
+            ->first();
+
         return Inertia::render('App/Communications/Settings/Channels', [
             'policies' => $policies,
             'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
+            'timingPolicy' => [
+                'channel' => CommunicationChannel::Email->value,
+                'enabled' => $timing !== null && $timing->enabled,
+                'quietHoursStart' => $timing?->quiet_hours_start !== null ? substr((string) $timing->quiet_hours_start, 0, 5) : null,
+                'quietHoursEnd' => $timing?->quiet_hours_end !== null ? substr((string) $timing->quiet_hours_end, 0, 5) : null,
+            ],
+            'schoolTimezone' => $school->timezone,
         ]);
     }
 

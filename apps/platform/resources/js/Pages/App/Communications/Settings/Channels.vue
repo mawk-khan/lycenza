@@ -10,9 +10,18 @@ interface ChannelPolicy {
     isOverride: boolean;
 }
 
+interface TimingPolicy {
+    channel: string;
+    enabled: boolean;
+    quietHoursStart: string | null;
+    quietHoursEnd: string | null;
+}
+
 interface Props {
     policies: ChannelPolicy[];
     emailChannelEnabled: boolean;
+    timingPolicy: TimingPolicy;
+    schoolTimezone: string;
 }
 
 const props = defineProps<Props>();
@@ -35,6 +44,35 @@ function save() {
             recipient_can_opt_out: recipientCanOptOut.value,
         },
         { onFinish: () => (saving.value = false), preserveScroll: true },
+    );
+}
+
+const quietHoursEnabled = ref(props.timingPolicy.enabled);
+const quietHoursStart = ref(props.timingPolicy.quietHoursStart ?? '20:00');
+const quietHoursEnd = ref(props.timingPolicy.quietHoursEnd ?? '07:00');
+const savingTiming = ref(false);
+const timingError = ref<string | null>(null);
+
+function saveTiming() {
+    savingTiming.value = true;
+    timingError.value = null;
+    router.put(
+        '/app/communications/settings/timing',
+        {
+            channel: 'email',
+            enabled: quietHoursEnabled.value,
+            quiet_hours_start: quietHoursStart.value,
+            quiet_hours_end: quietHoursEnd.value,
+        },
+        {
+            preserveScroll: true,
+            onFinish: () => (savingTiming.value = false),
+            onError: (errors: Record<string, string>) => {
+                const first = Object.values(errors)[0];
+                timingError.value =
+                    typeof first === 'string' ? first : 'Could not save quiet hours.';
+            },
+        },
     );
 }
 </script>
@@ -118,5 +156,60 @@ function save() {
         >
             Save Channel Settings
         </button>
+
+        <div class="mt-10 rounded border border-slate-200 p-4">
+            <h2 class="text-sm font-semibold">Email delivery timing</h2>
+            <p class="mt-1 text-xs text-slate-400">
+                Delays EMAIL transport during a daily quiet window. The in-app Communication Hub
+                record is never delayed -- this only affects when email is sent. Required and
+                Critical communications are still delayed like any other -- quiet hours are not
+                bypassed automatically.
+            </p>
+
+            <label class="mt-3 flex items-center gap-2 text-sm">
+                <input
+                    v-model="quietHoursEnabled"
+                    type="checkbox"
+                    class="rounded border-slate-300"
+                />
+                Enabled
+            </label>
+
+            <div class="mt-3 flex items-center gap-4 text-sm">
+                <label class="flex items-center gap-2">
+                    From
+                    <input
+                        v-model="quietHoursStart"
+                        type="time"
+                        :disabled="!quietHoursEnabled"
+                        class="rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-50"
+                    />
+                </label>
+                <label class="flex items-center gap-2">
+                    Until
+                    <input
+                        v-model="quietHoursEnd"
+                        type="time"
+                        :disabled="!quietHoursEnabled"
+                        class="rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-50"
+                    />
+                </label>
+            </div>
+            <p class="mt-2 text-xs text-slate-400">
+                Times are in this school's timezone ({{ schoolTimezone }}). A window that crosses
+                midnight (e.g. 8:00 PM to 7:00 AM) is supported.
+            </p>
+
+            <p v-if="timingError" class="mt-2 text-xs text-red-600">{{ timingError }}</p>
+
+            <button
+                type="button"
+                :disabled="savingTiming"
+                class="mt-4 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                @click="saveTiming"
+            >
+                Save Timing Settings
+            </button>
+        </div>
     </main>
 </template>

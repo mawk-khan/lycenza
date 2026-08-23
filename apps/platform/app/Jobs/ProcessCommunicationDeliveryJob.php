@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
+use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Models\School;
@@ -52,7 +53,7 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
         public readonly string $deliveryId,
     ) {}
 
-    public function handle(CommunicationChannelRegistry $registry, TenantContext $context): void
+    public function handle(CommunicationChannelRegistry $registry, TenantContext $context, CommunicationDeliveryTimingPolicyService $timingPolicy): void
     {
         $school = School::query()->find($this->schoolId);
 
@@ -62,13 +63,13 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
 
         try {
             $context->set($school);
-            $this->process($registry);
+            $this->process($registry, $timingPolicy, $school);
         } finally {
             $context->clearAll();
         }
     }
 
-    private function process(CommunicationChannelRegistry $registry): void
+    private function process(CommunicationChannelRegistry $registry, CommunicationDeliveryTimingPolicyService $timingPolicy, School $school): void
     {
         $delivery = $this->claim();
 
@@ -112,7 +113,7 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
 
         if ($result->retryable && $attemptNumber < (int) config('communications.delivery.max_attempts')) {
             $this->recordAttempt($delivery, $attemptNumber, $startedAt, 'transient_failure', null, $result->failureCode, $result->failureMessage);
-            $this->scheduleRetry($delivery, $attemptNumber);
+            $this->scheduleRetry($delivery, $attemptNumber, $timingPolicy, $school);
 
             return;
         }
@@ -137,17 +138,30 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
      * for. A max-attempts-exhausted retryable failure falls through to
      * the same terminal `failed` handling as a non-retryable one, one
      * call site up.
+     *
+     * Phase 5A.9 §33/§57: the computed backoff timestamp is itself
+     * re-checked against quiet-hours timing eligibility -- a retry
+     * that would otherwise land inside a quiet window is pushed out to
+     * the next permitted instant instead, so "every provider attempt
+     * respects current timing eligibility," not just the first one.
+     * This does NOT re-evaluate the ORIGINAL deferral decision made at
+     * delivery-creation time (brief §29's immutable-planning
+     * invariant) -- it only ever widens a freshly-computed retry
+     * candidate, never touches a delivery that hasn't just failed.
      */
-    private function scheduleRetry(CommunicationDelivery $delivery, int $attemptNumber): void
+    private function scheduleRetry(CommunicationDelivery $delivery, int $attemptNumber, CommunicationDeliveryTimingPolicyService $timingPolicy, School $school): void
     {
         $schedule = config('communications.delivery.retry_backoff_seconds');
         $delaySeconds = $schedule[min($attemptNumber - 1, count($schedule) - 1)];
+        $candidate = now()->addSeconds($delaySeconds);
+
+        $timingDecision = $timingPolicy->evaluate($school, $delivery->channelEnum(), $candidate);
 
         $delivery->update([
             'status' => 'queued',
             'attempts' => $attemptNumber,
             'processing_lease_expires_at' => null,
-            'next_attempt_at' => now()->addSeconds($delaySeconds),
+            'next_attempt_at' => $timingDecision->shouldDefer ? $timingDecision->availableAt : $candidate,
         ]);
     }
 

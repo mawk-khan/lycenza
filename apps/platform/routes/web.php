@@ -3,6 +3,7 @@
 use App\Domain\Communications\Http\Controllers\AnnouncementController;
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
+use App\Domain\Communications\Http\Controllers\CommunicationDeliveryTimingPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
 use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
@@ -137,6 +138,11 @@ Route::middleware('auth')->group(function (): void {
         Route::prefix('settings')->name('settings.')->group(function (): void {
             Route::get('/channels', [CommunicationChannelPolicyController::class, 'show'])->name('channels');
             Route::put('/channels', [CommunicationChannelPolicyController::class, 'update'])->name('channels.update');
+
+            // Phase 5A.9: write side of the same Channels settings
+            // page's quiet-hours section -- see
+            // CommunicationDeliveryTimingPolicyController's docblock.
+            Route::put('/timing', [CommunicationDeliveryTimingPolicyController::class, 'update'])->name('timing.update');
         });
 
         // Phase 5A.7 §10: registered BEFORE the '/{thread}' wildcard
