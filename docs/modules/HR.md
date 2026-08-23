@@ -1053,6 +1053,199 @@ does not prove authenticity — verification remains an explicit,
 separate HR domain action); full `hr.*` capability enforcement
 (8A.10).
 
+## Employee Directory (8A.8, implemented)
+
+**Read/query foundation only — no controller, route, or UI.** This
+checkpoint's own roadmap one-liner below ("search/filter/paginate API +
+list UI") was written speculatively in 8A.0, before any capability was
+actually seeded; verified before implementation that
+`Database\Seeders\CapabilityAndRoleSeeder` registers no `hr.*`
+capability at all yet (only mentioned in a comment listing future
+domain prefixes). Building an HTTP-reachable controller/route gated by
+a capability that does not exist would mean either shipping an
+ungated HR-data endpoint (a real regression) or seeding `hr.*`
+capabilities here — explicitly reserved for **8A.10 HR Permissions &
+Sensitive-Data Controls** ("capability seeder rollout"). 8A.8 therefore
+implements the safe query/read layer only:
+`App\Domain\HR\Application\EmployeeDirectoryService`,
+`EmployeeDirectoryQuery` (input), and `EmployeeDirectoryEntry`
+(disclosure DTO) — no `App\Http\Controllers` addition, no route, no
+Vue page. UI/API wiring is deferred to whichever future checkpoint
+pairs it with real `hr.*` authorization (8A.9/8A.10/8A.14).
+
+**Disclosure projection, not a convenience serializer**:
+`EmployeeDirectoryEntry` is never constructed from
+`$employee->toArray()` or `Employee::with([...])->get()` — its 12
+properties are the *entire* exhaustive contract, enforced by an
+allow-list test (`array_keys($entry->toArray())`). Exposed:
+`employee_id`, `employee_number`, `display_name`, `position_id`/
+`position_name`, `department_id`/`department_name`, `campus_id`/
+`campus_name`, `manager_employee_id`/`manager_employee_number`/
+`manager_display_name`. Excluded by construction (never selected,
+joined, or eager-loaded — not merely hidden by a serializer):
+`employee_personal_details`, `employee_addresses`,
+`employee_emergency_contacts`, `employee_qualifications`,
+`employee_experience_records`, `employee_certifications`,
+`employee_documents` — every Restricted/Highly-Sensitive table 8A.2/
+8A.6/8A.7 introduced. A dedicated test creates an Employee with
+populated data (and distinctive sentinel values) across all seven of
+those tables and asserts none of it appears anywhere in the serialized
+Directory result.
+
+**No status field exposed.** HR.md's own Directory-tier row (Privacy
+classification matrix, below) lists only name/employee number/work
+contact/position/department/campus/manager — no status dimension.
+`Employee.record_status` is used server-side only, as a query *filter*
+(default: `active` only; `includeArchived: true` opts into both), never
+as a returned DTO field — deliberately more conservative than "not
+currently displayed," per this checkpoint's own core invariant: an
+unapproved field is structurally absent, not just unrendered.
+
+**Work-contact gap, documented rather than worked around**: HR.md's
+Directory-tier row lists "work email/phone" as an eventually-Directory
+concept, but no `work_email`/`work_phone` column exists on `Employee`
+yet. `personal_email`/`personal_phone`/`alternate_phone` (8A.2) are
+Restricted and are never substituted as work contact information —
+Directory contact fields are simply absent until real work-contact
+columns exist. Not a bug; a recorded gap for whichever future
+checkpoint adds them.
+
+**Current Employment selection**: `starts_on <= today <= (ends_on OR
+infinity)` — the same rule `EmployeeAssignment::isCurrent()` already
+establishes, applied here to `EmploymentRecord` too (which has no
+`isCurrent()` helper of its own; `isOpen()` alone — `ends_on IS NULL`
+— is insufficient, since a future-dated open-ended Employment is
+"open" but not yet "current"). Past and future EmploymentRecords are
+ignored; if no currently-effective one exists, organizational fields
+are simply `null` (the Employee still appears in the Directory — a
+gap between Employments is not the same thing as `record_status =
+archived`).
+
+**Current primary Assignment selection**: within the currently
+effective EmploymentRecord, the currently effective `is_primary = true`
+Assignment drives `position_id`/`department_id`/`campus_id`. A
+superseded (ended) primary Assignment is ignored in favor of its
+successor; a non-primary (secondary) Assignment never drives these
+fields and never produces a second Directory row for the same
+Employee — multiple simultaneous Assignments (e.g. Teacher +
+Coordinator) collapse to exactly one Directory entry, with only the
+primary Assignment's organizational placement surfaced. If somehow more
+than one Assignment/EmploymentRecord satisfies "current" (a data-
+integrity violation 8A.4's own no-overlap/one-primary-open invariants
+should prevent), the query picks the most-recently-started one via an
+explicit, deterministic `ORDER BY starts_on DESC, id ASC` tiebreak —
+never Postgres' unspecified natural row order, and never a randomly
+"first" result.
+
+**Rehire**: proven directly — an Employee with a closed Employment #1
+and an open Employment #2 appears exactly once, using Employment #2's
+current primary Assignment; Employment #1's historical Position never
+resurfaces and never produces a duplicate row.
+
+**Manager projection — exactly one hop**: the current primary
+Assignment's live `manager_assignment_id` pointer (8A.5) is resolved to
+that manager Assignment's own EmploymentRecord and Employee, exposing
+only `manager_employee_id`/`manager_employee_number`/
+`manager_display_name` — no manager Restricted/Highly-Sensitive data,
+no recursive reporting-tree traversal, and no claim of historical
+point-in-time accuracy (this reflects 8A.5's live pointer exactly as
+8A.5 designed it — see that checkpoint's own docblock).
+
+**Search**: `employee_number` (prefix match) and `full_name`
+(substring match), both case-insensitive `ILIKE`, both parameterized
+(no string-concatenated SQL). User-supplied `%`/`_`/`\` characters are
+escaped (`addcslashes`) before being embedded in the `ILIKE` pattern,
+so a literal `%` in search input can never act as a SQL wildcard
+matching every row — proven with a dedicated test. No Restricted field
+is ever a search target (proven: searching a real personal-email value
+returns zero results). Organizational name/code text search
+(Department/Position/Campus) is deliberately not implemented this
+checkpoint — filtering by exact id is sufficient and safer; a
+`pg_trgm` GIN index (HR.md's original "Search strategy" section,
+written in 8A.0) remains deferred until real query-plan evidence at
+production data volumes justifies it — no speculative index migration
+was added.
+
+**Filters**: `campusId`/`departmentId`/`positionId`, each matched
+against the currently effective primary Assignment (never a historical
+one). A filter id belonging to a different School is never
+distinguished from one that does not exist — both simply match zero
+`employee_assignments` rows (RLS + the composite tenant-safe FK already
+guarantee this) — proven with a dedicated test, closing the
+existence-oracle risk without an extra, riskier existence check.
+
+**Sorting**: allow-listed to `full_name`/`employee_number` only
+(`EmployeeDirectoryQuery::ALLOWED_SORTS`) — an unapproved value falls
+back to the deterministic default (`full_name`) rather than being
+passed to `orderBy()` or rejected with an exception. Default order is
+always fully deterministic: the chosen sort column, then
+`employee_number`, then `id` as a final tiebreak.
+
+**Pagination**: Laravel's standard `paginate()`
+(`docs/architecture/API.md`'s documented offset-based convention).
+Default page size 25; hard maximum 100
+(`EmployeeDirectoryService::MAX_PER_PAGE`), enforced inside
+`EmployeeDirectoryQuery`'s own constructor — an out-of-range
+`perPage` can never reach the query layer at all, let alone return an
+unbounded result set.
+
+**Tenant isolation**: every query runs inside
+`TenantContext::withSchool($school, ...)`, established by the service
+itself (not merely assumed already-correct) — proven with a dedicated
+test that deliberately leaves a *different* School active in ambient
+`TenantContext` before calling `search()`, confirming the requested
+School's boundary still wins. Underlying RLS on `employees`/
+`employment_records`/`employee_assignments`/`hr_departments`/
+`positions`/`campuses` (already proven in `HrRawIsolationTest`) remains
+the defense-in-depth backstop; no privileged/admin database connection
+is used anywhere in this class. `employee_number` collisions across
+Schools (e.g. two Schools both using `EMP-000001`) are proven never to
+cross School boundaries via search.
+
+**Batch-hydration, not N+1**: a fixed, small number of queries per
+page (one for the page of Employees, one each for current
+EmploymentRecords/current primary Assignments/Departments/Positions/
+Campuses/manager Assignments/manager EmploymentRecords/manager
+Employees) — never one query per Employee row, regardless of page
+size.
+
+**No new migration.** `MIGRATIONS: NONE` — the Directory is entirely
+derived, in application/query code, from already-committed 8A.1–8A.5
+tables. No denormalized `employee_directory` table, no materialized
+view, no cache (tenant-sensitive query-result caching was considered
+and explicitly rejected for this checkpoint — a correct, RLS-backed
+SQL read model is preferred over cache-invalidation/cross-tenant-
+leakage risk for a feature with no demonstrated performance need yet).
+
+**Audit**: none added. An ordinary Directory read/search does not
+generate an `AuditRecorder` event — matches this codebase's existing
+convention (no read-access audit subsystem exists anywhere yet); a
+future Restricted/Highly-Sensitive *read* audit requirement remains
+8A.10's concern, not retrofitted here for data this checkpoint never
+touches in the first place.
+
+**Tests added**: 26 in `EmployeeDirectoryServiceTest` — exact
+disclosure shape, the full Restricted/Highly-Sensitive negative-leak
+test across all seven excluded tables, current-Employment/current-
+primary-Assignment selection (including the "future open-ended
+Employment is not current" edge case), rehire non-duplication,
+secondary-Assignment non-duplication, one-hop manager projection,
+search (number/name/wildcard-literal/no-Restricted-match), filters
+(same-School and cross-School-id-returns-nothing), sort (allow-listed
+and invalid-defaults-safely), pagination (deterministic, clamped
+maximum), and tenant isolation (cross-School discovery, identical
+cross-School employee numbers, ambient-context override safety,
+archived-employee default exclusion) — 351 passed, 610 assertions for
+the full precise-path HR suite, up from the 8A.7 baseline of 325
+passed / 544 assertions.
+
+**Deferred, correctly**: Employee Profile Workspace (8A.9); full `hr.*`
+capability rollout and Restricted-field suppression proof (8A.10);
+controller/route/UI of any kind; `EmployeeCategory`; imports; public/
+mobile API; payroll/attendance/leave/recruitment/performance;
+AI/automation; organizational name/code text search;
+`pg_trgm` index.
+
 ## Employee lifecycle — state responsibility matrix
 
 Rejecting one overloaded status enum (brief's explicit warning) in
@@ -1260,7 +1453,7 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.5  Reporting Hierarchy                                         (manager_assignment_id validation, cycle prevention, resolution queries — no new tables) [implemented]
 8A.6  Qualifications, Experience & Certifications                 (EmployeeQualification, EmployeeExperience, EmployeeCertification) [implemented]
 8A.7  Employee Documents                                          (employee_documents — narrow scope, see "Documents" above) [implemented]
-8A.8  Employee Directory                                          (search/filter/paginate API + list UI)
+8A.8  Employee Directory                                          (search/filter/paginate query layer — API+UI deferred, see "Employee Directory (8A.8, implemented)") [implemented]
 8A.9  Employee Profile Workspace                                  (tabbed detail UI — first of its kind in this codebase)
 8A.10 HR Permissions & Sensitive-Data Controls                    (capability seeder rollout, field-suppression proof)
 8A.11 Audit & Activity Timeline                                   (AuditRecorder wiring across all HR mutations + a read timeline view)
