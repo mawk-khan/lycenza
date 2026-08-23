@@ -21,7 +21,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * minimal identity record every later HR checkpoint builds on. Phase
  * 8A.2 adds its Restricted-tier personal-details/address/emergency-
  * contact extensions (relations below) without adding any new column
- * here -- Employee itself stays exactly as small as 8A.1 left it.
+ * here -- Employee itself stays exactly as small as 8A.1 left it. 8A.6
+ * adds Qualification/Experience/Certification relations on the same
+ * principle -- no denormalized summary column (e.g.
+ * `highest_qualification`) is added here; those are derived from the
+ * child records, not stored.
  *
  * `employee_number` is immutable once set (see booted() below) -- the
  * only sanctioned way to create an Employee is
@@ -97,6 +101,24 @@ class Employee extends Model
     public function employmentRecords(): HasMany
     {
         return $this->hasMany(EmploymentRecord::class);
+    }
+
+    /** @return HasMany<EmployeeQualification, $this> */
+    public function qualifications(): HasMany
+    {
+        return $this->hasMany(EmployeeQualification::class);
+    }
+
+    /** @return HasMany<EmployeeExperience, $this> */
+    public function experienceRecords(): HasMany
+    {
+        return $this->hasMany(EmployeeExperience::class);
+    }
+
+    /** @return HasMany<EmployeeCertification, $this> */
+    public function certifications(): HasMany
+    {
+        return $this->hasMany(EmployeeCertification::class);
     }
 
     public function isActive(): bool

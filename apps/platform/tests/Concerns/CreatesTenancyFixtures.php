@@ -14,8 +14,11 @@ use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
+use App\Domain\HR\Infrastructure\EmployeeCertification;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
+use App\Domain\HR\Infrastructure\EmployeeExperience;
 use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
+use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
@@ -277,6 +280,41 @@ trait CreatesTenancyFixtures
                 'school_id' => $employment->school_id,
                 'employment_record_id' => $employment->id,
                 'position_id' => $position->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 8A.6: Qualifications, Experience & Certifications -------
+
+    protected function createEmployeeQualification(Employee $employee, array $attributes = []): EmployeeQualification
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeQualification::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeExperience(Employee $employee, array $attributes = []): EmployeeExperience
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeExperience::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeCertification(Employee $employee, array $attributes = []): EmployeeCertification
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeCertification::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
             ], $attributes)),
         );
     }

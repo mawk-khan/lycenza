@@ -147,4 +147,52 @@ class EmployeeSchemaTest extends TestCase
             );
         }
     }
+
+    /**
+     * Phase 8A.6 scope-creep guard: `employees` must not accumulate
+     * denormalized summary columns derived from its Qualification/
+     * Experience/Certification children (docs/modules/HR.md's
+     * "Employee schema remains lean" principle) -- those values are
+     * always computed from the child tables, never stored here.
+     */
+    #[Test]
+    public function employees_table_has_no_denormalized_professional_record_summary_columns(): void
+    {
+        $forbiddenColumns = [
+            'highest_qualification', 'years_of_experience',
+            'certification_count', 'certification_expiry',
+        ];
+
+        foreach ($forbiddenColumns as $column) {
+            $this->assertFalse(
+                Schema::hasColumn('employees', $column),
+                "employees.{$column} must not exist -- derived from EmployeeQualification/EmployeeExperience/EmployeeCertification, never stored on Employee.",
+            );
+        }
+    }
+
+    /**
+     * Phase 8A.6 scope-creep guard: no Qualification/Experience/
+     * Certification table may carry a document/file/evidence-storage
+     * column -- document evidence is explicitly deferred to Phase
+     * 8A.7's `employee_documents` (ADR 0028).
+     */
+    #[Test]
+    public function professional_record_tables_have_no_document_or_file_storage_columns(): void
+    {
+        $forbiddenColumns = [
+            'document_id', 'file_path', 'storage_key', 'storage_disk',
+            'storage_path', 'bucket', 'blob', 'signed_url',
+            'certificate_file', 'attachment_path',
+        ];
+
+        foreach (['employee_qualifications', 'employee_experience_records', 'employee_certifications'] as $table) {
+            foreach ($forbiddenColumns as $column) {
+                $this->assertFalse(
+                    Schema::hasColumn($table, $column),
+                    "{$table}.{$column} must not exist -- document evidence is deferred to Phase 8A.7's employee_documents.",
+                );
+            }
+        }
+    }
 }

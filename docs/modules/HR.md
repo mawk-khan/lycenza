@@ -750,6 +750,160 @@ baseline of 203 passed / 316 assertions).
 **Deferred, correctly**: no manager backfill for existing Assignments;
 no UI/controllers/routes; `EmployeeCategory` remains out of scope.
 
+## Qualifications, Experience & Certifications (8A.6, implemented)
+
+Three new Restricted-tier tables extend Employee directly (entity
+model's `EmployeeQualification`/`EmployeeExperience`/
+`EmployeeCertification`, each 1:N), all School-owned,
+`TenantRls`-protected, composite-FK-safe against `employees(id,
+school_id)` (rule 70), `cascadeOnDelete` on `employee_id`. Employee
+itself gained no new columns — only three relations
+(`qualifications()`, `experienceRecords()`, `certifications()`), and
+deliberately no denormalized summary column (`highest_qualification`,
+`years_of_experience`, `certification_count`, `certification_expiry`)
+— those are always derived from the child tables at read time.
+
+**`employee_qualifications`**: `qualification_type`
+(secondary|higher_secondary|diploma|bachelors|masters|doctorate|
+professional|other) is a plain, application-validated string —
+matches `employment_type`'s exact convention, not a Postgres enum, not
+a PHP enum. `qualification_name`/`institution` required;
+`specialization`/`awarding_body`/`country_code`/`grade_or_result`
+nullable. `institution`/`awarding_body` are plain descriptive strings,
+deliberately not normalized into a School OS organization/reference
+table — an external university is not a School OS tenant.
+`starts_on`/`completed_on` are nullable dates (not timestamps);
+`completed_on = NULL` legitimately represents an in-progress
+qualification; no derived age/duration is stored. **Date-range CHECK**:
+`starts_on IS NULL OR completed_on IS NULL OR completed_on >=
+starts_on`.
+
+**`employee_experience_records`**: represents professional experience
+OUTSIDE this School's own employment — deliberately named apart from
+`employment_records` so the two are never confused.
+**Employee ≠ Employment ≠ Experience**: this table has no
+`employment_record_id`/`campus_id`/`department_id`/`position_id`
+column and no FK to any of those — an external employer is never
+encoded as a School OS `EmploymentRecord`. `organization`/`job_title`/
+`starts_on` required; `ends_on` nullable (`NULL` = this specific entry
+is ongoing — it does NOT mean "current School employment," which lives
+entirely on `employment_records`); `description`/`location`/
+`country_code` nullable. **Date-range CHECK**: `ends_on IS NULL OR
+ends_on >= starts_on`. Deliberately **no overlap constraint** —
+concurrent external experience (part-time, consulting, study + work)
+is legitimate and common, unlike `employment_records`' own
+no-overlap invariant for employment at this School.
+
+**`employee_certifications`**: `name`/`issuer` are plain descriptive
+strings — no hard-coded certification catalogue, no approved contract
+for one. `credential_number` (nullable) is deliberately **not unique
+at any scope** (not globally, not even `unique(issuer,
+credential_number)`) — different issuers use overlapping numbering
+formats, and no domain contract justifies inventing that constraint.
+`issued_on`/`expires_on` nullable dates; `expires_on = NULL`
+legitimately represents a non-expiring certification. No persistent
+`is_expired`/`days_until_expiry` column — both are derived from
+`expires_on` at read time. **Date-range CHECK**: `issued_on IS NULL OR
+expires_on IS NULL OR expires_on >= issued_on`. `(school_id,
+expires_on)` and `employee_id` are indexed so a future expiry-
+monitoring feature has the access path it needs — no query
+scope/helper is added yet, since there is no real consumer in this
+checkpoint to test one against (the same restraint rule 2 already
+established for speculative infrastructure, extended here to
+speculative query-API surface). No scheduled jobs/notifications/AI are
+introduced.
+
+**Verification model**: implemented for Qualification and
+Certification (externally-issued professional credentials genuinely
+subject to HR verification), deliberately **not** implemented for
+Experience (the checkpoint brief explicitly cautions against assuming
+external experience needs the same workflow as a formally-issued
+credential, and no reference-check contact data is collected to
+support one — kept minimal, a judgment call documented here since no
+approved contract mandates either choice). `verification_status`
+(unverified|verified|rejected, default `unverified`) plus
+`verified_at` (nullable timestamp) on both tables. Deliberately **no
+`verified_by_user_id` column** — `AuditRecorder`'s existing
+`actor_user_id` capture is sufficient to answer "who verified this,"
+per the brief's own guidance that audit-actor identity suffices absent
+an approved verifier-field contract.
+
+**Sole write paths**:
+`App\Domain\HR\Application\EmployeeQualificationService`/
+`EmployeeExperienceService`/`EmployeeCertificationService` — identical
+ownership-verification shape to `EmployeeAddressService` (8A.2): every
+method takes the authoritative `Employee` the caller already resolved,
+`school_id`/`employee_id` are never accepted from caller-supplied
+attributes, and `update()`/`remove()` re-verify the target record's
+`employee_id` before touching it (`EmployeeOwnershipMismatchException`
+otherwise — the same exception class 8A.2 already established, reused
+rather than duplicated). `verification_status`/`verified_at` are never
+accepted through `add()`/`update()`'s attributes array — `verify()`/
+`reject()` (Qualification and Certification services only) are the
+only writers of those two columns.
+
+**Material-edit verification-reset rule**: a verified or rejected
+Qualification/Certification whose fields are edited via `update()`
+must not silently keep looking verified — `update()` treats ANY field
+change as material and resets `verification_status` to `unverified`
+(clearing `verified_at`) as part of the same transaction whenever the
+record was previously `verified`/`rejected`. No narrower "harmless
+field" carve-out is defined — determining one is a judgment call this
+checkpoint declines to make without an approved contract, so the
+conservative default (any edit invalidates verification) applies
+uniformly. An `update()` call that changes no fields (empty
+attributes) does not disturb verification status. This directly
+satisfies the checkpoint's own requirement that a caller cannot verify
+one certificate and silently transform it (issuer, credential number,
+dates, name) into another while keeping `verified` status.
+
+**Audit**: every mutation calls `AuditRecorder::school()`
+(`hr.qualification.created`/`.updated`/`.removed`/`.verified`/
+`.rejected`, `hr.experience.created`/`.updated`/`.removed`,
+`hr.certification.created`/`.updated`/`.removed`/`.verified`/
+`.rejected`) with metadata limited to ids, changed field *names*, and
+a `verificationReset` boolean where relevant — never institution
+names, grades, credential numbers, issuers, or any other field value.
+No parallel HR audit subsystem.
+
+**Document evidence remains deferred to Phase 8A.7** (ADR 0028) — no
+`document_id`/`file_path`/`storage_key`/`storage_disk`/`storage_path`/
+`bucket`/`blob`/`signed_url`/`certificate_file`/`attachment_path`
+column exists on any of the three tables (schema-guard test:
+`EmployeeSchemaTest::professional_record_tables_have_no_document_or_file_storage_columns`).
+`employee_documents`' own `category` reference value (already
+documented above) is the only loose association a future evidence
+attachment will use — never a hard FK from a professional-record row.
+
+**Privacy**: unchanged from the existing classification matrix above —
+qualification/experience/certification detail is **Sensitive**, gated
+by `hr.employees.personal.view`/`.manage`
+(`hr.employees.qualifications.view`/`.manage` was already registered
+in 8A.0's authorization design specifically for this checkpoint). No
+Highly Sensitive data is modeled (no government IDs, no financial
+data, no health data). No automatic Directory exposure — these
+records are never included in generic Employee serialization, since no
+API Resource class or public/UI surface exists yet in Phase 8A.6.
+
+**Tests added**: 49 in `EmployeeQualificationTest`/
+`EmployeeExperienceTest`/`EmployeeCertificationTest` (ownership,
+mass-assignment protection, date-range validity, verification
+transitions and the material-edit reset rule, audit-metadata
+minimization, structural distinction from `EmploymentRecord`), 2
+schema-creep guards appended to `EmployeeSchemaTest` (no denormalized
+summary columns on `employees`; no document/file columns on any of the
+three new tables), and 18 raw-SQL RLS/composite-FK tests appended to
+`HrRawIsolationTest` (RLS enabled+forced, no-context isolation,
+same-School visibility, cross-School insert/update/delete rejection,
+for all three tables) — 69 new tests total (291 passed, 481 assertions
+for the full precise-path HR suite, up from the 8A.5 baseline of 222
+passed / 349 assertions).
+
+**Deferred, correctly**: `employee_documents`/document evidence
+(8A.7); `EmployeeCategory`; UI/controllers/routes; expiry-monitoring
+scheduled jobs/notifications/AI; payroll/attendance/leave/
+recruitment/performance.
+
 ## Employee lifecycle — state responsibility matrix
 
 Rejecting one overloaded status enum (brief's explicit warning) in
@@ -955,7 +1109,7 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.3  Departments & Positions                                     (hr_departments, positions -- employee_categories deferred, see "Department and Position (8A.3, implemented)" above)
 8A.4  Employment Records & Employee Assignments                   (EmploymentRecord, EmployeeAssignment, primary-assignment invariant)
 8A.5  Reporting Hierarchy                                         (manager_assignment_id validation, cycle prevention, resolution queries — no new tables) [implemented]
-8A.6  Qualifications, Experience & Certifications                 (EmployeeQualification, EmployeeExperience, EmployeeCertification)
+8A.6  Qualifications, Experience & Certifications                 (EmployeeQualification, EmployeeExperience, EmployeeCertification) [implemented]
 8A.7  Employee Documents                                          (employee_documents — narrow scope, see "Documents" above)
 8A.8  Employee Directory                                          (search/filter/paginate API + list UI)
 8A.9  Employee Profile Workspace                                  (tabbed detail UI — first of its kind in this codebase)
