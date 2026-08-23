@@ -1,9 +1,11 @@
-# Student Enrollment (Phase 1B.1)
+# Student Enrollment (Phase 1B.1 / 1B.2)
 
-Status: **foundation only** — schema, model, and factory/fixtures.
-No controllers, no API, no UI, no Application service, no
-authorization, and no domain events yet. Those land in later Phase 1B
-checkpoints (see "Deferred" below).
+Status: **schema + sanctioned write path.** Phase 1B.1 shipped the
+schema/model/RLS/composite-FK foundation; Phase 1B.2 adds
+`App\Domain\Students\Application\StudentEnrollmentService`, the only
+sanctioned way to create a StudentEnrollment. Still no controllers, no
+API, no UI, no authorization, and no lifecycle transitions
+(complete/withdraw/transfer/cancel) yet — see "Deferred" below.
 
 ## Identity vs enrollment boundary
 
@@ -86,17 +88,159 @@ AcademicYear/Campus/GradeLevel). This is deliberate, for two reasons:
 Consistency between `section_id` and the other three denormalized
 columns is **not** a database constraint (PostgreSQL cannot cheaply
 express "these columns must equal another row's columns" without a
-trigger). It is guaranteed by construction: the future
-`App\Domain\Students\Application\StudentEnrollmentService` (Phase 1B.4)
-will be the only sanctioned write path and will always derive
-`academic_year_id`/`campus_id`/`grade_level_id` **from** the
+trigger). It is guaranteed by construction: `StudentEnrollmentService`
+(Phase 1B.2, below) is the only sanctioned write path and always
+derives `academic_year_id`/`campus_id`/`grade_level_id` **from** the
 caller-chosen `section_id` server-side — the same trust model already
 used everywhere else in this codebase (a client never supplies
 `school_id`; here, a client never independently supplies the three
 denormalized ancestor ids either — only `section_id`). Phase 1B.1's
 test fixture (`CreatesTenancyFixtures::createStudentEnrollment()`)
-already enforces this by construction, so no test can accidentally
-construct an inconsistent state that real code could not produce.
+already enforced this by construction before the service existed, so
+no test could accidentally construct an inconsistent state that real
+code could not produce.
+
+## Sanctioned Enrollment creation path (Phase 1B.2)
+
+`App\Domain\Students\Application\StudentEnrollmentService::enroll()`
+is the ONLY sanctioned way to create a StudentEnrollment — never
+`StudentEnrollment::create()` directly from a future controller/
+import. Signature (repository convention, not necessarily the final
+HTTP-facing shape):
+
+```php
+enroll(Student $student, Section $section, string $rollNumber, string $startsOn, ?User $actor = null): StudentEnrollment
+```
+
+**Section is the sole placement input.** The method signature has no
+parameter through which a caller could independently supply
+`academic_year_id`/`campus_id`/`grade_level_id`/`section_id` — they
+are structurally unreachable, not merely unused/overwritten. The
+service reads `$section->academic_year_id`/`campus_id`/`grade_level_id`
+directly and writes those exact values, so "Section: Grade 5 / Campus A
+/ 2026-27, but Enrollment: Grade 6 / Campus B / 2027-28" cannot be
+expressed by a normal caller at all. Proven in
+`StudentEnrollmentServiceTest::the_service_derives_academic_year_campus_and_grade_level_from_the_section_alone`.
+
+**Same-School check (defense-in-depth).** Before touching the
+database, the service compares `$student->school_id` against
+`$section->school_id` and throws `CrossSchoolEnrollmentException` on a
+mismatch — a cheap in-memory check ahead of the composite FKs, which
+remain the authoritative guarantee (this check is a UX/fail-fast
+convenience, not a replacement; RLS and the composite FKs from Phase
+1B.1 are what actually make a cross-School row impossible even if this
+check were ever bypassed).
+
+**Transaction boundary.** `TenantContext::withSchool($student->school,
+...)` establishes School context from the Student's own School (never
+an assumed ambient context); inside that closure,
+`DB::transaction(...)` wraps the actual `StudentEnrollment::create()` +
+audit write. This mirrors `StudentGuardianRelationshipService::link()`'s
+exact shape. The inner `DB::transaction()` is what makes an expected
+constraint violation (roll-number or active-enrollment conflict) safe:
+Laravel's transaction wrapper catches the `UniqueConstraintViolationException`,
+issues `ROLLBACK TO SAVEPOINT`, and re-throws — so by the time
+`withSchool()`'s own `finally`-block `RESET app.current_school_id` runs,
+the connection is already back to a clean, non-aborted state. Proven
+directly in
+`StudentEnrollmentServiceTest::tenant_context_exits_cleanly_after_an_active_enrollment_conflict_and_the_next_operation_succeeds`
+and the equivalent roll-number-conflict test — a real subsequent write,
+in a fresh `TenantContext`, for a different Student, succeeds
+immediately after the expected exception. No change was made to
+`TenantContext` itself; this is the same "wrap the mutation in its own
+transaction" pattern every other write service in this codebase already
+uses (see the P3 note in the Phase 1B.1 startup report — a service that
+skips this wrapping remains a latent footgun, not fixed by this
+checkpoint, but not applicable to Enrollment's own sanctioned path).
+
+**Roll number normalization.** Surrounding whitespace is trimmed
+(`trim()`); a blank result (empty or whitespace-only) throws
+`InvalidEnrollmentRollNumberException` before any database write.
+Leading zeroes are preserved exactly — `"007"` is stored and returned
+as `"007"`, never cast to an integer. No case transformation is
+applied (unlike `code` columns via `NormalizesCode`) — Roll Number is
+not a `code` column and this codebase's normalization convention does
+not extend to it.
+
+**Expected-conflict translation.** The service catches
+`UniqueConstraintViolationException` and disambiguates by
+`$exception->index` (Laravel's own unique-index-name property — no
+message-string parsing):
+
+| Postgres index | Domain exception |
+|---|---|
+| `student_enrollments_one_active_per_student_year` | `ActiveEnrollmentConflictException` |
+| `student_enrollments_school_id_academic_year_id_section_id_roll_` | `DuplicateEnrollmentRollNumberException` |
+| (any other/unexpected index) | original exception re-thrown, never mislabeled |
+
+The database constraints remain authoritative — this is a translation
+layer only, matching `DuplicateStudentNumberException`/
+`DuplicateRelationshipException`'s established precedent. Neither
+constraint was removed or weakened.
+
+**Historical placement immutability.** This checkpoint implements
+Enrollment *creation* only. There is no `update()` method that can
+rewrite `academic_year_id`/`campus_id`/`grade_level_id`/`section_id`
+on an existing row — placement movement is always a new row, never an
+edit, matching the historical-record principle above. A future
+transfer/promotion checkpoint (1B.3+) will implement "close old
+Enrollment, create new Enrollment" as an explicit two-step operation
+inside one transaction, never a placement-column `UPDATE`.
+
+**Deferred lifecycle status decision (AcademicYear/Section/Campus/
+GradeLevel state).** The existing Academic Structure domain (Section,
+AcademicYear, Campus, GradeLevel) has no existing precedent anywhere
+in this codebase for blocking a *write* into an inactive/closed/
+archived reference row — no other Phase 0D module (e.g.
+`SubjectOfferingService`) checks a parent's `status` before attaching
+a child to it. Phase 1B.2 deliberately does **not** invent such a
+check for Enrollment either (inventing a first-of-its-kind cross-entity
+status rule here, un-requested by any existing pattern, would be
+exactly the kind of hidden product assumption CLAUDE.md rule 2 warns
+against). This also deliberately leaves room for legitimate
+pre-enrollment into a configured upcoming (non-yet-`active`)
+AcademicYear, which the product may need later. If a real requirement
+emerges, it belongs in a dedicated checkpoint that reasons about the
+change across every Academic Structure child, not a one-off addition
+buried in Enrollment's write path.
+
+**Deferred Student status eligibility.** `Student.status` only has two
+values today (`active`/`inactive` — see `StudentService::changeStatus()`);
+there is no `withdrawn`/`transferred`/`graduated` Student status in this
+codebase. No existing rule anywhere restricts which Student statuses
+may receive a new Enrollment. Phase 1B.2 does not invent one — inventing
+"an inactive Student cannot be enrolled" here would be a hidden product
+assumption with no existing precedent to justify it (CLAUDE.md rule 2).
+Deferred to whichever future checkpoint actually defines richer Student
+lifecycle semantics.
+
+**Authorization boundary.** `StudentEnrollmentService` is deliberately
+authorization-neutral, matching every other Application service in this
+codebase (`AcademicYearService`, `StudentGuardianRelationshipService`,
+...). No capability check exists inside it. A future controller
+(Phase 1B.5) must call `Gate::authorize`/`authorizeCapability` with
+whatever capability family that checkpoint introduces before ever
+reaching this service — no such controller exists yet, so no capability
+was added in 1B.1 or 1B.2 (CLAUDE.md rule 24 still applies once that
+controller exists).
+
+**Audit.** Every successful `enroll()` call records a `SchoolAuditEvent`
+via `AuditRecorder::school()`:
+
+```text
+event_type: student_enrollment.created
+subject:    the new StudentEnrollment row (subject_type/subject_id
+            captured automatically by AuditRecorder)
+metadata:   studentId, academicYearId, campusId, gradeLevelId, sectionId
+```
+
+`roll_number` is deliberately **excluded** from audit metadata — it
+carries no operational value the other ids don't already provide, and
+keeping the metadata minimal matches every other Student/Guardian audit
+event's "ids and structural facts only" design. No Student name,
+date of birth, or Guardian PII is ever included (`docs/security/DATA-CLASSIFICATION.md`).
+Lifecycle audit events (`student_enrollment.completed`/`.withdrawn`/
+`.transferred`) belong to a future lifecycle checkpoint, not this one.
 
 ## Historical record principle
 
@@ -212,13 +356,15 @@ reference).
 
 ## Deferred (not yet implemented)
 
-- **Application service** (`StudentEnrollmentService`) — validated
-  create/update/status-transition write path, audit recording,
-  exception translation. Phase 1B.4.
+- **Enrollment lifecycle transitions** (`active → completed`/
+  `withdrawn`/`transferred`/`cancelled`) — `StudentEnrollmentService::enroll()`
+  only creates a fresh `active` Enrollment; there is no supported way to
+  change an existing row's `status`/`ends_on` yet. Phase 1B.3.
 - **Authorization** (`enrollments.view`/`enrollments.manage` or
   equivalent capability family) — no controller exists yet to gate.
-  Phase 1B.4/1B.5.
-- **Administrative HTTP/API and Vue UI** — Phase 1B.5/1B.6.
+  A future HTTP checkpoint.
+- **Administrative HTTP/API and Vue UI** — a future checkpoint, once
+  authorization is defined.
 - **Promotion / bulk academic-year rollover** — conceptually "complete
   old Enrollment, create next-year Enrollment," but a bulk
   `Promote Grade 5A → Grade 6A` engine is a later checkpoint (Phase
