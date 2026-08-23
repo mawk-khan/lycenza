@@ -66,7 +66,7 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 | **Students/SIS** | Student master record, enrollment status, academic history | Academic Structure, Schools, Campuses | The record most other modules eventually reference; does not depend on any module that references it. |
 | **Guardians** | Guardian/parent records, guardian-student relationships | Students/SIS | |
 | **Admissions** | Admission leads, applications, admission workflow → produces a Student record via Students/SIS's Application contract | Academic Structure, Schools, Students/SIS | Admissions calls into SIS to create a student; SIS never calls into Admissions. |
-| **HR** | Employee master record, roles/designations, employment lifecycle | Schools, Identity & Access | Independent of the Students track except where a specific Layer 3 module needs both (e.g. Academics needs teachers). |
+| **HR** | Employee master record, roles/designations, employment lifecycle | Schools, Identity & Access | Independent of the Students track except where a specific Layer 3 module needs both (e.g. Academics needs teachers). **In progress (Phase 8A, resequenced ahead of `MASTER-ROADMAP.md`'s Phase 0J — see ADR 0028)**: `docs/modules/HR.md`. |
 
 ## Layer 3 — Core operations
 

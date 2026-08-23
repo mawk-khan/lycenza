@@ -210,6 +210,19 @@ questions flagged in `docs/security/DATA-CLASSIFICATION.md` (PF/ESI/
 TDS and similar) — Compliance module involvement expected here, not
 deferred.
 
+**Resequencing note (2026-08-23):** the HR half of this phase's scope
+(Employee master record, employment history, assignments, org
+structure, directory, documents, lifecycle/rehire — everything short
+of Payroll) is being built now, ahead of Phases 0E–0I, under a
+separately-numbered initiative ("Phase 8A") on
+`feature/phase-8a-hr-employee-records`. This is a deliberate, reviewed
+exception — see ADR 0028 and `docs/modules/HR.md` for the full decision
+record, scope boundary, and the one accepted cost (Phase 8A.7's
+Employee Documents has no Phase 0E Documents module to build on yet, so
+it uses a narrow HR-scoped table instead). Payroll itself is untouched
+by this note and remains scoped to this Phase 0J entry, in its
+originally documented order.
+
 ## Phase 0K — Operational Modules
 
 Transport, Library, Inventory, Canteen, Hostel, Health, Visitor/Safety
