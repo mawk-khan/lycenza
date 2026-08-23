@@ -1,0 +1,7 @@
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Per-app ignores live in apps/platform/.gitignore, services/ai/.gitignore,
+# apps/mobile/.gitignore — this file only covers repo-root concerns.

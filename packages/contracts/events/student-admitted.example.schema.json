@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.school-os.dev/events/student-admitted.example.schema.json",
+  "title": "StudentAdmitted (illustrative example — not wired to any implementation)",
+  "description": "Shows the required envelope every domain event must use. See docs/architecture/EVENTS.md.",
+  "type": "object",
+  "required": ["eventId", "eventType", "eventVersion", "occurredAt", "tenantId", "schoolId", "payload"],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "eventType": { "const": "StudentAdmitted" },
+    "eventVersion": { "type": "integer", "minimum": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "tenantId": { "type": "string", "format": "uuid" },
+    "schoolId": { "type": "string", "format": "uuid" },
+    "actorId": { "type": "string", "format": "uuid", "description": "User or AI agent that triggered the event, if any." },
+    "payload": {
+      "type": "object",
+      "required": ["studentId", "admissionId", "gradeId"],
+      "properties": {
+        "studentId": { "type": "string", "format": "uuid" },
+        "admissionId": { "type": "string", "format": "uuid" },
+        "gradeId": { "type": "string", "format": "uuid" }
+      }
+    }
+  }
+}

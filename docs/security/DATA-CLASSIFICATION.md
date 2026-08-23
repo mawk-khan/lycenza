@@ -1,0 +1,66 @@
+# School OS — Data Classification
+
+> **This document establishes an architectural classification model to
+> drive engineering controls (access, storage, logging, AI exposure). It
+> is written by engineering, not legal counsel, and makes no claim about
+> compliance with any specific law or regulation.** Anywhere this
+> document says a legal/compliance decision is required, that means
+> exactly that — the product must not represent itself as compliant with
+> India's Digital Personal Data Protection Act (DPDP Act, 2023), any
+> education-sector-specific regulation, or any other law until a
+> qualified legal review has actually happened. Flagged explicitly below
+> as **[LEGAL REVIEW REQUIRED]**.
+
+## Classification tiers
+
+| Tier | Definition | Handling baseline |
+|---|---|---|
+| **Public** | Safe for anyone to see, including unauthenticated visitors (e.g. a school's public admissions-inquiry page copy). | No special controls. |
+| **Internal** | Not secret, but not meant for the public — internal operational data (e.g. a non-sensitive configuration value, a public holiday calendar). | Requires authentication; no special encryption/retention beyond normal system data. |
+| **Confidential** | Business-sensitive; disclosure would harm the school or the product, but is not personal data (e.g. internal financial summaries, vendor contract terms). | Requires authentication + capability check; excluded from routine debug logging. |
+| **Sensitive** | Personal data of an identifiable individual, not in the highest-risk categories below (e.g. a guardian's phone number, an employee's address). | Requires authentication + capability check, tenant-scoped by construction (`docs/architecture/TENANCY.md`); excluded from logs and error messages by default; access is audited (ADR 0017). |
+| **Highly Sensitive** | Data whose exposure carries the highest harm potential: **children's personal data**, health records, government identifiers, authentication secrets, and financial account details. | Everything in Sensitive, plus: minimized default visibility (fetched only when a specific capability needs it, not included in broad list/summary views by default), and — for the categories below — explicit additional controls. |
+
+## Data categories mapped to tiers
+
+| Category | Tier | Notes |
+|---|---|---|
+| **Student data (general)** — name, class/section, enrollment status | Sensitive | Elevated to Highly Sensitive in combination with health, government-ID, or biometric data. |
+| **Children's data specifically** | Highly Sensitive | Students are, for most of this product's user base, minors. **[LEGAL REVIEW REQUIRED]**: India's DPDP Act, 2023 imposes specific obligations around processing children's data (including consent-related requirements) that must be reviewed by qualified counsel before any module processing student data ships to real schools — this document does not determine how those obligations are met, only that the architecture must support whatever controls legal review requires (e.g. verifiable parental consent flows, data minimization, purpose limitation). |
+| **Guardian data** | Sensitive | Contact details, relationship to student. |
+| **Employee (HR) data** | Sensitive | Elevated to Highly Sensitive for government identifiers, bank details, and any health data collected. |
+| **Financial data** (fees, invoices, payroll, payment instrument references) | Highly Sensitive | Never store raw payment-card data in School OS's own database — see the financial-correctness rules in `docs/architecture/ARCHITECTURE.md` §10 and PCI-DSS scope considerations, which are **[LEGAL/COMPLIANCE REVIEW REQUIRED]** once a real payment gateway integration (ADR 0018) is designed. |
+| **Health data** | Highly Sensitive | Medical conditions, allergies, incident records. **[LEGAL REVIEW REQUIRED]**: may separately qualify as a sensitive personal data category under applicable law; a dedicated review is required before the Health module (`docs/architecture/DOMAIN-MAP.md`) is implemented. |
+| **Government/statutory identifiers** (e.g. Aadhaar-linked references, PAN, other ID numbers collected for admissions/HR/compliance) | Highly Sensitive | **[LEGAL REVIEW REQUIRED]**: collection, storage, and masking requirements for government identifiers are subject to specific Indian regulatory requirements (including sector-specific Aadhaar-handling rules) that must be reviewed before any module collects them — do not assume storing a raw identifier is acceptable without that review. |
+| **Documents/files** (birth certificates, photos, transfer certificates, medical records, HR documents) | Classification inherited from what the document contains | A birth certificate scan is Highly Sensitive; a public event photo may be Public — the Documents module (ADR 0012) must tag each stored document with its actual classification, not a blanket default. |
+| **Authentication secrets** (passwords/hashes, API keys/tokens, the Laravel↔AI Gateway service token) | Highly Sensitive | Never logged, never included in error messages, never returned by any API response (see ADR 0016; `services/ai/app/core/config.py`'s `redact` conventions for the devtools/audit layers that must respect this). |
+| **AI prompts/context** | Classification inherited from the data included in the prompt/context | A prompt built from Sensitive or Highly Sensitive ERP data (e.g. a fee-reminder draft referencing a guardian's contact details) is itself Sensitive/Highly Sensitive for logging, audit-storage, and provider-selection purposes — see `docs/ai/AI-SECURITY.md`'s data-exposure controls. This has a direct consequence for provider selection: a provider whose data-handling/retention terms are inadequate for a given classification tier must not be used for prompts at that tier — a **[LEGAL/COMPLIANCE REVIEW REQUIRED]** gate before any real provider integration (ADR 0013) goes live with real school data. |
+
+## Engineering controls this classification drives
+
+- **Access control:** every Sensitive/Highly Sensitive field requires a
+  capability check (`docs/security/AUTHORIZATION.md`), not just
+  authentication.
+- **Logging:** Sensitive and Highly Sensitive values must never appear
+  in application logs, error messages, or exception traces — this is a
+  code-review checklist item (root `CLAUDE.md`), not just a policy
+  statement.
+- **AI exposure:** a tool exposed to an AI agent (ADR 0014) must be
+  designed to return only what that agent's purpose requires, informed
+  by classification — a fee-collection agent's tools should not surface
+  Health-tier data even if it's in an adjacent table.
+- **Audit:** access to Sensitive/Highly Sensitive data is itself
+  auditable (ADR 0017) — not just changes to it.
+- **Retention:** retention periods per category are a
+  **[LEGAL REVIEW REQUIRED]** decision, not yet made — flagged here so
+  it is designed deliberately once the first module handling
+  Sensitive/Highly Sensitive data is built, rather than defaulting to
+  "keep everything forever" by omission.
+
+## What this document does not do
+
+It does not implement any technical control itself (no encryption
+scheme, no field-level access-control code exists yet in Phase 0A) —
+it is the classification reference those future controls, and the
+capability design in `docs/security/AUTHORIZATION.md`, must be built
+against.

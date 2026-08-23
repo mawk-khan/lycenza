@@ -1,0 +1,15 @@
+{
+    "name": "@school-os/shared-types",
+    "private": true,
+    "version": "0.0.1",
+    "type": "module",
+    "description": "TypeScript types generated from packages/contracts/openapi. Do not hand-edit src/generated/*.",
+    "scripts": {
+        "generate": "openapi-typescript ../contracts/openapi/school-os-api.yaml -o src/generated/school-os-api.ts",
+        "type-check": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "openapi-typescript": "^7.4.4",
+        "typescript": "5.9.3"
+    }
+}
