@@ -1,0 +1,118 @@
+<?php
+
+namespace Tests\Feature\HR;
+
+use App\Domain\HR\Application\Exceptions\EmployeeNumberIsImmutableException;
+use App\Domain\HR\Infrastructure\Employee;
+use App\Support\Tenancy\TenantContext;
+use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Uid\UuidV7;
+use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\TestCase;
+
+/**
+ * Phase 8A.1: proves the Employee core aggregate's own shape and
+ * invariants -- UUIDv7 identity, School ownership, optional User
+ * linkage, and employee_number immutability. Cross-tenant behavior is
+ * covered separately in EmployeeTenantIsolationTest and
+ * tests/Feature/Postgres/HrRawIsolationTest.
+ */
+class EmployeeSchemaTest extends TestCase
+{
+    use CreatesTenancyFixtures;
+
+    #[Test]
+    public function employee_id_is_a_real_uuidv7(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+
+        $this->assertInstanceOf(UuidV7::class, Uuid::fromString($employee->id));
+    }
+
+    #[Test]
+    public function employee_belongs_to_its_school(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+
+        app(TenantContext::class)->set($school);
+
+        $this->assertSame($school->id, $employee->fresh()->school_id);
+        $this->assertSame($school->id, $employee->fresh()->school->id);
+    }
+
+    #[Test]
+    public function employee_may_exist_with_no_linked_user_account(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school, ['user_id' => null]);
+
+        app(TenantContext::class)->set($school);
+
+        $this->assertNull($employee->fresh()->user_id);
+        $this->assertNull($employee->fresh()->user);
+    }
+
+    #[Test]
+    public function employee_can_be_linked_to_a_valid_user(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin();
+        $employee = $this->createEmployee($school, ['user_id' => $user->id]);
+
+        app(TenantContext::class)->set($school);
+
+        $this->assertSame($user->id, $employee->fresh()->user_id);
+        $this->assertSame($user->id, $employee->fresh()->user->id);
+    }
+
+    #[Test]
+    public function employee_number_is_stable_across_unrelated_updates(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school, ['employee_number' => 'EMP-000042']);
+
+        app(TenantContext::class)->set($school);
+        $employee->update(['full_name' => 'Updated Name']);
+
+        $this->assertSame('EMP-000042', $employee->fresh()->employee_number);
+    }
+
+    #[Test]
+    public function directly_changing_employee_number_on_an_existing_row_is_rejected(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school, ['employee_number' => 'EMP-000001']);
+
+        app(TenantContext::class)->set($school);
+
+        $this->expectException(EmployeeNumberIsImmutableException::class);
+
+        $employee->update(['employee_number' => 'EMP-999999']);
+    }
+
+    #[Test]
+    public function record_status_defaults_to_active(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+
+        $this->assertSame('active', $employee->record_status);
+        $this->assertTrue($employee->isActive());
+    }
+
+    #[Test]
+    public function archived_factory_state_produces_an_archived_record_status(): void
+    {
+        $school = $this->createSchool();
+
+        $archivedEmployee = app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Employee::factory()->archived()->for($school, 'school')->create(),
+        );
+
+        $this->assertSame('archived', $archivedEmployee->record_status);
+        $this->assertFalse($archivedEmployee->isActive());
+    }
+}

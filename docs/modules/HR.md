@@ -220,6 +220,47 @@ need). Phase 8A.7 will be the first real consumer:
   `EmploymentRecord` row under the same `Employee`, never a new
   Employee/new number.
 
+## Employee core schema (8A.1, implemented)
+
+`employees` (School-owned, `TenantRls`-protected): `id` (UUIDv7 PK),
+`school_id` (FK, RLS-scoped), `user_id` (nullable FK to `users`,
+`unique(school_id, user_id)` — see "User linkage" below), `employee_number`
+(`unique(school_id, employee_number)`, immutable — enforced by a
+`static::updating()` guard that throws
+`EmployeeNumberIsImmutableException` on any attempted change),
+`full_name` (single string field, not split first/middle/last —
+matches the repo's existing `users.name` convention; a structured
+name breakdown was not part of the accepted 8A.0 contract and is not
+introduced speculatively here), `record_status` (`active`/`archived`,
+plain string column matching the `academic_years.status`/
+`grade_levels.status` convention — not database-CHECK-constrained,
+enforced at the application layer), `created_at`/`updated_at`.
+`hr_employee_number_counters` (School-owned, `TenantRls`-protected,
+`unique(school_id)`): `id` (UUIDv7 PK), `school_id`, `next_value`.
+
+**User linkage**: `unique(school_id, user_id)`, not a global
+`unique(user_id)` — matches this document's own recommendation above.
+Linking additionally requires the target User to hold a real
+`SchoolMembership` at the target School at link time
+(`App\Domain\HR\Application\Exceptions\UnrelatedUserLinkageException`
+otherwise) — this is the application-level invariant flagged as
+necessary in "Database constraints" below, re-checked only at
+link-time, never retroactively (a later membership suspension does not
+unwind an established linkage, per principle 2.6).
+
+**Creation pathway**: `App\Domain\HR\Application\EmployeeService::create()`
+is the sole sanctioned write path — resolves School/tenant context,
+validates User linkage, allocates the employee number
+(`EmployeeNumberAllocator::allocate()`, `SELECT ... FOR UPDATE` inside
+the same transaction as the Employee insert), persists the Employee,
+audits (`AuditRecorder::school()`, `employee.created`), and emits
+`App\Domain\HR\Events\EmployeeCreated` (outboxed, internal-only, not
+registered in `WebhookEventRegistry`). Proven concurrency-safe with
+five genuinely separate OS processes racing the same School
+(`EmployeeNumberConcurrencyTest`, mirroring
+`AcademicYearActivationConcurrencyTest`'s pattern) — all five receive
+distinct, gapless numbers.
+
 ## Temporal data strategy
 
 Following the exact naming convention `academic_years`/

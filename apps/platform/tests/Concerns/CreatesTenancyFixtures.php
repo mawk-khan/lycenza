@@ -10,6 +10,7 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\HR\Infrastructure\Employee;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -175,6 +176,23 @@ trait CreatesTenancyFixtures
                 'grade_level_id' => $gradeLevel->id,
                 'subject_id' => $subject->id,
             ], $attributes)),
+        );
+    }
+
+    // --- Phase 8A.1: HR / Employee fixtures ---------------------------
+
+    /**
+     * Factory-based creation for schema/relationship/isolation tests --
+     * `employee_number` here is a plausible fake value, NOT allocated
+     * through App\Domain\HR\Application\EmployeeNumberAllocator. A test
+     * about allocation/concurrency behavior itself must call
+     * App\Domain\HR\Application\EmployeeService::create() directly.
+     */
+    protected function createEmployee(School $school, array $attributes = []): Employee
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Employee::factory()->for($school, 'school')->create($attributes),
         );
     }
 }
