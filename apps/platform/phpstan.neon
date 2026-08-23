@@ -1,0 +1,21 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+
+    level: 5
+
+    tmpDir: storage/phpstan
+
+    # This project's models declare casts via the newer `casts(): array`
+    # method (Laravel 11+), not the legacy `protected $casts` property.
+    # Larastan only parses the method body for real attribute types when
+    # this is enabled -- left off, every cast declared this way is
+    # invisible to property-type inference (e.g. a `datetime`-cast
+    # attribute resolves as `string` instead of `Carbon`), which is a
+    # false negative in the OPPOSITE direction of a suppression: it
+    # hides real, usable type information rather than silencing a
+    # legitimate finding.
+    parseModelCastsMethod: true
