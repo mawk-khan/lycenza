@@ -16,6 +16,7 @@ use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\GuardianContact;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -224,5 +225,30 @@ trait CreatesTenancyFixtures
     protected function createGuardianContact(Guardian $guardian, ContactType $type, string $rawValue, array $attributes = []): GuardianContact
     {
         return app(GuardianContactService::class)->create($guardian, $type, $rawValue, $attributes);
+    }
+
+    // --- Phase 1B.1: Student Enrollment fixtures -----------------------
+
+    /**
+     * academic_year_id/campus_id/grade_level_id are always derived from
+     * the given Section, exactly like the (not-yet-built) Phase 1B.4
+     * StudentEnrollmentService will derive them in production -- a test
+     * fixture must never be able to construct an inconsistent
+     * Section-vs-denormalized-parent state that real code could not
+     * produce.
+     */
+    protected function createStudentEnrollment(Student $student, Section $section, array $attributes = []): StudentEnrollment
+    {
+        return app(TenantContext::class)->withSchool(
+            $student->school,
+            fn () => StudentEnrollment::factory()->create(array_merge([
+                'school_id' => $student->school_id,
+                'student_id' => $student->id,
+                'academic_year_id' => $section->academic_year_id,
+                'campus_id' => $section->campus_id,
+                'grade_level_id' => $section->grade_level_id,
+                'section_id' => $section->id,
+            ], $attributes)),
+        );
     }
 }

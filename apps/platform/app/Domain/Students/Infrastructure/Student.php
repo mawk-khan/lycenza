@@ -74,6 +74,18 @@ class Student extends Model
     }
 
     /**
+     * A Student's academic placement history (Phase 1B.1) -- many
+     * historical rows, never mutated to represent a later year. See
+     * App\Domain\Students\Infrastructure\StudentEnrollment's docblock.
+     *
+     * @return HasMany<StudentEnrollment, $this>
+     */
+    public function enrollments(): HasMany
+    {
+        return $this->hasMany(StudentEnrollment::class);
+    }
+
+    /**
      * Read convenience only (eager-loading, counting, querying "all
      * Guardians of this Student"). Phase 1A.2's P3 finding, resolved in
      * Phase 1A.3: `attach()`/`sync()`/`detach()` are NOT the supported
