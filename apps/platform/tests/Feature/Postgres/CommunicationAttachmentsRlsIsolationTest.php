@@ -45,6 +45,15 @@ class CommunicationAttachmentsRlsIsolationTest extends TestCase
         );
     }
 
+    private function attachToThread($thread, $creator): CommunicationAttachment
+    {
+        return app(CommunicationAttachmentService::class)->uploadForThread(
+            $thread,
+            $creator,
+            UploadedFile::fake()->create('a.pdf', 10, 'application/pdf'),
+        );
+    }
+
     #[Test]
     public function the_table_has_rls_enabled_and_forced(): void
     {
@@ -196,6 +205,107 @@ class CommunicationAttachmentsRlsIsolationTest extends TestCase
             $this->fail('Expected a QueryException: composite FK must reject a cross-school announcement reference.');
         } catch (QueryException $e) {
             $this->assertStringContainsStringIgnoringCase('violates foreign key constraint', $e->getMessage());
+        }
+    }
+
+    /**
+     * Phase 5A.7 §33 -- the same RLS/composite-FK boundary, now proven
+     * for the THREAD-owned pre-message-parent path
+     * (communication_thread_id) the 5A.7 normalization migration
+     * added.
+     */
+    #[Test]
+    public function school_a_cannot_select_school_bs_thread_owned_attachment(): void
+    {
+        $schoolA = $this->createSchool();
+        [$creatorB, $schoolB] = $this->createSchoolAdmin('school_admin');
+        $threadB = $this->createThread($schoolB, $creatorB);
+        $this->createParticipant($threadB, $creatorB);
+        $attachmentB = $this->attachToThread($threadB, $creatorB);
+
+        $this->setSchool($schoolA->id);
+
+        $rows = DB::connection('pgsql')->select('select id from communication_attachments where id = ?', [$attachmentB->id]);
+        $this->assertCount(0, $rows);
+    }
+
+    #[Test]
+    public function a_forged_cross_school_thread_reference_is_rejected_by_the_composite_foreign_key(): void
+    {
+        [$creatorA, $schoolA] = $this->createSchoolAdmin('school_admin');
+        $threadA = $this->createThread($schoolA, $creatorA);
+        [$creatorB, $schoolB] = $this->createSchoolAdmin('school_admin');
+
+        $this->setSchool($schoolB->id);
+
+        try {
+            DB::connection('pgsql')->transaction(function () use ($schoolB, $threadA, $creatorB): void {
+                DB::connection('pgsql')->table('communication_attachments')->insert([
+                    'id' => (string) new UuidV7,
+                    'school_id' => $schoolB->id,
+                    'communication_thread_id' => $threadA->id,
+                    'communication_message_id' => null,
+                    'storage_disk' => 'local',
+                    'storage_path' => 'communications/attachments/forged3.pdf',
+                    'original_filename' => 'forged3.pdf',
+                    'safe_display_name' => 'forged3.pdf',
+                    'mime_type' => 'application/pdf',
+                    'size_bytes' => 100,
+                    'checksum_sha256' => str_repeat('c', 64),
+                    'created_by_user_id' => $creatorB->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
+            $this->fail('Expected a QueryException: composite FK must reject a cross-school thread reference.');
+        } catch (QueryException $e) {
+            $this->assertStringContainsStringIgnoringCase('violates foreign key constraint', $e->getMessage());
+        }
+    }
+
+    /**
+     * Phase 5A.7 §6 -- `communication_attachments_one_parent_check`
+     * (num_nonnulls = 1) rejects a row claiming BOTH a pre-message
+     * owner (neither Announcement nor Thread is optional-and-extra --
+     * exactly one, always) and a row claiming NEITHER.
+     */
+    #[Test]
+    public function a_row_with_both_or_neither_parent_set_is_rejected_by_the_one_parent_check(): void
+    {
+        [$creator, $school] = $this->createSchoolAdmin('school_admin');
+        $announcement = $this->createAnnouncement($school, $creator);
+        $thread = $this->createThread($school, $creator);
+
+        $this->setSchool($school->id);
+
+        $rowFor = fn (?string $announcementId, ?string $threadId) => [
+            'id' => (string) new UuidV7,
+            'school_id' => $school->id,
+            'communication_announcement_id' => $announcementId,
+            'communication_thread_id' => $threadId,
+            'communication_message_id' => null,
+            'storage_disk' => 'local',
+            'storage_path' => 'communications/attachments/'.uniqid().'.pdf',
+            'original_filename' => 'x.pdf',
+            'safe_display_name' => 'x.pdf',
+            'mime_type' => 'application/pdf',
+            'size_bytes' => 100,
+            'checksum_sha256' => str_repeat('d', 64),
+            'created_by_user_id' => $creator->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        foreach ([
+            $rowFor($announcement->id, $thread->id), // both set
+            $rowFor(null, null), // neither set
+        ] as $row) {
+            try {
+                DB::connection('pgsql')->transaction(fn () => DB::connection('pgsql')->table('communication_attachments')->insert($row));
+                $this->fail('Expected a QueryException: exactly one parent must be set.');
+            } catch (QueryException $e) {
+                $this->assertStringContainsStringIgnoringCase('communication_attachments_one_parent_check', $e->getMessage());
+            }
         }
     }
 }

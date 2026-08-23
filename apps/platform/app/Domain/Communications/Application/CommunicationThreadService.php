@@ -126,4 +126,71 @@ class CommunicationThreadService
             return $participant->refresh();
         });
     }
+
+    /**
+     * Phase 5A.7 §22 -- updates ONLY the calling participant's own
+     * read cursor, never any other participant's. Deliberately NOT
+     * audited (root CLAUDE.md rule 11 covers state changes with real
+     * consequence -- this is per-viewer UI convenience state, not a
+     * fact worth a permanent audit trail entry, same reasoning as
+     * Phase 5A.5's preference-controller decision to skip a capability
+     * gate for inherently self-scoped actions). A no-op (not an error)
+     * if called again with no new messages -- `last_read_at` only ever
+     * moves forward via `greatest()`, so a stale/duplicate request can
+     * never rewind it past a newer read.
+     */
+    public function markRead(CommunicationThreadParticipant $participant): void
+    {
+        $this->context->withSchool($participant->school, function () use ($participant) {
+            // Phase 5A.7 §21/§22: goes through Eloquent (never a raw
+            // query-builder update()) specifically so this write picks
+            // up CommunicationThreadParticipant::$dateFormat's
+            // microsecond precision -- the query builder's own
+            // Carbon-binding path uses the CONNECTION grammar's default
+            // whole-second format instead, which would silently
+            // truncate this write and make it compare as EARLIER than
+            // a same-second CommunicationMessage::created_at (which
+            // does go through that precision), inverting the read
+            // cursor. Forward-only via a fresh-read PHP comparison
+            // rather than a raw GREATEST() (Postgres's own now()/
+            // CURRENT_TIMESTAMP is frozen at the wrapping transaction's
+            // start and is a different clock than this app process's
+            // under any app/DB clock skew -- see summarize()'s
+            // docblock for the same reasoning applied there).
+            $now = now();
+
+            if ($participant->last_read_at === null || $participant->last_read_at->lt($now)) {
+                $participant->update(['last_read_at' => $now]);
+            }
+        });
+    }
+
+    /**
+     * Phase 5A.7 §29 -- participant-specific archival: hides the
+     * thread from THIS participant's own inbox view only. Never a
+     * thread-global flag -- `communication_threads.status` (open/
+     * archived/closed) is a SEPARATE, thread-wide lifecycle concept
+     * (§28) that this method does not touch.
+     */
+    public function archiveForParticipant(CommunicationThreadParticipant $participant, User $actor): void
+    {
+        $this->context->withSchool($participant->school, function () use ($participant, $actor) {
+            $participant->update(['archived' => true]);
+
+            $this->audit->school($participant->school, 'communication.participant.archived', actor: $actor, subject: $participant, metadata: [
+                'threadId' => $participant->thread_id,
+            ]);
+        });
+    }
+
+    public function unarchiveForParticipant(CommunicationThreadParticipant $participant, User $actor): void
+    {
+        $this->context->withSchool($participant->school, function () use ($participant, $actor) {
+            $participant->update(['archived' => false]);
+
+            $this->audit->school($participant->school, 'communication.participant.unarchived', actor: $actor, subject: $participant, metadata: [
+                'threadId' => $participant->thread_id,
+            ]);
+        });
+    }
 }

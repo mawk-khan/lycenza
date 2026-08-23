@@ -6,6 +6,7 @@ use App\Domain\Communications\Application\CommunicationAttachmentService;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
+use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\CapabilityResolver;
@@ -80,6 +81,58 @@ class CommunicationAttachmentController extends Controller
         return redirect("/app/communications/announcements/{$model->id}");
     }
 
+    /**
+     * Phase 5A.7 §15/§16 -- the conversation-message counterpart to
+     * store(): pending-attachment upload scoped to a THREAD, authorized
+     * by active participation rather than announcement ownership.
+     */
+    public function storeForThread(Request $request, TenantContext $context, CommunicationAttachmentService $service, string $thread): RedirectResponse
+    {
+        $context->requireSchool();
+        $actor = $context->actor();
+
+        $model = CommunicationThread::query()->findOrFail($thread);
+        abort_unless($this->isActiveParticipant($model, $actor->id), 403);
+
+        $validated = $request->validate([
+            'file' => ['required', 'file'],
+        ]);
+
+        try {
+            $service->uploadForThread($model, $actor, $validated['file']);
+        } catch (CommunicationException $e) {
+            throw ValidationException::withMessages(['file' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/communications/{$model->id}");
+    }
+
+    public function destroyForThread(TenantContext $context, CommunicationAttachmentService $service, string $thread, string $attachment): RedirectResponse
+    {
+        $context->requireSchool();
+        $actor = $context->actor();
+
+        $model = CommunicationThread::query()->findOrFail($thread);
+        abort_unless($this->isActiveParticipant($model, $actor->id), 403);
+
+        $attachmentModel = CommunicationAttachment::query()
+            ->where('communication_thread_id', $model->id)
+            ->findOrFail($attachment);
+
+        try {
+            $service->remove($attachmentModel, $actor);
+        } catch (CommunicationException $e) {
+            throw ValidationException::withMessages(['attachment' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/communications/{$model->id}");
+    }
+
+    private function isActiveParticipant(CommunicationThread $thread, string $userId): bool
+    {
+        return $thread->participants()->where('user_id', $userId)->whereNull('left_at')->exists();
+    }
+
     public function download(TenantContext $context, CommunicationAttachmentService $service, AuditRecorder $audit, string $attachment)
     {
         $school = $context->requireSchool();
@@ -96,6 +149,7 @@ class CommunicationAttachmentController extends Controller
         $context->withSchool($school, function () use ($model, $actor, $school, $audit) {
             $audit->school($school, 'communication_attachment.downloaded', actor: $actor, subject: $model, metadata: [
                 'announcementId' => $model->communication_announcement_id,
+                'threadId' => $model->communication_thread_id,
             ]);
         });
 

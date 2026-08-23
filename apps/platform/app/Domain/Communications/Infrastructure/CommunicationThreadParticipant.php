@@ -28,6 +28,12 @@ class CommunicationThreadParticipant extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
+    /**
+     * Phase 5A.7 §21: microsecond precision, paired with
+     * CommunicationMessage's -- see that model's docblock for why.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = [
         'school_id', 'thread_id', 'user_id', 'joined_at', 'left_at',
         'last_read_at', 'muted', 'archived',

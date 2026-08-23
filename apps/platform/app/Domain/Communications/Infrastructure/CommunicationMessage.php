@@ -32,6 +32,18 @@ class CommunicationMessage extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
+    /**
+     * Phase 5A.7 §21: microsecond precision (paired with this
+     * checkpoint's migration widening the `created_at`/`updated_at`
+     * columns to `timestamp(6)`) -- Laravel's default `'Y-m-d H:i:s'`
+     * format truncates to whole seconds, which made two genuinely
+     * distinct events (e.g. a read-cursor update and a reply) within
+     * the same wall-clock second compare as simultaneous, breaking the
+     * unread-derivation invariant (brief §21) under fast/automated
+     * sends. See ConversationReadModel's docblock.
+     */
+    protected $dateFormat = 'Y-m-d H:i:s.u';
+
     protected $fillable = [
         'school_id', 'thread_id', 'announcement_id', 'sender_user_id', 'message_type', 'body',
         'priority', 'status', 'reply_to_message_id', 'edited_at',

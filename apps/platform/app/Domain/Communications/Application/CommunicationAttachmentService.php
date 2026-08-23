@@ -6,16 +6,21 @@ use App\Domain\Communications\Application\Exceptions\AttachmentStorageException;
 use App\Domain\Communications\Application\Exceptions\AttachmentTooLargeException;
 use App\Domain\Communications\Application\Exceptions\AttachmentTypeNotAllowedException;
 use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransitionException;
+use App\Domain\Communications\Application\Exceptions\NotThreadParticipantException;
+use App\Domain\Communications\Application\Exceptions\ThreadNotOpenException;
 use App\Domain\Communications\Application\Exceptions\TooManyAttachmentsException;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
+use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantStoragePath;
+use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -67,86 +72,91 @@ class CommunicationAttachmentService
                 throw new InvalidAnnouncementTransitionException($announcement->status, 'attach');
             }
 
-            [$mimeType, $extension] = $this->assertAllowedType($file);
-            $this->assertWithinSizeLimit($file);
-            $this->assertWithinMessageLimits($announcement, $file);
+            return $this->store($announcement->school, $actor, $file, [
+                'communication_announcement_id' => $announcement->id,
+            ], "communications/announcements/{$announcement->id}", fn ($q) => $q->where('communication_announcement_id', $announcement->id), [
+                'announcementId' => $announcement->id,
+            ]);
+        });
+    }
 
-            $disk = (string) config('communications.attachments.disk');
-            $checksum = hash_file('sha256', $file->getRealPath());
-            $storageKey = (string) new UuidV7;
-            $path = TenantStoragePath::for(
-                $announcement->school,
-                "communications/announcements/{$announcement->id}/{$storageKey}.{$extension}",
-            );
-
-            try {
-                $stream = fopen($file->getRealPath(), 'r');
-                $stored = Storage::disk($disk)->put($path, $stream);
-            } catch (Throwable) {
-                $stored = false;
-            } finally {
-                if (isset($stream) && is_resource($stream)) {
-                    fclose($stream);
-                }
+    /**
+     * Phase 5A.7 §6/§15 -- the conversation-message counterpart to
+     * upload(): a pending attachment is uploaded against the owning
+     * THREAD (the stable pre-message owner for a reply, exactly like
+     * an Announcement is for that flow -- see the migration's docblock
+     * for why a Thread, not a Message, is the right pre-send owner).
+     * Every allowlist/size/count/checksum/storage rule from Phase 5A.6
+     * applies unchanged -- no separate validation path.
+     */
+    public function uploadForThread(CommunicationThread $thread, User $actor, UploadedFile $file): CommunicationAttachment
+    {
+        return $this->context->withSchool($thread->school, function () use ($thread, $actor, $file) {
+            if (! $thread->isOpen()) {
+                throw new ThreadNotOpenException($thread->status);
             }
 
-            if ($stored === false) {
-                throw new AttachmentStorageException;
+            if (! $this->isActiveParticipant($thread, $actor)) {
+                throw new NotThreadParticipantException;
             }
 
-            try {
-                $attachment = DB::transaction(function () use ($announcement, $actor, $file, $mimeType, $checksum, $disk, $path) {
-                    $attachment = CommunicationAttachment::query()->create([
-                        'school_id' => $announcement->school_id,
-                        'communication_announcement_id' => $announcement->id,
-                        'storage_disk' => $disk,
-                        'storage_path' => $path,
-                        'original_filename' => $this->sanitizeDisplayName($file->getClientOriginalName()),
-                        'safe_display_name' => $this->sanitizeDisplayName($file->getClientOriginalName()),
-                        'mime_type' => $mimeType,
-                        'size_bytes' => $file->getSize(),
-                        'checksum_sha256' => $checksum,
-                        'created_by_user_id' => $actor->id,
-                    ]);
-
-                    $this->audit->school($announcement->school, 'communication_attachment.uploaded', actor: $actor, subject: $attachment, metadata: [
-                        'announcementId' => $announcement->id,
-                        'sizeBytes' => $attachment->size_bytes,
-                        'mimeType' => $attachment->mime_type,
-                    ]);
-
-                    return $attachment;
-                });
-            } catch (Throwable $e) {
-                Storage::disk($disk)->delete($path);
-
-                throw $e;
-            }
-
-            return $attachment;
+            return $this->store($thread->school, $actor, $file, [
+                'communication_thread_id' => $thread->id,
+            ], "communications/threads/{$thread->id}", fn ($q) => $q->where('communication_thread_id', $thread->id), [
+                'threadId' => $thread->id,
+            ]);
         });
     }
 
     public function remove(CommunicationAttachment $attachment, User $actor): void
     {
         $this->context->withSchool($attachment->school, function () use ($attachment, $actor) {
-            $announcement = $attachment->announcement;
-
-            // Brief §23/§24: once a CommunicationMessage has been
-            // linked (the announcement has been published), an
-            // attachment is historical and immutable -- there is no
-            // removal path here at all, matching "no attachment
-            // mutation after publish."
-            if (! $announcement->isEditable() || $attachment->communication_message_id !== null) {
-                throw new InvalidAnnouncementTransitionException($announcement->status, 'remove attachment from');
+            if ($attachment->communication_message_id !== null) {
+                // Brief §23/§24 (Phase 5A.6), extended by Phase 5A.7
+                // §16/§23 -- once a CommunicationMessage has been
+                // linked (announcement published, or conversation
+                // message sent), an attachment is historical and
+                // immutable. Deliberately the SAME exception class for
+                // both parent types (not a new Thread-specific one) --
+                // AnnouncementAttachmentPublishTest::a_published_attachment_cannot_be_removed
+                // already asserts on this class, and "already sent" is
+                // genuinely the same invariant regardless of which
+                // parent produced the message.
+                throw new InvalidAnnouncementTransitionException('sent', 'remove attachment from');
             }
 
-            DB::transaction(function () use ($attachment, $announcement, $actor) {
+            $metadata = [];
+
+            if ($attachment->communication_announcement_id !== null) {
+                $announcement = $attachment->announcement;
+
+                if (! $announcement->isEditable()) {
+                    throw new InvalidAnnouncementTransitionException($announcement->status, 'remove attachment from');
+                }
+
+                $metadata = ['announcementId' => $announcement->id];
+            } else {
+                $thread = $attachment->thread;
+
+                if (! $thread->isOpen()) {
+                    throw new ThreadNotOpenException($thread->status);
+                }
+
+                // Only the uploader may remove their own not-yet-sent
+                // pending attachment -- another participant guessing/
+                // enumerating an id they didn't upload must not be able
+                // to delete someone else's pending file.
+                if ($attachment->created_by_user_id !== $actor->id) {
+                    throw new NotThreadParticipantException;
+                }
+
+                $metadata = ['threadId' => $thread->id];
+            }
+
+            DB::transaction(function () use ($attachment, $actor, $metadata) {
                 $attachment->delete();
 
-                $this->audit->school($announcement->school, 'communication_attachment.removed', actor: $actor, subject: $attachment, metadata: [
-                    'announcementId' => $announcement->id,
-                ]);
+                $this->audit->school($attachment->school, 'communication_attachment.removed', actor: $actor, subject: $attachment, metadata: $metadata);
             });
 
             Storage::disk($attachment->storage_disk)->delete($attachment->storage_path);
@@ -154,12 +164,13 @@ class CommunicationAttachmentService
     }
 
     /**
-     * Phase 5A.6 §11 -- the parent-communication read-entitlement check,
-     * reused verbatim from AnnouncementController::show()'s own
-     * authorization (creator, resolved recipient, or communications.manage)
-     * rather than re-deriving a second definition of "may read this
-     * announcement." Never satisfied merely by knowing the attachment's
-     * id (brief §5/§12).
+     * Phase 5A.6 §11, generalized by Phase 5A.7 §32 -- the parent-
+     * communication read-entitlement check. For an Announcement-owned
+     * attachment: creator, resolved recipient, or communications.manage
+     * (reused verbatim from AnnouncementController::show()'s own
+     * authorization). For a Thread-owned attachment: an active
+     * participant, or communications.manage. Never satisfied merely by
+     * knowing the attachment's id (brief §5/§12).
      */
     public function authorizeRead(CommunicationAttachment $attachment, User $actor, School $school): bool
     {
@@ -168,25 +179,122 @@ class CommunicationAttachmentService
         }
 
         return $this->context->withSchool($school, function () use ($attachment, $actor) {
-            $announcement = $attachment->announcement;
+            if ($attachment->communication_announcement_id !== null) {
+                $announcement = $attachment->announcement;
 
-            if ($announcement === null) {
+                if ($announcement === null) {
+                    return false;
+                }
+
+                if ($announcement->created_by_user_id === $actor->id) {
+                    return true;
+                }
+
+                if (app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $announcement->school)) {
+                    return true;
+                }
+
+                return CommunicationAnnouncementRecipient::query()
+                    ->where('announcement_id', $announcement->id)
+                    ->where('user_id', $actor->id)
+                    ->exists();
+            }
+
+            $thread = $attachment->thread;
+
+            if ($thread === null) {
                 return false;
             }
 
-            if ($announcement->created_by_user_id === $actor->id) {
+            if (app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $thread->school)) {
                 return true;
             }
 
-            if (app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $announcement->school)) {
-                return true;
-            }
-
-            return CommunicationAnnouncementRecipient::query()
-                ->where('announcement_id', $announcement->id)
-                ->where('user_id', $actor->id)
-                ->exists();
+            return $this->isActiveParticipant($thread, $actor);
         });
+    }
+
+    private function isActiveParticipant(CommunicationThread $thread, User $user): bool
+    {
+        return $thread->participants()
+            ->where('user_id', $user->id)
+            ->whereNull('left_at')
+            ->exists();
+    }
+
+    /**
+     * Phase 5A.7 §6 -- the shared validate/store/create core behind
+     * both upload() and uploadForThread(): identical allowlist/size/
+     * count/checksum/storage/compensating-action behavior regardless
+     * of which pre-message owner the caller has already authorized
+     * against. `$ownerColumns` supplies exactly the one owner FK
+     * column to set (`communication_announcement_id` XOR
+     * `communication_thread_id` -- the database CHECK constraint is
+     * the final backstop, this is just which column a caller passes).
+     *
+     * @param  array<string, string>  $ownerColumns
+     * @param  Closure(Builder<CommunicationAttachment>): Builder<CommunicationAttachment>  $scopeExisting
+     * @param  array<string, mixed>  $auditMetadata
+     */
+    private function store(
+        School $school,
+        User $actor,
+        UploadedFile $file,
+        array $ownerColumns,
+        string $pathPrefix,
+        Closure $scopeExisting,
+        array $auditMetadata,
+    ): CommunicationAttachment {
+        [$mimeType, $extension] = $this->assertAllowedType($file);
+        $this->assertWithinSizeLimit($file);
+        $this->assertWithinMessageLimits($scopeExisting, $file);
+
+        $disk = (string) config('communications.attachments.disk');
+        $checksum = hash_file('sha256', $file->getRealPath());
+        $storageKey = (string) new UuidV7;
+        $path = TenantStoragePath::for($school, "{$pathPrefix}/{$storageKey}.{$extension}");
+
+        try {
+            $stream = fopen($file->getRealPath(), 'r');
+            $stored = Storage::disk($disk)->put($path, $stream);
+        } catch (Throwable) {
+            $stored = false;
+        } finally {
+            if (isset($stream) && is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        if ($stored === false) {
+            throw new AttachmentStorageException;
+        }
+
+        try {
+            return DB::transaction(function () use ($school, $actor, $file, $mimeType, $checksum, $disk, $path, $ownerColumns, $auditMetadata) {
+                $attachment = CommunicationAttachment::query()->create(array_merge([
+                    'school_id' => $school->id,
+                    'storage_disk' => $disk,
+                    'storage_path' => $path,
+                    'original_filename' => $this->sanitizeDisplayName($file->getClientOriginalName()),
+                    'safe_display_name' => $this->sanitizeDisplayName($file->getClientOriginalName()),
+                    'mime_type' => $mimeType,
+                    'size_bytes' => $file->getSize(),
+                    'checksum_sha256' => $checksum,
+                    'created_by_user_id' => $actor->id,
+                ], $ownerColumns));
+
+                $this->audit->school($school, 'communication_attachment.uploaded', actor: $actor, subject: $attachment, metadata: array_merge($auditMetadata, [
+                    'sizeBytes' => $attachment->size_bytes,
+                    'mimeType' => $attachment->mime_type,
+                ]));
+
+                return $attachment;
+            });
+        } catch (Throwable $e) {
+            Storage::disk($disk)->delete($path);
+
+            throw $e;
+        }
     }
 
     /**
@@ -225,11 +333,12 @@ class CommunicationAttachmentService
         }
     }
 
-    private function assertWithinMessageLimits(CommunicationAnnouncement $announcement, UploadedFile $file): void
+    /**
+     * @param  Closure(Builder<CommunicationAttachment>): Builder<CommunicationAttachment>  $scopeExisting
+     */
+    private function assertWithinMessageLimits(Closure $scopeExisting, UploadedFile $file): void
     {
-        $existing = CommunicationAttachment::query()
-            ->where('communication_announcement_id', $announcement->id)
-            ->get(['size_bytes']);
+        $existing = $scopeExisting(CommunicationAttachment::query())->get(['size_bytes']);
 
         $maxCount = (int) config('communications.attachments.max_per_message');
         if ($existing->count() + 1 > $maxCount) {

@@ -48,7 +48,7 @@ class CommunicationHubTest extends TestCase
 
         $this->get('/app/communications')->assertInertia(fn ($page) => $page
             ->component('App/Communications/Index')
-            ->where('threads', [])
+            ->where('threads.data', [])
             ->where('canSend', true)
         );
     }
@@ -73,7 +73,7 @@ class CommunicationHubTest extends TestCase
 
         $this->get('/app/communications')->assertInertia(fn ($page) => $page
             ->component('App/Communications/Index')
-            ->has('threads', 1)
+            ->has('threads.data', 1)
         );
 
         $this->get($threadUrl)->assertInertia(fn ($page) => $page

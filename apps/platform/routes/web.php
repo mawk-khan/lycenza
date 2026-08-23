@@ -128,7 +128,21 @@ Route::middleware('auth')->group(function (): void {
             Route::put('/channels', [CommunicationChannelPolicyController::class, 'update'])->name('channels.update');
         });
 
+        // Phase 5A.7 §10: registered BEFORE the '/{thread}' wildcard
+        // below, same reasoning as 'announcements'/'templates' above.
+        Route::get('/participants/search', [CommunicationHubController::class, 'searchParticipants'])->name('participants.search');
+
         Route::get('/{thread}', [CommunicationHubController::class, 'show'])->name('show');
         Route::post('/{thread}/messages', [CommunicationHubController::class, 'storeMessage'])->name('messages.store');
+        Route::post('/{thread}/archive', [CommunicationHubController::class, 'archive'])->name('archive');
+        Route::post('/{thread}/unarchive', [CommunicationHubController::class, 'unarchive'])->name('unarchive');
+
+        // Phase 5A.7 §15: attachment upload/removal scoped to their
+        // owning Thread, mirroring the Announcement pair above --
+        // download reuses the SAME generic endpoint registered above
+        // (brief §32: authorization is re-derived from the parent,
+        // whichever type it is).
+        Route::post('/{thread}/attachments', [CommunicationAttachmentController::class, 'storeForThread'])->name('threads.attachments.store');
+        Route::delete('/{thread}/attachments/{attachment}', [CommunicationAttachmentController::class, 'destroyForThread'])->name('threads.attachments.destroy');
     });
 });

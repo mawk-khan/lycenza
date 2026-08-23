@@ -3,8 +3,10 @@
 namespace App\Domain\Communications\Application;
 
 use App\Domain\Communications\Application\Exceptions\NotThreadParticipantException;
+use App\Domain\Communications\Application\Exceptions\ThreadNotOpenException;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Events\CommunicationMessageCreated;
+use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Jobs\ProcessCommunicationDeliveryJob;
@@ -32,9 +34,25 @@ class CommunicationMessageService
         private readonly CommunicationDeliveryFactory $deliveryFactory,
     ) {}
 
-    public function send(CommunicationThread $thread, User $sender, string $body, CommunicationPriority $priority = CommunicationPriority::Normal): CommunicationMessage
-    {
-        return $this->context->withSchool($thread->school, function () use ($thread, $sender, $body, $priority) {
+    /**
+     * @param  array<int, string>  $attachmentIds  Phase 5A.7 §15/§16 --
+     *                                             ids of pending attachments the SENDER already uploaded against
+     *                                             THIS thread (CommunicationAttachmentService::uploadForThread()),
+     *                                             not yet linked to any message. Passed explicitly by the caller
+     *                                             (never inferred as "every currently-unlinked attachment on the
+     *                                             thread") so a concurrent, unrelated pending upload from another
+     *                                             participant -- or a stale upload from an earlier abandoned
+     *                                             compose -- can never be silently attached to a message it was
+     *                                             never intended for.
+     */
+    public function send(
+        CommunicationThread $thread,
+        User $sender,
+        string $body,
+        CommunicationPriority $priority = CommunicationPriority::Normal,
+        array $attachmentIds = [],
+    ): CommunicationMessage {
+        return $this->context->withSchool($thread->school, function () use ($thread, $sender, $body, $priority, $attachmentIds) {
             // The participant check must run INSIDE withSchool(): the
             // thread_participants row is RLS-protected, and this
             // service method may be called without an ambient
@@ -49,9 +67,16 @@ class CommunicationMessageService
                 throw new NotThreadParticipantException;
             }
 
+            // Phase 5A.7 §26/§28: a non-open Thread is not sendable --
+            // enforced here (not just as a UI hint via `canReply`) so a
+            // direct call/forged request cannot bypass it.
+            if (! $thread->isOpen()) {
+                throw new ThreadNotOpenException($thread->status);
+            }
+
             $deliveryIds = [];
 
-            $message = DB::transaction(function () use ($thread, $sender, $body, $priority, &$deliveryIds) {
+            $message = DB::transaction(function () use ($thread, $sender, $body, $priority, $attachmentIds, &$deliveryIds) {
                 $message = CommunicationMessage::query()->create([
                     'school_id' => $thread->school_id,
                     'thread_id' => $thread->id,
@@ -61,6 +86,23 @@ class CommunicationMessageService
                     'priority' => $priority->value,
                     'status' => 'sent',
                 ]);
+
+                if ($attachmentIds !== []) {
+                    // Scoped to THIS thread, unlinked, AND uploaded by
+                    // THIS sender -- a forged/foreign attachment id
+                    // (another participant's pending upload, another
+                    // thread's, or already-linked) simply matches zero
+                    // rows and is silently excluded rather than
+                    // erroring the whole send (brief §17's orphan-
+                    // safety spirit: a bad id here is a client bug, not
+                    // grounds to fail an otherwise-valid message).
+                    CommunicationAttachment::query()
+                        ->where('communication_thread_id', $thread->id)
+                        ->where('created_by_user_id', $sender->id)
+                        ->whereNull('communication_message_id')
+                        ->whereIn('id', $attachmentIds)
+                        ->update(['communication_message_id' => $message->id]);
+                }
 
                 $recipientUserIds = $thread->participants()
                     ->where('user_id', '!=', $sender->id)
