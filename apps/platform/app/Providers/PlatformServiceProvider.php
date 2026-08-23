@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
+use App\Domain\Communications\Application\Audience\IndividualMembersAudienceResolver;
+use App\Domain\Communications\Application\Audience\SchoolWideAudienceResolver;
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
 use App\Domain\Communications\Application\Channels\InAppChannelDriver;
 use App\Support\Events\Consumers\NotifyActorOfSettingChangeConsumer;
@@ -49,6 +52,14 @@ class PlatformServiceProvider extends ServiceProvider
         $this->app->singleton(CommunicationChannelRegistry::class, function () {
             $registry = new CommunicationChannelRegistry;
             $registry->register(new InAppChannelDriver);
+
+            return $registry;
+        });
+
+        $this->app->singleton(CommunicationAudienceResolverRegistry::class, function ($app) {
+            $registry = new CommunicationAudienceResolverRegistry;
+            $registry->register($app->make(IndividualMembersAudienceResolver::class));
+            $registry->register($app->make(SchoolWideAudienceResolver::class));
 
             return $registry;
         });

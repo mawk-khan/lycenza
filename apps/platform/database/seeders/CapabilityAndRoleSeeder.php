@@ -83,6 +83,19 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'communications.reply', 'label' => 'Reply within Communication Hub threads', 'namespace' => 'school'],
             ['key' => 'communications.manage', 'label' => 'Manage Communication Hub threads and participants', 'namespace' => 'school'],
             ['key' => 'communications.audit.view', 'label' => 'View Communication Hub audit trail', 'namespace' => 'school'],
+
+            // Phase 5A.2 -- Announcement & Audience Resolution
+            // foundation. `communications.send` (above) starts a
+            // Thread with an EXPLICIT, bounded participant list the
+            // sender chose themselves; publishing an Announcement
+            // targets a COMPUTED, potentially School-wide audience --
+            // a materially larger blast radius that warrants its own
+            // capability rather than being folded into `.send`
+            // (docs/communication-hub/PHASE-5A-2-ANNOUNCEMENTS-AUDIENCES.md
+            // documents this reasoning). Granted to the same roles as
+            // `.send` today (school_admin, principal) -- ordinary
+            // members never receive it (brief §22).
+            ['key' => 'communications.announce', 'label' => 'Publish Communication Hub announcements', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -115,7 +128,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
                     'communications.view', 'communications.send', 'communications.reply',
-                    'communications.manage', 'communications.audit.view',
+                    'communications.manage', 'communications.audit.view', 'communications.announce',
                 ],
             ],
             'principal' => [
@@ -136,6 +149,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
                     'communications.view', 'communications.send', 'communications.reply',
+                    'communications.announce',
                 ],
             ],
         ];

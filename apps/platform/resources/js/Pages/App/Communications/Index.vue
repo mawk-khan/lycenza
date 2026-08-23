@@ -44,7 +44,7 @@ function submitCompose() {
     );
 }
 
-const futureSections = ['Announcements', 'Scheduled', 'Drafts', 'Failed'];
+const futureSections = ['Scheduled', 'Drafts', 'Failed'];
 </script>
 
 <template>
@@ -64,6 +64,13 @@ const futureSections = ['Announcements', 'Scheduled', 'Drafts', 'Failed'];
             <nav class="text-sm">
                 <ul class="space-y-1">
                     <li class="rounded bg-slate-100 px-2 py-1 font-medium text-slate-900">Inbox</li>
+                    <li>
+                        <a
+                            class="block px-2 py-1 text-slate-600 hover:text-slate-900"
+                            href="/app/communications/announcements"
+                            >Announcements</a
+                        >
+                    </li>
                     <li
                         v-for="section in futureSections"
                         :key="section"

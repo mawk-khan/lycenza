@@ -87,7 +87,7 @@ class CommunicationThreadService
         $isMember = SchoolMembership::query()
             ->where('user_id', $user->id)
             ->where('school_id', $thread->school_id)
-            ->where('status', 'active')
+            ->active()
             ->exists();
 
         if (! $isMember) {

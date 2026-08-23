@@ -3,19 +3,15 @@
 namespace App\Domain\Communications\Application;
 
 use App\Domain\Communications\Application\Exceptions\NotThreadParticipantException;
-use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Events\CommunicationMessageCreated;
-use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
-use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Observability\QueueName;
 use App\Support\Tenancy\TenantContext;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -24,12 +20,16 @@ use Illuminate\Support\Facades\DB;
  * participant) -> in_app Delivery, all created in ONE transaction, with
  * delivery processing dispatched only after commit (root CLAUDE.md rule
  * 38/20). No external provider call happens anywhere in this class.
+ * Recipient/delivery creation itself is extracted into
+ * CommunicationDeliveryFactory (Phase 5A.2) so
+ * AnnouncementService::publish() reuses it rather than duplicating it.
  */
 class CommunicationMessageService
 {
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly CommunicationDeliveryFactory $deliveryFactory,
     ) {}
 
     public function send(CommunicationThread $thread, User $sender, string $body, CommunicationPriority $priority = CommunicationPriority::Normal): CommunicationMessage
@@ -69,13 +69,9 @@ class CommunicationMessageService
                     ->pluck('user_id');
 
                 foreach ($recipientUserIds as $userId) {
-                    $recipient = CommunicationRecipient::query()->create([
-                        'school_id' => $thread->school_id,
-                        'message_id' => $message->id,
-                        'recipient_user_id' => $userId,
-                    ]);
+                    $recipient = $this->deliveryFactory->createRecipient($thread->school_id, $message->id, $userId);
 
-                    $deliveryIds[] = $this->createDelivery($recipient, CommunicationChannel::InApp)->id;
+                    $deliveryIds[] = $this->deliveryFactory->createInAppDelivery($recipient)->id;
                 }
 
                 $thread->update(['last_activity_at' => now()]);
@@ -106,35 +102,5 @@ class CommunicationMessageService
 
             return $message;
         });
-    }
-
-    /**
-     * Idempotent-by-construction (root CLAUDE.md rule 30): the
-     * unique(recipient_id, channel) constraint is the authoritative
-     * guard, never a check-then-insert. A duplicate call for the same
-     * recipient+channel returns the EXISTING row rather than raising.
-     */
-    private function createDelivery(CommunicationRecipient $recipient, CommunicationChannel $channel): CommunicationDelivery
-    {
-        try {
-            // Wrapped in its own DB::transaction() so a constraint
-            // violation only rolls back to a SAVEPOINT (Laravel opens
-            // one automatically for a transaction nested inside an
-            // already-open one) rather than aborting the entire
-            // enclosing transaction -- without this, the catch below
-            // would itself fail with "current transaction is aborted".
-            return DB::transaction(fn () => CommunicationDelivery::query()->create([
-                'school_id' => $recipient->school_id,
-                'recipient_id' => $recipient->id,
-                'channel' => $channel->value,
-                'status' => 'pending',
-                'queued_at' => now(),
-            ]));
-        } catch (UniqueConstraintViolationException) {
-            return CommunicationDelivery::query()
-                ->where('recipient_id', $recipient->id)
-                ->where('channel', $channel->value)
-                ->firstOrFail();
-        }
     }
 }

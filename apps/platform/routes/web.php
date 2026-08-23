@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Communications\Http\Controllers\AnnouncementController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -72,6 +73,19 @@ Route::middleware('auth')->group(function (): void {
     Route::prefix('app/communications')->name('app.communications.')->group(function (): void {
         Route::get('/', [CommunicationHubController::class, 'index'])->name('index');
         Route::post('/', [CommunicationHubController::class, 'store'])->name('store');
+
+        // Phase 5A.2: registered BEFORE the '/{thread}' wildcard below
+        // so 'announcements' never matches as a thread id.
+        Route::prefix('announcements')->name('announcements.')->group(function (): void {
+            Route::get('/', [AnnouncementController::class, 'index'])->name('index');
+            Route::get('/create', [AnnouncementController::class, 'create'])->name('create');
+            Route::post('/', [AnnouncementController::class, 'store'])->name('store');
+            Route::get('/{announcement}', [AnnouncementController::class, 'show'])->name('show');
+            Route::put('/{announcement}', [AnnouncementController::class, 'update'])->name('update');
+            Route::post('/{announcement}/publish', [AnnouncementController::class, 'publish'])->name('publish');
+            Route::post('/{announcement}/cancel', [AnnouncementController::class, 'cancel'])->name('cancel');
+        });
+
         Route::get('/{thread}', [CommunicationHubController::class, 'show'])->name('show');
         Route::post('/{thread}/messages', [CommunicationHubController::class, 'storeMessage'])->name('messages.store');
     });
