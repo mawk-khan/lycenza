@@ -13,15 +13,16 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * Phase 8A.1/8A.2/8A.3: the HR-table-specific counterpart to
+ * Phase 8A.1/8A.2/8A.3/8A.4: the HR-table-specific counterpart to
  * tests/Feature/Postgres/RawIsolationTest -- proof against REAL
  * PostgreSQL RLS, independent of Eloquent/SchoolScope entirely
  * (docs/modules/HR.md "Test strategy"). Every query uses
  * DB::connection('pgsql') directly, the exact connection every real
  * request/queue job uses (ADR 0021). Covers `employees`/
  * `hr_employee_number_counters` (8A.1), `employee_personal_details`/
- * `employee_addresses`/`employee_emergency_contacts` (8A.2), and
- * `hr_departments`/`positions` (8A.3).
+ * `employee_addresses`/`employee_emergency_contacts` (8A.2),
+ * `hr_departments`/`positions` (8A.3), and `employment_records`/
+ * `employee_assignments` (8A.4).
  */
 class HrRawIsolationTest extends TestCase
 {
@@ -629,6 +630,216 @@ class HrRawIsolationTest extends TestCase
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
         $affected = DB::connection('pgsql')->delete('delete from positions where id = ?', [$positionB->id]);
+
+        $this->assertSame(0, $affected);
+    }
+
+    // --- Phase 8A.4: employment_records -----------------------------------
+
+    #[Test]
+    public function employment_records_table_has_rls_enabled_and_forced(): void
+    {
+        $row = DB::connection('pgsql_admin')->selectOne(
+            'select relrowsecurity, relforcerowsecurity from pg_class '.
+            "where relname = 'employment_records' and relnamespace = 'public'::regnamespace",
+        );
+
+        $this->assertTrue($row->relrowsecurity);
+        $this->assertTrue($row->relforcerowsecurity);
+    }
+
+    #[Test]
+    public function raw_select_on_employment_records_with_no_school_context_returns_zero_rows(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+        $this->createEmploymentRecord($employee);
+
+        DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
+
+        $count = DB::connection('pgsql')->selectOne('select count(*) as c from employment_records')->c;
+
+        $this->assertSame(0, (int) $count);
+    }
+
+    #[Test]
+    public function raw_select_with_school_a_context_sees_only_school_as_employment_records(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeA = $this->createEmployee($schoolA);
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentA = $this->createEmploymentRecord($employeeA);
+        $this->createEmploymentRecord($employeeB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $rows = DB::connection('pgsql')->select('select id from employment_records');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame($employmentA->id, $rows[0]->id);
+    }
+
+    #[Test]
+    public function raw_insert_of_an_employment_record_for_a_different_school_than_the_active_context_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolB, $employeeB): void {
+            DB::connection('pgsql')->insert(
+                'insert into employment_records (id, school_id, employee_id, employment_type, starts_on, status, created_at, updated_at) '.
+                'values (?, ?, ?, ?, ?, ?, now(), now())',
+                [(string) Str::orderedUuid(), $schoolB->id, $employeeB->id, 'permanent', '2026-01-01', 'active'],
+            );
+        });
+    }
+
+    #[Test]
+    public function raw_update_of_an_employment_record_across_schools_affects_zero_rows_not_an_error(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentB = $this->createEmploymentRecord($employeeB, ['employment_type' => 'permanent']);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->update(
+            'update employment_records set employment_type = ? where id = ?',
+            ['contract', $employmentB->id],
+        );
+
+        $this->assertSame(0, $affected);
+    }
+
+    #[Test]
+    public function raw_delete_of_an_employment_record_across_schools_affects_zero_rows(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentB = $this->createEmploymentRecord($employeeB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->delete('delete from employment_records where id = ?', [$employmentB->id]);
+
+        $this->assertSame(0, $affected);
+    }
+
+    // --- Phase 8A.4: employee_assignments ----------------------------------
+
+    #[Test]
+    public function employee_assignments_table_has_rls_enabled_and_forced(): void
+    {
+        $row = DB::connection('pgsql_admin')->selectOne(
+            'select relrowsecurity, relforcerowsecurity from pg_class '.
+            "where relname = 'employee_assignments' and relnamespace = 'public'::regnamespace",
+        );
+
+        $this->assertTrue($row->relrowsecurity);
+        $this->assertTrue($row->relforcerowsecurity);
+    }
+
+    #[Test]
+    public function raw_select_on_employee_assignments_with_no_school_context_returns_zero_rows(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+        $employment = $this->createEmploymentRecord($employee);
+        $position = $this->createPosition($school);
+        $this->createEmployeeAssignment($employment, $position);
+
+        DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
+
+        $count = DB::connection('pgsql')->selectOne('select count(*) as c from employee_assignments')->c;
+
+        $this->assertSame(0, (int) $count);
+    }
+
+    #[Test]
+    public function raw_select_with_school_a_context_sees_only_school_as_assignments(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeA = $this->createEmployee($schoolA);
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentA = $this->createEmploymentRecord($employeeA);
+        $employmentB = $this->createEmploymentRecord($employeeB);
+        $positionA = $this->createPosition($schoolA);
+        $positionB = $this->createPosition($schoolB);
+        $assignmentA = $this->createEmployeeAssignment($employmentA, $positionA);
+        $this->createEmployeeAssignment($employmentB, $positionB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $rows = DB::connection('pgsql')->select('select id from employee_assignments');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame($assignmentA->id, $rows[0]->id);
+    }
+
+    #[Test]
+    public function raw_insert_of_an_assignment_for_a_different_school_than_the_active_context_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentB = $this->createEmploymentRecord($employeeB);
+        $positionB = $this->createPosition($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolB, $employmentB, $positionB): void {
+            DB::connection('pgsql')->insert(
+                'insert into employee_assignments (id, school_id, employment_record_id, position_id, starts_on, created_at, updated_at) '.
+                'values (?, ?, ?, ?, ?, now(), now())',
+                [(string) Str::orderedUuid(), $schoolB->id, $employmentB->id, $positionB->id, '2026-01-01'],
+            );
+        });
+    }
+
+    #[Test]
+    public function raw_update_of_an_assignment_across_schools_affects_zero_rows_not_an_error(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentB = $this->createEmploymentRecord($employeeB);
+        $positionB = $this->createPosition($schoolB);
+        $assignmentB = $this->createEmployeeAssignment($employmentB, $positionB, ['is_primary' => false]);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->update(
+            'update employee_assignments set is_primary = true where id = ?',
+            [$assignmentB->id],
+        );
+
+        $this->assertSame(0, $affected);
+    }
+
+    #[Test]
+    public function raw_delete_of_an_assignment_across_schools_affects_zero_rows(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentB = $this->createEmploymentRecord($employeeB);
+        $positionB = $this->createPosition($schoolB);
+        $assignmentB = $this->createEmployeeAssignment($employmentB, $positionB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->delete('delete from employee_assignments where id = ?', [$assignmentB->id]);
 
         $this->assertSame(0, $affected);
     }

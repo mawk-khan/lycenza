@@ -13,8 +13,10 @@ use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
+use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
+use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
@@ -251,6 +253,31 @@ trait CreatesTenancyFixtures
         return app(TenantContext::class)->withSchool(
             $school,
             fn () => Position::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    // --- Phase 8A.4: Employment Records & Employee Assignments ---------
+
+    protected function createEmploymentRecord(Employee $employee, array $attributes = []): EmploymentRecord
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmploymentRecord::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeAssignment(EmploymentRecord $employment, Position $position, array $attributes = []): EmployeeAssignment
+    {
+        return app(TenantContext::class)->withSchool(
+            $employment->school,
+            fn () => EmployeeAssignment::factory()->create(array_merge([
+                'school_id' => $employment->school_id,
+                'employment_record_id' => $employment->id,
+                'position_id' => $position->id,
+            ], $attributes)),
         );
     }
 }

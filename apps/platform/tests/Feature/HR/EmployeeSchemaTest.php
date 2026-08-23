@@ -118,21 +118,27 @@ class EmployeeSchemaTest extends TestCase
     }
 
     /**
-     * Phase 8A.3 scope-creep guard: organizational placement
-     * (department/position/campus) and reporting hierarchy (manager)
-     * belong to EmployeeAssignment (8A.4+), never to employees itself
-     * (docs/modules/HR.md's Employee != Assignment principle). This
-     * fails loudly if a future checkpoint accidentally adds one of
-     * these columns directly to employees instead of through
-     * EmployeeAssignment.
+     * Phase 8A.3/8A.4 scope-creep guard: organizational placement
+     * (department/position/campus), reporting hierarchy (manager), and
+     * employment lifecycle/history (employment_id, joined_at, left_at)
+     * belong to EmploymentRecord/EmployeeAssignment, never to employees
+     * itself (docs/modules/HR.md's Employee != Employment != Assignment
+     * principle). This fails loudly if a future checkpoint accidentally
+     * adds one of these columns directly to employees instead of
+     * through EmploymentRecord/EmployeeAssignment.
      */
     #[Test]
     public function employees_table_has_no_organizational_placement_columns(): void
     {
-        foreach (['department_id', 'position_id', 'campus_id', 'manager_id'] as $column) {
+        $forbiddenColumns = [
+            'department_id', 'position_id', 'campus_id', 'manager_id',
+            'employment_id', 'employment_record_id', 'joined_at', 'left_at',
+        ];
+
+        foreach ($forbiddenColumns as $column) {
             $this->assertFalse(
                 Schema::hasColumn('employees', $column),
-                "employees.{$column} must not exist -- organizational placement belongs to EmployeeAssignment, not Employee.",
+                "employees.{$column} must not exist -- organizational placement and employment lifecycle belong to EmploymentRecord/EmployeeAssignment, not Employee.",
             );
         }
     }

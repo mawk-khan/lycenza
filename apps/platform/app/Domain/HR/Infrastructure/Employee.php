@@ -15,13 +15,13 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Phase 8A.1 -- the Employee core aggregate (docs/modules/HR.md, ADR
- * 0028). Deliberately carries no employment/assignment fields -- those
- * belong to a later checkpoint (8A.4 Employment Records & Assignments).
- * This is the minimal identity record every later HR checkpoint builds
- * on. Phase 8A.2 adds its Restricted-tier personal-details/address/
- * emergency-contact extensions (relations below) without adding any
- * new column here -- Employee itself stays exactly as small as 8A.1
- * left it.
+ * 0028). Deliberately carries no employment/assignment fields --
+ * organizational placement and employment lifecycle live entirely on
+ * EmploymentRecord/EmployeeAssignment (Phase 8A.4). This is the
+ * minimal identity record every later HR checkpoint builds on. Phase
+ * 8A.2 adds its Restricted-tier personal-details/address/emergency-
+ * contact extensions (relations below) without adding any new column
+ * here -- Employee itself stays exactly as small as 8A.1 left it.
  *
  * `employee_number` is immutable once set (see booted() below) -- the
  * only sanctioned way to create an Employee is
@@ -84,6 +84,19 @@ class Employee extends Model
     public function emergencyContacts(): HasMany
     {
         return $this->hasMany(EmployeeEmergencyContact::class);
+    }
+
+    /**
+     * @return HasMany<EmploymentRecord, $this>
+     *
+     * Deliberately no direct `assignments()` relation on Employee --
+     * docs/modules/HR.md's entity model routes Assignment through
+     * EmploymentRecord, not directly off Employee; reach assignments
+     * via `$employmentRecord->assignments`.
+     */
+    public function employmentRecords(): HasMany
+    {
+        return $this->hasMany(EmploymentRecord::class);
     }
 
     public function isActive(): bool

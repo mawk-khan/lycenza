@@ -480,6 +480,136 @@ with the following as-built detail:
   unguided, which is deferred rather than done speculatively; the
   roadmap line below is corrected to reflect this.
 
+## Employment Records & Employee Assignments (8A.4, implemented)
+
+`employment_records` and `employee_assignments` connect Employee to the
+School's organizational structure. Employee itself gained no new
+column — organizational placement and employment lifecycle live
+entirely on these two tables (verified by
+`EmployeeSchemaTest::employees_table_has_no_organizational_placement_columns()`,
+extended this checkpoint to also cover `employment_id`/
+`employment_record_id`/`joined_at`/`left_at`).
+
+**Employee vs EmploymentRecord vs EmployeeAssignment**: Employee is the
+permanent identity (never duplicated); EmploymentRecord is one legal
+engagement (an Employee may have several over time — rehire); Assignment
+is where/how the Employee works *within* one Employment. None of the
+three collapse into each other.
+
+**`employment_records`** (School-owned, `TenantRls`-protected,
+`unique(id, school_id)`): `employee_id` (composite FK to
+`employees(id, school_id)`, `cascadeOnDelete` — Employment has no
+meaning independent of its Employee), `employment_type` (permanent|
+probationary|fixed_term|part_time|temporary|contract|consultant — a
+plain, application-validated string; not School-configurable reference
+data, since these are stable, universal HR concepts, not
+organization-specific names the way Department/Position are),
+`starts_on` (required, inclusive), `ends_on` (nullable, inclusive when
+present — `NULL` means current/ongoing), `probation_ends_on` (nullable
+date, per this document's own "Employee lifecycle" table), `status`
+(the exact 8-value set already locked in by that table:
+draft|pre_joining|active|notice_period|separated|terminated|retired|
+deceased).
+
+- **Date-range CHECK**: `ends_on IS NULL OR starts_on <= ends_on` —
+  `<=`, not the strict `<` `academic_years_date_range_check` uses,
+  since a single-day engagement is a legitimate real case for
+  employment.
+- **Overlap policy**: an Employee must not have two overlapping
+  EmploymentRecords at the same School. NOT database-constrained (no
+  `daterange`/`EXCLUDE USING gist` extension exists in or is introduced
+  to this codebase) — enforced entirely by
+  `App\Domain\HR\Application\EmploymentService::create()`, which locks
+  the Employee row (`lockForUpdate()`) before checking existing records
+  for overlap and inserting, inside one transaction. This closes the
+  race for the first-hire case too (no existing EmploymentRecord rows
+  to lock), not just subsequent ones — the same lock-then-check-then-
+  write pattern `EmployeeNumberAllocator`/`AcademicYearService` already
+  established. Proven with sequential/transactional tests, not a real
+  multi-process concurrency test (unlike 8A.1's employee-number
+  allocation, this specific invariant protects a rare, human-initiated
+  action, not a hot path, and the underlying lock pattern is already
+  proven correct by that earlier real-process test).
+- **Rehire**: `EmploymentService::create()` doubles as the rehire
+  pathway — nothing distinguishes "first hire" from "rehire" at the
+  schema level beyond it being the Employee's 2nd+ row, so no separate
+  `rehire()` method exists. Proven end-to-end
+  (`EmploymentRecordTest::rehire_preserves_employee_identity_and_creates_an_independent_second_employment`):
+  same Employee UUID and `employee_number`, two distinct EmploymentRecord
+  UUIDs, Employment #1 left untouched, Employment #2 independently
+  active/open-ended, assignments attach to the correct Employment.
+- **Ending employment**: `EmploymentService::end()` sets `ends_on`/
+  `status` AND, in the same transaction, closes every currently-open
+  Assignment under that Employment to the same `ends_on` date (Option A
+  from the brief — chosen over rejecting the call until assignments are
+  manually closed first, since that would make ending an Employment
+  error-prone for the common case). Never touches `users`/
+  `school_memberships` — account deactivation stays a distinct, explicit
+  action outside this checkpoint (principle 2.6).
+
+**`employee_assignments`** (School-owned, `TenantRls`-protected,
+`unique(id, school_id)` — reserved for 8A.5's `manager_assignment_id`
+self-reference): `employment_record_id` (composite FK,
+`cascadeOnDelete`), `campus_id` (nullable, composite FK,
+`restrictOnDelete`), `department_id` (nullable, composite FK,
+`restrictOnDelete`), `position_id` (required, composite FK,
+`restrictOnDelete`), `is_primary` (boolean), `starts_on`/`ends_on`
+(same nullable-open-ended semantics as EmploymentRecord). Deliberately
+has **no `employee_id` column** — always reached through
+`employment_record_id`, which makes the "Assignment attached to the
+wrong Employee" IDOR shape structurally impossible, not merely tested
+against. Deliberately has **no `status` column** — this document's own
+"Employee lifecycle" table already decided Assignment status is
+derived, never stored (`isCurrent()`: `starts_on <= today <= (ends_on
+OR infinity)`). Deliberately has **no `manager_assignment_id` yet** —
+reserved for 8A.5.
+
+- **Campus/Department compatibility**: `hr_departments.campus_id`
+  null = School-wide (compatible with any Assignment Campus or none),
+  non-null = Campus-scoped (the Assignment's own `campus_id` must match
+  exactly). Not database-constrained (depends on comparing against a
+  different, mutable row) — enforced by
+  `EmployeeAssignmentService::create()`
+  (`AssignmentDepartmentCampusScopeMismatchException` otherwise).
+- **Active-reference-at-creation only**: a NEW Assignment cannot use an
+  inactive Department/Position (`AssignmentInactiveDepartmentException`/
+  `AssignmentInactivePositionException`); an EXISTING historical
+  Assignment keeps referencing its Department/Position/Campus
+  unaffected if that row is later archived — archiving never
+  retroactively invalidates history, and the FK's `restrictOnDelete`
+  additionally guarantees a hard delete can never silently destroy that
+  history either.
+- **EmploymentRecord date-range containment**: an Assignment's
+  `[starts_on, ends_on-or-open]` interval must be fully contained
+  within its owning Employment's own interval — this document's own
+  "Database constraints" table already decided this is application-
+  level, not database-constrained; enforced by
+  `EmployeeAssignmentService::create()`
+  (`AssignmentOutsideEmploymentRangeException`). An open-ended
+  Assignment is only valid under an open-ended Employment (a bounded
+  Employment cannot contain an interval that claims to continue past
+  the Employment's own end).
+- **Primary assignment**: at most one currently-open (`ends_on IS
+  NULL`) primary Assignment per EmploymentRecord — the exact partial
+  unique index this document's "Temporal data strategy" already named
+  (`employee_assignments_one_primary_open_per_employment`). A
+  historical (ended) primary never blocks a later open primary, since
+  the index only applies to open rows. `create()` never accepts
+  caller-supplied `is_primary`; `EmployeeAssignmentService::setPrimary()`
+  is the sole promotion path (demote-then-promote in one transaction,
+  mirroring `EmployeeEmergencyContactService::setPrimary()`'s identical
+  shape from 8A.2).
+- **Multiple simultaneous assignments**: fully supported and tested
+  (e.g. Teacher + Coordinator concurrently) — nothing in the schema or
+  service layer assumes one Position per Employee.
+
+**Reporting hierarchy remains deferred to 8A.5** — `manager_assignment_id`
+was NOT added this checkpoint; `unique(id, school_id)` on
+`employee_assignments` is the only preparation made.
+
+**`EmployeeCategory` remains deferred** — not introduced; no genuine
+dependency on it surfaced during 8A.4.
+
 ## Reporting hierarchy strategy
 
 **Decision: `employee_assignments.manager_assignment_id`**, not
