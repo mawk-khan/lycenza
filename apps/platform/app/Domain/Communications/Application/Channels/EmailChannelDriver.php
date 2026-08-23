@@ -66,6 +66,25 @@ final class EmailChannelDriver implements CommunicationChannelDriver
         $message = $delivery->recipient->message;
         $school = $delivery->school;
 
+        // Phase 5A.6 §29: a SEPARATE, smaller threshold from the
+        // canonical `attachments.max_total_size_mb` storage limit --
+        // exceeding it fails ONLY this channel, deterministically and
+        // before any transport call is attempted, with a stable
+        // machine-readable code (brief §52). IN_APP remains unaffected
+        // (it renders the same canonical attachments independently --
+        // see InAppChannelDriver/the Announcement Show page) and no
+        // email is ever sent with attachments silently dropped.
+        $attachments = $message->attachments;
+        $totalBytes = $attachments->sum('size_bytes');
+        $maxBytes = (int) config('communications.attachments.email_max_total_size_mb') * 1024 * 1024;
+
+        if ($totalBytes > $maxBytes) {
+            return CommunicationDeliveryResult::failed(
+                'attachment_email_size_exceeded',
+                'This communication\'s attachments are too large to deliver by email.',
+            );
+        }
+
         $payload = new CommunicationEmailPayload(
             subject: $this->subjectFor($message),
             bodyText: $message->body,
@@ -75,6 +94,12 @@ final class EmailChannelDriver implements CommunicationChannelDriver
             // School's own domain. Custom verified sender domains are
             // explicitly deferred (brief §13, phase doc §7).
             fromName: "{$school->name} via ".(string) config('mail.from.name'),
+            attachments: $attachments->map(fn ($a) => [
+                'disk' => $a->storage_disk,
+                'path' => $a->storage_path,
+                'displayName' => $a->safe_display_name,
+                'mimeType' => $a->mime_type,
+            ])->all(),
         );
 
         try {

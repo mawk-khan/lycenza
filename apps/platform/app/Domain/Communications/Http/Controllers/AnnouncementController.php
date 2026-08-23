@@ -13,6 +13,7 @@ use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
+use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationTemplate;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -144,7 +145,7 @@ class AnnouncementController extends Controller
         $this->authorizeCapability('communications.view', $school);
         $actor = $context->actor();
 
-        $model = CommunicationAnnouncement::query()->with(['createdBy:id,name', 'requestedChannels'])->findOrFail($announcement);
+        $model = CommunicationAnnouncement::query()->with(['createdBy:id,name', 'requestedChannels', 'attachments'])->findOrFail($announcement);
 
         $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
         $isCreator = $model->created_by_user_id === $actor->id;
@@ -182,6 +183,8 @@ class AnnouncementController extends Controller
             'canSchedule' => $canEditOrSchedule,
             'canCancel' => ($isCreator || $canManage) && $model->isEditable(),
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
+            'attachments' => $model->attachments->map(fn (CommunicationAttachment $a) => $this->presentAttachment($a))->all(),
+            'canManageAttachments' => $canEditOrSchedule,
         ]);
     }
 
@@ -512,5 +515,24 @@ class AnnouncementController extends Controller
         return array_merge($this->presentSummary($a), [
             'body' => $a->body,
         ]);
+    }
+
+    /**
+     * Brief §27/§46: metadata only -- never the storage disk/path/key.
+     * Downloads always go through the authorized
+     * CommunicationAttachmentController::download() endpoint, never a
+     * raw storage URL embedded in this payload.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentAttachment(CommunicationAttachment $a): array
+    {
+        return [
+            'id' => $a->id,
+            'displayName' => $a->safe_display_name,
+            'mimeType' => $a->mime_type,
+            'sizeBytes' => $a->size_bytes,
+            'createdAt' => $a->created_at?->toIso8601String(),
+        ];
     }
 }

@@ -5,6 +5,7 @@ namespace App\Domain\Communications\Application\Channels;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -38,6 +39,25 @@ class CommunicationMail extends Mailable
         return new Content(
             text: 'emails.communications.message',
             with: ['bodyText' => $this->payload->bodyText],
+        );
+    }
+
+    /**
+     * Phase 5A.6 §28: streams each attachment lazily from its own
+     * storage disk (`Attachment::fromStorageDisk()` -- never reads the
+     * whole file into this process's memory up front) and always
+     * serves it under its safe, sanitized display name -- never the
+     * server-generated storage key/path (brief §10/§27).
+     *
+     * @return array<int, Attachment>
+     */
+    public function attachments(): array
+    {
+        return array_map(
+            fn (array $a) => Attachment::fromStorageDisk($a['disk'], $a['path'])
+                ->as($a['displayName'])
+                ->withMime($a['mimeType']),
+            $this->payload->attachments,
         );
     }
 }

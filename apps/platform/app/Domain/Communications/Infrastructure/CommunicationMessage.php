@@ -78,6 +78,12 @@ class CommunicationMessage extends Model
         return $this->hasMany(CommunicationRecipient::class, 'message_id');
     }
 
+    /** @return HasMany<CommunicationAttachment, $this> */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(CommunicationAttachment::class, 'communication_message_id');
+    }
+
     public function priorityEnum(): CommunicationPriority
     {
         return CommunicationPriority::from($this->priority);

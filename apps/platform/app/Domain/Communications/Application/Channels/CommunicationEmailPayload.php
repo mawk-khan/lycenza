@@ -13,10 +13,20 @@ namespace App\Domain\Communications\Application\Channels;
  */
 final class CommunicationEmailPayload
 {
+    /**
+     * Phase 5A.6 §28: `$attachments` holds lightweight storage-reference
+     * descriptors only -- never raw file bytes -- so this payload never
+     * loads a whole attachment into memory itself; CommunicationMail::attachments()
+     * streams each one lazily from its disk at send time via
+     * Attachment::fromStorageDisk().
+     *
+     * @param  array<int, array{disk: string, path: string, displayName: string, mimeType: string}>  $attachments
+     */
     public function __construct(
         public readonly string $subject,
         public readonly string $bodyText,
         public readonly string $fromAddress,
         public readonly string $fromName,
+        public readonly array $attachments = [],
     ) {}
 }

@@ -23,6 +23,7 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
+use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Jobs\ProcessCommunicationDeliveryJob;
@@ -297,6 +298,18 @@ class AnnouncementService
                     'priority' => $fresh->priority,
                     'status' => 'sent',
                 ]);
+
+                // Phase 5A.6 §6/§25: backfills the message-rendering FK
+                // on every attachment already associated with this
+                // Announcement -- the SAME row (same checksum, same
+                // storage_path) simply gains a second FK; nothing is
+                // re-uploaded or re-copied, which is exactly what makes
+                // the "scheduled attachment snapshot" invariant hold
+                // for free (there is no later step that could pick up
+                // a newer version of anything).
+                CommunicationAttachment::query()
+                    ->where('communication_announcement_id', $fresh->id)
+                    ->update(['communication_message_id' => $message->id]);
 
                 $requestedChannels = $this->requestedChannels($fresh);
                 $requirement = $fresh->requirementEnum();

@@ -36,6 +36,14 @@ interface ChannelDeliveryRow {
     count: number;
 }
 
+interface AttachmentSummary {
+    id: string;
+    displayName: string;
+    mimeType: string;
+    sizeBytes: number;
+    createdAt: string | null;
+}
+
 const UNAVAILABLE_FAILURE_CODES = [
     'recipient_email_missing',
     'recipient_email_invalid',
@@ -54,6 +62,8 @@ interface Props {
     canSchedule: boolean;
     canCancel: boolean;
     canAnnounce: boolean;
+    attachments: AttachmentSummary[];
+    canManageAttachments: boolean;
 }
 
 const props = defineProps<Props>();
@@ -157,6 +167,57 @@ function submitSchedule() {
         { onFinish: () => (scheduling.value = false) },
     );
 }
+
+const fileInput = ref<HTMLInputElement | null>(null);
+const uploading = ref(false);
+const removingAttachmentId = ref<string | null>(null);
+
+// Phase 5A.6 §46: Inertia's router.post() detects a FormData payload
+// and switches to a multipart request automatically -- no separate
+// AJAX/fetch endpoint is needed for this upload widget.
+function uploadAttachment(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    uploading.value = true;
+    router.post(
+        `/app/communications/announcements/${props.announcement.id}/attachments`,
+        formData,
+        {
+            forceFormData: true,
+            onFinish: () => {
+                uploading.value = false;
+                if (fileInput.value) {
+                    fileInput.value.value = '';
+                }
+            },
+        },
+    );
+}
+
+function removeAttachment(attachmentId: string) {
+    removingAttachmentId.value = attachmentId;
+    router.delete(
+        `/app/communications/announcements/${props.announcement.id}/attachments/${attachmentId}`,
+        { onFinish: () => (removingAttachmentId.value = null) },
+    );
+}
+
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 </script>
 
 <template>
@@ -200,6 +261,51 @@ function submitSchedule() {
 
         <div class="mt-4 rounded border border-slate-200 p-4">
             <p class="text-sm whitespace-pre-wrap">{{ announcement.body }}</p>
+        </div>
+
+        <div class="mt-4 rounded border border-slate-200 p-4">
+            <h2 class="text-sm font-semibold">Attachments</h2>
+
+            <ul v-if="attachments.length > 0" class="mt-2 space-y-1.5">
+                <li
+                    v-for="attachment in attachments"
+                    :key="attachment.id"
+                    class="flex items-center justify-between gap-2 text-sm"
+                >
+                    <a
+                        :href="`/app/communications/attachments/${attachment.id}/download`"
+                        class="truncate text-slate-700 underline"
+                    >
+                        {{ attachment.displayName }}
+                    </a>
+                    <span class="shrink-0 text-xs text-slate-400">{{
+                        formatFileSize(attachment.sizeBytes)
+                    }}</span>
+                    <button
+                        v-if="canManageAttachments"
+                        type="button"
+                        :disabled="removingAttachmentId === attachment.id"
+                        class="shrink-0 text-xs text-red-600 underline disabled:opacity-50"
+                        @click="removeAttachment(attachment.id)"
+                    >
+                        Remove
+                    </button>
+                </li>
+            </ul>
+            <p v-else class="mt-1 text-xs text-slate-500">No attachments.</p>
+
+            <div v-if="canManageAttachments" class="mt-3 border-t border-slate-100 pt-3">
+                <input
+                    ref="fileInput"
+                    type="file"
+                    :disabled="uploading"
+                    class="text-sm text-slate-600"
+                    @change="uploadAttachment"
+                />
+                <p class="mt-1 text-xs text-slate-400">
+                    PDF, JPEG, PNG, WEBP, Word, or Excel files only.
+                </p>
+            </div>
         </div>
 
         <div class="mt-4 rounded border border-slate-200 p-4">

@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\Communications\Http\Controllers\AnnouncementController;
+use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
@@ -91,7 +92,19 @@ Route::middleware('auth')->group(function (): void {
             // and a reschedule -- see AnnouncementController::schedule()'s
             // docblock.
             Route::post('/{announcement}/schedule', [AnnouncementController::class, 'schedule'])->name('schedule');
+
+            // Phase 5A.6: attachment upload/removal, scoped to their
+            // owning Announcement -- download is registered separately
+            // below (brief §11's exact route shape).
+            Route::post('/{announcement}/attachments', [CommunicationAttachmentController::class, 'store'])->name('attachments.store');
+            Route::delete('/{announcement}/attachments/{attachment}', [CommunicationAttachmentController::class, 'destroy'])->name('attachments.destroy');
         });
+
+        // Phase 5A.6 §11: registered BEFORE the '/{thread}' wildcard
+        // below, same reasoning as 'announcements'/'templates' above.
+        // An attachment id alone resolves its own School/parent
+        // Announcement -- no announcement id appears in this route.
+        Route::get('/attachments/{attachment}/download', [CommunicationAttachmentController::class, 'download'])->name('attachments.download');
 
         // Phase 5A.4: registered BEFORE the '/{thread}' wildcard below,
         // same reasoning as 'announcements' above.

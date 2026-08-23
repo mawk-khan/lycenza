@@ -81,4 +81,54 @@ return [
         'failure_backoff_seconds' => (int) env('COMMUNICATION_SCHEDULING_FAILURE_BACKOFF_SECONDS', 900),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Attachments (Phase 5A.6 §9/§14/§16/§17/§29)
+    |--------------------------------------------------------------------------
+    |
+    | `disk` is Communication Hub's OWN explicit storage choice --
+    | independent of `config('filesystems.default')`, same reasoning as
+    | `channels.email.mailer` above -- so a future unrelated change to
+    | the application's default disk never silently relocates
+    | attachment storage. Defaults to `local` (storage_path('app/private'),
+    | already private -- see config/filesystems.php), never `public`.
+    |
+    | `allowed_mime_types` maps a real, sniffed MIME type (never the
+    | client-supplied one -- brief §15) to the file extension(s) it may
+    | be declared with; a mismatch between the sniffed type and the
+    | uploaded filename's extension is rejected exactly like a
+    | disallowed type is. Deliberately excludes SVG (brief §14: "avoid
+    | casual SVG support" -- SVG can embed script) and every macro-
+    | enabled Office format (.docm/.xlsm/...).
+    |
+    | `email_max_total_size_mb` (brief §29) is a SEPARATE, smaller
+    | threshold from `max_total_size_mb` -- the canonical storage limit
+    | for what a message may hold at all vs. what EmailChannelDriver is
+    | willing to actually transmit as a MIME attachment. Exceeding it
+    | does not touch the canonical attachment or the IN_APP channel --
+    | see EmailChannelDriver's `attachment_email_size_exceeded` handling.
+    |
+    */
+
+    'attachments' => [
+        'disk' => env('COMMUNICATION_ATTACHMENTS_DISK', 'local'),
+
+        'max_file_size_mb' => (int) env('COMMUNICATION_ATTACHMENTS_MAX_FILE_SIZE_MB', 10),
+        'max_per_message' => (int) env('COMMUNICATION_ATTACHMENTS_MAX_PER_MESSAGE', 5),
+        'max_total_size_mb' => (int) env('COMMUNICATION_ATTACHMENTS_MAX_TOTAL_SIZE_MB', 25),
+
+        'email_max_total_size_mb' => (int) env('COMMUNICATION_ATTACHMENTS_EMAIL_MAX_TOTAL_SIZE_MB', 8),
+
+        'allowed_mime_types' => [
+            'application/pdf' => ['pdf'],
+            'image/jpeg' => ['jpg', 'jpeg'],
+            'image/png' => ['png'],
+            'image/webp' => ['webp'],
+            'application/msword' => ['doc'],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => ['docx'],
+            'application/vnd.ms-excel' => ['xls'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => ['xlsx'],
+        ],
+    ],
+
 ];
