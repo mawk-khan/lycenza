@@ -37,6 +37,7 @@ class EmployeeAssignmentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly AssignmentClosureCascade $closureCascade,
     ) {}
 
     /**
@@ -100,6 +101,8 @@ class EmployeeAssignmentService
         return $this->context->withSchool($school, function () use ($school, $assignment, $endsOn, $actor) {
             return DB::transaction(function () use ($school, $assignment, $endsOn, $actor) {
                 $assignment->update(['ends_on' => $endsOn]);
+
+                $this->closureCascade->clearDanglingManagerReferences([$assignment->id]);
 
                 $this->audit->school($school, 'hr.assignment.ended', actor: $actor, subject: $assignment, metadata: [
                     'employmentRecordId' => $assignment->employment_record_id,

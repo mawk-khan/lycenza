@@ -118,14 +118,18 @@ class EmployeeSchemaTest extends TestCase
     }
 
     /**
-     * Phase 8A.3/8A.4 scope-creep guard: organizational placement
-     * (department/position/campus), reporting hierarchy (manager), and
-     * employment lifecycle/history (employment_id, joined_at, left_at)
-     * belong to EmploymentRecord/EmployeeAssignment, never to employees
-     * itself (docs/modules/HR.md's Employee != Employment != Assignment
-     * principle). This fails loudly if a future checkpoint accidentally
-     * adds one of these columns directly to employees instead of
-     * through EmploymentRecord/EmployeeAssignment.
+     * Phase 8A.3/8A.4/8A.5 scope-creep guard: organizational placement
+     * (department/position/campus), reporting hierarchy (manager --
+     * which lives on `employee_assignments.manager_assignment_id`, an
+     * Assignment-to-Assignment relationship, never an Employee-to-
+     * Employee or Employee-to-Assignment one), and employment
+     * lifecycle/history (employment_id, joined_at, left_at) belong to
+     * EmploymentRecord/EmployeeAssignment, never to employees itself
+     * (docs/modules/HR.md's Employee != Employment != Assignment
+     * principle, extended to Employee != Reporting Line). This fails
+     * loudly if a future checkpoint accidentally adds one of these
+     * columns directly to employees instead of through
+     * EmploymentRecord/EmployeeAssignment.
      */
     #[Test]
     public function employees_table_has_no_organizational_placement_columns(): void
@@ -133,6 +137,7 @@ class EmployeeSchemaTest extends TestCase
         $forbiddenColumns = [
             'department_id', 'position_id', 'campus_id', 'manager_id',
             'employment_id', 'employment_record_id', 'joined_at', 'left_at',
+            'manager_employee_id', 'manager_assignment_id', 'supervisor_id',
         ];
 
         foreach ($forbiddenColumns as $column) {

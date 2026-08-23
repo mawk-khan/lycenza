@@ -629,6 +629,127 @@ database CHECK can't express acyclicity), and a resolution
 helper/read-model for "who does X currently report to" and "who
 reports to X" queries. No separate hierarchy/graph table is introduced.
 
+## Reporting Hierarchy (8A.5, implemented)
+
+**Architecture conflict, and resolution**: the 8A.5 checkpoint brief's
+own "preferred" design described a separate `employee_reporting_lines`
+table. This directly conflicted with the design this document already
+committed to above (and that 8A.4's own migration explicitly prepared
+for — `employee_assignments.unique(id, school_id)` exists specifically
+so a self-referencing composite FK could be added cleanly). Per the
+brief's own instruction to report such a conflict and follow the
+already-accepted architecture rather than silently redesign it, 8A.5
+implements the direct `employee_assignments.manager_assignment_id`
+self-reference described above, not a separate table. This paragraph
+is that report.
+
+**Schema**: `manager_assignment_id` (nullable uuid, added via a
+`Schema::table` migration against the existing `employee_assignments`
+table) with a same-School composite FK —
+`(manager_assignment_id, school_id) -> employee_assignments(id,
+school_id)`, `nullOnDelete()` — and a CHECK constraint
+(`manager_assignment_id IS NULL OR manager_assignment_id <> id`)
+rejecting direct self-reference at the database level, not only in
+application code (verified by
+`HrRawIsolationTest::raw_insert_of_an_assignment_with_a_cross_school_manager_is_rejected`/
+`raw_update_setting_a_cross_school_manager_is_rejected` and by
+`ReportingHierarchyTest`'s self-report tests, which exercise both the
+DB constraint and the service-level guard).
+
+**Sole write path**: `App\Domain\HR\Application\ReportingHierarchyService::setManager()`
+is the only sanctioned writer of `manager_assignment_id`. One method
+handles set, change, and clear uniformly — passing `null` as the
+manager clears the pointer — since "change" is just "set" called again
+on an Assignment that already has a manager; a separate
+`changeManager()` would duplicate the same validation for no benefit.
+Guards, all evaluated inside `TenantContext::withSchool()` (mirroring
+`DepartmentService`'s established pattern, required because
+`assertNotSameEmployee()` below reads an RLS-protected lazy relation):
+same-School (`AssignmentManagerMismatchException`), not self
+(`SelfReportingException`), not the same Employee's own other
+Assignment (`SameEmployeeReportingException` — self-management through
+a different Position is normally a confusing hierarchy loop, not a
+legitimate case), and no cycle (`ReportingHierarchyCycleException`).
+
+**Cycle prevention**: a deterministic, bounded ancestry walk from the
+proposed manager upward (mirrors `DepartmentService::assertNoCycle()`'s
+identical shape for Department hierarchy) — not a generic graph
+engine, since each Assignment has at most one manager, making the
+"graph" a simple chain. Proven directly (chains up to 4 nodes,
+including indirect 3-node and 4-node cycles), not just for the
+1-hop self-report case.
+
+**Concurrency**: a naive check-then-write is not safe against two
+concurrent opposite-direction changes (Transaction 1: A's manager →
+B; Transaction 2: B's manager → A) — both could read the pre-change
+state, both pass their own cycle check, and both commit, producing a
+real, persisted A↔B cycle. `setManager()` closes this by locking both
+involved Assignment rows via separate, sequential, single-row `WHERE
+id = ? FOR UPDATE` statements in sorted-`id` order — deliberately not
+a single `whereIn(...)->orderBy('id')->lockForUpdate()` query, since
+PostgreSQL does not guarantee a multi-row locking `SELECT` acquires
+its row locks in `ORDER BY` sequence (`ORDER BY` only governs the
+returned result set, not lock-acquisition order during the scan).
+Because both concurrent callers lock in the same sorted order
+regardless of which calls first, the second always blocks on the
+shared row until the first commits, then re-reads the now-current
+state and correctly detects the cycle the first transaction's change
+created. The cycle check itself re-fetches every node fresh from the
+database by id on every hop, including the first — the caller-supplied
+Eloquent object for the proposed manager can hold stale in-memory
+attributes if it was read before a concurrent transaction's lock was
+even attempted, and using those attributes directly would silently
+walk pre-lock data even though the row itself is correctly locked.
+Both of these were real bugs found and fixed during this checkpoint's
+own implementation (a first version used ordered multi-row locking and
+walked the caller-supplied object directly; a real two-process
+concurrency test — `ReportingHierarchyConcurrencyTest`, mirroring
+`EmployeeNumberConcurrencyTest`'s/`AcademicYearActivationConcurrencyTest`'s
+established real-process pattern — caught both, since a sequential
+simulation cannot expose either failure mode). Verified stable across
+repeated runs, not a single pass.
+
+**No `is_primary` for reporting**: moot under this single-FK-slot
+design — an Assignment has at most one `manager_assignment_id` value by
+construction, unlike the address/emergency-contact "multiple candidates,
+one primary" pattern from 8A.2.
+
+**History**: manager changes are preserved via the audit trail
+(`AuditRecorder::school()`, event `hr.assignment.manager_changed`,
+recording the subordinate Assignment, previous manager Assignment id,
+and new manager Assignment id) — the same convention this codebase
+already uses for other mutable-field history, not a dedicated temporal
+table. `manager_assignment_id` itself is a live pointer, not a
+temporal/effective-dated relationship; "who reported to whom as of a
+past date" is answerable from the audit log, not from a row that
+changes shape over time.
+
+**Interaction with ending an Assignment or Employment**: ending an
+Assignment (`EmployeeAssignmentService::end()`) or ending an Employment
+(`EmploymentService::end()`, which bulk-closes its open Assignments)
+never leaves a dangling `manager_assignment_id` pointing at a
+now-closed Assignment — both call the shared
+`App\Domain\HR\Application\AssignmentClosureCascade::clearDanglingManagerReferences()`
+collaborator (introduced to avoid a circular dependency between
+`EmploymentService` and `EmployeeAssignmentService`), which nulls out
+`manager_assignment_id` on any still-open subordinate Assignment
+pointing at a closed one. An ended Assignment's own historical
+`manager_assignment_id` is left untouched — ending an Assignment does
+not erase who it used to report to.
+
+**Tests added**: 16 in `ReportingHierarchyTest` (relationship
+resolution, same/cross-School, self-report, same-Employee, direct and
+indirect cycles up to 4 nodes, manager change/clear + audit, closure
+cascade on both Assignment-end and Employment-end, no authorization
+table touched), 1 real two-process concurrency test in
+`ReportingHierarchyConcurrencyTest`, and 2 raw-SQL RLS/constraint tests
+appended to `HrRawIsolationTest` — 19 new tests total (222 passed, 349
+assertions for the full precise-path HR suite, up from the 8A.4
+baseline of 203 passed / 316 assertions).
+
+**Deferred, correctly**: no manager backfill for existing Assignments;
+no UI/controllers/routes; `EmployeeCategory` remains out of scope.
+
 ## Employee lifecycle — state responsibility matrix
 
 Rejecting one overloaded status enum (brief's explicit warning) in
@@ -833,7 +954,7 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.2  Personal Details, Contacts & Addresses                      (EmployeePersonalDetail, EmployeeAddress, EmployeeEmergencyContact)
 8A.3  Departments & Positions                                     (hr_departments, positions -- employee_categories deferred, see "Department and Position (8A.3, implemented)" above)
 8A.4  Employment Records & Employee Assignments                   (EmploymentRecord, EmployeeAssignment, primary-assignment invariant)
-8A.5  Reporting Hierarchy                                         (manager_assignment_id validation, cycle prevention, resolution queries — no new tables)
+8A.5  Reporting Hierarchy                                         (manager_assignment_id validation, cycle prevention, resolution queries — no new tables) [implemented]
 8A.6  Qualifications, Experience & Certifications                 (EmployeeQualification, EmployeeExperience, EmployeeCertification)
 8A.7  Employee Documents                                          (employee_documents — narrow scope, see "Documents" above)
 8A.8  Employee Directory                                          (search/filter/paginate API + list UI)

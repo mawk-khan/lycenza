@@ -843,4 +843,60 @@ class HrRawIsolationTest extends TestCase
 
         $this->assertSame(0, $affected);
     }
+
+    // --- Phase 8A.5: employee_assignments.manager_assignment_id -----------
+
+    #[Test]
+    public function raw_insert_of_an_assignment_with_a_cross_school_manager_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentB = $this->createEmploymentRecord($employeeB);
+        $positionB = $this->createPosition($schoolB);
+        $managerB = $this->createEmployeeAssignment($employmentB, $positionB);
+
+        $employeeA = $this->createEmployee($schoolA);
+        $employmentA = $this->createEmploymentRecord($employeeA);
+        $positionA = $this->createPosition($schoolA);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolA, $employmentA, $positionA, $managerB): void {
+            DB::connection('pgsql')->insert(
+                'insert into employee_assignments (id, school_id, employment_record_id, position_id, manager_assignment_id, starts_on, created_at, updated_at) '.
+                'values (?, ?, ?, ?, ?, ?, now(), now())',
+                [(string) Str::orderedUuid(), $schoolA->id, $employmentA->id, $positionA->id, $managerB->id, '2026-01-01'],
+            );
+        });
+    }
+
+    #[Test]
+    public function raw_update_setting_a_cross_school_manager_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeA = $this->createEmployee($schoolA);
+        $employmentA = $this->createEmploymentRecord($employeeA);
+        $positionA = $this->createPosition($schoolA);
+        $subordinateA = $this->createEmployeeAssignment($employmentA, $positionA);
+
+        $employeeB = $this->createEmployee($schoolB);
+        $employmentB = $this->createEmploymentRecord($employeeB);
+        $positionB = $this->createPosition($schoolB);
+        $managerB = $this->createEmployeeAssignment($employmentB, $positionB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($subordinateA, $managerB): void {
+            DB::connection('pgsql')->update(
+                'update employee_assignments set manager_assignment_id = ? where id = ?',
+                [$managerB->id, $subordinateA->id],
+            );
+        });
+    }
 }

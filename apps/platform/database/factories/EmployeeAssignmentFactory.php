@@ -9,10 +9,10 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  * @extends Factory<EmployeeAssignment>
  *
  * Deliberately does NOT default `school_id`/`employment_record_id`/
- * `campus_id`/`department_id`/`position_id` -- same reasoning as
- * SectionFactory/SubjectOfferingFactory: several independent parents
- * that must all share one School are supplied explicitly by the
- * caller via
+ * `campus_id`/`department_id`/`position_id`/`manager_assignment_id` --
+ * same reasoning as SectionFactory/SubjectOfferingFactory: several
+ * independent parents that must all share one School are supplied
+ * explicitly by the caller via
  * Tests\Concerns\CreatesTenancyFixtures::createEmployeeAssignment().
  */
 class EmployeeAssignmentFactory extends Factory
@@ -31,6 +31,11 @@ class EmployeeAssignmentFactory extends Factory
     public function primary(): static
     {
         return $this->state(fn () => ['is_primary' => true]);
+    }
+
+    public function reportsTo(EmployeeAssignment $manager): static
+    {
+        return $this->state(fn () => ['manager_assignment_id' => $manager->id]);
     }
 
     /**

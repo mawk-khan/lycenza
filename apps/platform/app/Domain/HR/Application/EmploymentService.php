@@ -24,6 +24,7 @@ class EmploymentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly AssignmentClosureCascade $closureCascade,
     ) {}
 
     /**
@@ -121,6 +122,8 @@ class EmploymentService
                     ->pluck('id');
 
                 $employment->assignments()->whereNull('ends_on')->update(['ends_on' => $endsOn]);
+
+                $this->closureCascade->clearDanglingManagerReferences($closedAssignmentIds->all());
 
                 $this->audit->school($school, 'hr.employment.ended', actor: $actor, subject: $employment, metadata: [
                     'employeeId' => $employment->employee_id,
