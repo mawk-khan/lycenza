@@ -1,0 +1,65 @@
+<?php
+
+use App\Http\Controllers\App\DashboardController;
+use App\Http\Controllers\App\SchoolSettingsController;
+use App\Http\Controllers\App\SchoolSetupController;
+use App\Http\Controllers\App\SchoolSwitchController;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\SystemStatusController;
+use Illuminate\Support\Facades\Route;
+
+// Unauthenticated Phase 0A primitive -- unchanged.
+Route::get('/', [SystemStatusController::class, 'index'])->name('system.status');
+
+Route::middleware('guest')->group(function (): void {
+    Route::get('/login', [LoginController::class, 'create'])->name('login');
+    Route::post('/login', [LoginController::class, 'store'])
+        ->middleware('throttle:login')
+        ->name('login.store');
+});
+
+Route::middleware('auth')->group(function (): void {
+    Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+    Route::get('/app', [DashboardController::class, 'index'])->name('app.dashboard');
+
+    Route::post('/app/schools/{school}/activate', [SchoolSwitchController::class, 'store'])
+        ->name('app.schools.activate');
+
+    Route::get('/app/settings', [SchoolSettingsController::class, 'show'])
+        ->middleware('capability:school.settings.view')
+        ->name('app.settings.show');
+
+    // Authorization for this action is enforced inside the controller
+    // via the AuthorizesCapability trait, not route middleware -- see
+    // SchoolSettingsController::update() for why (both patterns are
+    // valid; this route demonstrates the controller-level one).
+    Route::put('/app/settings', [SchoolSettingsController::class, 'update'])
+        ->name('app.settings.update');
+
+    // Phase 0D sections 69-76: the minimal "School Setup" area.
+    // Capability checks live inside SchoolSetupController itself
+    // (AuthorizesCapability trait), matching SchoolSettingsController's
+    // controller-level pattern -- every action re-derives the active
+    // School from TenantContext, never a client-supplied id.
+    Route::prefix('app/school-setup')->name('app.school-setup.')->group(function (): void {
+        Route::get('/', [SchoolSetupController::class, 'index'])->name('index');
+
+        Route::get('/profile', [SchoolSetupController::class, 'profile'])->name('profile');
+        Route::put('/profile', [SchoolSetupController::class, 'updateProfile'])->name('profile.update');
+
+        Route::get('/campuses', [SchoolSetupController::class, 'campuses'])->name('campuses');
+        Route::post('/campuses', [SchoolSetupController::class, 'storeCampus'])->name('campuses.store');
+
+        Route::get('/academic-years', [SchoolSetupController::class, 'academicYears'])->name('academic-years');
+        Route::post('/academic-years', [SchoolSetupController::class, 'storeAcademicYear'])->name('academic-years.store');
+        Route::post('/academic-years/{academicYear}/activate', [SchoolSetupController::class, 'activateAcademicYear'])->name('academic-years.activate');
+        Route::post('/academic-years/{academicYear}/close', [SchoolSetupController::class, 'closeAcademicYear'])->name('academic-years.close');
+
+        Route::get('/grade-levels', [SchoolSetupController::class, 'gradeLevels'])->name('grade-levels');
+        Route::post('/grade-levels', [SchoolSetupController::class, 'storeGradeLevel'])->name('grade-levels.store');
+
+        Route::get('/subjects', [SchoolSetupController::class, 'subjects'])->name('subjects');
+        Route::post('/subjects', [SchoolSetupController::class, 'storeSubject'])->name('subjects.store');
+    });
+});

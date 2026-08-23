@@ -1,0 +1,1667 @@
+openapi: 3.1.0
+info:
+  title: School OS API
+  version: "1.0"
+  description: >
+    Versioned public/partner-facing surface of the School OS platform.
+    Authoritative implementation lives in apps/platform (Laravel);
+    this file is the source of truth for its shape and is consumed by
+    packages/shared-types to generate TypeScript bindings. See
+    docs/architecture/API.md for the full architecture (auth, pagination,
+    idempotency, rate limiting, webhooks, error format).
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+paths:
+  /system/status:
+    get:
+      operationId: getSystemStatus
+      summary: Unauthenticated liveness/version probe (Phase 0A primitive).
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: object
+                    required: [status, phase, environment]
+                    properties:
+                      status:
+                        type: string
+                        example: ok
+                      phase:
+                        type: string
+                      environment:
+                        type: string
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+
+  /schools/{schoolId}/context:
+    get:
+      operationId: getSchoolContext
+      summary: >
+        Phase 0B primitive proving the mobile/API chain: Sanctum
+        identity -> membership -> School context -> capabilities ->
+        response. Not a general School resource endpoint.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK -- caller has an active membership in this School.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: object
+                    required: [school, capabilities]
+                    properties:
+                      school:
+                        type: object
+                        required: [id, name]
+                        properties:
+                          id: { type: string, format: uuid }
+                          name: { type: string }
+                      capabilities:
+                        type: array
+                        items: { type: string }
+                        description: Effective capability keys for the caller in this School.
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+        "401":
+          description: Missing/invalid bearer token.
+        "404":
+          description: >
+            No active membership in this School (or the School doesn't
+            exist) -- deliberately indistinguishable from "doesn't
+            exist" to avoid leaking School existence to a non-member
+            (docs/architecture/API.md, "API error behavior").
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /schools/{schoolId}/idempotency-demo/increment:
+    post:
+      operationId: incrementIdempotencyDemoCounter
+      summary: >
+        Phase 0C.2 infrastructure-only demonstration mutation (local/
+        testing only -- not a production route, not a real ERP business
+        module). Proves the `idempotent` middleware's claim/replay/
+        conflict/in-progress/concurrency behavior against a real,
+        durable, School-scoped state change (a counter). See
+        docs/architecture/RELIABILITY.md ("API idempotency").
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: >
+            Required on this endpoint specifically (unlike the general,
+            optional components.parameters.IdempotencyKey convention) --
+            see docs/architecture/API.md ("Idempotency").
+          schema: { type: string, minLength: 8, maxLength: 255 }
+      responses:
+        "200":
+          description: >
+            The counter was incremented (first execution of this
+            logical request), OR this is a replay of an already-
+            completed identical request -- distinguish via the
+            `Idempotency-Replayed` response header.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: object
+                    required: [value]
+                    properties:
+                      value: { type: integer }
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+        "400":
+          description: Idempotency-Key missing or invalid (IDEMPOTENCY_KEY_REQUIRED / IDEMPOTENCY_KEY_INVALID).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacks the school.settings.manage capability in this School.
+        "404":
+          description: No active membership in this School.
+        "409":
+          description: >
+            IDEMPOTENCY_KEY_CONFLICT (same key reused with a different
+            request) or IDEMPOTENCY_REQUEST_IN_PROGRESS (a request with
+            this key is still being processed) -- distinguish via
+            `error.code`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /schools/{schoolId}/webhook-endpoints:
+    get:
+      operationId: listWebhookEndpoints
+      summary: List a School's registered webhook endpoints (Phase 0C.3).
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK -- caller holds integrations.webhooks.view.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/WebhookEndpoint" }
+        "403":
+          description: Lacks integrations.webhooks.view in this School.
+    post:
+      operationId: createWebhookEndpoint
+      summary: >
+        Registers a new webhook endpoint. The plaintext signing secret
+        is returned ONCE, in this response only (section 7) -- it is
+        never retrievable again afterward. Requires
+        integrations.webhooks.manage.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url]
+              properties:
+                name: { type: string, maxLength: 255 }
+                url: { type: string, maxLength: 2048, description: "https:// only in production -- see docs/security/INTEGRATION-SECURITY.md (SSRF policy)." }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/WebhookEndpoint"
+                      - type: object
+                        required: [secret]
+                        properties:
+                          secret: { type: string, description: "Plaintext HMAC signing secret -- shown once." }
+        "422":
+          description: URL rejected by SSRF validation, or otherwise invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Lacks integrations.webhooks.manage in this School.
+        "409":
+          description: IDEMPOTENCY_KEY_CONFLICT or IDEMPOTENCY_REQUEST_IN_PROGRESS.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}:
+    get:
+      operationId: getWebhookEndpoint
+      summary: Fetch one webhook endpoint. Never returns the signing secret.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookEndpointId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/WebhookEndpoint" }
+        "404":
+          description: Endpoint doesn't exist, or belongs to a different School.
+
+  /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}/rotate-secret:
+    post:
+      operationId: rotateWebhookEndpointSecret
+      summary: >
+        Rotates the signing secret with a documented overlap window
+        (section 9) -- the new plaintext secret is returned ONCE, here
+        only. Requires integrations.webhooks.manage.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookEndpointId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Rotated.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/WebhookEndpoint"
+                      - type: object
+                        required: [secret]
+                        properties:
+                          secret: { type: string }
+
+  /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}/disable:
+    post:
+      operationId: disableWebhookEndpoint
+      summary: Disables an endpoint -- no new deliveries are created for it (section 10).
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookEndpointId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Disabled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/WebhookEndpoint" }
+
+  /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}/enable:
+    post:
+      operationId: enableWebhookEndpoint
+      summary: Re-enables a disabled endpoint.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookEndpointId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Enabled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/WebhookEndpoint" }
+
+  /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}/subscriptions:
+    post:
+      operationId: createWebhookSubscription
+      summary: >
+        Subscribes an endpoint to one event type. The event type must
+        be in the externally-publishable catalog (section 12) or this
+        is rejected with 422.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookEndpointId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event_type]
+              properties:
+                event_type: { type: string, example: school.setting.changed.v1 }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/WebhookSubscription" }
+        "422":
+          description: Event type is not externally subscribable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}/subscriptions/{webhookSubscriptionId}:
+    delete:
+      operationId: deleteWebhookSubscription
+      summary: Removes a subscription. Does not affect deliveries already created.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookEndpointId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookSubscriptionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Deleted.
+
+  /schools/{schoolId}/webhook-deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: >
+        Delivery history (section 47). Never exposes the signing
+        secret, a full response body, or an internal stack trace.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [pending, delivering, delivered, retrying, failed, abandoned] }
+      responses:
+        "200":
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/WebhookDelivery" }
+
+  /schools/{schoolId}/webhook-deliveries/{webhookDeliveryId}:
+    get:
+      operationId: getWebhookDelivery
+      summary: One delivery's full attempt history.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookDeliveryId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/WebhookDelivery"
+                      - type: object
+                        properties:
+                          attemptHistory:
+                            type: array
+                            items: { $ref: "#/components/schemas/WebhookDeliveryAttempt" }
+
+  /schools/{schoolId}/webhook-deliveries/{webhookDeliveryId}/redeliver:
+    post:
+      operationId: redeliverWebhookDelivery
+      summary: >
+        Manually re-attempts a TERMINAL (delivered/failed/abandoned)
+        delivery (section 48). Reuses the same logical delivery
+        identity -- prior attempt history is preserved, never mutated.
+      parameters:
+        - name: schoolId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: webhookDeliveryId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Redelivery queued.
+          headers:
+            Idempotency-Replayed:
+              $ref: "#/components/headers/IdempotencyReplayed"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/WebhookDelivery" }
+        "422":
+          description: Delivery is not in a terminal state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /education-boards:
+    get:
+      operationId: listEducationBoards
+      summary: Platform reference catalog of Education Boards (Phase 0D). No capability gate.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/EducationBoard" }
+
+  /schools/{schoolId}:
+    get:
+      operationId: getSchoolProfile
+      summary: School operational profile (Phase 0D). Requires school.profile.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/School" }
+    patch:
+      operationId: updateSchoolProfile
+      summary: >
+        Updates School profile fields. Requires school.profile.manage.
+        Never accepts `status` (the platform tenant-lifecycle field) --
+        see docs/modules/ORGANIZATION.md.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SchoolProfileInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/School" }
+        "422":
+          description: Validation failure (e.g. an inactive Education Board).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/campuses:
+    get:
+      operationId: listCampuses
+      summary: List a School's Campuses. Requires school.campuses.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Campus" } }
+    post:
+      operationId: createCampus
+      summary: Creates a Campus. Requires school.campuses.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampusInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Campus" }
+        "422":
+          description: Validation failure (e.g. duplicate code within this School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/campuses/{campusId}:
+    get:
+      operationId: getCampus
+      summary: Fetch one Campus. Requires school.campuses.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/CampusId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Campus" } } }
+        "404":
+          description: Not found (including a cross-School id -- section 51/83).
+    patch:
+      operationId: updateCampus
+      summary: Updates a Campus. Requires school.campuses.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/CampusId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CampusInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Campus" } } }
+
+  /schools/{schoolId}/campuses/{campusId}/rooms:
+    get:
+      operationId: listRooms
+      summary: List Rooms for one Campus. Requires academics.structure.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/CampusId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/Room" } } } }
+    post:
+      operationId: createRoom
+      summary: Creates a Room under this Campus. Requires academics.structure.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/CampusId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoomInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Room" } } }
+
+  /schools/{schoolId}/rooms/{roomId}:
+    get:
+      operationId: getRoom
+      summary: Fetch one Room. Requires academics.structure.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Room" } } }
+    patch:
+      operationId: updateRoom
+      summary: Updates a Room. Requires academics.structure.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoomInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Room" } } }
+
+  /schools/{schoolId}/academic-years:
+    get:
+      operationId: listAcademicYears
+      summary: List a School's Academic Years. Requires academics.years.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/AcademicYear" } } } }
+    post:
+      operationId: createAcademicYear
+      summary: >
+        Creates an Academic Year (status starts as `draft`). Requires
+        academics.years.manage. Rejected with ACADEMIC_YEAR_OVERLAP if
+        the date range overlaps an existing year (section 15).
+        Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcademicYearInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicYear" } } }
+        "422":
+          description: ACADEMIC_YEAR_OVERLAP or date-range validation failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/academic-years/{academicYearId}:
+    get:
+      operationId: getAcademicYear
+      summary: Fetch one Academic Year. Requires academics.years.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicYear" } } }
+    patch:
+      operationId: updateAcademicYear
+      summary: Renames an Academic Year (name/code only). Requires academics.years.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                code: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicYear" } } }
+
+  /schools/{schoolId}/academic-years/{academicYearId}/activate:
+    post:
+      operationId: activateAcademicYear
+      summary: >
+        Activates a draft Academic Year, closing whatever year was
+        previously active for this School in the same transaction
+        (section 16/17). Concurrency-safe: a genuine race against
+        another activation is rejected with
+        ACADEMIC_YEAR_ACTIVATION_CONFLICT (409), never a double-active
+        state (section 80's real-concurrency proof). Requires
+        academics.years.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicYear" } } }
+        "409":
+          description: ACADEMIC_YEAR_ACTIVATION_CONFLICT -- another activation won the race.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: INVALID_ACADEMIC_YEAR_TRANSITION -- the year is not currently `draft`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/academic-years/{academicYearId}/close:
+    post:
+      operationId: closeAcademicYear
+      summary: Closes an active Academic Year. Requires academics.years.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicYear" } } }
+        "422":
+          description: INVALID_ACADEMIC_YEAR_TRANSITION -- the year is not currently `active`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/academic-years/{academicYearId}/terms:
+    get:
+      operationId: listAcademicTerms
+      summary: List Terms for one Academic Year. Requires academics.years.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/AcademicTerm" } } } }
+    post:
+      operationId: createAcademicTerm
+      summary: >
+        Creates a Term within this Academic Year. Rejected with
+        ACADEMIC_TERM_OUT_OF_RANGE if outside the year's dates, or
+        ACADEMIC_TERM_OVERLAP if it overlaps a sibling Term (sections
+        20-21). Requires academics.years.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcademicTermInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicTerm" } } }
+        "422":
+          description: ACADEMIC_TERM_OUT_OF_RANGE or ACADEMIC_TERM_OVERLAP.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/academic-terms/{academicTermId}:
+    get:
+      operationId: getAcademicTerm
+      summary: Fetch one Term. Requires academics.years.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academicTermId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicTerm" } } }
+    patch:
+      operationId: updateAcademicTerm
+      summary: Renames a Term (name/code only). Requires academics.years.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academicTermId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                code: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicTerm" } } }
+
+  /schools/{schoolId}/grade-levels:
+    get:
+      operationId: listGradeLevels
+      summary: List a School's Grade Levels, ordered by sequence. Requires academics.structure.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/GradeLevel" } } } }
+    post:
+      operationId: createGradeLevel
+      summary: Creates a Grade Level. Requires academics.structure.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GradeLevelInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GradeLevel" } } }
+        "422":
+          description: Duplicate code or sequence within this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/grade-levels/{gradeLevelId}:
+    get:
+      operationId: getGradeLevel
+      summary: Fetch one Grade Level. Requires academics.structure.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: gradeLevelId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GradeLevel" } } }
+    patch:
+      operationId: updateGradeLevel
+      summary: Updates a Grade Level. Requires academics.structure.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: gradeLevelId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GradeLevelInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GradeLevel" } } }
+
+  /schools/{schoolId}/academic-years/{academicYearId}/sections:
+    get:
+      operationId: listSections
+      summary: List Sections for one Academic Year. Requires academics.structure.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/Section" } } } }
+    post:
+      operationId: createSection
+      summary: >
+        Creates a Section within this Academic Year (belongs to exactly
+        this year, section 28 -- never reused across years).
+        Idempotency-Key required. Requires academics.structure.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SectionInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Section" } } }
+        "422":
+          description: Duplicate (Campus, Grade, code) within this Academic Year.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/sections/{sectionId}:
+    get:
+      operationId: getSection
+      summary: Fetch one Section. Requires academics.structure.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: sectionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Section" } } }
+    patch:
+      operationId: updateSection
+      summary: Updates a Section. Requires academics.structure.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: sectionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                code: { type: string }
+                capacity: { type: integer, nullable: true }
+                status: { type: string, enum: [active, inactive] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Section" } } }
+
+  /schools/{schoolId}/subjects:
+    get:
+      operationId: listSubjects
+      summary: List a School's Subjects. Requires academics.subjects.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/Subject" } } } }
+    post:
+      operationId: createSubject
+      summary: Creates a Subject. Requires academics.subjects.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubjectInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Subject" } } }
+        "422":
+          description: Duplicate code, or academic_department_id belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/subjects/{subjectId}:
+    get:
+      operationId: getSubject
+      summary: Fetch one Subject. Requires academics.subjects.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Subject" } } }
+    patch:
+      operationId: updateSubject
+      summary: Updates a Subject. Requires academics.subjects.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubjectInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Subject" } } }
+
+  /schools/{schoolId}/academic-departments:
+    get:
+      operationId: listAcademicDepartments
+      summary: List a School's Academic Departments. Requires academics.structure.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/AcademicDepartment" } } } }
+    post:
+      operationId: createAcademicDepartment
+      summary: Creates an Academic Department. Requires academics.structure.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcademicDepartmentInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicDepartment" } } }
+
+  /schools/{schoolId}/academic-departments/{academicDepartmentId}:
+    get:
+      operationId: getAcademicDepartment
+      summary: Fetch one Academic Department. Requires academics.structure.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academicDepartmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicDepartment" } } }
+    patch:
+      operationId: updateAcademicDepartment
+      summary: Updates an Academic Department. Requires academics.structure.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academicDepartmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcademicDepartmentInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AcademicDepartment" } } }
+
+  /schools/{schoolId}/academic-years/{academicYearId}/subject-offerings:
+    get:
+      operationId: listSubjectOfferings
+      summary: List Subject Offerings for one Academic Year. Requires academics.subjects.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/SubjectOffering" } } } }
+    post:
+      operationId: createSubjectOffering
+      summary: >
+        Offers a Subject to a Grade Level within a Campus, for this
+        Academic Year (sections 37-40 -- never attached to Section
+        directly). Idempotency-Key required. Requires
+        academics.subjects.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AcademicYearId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubjectOfferingInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SubjectOffering" } } }
+        "422":
+          description: Duplicate offering for this (Year, Campus, Grade, Subject).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/subject-offerings/{subjectOfferingId}:
+    get:
+      operationId: getSubjectOffering
+      summary: Fetch one Subject Offering. Requires academics.subjects.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SubjectOffering" } } }
+    patch:
+      operationId: updateSubjectOffering
+      summary: Updates a Subject Offering. Requires academics.subjects.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isRequired: { type: boolean }
+                sequence: { type: integer, nullable: true }
+                weeklyPeriodsTarget: { type: integer, nullable: true }
+                status: { type: string, enum: [active, inactive] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SubjectOffering" } } }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: >
+        Opaque personal-access token (web/mobile) or partner API key
+        (third-party integrations). See docs/architecture/API.md
+        ("Authentication").
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+    PerPage:
+      name: per_page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >
+        Required on all unsafe (POST/PATCH/DELETE) mutating requests that
+        are not naturally idempotent, e.g. payment callbacks. See
+        docs/architecture/API.md ("Idempotency").
+      schema: { type: string }
+    SchoolId:
+      name: schoolId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CampusId:
+      name: campusId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AcademicYearId:
+      name: academicYearId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IncludeInactive:
+      name: include_inactive
+      in: query
+      required: false
+      description: When true, includes inactive/archived reference rows (default excludes them).
+      schema: { type: boolean, default: false }
+
+  headers:
+    XRequestId:
+      description: Correlates this response with server-side logs/audit entries.
+      schema: { type: string, format: uuid }
+    IdempotencyReplayed:
+      description: >
+        Present and "true" only when this response is a replay of a
+        previously completed request with the same Idempotency-Key
+        (docs/architecture/API.md, "Idempotency"); absent on a request's
+        first, freshly-executed response.
+      schema: { type: string, enum: ["true"] }
+
+  schemas:
+    ResponseMeta:
+      type: object
+      required: [apiVersion, requestId]
+      properties:
+        apiVersion: { type: string, example: v1 }
+        requestId: { type: string, format: uuid, nullable: true }
+
+    PaginationMeta:
+      type: object
+      required: [page, perPage, total]
+      properties:
+        page: { type: integer }
+        perPage: { type: integer }
+        total: { type: integer }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message, status, requestId]
+          properties:
+            message: { type: string }
+            status: { type: integer }
+            code:
+              type: string
+              nullable: true
+              description: >
+                Stable machine-readable error code (e.g.
+                IDEMPOTENCY_KEY_CONFLICT), present only for exceptions
+                that define one. null otherwise -- see
+                docs/architecture/API.md ("Error format").
+            requestId: { type: string, format: uuid, nullable: true }
+            errors:
+              type: object
+              nullable: true
+              description: Field-level validation errors, present only on 422 responses.
+
+    WebhookEndpoint:
+      type: object
+      required: [id, name, url, status, createdAt]
+      description: Never includes the signing secret (see the create/rotate-secret responses for the one-time exception).
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        url: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        createdAt: { type: string, format: date-time }
+        disabledAt: { type: string, format: date-time, nullable: true }
+
+    WebhookSubscription:
+      type: object
+      required: [id, webhookEndpointId, eventType, enabled]
+      properties:
+        id: { type: string, format: uuid }
+        webhookEndpointId: { type: string, format: uuid }
+        eventType: { type: string }
+        enabled: { type: boolean }
+
+    WebhookDelivery:
+      type: object
+      required: [id, webhookEndpointId, eventId, eventType, status, attempts, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        webhookEndpointId: { type: string, format: uuid }
+        eventId: { type: string, format: uuid }
+        eventType: { type: string }
+        status: { type: string, enum: [pending, delivering, delivered, retrying, failed, abandoned] }
+        attempts: { type: integer }
+        nextAttemptAt: { type: string, format: date-time, nullable: true }
+        deliveredAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        lastAttempt:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/WebhookDeliveryAttempt" }]
+
+    WebhookDeliveryAttempt:
+      type: object
+      required: [attemptNumber, outcome]
+      description: Never includes the raw response body (section 72).
+      properties:
+        attemptNumber: { type: integer }
+        outcome: { type: string, enum: [success, transient_failure, permanent_failure, timeout, network_error] }
+        responseStatus: { type: integer, nullable: true }
+        durationMs: { type: integer, nullable: true }
+        errorClass: { type: string, nullable: true }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    EducationBoard:
+      type: object
+      required: [id, code, name]
+      description: Platform reference catalog (Phase 0D section 11) -- not School-owned.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+
+    School:
+      type: object
+      required: [id, name, status, timezone, defaultLocale, countryCode]
+      description: >
+        `status` is the platform tenant-lifecycle field (Phase 0B) --
+        read-only through this API; see SchoolProfileInput.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        legalName: { type: string, nullable: true }
+        code: { type: string, nullable: true }
+        status: { type: string, enum: [active, suspended, archived] }
+        timezone: { type: string }
+        defaultLocale: { type: string }
+        website: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        addressLine1: { type: string, nullable: true }
+        addressLine2: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        stateRegion: { type: string, nullable: true }
+        postalCode: { type: string, nullable: true }
+        countryCode: { type: string, minLength: 2, maxLength: 2 }
+        educationBoardId: { type: string, format: uuid, nullable: true }
+
+    SchoolProfileInput:
+      type: object
+      description: Every field is optional (partial update) -- `status` is never accepted here.
+      properties:
+        name: { type: string, maxLength: 255 }
+        legal_name: { type: string, maxLength: 255, nullable: true }
+        code: { type: string, maxLength: 32, nullable: true }
+        website: { type: string, maxLength: 255, nullable: true }
+        email: { type: string, format: email, nullable: true }
+        phone: { type: string, maxLength: 32, nullable: true }
+        address_line1: { type: string, maxLength: 255, nullable: true }
+        address_line2: { type: string, maxLength: 255, nullable: true }
+        city: { type: string, maxLength: 120, nullable: true }
+        state_region: { type: string, maxLength: 120, nullable: true }
+        postal_code: { type: string, maxLength: 20, nullable: true }
+        country_code: { type: string, minLength: 2, maxLength: 2 }
+        education_board_id: { type: string, format: uuid, nullable: true }
+
+    Campus:
+      type: object
+      required: [id, name, code, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string, description: "Case-insensitively unique within the School (section 65)." }
+        status: { type: string, enum: [active, inactive] }
+        phone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+
+    CampusInput:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string, maxLength: 255 }
+        code: { type: string, maxLength: 32 }
+        phone: { type: string, maxLength: 32, nullable: true }
+        email: { type: string, format: email, nullable: true }
+        address: { type: string, nullable: true }
+
+    Room:
+      type: object
+      required: [id, campusId, name, code, roomType, status]
+      properties:
+        id: { type: string, format: uuid }
+        campusId: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        roomType: { type: string, enum: [classroom, laboratory, auditorium, library, sports, other] }
+        capacity: { type: integer, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    RoomInput:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string, maxLength: 255 }
+        code: { type: string, maxLength: 32 }
+        room_type: { type: string, enum: [classroom, laboratory, auditorium, library, sports, other] }
+        capacity: { type: integer, nullable: true }
+
+    AcademicYear:
+      type: object
+      required: [id, name, code, startsOn, endsOn, status]
+      description: Only one Academic Year per School may be `active` (section 16, database-enforced).
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date }
+        status: { type: string, enum: [draft, active, closed, archived] }
+
+    AcademicYearInput:
+      type: object
+      required: [name, code, starts_on, ends_on]
+      properties:
+        name: { type: string, maxLength: 255 }
+        code: { type: string, maxLength: 32 }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date, description: "Must be after starts_on." }
+
+    AcademicTerm:
+      type: object
+      required: [id, academicYearId, name, code, startsOn, endsOn, sequence]
+      properties:
+        id: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date }
+        sequence: { type: integer }
+
+    AcademicTermInput:
+      type: object
+      required: [name, code, starts_on, ends_on, sequence]
+      properties:
+        name: { type: string, maxLength: 255 }
+        code: { type: string, maxLength: 32 }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date }
+        sequence: { type: integer, minimum: 1 }
+
+    GradeLevel:
+      type: object
+      required: [id, name, code, sequence, status]
+      description: School-wide reference data (not Campus/Year-scoped, section 62).
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        sequence: { type: integer, description: "Explicit pedagogical ordering -- never inferred from name/code." }
+        educationStage: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    GradeLevelInput:
+      type: object
+      required: [name, code, sequence]
+      properties:
+        name: { type: string, maxLength: 255 }
+        code: { type: string, maxLength: 32 }
+        sequence: { type: integer, minimum: 0 }
+        education_stage: { type: string, nullable: true }
+
+    Section:
+      type: object
+      required: [id, academicYearId, campusId, gradeLevelId, name, code, status]
+      description: Belongs to exactly one Academic Year (section 28 -- never reused across years).
+      properties:
+        id: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        campusId: { type: string, format: uuid }
+        gradeLevelId: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        capacity: { type: integer, nullable: true, description: "Advisory only (section 27) -- not admission-enforced." }
+        status: { type: string, enum: [active, inactive] }
+
+    SectionInput:
+      type: object
+      required: [campus_id, grade_level_id, name, code]
+      properties:
+        campus_id: { type: string, format: uuid }
+        grade_level_id: { type: string, format: uuid }
+        name: { type: string, maxLength: 255 }
+        code: { type: string, maxLength: 32 }
+        capacity: { type: integer, nullable: true }
+
+    Subject:
+      type: object
+      required: [id, name, code, subjectType, status]
+      description: School-wide reference data (section 62).
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        shortName: { type: string, nullable: true }
+        subjectType: { type: string, enum: [core, elective, co_scholastic, language, other] }
+        academicDepartmentId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    SubjectInput:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string, maxLength: 255 }
+        code: { type: string, maxLength: 32 }
+        short_name: { type: string, maxLength: 32, nullable: true }
+        subject_type: { type: string, enum: [core, elective, co_scholastic, language, other] }
+        academic_department_id: { type: string, format: uuid, nullable: true }
+
+    AcademicDepartment:
+      type: object
+      required: [id, name, code, status]
+      description: Deliberately distinct from a future HR organizational Department (section 32).
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        status: { type: string, enum: [active, inactive] }
+
+    AcademicDepartmentInput:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string, maxLength: 255 }
+        code: { type: string, maxLength: 32 }
+
+    SubjectOffering:
+      type: object
+      required: [id, academicYearId, campusId, gradeLevelId, subjectId, isRequired, status]
+      description: >
+        The academic-offering layer (sections 37-40) -- AcademicYear-
+        specific by construction, never a global Grade->Subject map.
+      properties:
+        id: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        campusId: { type: string, format: uuid }
+        gradeLevelId: { type: string, format: uuid }
+        subjectId: { type: string, format: uuid }
+        isRequired: { type: boolean }
+        sequence: { type: integer, nullable: true }
+        weeklyPeriodsTarget: { type: integer, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    SubjectOfferingInput:
+      type: object
+      required: [campus_id, grade_level_id, subject_id]
+      properties:
+        campus_id: { type: string, format: uuid }
+        grade_level_id: { type: string, format: uuid }
+        subject_id: { type: string, format: uuid }
+        is_required: { type: boolean, default: true }
+        sequence: { type: integer, nullable: true }
+        weekly_periods_target: { type: integer, nullable: true }
