@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Communications\Http\Controllers\CommunicationHubController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
@@ -61,5 +62,17 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/subjects', [SchoolSetupController::class, 'subjects'])->name('subjects');
         Route::post('/subjects', [SchoolSetupController::class, 'storeSubject'])->name('subjects.store');
+    });
+
+    // Phase 5A.1: the Communication Hub foundation -- session-
+    // authenticated Inertia pages against the ambient active School,
+    // same convention as SchoolSetupController above. Capability checks
+    // live inside CommunicationHubController itself (AuthorizesCapability
+    // trait).
+    Route::prefix('app/communications')->name('app.communications.')->group(function (): void {
+        Route::get('/', [CommunicationHubController::class, 'index'])->name('index');
+        Route::post('/', [CommunicationHubController::class, 'store'])->name('store');
+        Route::get('/{thread}', [CommunicationHubController::class, 'show'])->name('show');
+        Route::post('/{thread}/messages', [CommunicationHubController::class, 'storeMessage'])->name('messages.store');
     });
 });

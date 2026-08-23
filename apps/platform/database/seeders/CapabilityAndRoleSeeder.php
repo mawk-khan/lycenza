@@ -68,6 +68,21 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'academics.years.manage', 'label' => 'Manage Academic Years and Terms', 'namespace' => 'school'],
             ['key' => 'academics.subjects.view', 'label' => 'View Subjects and Subject Offerings', 'namespace' => 'school'],
             ['key' => 'academics.subjects.manage', 'label' => 'Manage Subjects and Subject Offerings', 'namespace' => 'school'],
+
+            // Phase 5A.1 -- Communication Hub foundation. A single
+            // `communications.manage` capability covers thread/
+            // participant administration (deliberately not split
+            // further, matching section 47's warning against a huge
+            // permission matrix in this checkpoint); `.send`/`.reply`
+            // are separate from `.view` since a role may be able to
+            // read a thread without being allowed to post into it (or
+            // vice versa is never needed, so no write-without-read
+            // case exists yet).
+            ['key' => 'communications.view', 'label' => 'View Communication Hub threads and messages', 'namespace' => 'school'],
+            ['key' => 'communications.send', 'label' => 'Start Communication Hub threads', 'namespace' => 'school'],
+            ['key' => 'communications.reply', 'label' => 'Reply within Communication Hub threads', 'namespace' => 'school'],
+            ['key' => 'communications.manage', 'label' => 'Manage Communication Hub threads and participants', 'namespace' => 'school'],
+            ['key' => 'communications.audit.view', 'label' => 'View Communication Hub audit trail', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -99,6 +114,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.structure.view', 'academics.structure.manage',
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
+                    'communications.view', 'communications.send', 'communications.reply',
+                    'communications.manage', 'communications.audit.view',
                 ],
             ],
             'principal' => [
@@ -118,6 +135,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.structure.view', 'academics.structure.manage',
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
+                    'communications.view', 'communications.send', 'communications.reply',
                 ],
             ],
         ];

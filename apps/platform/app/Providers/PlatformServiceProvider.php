@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
+use App\Domain\Communications\Application\Channels\InAppChannelDriver;
 use App\Support\Events\Consumers\NotifyActorOfSettingChangeConsumer;
 use App\Support\Events\Consumers\WebhookFanoutConsumer;
 use App\Support\Events\EventConsumerRegistry;
@@ -42,6 +44,13 @@ class PlatformServiceProvider extends ServiceProvider
             $dispatcher->registerProvider(new FakePushProvider);
 
             return $dispatcher;
+        });
+
+        $this->app->singleton(CommunicationChannelRegistry::class, function () {
+            $registry = new CommunicationChannelRegistry;
+            $registry->register(new InAppChannelDriver);
+
+            return $registry;
         });
 
         $this->app->singleton(EventConsumerRegistry::class, function ($app) {

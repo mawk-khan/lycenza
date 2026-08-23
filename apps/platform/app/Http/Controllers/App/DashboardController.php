@@ -47,6 +47,7 @@ class DashboardController extends Controller
                 'canViewSchoolSettings' => $school !== null && $capabilities->canInSchool($user, 'school.settings.view', $school),
                 'canManageSchoolSettings' => $school !== null && $capabilities->canInSchool($user, 'school.settings.manage', $school),
                 'canManagePlatformSchools' => $capabilities->canPlatform($user, 'platform.schools.manage'),
+                'canViewCommunications' => $school !== null && $capabilities->canInSchool($user, 'communications.view', $school),
             ],
         ]);
     }

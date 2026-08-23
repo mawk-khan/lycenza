@@ -14,6 +14,7 @@ interface Props {
         canViewSchoolSettings: boolean;
         canManageSchoolSettings: boolean;
         canManagePlatformSchools: boolean;
+        canViewCommunications: boolean;
     };
 }
 
@@ -56,6 +57,9 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="activeSchool">
                     <a class="underline" href="/app/school-setup">School setup</a>
+                </li>
+                <li v-if="nav.canViewCommunications">
+                    <a class="underline" href="/app/communications">Communication Hub</a>
                 </li>
             </ul>
         </nav>
