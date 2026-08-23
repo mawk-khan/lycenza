@@ -47,6 +47,9 @@ class DashboardController extends Controller
                 'canViewSchoolSettings' => $school !== null && $capabilities->canInSchool($user, 'school.settings.view', $school),
                 'canManageSchoolSettings' => $school !== null && $capabilities->canInSchool($user, 'school.settings.manage', $school),
                 'canManagePlatformSchools' => $capabilities->canPlatform($user, 'platform.schools.manage'),
+                // Phase 1A.6: Student/Guardian Identity administration.
+                'canViewStudents' => $school !== null && $capabilities->canInSchool($user, 'students.view', $school),
+                'canViewGuardians' => $school !== null && $capabilities->canInSchool($user, 'guardians.view', $school),
             ],
         ]);
     }

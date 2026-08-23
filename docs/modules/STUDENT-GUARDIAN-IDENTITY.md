@@ -8,9 +8,10 @@ authorization capabilities plus the supported Application-layer
 mutation services (`StudentService`, `GuardianService`,
 `StudentGuardianRelationshipService`, Phase 1A.4), and the
 administrative `/api/v1` HTTP surface exposing all of the above to
-authenticated School staff (Phase 1A.5) exist. No Vue UI, domain
-events, addresses, User/persona linking, or verification workflows
-(OTP/email/SMS) exist yet — see "Deferred" below. This
+authenticated School staff (Phase 1A.5), and a session-authenticated
+Inertia/Vue administrative UI (Phase 1A.6) exist. No domain events,
+addresses, User/persona linking, or verification workflows (OTP/email/
+SMS) exist yet — see "Deferred" below. This
 document will grow as later Phase 1A checkpoints add those pieces; it
 intentionally does not describe work that has not landed.
 
@@ -426,9 +427,6 @@ indexes" above and `tests/Feature/Postgres/GuardianContactIntegrityTest.php`.
   this is possible later without a schema change, but no rotation
   workflow (a backfill job re-hashing every row under a new key) is
   implemented — see ADR 0028.
-- **Vue administrative UI** — the HTTP boundary exists (Phase 1A.5,
-  see "Administrative HTTP boundary" below) but nothing renders it yet;
-  the next Phase 1A checkpoint.
 - **Public/mobile/parent-portal API** — the `/api/v1` surface added in
   Phase 1A.5 is the same *administrative* surface every other School
   OS module uses (Campus, Academic Year, ...), reached by authenticated
@@ -440,7 +438,11 @@ indexes" above and `tests/Feature/Postgres/GuardianContactIntegrityTest.php`.
   matching GuardianContact's Phase 1A.3 precedent, but deliberately no
   transactional-outbox domain events — see "Application services"
   below for why).
-  to validate.
+- **Admissions, academic enrollment, grade/class/section, attendance,
+  fees, transport, health, documents, portal, communications,
+  government identifiers, AI/automation** — none touched by the
+  administrative UI either (Phase 1A.6); the Student form/detail page
+  still collects/shows identity fields only.
 
 ## Authorization (Phase 1A.4)
 
@@ -1056,3 +1058,295 @@ green — this checkpoint proves the HTTP layer adds no privileged
 database connection or tenancy bypass on top of the RLS foundation
 Phase 1A/1A.2/1A.3 already established; RLS remains the authoritative
 defense-in-depth layer beneath every capability check above it.
+
+## Administrative UI (Phase 1A.6)
+
+### Architecture: a second, session-authenticated controller layer
+
+The Vue/Inertia UI does **not** call the `/api/v1` JSON surface Phase
+1A.5 built. That surface is deliberately the Bearer-token,
+Flutter/external-consumer API (`docs/architecture/API.md`); the
+established, already-documented convention for the Inertia web
+console is a **separate** session-authenticated controller layer under
+`App\Http\Controllers\App\*`, calling the exact same Application
+services — `SchoolSetupController` already does this for Campuses/
+Academic Years/Grade Levels/Subjects, explicitly documenting itself as
+"NOT the Bearer-token JSON API under /api/v1." Three new controllers
+follow that identical shape:
+
+- `App\Http\Controllers\App\StudentController`
+- `App\Http\Controllers\App\GuardianController`
+- `App\Http\Controllers\App\StudentGuardianRelationshipController`
+
+Every mutation delegates to `StudentService`/`GuardianService`/
+`StudentGuardianRelationshipService`/`GuardianContactService` (Phase
+1A.3/1A.4) — the same services the JSON API controllers call — never
+duplicated. Both controller layers are thin wrappers around one
+authoritative service layer; neither is a "real" backend the other
+proxies. Tenant context comes from `TenantContext::requireSchool()`
+(session-resolved, `App\Http\Middleware\ResolveSchoolContext`), not a
+`{school}` route parameter — matching `SchoolSetupController` exactly,
+not the API layer's `{schoolId}` path segment.
+
+One real integration difference required explicit handling: the JSON
+API's domain exceptions (`DuplicateStudentNumberException`, ...)
+render automatically via their own `getStatusCode()`/`errorCode()`
+through `bootstrap/app.php`'s `/api/*`-only exception envelope, but
+that envelope explicitly does not apply to `/app/*` routes. Inertia's
+client-side form-error handling (`form.errors`) only recognizes
+Laravel's own `ValidationException`. `StudentController::store()`/
+`update()` and `StudentGuardianRelationshipController::linkExisting()`
+therefore catch the specific domain exceptions a user can plausibly
+trigger (`DuplicateStudentNumberException`, `DuplicateRelationshipException`,
+`CrossSchoolRelationshipException`, `ConcurrentPrimaryGuardianConflictException`)
+and translate them to `ValidationException::withMessages(...)` —
+without touching the underlying service. `GuardianController::storeContact()`
+does the identical translation for `GuardianContactService`'s two raw
+failure modes (`InvalidArgumentException`, `UniqueConstraintViolationException`),
+exactly mirroring the JSON API's `GuardianContactController`.
+
+### Routes
+
+Under the existing `Route::middleware('auth')` group in `routes/web.php`
+(session cookies, not Bearer tokens):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/app/students` | List/search |
+| GET/POST | `/app/students/create`, `/app/students` | Create |
+| GET | `/app/students/{student}` | Detail (identity + Guardians) |
+| GET/PUT | `/app/students/{student}/edit`, `/app/students/{student}` | Edit |
+| POST | `/app/students/{student}/status` | Status change |
+| GET | `/app/students/{student}/guardians/add` | "Add guardian" page |
+| GET | `/app/students/{student}/guardians/search` | JSON name search |
+| GET | `/app/students/{student}/guardians/candidates` | JSON exact-contact lookup |
+| POST | `/app/students/{student}/guardians/link` | Link an existing Guardian |
+| POST | `/app/students/{student}/guardians` | Create a new Guardian and link |
+| PUT/DELETE | `/app/relationships/{relationship}` | Edit / unlink |
+| POST | `/app/relationships/{relationship}/primary` | Set primary Guardian |
+| GET | `/app/guardians` | List/search |
+| GET/POST | `/app/guardians/create`, `/app/guardians` | Create |
+| GET | `/app/guardians/{guardian}` | Detail (contacts + linked Students) |
+| GET/PUT | `/app/guardians/{guardian}/edit`, `/app/guardians/{guardian}` | Edit |
+| POST | `/app/guardians/{guardian}/status` | Status change |
+| POST | `/app/guardians/{guardian}/contacts` | Add contact |
+| POST | `/app/contacts/{contact}/primary`, `/deactivate` | Contact mutation |
+
+`students.view`/`guardians.view` gate every GET; `students.manage`/
+`guardians.manage` gate every mutation; relationship link/update/
+setPrimary/unlink/the two search endpoints require **both**
+`students.manage` and `guardians.manage` (Phase 1A.4's accepted
+design — see `authorizeBoth()` in
+`StudentGuardianRelationshipController`). Every action calls
+`$this->authorizeCapability(...)` explicitly — permission-aware
+rendering (below) is UX only, never the actual enforcement.
+
+### Student UI
+
+- **Index** (`Students/Index.vue`) — server-driven filters
+  (`student_number` exact, `name` ILIKE, `status`), paginated (20/page,
+  Laravel's standard paginator shape), debounced (300ms) text filters,
+  immediate status-select filter, responsive table→card collapse at
+  `md`. Rows deliberately **exclude `dateOfBirth`** (Highly Sensitive
+  children's data, `docs/security/DATA-CLASSIFICATION.md`) — a
+  **chosen option A** per this checkpoint's brief §7/§54: Guardian/
+  contact summary columns were considered and deliberately **not**
+  added (see "Backend changes" below) rather than silently expanding
+  the list endpoint.
+- **Empty state** — distinguishes "no Students exist" (with an "Add
+  student" CTA, `students.manage` only) from "no Students match this
+  search" (no CTA, since creating one wouldn't address a search
+  filter).
+- **Create/Edit** (`Students/Create.vue`/`Edit.vue`) — a single shared
+  `Components/StudentIdentityFields.vue` field group (`defineModel`
+  per field, not a mutated prop — see "Accessibility" below), the five
+  supported identity fields only. `date_of_birth` uses a native
+  `<input type="date">` bound directly to a plain `'YYYY-MM-DD'`
+  string end to end (form field → POST body → `Student::date_of_birth`
+  cast → `toDateString()` on display) — no `Date` object is ever
+  constructed from it anywhere in this checkpoint's Vue code, so no
+  JS-timezone shift is possible (this checkpoint's brief, §38).
+  Proven by `StudentAdminUiTest::date_of_birth_round_trips_exactly_with_no_timezone_shift`.
+- **Detail** (`Students/Show.vue`) — identity description list, a
+  status-toggle button, and the Guardians section (below).
+- **Status** — a single toggle button posting the current inverse
+  value; the two-value enum is hard-coded in Vue (`active`/`inactive`)
+  matching the two values `StudentService::changeStatus()` actually
+  supports — no metadata endpoint was added solely to serve this list
+  (this checkpoint's brief §39: "do not create an API endpoint solely
+  for status metadata unless justified" — two fixed values isn't).
+
+### Guardian UI
+
+- **Index** (`Guardians/Index.vue`) — name/status filters, paginated.
+  Shows a **linked-student count** (`withCount('studentRelationships')`
+  — one extra aggregate query for the whole page, not one query per
+  row, proven directly by `GuardianAdminUiTest::index_reports_linked_student_count_without_n_plus_one`)
+  but deliberately **omits a "primary contact" column** — decrypting
+  and displaying every Guardian's phone/email in a broad list view
+  would be the same over-exposure this checkpoint already avoided for
+  Student DOB; contact values are shown only on the Guardian detail
+  page (a single-record view).
+- **Create/Edit** — `Components/GuardianIdentityFields.vue`, name
+  fields only. A Guardian is deliberately creatable with **no**
+  contact information (the domain decision that Guardian ≠ login/
+  contact record, unchanged since Phase 1A.3) — "Add contact" is a
+  separate, optional follow-up action from the Guardian's own page.
+- **Detail** (`Guardians/Show.vue`) — identity, a Contact information
+  section (add/set-primary/deactivate, expanded inline on demand, not
+  a separate page), and a Students section listing every linked
+  Student with `RelationshipFlags`.
+- **Contact display** — the exact same five approved fields the JSON
+  API exposes (`id`/`type`/`value`/`label`/`isPrimary`/`isActive`/
+  `verifiedAt`); `value` is the *decrypted* plaintext (`encrypted`
+  Eloquent cast decrypts on direct property access, unaffected by the
+  model's own `$hidden`) — `encrypted_value`/`lookup_hash`/
+  `lookup_key_version` are referenced nowhere in
+  `GuardianController`/any Vue file (grep-confirmed before commit).
+- **Add contact** — type select (Email/Mobile), a human-readable mobile
+  hint ("Include country code, e.g. +91 9876543210") without assuming
+  every School is in India, and never silently rewrites `9876543210`
+  to `+919876543210` — `PhoneNormalizer`'s E.164-only contract
+  (Phase 1A.3) is unchanged; the frontend only *explains* the
+  requirement, never guesses a country to satisfy it.
+
+### Relationship UX ("Add guardian")
+
+A dedicated page (`Students/AddGuardian.vue`), not a modal, with two
+tabs:
+
+- **Find existing guardian** — a debounced (300ms) same-School name
+  search (`GET .../guardians/search`, a plain JSON endpoint, not an
+  Inertia page) and a separate, explicit-button (not debounced) exact
+  contact lookup (`GET .../guardians/candidates`, thin wrapper over
+  the unchanged `GuardianContactService::findCandidatesBySchool()`).
+  A contact match shows the neutral copy **"Existing guardians use
+  this contact information"** — never "duplicate guardian found" (this
+  checkpoint's brief §26: shared household contacts are legitimate,
+  never flagged as an error) — followed by candidate identities for
+  staff to review; no automatic selection, no merge. Selecting a
+  candidate reveals the relationship form
+  (`RelationshipType` + the three authority flags from
+  `resources/js/relationshipTypes.ts`, the single source for this enum's
+  display labels), submitting to `POST .../guardians/link`.
+- **Create new guardian** — identity fields + the same relationship
+  form, submitting to `POST .../guardians` (`StudentGuardianRelationshipController::linkNew()`),
+  which orchestrates `GuardianService::create()` then
+  `StudentGuardianRelationshipService::link()` — two already-atomic
+  service calls in sequence, not duplicated logic. Deliberately never
+  collects contact information on this form (this checkpoint's brief:
+  "do not implement one gigantic nested Student+Guardian+Contact
+  payload") — contact remains a separate follow-up from the Guardian's
+  own page.
+
+On the Student detail page, each linked Guardian shows via
+`Components/RelationshipFlags.vue`: the relationship type plus only
+the *true* authority flags, joined compactly ("Mother · Primary ·
+Legal guardian"), never a noisy list of every boolean. "Make primary"
+posts to the dedicated `.../primary` action (`StudentGuardianRelationshipService::setPrimary()`'s
+atomic demote-then-promote — never a frontend-only assumption).
+"Remove from student" requires confirmation with explicit wording that
+only the relationship is removed:
+
+> Remove this Guardian from {name}? This removes their relationship
+> with this student. The Guardian record and links to other students
+> will remain.
+
+— never "Delete guardian" (this checkpoint's brief §20). Implemented
+via `window.confirm()` (no dialog/modal component exists anywhere in
+this codebase yet; introducing one for a single confirmation would be
+the kind of premature abstraction this checkpoint's brief §35 warns
+against).
+
+### Authorization UX
+
+`canManage`(`Students`/`Guardians`)/`canManageStudents`/
+`canManageGuardians` props, computed via `CapabilityResolver` in each
+controller (never inferred from a role name), gate every mutation
+control in Vue — matching `SchoolSetupController`'s established
+`canManage` prop pattern exactly. Relationship mutation controls
+(Add guardian, Make primary, Edit, Remove) render only when **both**
+`canManageStudents` **and** `canManageGuardians` are true. This is
+UX only: every corresponding action independently re-checks
+authorization server-side regardless of what the page received,
+proven directly — `StudentAdminUiTest::the_add_student_action_is_not_rendered_for_a_view_only_member`
+hides the button *and* calls the create page/store action directly,
+asserting `403` both times (this checkpoint's brief §29: never rely on
+a hidden button as the only protection). The Dashboard's `nav` prop
+gained `canViewStudents`/`canViewGuardians`, following the exact
+pattern its `canViewSchoolSettings` already established.
+
+### Duplicate-candidate UX
+
+See "Relationship UX" above for the exact wording/behavior. Summary:
+exact-match only (never fuzzy), same-School only, may legitimately
+return multiple Guardians, never auto-selected, never auto-merged,
+never described as a "duplicate."
+
+### Privacy
+
+`encrypted_value`/`lookup_hash`/`lookup_key_version` are referenced
+nowhere under `resources/js/` (grep-confirmed before commit — see
+"Security review" in the Phase 1A.6 checkpoint report).
+`localStorage`/`sessionStorage` are not used anywhere in this
+checkpoint's Vue code — contact search terms (`nameQuery`,
+`contactValue`) live only in-memory `ref()`s for the lifetime of the
+`AddGuardian` page component and are never persisted.
+
+### Accessibility and responsive design
+
+Every input has a real `<label for>`; date-of-birth/student-number
+error text is `aria-describedby`-linked; invalid fields set
+`aria-invalid`; `StatusBadge` pairs a colored dot (`aria-hidden`) with
+a text label so status is never color-only; tables use
+`<th scope="col">`/a `sr-only` "Actions" header; `Pagination.vue` sets
+`aria-current="page"`; all interactive elements are real `<button>`/
+`<a>` (no clickable `<div>`s anywhere in this checkpoint). No custom
+modal/dialog exists (see "Remove from student" above), so there is no
+bespoke focus-trap to get wrong. Student/Guardian list and detail
+pages collapse from a table to a card list below Tailwind's `md`
+breakpoint; forms use responsive grid columns (`sm:grid-cols-3`) that
+stack to one column on narrow viewports.
+
+### Frontend field-group components introduced
+
+`Components/{StatusBadge,EmptyState,Pagination,RelationshipFlags,
+StudentIdentityFields,GuardianIdentityFields}.vue` — six small,
+genuinely-reused components (each used by ≥2 pages); no shared page
+layout/shell/component library was introduced, since none exists
+elsewhere in this codebase yet (`SchoolSetup/*.vue` pages are each
+still self-contained `<main>` blocks) — matching this checkpoint's
+brief §35 ("do not create an abstract component library during this
+checkpoint").
+
+### Backend changes made for this checkpoint
+
+Two small, backward-compatible read-side additions, both new code
+inside this checkpoint's own new controllers (not edits to the Phase
+1A.5 JSON API):
+
+- `StudentController@show` (web) eager-loads
+  `guardianRelationships.guardian.contacts` and includes each Guardian
+  relationship's primary/first-active contact in its response — the
+  JSON API's `StudentController@show` (Phase 1A.5) does not expose
+  Guardian relationships at all today. This is additive to the web
+  controller only.
+- `GuardianController@index` (web) adds
+  `withCount('studentRelationships')` for the "linked students" list
+  column.
+
+Both are new code within Phase 1A.6's own controllers, not
+modifications to Phase 1A.5's accepted JSON API contract or its
+services — no existing test was changed, and new tests cover both
+(`StudentAdminUiTest::show_renders_identity_and_guardian_relationships`,
+`GuardianAdminUiTest::index_reports_linked_student_count_without_n_plus_one`).
+Capability enforcement, tenant safety, and PII rules are unchanged by
+either.
+
+### Deferred by this checkpoint
+
+Vue equivalents of everything already deferred in "Deferred (not yet
+implemented)" above (StudentIdentifier, Address, portal login,
+verification workflows, key rotation, domain events, Admissions/
+academics/attendance/fees/etc.) — none render any UI for those
+concerns, matching the backend's own scope exactly.

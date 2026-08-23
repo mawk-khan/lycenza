@@ -1,0 +1,278 @@
+<script setup lang="ts">
+import { router, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import RelationshipFlags from '../../../Components/RelationshipFlags.vue';
+import StatusBadge from '../../../Components/StatusBadge.vue';
+
+interface Contact {
+    id: string;
+    type: 'email' | 'mobile';
+    value: string;
+    label: string | null;
+    isPrimary: boolean;
+    isActive: boolean;
+    verifiedAt: string | null;
+}
+
+interface LinkedStudent {
+    relationshipId: string;
+    student: { id: string; studentNumber: string; firstName: string; lastName: string | null };
+    relationshipType: string;
+    isPrimary: boolean;
+    isLegalGuardian: boolean;
+    isEmergencyContact: boolean;
+    isAuthorizedPickup: boolean;
+}
+
+interface Props {
+    guardian: {
+        id: string;
+        firstName: string;
+        middleName: string | null;
+        lastName: string | null;
+        status: 'active' | 'inactive';
+    };
+    contacts: Contact[];
+    students: LinkedStudent[];
+    canManage: boolean;
+}
+
+const props = defineProps<Props>();
+
+function fullName(): string {
+    return [props.guardian.firstName, props.guardian.middleName, props.guardian.lastName]
+        .filter(Boolean)
+        .join(' ');
+}
+
+function studentName(s: LinkedStudent['student']): string {
+    return [s.firstName, s.lastName].filter(Boolean).join(' ');
+}
+
+function toggleStatus(): void {
+    const next = props.guardian.status === 'active' ? 'inactive' : 'active';
+    router.post(`/app/guardians/${props.guardian.id}/status`, { status: next });
+}
+
+function setPrimaryContact(contactId: string): void {
+    router.post(`/app/contacts/${contactId}/primary`, {}, { preserveScroll: true });
+}
+
+function deactivateContact(contact: Contact): void {
+    const confirmed = window.confirm(
+        `Deactivate this ${contact.type === 'email' ? 'email' : 'mobile'} contact? It will no longer be usable as the primary contact, but the record is kept, not deleted.`,
+    );
+    if (!confirmed) return;
+    router.post(`/app/contacts/${contact.id}/deactivate`, {}, { preserveScroll: true });
+}
+
+// --- Add contact --------------------------------------------------------
+
+const showAddContact = ref(false);
+const contactForm = useForm({
+    type: 'email' as 'email' | 'mobile',
+    value: '',
+    label: '',
+    is_primary: false,
+});
+
+function submitContact(): void {
+    contactForm.post(`/app/guardians/${props.guardian.id}/contacts`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            contactForm.reset();
+            showAddContact.value = false;
+        },
+    });
+}
+</script>
+
+<template>
+    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+        <a class="text-sm underline" href="/app/guardians">← Guardians</a>
+
+        <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-xl font-semibold">{{ fullName() }}</h1>
+                <div class="mt-1"><StatusBadge :status="guardian.status" /></div>
+            </div>
+            <div v-if="canManage" class="flex items-center gap-2">
+                <a
+                    :href="`/app/guardians/${guardian.id}/edit`"
+                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                    Edit
+                </a>
+                <button
+                    type="button"
+                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                    @click="toggleStatus"
+                >
+                    {{ guardian.status === 'active' ? 'Mark inactive' : 'Mark active' }}
+                </button>
+            </div>
+        </div>
+
+        <!-- Contacts -->
+        <section class="mt-8">
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-medium text-slate-500">Contact information</h2>
+                <button
+                    v-if="canManage && !showAddContact"
+                    type="button"
+                    class="text-sm font-medium underline"
+                    @click="showAddContact = true"
+                >
+                    Add contact
+                </button>
+            </div>
+
+            <p v-if="contacts.length === 0 && !showAddContact" class="mt-3 text-sm text-slate-500">
+                No contact information on file yet.
+            </p>
+
+            <ul v-if="contacts.length" class="mt-3 space-y-2">
+                <li
+                    v-for="contact in contacts"
+                    :key="contact.id"
+                    class="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
+                >
+                    <div>
+                        <p>
+                            <span class="font-medium">{{ contact.value }}</span>
+                            <span class="ml-2 text-slate-400">{{
+                                contact.type === 'email' ? 'Email' : 'Mobile'
+                            }}</span>
+                            <span v-if="contact.label" class="ml-2 text-slate-400"
+                                >· {{ contact.label }}</span
+                            >
+                        </p>
+                        <p class="mt-0.5 text-slate-500">
+                            <span v-if="contact.isPrimary">Primary</span>
+                            <span v-if="contact.isPrimary && !contact.isActive"> · </span>
+                            <span v-if="!contact.isActive">Inactive</span>
+                            <span v-if="!contact.verifiedAt">
+                                <span v-if="contact.isPrimary || !contact.isActive"> · </span>Not
+                                verified
+                            </span>
+                        </p>
+                    </div>
+                    <div v-if="canManage" class="flex items-center gap-3">
+                        <button
+                            v-if="!contact.isPrimary && contact.isActive"
+                            type="button"
+                            class="underline"
+                            @click="setPrimaryContact(contact.id)"
+                        >
+                            Make primary
+                        </button>
+                        <button
+                            v-if="contact.isActive"
+                            type="button"
+                            class="text-red-600 underline"
+                            @click="deactivateContact(contact)"
+                        >
+                            Deactivate
+                        </button>
+                    </div>
+                </li>
+            </ul>
+
+            <form
+                v-if="showAddContact"
+                class="mt-4 rounded border border-slate-200 p-4"
+                @submit.prevent="submitContact"
+            >
+                <div class="flex flex-wrap items-end gap-3">
+                    <div>
+                        <label class="block text-sm text-slate-600" for="contact-type">Type</label>
+                        <select
+                            id="contact-type"
+                            v-model="contactForm.type"
+                            class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                        >
+                            <option value="email">Email</option>
+                            <option value="mobile">Mobile</option>
+                        </select>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm text-slate-600" for="contact-value">
+                            {{ contactForm.type === 'email' ? 'Email address' : 'Mobile number' }}
+                        </label>
+                        <input
+                            id="contact-value"
+                            v-model="contactForm.value"
+                            type="text"
+                            :placeholder="
+                                contactForm.type === 'email'
+                                    ? 'parent@example.com'
+                                    : 'Include country code, e.g. +91 9876543210'
+                            "
+                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-600" for="contact-label"
+                            >Label (optional)</label
+                        >
+                        <input
+                            id="contact-label"
+                            v-model="contactForm.label"
+                            type="text"
+                            placeholder="Work, Home…"
+                            class="mt-1 w-32 rounded border border-slate-300 px-3 py-2 text-sm"
+                        />
+                    </div>
+                </div>
+                <p v-if="contactForm.type === 'mobile'" class="mt-2 text-xs text-slate-500">
+                    Mobile numbers must include a country code (e.g. +91 9876543210). We never guess
+                    a country for you.
+                </p>
+                <p class="mt-2 text-sm text-red-600">{{ contactForm.errors.value }}</p>
+                <label class="mt-3 flex items-center gap-2 text-sm">
+                    <input v-model="contactForm.is_primary" type="checkbox" /> Set as primary
+                    {{ contactForm.type }}
+                </label>
+                <div class="mt-3 flex items-center gap-3">
+                    <button
+                        type="submit"
+                        :disabled="contactForm.processing"
+                        class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                        Save contact
+                    </button>
+                    <button type="button" class="text-sm underline" @click="showAddContact = false">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Linked students -->
+        <section class="mt-8">
+            <h2 class="text-sm font-medium text-slate-500">Students</h2>
+            <p v-if="students.length === 0" class="mt-3 text-sm text-slate-500">
+                Not linked to any Student yet.
+            </p>
+            <ul v-else class="mt-3 space-y-3">
+                <li
+                    v-for="s in students"
+                    :key="s.relationshipId"
+                    class="rounded border border-slate-200 p-4"
+                >
+                    <a class="font-medium underline" :href="`/app/students/${s.student.id}`">{{
+                        studentName(s.student)
+                    }}</a>
+                    <p class="text-sm text-slate-500">{{ s.student.studentNumber }}</p>
+                    <RelationshipFlags
+                        :relationship-type="s.relationshipType"
+                        :is-primary="s.isPrimary"
+                        :is-legal-guardian="s.isLegalGuardian"
+                        :is-emergency-contact="s.isEmergencyContact"
+                        :is-authorized-pickup="s.isAuthorizedPickup"
+                    />
+                </li>
+            </ul>
+        </section>
+    </main>
+</template>
