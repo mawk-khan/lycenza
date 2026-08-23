@@ -10,6 +10,8 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Students\Infrastructure\Student;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -175,6 +177,24 @@ trait CreatesTenancyFixtures
                 'grade_level_id' => $gradeLevel->id,
                 'subject_id' => $subject->id,
             ], $attributes)),
+        );
+    }
+
+    // --- Phase 1A: Student & Guardian identity fixtures ---------------
+
+    protected function createStudent(School $school, array $attributes = []): Student
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Student::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createGuardian(School $school, array $attributes = []): Guardian
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Guardian::factory()->for($school, 'school')->create($attributes),
         );
     }
 }

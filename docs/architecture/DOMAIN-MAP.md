@@ -3,8 +3,11 @@
 Status: as of Phase 0D, **Platform**, **Identity & Access**, **Tenancy**,
 **Schools**, **Campuses**, and **Academic Structure** (Layer 0-1) are
 implemented — see `docs/modules/ORGANIZATION.md` and
-`docs/modules/ACADEMIC-STRUCTURE.md`. Every other module below remains
-unimplemented. This is the ownership and dependency map future
+`docs/modules/ACADEMIC-STRUCTURE.md`. As of Phase 1A (foundation slice),
+**Students/SIS** and **Guardians** (Layer 2) are partially implemented:
+permanent identity only, no relationship model, API, or UI yet — see
+`docs/modules/STUDENT-GUARDIAN-IDENTITY.md`. Every other module below
+remains unimplemented. This is the ownership and dependency map future
 implementation must follow — see `apps/platform/app/Domain/README.md`
 for the concrete code-layout convention (Academic Structure is the
 first module to actually use its `Domain/Application/Infrastructure/Http`
@@ -63,8 +66,8 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 
 | Module | Owns | Depends on | Notes |
 |---|---|---|---|
-| **Students/SIS** | Student master record, enrollment status, academic history | Academic Structure, Schools, Campuses | The record most other modules eventually reference; does not depend on any module that references it. |
-| **Guardians** | Guardian/parent records, guardian-student relationships | Students/SIS | |
+| **Students/SIS** | Student master record, enrollment status, academic history | Academic Structure, Schools, Campuses | **Partially implemented (Phase 1A)**: permanent identity only (`App\Domain\Students\Infrastructure\Student`) — no enrollment/academic-history state yet, see `docs/modules/STUDENT-GUARDIAN-IDENTITY.md`. The record most other modules eventually reference; does not depend on any module that references it. |
+| **Guardians** | Guardian/parent records, guardian-student relationships | Students/SIS | **Partially implemented (Phase 1A)**: permanent identity only (`App\Domain\Guardians\Infrastructure\Guardian`) — no contact info, no relationship-to-Student model yet, see `docs/modules/STUDENT-GUARDIAN-IDENTITY.md`. |
 | **Admissions** | Admission leads, applications, admission workflow → produces a Student record via Students/SIS's Application contract | Academic Structure, Schools, Students/SIS | Admissions calls into SIS to create a student; SIS never calls into Admissions. |
 | **HR** | Employee master record, roles/designations, employment lifecycle | Schools, Identity & Access | Independent of the Students track except where a specific Layer 3 module needs both (e.g. Academics needs teachers). |
 
