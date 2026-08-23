@@ -4,6 +4,7 @@ namespace App\Domain\Communications\Infrastructure;
 
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationPriority;
+use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
@@ -27,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property string $body
  * @property string $priority
  * @property string $status
+ * @property string $requirement
  * @property string $audience_type
  * @property Carbon|null $scheduled_at
  * @property string|null $scheduled_by_user_id
@@ -42,7 +44,7 @@ class CommunicationAnnouncement extends Model
 
     protected $fillable = [
         'school_id', 'campus_id', 'created_by_user_id', 'title', 'body', 'priority',
-        'status', 'audience_type', 'scheduled_at', 'scheduled_by_user_id', 'source_template_id',
+        'status', 'requirement', 'audience_type', 'scheduled_at', 'scheduled_by_user_id', 'source_template_id',
         'message_id', 'recipient_count', 'published_at', 'cancelled_at',
     ];
 
@@ -117,6 +119,16 @@ class CommunicationAnnouncement extends Model
     public function priorityEnum(): CommunicationPriority
     {
         return CommunicationPriority::from($this->priority);
+    }
+
+    /**
+     * Phase 5A.5 §9: deliberately a SEPARATE enum from priority --
+     * CRITICAL priority does not imply Required, NORMAL does not imply
+     * Optional. See App\Domain\Communications\Domain\CommunicationRequirement.
+     */
+    public function requirementEnum(): CommunicationRequirement
+    {
+        return CommunicationRequirement::from($this->requirement);
     }
 
     public function audienceTypeEnum(): CommunicationAudienceType

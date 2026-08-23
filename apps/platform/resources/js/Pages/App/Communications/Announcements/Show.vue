@@ -11,6 +11,7 @@ interface AnnouncementDetail {
     recipientCount: number | null;
     status: string;
     priority: string;
+    requirement: string;
     scheduledAt: string | null;
     sourceTemplateId: string | null;
     publishedAt: string | null;
@@ -20,6 +21,7 @@ interface AnnouncementDetail {
 interface EmailEligibility {
     eligible: number;
     missing: number;
+    policySuppressed: number;
 }
 
 interface AudiencePreview {
@@ -70,8 +72,14 @@ function formatInSchoolTimezone(iso: string): string {
 
 const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email' };
 
+// Excludes 'suppressed' rows -- brief §21: a suppression was never an
+// attempted delivery, so it must not inflate the "X / Y attempted"
+// denominator (in_app can suppress a fully ineligible recipient, e.g.
+// one whose membership lapsed between publish and this view).
 function channelTotal(rows: ChannelDeliveryRow[]): number {
-    return rows.reduce((sum, row) => sum + row.count, 0);
+    return rows
+        .filter((row) => row.status !== 'suppressed')
+        .reduce((sum, row) => sum + row.count, 0);
 }
 
 function channelSucceeded(rows: ChannelDeliveryRow[]): number {
@@ -104,6 +112,15 @@ function channelFailed(rows: ChannelDeliveryRow[]): number {
 function channelPending(rows: ChannelDeliveryRow[]): number {
     return rows
         .filter((row) => ['pending', 'queued', 'sending'].includes(row.status))
+        .reduce((sum, row) => sum + row.count, 0);
+}
+
+// Brief §21: a policy SUPPRESSION is never attempted delivery -- kept
+// as its own bucket, distinct from "failed" and "unavailable" (both of
+// which mean a real send was attempted).
+function channelSuppressed(rows: ChannelDeliveryRow[]): number {
+    return rows
+        .filter((row) => row.status === 'suppressed')
         .reduce((sum, row) => sum + row.count, 0);
 }
 const publishing = ref(false);
@@ -160,6 +177,12 @@ function submitSchedule() {
                 }"
             >
                 {{ announcement.status }}
+            </span>
+            <span
+                v-if="announcement.requirement === 'required'"
+                class="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700"
+            >
+                required
             </span>
         </div>
         <p class="mt-1 text-xs text-slate-500">
@@ -219,6 +242,13 @@ function submitSchedule() {
                     <span>Missing email</span>
                     <span>{{ preview.email.missing }}</span>
                 </div>
+                <div
+                    v-if="preview.email.policySuppressed > 0"
+                    class="flex justify-between text-slate-500"
+                >
+                    <span>Optional email disabled (policy/preference)</span>
+                    <span>{{ preview.email.policySuppressed }}</span>
+                </div>
             </div>
         </div>
 
@@ -245,6 +275,9 @@ function submitSchedule() {
                     </p>
                     <p v-if="channel === 'in_app'" class="mt-1 text-slate-500">
                         {{ channelSucceeded(rows) }} / {{ channelTotal(rows) }}
+                        <span v-if="channelSuppressed(rows) > 0" class="text-xs"
+                            >({{ channelSuppressed(rows) }} ineligible)</span
+                        >
                     </p>
                     <ul v-else class="mt-1 space-y-0.5 text-slate-500">
                         <li v-if="channelSucceeded(rows) > 0">{{ channelSucceeded(rows) }} sent</li>
@@ -254,6 +287,9 @@ function submitSchedule() {
                         </li>
                         <li v-if="channelUnavailable(rows) > 0">
                             {{ channelUnavailable(rows) }} unavailable
+                        </li>
+                        <li v-if="channelSuppressed(rows) > 0">
+                            {{ channelSuppressed(rows) }} suppressed (policy/preference)
                         </li>
                     </ul>
                 </div>

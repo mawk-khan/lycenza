@@ -1,7 +1,9 @@
 <?php
 
 use App\Domain\Communications\Http\Controllers\AnnouncementController;
+use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
+use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -101,6 +103,16 @@ Route::middleware('auth')->group(function (): void {
             Route::put('/{template}', [CommunicationTemplateController::class, 'update'])->name('update');
             Route::post('/{template}/activate', [CommunicationTemplateController::class, 'activate'])->name('activate');
             Route::post('/{template}/deactivate', [CommunicationTemplateController::class, 'deactivate'])->name('deactivate');
+        });
+
+        // Phase 5A.5: registered BEFORE the '/{thread}' wildcard below,
+        // same reasoning as 'announcements'/'templates' above.
+        Route::get('/preferences', [CommunicationPreferenceController::class, 'show'])->name('preferences');
+        Route::put('/preferences', [CommunicationPreferenceController::class, 'update'])->name('preferences.update');
+
+        Route::prefix('settings')->name('settings.')->group(function (): void {
+            Route::get('/channels', [CommunicationChannelPolicyController::class, 'show'])->name('channels');
+            Route::put('/channels', [CommunicationChannelPolicyController::class, 'update'])->name('channels.update');
         });
 
         Route::get('/{thread}', [CommunicationHubController::class, 'show'])->name('show');

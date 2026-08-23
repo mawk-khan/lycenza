@@ -12,6 +12,7 @@ interface TemplatePrefill {
 interface Props {
     emailChannelEnabled: boolean;
     schoolTimezone: string;
+    canMarkRequired: boolean;
     template: TemplatePrefill | null;
 }
 
@@ -26,6 +27,7 @@ const priority = ref<'normal' | 'important' | 'urgent' | 'critical'>(
 const audienceType = ref<'school_wide' | 'individual'>('school_wide');
 const memberIds = ref('');
 const emailSelected = ref(false);
+const requirement = ref<'optional' | 'required'>('optional');
 const submitting = ref(false);
 
 function submit() {
@@ -47,6 +49,7 @@ function submit() {
             channels:
                 props.emailChannelEnabled && emailSelected.value ? ['in_app', 'email'] : ['in_app'],
             source_template_id: props.template?.id ?? null,
+            requirement: props.canMarkRequired ? requirement.value : 'optional',
         },
         {
             onFinish: () => {
@@ -149,6 +152,42 @@ function submit() {
                         <span v-if="!emailChannelEnabled" class="text-xs text-slate-400"
                             >(not currently available for this school)</span
                         >
+                    </label>
+                </div>
+            </div>
+
+            <div v-if="canMarkRequired">
+                <label class="block text-xs font-medium text-slate-500">Delivery policy</label>
+                <div class="mt-1 space-y-1 text-sm text-slate-600">
+                    <label class="flex items-start gap-2">
+                        <input
+                            v-model="requirement"
+                            type="radio"
+                            value="optional"
+                            class="mt-0.5 border-slate-300"
+                        />
+                        <span>
+                            Standard
+                            <span class="block text-xs text-slate-400"
+                                >Respects each recipient's optional-channel preferences.</span
+                            >
+                        </span>
+                    </label>
+                    <label class="flex items-start gap-2">
+                        <input
+                            v-model="requirement"
+                            type="radio"
+                            value="required"
+                            class="mt-0.5 border-slate-300"
+                        />
+                        <span>
+                            Required communication
+                            <span class="block text-xs text-slate-400"
+                                >May reach recipients on a channel their preference would otherwise
+                                suppress, where school policy still permits that channel for
+                                required communication.</span
+                            >
+                        </span>
                     </label>
                 </div>
             </div>

@@ -14,6 +14,7 @@ interface ThreadSummary {
 interface Props {
     threads: ThreadSummary[];
     canSend: boolean;
+    canManageChannelPolicy: boolean;
 }
 
 defineProps<Props>();
@@ -78,6 +79,20 @@ const futureSections = ['Failed'];
                             class="block px-2 py-1 text-slate-600 hover:text-slate-900"
                             href="/app/communications/templates"
                             >Templates</a
+                        >
+                    </li>
+                    <li>
+                        <a
+                            class="block px-2 py-1 text-slate-600 hover:text-slate-900"
+                            href="/app/communications/preferences"
+                            >Preferences</a
+                        >
+                    </li>
+                    <li v-if="canManageChannelPolicy">
+                        <a
+                            class="block px-2 py-1 text-slate-600 hover:text-slate-900"
+                            href="/app/communications/settings/channels"
+                            >Settings</a
                         >
                     </li>
                     <li

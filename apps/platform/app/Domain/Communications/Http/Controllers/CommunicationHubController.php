@@ -46,6 +46,10 @@ class CommunicationHubController extends Controller
         return Inertia::render('App/Communications/Index', [
             'threads' => $threads->map(fn (CommunicationThread $t) => $this->presentThread($t))->all(),
             'canSend' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.send', $school),
+            // Phase 5A.5 §26: channel-policy administration is gated
+            // the same as thread/participant management -- reused, not
+            // a new capability.
+            'canManageChannelPolicy' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school),
         ]);
     }
 

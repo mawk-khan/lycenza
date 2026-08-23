@@ -6,9 +6,12 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
+use App\Domain\Communications\Infrastructure\CommunicationChannelPolicy;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
+use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
+use App\Domain\Communications\Infrastructure\CommunicationPreference;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationTemplate;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
@@ -151,6 +154,39 @@ trait CreatesCommunicationFixtures
             fn () => CommunicationTemplate::factory()->create(array_merge([
                 'school_id' => $school->id,
                 'created_by_user_id' => $creator->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createChannelPolicy(School $school, array $attributes = []): CommunicationChannelPolicy
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationChannelPolicy::factory()->create(array_merge([
+                'school_id' => $school->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createPreference(SchoolMembership $membership, array $attributes = []): CommunicationPreference
+    {
+        return app(TenantContext::class)->withSchool(
+            $membership->school,
+            fn () => CommunicationPreference::factory()->create(array_merge([
+                'school_id' => $membership->school_id,
+                'school_membership_id' => $membership->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createPolicyDecision(School $school, string $messageId, User $recipient, array $attributes = []): CommunicationDeliveryPolicyDecision
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationDeliveryPolicyDecision::factory()->create(array_merge([
+                'school_id' => $school->id,
+                'message_id' => $messageId,
+                'recipient_user_id' => $recipient->id,
             ], $attributes)),
         );
     }

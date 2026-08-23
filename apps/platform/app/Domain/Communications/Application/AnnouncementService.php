@@ -10,9 +10,11 @@ use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransiti
 use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberException;
 use App\Domain\Communications\Application\Exceptions\InvalidScheduledTimeException;
 use App\Domain\Communications\Application\Exceptions\UnsupportedAnnouncementChannelException;
+use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
+use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Domain\Communications\Events\CommunicationAnnouncementCancelled;
 use App\Domain\Communications\Events\CommunicationAnnouncementCreated;
 use App\Domain\Communications\Events\CommunicationAnnouncementPublished;
@@ -21,6 +23,7 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
+use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Models\Campus;
@@ -31,6 +34,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Observability\QueueName;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Uid\UuidV7;
 
@@ -84,6 +88,7 @@ class AnnouncementService
         private readonly CommunicationAudienceResolverRegistry $audienceResolvers,
         private readonly CommunicationDeliveryFactory $deliveryFactory,
         private readonly EmailAddressResolver $emailAddressResolver,
+        private readonly CommunicationChannelPolicyService $channelPolicy,
     ) {}
 
     /**
@@ -101,8 +106,9 @@ class AnnouncementService
         ?Campus $campus = null,
         array $channels = [],
         ?string $sourceTemplateId = null,
+        CommunicationRequirement $requirement = CommunicationRequirement::Optional,
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement) {
             $announcement = CommunicationAnnouncement::query()->create([
                 'school_id' => $school->id,
                 'campus_id' => $campus?->id,
@@ -113,6 +119,7 @@ class AnnouncementService
                 'status' => 'draft',
                 'audience_type' => $audienceType->value,
                 'source_template_id' => $sourceTemplateId,
+                'requirement' => $requirement->value,
             ]);
 
             if ($audienceType === CommunicationAudienceType::Individual) {
@@ -143,8 +150,9 @@ class AnnouncementService
         ?CommunicationPriority $priority = null,
         ?array $individualMemberUserIds = null,
         ?array $channels = null,
+        ?CommunicationRequirement $requirement = null,
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels) {
+        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement) {
             // Phase 5A.4 §31: a SCHEDULED announcement remains editable
             // up until it is claimed for publication -- the exact same
             // content-editing rules as a draft (its own canonical
@@ -153,11 +161,12 @@ class AnnouncementService
                 throw new InvalidAnnouncementTransitionException($announcement->status, 'edit');
             }
 
-            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels) {
+            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement) {
                 $announcement->update(array_filter([
                     'title' => $title,
                     'body' => $body,
                     'priority' => $priority?->value,
+                    'requirement' => $requirement?->value,
                 ], fn ($value) => $value !== null));
 
                 if ($individualMemberUserIds !== null && $announcement->audienceTypeEnum() === CommunicationAudienceType::Individual) {
@@ -290,9 +299,13 @@ class AnnouncementService
                 ]);
 
                 $requestedChannels = $this->requestedChannels($fresh);
+                $requirement = $fresh->requirementEnum();
 
                 foreach (array_chunk($resolved->userIds, self::CHUNK_SIZE) as $chunk) {
-                    $this->snapshotRecipients($fresh, $chunk);
+                    // Reused for BOTH the historical snapshot AND the
+                    // policy engine's eligibility/preference lookups
+                    // (brief §55) -- never a second membership query.
+                    $memberships = $this->snapshotRecipients($fresh, $chunk);
 
                     // One batch User lookup per chunk (never per-recipient
                     // N+1) purely to resolve email destinations -- brief
@@ -302,10 +315,42 @@ class AnnouncementService
                         ? User::query()->whereIn('id', $chunk)->get(['id', 'email'])->keyBy('id')
                         : null;
 
+                    if (in_array(CommunicationChannel::Email, $requestedChannels, true)) {
+                        $this->channelPolicy->preloadPreferences(
+                            $fresh->school,
+                            $memberships->pluck('id')->all(),
+                            CommunicationChannel::Email,
+                        );
+                    }
+
                     foreach ($chunk as $userId) {
-                        $recipient = $this->deliveryFactory->createRecipient($fresh->school_id, $message->id, $userId);
+                        $membershipId = $memberships->get($userId)?->id;
+                        $recipient = null;
 
                         foreach ($requestedChannels as $channel) {
+                            $decision = $this->channelPolicy->evaluate($fresh->school, $membershipId, $channel, $requirement);
+
+                            if (! $decision->allowed) {
+                                CommunicationDeliveryPolicyDecision::query()->create([
+                                    'school_id' => $fresh->school_id,
+                                    'message_id' => $message->id,
+                                    'recipient_user_id' => $userId,
+                                    'channel' => $channel->value,
+                                    'reason' => $decision->reason->value,
+                                ]);
+
+                                continue;
+                            }
+
+                            // Created lazily, only once ALLOW is known for
+                            // at least one channel -- a fully ineligible
+                            // recipient (every channel suppressed) never
+                            // gets a CommunicationRecipient row at all,
+                            // matching the historical snapshot's own
+                            // exclusion above rather than being
+                            // inconsistent with it.
+                            $recipient ??= $this->deliveryFactory->createRecipient($fresh->school_id, $message->id, $userId);
+
                             $deliveryIds[] = $this->deliveryFactory->createDelivery(
                                 $recipient,
                                 $channel,
@@ -440,7 +485,13 @@ class AnnouncementService
     /**
      * @param  array<int, string>  $userIds
      */
-    private function snapshotRecipients(CommunicationAnnouncement $announcement, array $userIds): void
+    /**
+     * @param  array<int, string>  $userIds
+     * @return Collection<string, SchoolMembership> user_id => active membership, reused by publish() for
+     *                                              eligibility + policy preference batching (brief §55) so this is not
+     *                                              a second, duplicate membership query.
+     */
+    private function snapshotRecipients(CommunicationAnnouncement $announcement, array $userIds): Collection
     {
         $memberships = SchoolMembership::query()
             ->where('school_id', $announcement->school_id)
@@ -475,6 +526,8 @@ class AnnouncementService
         if ($rows !== []) {
             CommunicationAnnouncementRecipient::query()->insert($rows);
         }
+
+        return $memberships;
     }
 
     /**

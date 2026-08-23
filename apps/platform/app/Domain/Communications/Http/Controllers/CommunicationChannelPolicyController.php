@@ -1,0 +1,82 @@
+<?php
+
+namespace App\Domain\Communications\Http\Controllers;
+
+use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
+use App\Domain\Communications\Application\Policy\SchoolChannelPolicyService;
+use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Http\Controllers\Controller;
+use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+
+/**
+ * Phase 5A.5 §26/§29 -- School-level channel policy administration.
+ * Gated by `communications.manage` (brief §8's own capability, reused
+ * rather than adding a new one). Only IN_APP and EMAIL are exposed --
+ * brief §54: "do not expose SMS/WhatsApp/Push as functional preference
+ * controls" applies equally to this settings screen.
+ */
+class CommunicationChannelPolicyController extends Controller
+{
+    use AuthorizesCapability;
+
+    private const MANAGEABLE_CHANNELS = [CommunicationChannel::InApp, CommunicationChannel::Email];
+
+    public function show(TenantContext $context, CommunicationChannelPolicyService $channelPolicy): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.manage', $school);
+
+        $policies = [];
+        foreach (self::MANAGEABLE_CHANNELS as $channel) {
+            $view = $channelPolicy->policyFor($school, $channel);
+            $policies[] = [
+                'channel' => $channel->value,
+                'optionalAllowed' => $view->optionalAllowed,
+                'requiredAllowed' => $view->requiredAllowed,
+                'recipientCanOptOut' => $view->recipientCanOptOut,
+                'isOverride' => $view->isOverride,
+            ];
+        }
+
+        return Inertia::render('App/Communications/Settings/Channels', [
+            'policies' => $policies,
+            'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
+        ]);
+    }
+
+    public function update(Request $request, TenantContext $context, SchoolChannelPolicyService $service): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.manage', $school);
+
+        // Brief §10/§26: IN_APP is structurally canonical --
+        // App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService::evaluate()
+        // never even consults a School's IN_APP policy row before
+        // returning ALLOW, so accepting a write for it here would
+        // create a meaningless override nothing ever reads. Only
+        // `email` is a real, effective write target today.
+        $validated = $request->validate([
+            'channel' => ['required', 'string', Rule::in(['email'])],
+            'optional_allowed' => ['required', 'boolean'],
+            'required_allowed' => ['required', 'boolean'],
+            'recipient_can_opt_out' => ['required', 'boolean'],
+        ]);
+
+        $service->setPolicy(
+            $school,
+            $context->actor(),
+            CommunicationChannel::from($validated['channel']),
+            (bool) $validated['optional_allowed'],
+            (bool) $validated['required_allowed'],
+            (bool) $validated['recipient_can_opt_out'],
+        );
+
+        return redirect('/app/communications/settings/channels');
+    }
+}

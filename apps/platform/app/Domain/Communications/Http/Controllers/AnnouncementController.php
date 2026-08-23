@@ -6,13 +6,17 @@ use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
+use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
+use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationTemplate;
 use App\Http\Controllers\Controller;
+use App\Models\School;
+use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
@@ -89,6 +93,9 @@ class AnnouncementController extends Controller
         return Inertia::render('App/Communications/Announcements/Create', [
             'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
             'schoolTimezone' => $school->timezone,
+            // Brief §8: only a communications.manage-capable sender may
+            // ever mark a communication Required.
+            'canMarkRequired' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.manage', $school),
             'template' => $template === null ? null : [
                 'id' => $template->id,
                 'title' => $template->subject,
@@ -102,8 +109,9 @@ class AnnouncementController extends Controller
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.announce', $school);
+        $canMarkRequired = app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.manage', $school);
 
-        $validated = $this->validateComposer($request);
+        $validated = $this->validateComposer($request, $canMarkRequired);
 
         try {
             $announcement = $service->createDraft(
@@ -116,6 +124,7 @@ class AnnouncementController extends Controller
                 $validated['member_user_ids'] ?? [],
                 channels: $this->channelsFromInput($validated),
                 sourceTemplateId: $this->verifiedTemplateId($validated['source_template_id'] ?? null),
+                requirement: CommunicationRequirement::from($validated['requirement'] ?? 'optional'),
             );
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages(['member_user_ids' => [$e->getMessage()]]);
@@ -124,8 +133,13 @@ class AnnouncementController extends Controller
         return redirect("/app/communications/announcements/{$announcement->id}");
     }
 
-    public function show(TenantContext $context, AnnouncementService $service, EmailAddressResolver $emailResolver, string $announcement): Response
-    {
+    public function show(
+        TenantContext $context,
+        AnnouncementService $service,
+        EmailAddressResolver $emailResolver,
+        CommunicationChannelPolicyService $channelPolicy,
+        string $announcement,
+    ): Response {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.view', $school);
         $actor = $context->actor();
@@ -155,11 +169,12 @@ class AnnouncementController extends Controller
             'requestedChannels' => $requestedChannels,
             'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
             'schoolTimezone' => $school->timezone,
+            'canMarkRequired' => $canManage,
             'preview' => $preview === null ? null : [
                 'count' => $preview->count(),
                 'categoryBreakdown' => $preview->categoryBreakdown,
                 'email' => in_array('email', $requestedChannels, true)
-                    ? $this->emailEligibility($preview, $emailResolver)
+                    ? $this->emailPreview($preview, $model, $school, $emailResolver, $channelPolicy, $context)
                     : null,
             ],
             'channelDeliverySummary' => $model->isPublished() ? $this->channelDeliverySummary($model) : null,
@@ -180,7 +195,7 @@ class AnnouncementController extends Controller
         $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
 
-        $validated = $this->validateComposer($request);
+        $validated = $this->validateComposer($request, $canManage);
 
         try {
             $service->updateDraft(
@@ -191,6 +206,7 @@ class AnnouncementController extends Controller
                 CommunicationPriority::from($validated['priority']),
                 $model->audienceTypeEnum() === CommunicationAudienceType::Individual ? ($validated['member_user_ids'] ?? []) : null,
                 channels: isset($validated['channels']) ? $this->channelsFromInput($validated) : null,
+                requirement: isset($validated['requirement']) ? CommunicationRequirement::from($validated['requirement']) : null,
             );
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages(['body' => [$e->getMessage()]]);
@@ -282,7 +298,7 @@ class AnnouncementController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function validateComposer(Request $request): array
+    private function validateComposer(Request $request, bool $canMarkRequired): array
     {
         // Brief §17/§40: 'email' is only an ACCEPTABLE value when the
         // channel is currently enabled -- a forged HTTP payload
@@ -292,6 +308,16 @@ class AnnouncementController extends Controller
             ['in_app'],
             config('communications.channels.email.enabled') ? ['email'] : [],
         );
+
+        // Brief §8/§37: 'required' is only an ACCEPTABLE value for a
+        // communications.manage-capable sender -- a forged payload
+        // from anyone else fails validation (422) here, the same
+        // dynamic-allowed-values pattern as the channel gate above.
+        // This also covers a template that (however unlikely, since
+        // templates carry no requirement field at all -- brief §37)
+        // an unauthorized user tried to leverage into a required
+        // communication.
+        $allowedRequirements = array_merge(['optional'], $canMarkRequired ? ['required'] : []);
 
         return $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -303,6 +329,7 @@ class AnnouncementController extends Controller
             'channels' => ['sometimes', 'array'],
             'channels.*' => ['string', Rule::in($allowedChannels)],
             'source_template_id' => ['nullable', 'string'],
+            'requirement' => ['sometimes', 'string', Rule::in($allowedRequirements)],
         ]);
     }
 
@@ -338,21 +365,66 @@ class AnnouncementController extends Controller
     }
 
     /**
-     * @return array{eligible: int, missing: int}
+     * Brief §35: distinguishes "policy would suppress this channel"
+     * (recipient preference or School policy -- brief's own example:
+     * "19 optional-email disabled") from "no usable address at all"
+     * (brief's "8 missing email") -- NOT the same thing, and never
+     * collapsed into one count. Non-authoritative, exactly like
+     * ResolvedAudience::previewAudience() itself (brief §14/§17) --
+     * the definitive per-recipient decision is made again at
+     * publish/due time.
+     *
+     * @return array{eligible: int, missing: int, policySuppressed: int}
      */
-    private function emailEligibility(ResolvedAudience $preview, EmailAddressResolver $emailResolver): array
-    {
+    private function emailPreview(
+        ResolvedAudience $preview,
+        CommunicationAnnouncement $model,
+        School $school,
+        EmailAddressResolver $emailResolver,
+        CommunicationChannelPolicyService $channelPolicy,
+        TenantContext $context,
+    ): array {
         if ($preview->isEmpty()) {
-            return ['eligible' => 0, 'missing' => 0];
+            return ['eligible' => 0, 'missing' => 0, 'policySuppressed' => 0];
         }
 
-        $eligible = User::query()
-            ->whereIn('id', $preview->userIds)
+        $memberships = $context->withSchool(
+            $school,
+            fn () => SchoolMembership::query()
+                ->where('school_id', $school->id)
+                ->whereIn('user_id', $preview->userIds)
+                ->active()
+                ->get(['id', 'user_id'])
+                ->keyBy('user_id'),
+        );
+
+        $channelPolicy->preloadPreferences($school, $memberships->pluck('id')->all(), CommunicationChannel::Email);
+
+        $requirement = $model->requirementEnum();
+        $policySuppressed = 0;
+        $notSuppressedUserIds = [];
+
+        foreach ($preview->userIds as $userId) {
+            $decision = $channelPolicy->evaluate($school, $memberships->get($userId)?->id, CommunicationChannel::Email, $requirement);
+
+            if ($decision->allowed) {
+                $notSuppressedUserIds[] = $userId;
+            } else {
+                $policySuppressed++;
+            }
+        }
+
+        $eligible = $notSuppressedUserIds === [] ? 0 : User::query()
+            ->whereIn('id', $notSuppressedUserIds)
             ->get(['id', 'email'])
             ->filter(fn (User $user) => $emailResolver->resolve($user) !== null)
             ->count();
 
-        return ['eligible' => $eligible, 'missing' => $preview->count() - $eligible];
+        return [
+            'eligible' => $eligible,
+            'missing' => count($notSuppressedUserIds) - $eligible,
+            'policySuppressed' => $policySuppressed,
+        ];
     }
 
     /**
@@ -386,6 +458,25 @@ class AnnouncementController extends Controller
             ];
         }
 
+        // Brief §21: a SUPPRESSED channel never created a
+        // CommunicationDelivery row at all -- its own ledger is the
+        // only place this shows up, surfaced here with a distinct
+        // pseudo-status ('suppressed') so the UI never confuses "we
+        // tried and it failed" with "we deliberately never tried."
+        $suppressed = DB::table('communication_delivery_policy_decisions')
+            ->where('message_id', $model->message_id)
+            ->select('channel', 'reason', DB::raw('count(*) as decision_count'))
+            ->groupBy('channel', 'reason')
+            ->get();
+
+        foreach ($suppressed as $row) {
+            $summary[$row->channel][] = [
+                'status' => 'suppressed',
+                'failureCode' => $row->reason,
+                'count' => (int) $row->decision_count,
+            ];
+        }
+
         return $summary;
     }
 
@@ -402,6 +493,7 @@ class AnnouncementController extends Controller
             'recipientCount' => $a->recipient_count,
             'status' => $a->status,
             'priority' => $a->priority,
+            'requirement' => $a->requirement,
             'scheduledAt' => $a->scheduled_at?->toIso8601String(),
             'sourceTemplateId' => $a->source_template_id,
             'requestedChannels' => $a->relationLoaded('requestedChannels')

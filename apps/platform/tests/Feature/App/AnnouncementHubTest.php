@@ -437,4 +437,51 @@ class AnnouncementHubTest extends TestCase
 
         $this->get($showUrl)->assertInertia(fn ($page) => $page->where('announcement.sourceTemplateId', null));
     }
+
+    #[Test]
+    public function a_communications_manage_capable_sender_can_mark_an_announcement_required(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'T', 'body' => 'B', 'priority' => 'normal', 'audience_type' => 'school_wide',
+            'requirement' => 'required',
+        ]);
+        $showUrl = $create->headers->get('Location');
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page->where('announcement.requirement', 'required'));
+    }
+
+    #[Test]
+    public function a_sender_without_communications_manage_cannot_mark_an_announcement_required(): void
+    {
+        // Phase 5A.5 §8: `principal` has communications.announce but
+        // not communications.manage -- a forged 'requirement' =>
+        // 'required' payload must fail validation, never silently
+        // downgrade or silently succeed.
+        [$principal, $school] = $this->createSchoolAdmin('principal');
+        $this->activate($principal, $school);
+
+        $this->post('/app/communications/announcements', [
+            'title' => 'T', 'body' => 'B', 'priority' => 'normal', 'audience_type' => 'school_wide',
+            'requirement' => 'required',
+        ])->assertSessionHasErrors('requirement');
+    }
+
+    #[Test]
+    public function the_composer_only_exposes_required_when_the_sender_can_mark_it(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+        $this->get('/app/communications/announcements/create')->assertInertia(fn ($page) => $page
+            ->where('canMarkRequired', true)
+        );
+
+        [$principal, $schoolB] = $this->createSchoolAdmin('principal');
+        $this->activate($principal, $schoolB);
+        $this->get('/app/communications/announcements/create')->assertInertia(fn ($page) => $page
+            ->where('canMarkRequired', false)
+        );
+    }
 }
