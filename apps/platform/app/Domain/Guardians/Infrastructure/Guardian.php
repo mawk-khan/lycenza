@@ -58,6 +58,10 @@ class Guardian extends Model
     }
 
     /**
+     * Read convenience only -- see Student::guardians()'s docblock
+     * (the identical Phase 1A.2 P3 finding, resolved in Phase 1A.3):
+     * attach()/sync()/detach() are NOT the supported mutation API.
+     *
      * @return BelongsToMany<Student, $this>
      */
     public function students(): BelongsToMany
@@ -65,5 +69,19 @@ class Guardian extends Model
         return $this->belongsToMany(Student::class, 'student_guardian_relationships', 'guardian_id', 'student_id')
             ->withPivot(['relationship_type', 'is_primary', 'is_legal_guardian', 'is_emergency_contact', 'is_authorized_pickup'])
             ->withTimestamps();
+    }
+
+    /**
+     * Phase 1A.3: this Guardian's contact points (email/mobile). Always
+     * create/update rows through
+     * App\Domain\Guardians\Application\GuardianContactService, never
+     * `contacts()->create()` directly -- normalization, encryption, and
+     * lookup-hash computation must happen exactly once, in one place.
+     *
+     * @return HasMany<GuardianContact, $this>
+     */
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(GuardianContact::class);
     }
 }

@@ -52,5 +52,7 @@
         <env name="TENANCY_ALLOW_DEV_HEADER_OVERRIDE" value="true"/>
         <env name="AI_GATEWAY_SERVICE_TOKEN" value="dev-local-only-token"/>
         <env name="AI_GATEWAY_CONTEXT_SIGNING_KEY" value="test-only-context-signing-key"/>
+        <env name="CONTACT_LOOKUP_HMAC_KEY" value="test-only-contact-lookup-hmac-key"/>
+        <env name="CONTACT_LOOKUP_HMAC_KEY_VERSION" value="1"/>
     </php>
 </phpunit>

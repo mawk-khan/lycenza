@@ -74,6 +74,24 @@ class Student extends Model
     }
 
     /**
+     * Read convenience only (eager-loading, counting, querying "all
+     * Guardians of this Student"). Phase 1A.2's P3 finding, resolved in
+     * Phase 1A.3: `attach()`/`sync()`/`detach()` are NOT the supported
+     * mutation API for this relationship -- they write via a raw query
+     * builder insert that bypasses BelongsToSchool's `school_id`
+     * auto-fill entirely (Laravel does not route attach()/sync()
+     * through a custom pivot model's Eloquent events even when one is
+     * configured via `->using()`, so configuring one here would not
+     * have fixed this). In practice this fails loudly rather than
+     * silently: `school_id` is NOT NULL, so attach() raises a
+     * QueryException rather than creating a School-less or wrongly-
+     * scoped row -- proven in
+     * StudentGuardianRelationshipTest::attach_is_not_the_supported_mutation_api_and_fails_closed.
+     * Always create/update rows via
+     * App\Domain\Guardians\Infrastructure\StudentGuardianRelationship
+     * directly (or a future dedicated service), never via this
+     * relation's write methods.
+     *
      * @return BelongsToMany<Guardian, $this>
      */
     public function guardians(): BelongsToMany

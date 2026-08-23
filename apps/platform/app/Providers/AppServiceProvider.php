@@ -11,6 +11,7 @@ use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\LogErrorReporter;
 use App\Support\Observability\LogMetricsRecorder;
 use App\Support\Observability\MetricsRecorder;
+use App\Support\Privacy\ContactLookupHasher;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\TestDatabaseGuard;
 use Illuminate\Queue\Events\JobFailed;
@@ -42,6 +43,17 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(AiContextTokenService::class, fn () => new AiContextTokenService(
             (string) config('services.ai_gateway.context_signing_key'),
+        ));
+
+        // Phase 1A.3: unlike AiContextTokenService above, this
+        // deliberately does NOT cast a missing key to an empty string
+        // -- ContactLookupHasher::hash() fails closed (throws
+        // ContactLookupKeyNotConfiguredException) the first time it is
+        // actually used with no key configured, rather than silently
+        // computing a digest keyed by ''.
+        $this->app->singleton(ContactLookupHasher::class, fn () => new ContactLookupHasher(
+            config('privacy.contact_lookup.hmac_key'),
+            (int) config('privacy.contact_lookup.hmac_key_version'),
         ));
 
         // Phase 0C.4 sections 38/45: provider-independent abstractions.

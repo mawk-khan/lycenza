@@ -213,4 +213,30 @@ class StudentGuardianRelationshipTest extends TestCase
             $this->assertNotNull($relB->fresh(), "Student B's relationship with the shared Guardian must survive.");
         });
     }
+
+    #[Test]
+    public function attach_is_not_the_supported_mutation_api_and_fails_closed(): void
+    {
+        // Phase 1A.2 P3 finding, resolved in Phase 1A.3 (see
+        // Student::guardians()'s docblock): attach()/sync() bypass
+        // BelongsToSchool's school_id auto-fill because Laravel's
+        // BelongsToMany::attach() always writes via a raw query
+        // builder insert, never through a pivot model's Eloquent
+        // events -- even a correctly configured `->using()` custom
+        // pivot would not change this. The resolution is NOT to make
+        // attach() safe; it is to prove it fails loudly (a NOT NULL
+        // school_id violation) rather than silently creating a
+        // School-less or wrongly-scoped row, and to document
+        // StudentGuardianRelationship::create() as the only supported
+        // mutation path.
+        $school = $this->createSchool();
+        $student = $this->createStudent($school, ['student_number' => 'S-0001']);
+        $guardian = $this->createGuardian($school);
+
+        $this->expectException(QueryException::class);
+
+        app(TenantContext::class)->withSchool($school, fn () => DB::transaction(
+            fn () => $student->guardians()->attach($guardian->id, ['relationship_type' => 'mother'])
+        ));
+    }
 }

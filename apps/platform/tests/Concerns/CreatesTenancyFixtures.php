@@ -10,7 +10,10 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Guardians\Application\GuardianContactService;
+use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Guardians\Infrastructure\GuardianContact;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\Campus;
@@ -209,5 +212,17 @@ trait CreatesTenancyFixtures
                 'guardian_id' => $guardian->id,
             ], $attributes)),
         );
+    }
+
+    /**
+     * Goes through the real GuardianContactService -- not a raw
+     * factory create -- so normalization, encryption, and lookup-hash
+     * computation are always the genuine production code path, exactly
+     * like every other fixture helper above uses real
+     * TenantContext::withSchool() rather than a test-only bypass.
+     */
+    protected function createGuardianContact(Guardian $guardian, ContactType $type, string $rawValue, array $attributes = []): GuardianContact
+    {
+        return app(GuardianContactService::class)->create($guardian, $type, $rawValue, $attributes);
     }
 }
