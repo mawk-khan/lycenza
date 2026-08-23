@@ -1,12 +1,15 @@
-# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3)
+# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4)
 
-Status: **schema + sanctioned write path + lifecycle transitions.**
-Phase 1B.1 shipped the schema/model/RLS/composite-FK foundation; Phase
-1B.2 added `StudentEnrollmentService::enroll()`, the only sanctioned
-way to create a StudentEnrollment; Phase 1B.3 adds the four terminal
+Status: **schema + sanctioned write path + lifecycle transitions +
+authorization + read foundation.** Phase 1B.1 shipped the
+schema/model/RLS/composite-FK foundation; Phase 1B.2 added
+`StudentEnrollmentService::enroll()`, the only sanctioned way to
+create a StudentEnrollment; Phase 1B.3 added the four terminal
 lifecycle transitions (`complete()`/`withdraw()`/`cancel()`) and the
-atomic same-Academic-Year placement transfer (`transferPlacement()`).
-Still no controllers, no API, no UI, no authorization, and no
+atomic same-Academic-Year placement transfer (`transferPlacement()`);
+Phase 1B.4 adds the `enrollments.view`/`enrollments.manage`
+capabilities and `StudentEnrollmentReadService`, the canonical read
+layer. Still no controllers, no API, no UI, and no
 promotion/academic-year rollover yet — see "Deferred" below.
 
 ## Identity vs enrollment boundary
@@ -552,13 +555,230 @@ the same shared creation path `enroll()` uses — never double-recorded,
 since there is exactly one `create()` call per Enrollment row
 regardless of which method reached it.
 
+## Authorization (Phase 1B.4)
+
+Two capabilities, following this codebase's established `.view`/
+`.manage` convention exactly (never a micro-capability per action):
+
+```text
+enrollments.view     View Student Enrollment placement and history
+enrollments.manage   Manage Student Enrollment (create, complete, withdraw, cancel, transfer)
+```
+
+They are **independent** — `CapabilityResolver` has no
+capability-inheritance mechanism (`docs/security/AUTHORIZATION.md`), so
+`enrollments.manage` does NOT implicitly grant `enrollments.view` and
+vice versa; a role needing both must be granted both explicitly.
+Proven in `EnrollmentCapabilityTest::enrollments_view_does_not_imply_enrollments_manage`
+and its `_manage_does_not_imply_..._view` counterpart.
+
+**Default grants**: both existing School roles (`school_admin`,
+`principal` — the only two School-scoped roles in this codebase's
+catalog) receive both capabilities, matching the exact rationale
+already used for `students.*`/`guardians.*`: Enrollment/academic
+placement is the same kind of day-to-day operational concern for a
+Principal as Student/Guardian identity already is. No new role
+(`teacher`/`registrar`/`admissions_officer`/...) was invented to make
+this look more complete — role design for a delegated,
+narrower-than-Principal Enrollment administrator belongs to its own
+future roadmap item, not this checkpoint.
+
+**Tenant isolation**: a capability grant is always School-membership-
+scoped — `enrollments.view`/`.manage` in School A never implies
+anything in School B, and a bare authenticated `User` with no
+membership in a School has neither capability there, exactly matching
+the existing `CapabilityResolver`/`students.*` precedent. Proven in
+`EnrollmentCapabilityTest`'s isolation tests.
+
+**Application services remain authorization-neutral.** Neither
+`StudentEnrollmentService` nor `StudentEnrollmentReadService` calls
+`Gate::authorize`/`CapabilityResolver`/checks a role name — this is a
+deliberate, load-bearing architecture decision (matching
+`StudentService`/`AcademicYearService`/every other Application service
+in this codebase), not an oversight to fix later. The authorization
+boundary is always the future controller:
+
+```text
+Read (list/detail/current/history) controller boundary: requires enrollments.view
+Mutation (create/complete/withdraw/cancel/transfer) controller boundary: requires enrollments.manage
+StudentEnrollmentService: tenant-safe (cross-School/cross-year/cross-grade
+  checks + composite FKs + RLS), but authorization-neutral
+StudentEnrollmentReadService: tenant-safe (SchoolScope/RLS), but
+  authorization-neutral
+```
+
+No HTTP controller exists yet (Phase 1B.5), so nothing calls
+`Gate::authorize('capability', ['enrollments.view'/'enrollments.manage', $school])`
+in production code today — these tests exercise that same Gate/
+CapabilityResolver boundary directly, exactly as the future controller
+will, mirroring `StudentGuardianCapabilityTest`'s identical approach
+from Phase 1A.4.
+
+## Read architecture (Phase 1B.4)
+
+`App\Domain\Students\Application\StudentEnrollmentReadService` is the
+canonical read layer — centralizes "what does the current/historical
+placement for this Student look like" so a future API/UI layer never
+independently rebuilds this query logic. Deliberately internal
+application architecture, not yet an API contract: no DTOs, no API
+Resources — every method returns a plain Eloquent model, `Collection`,
+or `LengthAwarePaginator`, matching `StudentController::index()`/
+`show()`'s established shape for Student's own read layer.
+
+**Tenant-safe, not authorization-neutral by omission but by design**:
+every method relies entirely on the ambient `SchoolScope`/RLS
+protection already active on `StudentEnrollment` (and `Student`, for
+the directory's search filters) — it never calls
+`TenantContext::withSchool()` itself, matching `StudentController`'s
+own read methods (`Student::query()->paginate(...)`, no explicit
+context wrapping) rather than the write-service pattern. A caller of
+this class is always an already-tenant-resolved request/job; no
+`withoutGlobalScopes()`, no `pgsql_admin` connection, no `SET
+row_security = off` anywhere in it (verified by direct grep, not
+merely asserted).
+
+### Current Enrollment semantics
+
+`currentFor(Student $student, ?AcademicYear $academicYear = null)` —
+**never** "the latest row by `starts_on`/`created_at`", and **never** a
+historical/terminal row silently substituted for "current". Returns
+the `active` Enrollment for the Student within one specific
+AcademicYear, or `null` if none exists — it does not guess.
+
+If `$academicYear` is omitted, the School's currently `active`
+AcademicYear is resolved via the existing
+`CurrentAcademicYearResolver::tryResolve()` (Phase 0D's one
+authoritative "find the active year" helper, reused rather than
+re-implemented); if the School has no active AcademicYear, `currentFor()`
+returns `null` rather than silently falling back to some other year or
+guessing at history. Proven in
+`StudentEnrollmentReadServiceTest::current_for_returns_null_when_the_school_has_no_active_academic_year_and_none_is_supplied`
+and `..._never_substitutes_a_historical_row_when_no_active_enrollment_exists_for_the_year`.
+
+An explicit `$academicYear` argument is always supported (not just the
+"no argument = active year" path) — a future UI must let staff inspect
+2025-26/2026-27/2027-28 without pretending only the global active year
+exists; read logic is never permanently baked around
+`AcademicYear.status = active`.
+
+### Historical reads
+
+`historyFor(Student $student)` returns every permitted Enrollment
+record for the Student — every status (`active`/`completed`/
+`withdrawn`/`transferred`/`cancelled`), never implicitly filtered to
+"current". Ordering: `starts_on` ascending, then `created_at` as a
+deterministic tiebreaker. `starts_on` alone is sufficient for correct
+AcademicYear-chronological order without joining `academic_years` at
+all — a later AcademicYear's Enrollments always start later than an
+earlier one's, by construction (Enrollment can only be created for
+Sections belonging to a real, dated AcademicYear). Relationships
+eager-loaded: `academicYear`, `campus`, `gradeLevel`, `section` (not
+`student` — the caller already holds it).
+
+### Enrollment detail
+
+`detail(string $enrollmentId)` eager-loads `student`, `academicYear`,
+`campus`, `gradeLevel`, `section` — every relationship needed to
+explain one Enrollment's historical placement. Deliberately does
+**not** eager-load Guardian data (`student.guardians`/
+`student.guardianRelationships`) — Enrollment reads stay academically
+focused; a future Student-detail UI combining Enrollment with Guardian
+information does so by composing two separate reads, not by this
+service reaching into Guardian's domain.
+
+### Administrative listing
+
+`directory(array $filters = [], int $perPage = 25)` returns a
+`LengthAwarePaginator`. Supported filters — every one an already-
+established domain concept, nothing speculative:
+
+```text
+academic_year_id, campus_id, grade_level_id, section_id,
+status, student_number, student_name, roll_number
+```
+
+Filters combine with implicit AND. `student_number`/`student_name`
+use `whereHas('student', ...)` — the `student` relation on
+`StudentEnrollment` is itself `SchoolScope`/RLS-protected exactly like
+`StudentEnrollment` is, so a filter value naming a real row in a
+*different* School (a Section id, a Campus id, ...) simply matches
+**zero rows** — it can never widen the query or reveal that the
+foreign row exists, proven directly in
+`StudentEnrollmentReadServiceTest::school_a_read_methods_never_return_school_bs_enrollment`.
+No filter accepts or applies a `school_id` value at all — tenant
+identity comes entirely from whatever `TenantContext` the caller
+already established, never from filter input (the same rule 19
+principle applied to the read layer).
+
+**Pagination**: `paginate()`, the same mechanism `StudentController::index()`
+already uses — never an unbounded `StudentEnrollment::all()`/`->get()`
+administrative listing. Default page size 25, caller-adjustable.
+(`historyFor()`'s plain `->get()` is intentionally NOT paginated — it
+is scoped to one Student's own history, which is bounded by
+construction to at most a few dozen rows over an entire School
+career, categorically different from an unbounded cross-Student
+directory query.)
+
+**Eager loading / no N+1**: `student` (a **deliberately partial**
+column selection — `id, school_id, student_number, first_name,
+middle_name, last_name, status`, explicitly excluding
+`date_of_birth`), `academicYear`, `campus`, `gradeLevel`, `section`.
+Never `guardians`/`contacts`/`subjects`/attendance/fees. Listing N
+Enrollments issues a small, constant number of queries (one count +
+one page + five eager-load queries) regardless of N — proven directly
+in `StudentEnrollmentReadServiceTest::directory_does_not_issue_one_query_per_row`
+(10 rows, asserted well under 15 total queries).
+
+### Privacy / data minimization
+
+`date_of_birth` is never pulled into the Enrollment directory by
+default — the same privacy boundary Phase 1A's own Student list
+(`StudentController::presentSummary()`) already established, extended
+here at the query layer itself (a partial-column eager load) rather
+than left to a not-yet-built presentation layer. Proven directly in
+`StudentEnrollmentReadServiceTest::directory_rows_never_expose_the_students_date_of_birth`
+(asserts the key is genuinely absent from the loaded model's
+attributes, not merely unused). No Guardian contact information is
+ever loaded by any read-service method — structurally guaranteed by
+never eager-loading `student.guardians`/`student.guardianRelationships`
+anywhere in this class.
+
+### Read-layer immutability
+
+No read method mutates state — no "fix stale placement while reading,"
+no automatic status completion, no automatic rollover, no lazy
+roll-number correction. Reads are reads.
+
+## Cross-cutting P1 finding: intermittent full-suite flakiness (Phase 1B.4)
+
+While verifying this checkpoint, running the FULL platform regression
+suite repeatedly (not just once) surfaced a genuine, if intermittent,
+failure: roughly 1-in-5 full-suite runs fail with a `QueryException`
+(`SQLSTATE[25P02]: current transaction is aborted`) originating from
+`TenantContext::clear()`'s unconditional `RESET app.current_school_id`
+statement, thrown from inside a DIFFERENT, unrelated test class than
+any Phase 1B test — never reproduced when running Phase 1B's own test
+files alone or in combination with each other (100+ isolated/combined
+runs, always clean). A controlled comparison (5 consecutive full-suite
+runs against the Phase 1B.3 baseline, all clean, vs. roughly 5 failures
+across ~28 full-suite runs with Phase 1B.4's files present) shows this
+checkpoint's new test files measurably change *when* this pre-existing
+`TenantContext` fragility (already flagged as a P3 in the Phase 1B.1
+report) gets triggered — most plausibly by shifting PHPUnit's directory-
+scan discovery order, changing which pre-existing raw-SQL/RLS-session-
+manipulating tests (a pattern several modules use, not unique to
+Enrollment) end up adjacent to which other tests — not by introducing
+a new defect in Phase 1B's own write paths (which remain 100% reliably
+green across every targeted run). See the Phase 1B.4 checkpoint report
+("Findings", P1) for the full evidence and recommended next step
+(a dedicated test-infrastructure hardening checkpoint, before this
+branch's next push/merge gate).
+
 ## Deferred (not yet implemented)
 
-- **Authorization** (`enrollments.view`/`enrollments.manage` or
-  equivalent capability family) — no controller exists yet to gate.
-  A future HTTP checkpoint.
-- **Administrative HTTP/API and Vue UI** — a future checkpoint, once
-  authorization is defined.
+- **Administrative HTTP/API and Vue UI** — `enrollments.view`/
+  `enrollments.manage` exist and are granted (Phase 1B.4), but no
+  controller exists yet to check them. A future checkpoint.
 - **Promotion / bulk academic-year rollover** — conceptually "complete
   old Enrollment, create next-year Enrollment," but a bulk
   `Promote Grade 5A → Grade 6A` engine is a later checkpoint (Phase

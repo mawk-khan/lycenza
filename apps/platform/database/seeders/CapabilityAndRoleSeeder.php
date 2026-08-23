@@ -85,6 +85,25 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'students.manage', 'label' => 'Manage Students (create, update, status, Guardian links)', 'namespace' => 'school'],
             ['key' => 'guardians.view', 'label' => 'View Guardians and their contact information', 'namespace' => 'school'],
             ['key' => 'guardians.manage', 'label' => 'Manage Guardians, Guardian contact information, and Guardian links', 'namespace' => 'school'],
+
+            // Phase 1B.4 (docs/modules/STUDENT-ENROLLMENT.md
+            // "Authorization") -- Student academic placement/enrollment,
+            // deliberately its own pair rather than reusing
+            // students.view/students.manage: Enrollment is a distinct
+            // resource from Student identity (Phase 1A vs Phase 1B's
+            // explicit identity/enrollment boundary), and a School may
+            // later want to delegate Enrollment administration
+            // separately from Student identity administration (e.g. a
+            // future registrar-style role) without this checkpoint
+            // inventing that role now. `enrollments.manage` is
+            // independent of `enrollments.view` -- the CapabilityResolver
+            // has no capability-inheritance mechanism (see
+            // docs/security/AUTHORIZATION.md), so a role granted only
+            // `.manage` would NOT implicitly gain `.view`; every role
+            // that needs both must be granted both explicitly, exactly
+            // like every other view/manage pair in this catalog.
+            ['key' => 'enrollments.view', 'label' => 'View Student Enrollment placement and history', 'namespace' => 'school'],
+            ['key' => 'enrollments.manage', 'label' => 'Manage Student Enrollment (create, complete, withdraw, cancel, transfer)', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -118,6 +137,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.subjects.view', 'academics.subjects.manage',
                     'students.view', 'students.manage',
                     'guardians.view', 'guardians.manage',
+                    'enrollments.view', 'enrollments.manage',
                 ],
             ],
             'principal' => [
@@ -147,6 +167,14 @@ class CapabilityAndRoleSeeder extends Seeder
                     // purely administrative, concern.
                     'students.view', 'students.manage',
                     'guardians.view', 'guardians.manage',
+                    // Phase 1B.4: Enrollment/academic placement is the
+                    // same kind of hands-on operational concern for a
+                    // Principal as Student/Guardian identity already is
+                    // (placing/withdrawing/transferring Students is a
+                    // routine Principal task, not School-Admin-only
+                    // administration) -- matches the identical rationale
+                    // just above for students.*/guardians.*.
+                    'enrollments.view', 'enrollments.manage',
                 ],
             ],
         ];
