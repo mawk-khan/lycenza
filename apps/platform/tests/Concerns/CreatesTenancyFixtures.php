@@ -11,6 +11,7 @@ use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
@@ -195,6 +196,18 @@ trait CreatesTenancyFixtures
         return app(TenantContext::class)->withSchool(
             $school,
             fn () => Guardian::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createStudentGuardianRelationship(Student $student, Guardian $guardian, array $attributes = []): StudentGuardianRelationship
+    {
+        return app(TenantContext::class)->withSchool(
+            $student->school,
+            fn () => StudentGuardianRelationship::factory()->create(array_merge([
+                'school_id' => $student->school_id,
+                'student_id' => $student->id,
+                'guardian_id' => $guardian->id,
+            ], $attributes)),
         );
     }
 }

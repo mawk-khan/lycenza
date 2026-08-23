@@ -2,11 +2,15 @@
 
 namespace App\Domain\Students\Infrastructure;
 
+use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Support\Identifiers\GeneratesUuidV7;
 use App\Support\Tenancy\BelongsToSchool;
 use Database\Factories\StudentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -55,5 +59,27 @@ class Student extends Model
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    /**
+     * The domain relationship records themselves -- relationship_type,
+     * is_primary, is_legal_guardian, etc. Distinct from guardians()
+     * below, which is the plain related-Guardian collection.
+     *
+     * @return HasMany<StudentGuardianRelationship, $this>
+     */
+    public function guardianRelationships(): HasMany
+    {
+        return $this->hasMany(StudentGuardianRelationship::class);
+    }
+
+    /**
+     * @return BelongsToMany<Guardian, $this>
+     */
+    public function guardians(): BelongsToMany
+    {
+        return $this->belongsToMany(Guardian::class, 'student_guardian_relationships', 'student_id', 'guardian_id')
+            ->withPivot(['relationship_type', 'is_primary', 'is_legal_guardian', 'is_emergency_contact', 'is_authorized_pickup'])
+            ->withTimestamps();
     }
 }
