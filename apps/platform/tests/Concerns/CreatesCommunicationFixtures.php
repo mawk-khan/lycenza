@@ -4,6 +4,7 @@ namespace Tests\Concerns;
 
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
+use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
@@ -126,6 +127,18 @@ trait CreatesCommunicationFixtures
                 'announcement_id' => $announcement->id,
                 'school_membership_id' => $membership->id,
                 'user_id' => $membership->user_id,
+            ]),
+        );
+    }
+
+    protected function createAnnouncementChannel(CommunicationAnnouncement $announcement, string $channel = 'in_app'): CommunicationAnnouncementChannel
+    {
+        return app(TenantContext::class)->withSchool(
+            $announcement->school,
+            fn () => CommunicationAnnouncementChannel::factory()->create([
+                'school_id' => $announcement->school_id,
+                'announcement_id' => $announcement->id,
+                'channel' => $channel,
             ]),
         );
     }

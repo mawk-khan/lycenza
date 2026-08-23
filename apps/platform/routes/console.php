@@ -32,6 +32,16 @@ Schedule::command('platform:webhook-deliveries-redispatch')
     ->withoutOverlapping()
     ->name('webhook-deliveries-redispatch');
 
+// Phase 5A.3 (brief §21): same reasoning as the two commands above --
+// App\Jobs\ProcessCommunicationDeliveryJob's own atomic claim() makes
+// this safe under genuinely concurrent execution by construction, so
+// withoutOverlapping() here is purely a coarser efficiency safeguard,
+// not a correctness requirement.
+Schedule::command('platform:communication-deliveries-redispatch')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('communication-deliveries-redispatch');
+
 // platform:idempotency-prune is deliberately NOT scheduled here --
 // unchanged from Phase 0C.2's explicit decision (run manually/ad hoc
 // until a future checkpoint's retention policy actually requires

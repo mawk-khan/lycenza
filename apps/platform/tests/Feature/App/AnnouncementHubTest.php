@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\App;
 
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -162,5 +164,103 @@ class AnnouncementHubTest extends TestCase
         $this->activate($adminA, $schoolA);
 
         $this->post("/app/communications/announcements/{$announcementB->id}/publish")->assertNotFound();
+    }
+
+    #[Test]
+    public function the_composer_reports_email_available_only_when_the_channel_is_enabled(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        Config::set('communications.channels.email.enabled', false);
+        $this->get('/app/communications/announcements/create')->assertInertia(fn ($page) => $page
+            ->where('emailChannelEnabled', false)
+        );
+
+        Config::set('communications.channels.email.enabled', true);
+        $this->get('/app/communications/announcements/create')->assertInertia(fn ($page) => $page
+            ->where('emailChannelEnabled', true)
+        );
+    }
+
+    #[Test]
+    public function a_disabled_email_channel_cannot_be_submitted_by_forging_the_request_payload(): void
+    {
+        Config::set('communications.channels.email.enabled', false);
+
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->createMembership($this->createUser(), $school);
+        $this->activate($admin, $school);
+
+        $this->post('/app/communications/announcements', [
+            'title' => 'Forged',
+            'body' => 'Trying to sneak email in while disabled.',
+            'priority' => 'normal',
+            'audience_type' => 'school_wide',
+            'channels' => ['in_app', 'email'],
+        ])->assertSessionHasErrors('channels.1');
+    }
+
+    #[Test]
+    public function an_authorized_sender_can_select_email_and_publishing_creates_email_deliveries(): void
+    {
+        Config::set('communications.channels.email.enabled', true);
+        Mail::fake();
+
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $member = $this->createUser();
+        $this->createMembership($member, $school);
+        $this->activate($admin, $school);
+
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'Annual Day',
+            'body' => 'Rehearsal begins tomorrow at 8:30 AM.',
+            'priority' => 'normal',
+            'audience_type' => 'school_wide',
+            'channels' => ['in_app', 'email'],
+        ]);
+        $showUrl = $create->headers->get('Location');
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page
+            ->where('requestedChannels', ['in_app', 'email'])
+            ->where('preview.email.eligible', 1)
+            ->where('preview.email.missing', 0)
+        );
+
+        $this->post("{$showUrl}/publish")->assertRedirect();
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page
+            ->where('announcement.status', 'published')
+            ->has('channelDeliverySummary.in_app')
+            ->has('channelDeliverySummary.email')
+        );
+        Mail::assertSentCount(1);
+    }
+
+    #[Test]
+    public function the_in_app_only_flow_is_unchanged_when_channels_is_not_submitted_at_all(): void
+    {
+        Config::set('communications.channels.email.enabled', true);
+        Mail::fake();
+
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->createMembership($this->createUser(), $school);
+        $this->activate($admin, $school);
+
+        // No 'channels' key in the payload at all -- brief §15's core
+        // invariant: this must never implicitly start sending email.
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'Plain',
+            'body' => 'No channel selection made.',
+            'priority' => 'normal',
+            'audience_type' => 'school_wide',
+        ]);
+        $showUrl = $create->headers->get('Location');
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page->where('requestedChannels', ['in_app']));
+
+        $this->post("{$showUrl}/publish")->assertRedirect();
+
+        Mail::assertNothingSent();
     }
 }

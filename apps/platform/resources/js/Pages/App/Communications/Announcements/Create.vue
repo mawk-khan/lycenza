@@ -2,11 +2,18 @@
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
+interface Props {
+    emailChannelEnabled: boolean;
+}
+
+const props = defineProps<Props>();
+
 const title = ref('');
 const body = ref('');
 const priority = ref<'normal' | 'important' | 'urgent' | 'critical'>('normal');
 const audienceType = ref<'school_wide' | 'individual'>('school_wide');
 const memberIds = ref('');
+const emailSelected = ref(false);
 const submitting = ref(false);
 
 function submit() {
@@ -25,6 +32,8 @@ function submit() {
                           .map((id) => id.trim())
                           .filter(Boolean)
                     : [],
+            channels:
+                props.emailChannelEnabled && emailSelected.value ? ['in_app', 'email'] : ['in_app'],
         },
         {
             onFinish: () => {
@@ -100,6 +109,31 @@ function submit() {
                     type="text"
                     class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
                 />
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-500">Delivery</label>
+                <div class="mt-1 space-y-1">
+                    <label class="flex items-center gap-2 text-sm text-slate-600">
+                        <input type="checkbox" checked disabled class="rounded border-slate-300" />
+                        In-app
+                    </label>
+                    <label
+                        class="flex items-center gap-2 text-sm"
+                        :class="emailChannelEnabled ? 'text-slate-600' : 'text-slate-400'"
+                    >
+                        <input
+                            v-model="emailSelected"
+                            type="checkbox"
+                            :disabled="!emailChannelEnabled"
+                            class="rounded border-slate-300"
+                        />
+                        Email
+                        <span v-if="!emailChannelEnabled" class="text-xs text-slate-400"
+                            >(not currently available for this school)</span
+                        >
+                    </label>
+                </div>
             </div>
 
             <button

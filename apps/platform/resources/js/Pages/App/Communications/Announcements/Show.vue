@@ -15,19 +15,80 @@ interface AnnouncementDetail {
     createdAt: string | null;
 }
 
+interface EmailEligibility {
+    eligible: number;
+    missing: number;
+}
+
 interface AudiencePreview {
     count: number;
     categoryBreakdown: Record<string, number>;
+    email: EmailEligibility | null;
 }
+
+interface ChannelDeliveryRow {
+    status: string;
+    failureCode: string | null;
+    count: number;
+}
+
+const UNAVAILABLE_FAILURE_CODES = [
+    'recipient_email_missing',
+    'recipient_email_invalid',
+    'recipient_ineligible',
+    'email_channel_disabled',
+];
 
 interface Props {
     announcement: AnnouncementDetail;
+    requestedChannels: string[];
+    emailChannelEnabled: boolean;
     preview: AudiencePreview | null;
+    channelDeliverySummary: Record<string, ChannelDeliveryRow[]> | null;
     canEdit: boolean;
     canAnnounce: boolean;
 }
 
 const props = defineProps<Props>();
+
+const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email' };
+
+function channelTotal(rows: ChannelDeliveryRow[]): number {
+    return rows.reduce((sum, row) => sum + row.count, 0);
+}
+
+function channelSucceeded(rows: ChannelDeliveryRow[]): number {
+    return rows
+        .filter((row) => row.status === 'delivered' || row.status === 'sent')
+        .reduce((sum, row) => sum + row.count, 0);
+}
+
+function channelUnavailable(rows: ChannelDeliveryRow[]): number {
+    return rows
+        .filter(
+            (row) =>
+                row.status === 'failed' &&
+                row.failureCode !== null &&
+                UNAVAILABLE_FAILURE_CODES.includes(row.failureCode),
+        )
+        .reduce((sum, row) => sum + row.count, 0);
+}
+
+function channelFailed(rows: ChannelDeliveryRow[]): number {
+    return rows
+        .filter(
+            (row) =>
+                row.status === 'failed' &&
+                (row.failureCode === null || !UNAVAILABLE_FAILURE_CODES.includes(row.failureCode)),
+        )
+        .reduce((sum, row) => sum + row.count, 0);
+}
+
+function channelPending(rows: ChannelDeliveryRow[]): number {
+    return rows
+        .filter((row) => ['pending', 'queued', 'sending'].includes(row.status))
+        .reduce((sum, row) => sum + row.count, 0);
+}
 const publishing = ref(false);
 const cancelling = ref(false);
 
@@ -80,6 +141,13 @@ function cancelDraft() {
             <p class="text-sm whitespace-pre-wrap">{{ announcement.body }}</p>
         </div>
 
+        <div class="mt-4 rounded border border-slate-200 p-4">
+            <h2 class="text-sm font-semibold">Delivery channels</h2>
+            <p class="mt-1 text-xs text-slate-500">
+                {{ requestedChannels.map((c) => channelLabels[c] ?? c).join(', ') }}
+            </p>
+        </div>
+
         <div v-if="preview" class="mt-4 rounded border border-slate-200 p-4">
             <h2 class="text-sm font-semibold">Audience</h2>
             <p class="mt-1 text-xs text-slate-500">
@@ -103,6 +171,17 @@ function cancelDraft() {
                     <span>{{ count }}</span>
                 </li>
             </ul>
+
+            <div v-if="preview.email" class="mt-3 border-t border-slate-100 pt-2 text-xs">
+                <div class="flex justify-between text-slate-500">
+                    <span>Email eligible</span>
+                    <span>{{ preview.email.eligible }}</span>
+                </div>
+                <div v-if="preview.email.missing > 0" class="flex justify-between text-amber-600">
+                    <span>Missing email</span>
+                    <span>{{ preview.email.missing }}</span>
+                </div>
+            </div>
         </div>
 
         <div
@@ -113,6 +192,34 @@ function cancelDraft() {
             <p class="mt-1 text-sm">
                 {{ announcement.recipientCount }} recipients (resolved at publish time)
             </p>
+
+            <div
+                v-if="channelDeliverySummary"
+                class="mt-3 space-y-3 border-t border-slate-100 pt-3"
+            >
+                <div
+                    v-for="(rows, channel) in channelDeliverySummary"
+                    :key="channel"
+                    class="text-xs"
+                >
+                    <p class="font-medium text-slate-600">
+                        {{ channelLabels[channel] ?? channel }}
+                    </p>
+                    <p v-if="channel === 'in_app'" class="mt-1 text-slate-500">
+                        {{ channelSucceeded(rows) }} / {{ channelTotal(rows) }}
+                    </p>
+                    <ul v-else class="mt-1 space-y-0.5 text-slate-500">
+                        <li v-if="channelSucceeded(rows) > 0">{{ channelSucceeded(rows) }} sent</li>
+                        <li v-if="channelPending(rows) > 0">{{ channelPending(rows) }} pending</li>
+                        <li v-if="channelFailed(rows) > 0" class="text-red-600">
+                            {{ channelFailed(rows) }} failed
+                        </li>
+                        <li v-if="channelUnavailable(rows) > 0">
+                            {{ channelUnavailable(rows) }} unavailable
+                        </li>
+                    </ul>
+                </div>
+            </div>
         </div>
 
         <div v-if="canEdit" class="mt-6 flex gap-2">

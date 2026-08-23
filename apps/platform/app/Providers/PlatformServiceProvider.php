@@ -6,6 +6,7 @@ use App\Domain\Communications\Application\Audience\CommunicationAudienceResolver
 use App\Domain\Communications\Application\Audience\IndividualMembersAudienceResolver;
 use App\Domain\Communications\Application\Audience\SchoolWideAudienceResolver;
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
+use App\Domain\Communications\Application\Channels\EmailChannelDriver;
 use App\Domain\Communications\Application\Channels\InAppChannelDriver;
 use App\Support\Events\Consumers\NotifyActorOfSettingChangeConsumer;
 use App\Support\Events\Consumers\WebhookFanoutConsumer;
@@ -49,9 +50,10 @@ class PlatformServiceProvider extends ServiceProvider
             return $dispatcher;
         });
 
-        $this->app->singleton(CommunicationChannelRegistry::class, function () {
+        $this->app->singleton(CommunicationChannelRegistry::class, function ($app) {
             $registry = new CommunicationChannelRegistry;
             $registry->register(new InAppChannelDriver);
+            $registry->register($app->make(EmailChannelDriver::class));
 
             return $registry;
         });

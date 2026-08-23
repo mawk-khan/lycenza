@@ -4,16 +4,20 @@ namespace App\Domain\Communications\Application;
 
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
+use App\Domain\Communications\Application\Channels\EmailAddressResolver;
 use App\Domain\Communications\Application\Exceptions\EmptyAudienceException;
 use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransitionException;
 use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberException;
+use App\Domain\Communications\Application\Exceptions\UnsupportedAnnouncementChannelException;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
+use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Events\CommunicationAnnouncementCancelled;
 use App\Domain\Communications\Events\CommunicationAnnouncementCreated;
 use App\Domain\Communications\Events\CommunicationAnnouncementPublished;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
+use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Jobs\ProcessCommunicationDeliveryJob;
@@ -60,15 +64,28 @@ class AnnouncementService
      */
     private const CHUNK_SIZE = 500;
 
+    /**
+     * Delivery channels an Announcement draft may explicitly request
+     * (brief §16) -- deliberately narrower than the full
+     * CommunicationChannel enum (which already reserves Sms/WhatsApp/
+     * Push cases for a later checkpoint); requesting anything else
+     * throws UnsupportedAnnouncementChannelException before ever
+     * reaching the communication_announcement_channels_channel_check
+     * database constraint.
+     */
+    private const SUPPORTED_CHANNELS = [CommunicationChannel::InApp, CommunicationChannel::Email];
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly CommunicationAudienceResolverRegistry $audienceResolvers,
         private readonly CommunicationDeliveryFactory $deliveryFactory,
+        private readonly EmailAddressResolver $emailAddressResolver,
     ) {}
 
     /**
      * @param  array<int, string>  $individualMemberUserIds  only used when $audienceType is Individual
+     * @param  array<int, CommunicationChannel>  $channels  in_app is always included regardless of what's passed (brief §15)
      */
     public function createDraft(
         School $school,
@@ -79,8 +96,9 @@ class AnnouncementService
         CommunicationAudienceType $audienceType,
         array $individualMemberUserIds = [],
         ?Campus $campus = null,
+        array $channels = [],
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels) {
             $announcement = CommunicationAnnouncement::query()->create([
                 'school_id' => $school->id,
                 'campus_id' => $campus?->id,
@@ -96,6 +114,8 @@ class AnnouncementService
                 $this->syncAudienceMembers($announcement, $individualMemberUserIds);
             }
 
+            $this->syncChannels($announcement, $channels);
+
             $this->audit->school($school, 'announcement.created', actor: $creator, subject: $announcement, metadata: [
                 'audienceType' => $audienceType->value,
             ]);
@@ -108,6 +128,7 @@ class AnnouncementService
 
     /**
      * @param  array<int, string>|null  $individualMemberUserIds  null leaves the current member list untouched
+     * @param  array<int, CommunicationChannel>|null  $channels  null leaves the current channel selection untouched
      */
     public function updateDraft(
         CommunicationAnnouncement $announcement,
@@ -116,13 +137,14 @@ class AnnouncementService
         ?string $body = null,
         ?CommunicationPriority $priority = null,
         ?array $individualMemberUserIds = null,
+        ?array $channels = null,
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds) {
+        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels) {
             if (! $announcement->isDraft()) {
                 throw new InvalidAnnouncementTransitionException($announcement->status, 'edit');
             }
 
-            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds) {
+            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels) {
                 $announcement->update(array_filter([
                     'title' => $title,
                     'body' => $body,
@@ -131,6 +153,10 @@ class AnnouncementService
 
                 if ($individualMemberUserIds !== null && $announcement->audienceTypeEnum() === CommunicationAudienceType::Individual) {
                     $this->syncAudienceMembers($announcement, $individualMemberUserIds);
+                }
+
+                if ($channels !== null) {
+                    $this->syncChannels($announcement, $channels);
                 }
 
                 $this->audit->school($announcement->school, 'announcement.updated', actor: $actor, subject: $announcement);
@@ -220,12 +246,31 @@ class AnnouncementService
                     'status' => 'sent',
                 ]);
 
+                $requestedChannels = $this->requestedChannels($fresh);
+
                 foreach (array_chunk($resolved->userIds, self::CHUNK_SIZE) as $chunk) {
                     $this->snapshotRecipients($fresh, $chunk);
 
+                    // One batch User lookup per chunk (never per-recipient
+                    // N+1) purely to resolve email destinations -- brief
+                    // §19's chunking discipline applies here exactly like
+                    // snapshotRecipients()/audience resolution already do.
+                    $users = in_array(CommunicationChannel::Email, $requestedChannels, true)
+                        ? User::query()->whereIn('id', $chunk)->get(['id', 'email'])->keyBy('id')
+                        : null;
+
                     foreach ($chunk as $userId) {
                         $recipient = $this->deliveryFactory->createRecipient($fresh->school_id, $message->id, $userId);
-                        $deliveryIds[] = $this->deliveryFactory->createInAppDelivery($recipient)->id;
+
+                        foreach ($requestedChannels as $channel) {
+                            $deliveryIds[] = $this->deliveryFactory->createDelivery(
+                                $recipient,
+                                $channel,
+                                $channel === CommunicationChannel::Email
+                                    ? $this->emailDestinationSnapshot($users?->get($userId))
+                                    : null,
+                            )->id;
+                        }
                     }
                 }
 
@@ -334,5 +379,69 @@ class AnnouncementService
         if ($rows !== []) {
             CommunicationAnnouncementAudienceMember::query()->insert($rows);
         }
+    }
+
+    /**
+     * @return array<int, CommunicationChannel>
+     */
+    private function requestedChannels(CommunicationAnnouncement $announcement): array
+    {
+        $channels = $announcement->requestedChannels()->pluck('channel')
+            ->map(fn (string $value) => CommunicationChannel::from($value))
+            ->all();
+
+        // Defensive fallback only -- createDraft() always writes at
+        // least an `in_app` row (§15), so this branch exists for
+        // robustness, not as the normal path.
+        return $channels === [] ? [CommunicationChannel::InApp] : $channels;
+    }
+
+    /**
+     * @return array{email: string}|null
+     */
+    private function emailDestinationSnapshot(?User $user): ?array
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        $email = $this->emailAddressResolver->resolve($user);
+
+        return $email === null ? null : ['email' => $email];
+    }
+
+    /**
+     * @param  array<int, CommunicationChannel>  $channels
+     */
+    private function syncChannels(CommunicationAnnouncement $announcement, array $channels): void
+    {
+        foreach ($channels as $channel) {
+            if (! in_array($channel, self::SUPPORTED_CHANNELS, true)) {
+                throw new UnsupportedAnnouncementChannelException($channel->value);
+            }
+        }
+
+        // In-app is always included regardless of what was passed --
+        // brief §15: never let an Announcement end up with zero
+        // delivery channels, and IN_APP remains the one channel every
+        // Announcement can always rely on.
+        $values = array_unique(array_map(
+            fn (CommunicationChannel $c) => $c->value,
+            [...$channels, CommunicationChannel::InApp],
+        ));
+
+        CommunicationAnnouncementChannel::query()->where('announcement_id', $announcement->id)->delete();
+
+        $now = now();
+        $rows = array_map(fn (string $channel) => [
+            'id' => (string) new UuidV7,
+            'school_id' => $announcement->school_id,
+            'announcement_id' => $announcement->id,
+            'channel' => $channel,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ], $values);
+
+        CommunicationAnnouncementChannel::query()->insert($rows);
     }
 }

@@ -3,17 +3,23 @@
 namespace App\Domain\Communications\Http\Controllers;
 
 use App\Domain\Communications\Application\AnnouncementService;
+use App\Domain\Communications\Application\Audience\ResolvedAudience;
+use App\Domain\Communications\Application\Channels\EmailAddressResolver;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
+use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -59,7 +65,9 @@ class AnnouncementController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.announce', $school);
 
-        return Inertia::render('App/Communications/Announcements/Create');
+        return Inertia::render('App/Communications/Announcements/Create', [
+            'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
+        ]);
     }
 
     public function store(Request $request, TenantContext $context, AnnouncementService $service): RedirectResponse
@@ -78,6 +86,7 @@ class AnnouncementController extends Controller
                 CommunicationPriority::from($validated['priority']),
                 CommunicationAudienceType::from($validated['audience_type']),
                 $validated['member_user_ids'] ?? [],
+                channels: $this->channelsFromInput($validated),
             );
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages(['member_user_ids' => [$e->getMessage()]]);
@@ -86,13 +95,13 @@ class AnnouncementController extends Controller
         return redirect("/app/communications/announcements/{$announcement->id}");
     }
 
-    public function show(TenantContext $context, AnnouncementService $service, string $announcement): Response
+    public function show(TenantContext $context, AnnouncementService $service, EmailAddressResolver $emailResolver, string $announcement): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.view', $school);
         $actor = $context->actor();
 
-        $model = CommunicationAnnouncement::query()->with(['createdBy:id,name'])->findOrFail($announcement);
+        $model = CommunicationAnnouncement::query()->with(['createdBy:id,name', 'requestedChannels'])->findOrFail($announcement);
 
         $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
         $isCreator = $model->created_by_user_id === $actor->id;
@@ -103,14 +112,21 @@ class AnnouncementController extends Controller
 
         abort_unless($isCreator || $isRecipient || $canManage, 403);
 
+        $requestedChannels = $model->requestedChannels->pluck('channel')->all();
         $preview = $model->isDraft() ? $service->previewAudience($model) : null;
 
         return Inertia::render('App/Communications/Announcements/Show', [
             'announcement' => $this->presentDetail($model),
+            'requestedChannels' => $requestedChannels,
+            'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
             'preview' => $preview === null ? null : [
                 'count' => $preview->count(),
                 'categoryBreakdown' => $preview->categoryBreakdown,
+                'email' => in_array('email', $requestedChannels, true)
+                    ? $this->emailEligibility($preview, $emailResolver)
+                    : null,
             ],
+            'channelDeliverySummary' => $model->isPublished() ? $this->channelDeliverySummary($model) : null,
             'canEdit' => ($isCreator || $canManage) && $model->isDraft(),
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
         ]);
@@ -136,6 +152,7 @@ class AnnouncementController extends Controller
                 $validated['body'],
                 CommunicationPriority::from($validated['priority']),
                 $model->audienceTypeEnum() === CommunicationAudienceType::Individual ? ($validated['member_user_ids'] ?? []) : null,
+                channels: isset($validated['channels']) ? $this->channelsFromInput($validated) : null,
             );
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages(['body' => [$e->getMessage()]]);
@@ -187,6 +204,15 @@ class AnnouncementController extends Controller
      */
     private function validateComposer(Request $request): array
     {
+        // Brief §17/§40: 'email' is only an ACCEPTABLE value when the
+        // channel is currently enabled -- a forged HTTP payload
+        // requesting it while disabled fails validation (422) here,
+        // never silently reaches AnnouncementService.
+        $allowedChannels = array_merge(
+            ['in_app'],
+            config('communications.channels.email.enabled') ? ['email'] : [],
+        );
+
         return $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:10000'],
@@ -194,7 +220,73 @@ class AnnouncementController extends Controller
             'audience_type' => ['required', 'in:individual,school_wide'],
             'member_user_ids' => ['required_if:audience_type,individual', 'array'],
             'member_user_ids.*' => ['string'],
+            'channels' => ['sometimes', 'array'],
+            'channels.*' => ['string', Rule::in($allowedChannels)],
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<int, CommunicationChannel>
+     */
+    private function channelsFromInput(array $validated): array
+    {
+        return array_map(
+            fn (string $value) => CommunicationChannel::from($value),
+            $validated['channels'] ?? ['in_app'],
+        );
+    }
+
+    /**
+     * @return array{eligible: int, missing: int}
+     */
+    private function emailEligibility(ResolvedAudience $preview, EmailAddressResolver $emailResolver): array
+    {
+        if ($preview->isEmpty()) {
+            return ['eligible' => 0, 'missing' => 0];
+        }
+
+        $eligible = User::query()
+            ->whereIn('id', $preview->userIds)
+            ->get(['id', 'email'])
+            ->filter(fn (User $user) => $emailResolver->resolve($user) !== null)
+            ->count();
+
+        return ['eligible' => $eligible, 'missing' => $preview->count() - $eligible];
+    }
+
+    /**
+     * Read-only aggregation over the published Announcement's own
+     * deliveries -- brief §29: per-channel/status/failure-code counts,
+     * never individual destination addresses (§28: "Do not expose
+     * individual addresses unless needed and authorized").
+     *
+     * @return array<string, array<int, array{status: string, failureCode: string|null, count: int}>>
+     */
+    private function channelDeliverySummary(CommunicationAnnouncement $model): array
+    {
+        if ($model->message_id === null) {
+            return [];
+        }
+
+        $rows = DB::table('communication_deliveries as cd')
+            ->join('communication_recipients as cr', 'cr.id', '=', 'cd.recipient_id')
+            ->where('cr.message_id', $model->message_id)
+            ->select('cd.channel', 'cd.status', 'cd.failure_code', DB::raw('count(*) as delivery_count'))
+            ->groupBy('cd.channel', 'cd.status', 'cd.failure_code')
+            ->get();
+
+        $summary = [];
+
+        foreach ($rows as $row) {
+            $summary[$row->channel][] = [
+                'status' => $row->status,
+                'failureCode' => $row->failure_code,
+                'count' => (int) $row->delivery_count,
+            ];
+        }
+
+        return $summary;
     }
 
     /**

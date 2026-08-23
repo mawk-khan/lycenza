@@ -35,6 +35,25 @@ class CommunicationDeliveryFactory
      */
     public function createInAppDelivery(CommunicationRecipient $recipient): CommunicationDelivery
     {
+        return $this->createDelivery($recipient, CommunicationChannel::InApp);
+    }
+
+    /**
+     * Phase 5A.3 §8/§34: generalized over createInAppDelivery() so
+     * App\Domain\Communications\Application\AnnouncementService::publish()
+     * reuses the EXACT same idempotent-creation logic for `email`
+     * deliveries too (brief §6: "Email must use the same pipeline as
+     * IN_APP") -- no second delivery-creation code path.
+     * `$destinationSnapshot` is captured HERE, at creation time, not
+     * re-resolved later at send time (brief §8): whatever address a
+     * channel driver ends up sending to is exactly what was true the
+     * moment this row was written, independent of any later change to
+     * the recipient's stored contact details.
+     *
+     * @param  array<string, mixed>|null  $destinationSnapshot
+     */
+    public function createDelivery(CommunicationRecipient $recipient, CommunicationChannel $channel, ?array $destinationSnapshot = null): CommunicationDelivery
+    {
         try {
             // Wrapped in its own DB::transaction() so a constraint
             // violation only rolls back to a SAVEPOINT (Laravel opens
@@ -45,14 +64,15 @@ class CommunicationDeliveryFactory
             return DB::transaction(fn () => CommunicationDelivery::query()->create([
                 'school_id' => $recipient->school_id,
                 'recipient_id' => $recipient->id,
-                'channel' => CommunicationChannel::InApp->value,
+                'channel' => $channel->value,
                 'status' => 'pending',
+                'destination_snapshot' => $destinationSnapshot,
                 'queued_at' => now(),
             ]));
         } catch (UniqueConstraintViolationException) {
             return CommunicationDelivery::query()
                 ->where('recipient_id', $recipient->id)
-                ->where('channel', CommunicationChannel::InApp->value)
+                ->where('channel', $channel->value)
                 ->firstOrFail();
         }
     }

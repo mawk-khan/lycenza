@@ -81,7 +81,10 @@ class ProcessCommunicationDeliveryJobTest extends TestCase
         $thread = $this->createThread($school, $sender);
         $message = $this->createMessage($thread, $sender);
         $recipient = $this->createRecipient($message, $recipientUser);
-        $delivery = $this->createDelivery($recipient, ['channel' => 'email']);
+        // 'sms' -- not 'email' -- since Phase 5A.3 registered a real
+        // EmailChannelDriver; 'sms'/'whatsapp'/'push' remain genuinely
+        // unregistered, which is what this test needs to exercise.
+        $delivery = $this->createDelivery($recipient, ['channel' => 'sms']);
 
         (new ProcessCommunicationDeliveryJob($school->id, $delivery->id))->handle(
             app(CommunicationChannelRegistry::class),

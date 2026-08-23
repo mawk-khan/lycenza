@@ -27,6 +27,17 @@ use Illuminate\Support\Carbon;
  * DeliverWebhookJob), not TenantScoped's ambient capture, since the
  * dispatching request/service already knows exactly which School this
  * delivery belongs to.
+ *
+ * Phase 5A.3 §19/§21 extended this job, without redesigning it: a
+ * driver's success now carries its own terminal `status` (in_app's
+ * `delivered` vs a real external channel's `sent` --
+ * CommunicationDeliveryResult::delivered()/sent()), and a `retryable`
+ * failure is scheduled for a bounded, backed-off re-attempt
+ * (App\Console\Commands\RedispatchDueCommunicationDeliveries drives
+ * the actual re-dispatch, mirroring RedispatchDueWebhookDeliveries)
+ * rather than immediately terminal -- `in_app` never exercises either
+ * new path (it always succeeds with `delivered`), so this checkpoint's
+ * only NEW runtime behavior belongs to `email`.
  */
 class ProcessCommunicationDeliveryJob implements ShouldQueue
 {
@@ -86,14 +97,22 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
         $result = $driver->send($delivery);
 
         if ($result->success) {
+            $status = $result->status ?? 'delivered';
             $this->recordAttempt($delivery, $attemptNumber, $startedAt, 'success', $result->providerReference, null, null);
             $delivery->update([
-                'status' => 'delivered',
+                'status' => $status,
                 'attempts' => $attemptNumber,
                 'sent_at' => $delivery->sent_at ?? now(),
-                'delivered_at' => now(),
+                'delivered_at' => $status === 'delivered' ? now() : null,
                 'processing_lease_expires_at' => null,
             ]);
+
+            return;
+        }
+
+        if ($result->retryable && $attemptNumber < (int) config('communications.delivery.max_attempts')) {
+            $this->recordAttempt($delivery, $attemptNumber, $startedAt, 'transient_failure', null, $result->failureCode, $result->failureMessage);
+            $this->scheduleRetry($delivery, $attemptNumber);
 
             return;
         }
@@ -106,6 +125,29 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
             'failure_code' => $result->failureCode,
             'failure_reason' => $result->failureMessage,
             'processing_lease_expires_at' => null,
+        ]);
+    }
+
+    /**
+     * Mirrors DeliverWebhookJob::scheduleRetryOrAbandon()'s backoff
+     * shape (brief §21): `queued` (an existing, already-valid status
+     * in the closed set -- no new status added) with `next_attempt_at`
+     * set is what
+     * App\Console\Commands\RedispatchDueCommunicationDeliveries scans
+     * for. A max-attempts-exhausted retryable failure falls through to
+     * the same terminal `failed` handling as a non-retryable one, one
+     * call site up.
+     */
+    private function scheduleRetry(CommunicationDelivery $delivery, int $attemptNumber): void
+    {
+        $schedule = config('communications.delivery.retry_backoff_seconds');
+        $delaySeconds = $schedule[min($attemptNumber - 1, count($schedule) - 1)];
+
+        $delivery->update([
+            'status' => 'queued',
+            'attempts' => $attemptNumber,
+            'processing_lease_expires_at' => null,
+            'next_attempt_at' => now()->addSeconds($delaySeconds),
         ]);
     }
 
@@ -126,7 +168,7 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
             })
             ->update([
                 'status' => 'sending',
-                'processing_lease_expires_at' => now()->addSeconds(30),
+                'processing_lease_expires_at' => now()->addSeconds((int) config('communications.delivery.processing_lease_seconds')),
             ]);
 
         if ($claimed === 0) {

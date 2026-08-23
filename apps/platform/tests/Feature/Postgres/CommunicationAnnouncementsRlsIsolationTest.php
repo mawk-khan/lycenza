@@ -26,6 +26,7 @@ class CommunicationAnnouncementsRlsIsolationTest extends TestCase
         'communication_announcements',
         'communication_announcement_audience_members',
         'communication_announcement_recipients',
+        'communication_announcement_channels',
     ];
 
     private function setSchool(string $schoolId): void
@@ -59,6 +60,7 @@ class CommunicationAnnouncementsRlsIsolationTest extends TestCase
         $announcement = $this->createAnnouncement($school, $creator);
         $this->createAnnouncementAudienceMember($announcement, $membership);
         $this->createAnnouncementRecipient($announcement, $membership);
+        $this->createAnnouncementChannel($announcement, 'email');
 
         DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
 
@@ -79,6 +81,7 @@ class CommunicationAnnouncementsRlsIsolationTest extends TestCase
         $announcementB = $this->createAnnouncement($schoolB, $creatorB);
         $audienceMemberB = $this->createAnnouncementAudienceMember($announcementB, $membershipB);
         $recipientB = $this->createAnnouncementRecipient($announcementB, $membershipB);
+        $channelB = $this->createAnnouncementChannel($announcementB, 'email');
 
         $this->setSchool($schoolA->id);
 
@@ -86,6 +89,7 @@ class CommunicationAnnouncementsRlsIsolationTest extends TestCase
             'communication_announcements' => $announcementB->id,
             'communication_announcement_audience_members' => $audienceMemberB->id,
             'communication_announcement_recipients' => $recipientB->id,
+            'communication_announcement_channels' => $channelB->id,
         ];
 
         foreach ($ids as $table => $id) {
@@ -176,5 +180,44 @@ class CommunicationAnnouncementsRlsIsolationTest extends TestCase
         });
 
         $this->assertTrue($rejected, 'A cross-School school_membership_id must be rejected by the composite foreign key.');
+    }
+
+    /**
+     * Phase 5A.3 §24/§39: the same composite-FK discipline applied to
+     * communication_announcement_channels -- a row genuinely owned by
+     * School A (school_id = School A, satisfying RLS's own WITH CHECK)
+     * but pointing announcement_id at School B's real Announcement is
+     * rejected by the composite FK against
+     * communication_announcements(id, school_id), since no row there
+     * has that id paired with School A's school_id.
+     */
+    #[Test]
+    public function a_cross_school_announcement_channel_row_is_rejected_at_insert_time(): void
+    {
+        [$creatorA, $schoolA] = $this->createSchoolAdmin('school_admin');
+        [$creatorB, $schoolB] = $this->createSchoolAdmin('school_admin');
+
+        $announcementB = $this->createAnnouncement($schoolB, $creatorB);
+
+        $rejected = false;
+
+        app(TenantContext::class)->withSchool($schoolA, function () use ($schoolA, $announcementB, &$rejected): void {
+            try {
+                DB::connection('pgsql')->transaction(function () use ($schoolA, $announcementB): void {
+                    DB::connection('pgsql')->table('communication_announcement_channels')->insert([
+                        'id' => (string) new UuidV7,
+                        'school_id' => $schoolA->id,
+                        'announcement_id' => $announcementB->id,
+                        'channel' => 'email',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                });
+            } catch (QueryException) {
+                $rejected = true;
+            }
+        });
+
+        $this->assertTrue($rejected, 'A channel row referencing another School\'s Announcement must be rejected by the composite foreign key.');
     }
 }
