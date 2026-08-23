@@ -1,0 +1,87 @@
+<?php
+
+namespace App\Support\Ai;
+
+use App\Models\School;
+use App\Models\User;
+use App\Support\Authorization\CapabilityResolver;
+use App\Support\Observability\TraceContext;
+use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\Http;
+
+/**
+ * Laravel's outbound half of the AI tool boundary (ADR 0013, ADR 0014,
+ * ADR 0023). The ONLY way application code invokes an AI Gateway tool.
+ *
+ * Order matters: capability is verified FIRST, against the real
+ * membership/role data for (actor, school), and only THEN is a context
+ * token minted -- scoped to exactly the capability just verified. This
+ * is what proves "an actor from School A cannot create an authorized
+ * tool context for School B": there is no code path that mints a token
+ * without this check passing first, and services/ai never receives the
+ * signing key needed to mint one itself.
+ */
+class AiGatewayClient
+{
+    public function __construct(
+        private readonly AiContextTokenService $tokens,
+        private readonly CapabilityResolver $capabilities,
+        private readonly TenantContext $context,
+    ) {}
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function invokeTool(User $actor, School $school, string $capability, string $agent, string $tool, array $payload = []): array
+    {
+        if (! $this->capabilities->canInSchool($actor, $capability, $school)) {
+            throw new AiGatewayAuthorizationException(
+                "User {$actor->id} does not hold capability '{$capability}' in School {$school->id}; refusing to mint an AI context token."
+            );
+        }
+
+        $contextToken = $this->tokens->issue($school, $actor, [$capability], $this->context->requestId());
+
+        // X-Service-Token, not Authorization: Bearer -- must match
+        // services/ai's require_service_token dependency
+        // (app/core/security.py), which is the Phase 0A convention for
+        // Laravel -> AI Gateway calls specifically. This is the
+        // opposite direction from AiToolController's inbound check
+        // (App\Http\Middleware\VerifyAiGatewayServiceToken), which
+        // correctly uses Authorization: Bearer for AI Gateway ->
+        // Laravel calls -- the two directions are deliberately
+        // independent conventions, not the same header reused.
+        //
+        // Section 43: propagate the CURRENT trace (this request's),
+        // with a fresh child span-id for this specific outbound hop --
+        // the AI Gateway's own inbound handling mints a further child
+        // span from this when it, in turn, calls back to Laravel's
+        // audit write-back endpoint (services/ai's app/core/trace.py).
+        $currentTraceId = $this->context->traceId();
+        $childSpan = $currentTraceId !== null
+            ? TraceContext::forTraceId($currentTraceId)
+            : TraceContext::start();
+
+        $response = Http::withHeaders([
+            'X-Service-Token' => (string) config('services.ai_gateway.service_token'),
+            'traceparent' => $childSpan->toHeader(),
+        ])
+            ->baseUrl((string) config('services.ai_gateway.base_url'))
+            ->timeout(5)
+            ->post('/v1/tools/invoke', [
+                'school_id' => $school->id,
+                'agent' => $agent,
+                'tool' => $tool,
+                'context_token' => $contextToken,
+                // (object) cast: an empty PHP array json_encodes as
+                // `[]`, but the AI Gateway's payload field requires a
+                // JSON object (`{}`) even when empty.
+                'payload' => (object) $payload,
+            ]);
+
+        $response->throw();
+
+        return $response->json('result') ?? [];
+    }
+}

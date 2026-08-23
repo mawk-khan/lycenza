@@ -1,0 +1,272 @@
+# School OS — Health, Scheduler, Queue & Observability
+
+Phase 0C.4. This document is the operational reference for answering
+one question: *is School OS alive, ready, processing asynchronous
+work, scheduling jobs, accumulating backlogs, or degraded — and how
+would an operator find out?* It describes what is **actually
+implemented**, not a target design. See `docs/architecture/RELIABILITY.md`
+for API idempotency and the rate-limiting/job-timeout invariants this
+checkpoint added there, and ADR 0015 for why tracing here is a
+lightweight custom abstraction rather than a full OpenTelemetry SDK.
+
+## Liveness vs. readiness
+
+Two deliberately separate, unauthenticated endpoints
+(`App\Http\Controllers\Api\Internal\HealthController`):
+
+- **`GET /api/health/live`** — "is this process alive enough that
+  restarting it is not immediately warranted?" Always returns
+  `{"status":"ok"}`, unconditionally. Never checks PostgreSQL, Redis,
+  the AI Gateway, or a customer's webhook endpoint.
+- **`GET /api/health/ready`** — "can this instance safely receive
+  normal application traffic?" Checks PostgreSQL and Redis only
+  (`App\Support\Observability\OperationalStatusService::readiness()`),
+  each against a fresh, dedicated connection bounded by
+  `observability.readiness_check_timeout_ms` (500ms default) so one
+  slow dependency cannot hang the whole probe. Returns `200 {"status":
+  "ok"}` when healthy, `503 {"status":"degraded"}` otherwise.
+
+Object storage, the domain-event outbox, webhook delivery backlog, and
+the AI Gateway are **deliberately excluded from readiness** — a
+customer's own webhook endpoint being down, or the optional AI Gateway
+being unreachable, must never make the core ERP "unready." Both
+responses leak no infrastructure detail (no hostnames, database names,
+credentials, or stack traces) — see `HealthControllerTest` for the
+proof.
+
+**Both routes are registered with `withoutMiddleware([ResolveSchoolContext::class,
+DevOnlySchoolHeaderResolver::class])`** (`routes/api.php`). This is
+not incidental: both middleware are appended to the whole `api`
+middleware group (`bootstrap/app.php`), and `ResolveSchoolContext`
+unconditionally runs a `SchoolDomain` lookup against PostgreSQL on
+**every** `/api/*` request. A real local live proof for this
+checkpoint (stopping the `postgres` container under `php artisan serve`)
+found that, left in place, this made `/api/health/live` itself hang
+indefinitely during a PostgreSQL outage — precisely the failure mode
+liveness exists to survive. Any future route that must stay reachable
+independent of tenant resolution should follow the same pattern rather
+than assume the `api` group is always safe to sit under unmodified.
+
+The same live proof also found that a bare `PDO::ATTR_TIMEOUT` does
+**not** bound the pdo_pgsql driver's initial TCP connection attempt —
+only libpq's own `connect_timeout` DSN parameter does
+(`OperationalStatusService::database()` now sets both, DSN-first,
+floored at 2 seconds per libpq's own minimum). Neither bounds DNS
+resolution time: a host that stops resolving entirely (e.g. a
+container removed from Docker's embedded DNS, not merely refusing
+connections) can still block for the OS resolver's own timeout. This
+residual gap is accepted, not fixed — bounding system DNS resolution
+portably from PHP has no clean solution, and a real production outage
+is far more likely to look like "host resolves, port refuses/times
+out" (which IS bounded) than "the hostname stops existing."
+
+The FastAPI AI Gateway mirrors this split (`services/ai/app/core/health.py`):
+`GET /health/live` always `{"status":"ok"}`; `GET /health/ready` checks
+only that `settings.service_token` is configured (no Laravel call, no
+model-provider call).
+
+## Internal diagnostics
+
+**`GET /api/internal/operations/status`**
+(`App\Http\Controllers\Api\Internal\OperationsController`) is the
+authenticated counterpart — every component
+`OperationalStatusService::full()` knows how to check, gated by the
+`platform.operations.view` capability (platform-scoped only; no School
+role can ever grant it — the database trigger behind
+`platform_role_assignments`/`membership_role_assignments` enforces
+this, not just application code). Human platform-capability auth, not
+internal-service auth: no service identity has a legitimate reason to
+read this today.
+
+**`php artisan platform:operations-status [--json]`**
+(`App\Console\Commands\ShowOperationsStatus`) is the CLI equivalent for
+an operator with shell access but no HTTP session — same service, same
+component set, no separate diagnostic logic to keep in sync.
+
+## Operational status model
+
+`App\Support\Observability\OperationalStatus` — four states:
+`Healthy`, `Degraded`, `Unhealthy`, `Unknown`. `worstOf(array $statuses)`
+aggregates many component checks into one overall status using a fixed
+severity order (`Unhealthy > Degraded > Unknown > Healthy`) — used by
+both readiness (a small essential subset) and internal diagnostics
+(every component). Every individual check
+(`App\Support\Observability\ComponentStatus`) carries `component`,
+`status`, an optional `reason`, and a `detail` array — `detail`/`reason`
+may carry operationally-useful facts (an age in seconds, a pending
+count) but never a hostname, database name, credential, or stack trace,
+regardless of audience.
+
+## Scheduler heartbeats
+
+`App\Support\Observability\SchedulerHeartbeatRecorder` wraps the
+`scheduler_heartbeats` table (`name` primary key,
+`last_run_at`/`last_success_at`/`last_error`). One small, generically
+named table is reused for **both** scheduled-command heartbeats
+(`outbox-dispatch`, `webhook-deliveries-redispatch` — `routes/console.php`)
+**and** queue-processing heartbeats (`queue:default`, `queue:integrations`
+— recorded by `App\Listeners\RecordQueueHeartbeat` on Laravel's
+`JobProcessed`/`JobFailed` events, throttled to one write per 10 seconds
+per queue) — both are "a named operational task reported it is alive,"
+the same shape already models both. A heartbeat is `stale` once
+`last_success_at` is older than `observability.scheduler_stale_after_seconds`
+(300s — five scheduler intervals of margin) or
+`observability.queue_stale_after_seconds` (600s for queues, which are
+legitimately burstier than the once-a-minute scheduler).
+
+## Queue health model
+
+`OperationalStatusService::queues()` checks `QueueName::Default` and
+`QueueName::Integrations` (`App\Support\Observability\QueueName` — a
+6-case enum; `Notifications`/`Ai`/`Low`/`Critical` are reserved names
+with no dispatched jobs yet, formalizing the topology without
+speculative infrastructure). For each queue:
+
+- **Pending count** — `Queue::size($queue)`. Deliberately NOT "oldest
+  pending job age," which is unreliable/undefined for the Redis queue
+  driver used in this project.
+- **Failed count** — `failed_jobs` table, filtered by queue.
+- **Staleness** — the queue's own processing heartbeat, per above.
+
+A queue with **zero pending jobs is always Healthy** (or Degraded if it
+has failed jobs), regardless of heartbeat age — there is nothing to
+have processed recently, so an idle queue is never "stalled." A queue
+with pending work IS "stalled" (Unhealthy) once its heartbeat is stale
+or has never recorded a success. See `QueueHealthTest` for all four
+cases.
+
+## Failed-job visibility
+
+`App\Support\Observability\FailedJobInspector` (read-only) groups
+`failed_jobs` by queue with counts/oldest-failure, and lists recent
+failures with a best-effort School id / correlation id recovered from
+the serialized job payload via a narrow property-name regex — it
+deliberately never `unserialize()`s the stored command blob (no reason
+to execute arbitrary `__wakeup` on our own job classes for a listing).
+`php artisan platform:failed-jobs [--limit=20] [--summary]`
+(`App\Console\Commands\InspectFailedJobs`) is the CLI surface. Retrying
+or deleting a failed job stays Laravel's own `queue:retry`/`queue:forget`
+— not reinvented here.
+
+**Payload privacy** (section 22): every queued job in this codebase
+carries only ids/references, never full models or free-form user
+content — `DeliverWebhookJob`/`ProcessOutboxEventJob` carry only
+`schoolId`/`deliveryId`/`eventId` strings; `RecordSchoolAuditPingJob`'s
+one free-text constructor argument is only ever called with a short
+fixed diagnostic literal (`'ping'`, `'first'`, ...) in tests, never
+user-controlled input. A failed job's payload can therefore be surfaced
+by the tools above without a separate redaction pass.
+
+## Job timeout / retry invariants
+
+Moved to `docs/architecture/RELIABILITY.md` ("Job timeout invariants")
+since it is a correctness property of the queue architecture, not
+specifically an observability concern: every job declares `$tries`/
+`$timeout` explicitly, `$timeout` always stays well under every queue
+connection's `retry_after` (90s), and domain-level retry (e.g.
+`DeliverWebhookJob`'s delivery-row-driven backoff) never doubles up
+with queue-level retry.
+
+## Distributed locks
+
+`App\Support\Concurrency\TenantLock` wraps Laravel's own
+`Cache::lock()` — never a hand-written Redis algorithm. School-scoped
+locks are namespaced `school:{school_id}:lock:{operation}`; a central
+(cross-tenant) lock is namespaced `platform:lock:{operation}`, a
+distinct prefix so the two can never collide even with the same
+operation name. See `TenantLockTest` for the isolation proof: two
+Schools holding "the same" named lock never contend with each other,
+while the same School+operation genuinely does.
+
+## Correlation & tracing semantics
+
+Five distinct identifiers, never conflated:
+
+- **`request_id`** — one HTTP request (`App\Http\Middleware\AssignRequestId`,
+  pre-existing).
+- **`correlation_id`** — a logical workflow; starts equal to
+  `request_id` for a fresh top-level request
+  (`App\Http\Middleware\ResolveSchoolContext`) and propagates unchanged
+  through outbox → queue → webhook/AI calls (`TenantScoped`,
+  `ProcessOutboxEventJob`) — never a fresh id minted at each layer.
+- **`causation_id`** — the immediately preceding cause (existing domain
+  event fields; unchanged this checkpoint).
+- **`trace_id`/`span_id`** — W3C Trace Context-compatible
+  (`App\Support\Observability\TraceContext`), diagnostic only. **Never**
+  used for authorization anywhere in this codebase.
+
+`TraceContext` is a from-scratch, ~90-line implementation of the W3C
+`traceparent` header format (`{version}-{trace-id}-{span-id}-{flags}`),
+not a full OpenTelemetry SDK integration — ADR 0015 explicitly
+anticipated this exact tradeoff ("if full native OpenTelemetry
+integration ... is immature or introduces disproportionate complexity,
+implement a clean tracing abstraction compatible with W3C Trace
+Context"). `App\Http\Middleware\AssignTraceContext` parses an inbound
+`traceparent` header (or starts a fresh trace), stores it on
+`TenantContext`, and echoes it back on the response. `AiGatewayClient`
+forwards a child span's `traceparent` on every Laravel → FastAPI tool
+call; the FastAPI side (`app/core/trace.py`, a structurally identical
+Python port) forwards its own child span back on the durable
+audit-write-back call to Laravel. A trace-id survives a
+Laravel → FastAPI → Laravel round trip; a **new span-id is always
+minted locally** at each hop — a service never adopts a caller-supplied
+span-id as if it were its own.
+
+## Structured logging & sanitization
+
+`App\Support\Observability\LogSanitizer` is the backstop, not the
+primary control — callers are still expected to pass only minimal,
+already-safe metadata. It recursively redacts any array key containing
+(case-insensitive, `-`/space-normalized) `password`, `token`,
+`authorization`, `secret`, `api_key`, `apikey`, `access_key`,
+`private_key`, `credential`, or `signature`, replacing the value with
+`[redacted]` — deliberately broad substring matching over an exact
+allowlist a new field name could silently slip past.
+
+## Error reporting
+
+`App\Support\Observability\ErrorReporter` (interface) /
+`LogErrorReporter` (default implementation, bound in
+`AppServiceProvider`) emit one structured `application_error` log line
+per reported exception, sanitized via `LogSanitizer`, with a **stable
+fingerprint** — `{exception_class}:{component}:{operation}`,
+deliberately **not** a stack-trace hash, so the same logical failure at
+a different call depth or line number still groups together. No
+commercial error-tracking vendor is bound; a future `ErrorReporter`
+implementation (Sentry, Bugsnag, ...) can be swapped in without any
+call site changing.
+
+## Metrics abstraction
+
+`App\Support\Observability\MetricsRecorder` (interface: `counter`/
+`gauge`/`timing`) / `LogMetricsRecorder` (default, structured `metric`
+log lines — the same shape `App\Support\Idempotency\IdempotencyMetrics`
+established in Phase 0C.2, now delegating to this shared abstraction).
+**High-cardinality safety rule**: a metric label is never a
+`request_id`, `correlation_id`, `event_id`, `delivery_id`, `user_id`,
+or `school_id` — those belong in structured *logs*, which are queried
+per-instance, never in a *metrics* label, which a time-series backend
+would otherwise be asked to index one series per unique value of
+forever. No commercial metrics vendor/exporter is bound here.
+
+## Rate limiting
+
+Covered in full in `docs/architecture/RELIABILITY.md` ("Rate limiting
+interaction") — six named limiters
+(`App\Providers\RateLimiterServiceProvider`: `login`, `public-api`,
+`school-api-mutations`, `webhook-admin`, `internal-service`,
+`internal-diagnostics`), why `throttle:*` middleware's ACTUAL runtime
+position differs from its declared position in `routes/api.php`
+(Laravel's framework middleware-priority list), and why every
+tenant-aware limiter key is read from the route parameter rather than
+`TenantContext` as a result.
+
+## AI Gateway is optional, by design
+
+`OperationalStatusService::aiGateway()` calls the FastAPI Gateway's own
+`/health/live`; an unreachable Gateway is reported `Degraded`, **never**
+`Unhealthy`, and is excluded from `readiness()` entirely. A customer's
+own webhook endpoint being persistently down is the same story —
+`webhooks()` caps its status at `Degraded` regardless of how old the
+retry backlog gets (never *our* unhealthy). Both are internal
+diagnostics signals only, never a public readiness failure.
