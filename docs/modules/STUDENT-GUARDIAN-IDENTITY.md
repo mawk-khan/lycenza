@@ -1,9 +1,12 @@
 # School OS — Student & Guardian Identity (Phase 1A)
 
 Status: `students`, `guardians`, their first-class relationship
-(`student_guardian_relationships`, Phase 1A.2), and Guardian contact
+(`student_guardian_relationships`, Phase 1A.2), Guardian contact
 information with a searchable-encrypted-PII architecture
-(`guardian_contacts`, Phase 1A.3) exist. No API, UI, capabilities,
+(`guardian_contacts`, Phase 1A.3), and `students.*`/`guardians.*`
+authorization capabilities plus the supported Application-layer
+mutation services (`StudentService`, `GuardianService`,
+`StudentGuardianRelationshipService`, Phase 1A.4) exist. No API, UI,
 domain events, addresses, User/persona linking, or verification
 workflows (OTP/email/SMS) exist yet — see "Deferred" below. This
 document will grow as later Phase 1A checkpoints add those pieces; it
@@ -186,15 +189,16 @@ return the domain records themselves (`HasMany<StudentGuardianRelationship>`)
 (`BelongsToMany`, with the relationship columns available via
 `->pivot` for read convenience) — deliberately named to distinguish
 "the join record" from "the collection on the other side," per this
-checkpoint's brief. No service layer was introduced: with no
-controller/API yet calling into this model, and no business rule beyond
-what the database constraints already enforce authoritatively, a
-service would have no real caller and nothing to orchestrate (Phase 0D's
-own convention, CLAUDE.md rule 76, reserves a service for once real
-invariants/orchestration exist) — fixtures and future callers create
-`StudentGuardianRelationship` rows directly, the same way
-`CreatesTenancyFixtures`' other `create*` helpers do for every other
-Phase 0D model.
+checkpoint's brief. Phase 1A.2 introduced no service layer (no real
+caller/orchestration existed yet); Phase 1A.4 added
+`App\Domain\Guardians\Application\StudentGuardianRelationshipService`
+once genuine orchestration existed to justify one (cross-School
+guard translation, demote-then-promote primary changes, raw-SQL-error
+translation) — see "Application services" below. `attach()`/`sync()`
+on the `BelongsToMany` relations above remain explicitly unsupported for
+writes (Phase 1A.3's finding, reaffirmed by this service's existence:
+every write goes through `StudentGuardianRelationship` directly, never
+the pivot convenience methods).
 
 ### RLS
 
@@ -367,17 +371,17 @@ flags only; never the decrypted value, ciphertext, or lookup hash).
 
 `App\Domain\Students\Infrastructure\Student` and
 `App\Domain\Guardians\Infrastructure\{Guardian,StudentGuardianRelationship,RelationshipType,GuardianContact,ContactType}`,
-plus `App\Domain\Guardians\Application\GuardianContactService`
+plus `App\Domain\Students\Application\StudentService` and
+`App\Domain\Guardians\Application\{GuardianService,StudentGuardianRelationshipService,GuardianContactService}`
 — two separate modules (matching `docs/architecture/DOMAIN-MAP.md`'s
 Layer 2 split of Students/SIS and Guardians into distinct rows), each
 following the `Domain/Application/Infrastructure/Http` convention
-(`apps/platform/app/Domain/README.md`). Guardians now has a populated
-`Application` layer (Phase 1A.3's `GuardianContactService` — the first
-Phase 1A checkpoint that needed one, since normalization/encryption/
-hashing genuinely must not be duplicated across future call sites);
-Students still has only `Infrastructure` — no `Http` layer exists yet
-in either module, since no API/controller has been built. Generic
-reusable pieces (`EmailNormalizer`, `PhoneNormalizer`,
+(`apps/platform/app/Domain/README.md`). Both modules now have a
+populated `Application` layer (Phase 1A.4); `StudentGuardianRelationshipService`
+lives under Guardians, not Students, for the same reason
+`StudentGuardianRelationship` itself does (below). No `Http` layer
+exists yet in either module, since no API/controller has been built.
+Generic reusable pieces (`EmailNormalizer`, `PhoneNormalizer`,
 `ContactLookupHasher`) live under `App\Support\Privacy`, not under
 either Domain module, since they depend on nothing Guardian-specific
 and Support code must never depend on Domain code (layering rule,
@@ -420,13 +424,274 @@ indexes" above and `tests/Feature/Postgres/GuardianContactIntegrityTest.php`.
   this is possible later without a schema change, but no rotation
   workflow (a backfill job re-hashing every row under a new key) is
   implemented — see ADR 0028.
-- **API, UI, capabilities (`students.*`/`guardians.*`), domain events**
-  — none exist yet (Phase 1A.3 added minimal audit events for
-  GuardianContact mutations only, per its brief — no domain events).
-  The established capability-naming convention in this codebase is a
-  `.view`/`.manage` pair per resource (e.g. `academics.years.view`/
-  `.manage`), not the four-verb `.view`/`.create`/`.update`/`.archive`
-  set sometimes used as illustrative examples — a future checkpoint
-  adding `students.view`/`students.manage` and
-  `guardians.view`/`guardians.manage` should follow the two-verb
-  pattern already established, not introduce a new one.
+- **API, UI, domain events** — none exist yet (Phase 1A.4 added audit
+  events for the new Student/Guardian/relationship mutations, matching
+  GuardianContact's Phase 1A.3 precedent, but deliberately no
+  transactional-outbox domain events — see "Application services"
+  below for why).
+- **Form/shape validation** (required fields, string lengths, date
+  formats) for the new Application services — deferred to the
+  controller layer that will call them (Phase 1A.5), matching
+  `AcademicYearController::store()`'s `$request->validate()` pattern.
+  The services validate genuine *domain* invariants only (duplicate
+  Student Number, valid status values, same-School Student/Guardian) —
+  not basic input shape, which has no meaning without an HTTP request
+  to validate.
+
+## Authorization (Phase 1A.4)
+
+Two capability pairs, following this codebase's established
+`.view`/`.manage`-per-resource convention (e.g. `academics.years.view`/
+`.manage`) rather than a separate verb per CRUD action:
+
+| Capability | Covers |
+|---|---|
+| `students.view` | Reading Student identity |
+| `students.manage` | Creating/updating a Student, changing Student status, and (jointly with `guardians.manage`) linking/unlinking/changing the primary Guardian |
+| `guardians.view` | Reading Guardian identity **and** Guardian contact information (email/mobile) — contact information is a Guardian-owned concept, not a capability an administrator thinks about separately |
+| `guardians.manage` | Creating/updating a Guardian, changing Guardian status, adding/updating/deactivating a Guardian's contact information, and (jointly with `students.manage`) linking/unlinking/changing the primary Guardian |
+
+Deliberately **not** split further (no `guardians.contacts.manage`,
+no `students.guardians.link`) — CLAUDE.md rule 47/Phase 0D section
+48's "keep the capability model understandable to School
+administrators" principle, and the brief's explicit rejection of
+micro-capabilities for this checkpoint.
+
+**Linking/unlinking a Guardian to a Student, and changing a Student's
+primary Guardian, require BOTH `students.manage` AND
+`guardians.manage`** — the safe default the brief specifies, since the
+operation mutates both domain identities' relationship at once. A
+future controller must check both before calling
+`StudentGuardianRelationshipService::link()`/`setPrimary()`/`unlink()`.
+
+### Default role grants
+
+Capabilities are seeded via `CapabilityAndRoleSeeder` (the existing
+canonical mechanism — no new migration). Only two School-scoped roles
+exist in this codebase today (`school_admin`, `principal`); no `Teacher`
+or other role exists yet, so none was invented for this checkpoint
+(CLAUDE.md rule 2).
+
+| Role | `students.view` | `students.manage` | `guardians.view` | `guardians.manage` |
+|---|---|---|---|---|
+| `school_admin` | ✅ | ✅ | ✅ | ✅ |
+| `principal` | ✅ | ✅ | ✅ | ✅ |
+
+Both existing School-scoped roles receive the full set. For
+`school_admin` this follows its existing "manage everything
+operational" pattern. For `principal`, this checkpoint deliberately
+matches the *academic-structure* precedent (Principal already gets
+`academics.structure.manage`/`academics.years.manage`/
+`academics.subjects.manage` — hands-on operational authority) rather
+than the *School-settings* precedent (Principal gets `school.settings.view`
+only, never `.manage`) — a Principal in a real school actively manages
+Student/Guardian records (admissions follow-up, discipline, contacting
+parents), which is an operational concern, not a purely administrative
+one like School profile/Campus configuration (where Principal stays
+view-only).
+
+### Authorization boundary
+
+Application-layer services in this codebase are **deliberately
+authorization-neutral** — `StudentService`, `GuardianService`,
+`StudentGuardianRelationshipService`, and (from Phase 1A.3)
+`GuardianContactService` never call `Gate::authorize()`/
+`CapabilityResolver` themselves, following the exact same pattern
+`App\Domain\AcademicStructure\Application\AcademicYearService`
+established: a controller validates input, calls
+`$this->authorizeCapability(...)` (the `AuthorizesCapability` trait) or
+uses the `capability:` route middleware, *then* calls the service. See
+`App\Domain\AcademicStructure\Http\Controllers\AcademicYearController`
+for the exact shape every future Student/Guardian controller must
+follow.
+
+**This is a deliberate, explicit choice, not an oversight**: it keeps
+authorization logic in exactly one layer (the HTTP boundary, where the
+actor and the specific action being attempted are both unambiguous),
+avoids duplicating capability checks between a controller and the
+service it calls, and matches this checkpoint's own instruction not to
+put `Gate` calls inside low-level normalizers/hashers/models/database
+helpers. Since **no controller exists yet** in this checkpoint (Phase
+1A.4 explicitly excludes HTTP/API work), these services are currently
+reachable from application code (tests, console commands, future
+internal callers) with no authorization check at all — this is
+intentional for Phase 1A.4, but means **Phase 1A.5 (the HTTP/API layer)
+must wire `Gate::authorize('capability', ...)` into every new controller
+action before these services become reachable from an untrusted
+request** — a future controller calling one of these services without
+an `authorizeCapability()` call first is a bug, not a valid shortcut.
+The authorization test matrix in
+`tests/Feature/Authorization/StudentGuardianCapabilityTest.php` proves
+the capability grants themselves resolve correctly (least privilege,
+tenant isolation) using `Gate::forUser($user)->allows('capability', ...)`
+directly, exactly as a future controller will call it.
+
+## Application services (Phase 1A.4)
+
+Three new services, following `AcademicYearService`/
+`GuardianContactService`'s established shape: validate domain
+invariants → write state inside `DB::transaction()` → audit, with
+School context enforced via `TenantContext::withSchool()` (never
+ambient). `school_id` is never accepted as caller-supplied data in any
+of these services — it always derives from the `$school`/`$student`/
+`$guardian` object the caller already holds (itself only obtainable
+through real, verified tenant resolution upstream).
+
+### `App\Domain\Students\Application\StudentService`
+
+`create()`, `update()` (identity fields only), `changeStatus()`
+(`active`/`inactive` — see "Status remains a plain string" below).
+`create()`/`update()` catch the database's
+`unique(school_id, student_number)` violation
+(`Illuminate\Database\UniqueConstraintViolationException`) and
+translate it to `DuplicateStudentNumberException` (422,
+`DUPLICATE_STUDENT_NUMBER`) — the database constraint remains the
+actual guarantee; this is a translation, not a replacement. An invalid
+`changeStatus()` value throws `InvalidStudentStatusException` (422,
+`INVALID_STUDENT_STATUS`).
+
+### `App\Domain\Guardians\Application\GuardianService`
+
+`create()`, `update()`, `changeStatus()` — identical shape to
+`StudentService`, minus the duplicate-number concern (Guardian has no
+comparable unique business identifier). Never touches
+`guardian_contacts` — Guardian identity and Guardian contact
+information are composed by the caller, not coupled inside one service
+(`GuardianContactService` remains the sole owner of its
+encryption/HMAC-lookup logic, per this checkpoint's brief — nothing
+here duplicates or wraps it).
+
+### `App\Domain\Guardians\Application\StudentGuardianRelationshipService`
+
+The **only** sanctioned mutation path for `StudentGuardianRelationship`
+— resolves Phase 1A.2's P3 finding for good: `Student::guardians()`/
+`Guardian::students()`'s `attach()`/`sync()` are never called anywhere
+in this service (Phase 1A.3's regression test,
+`StudentGuardianRelationshipTest::attach_is_not_the_supported_mutation_api_and_fails_closed`,
+remains the proof that path is intentionally unsafe — nothing in this
+checkpoint changes that).
+
+- **`link(Student, Guardian, RelationshipType, attributes, actor)`** —
+  checks `$student->school_id === $guardian->school_id` *before* any
+  database write, throwing `CrossSchoolRelationshipException` (422) if
+  not — defense-in-depth ahead of the composite FK's own rejection
+  (rule 24: never rely on a constraint alone to catch what the
+  application can check first). Deliberately does **not** accept
+  `is_primary` (mirrors `GuardianContactService::create()`'s identical
+  split) — `setPrimary()` is the only way to promote a relationship.
+  Catches the `unique(school_id, student_id, guardian_id)` violation and
+  translates it to `DuplicateRelationshipException` (422).
+- **`update(StudentGuardianRelationship, attributes, actor)`** —
+  `relationship_type`/authority-flag changes only, never `is_primary`.
+- **`setPrimary(StudentGuardianRelationship, actor)`** — demotes
+  whichever relationship was previously primary for the *same Student*
+  in the **same transaction** as the promotion (never demote/COMMIT/
+  promote as separate transactions, per the brief) — the database's
+  `student_guardian_relationships_one_primary_per_student` partial
+  unique index is the actual concurrency guarantee, exactly matching
+  `AcademicYearService::activate()`'s and
+  `GuardianContactService::setPrimary()`'s established "demote then
+  conditionally promote, translate the race into a domain exception"
+  pattern. A genuine concurrent race translates to
+  `ConcurrentPrimaryGuardianConflictException` (409).
+- **`unlink(StudentGuardianRelationship, actor)`** — hard-deletes the
+  relationship row. There is no soft-deactivation column on
+  `student_guardian_relationships` (unlike `GuardianContact.is_active`)
+  — "unlinking" while keeping both identities is the only meaning this
+  operation has today. Deleting the relationship row can never delete
+  the Student or Guardian, and never touches another Student's
+  relationship with a shared Guardian (foreign keys only cascade
+  parent-to-child — see the migration's "Delete behavior" docblock).
+
+### Status remains a plain string (not a new enum)
+
+`students.status`/`guardians.status` remain plain validated strings
+(`active`/`inactive`), **not** converted to a PHP backed enum in this
+checkpoint. This matches the documented repository convention this
+module's own schema tables already state: "`status` column... same
+deactivate-don't-delete convention as every other reference/identity
+table," validated at the application layer, the same as
+`GradeLevel`/`AcademicYear`/`Section`/`Subject`'s `status` columns —
+`RelationshipType`/`ContactType`'s PHP-enum-cast treatment is
+deliberately reserved for closed sets of *domain* values (family
+relationship, contact channel), not the generic active/inactive
+lifecycle flag every reference table shares. Converting it now would be
+scope creep for a checkpoint about authorization/services, not a
+lifecycle redesign; `StudentService::changeStatus()`/
+`GuardianService::changeStatus()` validate against the two supported
+values and throw a domain exception for anything else, so the
+*behavior* an enum would give (reject invalid values) already exists
+without the schema/cast change.
+
+### Read patterns (no new abstraction)
+
+No read-service/query-object layer was introduced — matching this
+codebase's established pattern (`AcademicYearController::index()`
+queries `AcademicYear::query()` directly; no repository/query-object
+class exists anywhere in this codebase). The relationships already
+defined fully support every read pattern a future controller/UI will
+need, with no new code:
+
+```php
+// Student detail with Guardian relationships
+$student->guardianRelationships()->with('guardian')->get();
+
+// Guardian detail with linked Students
+$guardian->studentRelationships()->with('student')->get();
+
+// Primary Guardian for a Student
+$student->guardianRelationships()->where('is_primary', true)->first();
+
+// Same-School Guardian candidate lookup by contact (Phase 1A.3, unchanged)
+app(GuardianContactService::class)->findCandidatesBySchool($school, $type, $rawValue);
+```
+
+Every query above must run inside `TenantContext::withSchool()` (or
+ambient request-scoped context) for `BelongsToSchool`'s Eloquent scope
+to apply, exactly like every other query in this codebase.
+
+### Audit (Phase 1A.4)
+
+New `SchoolAuditEvent` types, via the existing `AuditRecorder` (no new
+audit infrastructure): `student.created`, `student.updated`,
+`student.status_changed`, `guardian.created`, `guardian.updated`,
+`guardian.status_changed`, `student_guardian.linked`,
+`student_guardian.updated`, `student_guardian.primary_changed`,
+`student_guardian.unlinked`. GuardianContact's Phase 1A.3 events
+(`guardian_contact.added`/`.primary_changed`/`.deactivated`) are
+unchanged.
+
+**Audit metadata never carries a Student's or Guardian's name or date
+of birth** — those are Sensitive/Highly-Sensitive personal data of
+(usually) a minor (`docs/security/DATA-CLASSIFICATION.md`: "Children's
+data specifically | Highly Sensitive"), and duplicating them into a
+second table (the audit log) is unnecessary exposure the brief's own
+"never log full email/mobile.../prefer IDs and non-sensitive
+relationship/status metadata" principle already argues against by
+analogy. `student.updated`/`guardian.updated`/
+`student_guardian.updated` record only the **list of changed field
+names**, never the values; `*.status_changed`/
+`student_guardian.primary_changed` record the (non-PII, enum-like)
+status/id values themselves, matching `AcademicYearService::activate()`'s
+`previousActiveAcademicYearId` precedent; `student_guardian.linked`
+records `studentId`/`guardianId`/`relationshipType`/the boolean
+authority flags — all structural, non-PII facts, mirroring
+`GuardianContactService`'s "identity-safe by construction" audit design
+exactly.
+
+### No domain events (deliberate)
+
+Unlike `AcademicYearService` (which emits `AcademicYearCreated`/
+`Activated`/`Closed` via the transactional outbox, ADR 0025), the new
+Student/Guardian/relationship services emit **audit records only, no
+domain events** — following `GuardianContactService`'s own precedent in
+the same Guardians module (Phase 1A.3 added audit-only events for
+identical reasons). No consumer for a `student.created`-shaped event
+exists anywhere in this codebase yet (no webhook registry entry, no
+listener); adding transactional-outbox rows nothing reads yet would be
+exactly the "no speculative infrastructure" CLAUDE.md rule 2 warns
+against. A future module with a genuine need (e.g. a Communications
+module reacting to `student_guardian.linked` to notify a newly-linked
+Guardian) is the point to add the event **and** register it in
+`WebhookEventRegistry` if it should ever be externally subscribable
+(rule 45) — not before.

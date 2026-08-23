@@ -68,6 +68,23 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'academics.years.manage', 'label' => 'Manage Academic Years and Terms', 'namespace' => 'school'],
             ['key' => 'academics.subjects.view', 'label' => 'View Subjects and Subject Offerings', 'namespace' => 'school'],
             ['key' => 'academics.subjects.manage', 'label' => 'Manage Subjects and Subject Offerings', 'namespace' => 'school'],
+
+            // Phase 1A.4 (docs/modules/STUDENT-GUARDIAN-IDENTITY.md
+            // "Authorization") -- Student and Guardian identity,
+            // deliberately just two pairs rather than one capability
+            // per entity: `guardians.manage` covers both Guardian
+            // identity AND Guardian contact mutation (GuardianContact
+            // is a Guardian-owned concept, not a separate resource an
+            // administrator thinks about independently), and
+            // `students.manage`/`guardians.manage` together (not a
+            // dedicated `students.guardians.link` capability) gate
+            // linking/unlinking/primary-Guardian changes, since that
+            // operation mutates both domain identities' relationship at
+            // once -- see AUTHORIZATION.md for the exact rule.
+            ['key' => 'students.view', 'label' => 'View Students', 'namespace' => 'school'],
+            ['key' => 'students.manage', 'label' => 'Manage Students (create, update, status, Guardian links)', 'namespace' => 'school'],
+            ['key' => 'guardians.view', 'label' => 'View Guardians and their contact information', 'namespace' => 'school'],
+            ['key' => 'guardians.manage', 'label' => 'Manage Guardians, Guardian contact information, and Guardian links', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -99,6 +116,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.structure.view', 'academics.structure.manage',
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
+                    'students.view', 'students.manage',
+                    'guardians.view', 'guardians.manage',
                 ],
             ],
             'principal' => [
@@ -118,6 +137,16 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.structure.view', 'academics.structure.manage',
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
+                    // Phase 1A.4: a Principal is the day-to-day operator
+                    // of Student/Guardian records (admissions
+                    // follow-up, discipline, contacting parents) in the
+                    // same hands-on way they already manage the
+                    // academic structure -- unlike School profile/
+                    // Campus administration (view-only for Principal),
+                    // Student/Guardian identity is an operational, not
+                    // purely administrative, concern.
+                    'students.view', 'students.manage',
+                    'guardians.view', 'guardians.manage',
                 ],
             ],
         ];
