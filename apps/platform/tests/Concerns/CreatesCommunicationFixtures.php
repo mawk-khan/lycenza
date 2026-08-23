@@ -10,6 +10,7 @@ use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
+use App\Domain\Communications\Infrastructure\CommunicationTemplate;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Domain\Communications\Infrastructure\CommunicationThreadParticipant;
 use App\Models\School;
@@ -140,6 +141,17 @@ trait CreatesCommunicationFixtures
                 'announcement_id' => $announcement->id,
                 'channel' => $channel,
             ]),
+        );
+    }
+
+    protected function createTemplate(School $school, User $creator, array $attributes = []): CommunicationTemplate
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationTemplate::factory()->create(array_merge([
+                'school_id' => $school->id,
+                'created_by_user_id' => $creator->id,
+            ], $attributes)),
         );
     }
 }

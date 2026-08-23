@@ -9,6 +9,8 @@ interface AnnouncementSummary {
     recipientCount: number | null;
     status: string;
     priority: string;
+    scheduledAt: string | null;
+    requestedChannels: string[] | null;
     publishedAt: string | null;
     createdAt: string | null;
 }
@@ -22,6 +24,7 @@ interface Paginated<T> {
 
 interface Props {
     announcements: Paginated<AnnouncementSummary>;
+    filters: { status: string | null };
     canAnnounce: boolean;
 }
 
@@ -29,6 +32,20 @@ defineProps<Props>();
 
 function audienceLabel(type: string): string {
     return type === 'school_wide' ? 'Entire School' : 'Selected Members';
+}
+
+const tabs: Array<{ label: string; value: string | null }> = [
+    { label: 'All', value: null },
+    { label: 'Drafts', value: 'draft' },
+    { label: 'Scheduled', value: 'scheduled' },
+    { label: 'Published', value: 'published' },
+    { label: 'Cancelled', value: 'cancelled' },
+];
+
+function tabHref(value: string | null): string {
+    return value === null
+        ? '/app/communications/announcements'
+        : `/app/communications/announcements?status=${value}`;
 }
 </script>
 
@@ -49,6 +66,22 @@ function audienceLabel(type: string): string {
                 + New Announcement
             </Link>
         </div>
+
+        <nav class="mt-4 flex gap-1 text-xs">
+            <a
+                v-for="tab in tabs"
+                :key="tab.label"
+                :href="tabHref(tab.value)"
+                class="rounded px-2 py-1"
+                :class="
+                    (filters.status ?? null) === tab.value
+                        ? 'bg-slate-900 font-medium text-white'
+                        : 'text-slate-500 hover:bg-slate-100'
+                "
+            >
+                {{ tab.label }}
+            </a>
+        </nav>
 
         <div
             v-if="announcements.data.length === 0"
@@ -72,6 +105,7 @@ function audienceLabel(type: string): string {
                             class="rounded px-1.5 py-0.5 text-xs font-medium"
                             :class="{
                                 'bg-slate-100 text-slate-600': announcement.status === 'draft',
+                                'bg-amber-100 text-amber-700': announcement.status === 'scheduled',
                                 'bg-emerald-100 text-emerald-700':
                                     announcement.status === 'published',
                                 'bg-red-100 text-red-600': announcement.status === 'cancelled',
@@ -84,6 +118,11 @@ function audienceLabel(type: string): string {
                         {{ audienceLabel(announcement.audienceType) }}
                         <template v-if="announcement.recipientCount !== null">
                             · {{ announcement.recipientCount }} recipients</template
+                        >
+                        <template
+                            v-if="announcement.status === 'scheduled' && announcement.scheduledAt"
+                        >
+                            · scheduled for {{ announcement.scheduledAt }}</template
                         >
                         · by {{ announcement.createdByName ?? 'Unknown' }}
                     </p>

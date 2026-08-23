@@ -263,4 +263,178 @@ class AnnouncementHubTest extends TestCase
 
         Mail::assertNothingSent();
     }
+
+    #[Test]
+    public function an_authorized_sender_can_schedule_a_draft_and_it_appears_in_the_scheduled_filter(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->createMembership($this->createUser(), $school);
+        $this->activate($admin, $school);
+
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'Holiday Notice', 'body' => 'School is closed Monday.',
+            'priority' => 'normal', 'audience_type' => 'school_wide',
+        ]);
+        $showUrl = $create->headers->get('Location');
+
+        $this->post("{$showUrl}/schedule", ['scheduled_at' => now()->addDay()->format('Y-m-d\TH:i:s')])
+            ->assertRedirect();
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page
+            ->where('announcement.status', 'scheduled')
+            ->where('canSchedule', true)
+            ->where('canCancel', true)
+        );
+
+        $this->get('/app/communications/announcements?status=scheduled')->assertInertia(fn ($page) => $page
+            ->has('announcements.data', 1)
+            ->where('announcements.data.0.status', 'scheduled')
+        );
+
+        $this->get('/app/communications/announcements?status=draft')->assertInertia(fn ($page) => $page
+            ->has('announcements.data', 0)
+        );
+    }
+
+    #[Test]
+    public function scheduling_a_past_timestamp_is_rejected_with_a_validation_error(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'T', 'body' => 'B', 'priority' => 'normal', 'audience_type' => 'school_wide',
+        ]);
+        $showUrl = $create->headers->get('Location');
+
+        $this->post("{$showUrl}/schedule", ['scheduled_at' => now()->subDay()->format('Y-m-d\TH:i:s')])
+            ->assertSessionHasErrors('scheduled_at');
+    }
+
+    #[Test]
+    public function a_scheduled_announcement_can_be_rescheduled(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'T', 'body' => 'B', 'priority' => 'normal', 'audience_type' => 'school_wide',
+        ]);
+        $showUrl = $create->headers->get('Location');
+        $this->post("{$showUrl}/schedule", ['scheduled_at' => now()->addDay()->format('Y-m-d\TH:i:s')]);
+
+        $newTime = now()->addDays(3)->format('Y-m-d\TH:i:s');
+        $this->post("{$showUrl}/schedule", ['scheduled_at' => $newTime])->assertRedirect();
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page->where('announcement.status', 'scheduled'));
+    }
+
+    #[Test]
+    public function a_scheduled_announcement_can_be_cancelled_via_the_existing_cancel_endpoint(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'T', 'body' => 'B', 'priority' => 'normal', 'audience_type' => 'school_wide',
+        ]);
+        $showUrl = $create->headers->get('Location');
+        $this->post("{$showUrl}/schedule", ['scheduled_at' => now()->addDay()->format('Y-m-d\TH:i:s')]);
+
+        $this->post("{$showUrl}/cancel")->assertRedirect();
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page->where('announcement.status', 'cancelled'));
+    }
+
+    #[Test]
+    public function an_unauthorized_member_cannot_schedule_someone_elses_draft(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $announcement = $this->createAnnouncement($school, $admin);
+
+        $bystander = $this->createUser();
+        $this->createMembership($bystander, $school);
+        $this->activate($bystander, $school);
+
+        $this->post("/app/communications/announcements/{$announcement->id}/schedule", [
+            'scheduled_at' => now()->addDay()->format('Y-m-d\TH:i:s'),
+        ])->assertForbidden();
+    }
+
+    #[Test]
+    public function school_a_cannot_schedule_school_bs_announcement(): void
+    {
+        [$adminA, $schoolA] = $this->createSchoolAdmin('school_admin');
+        [$creatorB, $schoolB] = $this->createSchoolAdmin('school_admin');
+        $announcementB = $this->createAnnouncement($schoolB, $creatorB);
+
+        $this->activate($adminA, $schoolA);
+
+        $this->post("/app/communications/announcements/{$announcementB->id}/schedule", [
+            'scheduled_at' => now()->addDay()->format('Y-m-d\TH:i:s'),
+        ])->assertNotFound();
+    }
+
+    #[Test]
+    public function using_an_active_template_pre_fills_the_composer_and_records_the_source_template(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        $template = $this->createTemplate($school, $admin, [
+            'name' => 'Closure Notice', 'subject' => 'School Closure', 'body' => 'School closes at 1 PM.',
+        ]);
+
+        $this->get("/app/communications/announcements/create?template={$template->id}")->assertInertia(fn ($page) => $page
+            ->where('template.id', $template->id)
+            ->where('template.title', 'School Closure')
+            ->where('template.body', 'School closes at 1 PM.')
+        );
+
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'School Closure', 'body' => 'School closes at 1 PM.',
+            'priority' => 'normal', 'audience_type' => 'school_wide',
+            'source_template_id' => $template->id,
+        ]);
+        $showUrl = $create->headers->get('Location');
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page
+            ->where('announcement.sourceTemplateId', $template->id)
+        );
+    }
+
+    #[Test]
+    public function an_inactive_template_cannot_be_used_for_pre_fill(): void
+    {
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($admin, $school);
+
+        $template = $this->createTemplate($school, $admin, ['status' => 'inactive']);
+
+        $this->get("/app/communications/announcements/create?template={$template->id}")->assertInertia(fn ($page) => $page
+            ->where('template', null)
+        );
+    }
+
+    #[Test]
+    public function a_cross_school_template_id_cannot_be_used_for_pre_fill_or_recorded_as_source(): void
+    {
+        [$adminA, $schoolA] = $this->createSchoolAdmin('school_admin');
+        [$creatorB, $schoolB] = $this->createSchoolAdmin('school_admin');
+        $templateB = $this->createTemplate($schoolB, $creatorB);
+
+        $this->activate($adminA, $schoolA);
+
+        $this->get("/app/communications/announcements/create?template={$templateB->id}")->assertInertia(fn ($page) => $page
+            ->where('template', null)
+        );
+
+        $create = $this->post('/app/communications/announcements', [
+            'title' => 'T', 'body' => 'B', 'priority' => 'normal', 'audience_type' => 'school_wide',
+            'source_template_id' => $templateB->id,
+        ]);
+        $showUrl = $create->headers->get('Location');
+
+        $this->get($showUrl)->assertInertia(fn ($page) => $page->where('announcement.sourceTemplateId', null));
+    }
 }

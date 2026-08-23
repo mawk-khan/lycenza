@@ -2,6 +2,7 @@
 
 use App\Domain\Communications\Http\Controllers\AnnouncementController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
+use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
@@ -84,6 +85,22 @@ Route::middleware('auth')->group(function (): void {
             Route::put('/{announcement}', [AnnouncementController::class, 'update'])->name('update');
             Route::post('/{announcement}/publish', [AnnouncementController::class, 'publish'])->name('publish');
             Route::post('/{announcement}/cancel', [AnnouncementController::class, 'cancel'])->name('cancel');
+            // Phase 5A.4: one endpoint serves both the initial schedule
+            // and a reschedule -- see AnnouncementController::schedule()'s
+            // docblock.
+            Route::post('/{announcement}/schedule', [AnnouncementController::class, 'schedule'])->name('schedule');
+        });
+
+        // Phase 5A.4: registered BEFORE the '/{thread}' wildcard below,
+        // same reasoning as 'announcements' above.
+        Route::prefix('templates')->name('templates.')->group(function (): void {
+            Route::get('/', [CommunicationTemplateController::class, 'index'])->name('index');
+            Route::get('/create', [CommunicationTemplateController::class, 'create'])->name('create');
+            Route::post('/', [CommunicationTemplateController::class, 'store'])->name('store');
+            Route::get('/{template}/edit', [CommunicationTemplateController::class, 'edit'])->name('edit');
+            Route::put('/{template}', [CommunicationTemplateController::class, 'update'])->name('update');
+            Route::post('/{template}/activate', [CommunicationTemplateController::class, 'activate'])->name('activate');
+            Route::post('/{template}/deactivate', [CommunicationTemplateController::class, 'deactivate'])->name('deactivate');
         });
 
         Route::get('/{thread}', [CommunicationHubController::class, 'show'])->name('show');

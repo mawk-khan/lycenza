@@ -11,13 +11,16 @@ use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
+use App\Domain\Communications\Infrastructure\CommunicationTemplate;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -48,25 +51,50 @@ class AnnouncementController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.view', $school);
 
-        $announcements = CommunicationAnnouncement::query()
-            ->with(['createdBy:id,name'])
-            ->orderByDesc('created_at')
-            ->paginate(20)
-            ->withQueryString();
+        $query = CommunicationAnnouncement::query()->with(['createdBy:id,name', 'requestedChannels']);
+
+        // Brief §34/§35: All/Drafts/Scheduled/Published tabs -- an
+        // unrecognized/absent value is treated as "All", never a 422,
+        // since this is a read-model filter, not a mutation.
+        $status = $request->string('status')->value();
+        if (in_array($status, ['draft', 'scheduled', 'published', 'cancelled'], true)) {
+            $query->where('status', $status);
+        }
+
+        $announcements = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
 
         return Inertia::render('App/Communications/Announcements/Index', [
             'announcements' => $announcements->through(fn (CommunicationAnnouncement $a) => $this->presentSummary($a)),
+            'filters' => ['status' => $status ?: null],
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.announce', $school),
         ]);
     }
 
-    public function create(TenantContext $context): Response
+    public function create(TenantContext $context, Request $request): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.announce', $school);
 
+        // Brief §13: "Use Template" pre-fills the composer -- reading
+        // an ACTIVE template only (brief §10's chosen policy: an
+        // inactive template cannot be newly applied). An invalid,
+        // inactive, or cross-School template id (RLS makes a cross-
+        // School row invisible to begin with) simply renders a blank
+        // composer rather than erroring -- this is a convenience
+        // pre-fill, not a hard dependency.
+        $template = $request->filled('template')
+            ? CommunicationTemplate::query()->where('status', 'active')->find($request->string('template')->value())
+            : null;
+
         return Inertia::render('App/Communications/Announcements/Create', [
             'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
+            'schoolTimezone' => $school->timezone,
+            'template' => $template === null ? null : [
+                'id' => $template->id,
+                'title' => $template->subject,
+                'body' => $template->body,
+                'priority' => $template->priority,
+            ],
         ]);
     }
 
@@ -87,6 +115,7 @@ class AnnouncementController extends Controller
                 CommunicationAudienceType::from($validated['audience_type']),
                 $validated['member_user_ids'] ?? [],
                 channels: $this->channelsFromInput($validated),
+                sourceTemplateId: $this->verifiedTemplateId($validated['source_template_id'] ?? null),
             );
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages(['member_user_ids' => [$e->getMessage()]]);
@@ -113,12 +142,19 @@ class AnnouncementController extends Controller
         abort_unless($isCreator || $isRecipient || $canManage, 403);
 
         $requestedChannels = $model->requestedChannels->pluck('channel')->all();
-        $preview = $model->isDraft() ? $service->previewAudience($model) : null;
+        // Brief §17: a scheduling preview is estimated/non-authoritative
+        // for a SCHEDULED announcement too, computed the same live way
+        // as a draft's -- the real snapshot only exists once
+        // publish() actually runs at due time.
+        $preview = $model->isEditable() ? $service->previewAudience($model) : null;
+
+        $canEditOrSchedule = ($isCreator || $canManage) && $model->isEditable();
 
         return Inertia::render('App/Communications/Announcements/Show', [
             'announcement' => $this->presentDetail($model),
             'requestedChannels' => $requestedChannels,
             'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
+            'schoolTimezone' => $school->timezone,
             'preview' => $preview === null ? null : [
                 'count' => $preview->count(),
                 'categoryBreakdown' => $preview->categoryBreakdown,
@@ -127,7 +163,9 @@ class AnnouncementController extends Controller
                     : null,
             ],
             'channelDeliverySummary' => $model->isPublished() ? $this->channelDeliverySummary($model) : null,
-            'canEdit' => ($isCreator || $canManage) && $model->isDraft(),
+            'canEdit' => $canEditOrSchedule,
+            'canSchedule' => $canEditOrSchedule,
+            'canCancel' => ($isCreator || $canManage) && $model->isEditable(),
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
         ]);
     }
@@ -200,6 +238,48 @@ class AnnouncementController extends Controller
     }
 
     /**
+     * Brief §14/§24: one endpoint for BOTH the initial schedule
+     * (draft -> scheduled) and a reschedule (already scheduled, time
+     * changed) -- dispatches to AnnouncementService::schedule()/
+     * reschedule() based on the announcement's CURRENT status, so the
+     * composer only needs one "Set schedule" form regardless of which
+     * case applies. `scheduled_at` is a school-timezone-local naive
+     * datetime string (brief §18); converted to UTC here, once, before
+     * ever reaching the service -- the service only ever deals in UTC
+     * Carbon instances.
+     */
+    public function schedule(Request $request, TenantContext $context, AnnouncementService $service, string $announcement): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.announce', $school);
+        $actor = $context->actor();
+
+        $model = CommunicationAnnouncement::query()->findOrFail($announcement);
+        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
+
+        $validated = $request->validate(['scheduled_at' => ['required', 'string']]);
+
+        try {
+            $scheduledAtUtc = Carbon::parse($validated['scheduled_at'], SchoolTimezone::resolve($school))->utc();
+        } catch (\Exception) {
+            throw ValidationException::withMessages(['scheduled_at' => ['The scheduled time is not a valid date/time.']]);
+        }
+
+        try {
+            if ($model->isScheduled()) {
+                $service->reschedule($model, $actor, $scheduledAtUtc);
+            } else {
+                $service->schedule($model, $actor, $scheduledAtUtc);
+            }
+        } catch (CommunicationException $e) {
+            throw ValidationException::withMessages(['scheduled_at' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/communications/announcements/{$model->id}");
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function validateComposer(Request $request): array
@@ -222,7 +302,27 @@ class AnnouncementController extends Controller
             'member_user_ids.*' => ['string'],
             'channels' => ['sometimes', 'array'],
             'channels.*' => ['string', Rule::in($allowedChannels)],
+            'source_template_id' => ['nullable', 'string'],
         ]);
+    }
+
+    /**
+     * Brief §9's "a request parameter naming an X is not authorization
+     * to use it" applies to a client-supplied template id exactly like
+     * a School id -- re-verified against the current School and
+     * `active` status here rather than trusted from the form's hidden
+     * field. An invalid id is silently dropped (announcement is simply
+     * created with no source template) rather than a validation error,
+     * matching create()'s own "convenience, not a hard dependency"
+     * policy.
+     */
+    private function verifiedTemplateId(?string $templateId): ?string
+    {
+        if ($templateId === null) {
+            return null;
+        }
+
+        return CommunicationTemplate::query()->where('status', 'active')->find($templateId)?->id;
     }
 
     /**
@@ -302,6 +402,11 @@ class AnnouncementController extends Controller
             'recipientCount' => $a->recipient_count,
             'status' => $a->status,
             'priority' => $a->priority,
+            'scheduledAt' => $a->scheduled_at?->toIso8601String(),
+            'sourceTemplateId' => $a->source_template_id,
+            'requestedChannels' => $a->relationLoaded('requestedChannels')
+                ? $a->requestedChannels->pluck('channel')->all()
+                : null,
             'publishedAt' => $a->published_at?->toIso8601String(),
             'createdAt' => $a->created_at?->toIso8601String(),
         ];

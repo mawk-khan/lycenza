@@ -8,6 +8,7 @@ use App\Domain\Communications\Application\Channels\EmailAddressResolver;
 use App\Domain\Communications\Application\Exceptions\EmptyAudienceException;
 use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransitionException;
 use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberException;
+use App\Domain\Communications\Application\Exceptions\InvalidScheduledTimeException;
 use App\Domain\Communications\Application\Exceptions\UnsupportedAnnouncementChannelException;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
@@ -15,6 +16,7 @@ use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Events\CommunicationAnnouncementCancelled;
 use App\Domain\Communications\Events\CommunicationAnnouncementCreated;
 use App\Domain\Communications\Events\CommunicationAnnouncementPublished;
+use App\Domain\Communications\Events\CommunicationAnnouncementScheduled;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
@@ -28,6 +30,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Observability\QueueName;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Uid\UuidV7;
 
@@ -97,8 +100,9 @@ class AnnouncementService
         array $individualMemberUserIds = [],
         ?Campus $campus = null,
         array $channels = [],
+        ?string $sourceTemplateId = null,
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId) {
             $announcement = CommunicationAnnouncement::query()->create([
                 'school_id' => $school->id,
                 'campus_id' => $campus?->id,
@@ -108,6 +112,7 @@ class AnnouncementService
                 'priority' => $priority->value,
                 'status' => 'draft',
                 'audience_type' => $audienceType->value,
+                'source_template_id' => $sourceTemplateId,
             ]);
 
             if ($audienceType === CommunicationAudienceType::Individual) {
@@ -140,7 +145,11 @@ class AnnouncementService
         ?array $channels = null,
     ): CommunicationAnnouncement {
         return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels) {
-            if (! $announcement->isDraft()) {
+            // Phase 5A.4 §31: a SCHEDULED announcement remains editable
+            // up until it is claimed for publication -- the exact same
+            // content-editing rules as a draft (its own canonical
+            // content, never its source template).
+            if (! $announcement->isEditable()) {
                 throw new InvalidAnnouncementTransitionException($announcement->status, 'edit');
             }
 
@@ -169,9 +178,19 @@ class AnnouncementService
     public function cancel(CommunicationAnnouncement $announcement, User $actor): CommunicationAnnouncement
     {
         return $this->context->withSchool($announcement->school, function () use ($announcement, $actor) {
+            // Brief §15/§25: DRAFT -> CANCELLED and SCHEDULED -> CANCELLED
+            // are both valid; a scheduled cancellation racing the
+            // scheduler's own claim is resolved by this SAME
+            // conditional UPDATE -- if the scheduler already flipped
+            // the row to `published`, this WHERE matches 0 rows and
+            // cancellation is correctly rejected (brief §25: "a
+            // cancellation racing with scheduler execution must have
+            // deterministic behavior").
+            $wasScheduled = $announcement->isScheduled();
+
             $claimed = CommunicationAnnouncement::query()
                 ->where('id', $announcement->id)
-                ->where('status', 'draft')
+                ->whereIn('status', ['draft', 'scheduled'])
                 ->update(['status' => 'cancelled', 'cancelled_at' => now()]);
 
             $fresh = $announcement->fresh();
@@ -184,7 +203,8 @@ class AnnouncementService
                 throw new InvalidAnnouncementTransitionException($fresh->status, 'cancel');
             }
 
-            $this->audit->school($announcement->school, 'announcement.cancelled', actor: $actor, subject: $fresh);
+            $eventType = $wasScheduled ? 'announcement.schedule_cancelled' : 'announcement.cancelled';
+            $this->audit->school($announcement->school, $eventType, actor: $actor, subject: $fresh);
             event(new CommunicationAnnouncementCancelled($announcement->school_id, $announcement->id, $actor->id));
 
             return $fresh;
@@ -205,6 +225,24 @@ class AnnouncementService
         );
     }
 
+    /**
+     * Brief §21: the SAME atomic claim serves both a manual "Publish
+     * Now" (draft) and a scheduler-driven due publication (scheduled +
+     * due) -- App\Console\Commands\PublishScheduledAnnouncements never
+     * claims anything itself; it just calls this method for each due
+     * candidate ID and relies entirely on THIS conditional UPDATE for
+     * concurrency safety (brief §22: two overlapping scheduler runs
+     * calling publish() for the same announcement -- only one's UPDATE
+     * matches a row, the other sees $claimed === 0 and, since the
+     * winner already committed `published`, returns the fresh state as
+     * a no-op, identical to the existing manual-republish idempotency
+     * proof). A crash/exception between claim and commit rolls back
+     * the WHOLE transaction -- a scheduled announcement whose audience
+     * resolves empty reverts all the way to `scheduled`, never stuck
+     * in a half-published state (brief §23 -- see
+     * App\Console\Commands\PublishScheduledAnnouncements for what
+     * happens next).
+     */
     public function publish(CommunicationAnnouncement $announcement, User $actor): CommunicationAnnouncement
     {
         return $this->context->withSchool($announcement->school, function () use ($announcement, $actor) {
@@ -213,7 +251,12 @@ class AnnouncementService
             $result = DB::transaction(function () use ($announcement, $actor, &$deliveryIds) {
                 $claimed = CommunicationAnnouncement::query()
                     ->where('id', $announcement->id)
-                    ->where('status', 'draft')
+                    ->where(function ($query) {
+                        $query->where('status', 'draft')
+                            ->orWhere(function ($query) {
+                                $query->where('status', 'scheduled')->where('scheduled_at', '<=', now());
+                            });
+                    })
                     ->update(['status' => 'published', 'published_at' => now()]);
 
                 $fresh = $announcement->fresh();
@@ -303,6 +346,94 @@ class AnnouncementService
             }
 
             return $result;
+        });
+    }
+
+    /**
+     * Brief §16/§17: does NOT resolve or persist a recipient snapshot
+     * -- only the intended audience DEFINITION (already stored on the
+     * draft via audience_type/audience members/channels) plus the
+     * schedule metadata. The authoritative snapshot is produced later,
+     * at due-publication time, by this same class's publish() --
+     * reused unchanged, not reimplemented.
+     */
+    public function schedule(CommunicationAnnouncement $announcement, User $actor, Carbon $scheduledAtUtc): CommunicationAnnouncement
+    {
+        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $scheduledAtUtc) {
+            if ($scheduledAtUtc->isPast()) {
+                throw new InvalidScheduledTimeException;
+            }
+
+            return DB::transaction(function () use ($announcement, $actor, $scheduledAtUtc) {
+                $claimed = CommunicationAnnouncement::query()
+                    ->where('id', $announcement->id)
+                    ->where('status', 'draft')
+                    ->update([
+                        'status' => 'scheduled',
+                        'scheduled_at' => $scheduledAtUtc,
+                        'scheduled_by_user_id' => $actor->id,
+                    ]);
+
+                $fresh = $announcement->fresh();
+
+                if ($claimed === 0) {
+                    throw new InvalidAnnouncementTransitionException($fresh->status, 'schedule');
+                }
+
+                $this->audit->school($announcement->school, 'announcement.scheduled', actor: $actor, subject: $fresh, metadata: [
+                    'scheduledAt' => $scheduledAtUtc->toIso8601String(),
+                ]);
+
+                event(new CommunicationAnnouncementScheduled(
+                    $announcement->school_id,
+                    $announcement->id,
+                    $actor->id,
+                    $scheduledAtUtc->toIso8601String(),
+                ));
+
+                return $fresh;
+            });
+        });
+    }
+
+    /**
+     * Brief §24: changes the schedule time of an already-SCHEDULED
+     * announcement. Race-safe against a concurrent scheduler claim via
+     * the same "conditional UPDATE ... WHERE status = 'scheduled'"
+     * discipline as every other transition here -- if the scheduler
+     * already published it (status is no longer 'scheduled' by the
+     * time this UPDATE runs), $claimed is 0 and this throws rather
+     * than silently rewriting a schedule that no longer applies to
+     * anything.
+     */
+    public function reschedule(CommunicationAnnouncement $announcement, User $actor, Carbon $newScheduledAtUtc): CommunicationAnnouncement
+    {
+        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $newScheduledAtUtc) {
+            if ($newScheduledAtUtc->isPast()) {
+                throw new InvalidScheduledTimeException;
+            }
+
+            return DB::transaction(function () use ($announcement, $actor, $newScheduledAtUtc) {
+                $previousScheduledAt = $announcement->scheduled_at;
+
+                $claimed = CommunicationAnnouncement::query()
+                    ->where('id', $announcement->id)
+                    ->where('status', 'scheduled')
+                    ->update(['scheduled_at' => $newScheduledAtUtc]);
+
+                $fresh = $announcement->fresh();
+
+                if ($claimed === 0) {
+                    throw new InvalidAnnouncementTransitionException($fresh->status, 'reschedule');
+                }
+
+                $this->audit->school($announcement->school, 'announcement.rescheduled', actor: $actor, subject: $fresh, metadata: [
+                    'previousScheduledAt' => $previousScheduledAt?->toIso8601String(),
+                    'newScheduledAt' => $newScheduledAtUtc->toIso8601String(),
+                ]);
+
+                return $fresh;
+            });
         });
     }
 

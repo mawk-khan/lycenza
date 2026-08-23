@@ -44,7 +44,9 @@ function submitCompose() {
     );
 }
 
-const futureSections = ['Scheduled', 'Drafts', 'Failed'];
+// 'Scheduled'/'Drafts' now live as status filters within Announcements
+// itself (Phase 5A.4), not as separate top-level nav sections.
+const futureSections = ['Failed'];
 </script>
 
 <template>
@@ -69,6 +71,13 @@ const futureSections = ['Scheduled', 'Drafts', 'Failed'];
                             class="block px-2 py-1 text-slate-600 hover:text-slate-900"
                             href="/app/communications/announcements"
                             >Announcements</a
+                        >
+                    </li>
+                    <li>
+                        <a
+                            class="block px-2 py-1 text-slate-600 hover:text-slate-900"
+                            href="/app/communications/templates"
+                            >Templates</a
                         >
                     </li>
                     <li

@@ -54,4 +54,31 @@ return [
         'processing_lease_seconds' => (int) env('COMMUNICATION_DELIVERY_PROCESSING_LEASE_SECONDS', 30),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Scheduled Announcement Publication (Phase 5A.4 §19/§23/§39)
+    |--------------------------------------------------------------------------
+    |
+    | `App\Console\Commands\PublishScheduledAnnouncements` never claims a
+    | second time via its own lease -- App\Domain\Communications\Application\
+    | AnnouncementService::publish() already claims atomically in ONE
+    | transaction (draft/due-scheduled -> published), so a crash between
+    | claim and commit is impossible (nothing partially commits). The
+    | one genuine failure-recovery need is a due announcement whose
+    | publish() attempt THROWS (e.g. EmptyAudienceException) and rolls
+    | back to `scheduled` -- `failure_backoff_seconds` is how far the
+    | command pushes `scheduled_at` forward before it will be retried
+    | again, so a permanently-empty-audience Announcement retries every
+    | 15 minutes forever (a genuinely transient condition -- membership
+    | can change) rather than every minute (brief §23: "do not create an
+    | uncontrolled infinite retry loop").
+    |
+    */
+
+    'scheduling' => [
+        'batch_size' => (int) env('COMMUNICATION_SCHEDULING_BATCH_SIZE', 100),
+
+        'failure_backoff_seconds' => (int) env('COMMUNICATION_SCHEDULING_FAILURE_BACKOFF_SECONDS', 900),
+    ],
+
 ];

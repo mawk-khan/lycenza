@@ -2,15 +2,27 @@
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
+interface TemplatePrefill {
+    id: string;
+    title: string | null;
+    body: string;
+    priority: string | null;
+}
+
 interface Props {
     emailChannelEnabled: boolean;
+    schoolTimezone: string;
+    template: TemplatePrefill | null;
 }
 
 const props = defineProps<Props>();
 
-const title = ref('');
-const body = ref('');
-const priority = ref<'normal' | 'important' | 'urgent' | 'critical'>('normal');
+const title = ref(props.template?.title ?? '');
+const body = ref(props.template?.body ?? '');
+const priority = ref<'normal' | 'important' | 'urgent' | 'critical'>(
+    (props.template?.priority as 'normal' | 'important' | 'urgent' | 'critical' | undefined) ??
+        'normal',
+);
 const audienceType = ref<'school_wide' | 'individual'>('school_wide');
 const memberIds = ref('');
 const emailSelected = ref(false);
@@ -34,6 +46,7 @@ function submit() {
                     : [],
             channels:
                 props.emailChannelEnabled && emailSelected.value ? ['in_app', 'email'] : ['in_app'],
+            source_template_id: props.template?.id ?? null,
         },
         {
             onFinish: () => {
@@ -51,7 +64,11 @@ function submit() {
         >
         <h1 class="mt-2 text-xl font-semibold">New Announcement</h1>
         <p class="mt-1 text-xs text-slate-500">
-            Saved as a draft first -- you'll see an audience preview before publishing.
+            Saved as a draft first -- you'll see an audience preview before publishing or
+            scheduling.
+        </p>
+        <p v-if="template" class="mt-1 text-xs text-slate-400">
+            Pre-filled from template. Editing here does not change the template.
         </p>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">

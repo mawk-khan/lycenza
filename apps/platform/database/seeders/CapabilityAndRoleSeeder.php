@@ -96,6 +96,21 @@ class CapabilityAndRoleSeeder extends Seeder
             // `.send` today (school_admin, principal) -- ordinary
             // members never receive it (brief §22).
             ['key' => 'communications.announce', 'label' => 'Publish Communication Hub announcements', 'namespace' => 'school'],
+
+            // Phase 5A.4 -- Communication Templates & Scheduling
+            // foundation. Template administration (create/edit/
+            // activate/deactivate) is its own capability, distinct
+            // from `communications.announce`: any authorized announcer
+            // can USE an existing active template (gated by the same
+            // `.announce` check the composer already requires), but
+            // AUTHORING reusable source content that other senders will
+            // see and pick from warrants the narrower, separately
+            // grantable right (brief §11). Scheduling/rescheduling/
+            // cancelling a scheduled Announcement reuses
+            // `communications.announce`/`.manage` exactly like
+            // publish()/cancel() already do -- no new capability for
+            // those (brief §36).
+            ['key' => 'communications.templates.manage', 'label' => 'Create and manage Communication Hub templates', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -129,6 +144,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.subjects.view', 'academics.subjects.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',
+                    'communications.templates.manage',
                 ],
             ],
             'principal' => [
@@ -149,7 +165,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
                     'communications.view', 'communications.send', 'communications.reply',
-                    'communications.announce',
+                    'communications.announce', 'communications.templates.manage',
                 ],
             ],
         ];

@@ -28,6 +28,9 @@ use Illuminate\Support\Carbon;
  * @property string $priority
  * @property string $status
  * @property string $audience_type
+ * @property Carbon|null $scheduled_at
+ * @property string|null $scheduled_by_user_id
+ * @property string|null $source_template_id
  * @property string|null $message_id
  * @property int|null $recipient_count
  * @property Carbon|null $published_at
@@ -39,12 +42,14 @@ class CommunicationAnnouncement extends Model
 
     protected $fillable = [
         'school_id', 'campus_id', 'created_by_user_id', 'title', 'body', 'priority',
-        'status', 'audience_type', 'message_id', 'recipient_count', 'published_at', 'cancelled_at',
+        'status', 'audience_type', 'scheduled_at', 'scheduled_by_user_id', 'source_template_id',
+        'message_id', 'recipient_count', 'published_at', 'cancelled_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'scheduled_at' => 'datetime',
             'published_at' => 'datetime',
             'cancelled_at' => 'datetime',
         ];
@@ -71,6 +76,18 @@ class CommunicationAnnouncement extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function scheduledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'scheduled_by_user_id');
+    }
+
+    /** @return BelongsTo<CommunicationTemplate, $this> */
+    public function sourceTemplate(): BelongsTo
+    {
+        return $this->belongsTo(CommunicationTemplate::class, 'source_template_id');
     }
 
     /** @return BelongsTo<CommunicationMessage, $this> */
@@ -112,8 +129,23 @@ class CommunicationAnnouncement extends Model
         return $this->status === 'draft';
     }
 
+    public function isScheduled(): bool
+    {
+        return $this->status === 'scheduled';
+    }
+
     public function isPublished(): bool
     {
         return $this->status === 'published';
+    }
+
+    /**
+     * Phase 5A.4 §31: still-canonical-content-editable, whether or not
+     * it has a schedule attached yet -- the SAME `title`/`body`/
+     * `priority`/audience/channel editing rules apply to both.
+     */
+    public function isEditable(): bool
+    {
+        return $this->isDraft() || $this->isScheduled();
     }
 }

@@ -11,6 +11,8 @@ interface AnnouncementDetail {
     recipientCount: number | null;
     status: string;
     priority: string;
+    scheduledAt: string | null;
+    sourceTemplateId: string | null;
     publishedAt: string | null;
     createdAt: string | null;
 }
@@ -43,13 +45,28 @@ interface Props {
     announcement: AnnouncementDetail;
     requestedChannels: string[];
     emailChannelEnabled: boolean;
+    schoolTimezone: string;
     preview: AudiencePreview | null;
     channelDeliverySummary: Record<string, ChannelDeliveryRow[]> | null;
     canEdit: boolean;
+    canSchedule: boolean;
+    canCancel: boolean;
     canAnnounce: boolean;
 }
 
 const props = defineProps<Props>();
+
+function formatInSchoolTimezone(iso: string): string {
+    try {
+        return new Intl.DateTimeFormat(undefined, {
+            timeZone: props.schoolTimezone,
+            dateStyle: 'medium',
+            timeStyle: 'short',
+        }).format(new Date(iso));
+    } catch {
+        return iso;
+    }
+}
 
 const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email' };
 
@@ -91,6 +108,8 @@ function channelPending(rows: ChannelDeliveryRow[]): number {
 }
 const publishing = ref(false);
 const cancelling = ref(false);
+const scheduling = ref(false);
+const scheduledAtInput = ref('');
 
 function publish() {
     publishing.value = true;
@@ -101,12 +120,24 @@ function publish() {
     );
 }
 
-function cancelDraft() {
+function cancelAnnouncement() {
     cancelling.value = true;
     router.post(
         `/app/communications/announcements/${props.announcement.id}/cancel`,
         {},
         { onFinish: () => (cancelling.value = false) },
+    );
+}
+
+function submitSchedule() {
+    if (!scheduledAtInput.value) {
+        return;
+    }
+    scheduling.value = true;
+    router.post(
+        `/app/communications/announcements/${props.announcement.id}/schedule`,
+        { scheduled_at: scheduledAtInput.value },
+        { onFinish: () => (scheduling.value = false) },
     );
 }
 </script>
@@ -123,6 +154,7 @@ function cancelDraft() {
                 class="rounded px-1.5 py-0.5 text-xs font-medium"
                 :class="{
                     'bg-slate-100 text-slate-600': announcement.status === 'draft',
+                    'bg-amber-100 text-amber-700': announcement.status === 'scheduled',
                     'bg-emerald-100 text-emerald-700': announcement.status === 'published',
                     'bg-red-100 text-red-600': announcement.status === 'cancelled',
                 }"
@@ -132,6 +164,12 @@ function cancelDraft() {
         </div>
         <p class="mt-1 text-xs text-slate-500">
             by {{ announcement.createdByName ?? 'Unknown' }}
+            <template v-if="announcement.sourceTemplateId"> · from a template</template>
+            <template v-if="announcement.status === 'scheduled' && announcement.scheduledAt">
+                · scheduled for {{ formatInSchoolTimezone(announcement.scheduledAt) }} ({{
+                    schoolTimezone
+                }})</template
+            >
             <template v-if="announcement.publishedAt">
                 · published {{ announcement.publishedAt }}</template
             >
@@ -222,8 +260,35 @@ function cancelDraft() {
             </div>
         </div>
 
-        <div v-if="canEdit" class="mt-6 flex gap-2">
+        <div v-if="canSchedule" class="mt-6 rounded border border-slate-200 p-4">
+            <h2 class="text-sm font-semibold">
+                {{ announcement.status === 'scheduled' ? 'Reschedule' : 'Schedule for later' }}
+            </h2>
+            <p class="mt-1 text-xs text-slate-500">
+                Enter a time in the school's timezone ({{ schoolTimezone }}). The audience is
+                resolved again, authoritatively, when the schedule becomes due -- this preview is
+                only an estimate.
+            </p>
+            <div class="mt-2 flex items-center gap-2">
+                <input
+                    v-model="scheduledAtInput"
+                    type="datetime-local"
+                    class="rounded border border-slate-300 px-2 py-1 text-sm"
+                />
+                <button
+                    type="button"
+                    :disabled="scheduling"
+                    class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 disabled:opacity-50"
+                    @click="submitSchedule"
+                >
+                    {{ announcement.status === 'scheduled' ? 'Update schedule' : 'Schedule' }}
+                </button>
+            </div>
+        </div>
+
+        <div v-if="canEdit || canCancel" class="mt-6 flex gap-2">
             <button
+                v-if="canEdit && announcement.status === 'draft'"
                 type="button"
                 :disabled="publishing"
                 class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
@@ -232,12 +297,13 @@ function cancelDraft() {
                 Publish
             </button>
             <button
+                v-if="canCancel"
                 type="button"
                 :disabled="cancelling"
                 class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 disabled:opacity-50"
-                @click="cancelDraft"
+                @click="cancelAnnouncement"
             >
-                Cancel Draft
+                {{ announcement.status === 'scheduled' ? 'Cancel Schedule' : 'Cancel Draft' }}
             </button>
         </div>
     </main>
