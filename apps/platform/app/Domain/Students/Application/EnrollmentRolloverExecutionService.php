@@ -59,12 +59,16 @@ class EnrollmentRolloverExecutionService
      * -- use `resume()` instead; a duplicate/concurrent `start()` call
      * never becomes a second active processor for the same Plan).
      *
-     * @param  callable(string): bool|null  $afterEachItem  Test-only seam: invoked with
-     *                                                      the just-processed Item's id after every
-     *                                                      Item; returning true stops processing
-     *                                                      immediately, simulating a crashed/interrupted
-     *                                                      process (this checkpoint's brief, section
-     *                                                      29/30) without any timing/sleep-based test.
+     * @param  callable(string): bool|null  $afterEachItem  Invoked with the just-processed
+     *                                                      Item's id after every Item; returning true stops
+     *                                                      processing immediately. Two sanctioned callers
+     *                                                      (Phase 1B.7D's own tests deterministically simulate
+     *                                                      a crashed/interrupted process without any timing/
+     *                                                      sleep-based test; Phase 1B.7E's
+     *                                                      EnrollmentRolloverController bounds one synchronous
+     *                                                      HTTP request to a server-owned Item cap, since no
+     *                                                      queue exists yet) -- never exposed to an HTTP caller
+     *                                                      as a parameter itself.
      * @return array{total: int, succeeded: int, reconciled: int, skipped: int, failed: int, pending: int, planStatus: string}
      */
     public function start(EnrollmentRolloverPlan $plan, ?User $actor = null, int $batchSize = self::DEFAULT_BATCH_SIZE, ?callable $afterEachItem = null): array
