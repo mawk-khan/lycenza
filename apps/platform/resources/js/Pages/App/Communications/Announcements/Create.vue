@@ -25,8 +25,81 @@ const priority = ref<'normal' | 'important' | 'urgent' | 'critical'>(
     (props.template?.priority as 'normal' | 'important' | 'urgent' | 'critical' | undefined) ??
         'normal',
 );
-const audienceType = ref<'school_wide' | 'individual'>('school_wide');
+interface DomainTarget {
+    id: string;
+    label: string;
+}
+
+const audienceType = ref<
+    'school_wide' | 'individual' | 'student' | 'guardian' | 'guardians_of_students'
+>('school_wide');
 const memberIds = ref('');
+
+// Phase 5B.1 §11/§12/§13/§25/§26: search-assisted picker for the three
+// new domain audience types, mirroring the exact search-then-add-chip
+// pattern already established in
+// resources/js/Pages/App/Communications/Conversations.vue's
+// participant picker. 'student' and 'guardians_of_students' both
+// search Students (guardians_of_students' INPUT is Students -- its
+// Guardian output is derived server-side); 'guardian' searches
+// Guardians directly.
+const selectedDomainTargets = ref<DomainTarget[]>([]);
+const domainQuery = ref('');
+const domainResults = ref<DomainTarget[]>([]);
+const domainSearching = ref(false);
+let domainSearchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+function domainSearchEndpoint(): string | null {
+    if (audienceType.value === 'student' || audienceType.value === 'guardians_of_students') {
+        return '/app/communications/audience/students/search';
+    }
+    if (audienceType.value === 'guardian') {
+        return '/app/communications/audience/guardians/search';
+    }
+    return null;
+}
+
+function searchDomainTargets() {
+    const endpoint = domainSearchEndpoint();
+    const q = domainQuery.value.trim();
+    clearTimeout(domainSearchDebounce);
+    if (endpoint === null || q === '') {
+        domainResults.value = [];
+        return;
+    }
+    domainSearchDebounce = setTimeout(async () => {
+        domainSearching.value = true;
+        try {
+            const response = await fetch(`${endpoint}?q=${encodeURIComponent(q)}`, {
+                headers: { Accept: 'application/json' },
+            });
+            const body = await response.json();
+            const results: DomainTarget[] = (body.students ??
+                body.guardians ??
+                []) as DomainTarget[];
+            const selectedIds = new Set(selectedDomainTargets.value.map((t) => t.id));
+            domainResults.value = results.filter((t) => !selectedIds.has(t.id));
+        } finally {
+            domainSearching.value = false;
+        }
+    }, 250);
+}
+
+function addDomainTarget(target: DomainTarget) {
+    selectedDomainTargets.value.push(target);
+    domainResults.value = domainResults.value.filter((t) => t.id !== target.id);
+    domainQuery.value = '';
+}
+
+function removeDomainTarget(id: string) {
+    selectedDomainTargets.value = selectedDomainTargets.value.filter((t) => t.id !== id);
+}
+
+watch(audienceType, () => {
+    selectedDomainTargets.value = [];
+    domainResults.value = [];
+    domainQuery.value = '';
+});
 const emailSelected = ref(false);
 const requirement = ref<'optional' | 'required'>('optional');
 // Phase 5A.10 §40: never a default -- always an explicit choice, and
@@ -61,6 +134,12 @@ function submit() {
                           .split(',')
                           .map((id) => id.trim())
                           .filter(Boolean)
+                    : [],
+            domain_audience_member_ids:
+                audienceType.value === 'student' ||
+                audienceType.value === 'guardian' ||
+                audienceType.value === 'guardians_of_students'
+                    ? selectedDomainTargets.value.map((t) => t.id)
                     : [],
             channels:
                 props.emailChannelEnabled && emailSelected.value ? ['in_app', 'email'] : ['in_app'],
@@ -136,6 +215,9 @@ function submit() {
                 >
                     <option value="school_wide">Entire School</option>
                     <option value="individual">Selected Members</option>
+                    <option value="student">Students</option>
+                    <option value="guardian">Guardians</option>
+                    <option value="guardians_of_students">Guardians of Selected Students</option>
                 </select>
             </div>
 
@@ -148,6 +230,73 @@ function submit() {
                     type="text"
                     class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
                 />
+            </div>
+
+            <div
+                v-if="
+                    audienceType === 'student' ||
+                    audienceType === 'guardian' ||
+                    audienceType === 'guardians_of_students'
+                "
+            >
+                <label class="block text-xs font-medium text-slate-500">
+                    {{
+                        audienceType === 'guardian'
+                            ? 'Guardians'
+                            : audienceType === 'guardians_of_students'
+                              ? 'Students (their Guardians will be targeted)'
+                              : 'Students'
+                    }}
+                </label>
+                <p
+                    v-if="audienceType === 'guardians_of_students'"
+                    class="mt-1 text-xs text-slate-400"
+                >
+                    Only each Student's primary or legal Guardian is included. A Guardian shared by
+                    multiple selected Students is targeted once.
+                </p>
+                <div v-if="selectedDomainTargets.length > 0" class="mt-1 flex flex-wrap gap-1">
+                    <span
+                        v-for="t in selectedDomainTargets"
+                        :key="t.id"
+                        class="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                    >
+                        {{ t.label }}
+                        <button
+                            type="button"
+                            class="text-slate-400 hover:text-slate-700"
+                            @click="removeDomainTarget(t.id)"
+                        >
+                            ×
+                        </button>
+                    </span>
+                </div>
+                <div class="relative mt-1">
+                    <input
+                        v-model="domainQuery"
+                        type="text"
+                        :placeholder="
+                            audienceType === 'guardian'
+                                ? 'Search guardians by name…'
+                                : 'Search students by name or student number…'
+                        "
+                        class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        @input="searchDomainTargets"
+                    />
+                    <ul
+                        v-if="domainResults.length > 0"
+                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    >
+                        <li
+                            v-for="result in domainResults"
+                            :key="result.id"
+                            class="cursor-pointer px-2 py-1 hover:bg-slate-50"
+                            @click="addDomainTarget(result)"
+                        >
+                            {{ result.label }}
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <div>

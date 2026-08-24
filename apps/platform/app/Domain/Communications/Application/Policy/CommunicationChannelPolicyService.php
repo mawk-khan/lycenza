@@ -188,4 +188,46 @@ class CommunicationChannelPolicyService
 
         return CommunicationPolicyDecision::allow();
     }
+
+    /**
+     * Phase 5B.1 §16/§18/§20: the SAME policy engine as evaluate()
+     * above, for a party with NO SchoolMembership at all (a Guardian,
+     * today) -- deliberately NOT a second implementation, just a
+     * second entry point that skips evaluate()'s membership-null
+     * short-circuit (which exists to suppress a NO-LONGER-active
+     * member, not to universally suppress every channel for a party
+     * that was never expected to have a membership in the first
+     * place). IN_APP is still ALWAYS suppressed here (brief §16: no
+     * fake account inbox); EMAIL is evaluated against the exact same
+     * School channel-policy row evaluate() consults, with the
+     * recipient-preference step skipped entirely (brief §18: no
+     * SchoolMembership means no personal CommunicationPreference row
+     * could possibly exist for this party -- there is nothing to
+     * consult, not "nothing configured yet").
+     */
+    public function evaluateForDomainParty(
+        School $school,
+        CommunicationChannel $channel,
+        CommunicationRequirement $requirement,
+    ): CommunicationPolicyDecision {
+        if ($channel === CommunicationChannel::InApp) {
+            return CommunicationPolicyDecision::suppress(CommunicationPolicyReason::RecipientIneligible);
+        }
+
+        if ($channel !== CommunicationChannel::Email) {
+            return CommunicationPolicyDecision::suppress(CommunicationPolicyReason::UnsupportedChannel);
+        }
+
+        $policy = $this->policyFor($school, $channel);
+
+        if ($requirement === CommunicationRequirement::Required) {
+            return $policy->requiredAllowed
+                ? CommunicationPolicyDecision::allow()
+                : CommunicationPolicyDecision::suppress(CommunicationPolicyReason::SchoolRequiredChannelDisabled);
+        }
+
+        return $policy->optionalAllowed
+            ? CommunicationPolicyDecision::allow()
+            : CommunicationPolicyDecision::suppress(CommunicationPolicyReason::SchoolOptionalChannelDisabled);
+    }
 }

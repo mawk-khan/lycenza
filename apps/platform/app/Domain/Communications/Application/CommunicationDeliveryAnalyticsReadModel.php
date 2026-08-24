@@ -5,6 +5,7 @@ namespace App\Domain\Communications\Application;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
+use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Support\Tenancy\TenantContext;
@@ -195,9 +196,14 @@ class CommunicationDeliveryAnalyticsReadModel
                 return new LengthAwarePaginator([], 0, $perPage, $page);
             }
 
+            // Phase 5B.1: a delivery's logical recipient is now
+            // EITHER a User or a Guardian (never both, database-
+            // enforced) -- both relations are eager-loaded so
+            // presentDeliveryRow() can name either kind of recipient
+            // without an N+1.
             $query = CommunicationDelivery::query()
                 ->whereHas('recipient', fn ($q) => $q->where('message_id', $announcement->message_id))
-                ->with('recipient.recipientUser:id,name');
+                ->with(['recipient.recipientUser:id,name', 'recipient.recipientGuardian:id,first_name,last_name']);
 
             if (in_array($filters['channel'] ?? null, ['in_app', 'email', 'sms', 'whatsapp', 'push'], true)) {
                 $query->where('channel', $filters['channel']);
@@ -224,7 +230,7 @@ class CommunicationDeliveryAnalyticsReadModel
     {
         return [
             'id' => $delivery->id,
-            'recipientName' => $delivery->recipient?->recipientUser?->name,
+            'recipientName' => $this->recipientDisplayName($delivery),
             'channel' => $delivery->channel,
             'status' => $delivery->status,
             'failureCode' => $delivery->failure_code,
@@ -234,6 +240,22 @@ class CommunicationDeliveryAnalyticsReadModel
             'readAt' => $delivery->read_at?->toIso8601String(),
             'failedAt' => $delivery->failed_at?->toIso8601String(),
         ];
+    }
+
+    private function recipientDisplayName(CommunicationDelivery $delivery): ?string
+    {
+        $recipient = $delivery->recipient;
+
+        if ($recipient->recipientUser !== null) {
+            return $recipient->recipientUser->name;
+        }
+
+        return $this->guardianDisplayName($recipient->recipientGuardian);
+    }
+
+    private function guardianDisplayName(?Guardian $guardian): ?string
+    {
+        return $guardian === null ? null : trim("{$guardian->first_name} {$guardian->last_name}");
     }
 
     /**

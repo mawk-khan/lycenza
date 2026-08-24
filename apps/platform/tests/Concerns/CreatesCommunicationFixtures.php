@@ -5,6 +5,7 @@ namespace Tests\Concerns;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
+use App\Domain\Communications\Infrastructure\CommunicationAnnouncementDomainAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationApprovalPolicy;
 use App\Domain\Communications\Infrastructure\CommunicationApprovalRequest;
@@ -19,6 +20,8 @@ use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationTemplate;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Domain\Communications\Infrastructure\CommunicationThreadParticipant;
+use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
@@ -222,6 +225,72 @@ trait CreatesCommunicationFixtures
                 'school_id' => $announcement->school_id,
                 'announcement_id' => $announcement->id,
                 'requested_by_user_id' => $requester->id,
+            ], $attributes)),
+        );
+    }
+
+    /**
+     * Phase 5B.1 -- the authored domain-audience selection. Pass
+     * exactly one of $student/$guardian (matches the database's
+     * num_nonnulls check).
+     */
+    protected function createDomainAudienceMember(CommunicationAnnouncement $announcement, ?Student $student = null, ?Guardian $guardian = null): CommunicationAnnouncementDomainAudienceMember
+    {
+        return app(TenantContext::class)->withSchool(
+            $announcement->school,
+            fn () => CommunicationAnnouncementDomainAudienceMember::query()->create([
+                'school_id' => $announcement->school_id,
+                'announcement_id' => $announcement->id,
+                'student_id' => $student?->id,
+                'guardian_id' => $guardian?->id,
+            ]),
+        );
+    }
+
+    protected function createStudentAnnouncementRecipient(CommunicationAnnouncement $announcement, Student $student): CommunicationAnnouncementRecipient
+    {
+        return app(TenantContext::class)->withSchool(
+            $announcement->school,
+            fn () => CommunicationAnnouncementRecipient::factory()->create([
+                'school_id' => $announcement->school_id,
+                'announcement_id' => $announcement->id,
+                'student_id' => $student->id,
+            ]),
+        );
+    }
+
+    protected function createGuardianAnnouncementRecipient(CommunicationAnnouncement $announcement, Guardian $guardian): CommunicationAnnouncementRecipient
+    {
+        return app(TenantContext::class)->withSchool(
+            $announcement->school,
+            fn () => CommunicationAnnouncementRecipient::factory()->create([
+                'school_id' => $announcement->school_id,
+                'announcement_id' => $announcement->id,
+                'guardian_id' => $guardian->id,
+            ]),
+        );
+    }
+
+    protected function createGuardianRecipient(CommunicationMessage $message, Guardian $guardian): CommunicationRecipient
+    {
+        return app(TenantContext::class)->withSchool(
+            $message->school,
+            fn () => CommunicationRecipient::factory()->create([
+                'school_id' => $message->school_id,
+                'message_id' => $message->id,
+                'recipient_guardian_id' => $guardian->id,
+            ]),
+        );
+    }
+
+    protected function createGuardianPolicyDecision(School $school, string $messageId, Guardian $guardian, array $attributes = []): CommunicationDeliveryPolicyDecision
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationDeliveryPolicyDecision::factory()->create(array_merge([
+                'school_id' => $school->id,
+                'message_id' => $messageId,
+                'recipient_guardian_id' => $guardian->id,
             ], $attributes)),
         );
     }

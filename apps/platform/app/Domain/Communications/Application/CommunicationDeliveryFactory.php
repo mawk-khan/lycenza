@@ -29,6 +29,24 @@ class CommunicationDeliveryFactory
     }
 
     /**
+     * Phase 5B.1 §9: the Guardian-side counterpart to createRecipient()
+     * -- reuses the exact same `communication_recipients` row shape
+     * (widened by this checkpoint's migration to accept a nullable
+     * `recipient_guardian_id` instead of `recipient_user_id`), so
+     * everything downstream (CommunicationDelivery, ProcessCommunicationDeliveryJob,
+     * the channel driver registry) needs zero changes to serve a
+     * Guardian recipient.
+     */
+    public function createRecipientForGuardian(string $schoolId, string $messageId, string $recipientGuardianId): CommunicationRecipient
+    {
+        return CommunicationRecipient::query()->create([
+            'school_id' => $schoolId,
+            'message_id' => $messageId,
+            'recipient_guardian_id' => $recipientGuardianId,
+        ]);
+    }
+
+    /**
      * Idempotent-by-construction (root CLAUDE.md rule 30): the
      * unique(recipient_id, channel) constraint is the authoritative
      * guard, never a check-then-insert. A duplicate call for the same

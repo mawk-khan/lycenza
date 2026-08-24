@@ -19,6 +19,20 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
  * "schedule time is operational timing, not message meaning") and
  * anything resolved only at publish time (the actual recipient
  * snapshot, brief §19/§53).
+ *
+ * Phase 5B.1 §22/§44: `domainAudienceIds` (canonicalized Student ids
+ * for `student`/`guardians_of_students`, Guardian ids for `guardian`)
+ * is approval-sensitive for the SAME reason `individualMemberIds`
+ * already is -- changing WHO a message targets changes what was
+ * approved. Deliberately EXCLUDES any GuardianContact/destination
+ * value -- contact-destination resolution happens at PUBLISH time
+ * (docs/communication-hub/
+ * PHASE-5B-1-STUDENT-GUARDIAN-AUDIENCE-REACHABILITY.md §"Approval
+ * fingerprint semantics": approval binds to WHO is targeted, not to
+ * where a message happens to be deliverable right now -- editing a
+ * Guardian's email after approval never invalidates it, matching
+ * brief §44's documented choice), and never hashes a decrypted
+ * contact value (brief §22/§32).
  */
 class CommunicationApprovalFingerprint
 {
@@ -35,7 +49,9 @@ class CommunicationApprovalFingerprint
         // always be reflected here. Fingerprint correctness is a
         // security boundary (brief §17/§32), not just a convenience
         // read.
-        $announcement = $announcement->fresh(['requestedChannels', 'audienceMembers', 'attachments']);
+        $announcement = $announcement->fresh(['requestedChannels', 'audienceMembers', 'domainAudienceMembers', 'attachments']);
+
+        $isDomainAudience = in_array($announcement->audience_type, ['student', 'guardian', 'guardians_of_students'], true);
 
         return [
             'title' => trim($announcement->title),
@@ -48,6 +64,13 @@ class CommunicationApprovalFingerprint
             // selection ORDER was never meaningful, only membership.
             'individualMemberIds' => $announcement->audience_type === 'individual'
                 ? $this->sortedUnique($announcement->audienceMembers->pluck('school_membership_id')->all())
+                : [],
+            // Phase 5B.1: canonicalized -- student_id for
+            // student/guardians_of_students, guardian_id for guardian.
+            'domainAudienceIds' => $isDomainAudience
+                ? $this->sortedUnique($announcement->domainAudienceMembers
+                    ->pluck($announcement->audience_type === 'guardian' ? 'guardian_id' : 'student_id')
+                    ->all())
                 : [],
             // Brief §21: canonicalized channel set.
             'channels' => $this->sortedUnique($announcement->requestedChannels->pluck('channel')->all()),

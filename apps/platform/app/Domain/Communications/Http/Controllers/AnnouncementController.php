@@ -6,6 +6,7 @@ use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
+use App\Domain\Communications\Application\Channels\GuardianEmailAddressResolver;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
@@ -17,6 +18,7 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationTemplate;
+use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\SchoolMembership;
@@ -134,9 +136,10 @@ class AnnouncementController extends Controller
                 requirement: CommunicationRequirement::from($validated['requirement'] ?? 'optional'),
                 dispatchMode: CommunicationDispatchMode::from($validated['dispatch_mode'] ?? 'standard'),
                 emergencyJustification: $validated['emergency_justification'] ?? null,
+                domainAudienceMemberIds: $validated['domain_audience_member_ids'] ?? [],
             );
         } catch (CommunicationException $e) {
-            throw ValidationException::withMessages(['member_user_ids' => [$e->getMessage()]]);
+            throw ValidationException::withMessages([$this->audienceErrorField($validated['audience_type']) => [$e->getMessage()]]);
         }
 
         return redirect("/app/communications/announcements/{$announcement->id}");
@@ -146,6 +149,7 @@ class AnnouncementController extends Controller
         TenantContext $context,
         AnnouncementService $service,
         EmailAddressResolver $emailResolver,
+        GuardianEmailAddressResolver $guardianEmailResolver,
         CommunicationChannelPolicyService $channelPolicy,
         CommunicationApprovalService $approvalService,
         string $announcement,
@@ -208,6 +212,13 @@ class AnnouncementController extends Controller
                 'categoryBreakdown' => $preview->categoryBreakdown,
                 'email' => in_array('email', $requestedChannels, true)
                     ? $this->emailPreview($preview, $model, $school, $emailResolver, $channelPolicy, $context)
+                    : null,
+                // Phase 5B.1 §28: Student/Guardian targets have a
+                // different reachability profile from SchoolMembership
+                // recipients -- reported separately rather than folded
+                // into the counts above, which remain membership-only.
+                'domain' => $preview->studentIds !== [] || $preview->guardianIds !== []
+                    ? $this->domainAudiencePreview($preview, $requestedChannels, $guardianEmailResolver)
                     : null,
             ],
             'channelDeliverySummary' => $model->isPublished() ? $this->channelDeliverySummary($model) : null,
@@ -289,9 +300,10 @@ class AnnouncementController extends Controller
                 requirement: isset($validated['requirement']) ? CommunicationRequirement::from($validated['requirement']) : null,
                 dispatchMode: isset($validated['dispatch_mode']) ? CommunicationDispatchMode::from($validated['dispatch_mode']) : null,
                 emergencyJustification: $validated['emergency_justification'] ?? null,
+                domainAudienceMemberIds: $this->isDomainAudienceType($model->audience_type) ? ($validated['domain_audience_member_ids'] ?? []) : null,
             );
         } catch (CommunicationException $e) {
-            throw ValidationException::withMessages(['body' => [$e->getMessage()]]);
+            throw ValidationException::withMessages([$this->audienceErrorField($model->audience_type) => [$e->getMessage()]]);
         }
 
         return redirect("/app/communications/announcements/{$model->id}");
@@ -494,9 +506,16 @@ class AnnouncementController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:10000'],
             'priority' => ['required', 'in:normal,important,urgent,critical'],
-            'audience_type' => ['required', 'in:individual,school_wide'],
+            'audience_type' => ['required', 'in:individual,school_wide,student,guardian,guardians_of_students'],
             'member_user_ids' => ['required_if:audience_type,individual', 'array'],
             'member_user_ids.*' => ['string'],
+            // Phase 5B.1: the Student ids for 'student'/
+            // 'guardians_of_students', the Guardian ids for 'guardian'
+            // -- re-validated (same-school, active) inside
+            // AnnouncementService::syncDomainAudienceMembers(), never
+            // trusted from this shape check alone.
+            'domain_audience_member_ids' => ['required_if:audience_type,student,guardian,guardians_of_students', 'array'],
+            'domain_audience_member_ids.*' => ['string'],
             'channels' => ['sometimes', 'array'],
             'channels.*' => ['string', Rule::in($allowedChannels)],
             'source_template_id' => ['nullable', 'string'],
@@ -531,6 +550,16 @@ class AnnouncementController extends Controller
         }
 
         return CommunicationTemplate::query()->where('status', 'active')->find($templateId)?->id;
+    }
+
+    private function isDomainAudienceType(string $audienceType): bool
+    {
+        return in_array($audienceType, ['student', 'guardian', 'guardians_of_students'], true);
+    }
+
+    private function audienceErrorField(string $audienceType): string
+    {
+        return $this->isDomainAudienceType($audienceType) ? 'domain_audience_member_ids' : 'member_user_ids';
     }
 
     /**
@@ -605,6 +634,42 @@ class AnnouncementController extends Controller
             'eligible' => $eligible,
             'missing' => count($notSuppressedUserIds) - $eligible,
             'policySuppressed' => $policySuppressed,
+        ];
+    }
+
+    /**
+     * Phase 5B.1 §28/§34: non-authoritative, exactly like emailPreview()
+     * above -- the definitive per-recipient decision is made again at
+     * publish time. Never returns an individual address (brief §28) --
+     * counts only. IN_APP is always 0 (brief §16: a Student/Guardian
+     * without an account link has no in-app inbox, never fabricated).
+     *
+     * @param  array<int, string>  $requestedChannels
+     * @return array{studentCount: int, guardianCount: int, inAppReachable: int, guardianEmailEligible: int, guardianEmailUnavailable: int}
+     */
+    private function domainAudiencePreview(ResolvedAudience $preview, array $requestedChannels, GuardianEmailAddressResolver $guardianEmailResolver): array
+    {
+        $guardianEmailEligible = 0;
+        $guardianEmailUnavailable = 0;
+
+        if ($preview->guardianIds !== [] && in_array('email', $requestedChannels, true)) {
+            $guardians = Guardian::query()->whereIn('id', $preview->guardianIds)->get(['id']);
+
+            foreach ($guardians as $guardian) {
+                if ($guardianEmailResolver->resolve($guardian) !== null) {
+                    $guardianEmailEligible++;
+                } else {
+                    $guardianEmailUnavailable++;
+                }
+            }
+        }
+
+        return [
+            'studentCount' => count($preview->studentIds),
+            'guardianCount' => count($preview->guardianIds),
+            'inAppReachable' => 0,
+            'guardianEmailEligible' => $guardianEmailEligible,
+            'guardianEmailUnavailable' => $guardianEmailUnavailable,
         ];
     }
 

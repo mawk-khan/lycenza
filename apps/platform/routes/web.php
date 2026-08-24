@@ -5,6 +5,7 @@ use App\Domain\Communications\Http\Controllers\CommunicationAnalyticsController;
 use App\Domain\Communications\Http\Controllers\CommunicationApprovalController;
 use App\Domain\Communications\Http\Controllers\CommunicationApprovalPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
+use App\Domain\Communications\Http\Controllers\CommunicationAudienceSearchController;
 use App\Domain\Communications\Http\Controllers\CommunicationAuditController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationDeliveryTimingPolicyController;
@@ -234,6 +235,13 @@ Route::middleware('auth')->group(function (): void {
         // Phase 5A.7 §10: registered BEFORE the '/{thread}' wildcard
         // below, same reasoning as 'announcements'/'templates' above.
         Route::get('/participants/search', [CommunicationHubController::class, 'searchParticipants'])->name('participants.search');
+
+        // Phase 5B.1 §25/§26: registered BEFORE the '/{thread}'
+        // wildcard below, same reasoning as 'participants/search'
+        // above -- the Announcement composer's Student/Guardian
+        // audience-picker search.
+        Route::get('/audience/students/search', [CommunicationAudienceSearchController::class, 'students'])->name('audience.students.search');
+        Route::get('/audience/guardians/search', [CommunicationAudienceSearchController::class, 'guardians'])->name('audience.guardians.search');
 
         // Phase 5A.11 §25/§32: the School-wide operational delivery
         // overview -- registered BEFORE the '/{thread}' wildcard below,

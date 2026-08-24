@@ -117,6 +117,18 @@ class CommunicationAnnouncement extends Model
         return $this->hasMany(CommunicationAnnouncementAudienceMember::class, 'announcement_id');
     }
 
+    /**
+     * Phase 5B.1 -- the authored `student`/`guardian`/
+     * `guardians_of_students` selection, parallel to audienceMembers()
+     * above (which serves only `individual`).
+     *
+     * @return HasMany<CommunicationAnnouncementDomainAudienceMember, $this>
+     */
+    public function domainAudienceMembers(): HasMany
+    {
+        return $this->hasMany(CommunicationAnnouncementDomainAudienceMember::class, 'announcement_id');
+    }
+
     /** @return HasMany<CommunicationAnnouncementRecipient, $this> */
     public function resolvedRecipients(): HasMany
     {

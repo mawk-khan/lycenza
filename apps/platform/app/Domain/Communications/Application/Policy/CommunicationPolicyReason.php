@@ -20,4 +20,18 @@ enum CommunicationPolicyReason: string
     case SchoolRequiredChannelDisabled = 'school_required_channel_disabled';
     case RecipientIneligible = 'recipient_ineligible';
     case UnsupportedChannel = 'unsupported_channel';
+
+    /**
+     * Phase 5B.1 -- distinct from every reason above: school policy
+     * ALLOWS this channel and requirement, but no usable destination
+     * endpoint exists for this recipient (e.g. a Guardian with no
+     * eligible email contact). Never used for a User/SchoolMembership
+     * recipient today (EmailAddressResolver failures for a User use
+     * their own separate `recipient_email_missing`/
+     * `recipient_email_invalid` codes at the delivery-attempt layer,
+     * not this policy-decision layer) -- reserved for a domain party
+     * (Guardian today) whose reachability is decided BEFORE a
+     * CommunicationRecipient row is ever created.
+     */
+    case RecipientDestinationUnavailable = 'recipient_destination_unavailable';
 }
