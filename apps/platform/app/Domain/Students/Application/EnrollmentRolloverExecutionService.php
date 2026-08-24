@@ -61,14 +61,15 @@ class EnrollmentRolloverExecutionService
      *
      * @param  callable(string): bool|null  $afterEachItem  Invoked with the just-processed
      *                                                      Item's id after every Item; returning true stops
-     *                                                      processing immediately. Two sanctioned callers
-     *                                                      (Phase 1B.7D's own tests deterministically simulate
-     *                                                      a crashed/interrupted process without any timing/
-     *                                                      sleep-based test; Phase 1B.7E's
-     *                                                      EnrollmentRolloverController bounds one synchronous
-     *                                                      HTTP request to a server-owned Item cap, since no
-     *                                                      queue exists yet) -- never exposed to an HTTP caller
-     *                                                      as a parameter itself.
+     *                                                      processing immediately. Sanctioned callers: Phase
+     *                                                      1B.7D's own tests deterministically simulate a
+     *                                                      crashed/interrupted process without any timing/
+     *                                                      sleep-based test; Phase 1B.7E's JSON API controller
+     *                                                      and Phase 1B.7F's Inertia web controller both bound
+     *                                                      one synchronous HTTP request to the SAME server-owned
+     *                                                      Item cap (App\Support\Rollover\BoundsRolloverExecutionRequest),
+     *                                                      since no queue exists yet -- never exposed to a
+     *                                                      caller as a parameter itself.
      * @return array{total: int, succeeded: int, reconciled: int, skipped: int, failed: int, pending: int, planStatus: string}
      */
     public function start(EnrollmentRolloverPlan $plan, ?User $actor = null, int $batchSize = self::DEFAULT_BATCH_SIZE, ?callable $afterEachItem = null): array

@@ -108,4 +108,43 @@ class EnrollmentRolloverReadService
             'pending' => $total - $succeeded - $reconciled - $skipped - $failed,
         ];
     }
+
+    /**
+     * Phase 1B.7F: the LAST persisted dry-run classification per Item
+     * (`validation_result`), grouped -- distinct from `executionSummary()`
+     * above (a different dimension: what execution actually DID, vs
+     * what validation PROPOSED). Needed by the "high-risk execution
+     * review" panel (this checkpoint's brief, section 42) to show
+     * Ready/Excluded/Already-enrolled/Review/Blocked counts BEFORE
+     * Start is offered -- `EnrollmentRolloverDryRunService::run()`'s own
+     * return value only exists transiently, right after a validate()
+     * call; this recomputes it fresh from persisted Items so the
+     * Plan-detail page reflects the LAST validation result even after a
+     * fresh page load. A plain read-only aggregate COUNT query, not a
+     * re-evaluation -- never re-runs dry-run's own classification
+     * logic.
+     *
+     * @return array{total: int, ready: int, excluded: int, already_enrolled: int, review: int, blocked: int, unvalidated: int}
+     */
+    public function validationSummary(EnrollmentRolloverPlan $plan): array
+    {
+        $counts = DB::table('enrollment_rollover_items')
+            ->where('plan_id', $plan->id)
+            ->selectRaw('validation_result, count(*) as c')
+            ->groupBy('validation_result')
+            ->get()
+            ->mapWithKeys(fn ($row) => [$row->validation_result ?? 'unvalidated' => (int) $row->c]);
+
+        $total = (int) $counts->sum();
+
+        return [
+            'total' => $total,
+            'ready' => $counts->get('ready', 0),
+            'excluded' => $counts->get('excluded', 0),
+            'already_enrolled' => $counts->get('already_enrolled', 0),
+            'review' => $counts->get('review', 0),
+            'blocked' => $counts->get('blocked', 0),
+            'unvalidated' => $counts->get('unvalidated', 0),
+        ];
+    }
 }

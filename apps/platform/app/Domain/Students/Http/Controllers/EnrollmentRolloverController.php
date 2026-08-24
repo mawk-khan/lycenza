@@ -14,6 +14,7 @@ use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Rollover\BoundsRolloverExecutionRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -44,23 +45,7 @@ use Illuminate\Validation\Rule;
  */
 class EnrollmentRolloverController extends Controller
 {
-    use AuthorizesCapability;
-
-    /**
-     * Server-owned bound on how many Items ONE HTTP call to start()/
-     * resume() will process before returning -- never caller-controlled
-     * (this checkpoint's brief, sections 33/34/92). A Plan with more
-     * pending Items than this simply returns with the Plan still
-     * `executing`; the client calls resume() again to continue. This is
-     * NOT a redesign of the 1B.7D orchestrator -- it reuses that
-     * service's own existing `$afterEachItem` extension point (Phase
-     * 1B.7D's deterministic-interruption test seam) for its OTHER
-     * legitimate purpose: bounding a single synchronous HTTP request's
-     * duration now that a real caller (this controller) exists. See
-     * EnrollmentRolloverExecutionService::start()'s own updated
-     * docblock.
-     */
-    private const MAX_ITEMS_PER_REQUEST = 100;
+    use AuthorizesCapability, BoundsRolloverExecutionRequest;
 
     // --- Directory / detail --------------------------------------------
 
@@ -197,17 +182,6 @@ class EnrollmentRolloverController extends Controller
         $summary = $execution->resume($plan, $request->user(), afterEachItem: $this->stopAfterItemCap());
 
         return response()->json(['data' => $summary]);
-    }
-
-    private function stopAfterItemCap(): callable
-    {
-        $processed = 0;
-
-        return function () use (&$processed) {
-            $processed++;
-
-            return $processed >= self::MAX_ITEMS_PER_REQUEST;
-        };
     }
 
     // --- Presentation -----------------------------------------------------
