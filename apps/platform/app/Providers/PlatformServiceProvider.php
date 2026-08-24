@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
+use App\Domain\Communications\Application\Audience\GradeAudienceResolver;
 use App\Domain\Communications\Application\Audience\GuardianAudienceResolver;
 use App\Domain\Communications\Application\Audience\GuardiansOfStudentsAudienceResolver;
 use App\Domain\Communications\Application\Audience\IndividualMembersAudienceResolver;
 use App\Domain\Communications\Application\Audience\SchoolWideAudienceResolver;
+use App\Domain\Communications\Application\Audience\SectionAudienceResolver;
 use App\Domain\Communications\Application\Audience\StudentAudienceResolver;
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
 use App\Domain\Communications\Application\Channels\EmailChannelDriver;
@@ -68,6 +70,8 @@ class PlatformServiceProvider extends ServiceProvider
             $registry->register($app->make(StudentAudienceResolver::class));
             $registry->register($app->make(GuardianAudienceResolver::class));
             $registry->register($app->make(GuardiansOfStudentsAudienceResolver::class));
+            $registry->register($app->make(GradeAudienceResolver::class));
+            $registry->register($app->make(SectionAudienceResolver::class));
 
             return $registry;
         });

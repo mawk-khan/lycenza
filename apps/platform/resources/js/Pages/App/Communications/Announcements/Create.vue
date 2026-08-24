@@ -9,12 +9,18 @@ interface TemplatePrefill {
     priority: string | null;
 }
 
+interface CurrentAcademicYear {
+    id: string;
+    label: string;
+}
+
 interface Props {
     emailChannelEnabled: boolean;
     schoolTimezone: string;
     canMarkRequired: boolean;
     canDispatchEmergency: boolean;
     template: TemplatePrefill | null;
+    currentAcademicYear: CurrentAcademicYear | null;
 }
 
 const props = defineProps<Props>();
@@ -31,7 +37,13 @@ interface DomainTarget {
 }
 
 const audienceType = ref<
-    'school_wide' | 'individual' | 'student' | 'guardian' | 'guardians_of_students'
+    | 'school_wide'
+    | 'individual'
+    | 'student'
+    | 'guardian'
+    | 'guardians_of_students'
+    | 'grade'
+    | 'section'
 >('school_wide');
 const memberIds = ref('');
 
@@ -99,7 +111,69 @@ watch(audienceType, () => {
     selectedDomainTargets.value = [];
     domainResults.value = [];
     domainQuery.value = '';
+    selectedCohort.value = null;
+    cohortResults.value = [];
+    cohortQuery.value = '';
 });
+
+// Phase 5B.3 §6/§7/§34: the Grade/Section academic-cohort picker --
+// mirrors the Student/Guardian search-then-select pattern above.
+// `recipientKind` ('student'|'guardian') is a field on the single
+// cohort selection, not a separate audience type (brief §5's
+// composable-model decision -- see CommunicationAudienceType's
+// docblock).
+interface CohortTarget {
+    id: string;
+    label: string;
+}
+
+const cohortRecipientKind = ref<'student' | 'guardian'>('student');
+const selectedCohort = ref<CohortTarget | null>(null);
+const cohortQuery = ref('');
+const cohortResults = ref<CohortTarget[]>([]);
+const cohortSearching = ref(false);
+let cohortSearchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+function cohortSearchEndpoint(): string | null {
+    if (audienceType.value === 'grade') {
+        return '/app/communications/audience/grade-levels/search';
+    }
+    if (audienceType.value === 'section') {
+        return '/app/communications/audience/sections/search';
+    }
+    return null;
+}
+
+function searchCohort() {
+    const endpoint = cohortSearchEndpoint();
+    clearTimeout(cohortSearchDebounce);
+    if (endpoint === null || !props.currentAcademicYear) {
+        cohortResults.value = [];
+        return;
+    }
+    cohortSearchDebounce = setTimeout(async () => {
+        cohortSearching.value = true;
+        try {
+            const params = new URLSearchParams({ q: cohortQuery.value.trim() });
+            if (audienceType.value === 'section') {
+                params.set('academic_year_id', props.currentAcademicYear!.id);
+            }
+            const response = await fetch(`${endpoint}?${params.toString()}`, {
+                headers: { Accept: 'application/json' },
+            });
+            const body = await response.json();
+            cohortResults.value = (body.gradeLevels ?? body.sections ?? []) as CohortTarget[];
+        } finally {
+            cohortSearching.value = false;
+        }
+    }, 250);
+}
+
+function selectCohort(target: CohortTarget) {
+    selectedCohort.value = target;
+    cohortResults.value = [];
+    cohortQuery.value = '';
+}
 const emailSelected = ref(false);
 const requirement = ref<'optional' | 'required'>('optional');
 // Phase 5A.10 §40: never a default -- always an explicit choice, and
@@ -141,6 +215,19 @@ function submit() {
                 audienceType.value === 'guardians_of_students'
                     ? selectedDomainTargets.value.map((t) => t.id)
                     : [],
+            academic_cohort:
+                (audienceType.value === 'grade' || audienceType.value === 'section') &&
+                props.currentAcademicYear &&
+                selectedCohort.value
+                    ? {
+                          academic_year_id: props.currentAcademicYear.id,
+                          grade_level_id:
+                              audienceType.value === 'grade' ? selectedCohort.value.id : null,
+                          section_id:
+                              audienceType.value === 'section' ? selectedCohort.value.id : null,
+                          recipient_kind: cohortRecipientKind.value,
+                      }
+                    : undefined,
             channels:
                 props.emailChannelEnabled && emailSelected.value ? ['in_app', 'email'] : ['in_app'],
             source_template_id: props.template?.id ?? null,
@@ -218,7 +305,17 @@ function submit() {
                     <option value="student">Students</option>
                     <option value="guardian">Guardians</option>
                     <option value="guardians_of_students">Guardians of Selected Students</option>
+                    <option value="grade" :disabled="!currentAcademicYear">
+                        Grade (Academic Cohort)
+                    </option>
+                    <option value="section" :disabled="!currentAcademicYear">
+                        Section (Academic Cohort)
+                    </option>
                 </select>
+                <p v-if="!currentAcademicYear" class="mt-1 text-xs text-slate-400">
+                    Grade/Section audiences are unavailable -- this school has no active academic
+                    year set.
+                </p>
             </div>
 
             <div v-if="audienceType === 'individual'">
@@ -296,6 +393,88 @@ function submit() {
                             {{ result.label }}
                         </li>
                     </ul>
+                </div>
+            </div>
+
+            <div
+                v-if="
+                    (audienceType === 'grade' || audienceType === 'section') && currentAcademicYear
+                "
+            >
+                <label class="block text-xs font-medium text-slate-500">
+                    {{ audienceType === 'grade' ? 'Grade' : 'Section' }}
+                </label>
+                <p class="mt-1 text-xs text-slate-400">
+                    Academic year: {{ currentAcademicYear.label }}. Recipients are the Students
+                    currently enrolled in this {{ audienceType === 'grade' ? 'Grade' : 'Section' }}
+                    for this academic year -- resolved fresh again at publication (and, for a
+                    scheduled announcement, again at the scheduled time), never fixed to who's
+                    enrolled today.
+                </p>
+
+                <div v-if="selectedCohort" class="mt-2 flex items-center gap-1">
+                    <span
+                        class="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                    >
+                        {{ selectedCohort.label }}
+                        <button
+                            type="button"
+                            class="text-slate-400 hover:text-slate-700"
+                            @click="selectedCohort = null"
+                        >
+                            ×
+                        </button>
+                    </span>
+                </div>
+                <div v-else class="relative mt-1">
+                    <input
+                        v-model="cohortQuery"
+                        type="text"
+                        :placeholder="
+                            audienceType === 'grade' ? 'Search grades…' : 'Search sections…'
+                        "
+                        class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        @focus="searchCohort"
+                        @input="searchCohort"
+                    />
+                    <ul
+                        v-if="cohortResults.length > 0"
+                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    >
+                        <li
+                            v-for="result in cohortResults"
+                            :key="result.id"
+                            class="cursor-pointer px-2 py-1 hover:bg-slate-50"
+                            @click="selectCohort(result)"
+                        >
+                            {{ result.label }}
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="mt-2 space-y-1 text-sm text-slate-600">
+                    <label class="flex items-center gap-2">
+                        <input
+                            v-model="cohortRecipientKind"
+                            type="radio"
+                            value="student"
+                            class="border-slate-300"
+                        />
+                        Students
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input
+                            v-model="cohortRecipientKind"
+                            type="radio"
+                            value="guardian"
+                            class="border-slate-300"
+                        />
+                        Guardians
+                    </label>
+                    <p v-if="cohortRecipientKind === 'guardian'" class="text-xs text-slate-400">
+                        Only each Student's primary or legal Guardian is included. A Guardian shared
+                        by multiple Students in this cohort is targeted once.
+                    </p>
                 </div>
             </div>
 
@@ -416,7 +595,8 @@ function submit() {
                 :disabled="
                     submitting ||
                     (dispatchMode === 'emergency' &&
-                        (!emergencyJustification.trim() || !emergencyAcknowledged))
+                        (!emergencyJustification.trim() || !emergencyAcknowledged)) ||
+                    ((audienceType === 'grade' || audienceType === 'section') && !selectedCohort)
                 "
                 class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >

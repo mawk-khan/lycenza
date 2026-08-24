@@ -2,6 +2,8 @@
 
 namespace App\Domain\Communications\Http\Controllers;
 
+use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
@@ -76,6 +78,80 @@ class CommunicationAudienceSearchController extends Controller
             'guardians' => $guardians->map(fn (Guardian $g) => [
                 'id' => $g->id,
                 'label' => trim("{$g->first_name} {$g->last_name}"),
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Phase 5B.3 §6/§34: the Announcement composer's GradeLevel
+     * cohort-picker search -- same shape/gate as students()/guardians()
+     * above. GradeLevel is School-wide reference data (not
+     * AcademicYear-scoped), so no academic_year_id filter applies here;
+     * `syncAcademicCohort()` is what actually ties a selection to an
+     * AcademicYear.
+     */
+    public function gradeLevels(Request $request, TenantContext $context): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.announce', $school);
+
+        $q = trim((string) $request->string('q'));
+
+        $gradeLevels = GradeLevel::query()
+            ->where('school_id', $school->id)
+            ->where('status', 'active')
+            ->when($q !== '', fn ($query) => $query
+                ->where(fn ($query) => $query
+                    ->where('name', 'ilike', "%{$q}%")
+                    ->orWhere('code', 'ilike', "%{$q}%")))
+            ->orderBy('sequence')
+            ->limit(20)
+            ->get(['id', 'name', 'code']);
+
+        return response()->json([
+            'gradeLevels' => $gradeLevels->map(fn (GradeLevel $g) => [
+                'id' => $g->id,
+                'label' => "{$g->name} ({$g->code})",
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Phase 5B.3 §7/§34: the Announcement composer's Section
+     * cohort-picker search. `academic_year_id` is required -- a Section
+     * belongs to exactly one AcademicYear, so an unscoped search would
+     * be meaningless (and could otherwise surface a prior year's
+     * Section, which syncAcademicCohort() would then reject anyway).
+     */
+    public function sections(Request $request, TenantContext $context): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.announce', $school);
+
+        $academicYearId = trim((string) $request->string('academic_year_id'));
+        $q = trim((string) $request->string('q'));
+
+        if ($academicYearId === '') {
+            return response()->json(['sections' => []]);
+        }
+
+        $sections = Section::query()
+            ->where('school_id', $school->id)
+            ->where('academic_year_id', $academicYearId)
+            ->where('status', 'active')
+            ->with('gradeLevel:id,name')
+            ->when($q !== '', fn ($query) => $query
+                ->where(fn ($query) => $query
+                    ->where('name', 'ilike', "%{$q}%")
+                    ->orWhere('code', 'ilike', "%{$q}%")))
+            ->orderBy('name')
+            ->limit(20)
+            ->get(['id', 'name', 'code', 'grade_level_id']);
+
+        return response()->json([
+            'sections' => $sections->map(fn (Section $s) => [
+                'id' => $s->id,
+                'label' => $s->gradeLevel !== null ? "{$s->gradeLevel->name} - {$s->name} ({$s->code})" : "{$s->name} ({$s->code})",
             ])->values(),
         ]);
     }

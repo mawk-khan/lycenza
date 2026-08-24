@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -127,6 +128,19 @@ class CommunicationAnnouncement extends Model
     public function domainAudienceMembers(): HasMany
     {
         return $this->hasMany(CommunicationAnnouncementDomainAudienceMember::class, 'announcement_id');
+    }
+
+    /**
+     * Phase 5B.3 -- the authored `grade`/`section` cohort definition,
+     * parallel to domainAudienceMembers() above (which serves
+     * `student`/`guardian`/`guardians_of_students`). At most one row
+     * per announcement (database-enforced unique `announcement_id`).
+     *
+     * @return HasOne<CommunicationAnnouncementAcademicCohort, $this>
+     */
+    public function academicCohort(): HasOne
+    {
+        return $this->hasOne(CommunicationAnnouncementAcademicCohort::class, 'announcement_id');
     }
 
     /** @return HasMany<CommunicationAnnouncementRecipient, $this> */

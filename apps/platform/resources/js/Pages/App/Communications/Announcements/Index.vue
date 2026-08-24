@@ -36,6 +36,8 @@ const AUDIENCE_LABELS: Record<string, string> = {
     student: 'Students',
     guardian: 'Guardians',
     guardians_of_students: 'Guardians of Selected Students',
+    grade: 'Grade (Academic Cohort)',
+    section: 'Section (Academic Cohort)',
 };
 
 function audienceLabel(type: string): string {

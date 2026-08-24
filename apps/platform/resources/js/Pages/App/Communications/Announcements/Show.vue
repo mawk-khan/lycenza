@@ -34,11 +34,21 @@ interface DomainAudiencePreview {
     guardianEmailUnavailable: number;
 }
 
+interface AcademicCohortPreview {
+    cohortType: string;
+    gradeLevelName: string | null;
+    sectionName: string | null;
+    academicYearLabel: string | null;
+    recipientKind: string;
+    isDynamic: boolean;
+}
+
 interface AudiencePreview {
     count: number;
     categoryBreakdown: Record<string, number>;
     email: EmailEligibility | null;
     domain: DomainAudiencePreview | null;
+    academicCohort: AcademicCohortPreview | null;
 }
 
 interface ChannelDeliveryRow {
@@ -476,9 +486,40 @@ function formatFileSize(bytes: number): string {
                         student: 'Students',
                         guardian: 'Guardians',
                         guardians_of_students: 'Guardians of Selected Students',
+                        grade: 'Grade (Academic Cohort)',
+                        section: 'Section (Academic Cohort)',
                     }[announcement.audienceType] ?? announcement.audienceType
                 }}
             </p>
+
+            <div v-if="preview.academicCohort" class="mt-2 rounded bg-slate-50 p-2 text-xs">
+                <p class="text-slate-600">
+                    <span v-if="preview.academicCohort.cohortType === 'grade_level'">
+                        Grade: {{ preview.academicCohort.gradeLevelName }}
+                    </span>
+                    <span v-else> Section: {{ preview.academicCohort.sectionName }} </span>
+                    <span v-if="preview.academicCohort.academicYearLabel">
+                        &middot; {{ preview.academicCohort.academicYearLabel }}</span
+                    >
+                    &middot;
+                    {{
+                        preview.academicCohort.recipientKind === 'guardian'
+                            ? 'Guardians'
+                            : 'Students'
+                    }}
+                </p>
+                <p class="mt-1 text-slate-400">
+                    Recipient counts reflect current enrollment and are re-resolved again at
+                    publication{{
+                        announcement.status === 'scheduled'
+                            ? ' (and again at the scheduled send time)'
+                            : ''
+                    }}
+                    -- a Student who joins or leaves this Grade/Section before then changes who
+                    actually receives this message.
+                </p>
+            </div>
+
             <p class="mt-2 text-sm">Estimated recipients: {{ preview.count }}</p>
             <ul
                 v-if="Object.keys(preview.categoryBreakdown).length > 0"

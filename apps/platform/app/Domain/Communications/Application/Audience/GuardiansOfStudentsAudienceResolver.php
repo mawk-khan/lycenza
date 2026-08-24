@@ -13,27 +13,17 @@ use Illuminate\Support\Facades\DB;
  * (`student_id` rows -- the INPUT is Students, the OUTPUT is their
  * Guardians) for `audience_type = guardians_of_students`.
  *
- * Relationship-eligibility rule (documented, deliberately narrow --
- * brief §13's "if product semantics are ambiguous, defer rather than
- * guess"): a StudentGuardianRelationship is considered eligible for
- * general school communication only when `is_primary = true` OR
- * `is_legal_guardian = true`. A relationship that is ONLY
- * `is_emergency_contact`/`is_authorized_pickup` (and neither primary
- * nor legal) is excluded -- those flags authorize contact in an
- * emergency/pickup context specifically, not routine school
- * communication, and conflating them would silently over-notify
- * someone the school never intended as a general communication
- * recipient. See docs/communication-hub/
- * PHASE-5B-1-STUDENT-GUARDIAN-AUDIENCE-REACHABILITY.md §11.
- *
- * A Guardian related to multiple selected Students collapses to ONE
- * logical recipient -- the `distinct()` on `g.id` below, exactly
- * mirroring GuardianAudienceResolver's own single-Guardian-per-row
- * output shape.
+ * Phase 5B.3 §10: the actual Student-ids-to-Guardian-ids projection
+ * (relationship eligibility + dedup) now lives in the shared
+ * GuardianProjectionResolver, reused by GradeAudienceResolver/
+ * SectionAudienceResolver too rather than triplicated.
  */
 class GuardiansOfStudentsAudienceResolver implements CommunicationAudienceResolver
 {
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly GuardianProjectionResolver $guardianProjection,
+    ) {}
 
     public function type(): CommunicationAudienceType
     {
@@ -42,25 +32,21 @@ class GuardiansOfStudentsAudienceResolver implements CommunicationAudienceResolv
 
     public function resolve(CommunicationAnnouncement $announcement): ResolvedAudience
     {
-        return $this->context->withSchool($announcement->school, function () use ($announcement) {
-            $guardianIds = DB::table('communication_announcement_domain_audience_members as caddam')
-                ->join('students as s', 's.id', '=', 'caddam.student_id')
-                ->join('student_guardian_relationships as sgr', 'sgr.student_id', '=', 's.id')
-                ->join('guardians as g', 'g.id', '=', 'sgr.guardian_id')
-                ->where('caddam.announcement_id', $announcement->id)
-                ->where('caddam.school_id', $announcement->school_id)
-                ->where('s.status', 'active')
-                ->where('g.status', 'active')
-                ->where(fn ($query) => $query->where('sgr.is_primary', true)->orWhere('sgr.is_legal_guardian', true))
-                ->distinct()
-                ->pluck('g.id')
-                ->all();
+        $studentIds = $this->context->withSchool($announcement->school, fn () => DB::table('communication_announcement_domain_audience_members as caddam')
+            ->join('students as s', 's.id', '=', 'caddam.student_id')
+            ->where('caddam.announcement_id', $announcement->id)
+            ->where('caddam.school_id', $announcement->school_id)
+            ->where('s.status', 'active')
+            ->distinct()
+            ->pluck('s.id')
+            ->all());
 
-            return new ResolvedAudience(
-                userIds: [],
-                categoryBreakdown: $guardianIds === [] ? [] : ['Guardians of Selected Students' => count($guardianIds)],
-                guardianIds: $guardianIds,
-            );
-        });
+        $guardianIds = $this->guardianProjection->forStudentIds($announcement->school, $studentIds);
+
+        return new ResolvedAudience(
+            userIds: [],
+            categoryBreakdown: $guardianIds === [] ? [] : ['Guardians of Selected Students' => count($guardianIds)],
+            guardianIds: $guardianIds,
+        );
     }
 }

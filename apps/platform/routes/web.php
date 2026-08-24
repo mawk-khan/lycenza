@@ -262,6 +262,12 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/audience/students/search', [CommunicationAudienceSearchController::class, 'students'])->name('audience.students.search');
         Route::get('/audience/guardians/search', [CommunicationAudienceSearchController::class, 'guardians'])->name('audience.guardians.search');
 
+        // Phase 5B.3 §6/§7/§34: the Announcement composer's Grade/
+        // Section academic-cohort picker search -- same registration
+        // reasoning as 'audience/students|guardians/search' above.
+        Route::get('/audience/grade-levels/search', [CommunicationAudienceSearchController::class, 'gradeLevels'])->name('audience.grade-levels.search');
+        Route::get('/audience/sections/search', [CommunicationAudienceSearchController::class, 'sections'])->name('audience.sections.search');
+
         // Phase 5A.11 §25/§32: the School-wide operational delivery
         // overview -- registered BEFORE the '/{thread}' wildcard below,
         // same reasoning as every other literal-segment route in this

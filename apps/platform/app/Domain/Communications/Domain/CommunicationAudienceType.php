@@ -17,6 +17,17 @@ namespace App\Domain\Communications\Domain;
  * Student/Guardian domain identities established by Phase 1A. See
  * docs/communication-hub/
  * PHASE-5B-1-STUDENT-GUARDIAN-AUDIENCE-REACHABILITY.md.
+ *
+ * Phase 5B.3 adds `Grade`/`Section` -- academic-cohort audiences
+ * resolved against Phase 1B's `student_enrollments` (current
+ * placement). Deliberately NOT four separate cases (no
+ * `GuardiansOfGrade`/`GuardiansOfSection`) -- the Student-vs-Guardian
+ * projection is a `recipient_kind` field on the authored cohort
+ * definition (`communication_announcement_academic_cohorts`), not a
+ * distinct audience type, keeping the composable model brief §5
+ * calls for. There is no independent Class entity in the current
+ * academic model (GradeLevel/Section are it) -- see
+ * docs/communication-hub/PHASE-5B-3-ACADEMIC-COHORT-AUDIENCES.md.
  */
 enum CommunicationAudienceType: string
 {
@@ -25,4 +36,6 @@ enum CommunicationAudienceType: string
     case Student = 'student';
     case Guardian = 'guardian';
     case GuardiansOfStudents = 'guardians_of_students';
+    case Grade = 'grade';
+    case Section = 'section';
 }

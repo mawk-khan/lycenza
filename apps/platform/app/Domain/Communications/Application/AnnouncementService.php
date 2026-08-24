@@ -2,7 +2,11 @@
 
 namespace App\Domain\Communications\Application;
 
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
+use App\Domain\Communications\Application\Audience\AcademicCohortSelection;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
@@ -12,6 +16,7 @@ use App\Domain\Communications\Application\Exceptions\EmergencyCannotBeScheduledE
 use App\Domain\Communications\Application\Exceptions\EmergencyJustificationRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmergencyMustBeRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmptyAudienceException;
+use App\Domain\Communications\Application\Exceptions\InvalidAcademicCohortException;
 use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransitionException;
 use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberException;
 use App\Domain\Communications\Application\Exceptions\InvalidScheduledTimeException;
@@ -21,6 +26,7 @@ use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPoli
 use App\Domain\Communications\Application\Policy\CommunicationPolicyReason;
 use App\Domain\Communications\Application\Policy\CommunicationTimingDecision;
 use App\Domain\Communications\Application\Policy\CommunicationTimingReason;
+use App\Domain\Communications\Domain\CommunicationAcademicCohortType;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationDispatchMode;
@@ -31,6 +37,7 @@ use App\Domain\Communications\Events\CommunicationAnnouncementCreated;
 use App\Domain\Communications\Events\CommunicationAnnouncementPublished;
 use App\Domain\Communications\Events\CommunicationAnnouncementScheduled;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
+use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAcademicCohort;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementDomainAudienceMember;
@@ -133,6 +140,7 @@ class AnnouncementService
         CommunicationDispatchMode $dispatchMode = CommunicationDispatchMode::Standard,
         ?string $emergencyJustification = null,
         array $domainAudienceMemberIds = [],
+        ?AcademicCohortSelection $academicCohort = null,
     ): CommunicationAnnouncement {
         // Phase 5A.10 §6/§23: validated BEFORE any write, independent
         // of whatever the controller already validated -- an
@@ -144,7 +152,7 @@ class AnnouncementService
         // re-checked in this service.
         $this->assertValidDispatchMode($dispatchMode, $requirement, $emergencyJustification);
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement, $dispatchMode, $emergencyJustification, $domainAudienceMemberIds) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement, $dispatchMode, $emergencyJustification, $domainAudienceMemberIds, $academicCohort) {
             $isEmergency = $dispatchMode === CommunicationDispatchMode::Emergency;
 
             $announcement = CommunicationAnnouncement::query()->create([
@@ -172,6 +180,10 @@ class AnnouncementService
                 $this->syncDomainAudienceMembers($announcement, $audienceType, $domainAudienceMemberIds);
             }
 
+            if ($this->isAcademicCohortAudienceType($audienceType)) {
+                $this->syncAcademicCohort($announcement, $audienceType, $academicCohort);
+            }
+
             $this->syncChannels($announcement, $channels);
 
             $this->audit->school($school, 'announcement.created', actor: $creator, subject: $announcement, metadata: [
@@ -191,11 +203,8 @@ class AnnouncementService
     /**
      * @param  array<int, string>|null  $individualMemberUserIds  null leaves the current member list untouched
      * @param  array<int, CommunicationChannel>|null  $channels  null leaves the current channel selection untouched
-     */
-    /**
-     * @param  array<int, string>|null  $individualMemberUserIds  null leaves the current member list untouched
-     * @param  array<int, CommunicationChannel>|null  $channels  null leaves the current channel selection untouched
      * @param  array<int, string>|null  $domainAudienceMemberIds  null leaves the current domain-audience selection untouched
+     * @param  AcademicCohortSelection|null  $academicCohort  null leaves the current academic-cohort selection untouched
      */
     public function updateDraft(
         CommunicationAnnouncement $announcement,
@@ -209,8 +218,9 @@ class AnnouncementService
         ?CommunicationDispatchMode $dispatchMode = null,
         ?string $emergencyJustification = null,
         ?array $domainAudienceMemberIds = null,
+        ?AcademicCohortSelection $academicCohort = null,
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification, $domainAudienceMemberIds) {
+        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification, $domainAudienceMemberIds, $academicCohort) {
             // Phase 5A.4 §31: a SCHEDULED announcement remains editable
             // up until it is claimed for publication -- the exact same
             // content-editing rules as a draft (its own canonical
@@ -237,7 +247,7 @@ class AnnouncementService
 
             $this->assertValidDispatchMode($effectiveDispatchMode, $effectiveRequirement, $effectiveJustification);
 
-            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification, $effectiveRequirement, $domainAudienceMemberIds) {
+            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification, $effectiveRequirement, $domainAudienceMemberIds, $academicCohort) {
                 $updates = array_filter([
                     'title' => $title,
                     'body' => $body,
@@ -283,6 +293,10 @@ class AnnouncementService
 
                 if ($domainAudienceMemberIds !== null && $this->isDomainAudienceType($announcement->audienceTypeEnum())) {
                     $this->syncDomainAudienceMembers($announcement, $announcement->audienceTypeEnum(), $domainAudienceMemberIds);
+                }
+
+                if ($academicCohort !== null && $this->isAcademicCohortAudienceType($announcement->audienceTypeEnum())) {
+                    $this->syncAcademicCohort($announcement, $announcement->audienceTypeEnum(), $academicCohort);
                 }
 
                 if ($channels !== null) {
@@ -1006,6 +1020,109 @@ class AnnouncementService
         if ($rows !== []) {
             CommunicationAnnouncementDomainAudienceMember::query()->insert($rows);
         }
+    }
+
+    /**
+     * Phase 5B.3 §6/§7: is this audience type an academic-cohort type
+     * (`grade`/`section`)? Parallel to isDomainAudienceType() above.
+     */
+    private function isAcademicCohortAudienceType(CommunicationAudienceType $type): bool
+    {
+        return in_array($type, [
+            CommunicationAudienceType::Grade,
+            CommunicationAudienceType::Section,
+        ], true);
+    }
+
+    /**
+     * Phase 5B.3 §6/§7/§31: validates and persists the authored
+     * academic-cohort selection for `audience_type = grade`/`section`.
+     * Root CLAUDE.md rule 19 applied to cohort selection: a
+     * caller-supplied AcademicYear/GradeLevel/Section id is never
+     * trusted at face value -- each is re-verified to belong to
+     * $announcement->school_id here, at authoring time, even though
+     * the composite `(id, school_id)` foreign keys on
+     * communication_announcement_academic_cohorts would also reject a
+     * genuinely cross-School id at INSERT time. A Section's own
+     * academic_year_id is additionally cross-checked against the
+     * caller-supplied academic_year_id (brief §7) so a Section can
+     * never be silently paired with the wrong AcademicYear.
+     *
+     * Only the cohort DEFINITION is persisted here -- no Student/
+     * Guardian id is resolved or stored (brief §3/§31): resolution
+     * happens fresh, every time, in GradeAudienceResolver/
+     * SectionAudienceResolver.
+     */
+    private function syncAcademicCohort(CommunicationAnnouncement $announcement, CommunicationAudienceType $type, ?AcademicCohortSelection $selection): void
+    {
+        if ($selection === null) {
+            throw new InvalidAcademicCohortException;
+        }
+
+        $expectedCohortType = $type === CommunicationAudienceType::Grade
+            ? CommunicationAcademicCohortType::GradeLevel
+            : CommunicationAcademicCohortType::Section;
+
+        if ($selection->cohortType !== $expectedCohortType) {
+            throw new InvalidAcademicCohortException;
+        }
+
+        $academicYearExists = AcademicYear::query()
+            ->where('school_id', $announcement->school_id)
+            ->where('id', $selection->academicYearId)
+            ->exists();
+
+        if (! $academicYearExists) {
+            throw new InvalidAcademicCohortException;
+        }
+
+        if ($expectedCohortType === CommunicationAcademicCohortType::GradeLevel) {
+            if ($selection->gradeLevelId === null) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $gradeLevelExists = GradeLevel::query()
+                ->where('school_id', $announcement->school_id)
+                ->where('id', $selection->gradeLevelId)
+                ->where('status', 'active')
+                ->exists();
+
+            if (! $gradeLevelExists) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $gradeLevelId = $selection->gradeLevelId;
+            $sectionId = null;
+        } else {
+            if ($selection->sectionId === null) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $section = Section::query()
+                ->where('school_id', $announcement->school_id)
+                ->where('id', $selection->sectionId)
+                ->where('status', 'active')
+                ->first();
+
+            if ($section === null || $section->academic_year_id !== $selection->academicYearId) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $gradeLevelId = null;
+            $sectionId = $selection->sectionId;
+        }
+
+        CommunicationAnnouncementAcademicCohort::query()->where('announcement_id', $announcement->id)->delete();
+
+        CommunicationAnnouncementAcademicCohort::query()->create([
+            'school_id' => $announcement->school_id,
+            'announcement_id' => $announcement->id,
+            'cohort_type' => $expectedCohortType->value,
+            'academic_year_id' => $selection->academicYearId,
+            'grade_level_id' => $gradeLevelId,
+            'section_id' => $sectionId,
+            'recipient_kind' => $selection->recipientKind->value,
+        ]);
     }
 
     /**
