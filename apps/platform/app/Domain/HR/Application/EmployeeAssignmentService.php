@@ -91,6 +91,11 @@ class EmployeeAssignmentService
                 ]);
 
                 $this->audit->school($school, 'hr.assignment.created', actor: $actor, subject: $assignment, metadata: [
+                    // Phase 8A.11: employeeId added (purely additive, does
+                    // not change this event's existing semantics) so the
+                    // Employee Activity Timeline can resolve this event
+                    // directly from metadata.
+                    'employeeId' => $employment->employee_id,
                     'employmentRecordId' => $employment->id,
                     'positionId' => $position->id,
                     'departmentId' => $department?->id,
@@ -114,6 +119,8 @@ class EmployeeAssignmentService
                 $this->closureCascade->clearDanglingManagerReferences([$assignment->id]);
 
                 $this->audit->school($school, 'hr.assignment.ended', actor: $actor, subject: $assignment, metadata: [
+                    // Phase 8A.11: employeeId added, purely additive (see create()).
+                    'employeeId' => $assignment->employmentRecord->employee_id,
                     'employmentRecordId' => $assignment->employment_record_id,
                     'endsOn' => $endsOn,
                 ]);
@@ -154,6 +161,8 @@ class EmployeeAssignmentService
                 $assignment->update(['is_primary' => true]);
 
                 $this->audit->school($school, 'hr.assignment.primary_changed', actor: $actor, subject: $assignment, metadata: [
+                    // Phase 8A.11: employeeId added, purely additive (see create()).
+                    'employeeId' => $assignment->employmentRecord->employee_id,
                     'employmentRecordId' => $assignment->employment_record_id,
                 ]);
 

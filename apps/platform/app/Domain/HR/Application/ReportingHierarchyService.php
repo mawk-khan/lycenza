@@ -95,6 +95,11 @@ class ReportingHierarchyService
                 $subordinate->update(['manager_assignment_id' => $manager?->id]);
 
                 $this->audit->school($school, 'hr.assignment.manager_changed', actor: $actor, subject: $subordinate, metadata: [
+                    // Phase 8A.11: employeeId added, purely additive -- this
+                    // event belongs to the SUBORDINATE's Employee Activity
+                    // Timeline (whose reporting line changed), not the
+                    // manager's.
+                    'employeeId' => $subordinate->employmentRecord->employee_id,
                     'subordinateAssignmentId' => $subordinate->id,
                     'previousManagerAssignmentId' => $previousManagerId,
                     'newManagerAssignmentId' => $manager?->id,

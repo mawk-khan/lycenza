@@ -1765,6 +1765,343 @@ build any public/mobile API surface (8A.14's scope, unaffected by
 anything here beyond inheriting an already-authorization-aware service
 layer to build against).
 
+## Audit & Activity Timeline (8A.11, implemented)
+
+**`App\Models\SchoolAuditEvent`/`App\Support\Audit\AuditRecorder` remain
+the sole, authoritative audit store (ADR 0017) — this checkpoint adds
+NO second event/audit table.** `EmployeeActivityTimelineService` is a
+pure READ PROJECTION over the existing ledger: it never writes an audit
+event (reading the Timeline is itself never audited — see "Timeline
+reads are not audited" below), never mutates a historical row (the
+table is append-only at the database privilege level, ADR 0021 — an
+`UPDATE`/`DELETE` from the runtime role fails regardless of intent),
+and never normalizes or backfills old rows to make linkage easier.
+
+### Audit storage architecture (as inspected, not assumed)
+
+- **Table/model**: `school_audit_events` / `SchoolAuditEvent`.
+- **School ownership**: `school_id` (FK, RLS-scoped via
+  `App\Support\Tenancy\TenantRls::enable()`, `cascadeOnDelete`).
+- **Actor**: `actor_user_id`, nullable, `nullOnDelete` — a deleted User
+  leaves the audit row intact with a null actor, never a broken
+  reference.
+- **Subject/resource**: `subject_type` (nullable string, an Eloquent
+  FQCN) + `subject_id` (nullable uuid) — set whenever `AuditRecorder::school()`
+  is called with a `$subject` model.
+- **Metadata**: `jsonb`, nullable, cast to `array`.
+- **RLS**: enabled AND append-only (`TenantRls::makeAppendOnly()` —
+  `UPDATE`/`DELETE` revoked from the runtime `school_os_app` role at
+  the database privilege level, proven directly in
+  `tests/Feature/Audit/AuditImmutabilityTest.php`, already committed
+  before this checkpoint and not duplicated here).
+- **Indexes**: `school_id`; `(school_id, event_type)`; `occurred_at`.
+  No index exists on `subject_type`/`subject_id` or on any JSONB path —
+  see "Audit index decision" below for why none was added.
+- **Immutability**: enforced at the database privilege level, not just
+  by application convention — confirmed by inspection of the migration
+  and the existing `AuditImmutabilityTest`, not assumed.
+
+### Employee linkage strategy
+
+In the checkpoint brief's own required preference order:
+
+1. **Explicit Employee subject** — `subject_type = Employee::class AND
+   subject_id = $employee->id`. Used by `employee.created` and
+   `hr.employee_document.sensitive_viewed` (both audit calls already
+   passed the Employee itself as `$subject` since 8A.1/8A.10).
+2. **Explicit `metadata.employeeId`** — used by every other mapped HR
+   event. This was already present on ALL personal/professional/
+   document mutation events since 8A.2/8A.6/8A.7. This checkpoint found
+   five methods that carried only a child-resource id
+   (`employmentRecordId`/`subordinateAssignmentId`) and NOT
+   `employeeId`: `EmploymentService::update()`,
+   `EmployeeAssignmentService::create()/end()/setPrimary()`, and
+   `ReportingHierarchyService::setManager()`. Each got a narrow,
+   purely-additive metadata fix (`'employeeId' => ...`), forward-only —
+   no historical row was rewritten, no existing key was removed or
+   renamed, and every pre-existing assertion about these events'
+   metadata shape from 8A.4/8A.5's own tests still passes unchanged.
+   `setManager()`'s event belongs to the **subordinate's** Employee
+   Timeline specifically (whose reporting line changed), never the
+   manager's — proven directly
+   (`HrActivityTimelineLinkageTest::a_reporting_manager_change_resolves_to_the_subordinates_employee`).
+3. **Child-resource resolution** — not needed and not used. Option 2
+   alone, after the fix above, covers every mapped event type, so no
+   query ever joins through `EmploymentRecord`/`EmployeeAssignment` to
+   find an Employee id.
+
+`hr.department.*`/`hr.position.*` events are **never** Employee-linked
+— Department/Position are org-wide reference data, not per-Employee —
+and are correctly, structurally absent from `EVENT_CATEGORIES` (not
+filtered out at query time; they were never mapped in the first
+place).
+
+**No backfill.** An `hr.employment.updated`/`hr.assignment.*`/
+`hr.assignment.manager_changed` row written *before* this checkpoint's
+metadata fix lacks `metadata.employeeId` and will not appear in any
+Timeline — documented, accepted, fail-safe (exclude rather than guess),
+per the brief's own explicit instruction. In this repository's actual
+history there is no such pre-8A.11 data (Phase 8A has never run
+against real school data per root `CLAUDE.md` rule 16), so this is a
+theoretical-only gap, recorded for completeness rather than because it
+currently affects anyone.
+
+### HR audit event inventory (from actual code, by category)
+
+| Category | Event types |
+|---|---|
+| `employee` | `employee.created` |
+| `personal` | `employee.personal_details.updated`, `employee.address.{created,updated,removed}`, `employee.emergency_contact.{created,updated,removed,primary_changed}` |
+| `employment` | `hr.employment.{created,updated,ended}`, `hr.assignment.{created,ended,primary_changed}`, `hr.assignment.manager_changed` |
+| `professional` | `hr.qualification.{created,updated,removed,verified,rejected}`, `hr.experience.{created,updated,removed}`, `hr.certification.{created,updated,removed,verified,rejected}` |
+| `document` | `hr.employee_document.{created,updated,archived}` |
+| `sensitive_access` | `hr.employee_document.sensitive_viewed` |
+
+`hr.department.*`/`hr.position.*` are deliberately absent (not
+Employee-centric — see above). Any event name not in this table is
+**unmapped** and structurally cannot appear in any Timeline result,
+regardless of actor/capability (fail-closed by construction, not by a
+runtime check — see "Unknown/malformed event handling" below).
+
+### Actor ≠ subject Employee (the critical invariant)
+
+Timeline membership is decided **exclusively** by the linkage strategy
+above — `actor_user_id` is never consulted to decide which Employee's
+Timeline an event belongs to. `HrActivityTimelineLinkageTest::an_event_where_the_employees_linked_user_is_the_actor_but_not_the_subject_does_not_appear_on_the_actors_own_timeline`
+proves this directly: an HR staff member whose own `Employee` record
+exists performs a mutation on a *different* Employee — that event
+appears only on the target Employee's Timeline, never the actor's own,
+even though `employees.user_id` links the actor to a real Employee row
+in the same School.
+
+### Timeline read model
+
+`EmployeeActivityTimelineService` / `EmployeeActivityTimelineQuery` /
+`EmployeeActivityTimelineEntry` (all `App\Domain\HR\Application\*`,
+matching every other 8A.x read model's flat namespace convention).
+`EmployeeActivityTimelineEntry` is a DISCLOSURE PROJECTION exactly like
+`EmployeeDirectoryEntry`/`EmployeeProfileDocumentEntry` — never
+constructed from `$auditEvent->toArray()`. Its full, exhaustive field
+list: `id`, `eventType`, `category`, `occurredAt`, `actorUserId`,
+`actorDisplayName`, `changedFields` (`array<int,string>`). No raw
+`metadata` field exists on the DTO at all — `metadata` is read
+internally only to extract the single, always-safe `fields` key (a
+flat array of changed field *names*, never values, guaranteed by every
+writing service's own `array_keys($attributes)` construction) and,
+for document events only, the classification-evidence keys described
+below. Any other metadata key present on any event (past, present, or
+future) is silently ignored — this is what makes "unmapped event" and
+"unexpected metadata key" both fail closed by construction rather than
+by an enumerated exclusion list that could go stale.
+
+**Resource ids are deliberately NOT exposed** (brief section 50's
+"determine whether..." resolved to no, for this checkpoint) —
+`documentId`/`qualificationId`/etc. never leave `EmployeeActivityTimelineEntry`.
+This is a conservative scope reduction, not an oversight: it makes the
+"no forbidden-resource-id side channel" requirement trivially true by
+construction, and can be revisited in a later checkpoint if a
+navigation use case actually needs it. Actor email, login/security
+detail, and role/capability internals are similarly never exposed —
+only `actor_user_id` and a batch-resolved `actor_display_name`
+(`User.name`, resolved for every distinct non-null actor on the page
+in ONE `whereIn` query — never per-row). A missing/deleted actor
+(`actor_user_id IS NULL`, or a since-deleted User via the column's own
+`nullOnDelete`) yields `actorDisplayName: null`, never an error.
+
+### Authorization — base access and section-level categories
+
+**No new capability was created.** `hr.employees.personal.view` is the
+entry gate for the Timeline as a whole — identical to
+`EmployeeProfileWorkspaceService`'s 8A.10 entry gate, deliberately: the
+Timeline reveals granular Restricted-tier activity (arguably more
+revealing than the Profile Workspace itself, since it exposes *change
+history*, not just current state), so a Directory-only actor
+(`hr.employees.view`) must never reach it — proven
+(`HrDefaultDenyTest`-equivalent case in `HrActivityTimelineAuthorizationTest::directory_capability_alone_does_not_grant_timeline_access`).
+
+Beyond the entry gate, each category maps to the exact same 8A.10
+capability that already gates the equivalent Profile Workspace section
+— reusing the capability model wholesale, not inventing a parallel one:
+
+| Category | Additional capability required |
+|---|---|
+| `employee`, `personal` | none beyond the entry gate |
+| `employment` | `hr.employees.assignments.view` |
+| `professional` | `hr.employees.qualifications.view` |
+| `document` | `hr.employees.documents.view` (further gated per-event by classification, see below) |
+| `sensitive_access` | `hr.employees.sensitive.view` (independent of `.documents.view` — an actor could theoretically hold one without the other) |
+
+Filtering happens **before** any `EmployeeActivityTimelineEntry` is
+constructed: the actor's visible-category set is computed once, turned
+into a closed `event_type` allow-list, and that allow-list is applied
+as a SQL `WHERE event_type IN (...)` — a forbidden category's events
+are never fetched from the database at all, let alone serialized and
+then hidden.
+
+### Highly Sensitive document events — event-time classification, not current
+
+**The core safety requirement of this checkpoint.** `hr.employee_document.created`
+has always carried its classification tier in metadata (`classificationTier`,
+since 8A.7) — reliable event-time evidence, used directly.
+`hr.employee_document.updated`/`.archived` did **not** carry the
+resulting tier before this checkpoint (only `classificationChanged`,
+a boolean, on `updated`) — using the document's *current* tier for
+these would have been WRONG per the brief's own worked example (a
+document created `highly_sensitive`, later deliberately downgraded to
+`restricted`, would make an old `updated`/`archived` event about the
+Highly Sensitive period look safe using only current-state evidence).
+This checkpoint therefore added `'classificationTier' => $document->classification_tier`
+(the event-time/resulting tier) to both `update()` and `archive()`'s
+metadata — additive only, same reasoning as the `employeeId` fix above.
+
+**Sensitivity determination, from real event-time evidence, fail-closed
+where evidence is missing:**
+
+| Event | Sensitive iff |
+|---|---|
+| `hr.employee_document.created` | `metadata.classificationTier !== 'restricted'` (covers `highly_sensitive` and any missing/malformed value) |
+| `hr.employee_document.updated` | `metadata.classificationChanged !== false` **OR** `metadata.classificationTier !== 'restricted'` — a transition in EITHER direction is itself Highly Sensitive information (brief section 20), regardless of the resulting tier; a legacy row lacking `classificationChanged`/`classificationTier` fails closed (treated as sensitive) |
+| `hr.employee_document.archived` | `metadata.classificationTier !== 'restricted'` (missing evidence fails closed) |
+| `hr.employee_document.sensitive_viewed` | always sensitive, unconditionally |
+
+This exact logic is pushed into the SQL query itself (as `whereRaw`
+JSONB-path conditions, parameterized, no string interpolation of
+caller input) when the actor lacks `hr.employees.sensitive.view` — not
+applied by filtering an already-fetched PHP array — so pagination
+`total()` reflects VISIBLE events only (see "No count side-channel"
+below). Proven end-to-end with a full 5-event real history (restricted
+created → upgraded to highly_sensitive → sensitive-viewed → a further
+highly_sensitive edit → downgraded back to restricted):
+`hr.employees.documents.view`-only actor sees exactly 1 event (the
+original creation) with `total() === 1`; an actor additionally holding
+`hr.employees.sensitive.view` sees all 5 with `total() === 5`
+(`HrActivityTimelineSensitiveHistoryTest`). A negative control proves
+an ordinary non-classification-touching restricted-document edit is
+NOT swept up by the fail-closed rule.
+
+### No sensitive side-channel
+
+- **Counts**: a `hr.employees.documents.view`-only actor's result
+  never reflects the existence of hidden Highly Sensitive events in
+  its `total()` — proven directly, not just by absence of items.
+- **Category filter**: requesting `category=sensitive_access` (or any
+  structurally valid category the actor cannot see) yields the exact
+  same `total() === 0` result as requesting a category that
+  legitimately has zero events for that Employee — proven identical,
+  item-for-item
+  (`HrActivityTimelinePaginationTest::requesting_a_category_the_actor_cannot_see_yields_the_same_empty_result_as_a_category_with_no_events`).
+  An unrecognized (not just unauthorized) category string is treated
+  identically to "no filter" — never an error, never a distinguishing
+  signal.
+
+### Unknown/malformed event handling
+
+An event name absent from `EVENT_CATEGORIES` is excluded by
+construction (never enters the SQL `event_type IN (...)` allow-list) —
+proven with a real unmapped event carrying an otherwise-valid
+`metadata.employeeId` link, confirming the exclusion is about the
+event *name*, not the presence/absence of linkage
+(`HrActivityTimelineDisclosureTest::unmapped_event_names_never_pass_through_even_when_metadata_carries_a_valid_employee_link`).
+Null metadata, a non-array `fields` value, and a deleted actor are all
+tolerated without a 500, a cross-tenant lookup, or any raw-value
+leakage — each normalizes to a safe default (`changedFields: []`,
+`actorDisplayName: null`).
+
+### Ordering, pagination, filters, search
+
+- **Ordering**: `occurred_at DESC, id DESC` — deterministic, proven
+  stable across a real multi-event history.
+- **Pagination**: default 25, maximum 100
+  (`EmployeeActivityTimelineService::MAX_PER_PAGE`), clamped in
+  `EmployeeActivityTimelineQuery`'s constructor exactly like
+  `EmployeeDirectoryQuery`. Adjacent pages proven to never overlap or
+  drop an event under a stable dataset.
+- **Filters**: `category` (closed allow-list, invalid → no filter) and
+  `occurredFrom`/`occurredTo` — filtering `SchoolAuditEvent.occurred_at`
+  (when the action happened), never a domain effective date
+  (`Employment.starts_on`, `Certification.issued_on`, ...), per the
+  brief's explicit instruction.
+- **Search**: **NONE.** No free-text filter over any metadata field
+  exists or is planned — root `CLAUDE.md` rule 2 and this checkpoint's
+  own explicit "no raw-metadata search" instruction; category + date
+  range are the complete filter surface.
+
+### Tenant isolation / RLS vs authorization
+
+Every query is School-scoped (`where('school_id', $school->id)` plus
+the underlying RLS already proven for `school_audit_events`) and runs
+through the ordinary application DB connection — no privileged
+connection anywhere in this class. Both required cross-cutting proofs
+are explicit, separate tests: a same-School, RLS-visible Employee row
+is still denied without `hr.employees.personal.view`
+(`rls_visible_same_school_data_is_still_denied_without_the_capability`),
+and a capability granted in School A cannot reach a School B Employee's
+Timeline — resolved as `null`, the same tenant-safe result
+`EmployeeProfileWorkspaceService` already established for a
+cross-School id, never a distinguishing error
+(`a_capability_in_school_a_cannot_reach_a_school_b_employees_timeline`).
+
+### Performance
+
+One employee lookup, one `paginate()` call (which itself issues one
+`COUNT` and one page `SELECT`), and at most one batched
+`User::whereIn('id', ...)` actor-name lookup per page — never one query
+per event. Proven with a 25-event page under a real query-log
+assertion (`HrActivityTimelinePaginationTest::fetching_a_page_of_many_events_issues_a_bounded_number_of_queries`).
+
+### Audit index decision
+
+**No migration.** The existing `(school_id, event_type)` index already
+narrows every Timeline query to one Employee's realistic event volume
+before the `metadata->>'employeeId'`/`subject_type`+`subject_id` JSONB
+comparison ever runs — HR audit volume per School is bounded by
+Employee count × lifecycle events, not the kind of scale that has
+demonstrated a poor query plan. Per the brief's own explicit
+preference ("no migration is preferable if current indexing is
+sufficient") and root `CLAUDE.md` rule 2 (no speculative
+infrastructure), no expression index on `metadata->>'employeeId'` was
+added. Revisit only if a real query-plan problem is observed at actual
+production data volumes.
+
+### Timeline reads are not audited
+
+Reading the Activity Timeline does **not** itself write a new audit
+event. 8A.10 already established a real precedent for auditing a
+*read* operation specifically because it exposes Highly Sensitive data
+(`hr.employee_document.sensitive_viewed`) — the Timeline is different:
+it is a curated, already-authorization-filtered VIEW of existing
+audit history, not a new disclosure of previously-unaudited data, and
+auditing every Timeline read would create exactly the "timeline shows
+its own read events, which the next read then shows too" recursion the
+brief's own section 40 warns against. This is a deliberate,
+documented policy decision, not an oversight — revisit only if a
+future product requirement specifically demands read-auditing the
+Timeline itself.
+
+### UI / HTTP
+
+**Deferred**, same decision and same reasoning as 8A.10: no controller,
+route, or Vue page. `EmployeeActivityTimelineService` is fully
+authorization-aware and ready for a future checkpoint to wire an HTTP
+surface against, with the capability boundary and disclosure
+projection already proven. `EmployeeDirectoryEntry` and the 8A.9
+Profile Workspace DTO are both unmodified — the Timeline is not
+embedded into either, remaining independently, separately paginable
+(brief section 53).
+
+### Capability-cache P3 (carried forward, not re-litigated)
+
+The pre-existing, shared `CapabilityResolver` ~60-second cache window
+(documented in 8A.10's security review) is unaffected by this
+checkpoint and was not redesigned here — 8A.11 introduces no new
+capability and no new cache. Carried forward as-is.
+
+### 8A.12 boundary
+
+8A.11 ships the Timeline read layer only — no Employee Import, no
+duplicate-resolution workflow (8A.12's scope), no lifecycle/separation/
+rehire expansion (8A.13), no public/mobile API (8A.14), and no UI.
+
 ## Employee lifecycle — state responsibility matrix
 
 Rejecting one overloaded status enum (brief's explicit warning) in
@@ -1986,7 +2323,7 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.8  Employee Directory                                          (search/filter/paginate query layer — API+UI deferred, see "Employee Directory (8A.8, implemented)") [implemented]
 8A.9  Employee Profile Workspace                                  (Restricted-tier read model — tabbed UI deferred, see "Employee Profile Workspace (8A.9, implemented)") [implemented]
 8A.10 HR Permissions & Sensitive-Data Controls                    (capability seeder rollout, field-suppression proof) [implemented]
-8A.11 Audit & Activity Timeline                                   (AuditRecorder wiring across all HR mutations + a read timeline view)
+8A.11 Audit & Activity Timeline                                   (AuditRecorder wiring across all HR mutations + a read timeline view) [implemented]
 8A.12 Employee Import & Duplicate Controls                        (narrow CSV/XLSX importer, preview/dry-run/row errors)
 8A.13 Lifecycle, Separation & Rehire                               (employment_records.status transitions, separation workflow, rehire proof)
 8A.14 API & Mobile-Ready Read Layer                               (stable versioned read contracts, sparse fieldsets)

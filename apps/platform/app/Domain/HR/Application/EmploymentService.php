@@ -101,6 +101,12 @@ class EmploymentService
                 $employment->update($attributes);
 
                 $this->audit->school($school, 'hr.employment.updated', actor: $actor, subject: $employment, metadata: [
+                    // Phase 8A.11: added so the Employee Activity Timeline
+                    // can resolve this event to its Employee directly from
+                    // metadata, without depending on EmploymentRecord still
+                    // being reachable -- purely additive, does not change
+                    // this event's existing semantics.
+                    'employeeId' => $employment->employee_id,
                     'fields' => array_keys($attributes),
                 ]);
 

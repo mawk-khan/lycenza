@@ -150,6 +150,15 @@ class EmployeeDocumentService
                     'documentId' => $document->id,
                     'fields' => array_keys($attributes),
                     'classificationChanged' => $classificationChanged,
+                    // Phase 8A.11: the resulting (event-time) classification
+                    // tier, purely additive -- lets the Employee Activity
+                    // Timeline determine whether THIS event is itself
+                    // Highly Sensitive from real event-time evidence rather
+                    // than the document's current (possibly since-changed)
+                    // tier. A row written before this fix has no
+                    // classificationTier here and is treated as ambiguous
+                    // (fail closed) by the Timeline read model.
+                    'classificationTier' => $document->classification_tier,
                 ]);
 
                 return $document->fresh();
@@ -169,6 +178,12 @@ class EmployeeDocumentService
                 $this->audit->school($employee->school, 'hr.employee_document.archived', actor: $actor, subject: $document, metadata: [
                     'employeeId' => $employee->id,
                     'documentId' => $document->id,
+                    // Phase 8A.11: event-time classification tier, purely
+                    // additive -- archive() never changes classification_tier
+                    // itself, so this is simply the document's tier at the
+                    // moment of archiving. See update()'s identical field
+                    // for the fail-closed rule on rows written before this fix.
+                    'classificationTier' => $document->classification_tier,
                 ]);
 
                 return $document->fresh();
