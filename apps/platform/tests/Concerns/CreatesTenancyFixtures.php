@@ -15,6 +15,18 @@ use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\GuardianContact;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
+use App\Domain\HR\Infrastructure\Department;
+use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\HR\Infrastructure\EmployeeAddress;
+use App\Domain\HR\Infrastructure\EmployeeAssignment;
+use App\Domain\HR\Infrastructure\EmployeeCertification;
+use App\Domain\HR\Infrastructure\EmployeeDocument;
+use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
+use App\Domain\HR\Infrastructure\EmployeeExperience;
+use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
+use App\Domain\HR\Infrastructure\EmployeeQualification;
+use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\HR\Infrastructure\Position;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
@@ -28,6 +40,7 @@ use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Str;
 
 /**
  * Test fixtures deliberately go through the SAME rules production code
@@ -103,6 +116,65 @@ trait CreatesTenancyFixtures
         $this->assignSchoolRole($membership, $roleKey);
 
         return [$user, $school];
+    }
+
+    /**
+     * Phase 8A.10: creates a User with an ACTIVE membership at $school
+     * and an ad hoc, non-system school-scoped Role holding exactly
+     * $capabilities -- no more, no less. This is the standard way
+     * 8A.10's authorization tests construct an actor with a precise
+     * capability set (e.g. "documents.manage but NOT sensitive.manage")
+     * without depending on -- or mutating -- the seeded system roles.
+     * Reuses the exact same Role/Capability/MembershipRoleAssignment
+     * tables production code uses; this is not a parallel test-only ACL
+     * mechanism (root CLAUDE.md rule 2 / 8A.10 brief section 3).
+     *
+     * @param  array<int, string>  $capabilities
+     */
+    protected function createUserWithCapabilities(School $school, array $capabilities, string $status = 'active'): User
+    {
+        $user = $this->createUser();
+        $membership = $this->createMembership($user, $school, $status);
+
+        if ($capabilities !== []) {
+            $role = Role::query()->create([
+                'key' => 'test.capability_grant.'.(string) Str::uuid(),
+                'name' => 'Test Capability Grant',
+                'scope' => 'school',
+                'is_system' => false,
+            ]);
+            $role->capabilities()->sync($capabilities);
+            $this->assignSchoolRole($membership, $role->key);
+        }
+
+        return $user;
+    }
+
+    /**
+     * Phase 8A.10 fixture convenience: an actor holding EVERY HR
+     * capability at $school. Used by pre-8A.10 (8A.1-8A.9) tests that
+     * are not themselves testing authorization -- once HR Application
+     * services require an authorized actor, these tests continue to
+     * exercise their original domain invariants (overlap validation,
+     * ownership checks, verification-reset rules, ...) unchanged, using
+     * an actor that is never the thing under test. 8A.10's OWN
+     * authorization tests use createUserWithCapabilities() directly
+     * with a narrow, deliberate capability list instead -- never this
+     * method, which would defeat the point of a deny test.
+     */
+    protected function fullHrActor(School $school): User
+    {
+        return $this->createUserWithCapabilities($school, [
+            'hr.employees.view', 'hr.employees.manage',
+            'hr.employees.personal.view', 'hr.employees.personal.manage',
+            'hr.employees.assignments.view', 'hr.employees.assignments.manage',
+            'hr.employees.qualifications.view', 'hr.employees.qualifications.manage',
+            'hr.employees.documents.view', 'hr.employees.documents.manage',
+            'hr.employees.sensitive.view', 'hr.employees.sensitive.manage',
+            'hr.employees.notes.view', 'hr.employees.notes.manage',
+            'hr.departments.view', 'hr.departments.manage',
+            'hr.positions.view', 'hr.positions.manage',
+        ]);
     }
 
     // --- Phase 0D: Academic Structure fixtures -----------------------
@@ -298,6 +370,149 @@ trait CreatesTenancyFixtures
                 'plan_id' => $plan->id,
                 'student_id' => $student->id,
                 'source_enrollment_id' => $sourceEnrollment->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 8A.1: HR / Employee fixtures ---------------------------
+
+    /**
+     * Factory-based creation for schema/relationship/isolation tests --
+     * `employee_number` here is a plausible fake value, NOT allocated
+     * through App\Domain\HR\Application\EmployeeNumberAllocator. A test
+     * about allocation/concurrency behavior itself must call
+     * App\Domain\HR\Application\EmployeeService::create() directly.
+     */
+    protected function createEmployee(School $school, array $attributes = []): Employee
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Employee::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    // --- Phase 8A.2: Personal details, addresses, emergency contacts --
+
+    protected function createEmployeePersonalDetail(Employee $employee, array $attributes = []): EmployeePersonalDetail
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeePersonalDetail::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeAddress(Employee $employee, array $attributes = []): EmployeeAddress
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeAddress::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeEmergencyContact(Employee $employee, array $attributes = []): EmployeeEmergencyContact
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeEmergencyContact::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 8A.3: Departments & Positions ---------------------------
+
+    protected function createDepartment(School $school, array $attributes = []): Department
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Department::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createPosition(School $school, array $attributes = []): Position
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Position::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    // --- Phase 8A.4: Employment Records & Employee Assignments ---------
+
+    protected function createEmploymentRecord(Employee $employee, array $attributes = []): EmploymentRecord
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmploymentRecord::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeAssignment(EmploymentRecord $employment, Position $position, array $attributes = []): EmployeeAssignment
+    {
+        return app(TenantContext::class)->withSchool(
+            $employment->school,
+            fn () => EmployeeAssignment::factory()->create(array_merge([
+                'school_id' => $employment->school_id,
+                'employment_record_id' => $employment->id,
+                'position_id' => $position->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 8A.6: Qualifications, Experience & Certifications -------
+
+    protected function createEmployeeQualification(Employee $employee, array $attributes = []): EmployeeQualification
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeQualification::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeExperience(Employee $employee, array $attributes = []): EmployeeExperience
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeExperience::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEmployeeCertification(Employee $employee, array $attributes = []): EmployeeCertification
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeCertification::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 8A.7: Employee Documents ---------------------------------
+
+    protected function createEmployeeDocument(Employee $employee, array $attributes = []): EmployeeDocument
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeDocument::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
             ], $attributes)),
         );
     }

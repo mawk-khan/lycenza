@@ -11,6 +11,10 @@ use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
 use App\Domain\Guardians\Http\Controllers\GuardianContactController;
 use App\Domain\Guardians\Http\Controllers\GuardianController;
 use App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController;
+use App\Domain\HR\Http\Controllers\EmployeeActivityController;
+use App\Domain\HR\Http\Controllers\EmployeeDirectoryController;
+use App\Domain\HR\Http\Controllers\EmployeeProfileController;
+use App\Domain\HR\Http\Controllers\EmployeeSensitiveDocumentController;
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
@@ -366,6 +370,40 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/students/{student}/enrollments', [StudentEnrollmentController::class, 'store'])
                 ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.students.enrollments.store');
+
+            // Phase 8A.14: read-only HR transport. Deliberately NO
+            // `capability:` route middleware anywhere in this block --
+            // every one of these controllers calls straight through to
+            // an already-authoritative 8A.8/8A.9/8A.10/8A.11 Application
+            // service (EmployeeDirectoryService/EmployeeProfileWorkspaceService/
+            // EmployeeActivityTimelineService/EmployeeSensitiveDocumentReadService)
+            // that performs its OWN `hr.employees.*` capability check
+            // against the real authenticated actor before running any
+            // query -- adding a second, route-level capability check
+            // here would either exactly duplicate that check or risk
+            // silently drifting from it (docs/modules/HR.md 8A.14 "no
+            // divergent capability matrix"). `{employee}` is always a
+            // raw route-parameter string, never implicit Eloquent
+            // route-model binding -- see each controller's own docblock.
+            //
+            // Phase 8A.15: `throttle:hr-api-reads` (School+actor-keyed,
+            // 120/min) and `private-no-store` (Cache-Control: private,
+            // no-store -- this data must never become shared-cacheable)
+            // added to all four; the sensitive-document endpoint uses
+            // the stricter `throttle:hr-api-sensitive-reads` (20/min)
+            // instead. See docs/modules/HR.md 8A.15 as-built.
+            Route::get('/employees', [EmployeeDirectoryController::class, 'index'])
+                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
+                ->name('schools.employees.index');
+            Route::get('/employees/{employee}', [EmployeeProfileController::class, 'show'])
+                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
+                ->name('schools.employees.show');
+            Route::get('/employees/{employee}/activity', [EmployeeActivityController::class, 'index'])
+                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
+                ->name('schools.employees.activity.index');
+            Route::get('/employees/{employee}/sensitive-documents', [EmployeeSensitiveDocumentController::class, 'index'])
+                ->middleware(['throttle:hr-api-sensitive-reads', 'private-no-store'])
+                ->name('schools.employees.sensitive-documents.index');
         });
 });
 

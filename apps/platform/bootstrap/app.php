@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\Api\EnsurePrivateNoStoreResponse;
 use App\Http\Middleware\Api\EnsureSchoolMembershipContext;
 use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\AssignTraceContext;
@@ -35,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ai-service' => VerifyAiGatewayServiceToken::class,
             'school-membership' => EnsureSchoolMembershipContext::class,
             'idempotent' => EnsureIdempotent::class,
+            'private-no-store' => EnsurePrivateNoStoreResponse::class,
         ]);
 
         // Tenant resolution needs the session already started (so
@@ -98,6 +100,19 @@ return Application::configure(basePath: dirname(__DIR__))
             // `null` otherwise. Not a new/parallel error JSON shape.
             $code = method_exists($e, 'errorCode') ? $e->errorCode() : null;
 
+            // Phase 8A.15: this render callback builds a brand-new
+            // response, so it does NOT automatically inherit headers
+            // Laravel's own default exception rendering would have
+            // attached -- most importantly `Retry-After` on a thrown
+            // `Illuminate\Http\Exceptions\ThrottleRequestsException`
+            // (every `throttle:*` limiter across the whole API, not
+            // HR-specific, was silently losing this header before this
+            // fix, confirmed empirically). `getHeaders()` is present on
+            // any HttpExceptionInterface that carries response headers
+            // (Symfony's HttpException family) -- merged in, never
+            // overriding this envelope's own Content-Type.
+            $headers = method_exists($e, 'getHeaders') ? $e->getHeaders() : [];
+
             return response()->json([
                 'error' => [
                     'message' => $status === 500 && ! config('app.debug')
@@ -108,6 +123,6 @@ return Application::configure(basePath: dirname(__DIR__))
                     'requestId' => $request->attributes->get('request_id'),
                     'errors' => $errors,
                 ],
-            ], $status);
+            ], $status, $headers);
         });
     })->create();
