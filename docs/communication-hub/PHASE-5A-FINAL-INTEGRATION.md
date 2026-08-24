@@ -200,12 +200,13 @@ was merged into local `main`.
 
 Because `main` had not moved since `integration/phase-5a-communication-hub`
 was branched from it (`git merge-base main integration/phase-5a-communication-hub`
-== `main`'s tip, `e0c4e1b9`), this merge is a **fast-forward** —
-`main` now points at `93b28fa` (the merge commit `25ddebd`, §2, plus
-this document's own commit on top). No new commit was created by the
-fast-forward step itself; full history (all 12 Phase 5A checkpoint
-commits and all 6 Phase 1A checkpoint commits, unrewritten) is
-preserved and reachable from `main`.
+== `main`'s tip, `e0c4e1b9`), this merge is a **fast-forward**: `main`
+now points at the tip of `integration/phase-5a-communication-hub`
+(the merge commit `25ddebd`, §2, plus this document's own commit(s) on
+top). No new commit was created by the fast-forward step itself; full
+history (all 12 Phase 5A checkpoint commits and all 6 Phase 1A
+checkpoint commits, unrewritten) is preserved and reachable from
+`main`.
 
 Nothing was pushed. `origin/main` is unaffected.
 
