@@ -13,6 +13,7 @@ use App\Domain\Guardians\Http\Controllers\GuardianController;
 use App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController;
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
+use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
 use App\Http\Controllers\Api\Internal\AiToolController;
 use App\Http\Controllers\Api\Internal\HealthController;
@@ -236,6 +237,30 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/subject-offerings/{subjectOffering}', [SubjectOfferingController::class, 'update'])
                 ->middleware(['capability:academics.subjects.manage', 'throttle:school-api-mutations'])
                 ->name('schools.subject-offerings.update');
+
+            // --- Phase 1C.1: Student Subject Enrollment administrative
+            // HTTP surface (docs/students/PHASE-1C-STUDENT-SUBJECT-ENROLLMENT-FOUNDATION.md).
+            // Reuses academics.subjects.view/.manage rather than a new
+            // capability pair -- this is a direct extension of "manage
+            // Subjects and Subject Offerings", not a new concern. The
+            // roster GET is read-only (no idempotent middleware needed);
+            // every mutation is consequential + plausibly retryable
+            // (mirrors StudentEnrollmentController's mutation routes
+            // exactly), hence `idempotent` on all four.
+            Route::get('/subject-offerings/{subjectOffering}/roster', [StudentSubjectEnrollmentController::class, 'roster'])
+                ->name('schools.subject-offerings.roster');
+            Route::post('/students/{student}/subject-enrollments', [StudentSubjectEnrollmentController::class, 'store'])
+                ->middleware(['capability:academics.subjects.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.students.subject-enrollments.store');
+            Route::post('/subject-enrollments/{enrollment}/withdraw', [StudentSubjectEnrollmentController::class, 'withdraw'])
+                ->middleware(['capability:academics.subjects.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.subject-enrollments.withdraw');
+            Route::post('/subject-enrollments/{enrollment}/cancel', [StudentSubjectEnrollmentController::class, 'cancel'])
+                ->middleware(['capability:academics.subjects.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.subject-enrollments.cancel');
+            Route::post('/subject-enrollments/{enrollment}/transfer', [StudentSubjectEnrollmentController::class, 'transfer'])
+                ->middleware(['capability:academics.subjects.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.subject-enrollments.transfer');
 
             // --- Phase 1A.5: Student & Guardian Identity administrative
             // HTTP surface (docs/modules/STUDENT-GUARDIAN-IDENTITY.md,
