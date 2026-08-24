@@ -56,6 +56,14 @@ use RuntimeException;
  * both services call), as a revalidation, never a second independent
  * evaluation.
  *
+ * Phase 1B.7D: accepts a Plan in EITHER `validated` OR `executing`
+ * status (never `draft`/`completed`/`completed_with_errors`/
+ * `cancelled`) -- `executing` is what `EnrollmentRolloverExecutionService::start()`
+ * transitions a Plan to for the duration of a bulk run, so every Item
+ * it processes must still pass through this exact gate.
+ * `validated_configuration_version === configuration_version` remains
+ * required regardless of which of the two statuses is current.
+ *
  * Deliberately authorization-neutral, matching every other Application
  * service in this codebase.
  */
@@ -93,7 +101,16 @@ class EnrollmentRolloverItemExecutionService
                     return $this->reconcileAlreadyExecuted($plan, $lockedItem);
                 }
 
-                if ($plan->status !== 'validated' || $plan->validated_configuration_version !== $plan->configuration_version) {
+                // Phase 1B.7D: 'executing' is accepted alongside
+                // 'validated' -- EnrollmentRolloverExecutionService::start()
+                // transitions the Plan to 'executing' for the DURATION of
+                // a bulk run, and every Item it processes must still pass
+                // through this exact gate. `validated_configuration_version
+                // === configuration_version` remains required either way --
+                // it is what actually proves the Item's persisted
+                // validation_result belongs to the CURRENT configuration,
+                // not `status` alone.
+                if (! in_array($plan->status, ['validated', 'executing'], true) || $plan->validated_configuration_version !== $plan->configuration_version) {
                     throw new RolloverPlanNotExecutionReadyException;
                 }
 

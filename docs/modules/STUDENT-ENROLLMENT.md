@@ -2207,19 +2207,146 @@ commits inside the SAME transaction as `item_succeeded` — proven by a
 dedicated audit-count test that a rejected/rolled-back attempt
 produces neither.
 
+## Bulk & Resumable Rollover Execution (Phase 1B.7D)
+
+Implements the PLAN-LEVEL orchestrator
+(`App\Domain\Students\Application\EnrollmentRolloverExecutionService`)
+that claims a validated Plan, processes its Items in deterministic
+bounded batches, and finalizes it once every Item reaches a
+terminal-accepted outcome — it never duplicates one-Item promotion
+logic: every academic mutation still goes through
+`EnrollmentRolloverItemExecutionService::execute()`, exactly once per
+Item.
+
+### 1B.7C integration: `validated` OR `executing`
+
+`EnrollmentRolloverItemExecutionService::execute()`'s Plan-readiness
+gate now accepts `status IN ('validated', 'executing')` (previously
+`validated` only) — `executing` is what `start()` transitions a Plan
+to for the duration of a bulk run, and every Item it processes must
+still pass through the identical gate.
+`validated_configuration_version === configuration_version` remains
+required either way; `status` alone was never sufficient (see
+`EnrollmentRolloverPlan::isValidatedForCurrentConfiguration()` —
+`upsertMapping()`/`setItemDecision()` bump `configuration_version`
+without touching `status`). Per-Student academic semantics inside
+`execute()` are otherwise completely unchanged.
+
+### Public contract: `start()` / `resume()`
+
+- **`start(plan, actor, batchSize, afterEachItem)`** — claims a
+  `validated` Plan (short, row-locked transaction: verify status +
+  configuration version, conditional `UPDATE ... WHERE status =
+  'validated'`, set `execution_started_at` only if it was still null,
+  audit `enrollment_rollover.execution_started`), then processes it.
+  Refuses `RolloverPlanNotExecutionReadyException` for a Plan that
+  isn't currently validated, `RolloverPlanAlreadyExecutingException`
+  for one that already is — a duplicate/concurrent `start()` call
+  never becomes a second active processor for the same Plan.
+- **`resume(plan, actor, batchSize, afterEachItem)`** — continues an
+  ALREADY-`executing` Plan; no claim/transition step. Refuses
+  `RolloverPlanNotResumableException` for any other status, including
+  an already-`completed`/`completed_with_errors` one — calling
+  `resume()` again after completion is a clean no-op rejection, never
+  a silent re-run.
+- `$afterEachItem` (both methods) is a test-only seam — invoked with
+  the just-processed Item's id after every Item; returning `true`
+  stops processing immediately, deterministically simulating a
+  crashed/interrupted process without any timing/sleep-based test
+  (mirrors `EnrollmentRolloverDryRunService::run()`'s `$beforePersist`
+  precedent).
+
+### Bounded batch processing, no offset pagination
+
+Item selection is `WHERE plan_id = ? AND (execution_status IS NULL OR
+execution_status NOT IN ('succeeded','reconciled','skipped'))
+ORDER BY id LIMIT $batchSize` (default 100) — offset-free by
+construction: the WHERE clause itself naturally shrinks as Items are
+processed, so repeating the identical bounded query with no offset
+always returns the next genuinely-still-pending batch; a processed
+Item can never cause another to be skipped. (A plain `NOT IN` alone is
+NOT sufficient here — SQL's three-valued logic excludes `NULL` rows
+from a bare `NOT IN (...)`, which would silently skip every
+never-yet-attempted Item; the `execution_status IS NULL OR ...` form
+is required.)
+
+### Stop-immediately on invalidation
+
+The Plan's status/configuration-version is re-verified BEFORE every
+batch AND after every single Item (not merely before the next batch)
+— the moment `EnrollmentRolloverItemExecutionService::invalidateForDrift()`
+demotes the Plan (source changed, target Section changed, a
+conflicting target Enrollment, a Roll Number race), the orchestrator
+stops before any later Item is ever attempted. It never re-runs
+dry-run itself and never overwrites an invalidated Plan's `draft`
+status with `completed`/`completed_with_errors`.
+
+### Finalization
+
+Only when the Plan is still genuinely `executing` (re-checked under a
+fresh row lock) AND zero Items remain outside the terminal-accepted
+set (`succeeded`/`reconciled`/`skipped`) — never trusts the caller's
+in-memory belief that processing finished. `completed_with_errors` is
+kept as a structurally-supported branch (any `failed` Item at
+finalization time) but is, by the current architecture's own
+invariant, effectively unreached: every path that marks an Item
+`failed` also demotes the Plan out of `executing` in the same write,
+which the orchestrator's own stop-immediately check catches before
+`finalize()` is ever reached again.
+
+### Revalidation after partial execution
+
+Dry-run's persistence step never touches `execution_status`/
+`target_enrollment_id`/`executed_at` (unchanged from 1B.7C) — an
+already-succeeded Item surviving a partial/interrupted run is
+naturally reclassified `already_enrolled` on the NEXT dry-run (its own
+target Enrollment now exists), while its execution provenance is
+completely untouched. A later `start()`/`resume()` never re-selects a
+`succeeded`/`reconciled`/`skipped` Item for processing at all — it
+simply survives, permanently, never re-touched, never reclassified to
+`reconciled`. `EnrollmentRolloverPlanService::setItemDecision()`'s
+existing 1B.7C guard (`RolloverItemAlreadyExecutedException`) remains
+the narrower defense for the case where the Plan has reverted to
+`draft`/`validated` but a specific Item already executed;
+`assertConfigurable()` alone already blocks ANY Item reconfiguration
+while the Plan is `executing`.
+
+### Concurrency
+
+Plan claim: `lockForUpdate()` on the Plan row, proven by a REAL
+two-OS-process test
+(`EnrollmentRolloverExecutionConcurrencyTest`, mirroring
+`AcademicYearActivationConcurrencyTest`/
+`EnrollmentRolloverItemExecutionConcurrencyTest`'s established
+pattern) — exactly one of two concurrent `start()` calls claims the
+Plan. Concurrent `resume()`: deliberately NOT given a distributed
+lease/worker-leasing subsystem — per-Item `lockForUpdate()` (1B.7C)
+plus target-Enrollment uniqueness remain the final, sufficient
+backstop even if two resume processors inspect overlapping batches; a
+single logical orchestrator is the recommended operational model.
+
+### Queue compatibility (still deferred)
+
+No `ShouldQueue` job/scheduler/command exists yet — `start()`/
+`resume()` are designed as though the PHP process could stop after any
+committed Item (each Item is its own committed transaction), so a
+future queue worker can call either method exactly as a synchronous
+caller does today, with zero change to academic semantics.
+
 ## Deferred (not yet implemented)
 
-- **Whole-Plan / bulk academic-year rollover execution, API, and UI** —
-  the architecture was decided in Phase 1B.7, the durable plan/mapping/
-  item schema + `createDraft()` landed in Phase 1B.7A, the dry-run/
-  eligibility/conflict engine landed in Phase 1B.7B, and the
-  per-Student promotion EXECUTION primitive landed in Phase 1B.7C (see
-  "Per-Student Promotion Execution (Phase 1B.7C)" above) — a single
-  already-validated Item can now be executed one at a time, but
-  nothing loops a whole Plan yet: no chunked/resumable bulk
-  orchestration, no queue job, no scheduler, no rollover command, no
-  rollover HTTP/API, no rollover Vue UI. Implementation continues at
-  Phase 1B.7D.
+- **Rollover authorization, HTTP/API, and UI** — the architecture was
+  decided in Phase 1B.7, the durable plan/mapping/item schema landed in
+  Phase 1B.7A, the dry-run/eligibility/conflict engine landed in Phase
+  1B.7B, the per-Student promotion EXECUTION primitive landed in Phase
+  1B.7C, and PLAN-LEVEL bulk/resumable execution landed in Phase 1B.7D
+  (see "Bulk & Resumable Rollover Execution (Phase 1B.7D)" above) — a
+  whole validated Plan can now be started/resumed to completion, but
+  still: no queue job, no scheduler, no rollover command, no rollover
+  HTTP/API, no rollover Vue UI, and the recommended
+  `enrollments.rollover.manage` capability remains unseeded (every
+  rollover service stays authorization-neutral). Implementation
+  continues at Phase 1B.7E.
 - **Transfer certificate / TC document generation, inter-school
   electronic transfer network** — out of scope for the transfer/
   withdrawal *status* concept this schema already supports.
