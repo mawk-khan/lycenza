@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Identifiers\GeneratesUuidV7;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -55,5 +56,21 @@ class SchoolMembership extends Model
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    /**
+     * Centralizes the "eligible membership" predicate (Phase 5A.2 §13)
+     * so callers stop hand-writing `where('status', 'active')` --
+     * App\Support\Authorization\CapabilityResolver and
+     * App\Domain\Communications\Application\CommunicationThreadService
+     * both had their own copy before this was extracted; new callers
+     * (audience resolvers, §9) use this instead of adding a third.
+     *
+     * @param  Builder<SchoolMembership>  $query
+     * @return Builder<SchoolMembership>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('status', 'active');
     }
 }

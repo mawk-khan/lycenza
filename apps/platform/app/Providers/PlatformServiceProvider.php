@@ -2,6 +2,12 @@
 
 namespace App\Providers;
 
+use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
+use App\Domain\Communications\Application\Audience\IndividualMembersAudienceResolver;
+use App\Domain\Communications\Application\Audience\SchoolWideAudienceResolver;
+use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
+use App\Domain\Communications\Application\Channels\EmailChannelDriver;
+use App\Domain\Communications\Application\Channels\InAppChannelDriver;
 use App\Support\Events\Consumers\NotifyActorOfSettingChangeConsumer;
 use App\Support\Events\Consumers\WebhookFanoutConsumer;
 use App\Support\Events\EventConsumerRegistry;
@@ -42,6 +48,22 @@ class PlatformServiceProvider extends ServiceProvider
             $dispatcher->registerProvider(new FakePushProvider);
 
             return $dispatcher;
+        });
+
+        $this->app->singleton(CommunicationChannelRegistry::class, function ($app) {
+            $registry = new CommunicationChannelRegistry;
+            $registry->register(new InAppChannelDriver);
+            $registry->register($app->make(EmailChannelDriver::class));
+
+            return $registry;
+        });
+
+        $this->app->singleton(CommunicationAudienceResolverRegistry::class, function ($app) {
+            $registry = new CommunicationAudienceResolverRegistry;
+            $registry->register($app->make(IndividualMembersAudienceResolver::class));
+            $registry->register($app->make(SchoolWideAudienceResolver::class));
+
+            return $registry;
         });
 
         $this->app->singleton(EventConsumerRegistry::class, function ($app) {

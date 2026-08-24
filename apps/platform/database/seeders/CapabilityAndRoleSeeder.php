@@ -85,6 +85,80 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'students.manage', 'label' => 'Manage Students (create, update, status, Guardian links)', 'namespace' => 'school'],
             ['key' => 'guardians.view', 'label' => 'View Guardians and their contact information', 'namespace' => 'school'],
             ['key' => 'guardians.manage', 'label' => 'Manage Guardians, Guardian contact information, and Guardian links', 'namespace' => 'school'],
+
+            // Phase 5A.1 -- Communication Hub foundation. A single
+            // `communications.manage` capability covers thread/
+            // participant administration (deliberately not split
+            // further, matching section 47's warning against a huge
+            // permission matrix in this checkpoint); `.send`/`.reply`
+            // are separate from `.view` since a role may be able to
+            // read a thread without being allowed to post into it (or
+            // vice versa is never needed, so no write-without-read
+            // case exists yet).
+            ['key' => 'communications.view', 'label' => 'View Communication Hub threads and messages', 'namespace' => 'school'],
+            ['key' => 'communications.send', 'label' => 'Start Communication Hub threads', 'namespace' => 'school'],
+            ['key' => 'communications.reply', 'label' => 'Reply within Communication Hub threads', 'namespace' => 'school'],
+            ['key' => 'communications.manage', 'label' => 'Manage Communication Hub threads and participants', 'namespace' => 'school'],
+            ['key' => 'communications.audit.view', 'label' => 'View Communication Hub audit trail', 'namespace' => 'school'],
+
+            // Phase 5A.2 -- Announcement & Audience Resolution
+            // foundation. `communications.send` (above) starts a
+            // Thread with an EXPLICIT, bounded participant list the
+            // sender chose themselves; publishing an Announcement
+            // targets a COMPUTED, potentially School-wide audience --
+            // a materially larger blast radius that warrants its own
+            // capability rather than being folded into `.send`
+            // (docs/communication-hub/PHASE-5A-2-ANNOUNCEMENTS-AUDIENCES.md
+            // documents this reasoning). Granted to the same roles as
+            // `.send` today (school_admin, principal) -- ordinary
+            // members never receive it (brief §22).
+            ['key' => 'communications.announce', 'label' => 'Publish Communication Hub announcements', 'namespace' => 'school'],
+
+            // Phase 5A.4 -- Communication Templates & Scheduling
+            // foundation. Template administration (create/edit/
+            // activate/deactivate) is its own capability, distinct
+            // from `communications.announce`: any authorized announcer
+            // can USE an existing active template (gated by the same
+            // `.announce` check the composer already requires), but
+            // AUTHORING reusable source content that other senders will
+            // see and pick from warrants the narrower, separately
+            // grantable right (brief §11). Scheduling/rescheduling/
+            // cancelling a scheduled Announcement reuses
+            // `communications.announce`/`.manage` exactly like
+            // publish()/cancel() already do -- no new capability for
+            // those (brief §36).
+            ['key' => 'communications.templates.manage', 'label' => 'Create and manage Communication Hub templates', 'namespace' => 'school'],
+
+            // Phase 5A.10 -- Emergency Communication Policy foundation.
+            // A distinct, elevated capability from `communications.announce`
+            // -- Emergency mode can (only where the School has also
+            // separately opted in per channel) bypass the School's own
+            // configured quiet hours, a materially different blast
+            // radius/urgency than an ordinary announcement (brief §11).
+            // Granted ONLY to the single narrowest school-scoped role,
+            // `school_admin` -- `principal` already lacks
+            // `communications.manage`/`.audit.view` in this seeder, so
+            // withholding this capability from `principal` too is
+            // consistent with the existing trust boundary between the
+            // two roles, not a new one.
+            ['key' => 'communications.emergency', 'label' => 'Declare Communication Hub announcements as Emergency', 'namespace' => 'school'],
+
+            // Phase 5A.12 -- Approval Workflow foundation. A distinct
+            // capability from `communications.announce`/`.manage`
+            // (brief §12): the ability to REVIEW and decide someone
+            // else's submitted communication is not implied by the
+            // ability to send one's own. Granted to BOTH senior
+            // school-scoped roles (`school_admin`, `principal`) --
+            // unlike `communications.emergency`, approval review is
+            // exactly the kind of governance action a Principal is
+            // expected to perform over communications submitted by
+            // less-privileged senders, and separation of duties
+            // (brief §13, enforced in
+            // App\Domain\Communications\Application\Approval\CommunicationApprovalService::decide())
+            // already prevents a requester from approving their own
+            // submission regardless of which role granted them this
+            // capability.
+            ['key' => 'communications.approve', 'label' => 'Approve or reject Communication Hub approval requests', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -118,6 +192,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.subjects.view', 'academics.subjects.manage',
                     'students.view', 'students.manage',
                     'guardians.view', 'guardians.manage',
+                    'communications.view', 'communications.send', 'communications.reply',
+                    'communications.manage', 'communications.audit.view', 'communications.announce',
+                    'communications.templates.manage', 'communications.emergency', 'communications.approve',
                 ],
             ],
             'principal' => [
@@ -147,6 +224,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     // purely administrative, concern.
                     'students.view', 'students.manage',
                     'guardians.view', 'guardians.manage',
+                    'communications.view', 'communications.send', 'communications.reply',
+                    'communications.announce', 'communications.templates.manage', 'communications.approve',
                 ],
             ],
         ];

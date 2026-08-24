@@ -1,5 +1,17 @@
 <?php
 
+use App\Domain\Communications\Http\Controllers\AnnouncementController;
+use App\Domain\Communications\Http\Controllers\CommunicationAnalyticsController;
+use App\Domain\Communications\Http\Controllers\CommunicationApprovalController;
+use App\Domain\Communications\Http\Controllers\CommunicationApprovalPolicyController;
+use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
+use App\Domain\Communications\Http\Controllers\CommunicationAuditController;
+use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
+use App\Domain\Communications\Http\Controllers\CommunicationDeliveryTimingPolicyController;
+use App\Domain\Communications\Http\Controllers\CommunicationHubController;
+use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
+use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
+use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\GuardianController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -111,5 +123,135 @@ Route::middleware('auth')->group(function (): void {
     Route::prefix('app/contacts')->name('app.contacts.')->group(function (): void {
         Route::post('/{contact}/primary', [GuardianController::class, 'setPrimaryContact'])->name('primary');
         Route::post('/{contact}/deactivate', [GuardianController::class, 'deactivateContact'])->name('deactivate');
+    });
+
+    // Phase 5A.1: the Communication Hub foundation -- session-
+    // authenticated Inertia pages against the ambient active School,
+    // same convention as SchoolSetupController above. Capability checks
+    // live inside CommunicationHubController itself (AuthorizesCapability
+    // trait).
+    Route::prefix('app/communications')->name('app.communications.')->group(function (): void {
+        // Phase 5A.8 §33: the Hub's root is now the operational Inbox
+        // (App\Domain\Communications\Http\Controllers\CommunicationInboxController),
+        // not the conversation list -- that moved to `/conversations`
+        // below (brief §33's own suggested route shape).
+        Route::get('/', [CommunicationInboxController::class, 'index'])->name('index');
+        Route::get('/unread', [CommunicationInboxController::class, 'unread'])->name('unread');
+        Route::get('/sent', [CommunicationInboxController::class, 'sent'])->name('sent');
+        Route::get('/failed', [CommunicationInboxController::class, 'failed'])->name('failed');
+        Route::get('/search', [CommunicationInboxController::class, 'search'])->name('search');
+
+        Route::get('/conversations', [CommunicationHubController::class, 'conversations'])->name('conversations');
+        Route::post('/conversations', [CommunicationHubController::class, 'store'])->name('store');
+
+        // Phase 5A.2: registered BEFORE the '/{thread}' wildcard below
+        // so 'announcements' never matches as a thread id.
+        Route::prefix('announcements')->name('announcements.')->group(function (): void {
+            Route::get('/', [AnnouncementController::class, 'index'])->name('index');
+            Route::get('/create', [AnnouncementController::class, 'create'])->name('create');
+            Route::post('/', [AnnouncementController::class, 'store'])->name('store');
+            Route::get('/{announcement}', [AnnouncementController::class, 'show'])->name('show');
+            Route::put('/{announcement}', [AnnouncementController::class, 'update'])->name('update');
+            Route::post('/{announcement}/publish', [AnnouncementController::class, 'publish'])->name('publish');
+            Route::post('/{announcement}/cancel', [AnnouncementController::class, 'cancel'])->name('cancel');
+            // Phase 5A.4: one endpoint serves both the initial schedule
+            // and a reschedule -- see AnnouncementController::schedule()'s
+            // docblock.
+            Route::post('/{announcement}/schedule', [AnnouncementController::class, 'schedule'])->name('schedule');
+
+            // Phase 5A.6: attachment upload/removal, scoped to their
+            // owning Announcement -- download is registered separately
+            // below (brief §11's exact route shape).
+            Route::post('/{announcement}/attachments', [CommunicationAttachmentController::class, 'store'])->name('attachments.store');
+            Route::delete('/{announcement}/attachments/{attachment}', [CommunicationAttachmentController::class, 'destroy'])->name('attachments.destroy');
+
+            // Phase 5A.11: read-only audit/delivery-analytics surfaces
+            // for one Announcement -- distinct capabilities
+            // (communications.audit.view / communications.manage, brief
+            // §30), distinct controllers (CommunicationAuditController /
+            // CommunicationAnalyticsController, brief §4's audit-vs-
+            // analytics separation).
+            Route::get('/{announcement}/audit', [CommunicationAuditController::class, 'show'])->name('audit');
+            Route::get('/{announcement}/analytics', [CommunicationAnalyticsController::class, 'announcement'])->name('analytics');
+
+            // Phase 5A.12 §27/§29/§37: submit-for-approval and
+            // withdrawal, scoped to their owning Announcement --
+            // approve/reject live under their own
+            // `/app/communications/approvals` prefix below (brief §42),
+            // since a decision is made against the REQUEST, not the
+            // Announcement directly.
+            Route::post('/{announcement}/submit-approval', [AnnouncementController::class, 'submitForApproval'])->name('submit-approval');
+            Route::post('/{announcement}/withdraw-approval', [AnnouncementController::class, 'withdrawApproval'])->name('withdraw-approval');
+        });
+
+        // Phase 5A.12 §42/§45: registered BEFORE the '/{thread}'
+        // wildcard below, same reasoning as 'announcements' above.
+        Route::prefix('approvals')->name('approvals.')->group(function (): void {
+            Route::get('/', [CommunicationApprovalController::class, 'index'])->name('index');
+            Route::get('/{approvalRequest}', [CommunicationApprovalController::class, 'show'])->name('show');
+            Route::post('/{approvalRequest}/approve', [CommunicationApprovalController::class, 'approve'])->name('approve');
+            Route::post('/{approvalRequest}/reject', [CommunicationApprovalController::class, 'reject'])->name('reject');
+        });
+
+        // Phase 5A.6 §11: registered BEFORE the '/{thread}' wildcard
+        // below, same reasoning as 'announcements'/'templates' above.
+        // An attachment id alone resolves its own School/parent
+        // Announcement -- no announcement id appears in this route.
+        Route::get('/attachments/{attachment}/download', [CommunicationAttachmentController::class, 'download'])->name('attachments.download');
+
+        // Phase 5A.4: registered BEFORE the '/{thread}' wildcard below,
+        // same reasoning as 'announcements' above.
+        Route::prefix('templates')->name('templates.')->group(function (): void {
+            Route::get('/', [CommunicationTemplateController::class, 'index'])->name('index');
+            Route::get('/create', [CommunicationTemplateController::class, 'create'])->name('create');
+            Route::post('/', [CommunicationTemplateController::class, 'store'])->name('store');
+            Route::get('/{template}/edit', [CommunicationTemplateController::class, 'edit'])->name('edit');
+            Route::put('/{template}', [CommunicationTemplateController::class, 'update'])->name('update');
+            Route::post('/{template}/activate', [CommunicationTemplateController::class, 'activate'])->name('activate');
+            Route::post('/{template}/deactivate', [CommunicationTemplateController::class, 'deactivate'])->name('deactivate');
+        });
+
+        // Phase 5A.5: registered BEFORE the '/{thread}' wildcard below,
+        // same reasoning as 'announcements'/'templates' above.
+        Route::get('/preferences', [CommunicationPreferenceController::class, 'show'])->name('preferences');
+        Route::put('/preferences', [CommunicationPreferenceController::class, 'update'])->name('preferences.update');
+
+        Route::prefix('settings')->name('settings.')->group(function (): void {
+            Route::get('/channels', [CommunicationChannelPolicyController::class, 'show'])->name('channels');
+            Route::put('/channels', [CommunicationChannelPolicyController::class, 'update'])->name('channels.update');
+
+            // Phase 5A.9: write side of the same Channels settings
+            // page's quiet-hours section -- see
+            // CommunicationDeliveryTimingPolicyController's docblock.
+            Route::put('/timing', [CommunicationDeliveryTimingPolicyController::class, 'update'])->name('timing.update');
+
+            // Phase 5A.12 §41: write side of the same Channels settings
+            // page's Approval Workflow section -- see
+            // CommunicationApprovalPolicyController's docblock.
+            Route::put('/approvals', [CommunicationApprovalPolicyController::class, 'update'])->name('approvals.update');
+        });
+
+        // Phase 5A.7 §10: registered BEFORE the '/{thread}' wildcard
+        // below, same reasoning as 'announcements'/'templates' above.
+        Route::get('/participants/search', [CommunicationHubController::class, 'searchParticipants'])->name('participants.search');
+
+        // Phase 5A.11 §25/§32: the School-wide operational delivery
+        // overview -- registered BEFORE the '/{thread}' wildcard below,
+        // same reasoning as every other literal-segment route in this
+        // group.
+        Route::get('/analytics', [CommunicationAnalyticsController::class, 'overview'])->name('analytics');
+
+        Route::get('/{thread}', [CommunicationHubController::class, 'show'])->name('show');
+        Route::post('/{thread}/messages', [CommunicationHubController::class, 'storeMessage'])->name('messages.store');
+        Route::post('/{thread}/archive', [CommunicationHubController::class, 'archive'])->name('archive');
+        Route::post('/{thread}/unarchive', [CommunicationHubController::class, 'unarchive'])->name('unarchive');
+
+        // Phase 5A.7 §15: attachment upload/removal scoped to their
+        // owning Thread, mirroring the Announcement pair above --
+        // download reuses the SAME generic endpoint registered above
+        // (brief §32: authorization is re-derived from the parent,
+        // whichever type it is).
+        Route::post('/{thread}/attachments', [CommunicationAttachmentController::class, 'storeForThread'])->name('threads.attachments.store');
+        Route::delete('/{thread}/attachments/{attachment}', [CommunicationAttachmentController::class, 'destroyForThread'])->name('threads.attachments.destroy');
     });
 });

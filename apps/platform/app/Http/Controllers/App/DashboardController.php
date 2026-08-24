@@ -50,6 +50,8 @@ class DashboardController extends Controller
                 // Phase 1A.6: Student/Guardian Identity administration.
                 'canViewStudents' => $school !== null && $capabilities->canInSchool($user, 'students.view', $school),
                 'canViewGuardians' => $school !== null && $capabilities->canInSchool($user, 'guardians.view', $school),
+                // Phase 5A: Communication Hub.
+                'canViewCommunications' => $school !== null && $capabilities->canInSchool($user, 'communications.view', $school),
             ],
         ]);
     }

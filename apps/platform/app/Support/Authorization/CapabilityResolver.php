@@ -66,7 +66,7 @@ class CapabilityResolver
                 $membership = SchoolMembership::query()
                     ->where('user_id', $actor->id)
                     ->where('school_id', $school->id)
-                    ->where('status', 'active')
+                    ->active()
                     ->first();
 
                 if ($membership === null) {

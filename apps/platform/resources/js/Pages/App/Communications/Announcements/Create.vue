@@ -1,0 +1,278 @@
+<script setup lang="ts">
+import { router } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
+
+interface TemplatePrefill {
+    id: string;
+    title: string | null;
+    body: string;
+    priority: string | null;
+}
+
+interface Props {
+    emailChannelEnabled: boolean;
+    schoolTimezone: string;
+    canMarkRequired: boolean;
+    canDispatchEmergency: boolean;
+    template: TemplatePrefill | null;
+}
+
+const props = defineProps<Props>();
+
+const title = ref(props.template?.title ?? '');
+const body = ref(props.template?.body ?? '');
+const priority = ref<'normal' | 'important' | 'urgent' | 'critical'>(
+    (props.template?.priority as 'normal' | 'important' | 'urgent' | 'critical' | undefined) ??
+        'normal',
+);
+const audienceType = ref<'school_wide' | 'individual'>('school_wide');
+const memberIds = ref('');
+const emailSelected = ref(false);
+const requirement = ref<'optional' | 'required'>('optional');
+// Phase 5A.10 §40: never a default -- always an explicit choice, and
+// never inherited from a template (brief §13: templates carry no
+// dispatch-mode authority).
+const dispatchMode = ref<'standard' | 'emergency'>('standard');
+const emergencyJustification = ref('');
+const emergencyAcknowledged = ref(false);
+const submitting = ref(false);
+
+// Phase 5A.10 §39: the backend independently enforces this invariant
+// too -- this is a UX convenience, not the authorization boundary.
+watch(dispatchMode, (mode) => {
+    if (mode === 'emergency') {
+        requirement.value = 'required';
+    }
+});
+
+function submit() {
+    submitting.value = true;
+    const isEmergency = props.canDispatchEmergency && dispatchMode.value === 'emergency';
+    router.post(
+        '/app/communications/announcements',
+        {
+            title: title.value,
+            body: body.value,
+            priority: priority.value,
+            audience_type: audienceType.value,
+            member_user_ids:
+                audienceType.value === 'individual'
+                    ? memberIds.value
+                          .split(',')
+                          .map((id) => id.trim())
+                          .filter(Boolean)
+                    : [],
+            channels:
+                props.emailChannelEnabled && emailSelected.value ? ['in_app', 'email'] : ['in_app'],
+            source_template_id: props.template?.id ?? null,
+            requirement: props.canMarkRequired ? requirement.value : 'optional',
+            dispatch_mode: isEmergency ? 'emergency' : 'standard',
+            emergency_justification: isEmergency ? emergencyJustification.value : null,
+            emergency_acknowledged: isEmergency ? emergencyAcknowledged.value : undefined,
+        },
+        {
+            onFinish: () => {
+                submitting.value = false;
+            },
+        },
+    );
+}
+</script>
+
+<template>
+    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+        <a class="text-xs text-slate-400 underline" href="/app/communications/announcements"
+            >← Announcements</a
+        >
+        <h1 class="mt-2 text-xl font-semibold">New Announcement</h1>
+        <p class="mt-1 text-xs text-slate-500">
+            Saved as a draft first -- you'll see an audience preview before publishing or
+            scheduling.
+        </p>
+        <p v-if="template" class="mt-1 text-xs text-slate-400">
+            Pre-filled from template. Editing here does not change the template.
+        </p>
+
+        <form class="mt-6 space-y-4" @submit.prevent="submit">
+            <div>
+                <label class="block text-xs font-medium text-slate-500">Title</label>
+                <input
+                    v-model="title"
+                    type="text"
+                    required
+                    maxlength="255"
+                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                />
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-500">Message</label>
+                <textarea
+                    v-model="body"
+                    rows="5"
+                    required
+                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                ></textarea>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-500">Priority</label>
+                <select
+                    v-model="priority"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                >
+                    <option value="normal">Normal</option>
+                    <option value="important">Important</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="critical">Critical</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-500">Audience</label>
+                <select
+                    v-model="audienceType"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
+                >
+                    <option value="school_wide">Entire School</option>
+                    <option value="individual">Selected Members</option>
+                </select>
+            </div>
+
+            <div v-if="audienceType === 'individual'">
+                <label class="block text-xs font-medium text-slate-500"
+                    >Member user IDs (comma-separated)</label
+                >
+                <input
+                    v-model="memberIds"
+                    type="text"
+                    class="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                />
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-500">Delivery</label>
+                <div class="mt-1 space-y-1">
+                    <label class="flex items-center gap-2 text-sm text-slate-600">
+                        <input type="checkbox" checked disabled class="rounded border-slate-300" />
+                        In-app
+                    </label>
+                    <label
+                        class="flex items-center gap-2 text-sm"
+                        :class="emailChannelEnabled ? 'text-slate-600' : 'text-slate-400'"
+                    >
+                        <input
+                            v-model="emailSelected"
+                            type="checkbox"
+                            :disabled="!emailChannelEnabled"
+                            class="rounded border-slate-300"
+                        />
+                        Email
+                        <span v-if="!emailChannelEnabled" class="text-xs text-slate-400"
+                            >(not currently available for this school)</span
+                        >
+                    </label>
+                </div>
+            </div>
+
+            <div v-if="canMarkRequired">
+                <label class="block text-xs font-medium text-slate-500">Delivery policy</label>
+                <div class="mt-1 space-y-1 text-sm text-slate-600">
+                    <label class="flex items-start gap-2">
+                        <input
+                            v-model="requirement"
+                            type="radio"
+                            value="optional"
+                            :disabled="dispatchMode === 'emergency'"
+                            class="mt-0.5 border-slate-300"
+                        />
+                        <span>
+                            Standard
+                            <span class="block text-xs text-slate-400"
+                                >Respects each recipient's optional-channel preferences.</span
+                            >
+                        </span>
+                    </label>
+                    <label class="flex items-start gap-2">
+                        <input
+                            v-model="requirement"
+                            type="radio"
+                            value="required"
+                            :disabled="dispatchMode === 'emergency'"
+                            class="mt-0.5 border-slate-300"
+                        />
+                        <span>
+                            Required communication
+                            <span class="block text-xs text-slate-400"
+                                >May reach recipients on a channel their preference would otherwise
+                                suppress, where school policy still permits that channel for
+                                required communication.</span
+                            >
+                        </span>
+                    </label>
+                    <p v-if="dispatchMode === 'emergency'" class="text-xs text-slate-400">
+                        Locked to Required because this is an Emergency communication.
+                    </p>
+                </div>
+            </div>
+
+            <div v-if="canDispatchEmergency" class="rounded border border-red-200 bg-red-50 p-3">
+                <label class="flex items-start gap-2 text-sm font-medium text-red-800">
+                    <input
+                        :checked="dispatchMode === 'emergency'"
+                        type="checkbox"
+                        class="mt-0.5 rounded border-red-300"
+                        @change="
+                            dispatchMode = ($event.target as HTMLInputElement).checked
+                                ? 'emergency'
+                                : 'standard'
+                        "
+                    />
+                    Emergency communication
+                </label>
+                <p class="mt-1 text-xs text-red-700">
+                    This will mark the announcement as an emergency communication and may bypass
+                    configured quiet hours on channels where the school has explicitly enabled that
+                    bypass. It will automatically become Required.
+                </p>
+
+                <div v-if="dispatchMode === 'emergency'" class="mt-3 space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-red-800"
+                            >Internal justification</label
+                        >
+                        <textarea
+                            v-model="emergencyJustification"
+                            rows="2"
+                            maxlength="500"
+                            required
+                            placeholder="Short internal reason -- not necessarily shown to recipients."
+                            class="mt-1 w-full rounded border border-red-300 px-2 py-1 text-sm"
+                        ></textarea>
+                    </div>
+                    <label class="flex items-start gap-2 text-xs text-red-800">
+                        <input
+                            v-model="emergencyAcknowledged"
+                            type="checkbox"
+                            required
+                            class="mt-0.5 rounded border-red-300"
+                        />
+                        I understand this communication is intended for an emergency situation.
+                    </label>
+                </div>
+            </div>
+
+            <button
+                type="submit"
+                :disabled="
+                    submitting ||
+                    (dispatchMode === 'emergency' &&
+                        (!emergencyJustification.trim() || !emergencyAcknowledged))
+                "
+                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+                Save Draft
+            </button>
+        </form>
+    </main>
+</template>
