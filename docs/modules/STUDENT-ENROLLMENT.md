@@ -1,15 +1,19 @@
-# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4)
+# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5)
 
 Status: **schema + sanctioned write path + lifecycle transitions +
-authorization + read foundation.** Phase 1B.1 shipped the
-schema/model/RLS/composite-FK foundation; Phase 1B.2 added
-`StudentEnrollmentService::enroll()`, the only sanctioned way to
+authorization + read foundation + administrative HTTP/API.** Phase
+1B.1 shipped the schema/model/RLS/composite-FK foundation; Phase 1B.2
+added `StudentEnrollmentService::enroll()`, the only sanctioned way to
 create a StudentEnrollment; Phase 1B.3 added the four terminal
 lifecycle transitions (`complete()`/`withdraw()`/`cancel()`) and the
 atomic same-Academic-Year placement transfer (`transferPlacement()`);
-Phase 1B.4 adds the `enrollments.view`/`enrollments.manage`
+Phase 1B.4 added the `enrollments.view`/`enrollments.manage`
 capabilities and `StudentEnrollmentReadService`, the canonical read
-layer. Still no controllers, no API, no UI, and no
+layer; Phase 1B.4A hardened cross-cutting TenantContext cleanup; Phase
+1B.5 exposes all of the above through the repository's existing
+authenticated School administrative `/api/v1` surface (see
+"Administrative HTTP boundary (Phase 1B.5)" below) — it does not
+redesign the Enrollment domain. Still no Vue UI, and no
 promotion/academic-year rollover yet — see "Deferred" below.
 
 ## Identity vs enrollment boundary
@@ -764,11 +768,171 @@ Phase 1B.4A checkpoint report for the verification evidence (3
 consecutive clean full-suite runs, a random-order run, and a 20/20
 targeted stress loop, all green).
 
+## Administrative HTTP boundary (Phase 1B.5)
+
+`App\Domain\Students\Http\Controllers\StudentEnrollmentController`
+exposes the Enrollment domain above through the repository's existing
+authenticated administrative `/api/v1` surface — the same Sanctum +
+`school-membership` + capability architecture Phase 1A.5's
+`StudentController`/`StudentGuardianRelationshipController` already
+established. Deliberately thin: every mutation delegates to
+`StudentEnrollmentService`; every non-trivial read delegates to
+`StudentEnrollmentReadService`. No Enrollment rule is duplicated in the
+controller.
+
+### Authentication and School membership
+
+Every route requires `auth:sanctum` and the `school-membership`
+middleware (`App\Http\Middleware\Api\EnsureSchoolMembershipContext`) —
+an authenticated central User with no active membership in the routed
+School gets `404`, identical to a School that doesn't exist (never
+`403` — matches every other `/api/v1/schools/{school}/...` route).
+
+### Capabilities
+
+`enrollments.view` gates every read action; `enrollments.manage` gates
+every mutation. They are independent (Phase 1B.4) — `manage` never
+implies `view` and vice versa, proven by
+`StudentEnrollmentApiTest::enrollments_manage_only_is_still_denied_read_access()`/
+`::enrollments_view_only_is_denied_create()`. Mutation routes carry the
+`capability:` route middleware AND the controller's own
+`AuthorizesCapability::authorizeCapability()` call (defense in depth,
+matching every other mutation controller in this codebase); read
+actions authorize inline only, matching `AcademicYearController`/
+`StudentController`'s own read methods.
+
+### Route inventory
+
+Nested under `/students/{student}` for per-Student reads and creation
+(an Enrollment's history/current placement/creation naturally belong
+to one Student); flat under `/enrollments` for the administrative
+directory/detail/lifecycle actions — the same "nested for index/store,
+flat for singular actions" split `StudentGuardianRelationshipController`/
+`RoomController`/`AcademicTermController` already established.
+
+| Method | URI | Capability | Purpose |
+| --- | --- | --- | --- |
+| GET | `/schools/{school}/enrollments` | `enrollments.view` | Directory (`StudentEnrollmentReadService::directory()`) |
+| GET | `/schools/{school}/enrollments/{enrollment}` | `enrollments.view` | Detail (`StudentEnrollmentReadService::detail()`) |
+| GET | `/schools/{school}/students/{student}/enrollments` | `enrollments.view` | Full history (`StudentEnrollmentReadService::historyFor()`) |
+| GET | `/schools/{school}/students/{student}/enrollments/current` | `enrollments.view` | Current placement (`StudentEnrollmentReadService::currentFor()`) |
+| POST | `/schools/{school}/students/{student}/enrollments` | `enrollments.manage` | Create (`StudentEnrollmentService::enroll()`) |
+| POST | `/schools/{school}/enrollments/{enrollment}/complete` | `enrollments.manage` | `StudentEnrollmentService::complete()` |
+| POST | `/schools/{school}/enrollments/{enrollment}/withdraw` | `enrollments.manage` | `StudentEnrollmentService::withdraw()` |
+| POST | `/schools/{school}/enrollments/{enrollment}/cancel` | `enrollments.manage` | `StudentEnrollmentService::cancel()` |
+| POST | `/schools/{school}/enrollments/{enrollment}/transfer` | `enrollments.manage` | `StudentEnrollmentService::transferPlacement()` |
+
+All five mutation routes carry `throttle:school-api-mutations` and the
+`idempotent` middleware (an `Idempotency-Key` header is required) —
+every one is a consequential, plausibly-retried state change.
+
+### Tenant-safe id resolution
+
+Path-identified resources (`{student}`, `{enrollment}`) resolve via a
+plain `Student::query()->findOrFail($id)` /
+`StudentEnrollment::query()->findOrFail($id)` (or the read service's
+equivalent) — SchoolScope/RLS already make a foreign-School id `404`,
+byte-identical to a random UUID, matching `StudentController`'s own
+`show()`/`update()`. Body-supplied cross-references (`section_id` on
+create, `target_section_id` on transfer) resolve via
+`Rule::exists('sections', 'id')->where('school_id', $school->id)`
+followed by `Section::query()->findOrFail(...)` — the exact
+`StudentGuardianRelationshipController::store()` pattern for a
+caller-supplied sibling-entity id in the request body: a missing id
+and a foreign-School id both fail validation with the identical
+generic "the selected section id is invalid" message, never
+distinguishing the two. Directory/current filter ids
+(`academic_year_id`, `campus_id`, `grade_level_id`, `section_id`) are
+validated as `uuid` only and passed straight into the already
+tenant-safe read-service query — a foreign-School filter value simply
+matches zero rows (`directory()`) or `404`s exactly like a random UUID
+(`current`'s explicit `academic_year_id`), never revealing whether the
+id exists in another School.
+
+### Create input contract
+
+Only `section_id`, `roll_number`, `starts_on` are accepted — the route
+`{student}` is authoritative, and Section is the sole authoritative
+placement input. `academic_year_id`/`campus_id`/`grade_level_id`/
+`school_id`/`student_id` in the request body are silently absent from
+`$request->validate()`'s result (Laravel's validator only returns
+listed keys) and can never reach `StudentEnrollmentService::enroll()`
+— proven by
+`StudentEnrollmentApiTest::malicious_redundant_placement_fields_never_override_the_derived_placement()`.
+`roll_number` is preserved as a string end-to-end (`"007"` stays
+`"007"`, never cast to `7`). The transfer endpoint applies the
+identical rule for `target_academic_year_id`/`target_campus_id`/
+`target_grade_level_id` against `target_section_id`.
+
+### Response shape and privacy
+
+Directory rows and detail responses share one presenter: `id`, a
+minimal `student` summary (`id`, `studentNumber`, `firstName`,
+`middleName`, `lastName` — never `dateOfBirth`), `academicYear`/
+`campus`/`gradeLevel`/`section` references (`id`/`name`/`code`),
+`rollNumber`, `status`, `startsOn`, `endsOn`; detail additionally
+includes `createdAt`/`updatedAt`. No Guardian data, no encrypted
+contact values, no lookup hashes, no `school_id`, no raw audit events
+are ever serialized — proven directly against the JSON response body
+in `StudentEnrollmentApiTest::directory_rows_never_expose_sensitive_fields()`,
+not just by source inspection. Reads never audit (only the existing
+create/lifecycle service events fire).
+
+`current` returns HTTP `200` with `"data": null` when the Student has
+no active Enrollment in the resolved/given Academic Year — this is a
+valid state, not a not-found error; a `404` is reserved for a
+route-identified resource that genuinely doesn't resolve (a bad
+`{student}`/`{enrollment}` id, or an explicit but foreign/nonexistent
+`academic_year_id` filter on `current`, which fails closed exactly
+like a random UUID rather than silently falling back to the School's
+active year).
+
+### Error mapping
+
+Every existing Phase 1B domain exception already carries its own
+`getStatusCode()`/`errorCode()` (`StudentException`'s shape) and is
+rendered automatically by `bootstrap/app.php`'s generic exception
+handler — no new mapping, no per-controller `catch`, and no new
+exception classes were introduced. All are `422` today (this
+checkpoint does not change any exception's existing HTTP status):
+
+| Exception | Code | Trigger |
+| --- | --- | --- |
+| `CrossSchoolEnrollmentException` | `CROSS_SCHOOL_ENROLLMENT` | Defense-in-depth only — HTTP callers can't reach this since Student/Section are both already tenant-resolved |
+| `ActiveEnrollmentConflictException` | `ACTIVE_ENROLLMENT_CONFLICT` | A second `active` Enrollment for the same Student+Year |
+| `DuplicateEnrollmentRollNumberException` | `DUPLICATE_ENROLLMENT_ROLL_NUMBER` | Roll number already used in that Section+Year |
+| `InvalidEnrollmentRollNumberException` | `INVALID_ENROLLMENT_ROLL_NUMBER` | Blank roll number surviving Laravel's own `required` trim-check (e.g. programmatic callers) |
+| `InvalidEnrollmentTransitionException` | `INVALID_ENROLLMENT_TRANSITION` | e.g. `completed → withdraw` |
+| `InvalidEnrollmentDateRangeException` | `INVALID_ENROLLMENT_DATE_RANGE` | An end/effective date before the Enrollment's `starts_on` |
+| `CrossAcademicYearTransferException` | `CROSS_ACADEMIC_YEAR_TRANSFER` | Transfer target Section in a different Academic Year |
+| `IntraYearGradeChangeException` | `INTRA_YEAR_GRADE_CHANGE` | Transfer target Section in a different GradeLevel |
+
+No `SQLSTATE`, constraint/index name, or stack trace ever reaches a
+response body — proven directly in
+`StudentEnrollmentApiTest` for every conflict case above.
+
+### Transfer atomicity through HTTP
+
+`StudentEnrollmentApiTest::transfer_failure_is_fully_atomic_through_http()`
+proves the controller does not break `transferPlacement()`'s
+transaction semantics end-to-end: when the target Section already has
+the requested roll number, the response is a clean `422`, the source
+Enrollment is left exactly `active` with its original (`null`)
+`ends_on`, no replacement Enrollment row exists, and no
+`student_enrollment.transferred` audit event was recorded for the
+source Student.
+
+### Deferred by this checkpoint
+
+- Promotion/rollover, bulk operations, roll-number auto-generation —
+  no API surface added for any of them (unchanged from Phase 1B.1-1B.4).
+- Admissions, Attendance, Exams, Fees — untouched.
+- Vue UI — Phase 1B.6.
+
 ## Deferred (not yet implemented)
 
-- **Administrative HTTP/API and Vue UI** — `enrollments.view`/
-  `enrollments.manage` exist and are granted (Phase 1B.4), but no
-  controller exists yet to check them. A future checkpoint.
+- **Administrative Vue UI** — the API above is fully authorized and
+  tested; no frontend consumes it yet. Phase 1B.6.
 - **Promotion / bulk academic-year rollover** — conceptually "complete
   old Enrollment, create next-year Enrollment," but a bulk
   `Promote Grade 5A → Grade 6A` engine is a later checkpoint (Phase

@@ -12,6 +12,7 @@ use App\Domain\Guardians\Http\Controllers\GuardianContactController;
 use App\Domain\Guardians\Http\Controllers\GuardianController;
 use App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController;
 use App\Domain\Students\Http\Controllers\StudentController;
+use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
 use App\Http\Controllers\Api\Internal\AiToolController;
 use App\Http\Controllers\Api\Internal\HealthController;
@@ -323,6 +324,48 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/guardian-contacts/{contact}/deactivate', [GuardianContactController::class, 'deactivate'])
                 ->middleware(['capability:guardians.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.guardian-contacts.deactivate');
+
+            // --- Phase 1B.5: Student Enrollment administrative HTTP
+            // surface (docs/modules/STUDENT-ENROLLMENT.md, "Administrative
+            // HTTP boundary"). This exposes the already-built Enrollment
+            // domain (Phase 1B.1-1B.4A) -- it does not redesign it. Read
+            // actions authorize via AuthorizesCapability inline (matching
+            // AcademicYearController's index/show); mutation actions ALSO
+            // carry the `capability:` route middleware (defense in depth,
+            // matching every mutation route above). `enrollments.view`/
+            // `enrollments.manage` are independent capabilities (Phase
+            // 1B.4) -- manage never implies view here. Nested for
+            // per-Student reads/create (an Enrollment's history/current
+            // placement/creation naturally belong to one Student), flat
+            // for the administrative directory/detail/lifecycle actions --
+            // the same "nested for index/store, flat for singular actions"
+            // split StudentGuardianRelationshipController/RoomController/
+            // AcademicTermController already established above.
+
+            Route::get('/enrollments', [StudentEnrollmentController::class, 'index'])
+                ->name('schools.enrollments.index');
+            Route::get('/enrollments/{enrollment}', [StudentEnrollmentController::class, 'show'])
+                ->name('schools.enrollments.show');
+            Route::post('/enrollments/{enrollment}/complete', [StudentEnrollmentController::class, 'complete'])
+                ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollments.complete');
+            Route::post('/enrollments/{enrollment}/withdraw', [StudentEnrollmentController::class, 'withdraw'])
+                ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollments.withdraw');
+            Route::post('/enrollments/{enrollment}/cancel', [StudentEnrollmentController::class, 'cancel'])
+                ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollments.cancel');
+            Route::post('/enrollments/{enrollment}/transfer', [StudentEnrollmentController::class, 'transfer'])
+                ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollments.transfer');
+
+            Route::get('/students/{student}/enrollments', [StudentEnrollmentController::class, 'historyForStudent'])
+                ->name('schools.students.enrollments.index');
+            Route::get('/students/{student}/enrollments/current', [StudentEnrollmentController::class, 'currentForStudent'])
+                ->name('schools.students.enrollments.current');
+            Route::post('/students/{student}/enrollments', [StudentEnrollmentController::class, 'store'])
+                ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.students.enrollments.store');
         });
 });
 
