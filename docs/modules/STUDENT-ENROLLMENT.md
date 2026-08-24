@@ -1,9 +1,10 @@
-# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6 / 1B.7)
+# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6 / 1B.7 / 1B.7A)
 
 Status: **schema + sanctioned write path + lifecycle transitions +
 authorization + read foundation + administrative HTTP/API + administrative
-UI + rollover/promotion architecture decision (no rollover implementation
-yet).** Phase 1B.1 shipped the schema/model/RLS/composite-FK foundation;
+UI + rollover/promotion architecture decision + rollover schema/domain
+foundation (no dry-run/execution/API/UI for rollover yet).** Phase 1B.1
+shipped the schema/model/RLS/composite-FK foundation;
 Phase 1B.2 added `StudentEnrollmentService::enroll()`, the only
 sanctioned way to create a StudentEnrollment; Phase 1B.3 added the four
 terminal lifecycle transitions (`complete()`/`withdraw()`/`cancel()`)
@@ -16,10 +17,14 @@ repository's existing authenticated School administrative `/api/v1`
 surface (see "Administrative HTTP boundary (Phase 1B.5)" below); Phase
 1B.6 added the session-authenticated Vue/Inertia administrative UI over
 the SAME domain (see "Administrative UI (Phase 1B.6)" below); Phase
-1B.7 is an ARCHITECTURE-ONLY gate (see "Academic-Year Rollover &
-Promotion — Architecture Decision (Phase 1B.7)" below) — it decided the
-safe model for cross-year promotion but changed no production code.
-Rollover/promotion implementation begins at a future Phase 1B.7A.
+1B.7 was an ARCHITECTURE-ONLY gate (see "Academic-Year Rollover &
+Promotion — Architecture Decision (Phase 1B.7)" below) that decided the
+safe model for cross-year promotion; Phase 1B.7A implements the first
+slice of that decision — the durable plan/mapping/item schema and a
+single `EnrollmentRolloverPlanService::createDraft()` method (see
+"Schema & Domain Foundation (Phase 1B.7A)" below) — with no dry-run,
+no eligibility engine, no execution, no HTTP/API, and no UI for
+rollover yet (Phase 1B.7B onward).
 
 ## Identity vs enrollment boundary
 
@@ -1060,14 +1065,14 @@ desktop/tablet and a card list on mobile, mirroring
 
 ## Academic-Year Rollover & Promotion — Architecture Decision (Phase 1B.7)
 
-**This is a decision record, not an implementation.** Phase 1B.7 changed
-no production code — no migration, model, service, controller, route,
-Vue page, job, or command. Every rule below is either **DECIDED**
-(binding on the eventual implementation checkpoints), **DEFERRED**
-(explicitly out of scope, to be decided later), or an **OPEN DECISION**
-(a genuine product question with no safe default, requiring a human
-answer before 1B.7A can start). Nothing here should be read as already
-implemented.
+**Phase 1B.7 was a decision record, not an implementation** — it
+changed no production code. Every rule below is either **DECIDED**
+(binding on the implementation checkpoints), **DEFERRED** (explicitly
+out of scope, to be decided later), or an **OPEN DECISION** (a genuine
+product question with no safe default). Phase 1B.7A (below, "Schema &
+Domain Foundation") is the first checkpoint that actually implements
+part of this decision record — read "Schema & Domain Foundation (Phase
+1B.7A)" after this section for exactly which pieces are real today.
 
 ### Terminology (DECIDED)
 
@@ -1709,9 +1714,8 @@ because implementation hasn't started.
 
 ### Recommended implementation checkpoint sequence
 
-1. **1B.7A — Rollover Plan Schema & Domain Foundation**: migrations for
-   `EnrollmentRolloverPlan`/`EnrollmentRolloverItem` (RLS, composite
-   FKs, plan lifecycle enum), bare model classes, no business logic yet.
+1. **1B.7A — Rollover Plan Schema & Domain Foundation — IMPLEMENTED**,
+   see "Schema & Domain Foundation (Phase 1B.7A)" below.
 2. **1B.7B — Dry-Run / Eligibility / Conflict Engine**: source
    selection, eligibility matrix, GradeLevel/Section mapping
    validation, Roll Number conflict detection, result-code taxonomy —
@@ -1737,12 +1741,124 @@ Each checkpoint should independently regression-test against the
 current full-platform baseline before proceeding, exactly like every
 prior Phase 1B checkpoint.
 
+## Schema & Domain Foundation (Phase 1B.7A)
+
+Implements ONLY the durable representation the architecture decision
+above calls for. No dry-run/eligibility engine, no execution engine, no
+Roll Number generation, no HTTP/API, no UI, no queue job — those remain
+exactly as deferred above. Nothing in this checkpoint creates a
+`StudentEnrollment` row, completes/withdraws/cancels one, or touches
+`AcademicYear`/`Student` status.
+
+### Tables
+
+Three new tables, all `BelongsToSchool` + `TenantRls`-protected (RLS
+enabled and FORCED, proven under the unprivileged `school_os_app`
+runtime role in `EnrollmentRolloverIntegrityTest`), following every
+composite-FK-to-`(id, school_id)` convention already established in
+this codebase:
+
+- **`enrollment_rollover_plans`** — the plan header. `source_academic_year_id`/
+  `target_academic_year_id` (composite-FK'd to `academic_years`, must
+  differ — a real PostgreSQL CHECK constraint,
+  `enrollment_rollover_plans_source_target_differ_check`), `status`
+  (`draft`/`validated`/`executing`/`completed`/`completed_with_errors`/
+  `cancelled` — a plain string, no DB-level enumeration, matching every
+  other lifecycle column in this codebase), `configuration_version`/
+  `validated_configuration_version` (the explicit staleness mechanism —
+  execution may only proceed when they are equal), `created_by_user_id`,
+  and the usual lifecycle timestamps. At most one OPEN plan
+  (`draft`/`validated`/`executing`) may exist per (School, source year,
+  target year) — `enrollment_rollover_plans_one_open_per_year_pair`, a
+  PostgreSQL partial unique index (the `academic_years_one_active_per_school`
+  pattern); terminal plans are exempt, so a cancelled plan's year pair
+  can be legitimately re-attempted.
+- **`enrollment_rollover_mappings`** — a plan's explicit source-Grade-
+  or source-Section-keyed default. `source_section_id` NULL means a
+  Grade-level default (`enrollment_rollover_mappings_one_grade_default`,
+  a partial unique index, one per plan+Grade); set means a Section-
+  specific override (`enrollment_rollover_mappings_one_section_override`,
+  one per plan+Section). Repeat/retention has no dedicated column — it
+  is simply `target_grade_level_id = source_grade_level_id`; terminal
+  Grade is the absence of any mapping row for that source Grade, never
+  a row with a null target.
+- **`enrollment_rollover_items`** — the durable per-Student unit.
+  Columns are grouped into three families populated by three different
+  future checkpoints: CONFIGURATION (`mapping_id`, `decision`,
+  `target_section_id`, `roll_number_strategy`, `target_roll_number` —
+  1B.7B), VALIDATION/STALENESS (`validation_result`, `validation_reason`,
+  and four `*_snapshot` columns — 1B.7B), EXECUTION (`execution_status`,
+  `target_enrollment_id`, `executed_at` — 1B.7C, left fully NULL rather
+  than defaulted so a freshly configured item never looks like a queued
+  execution attempt). `source_enrollment_id` anchors the item to the
+  exact, already-resolved authoritative source `StudentEnrollment` row
+  (never re-derived loosely from `student_id` at execution time). At
+  most one item per (plan, Student) and per (plan, source Enrollment) —
+  both plain unique constraints.
+
+### The structural Student/source-Enrollment guarantee
+
+`enrollment_rollover_items.source_enrollment_id` carries **two**
+independent composite foreign keys against `student_enrollments`: one
+paired with `school_id` (the standard same-School guarantee) and one
+paired with `student_id`, made possible by a small, purely additive
+supporting index added to the already-accepted `student_enrollments`
+table in this same checkpoint —
+`unique(['id', 'student_id'])` (migration
+`2026_08_24_090000_add_student_composite_unique_to_student_enrollments_table`).
+`id` alone was already globally unique, so this index changes no
+existing behavior for any Phase 1B.1-1B.6 code; its only purpose is
+making it structurally IMPOSSIBLE to construct an item whose
+`source_enrollment_id` belongs to a different Student than its own
+`student_id` — no trigger, and no reliance on a future service "getting
+it right" the way `student_enrollments` itself must rely on
+`StudentEnrollmentService` alone for its own internal `section_id`/
+`academic_year_id` consistency. Proven directly in both
+`EnrollmentRolloverSchemaTest` (Eloquent) and
+`EnrollmentRolloverIntegrityTest` (raw SQL via `pgsql_admin`).
+
+### What is deliberately NOT database-structural
+
+Documented explicitly rather than silently assumed: `sections` exposes
+no `unique(['id', 'grade_level_id'])`/`unique(['id', 'academic_year_id'])`
+today, and this checkpoint does **not** alter Academic Structure to add
+one (unlike the narrow, explicitly-scoped `student_enrollments`
+addition above). Three invariants therefore remain
+APPLICATION-validated, deferred to Phase 1B.7B's dry-run/eligibility
+engine, never enforced by this schema:
+
+1. A mapping's `source_section_id`'s own `grade_level_id` equals its
+   `source_grade_level_id`.
+2. A mapping's `target_section_id`'s own `grade_level_id` equals its
+   `target_grade_level_id`.
+3. Any Section referenced by a mapping or item belongs to the plan's
+   declared source/target AcademicYear.
+
+### `EnrollmentRolloverPlanService`
+
+The sole sanctioned write path in this checkpoint — `createDraft()`
+only. Validates same-School (source/target year must belong to the
+plan's School) and source-year-≠-target-year BEFORE writing
+(`CrossSchoolRolloverPlanException`/`InvalidRolloverPlanYearsException`,
+mirroring `StudentEnrollmentService::enroll()`'s pre-write same-School
+check exactly), writes inside one transaction, translates the open-plan
+partial-unique violation to `OpenRolloverPlanConflictException`, and
+audits `enrollment_rollover_plan.created` via the existing
+`AuditRecorder`. Mapping and item creation have **no service yet** —
+tests construct them via factories/direct Eloquent `create()` under
+`TenantContext`, exactly like `SectionFactory`-based tests already
+build a full graph before any orchestrating service exists; a
+mapping/item-creation service arrives with Phase 1B.7B, which needs
+real mapping/eligibility validation logic anyway.
+
 ## Deferred (not yet implemented)
 
-- **Promotion / bulk academic-year rollover implementation** — the
-  architecture was decided in Phase 1B.7 (see "Academic-Year Rollover
-  & Promotion — Architecture Decision" above); no schema/service/API/
-  UI exists yet. Implementation begins at Phase 1B.7A.
+- **Promotion / bulk academic-year rollover dry-run, execution, API,
+  and UI** — the architecture was decided in Phase 1B.7 and the
+  durable plan/mapping/item schema + `createDraft()` landed in Phase
+  1B.7A (see "Schema & Domain Foundation (Phase 1B.7A)" above); no
+  dry-run/eligibility engine, execution, HTTP/API, or UI exists yet.
+  Implementation continues at Phase 1B.7B.
 - **Transfer certificate / TC document generation, inter-school
   electronic transfer network** — out of scope for the transfer/
   withdrawal *status* concept this schema already supports.

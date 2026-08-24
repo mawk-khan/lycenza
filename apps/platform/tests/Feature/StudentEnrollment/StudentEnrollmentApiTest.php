@@ -72,7 +72,7 @@ class StudentEnrollmentApiTest extends TestCase
     {
         $school = $this->createSchool();
         $campus = $this->createCampus($school);
-        $year = $this->createAcademicYear($school);
+        $year = $this->createAcademicYear($school, ['code' => 'SRC']);
         $grade = $this->createGradeLevel($school);
         $section = $this->createSection($year, $campus, $grade);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
@@ -853,7 +853,7 @@ class StudentEnrollmentApiTest extends TestCase
     public function transfer_to_a_different_academic_year_is_rejected(): void
     {
         ['school' => $school, 'campus' => $campus, 'grade' => $grade, 'section' => $sourceSection, 'student' => $student] = $this->buildPlacementContext();
-        $otherYear = $this->createAcademicYear($school);
+        $otherYear = $this->createAcademicYear($school, ['code' => 'TGT']);
         $targetSection = $this->createSection($otherYear, $campus, $grade);
         $sourceEnrollment = $this->service()->enroll($student, $sourceSection, '01', '2026-06-01');
         [$user] = $this->createSchoolAdmin('school_admin');

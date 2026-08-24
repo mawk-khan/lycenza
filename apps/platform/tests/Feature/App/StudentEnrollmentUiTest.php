@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\App;
 
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Campus;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
@@ -70,13 +71,13 @@ class StudentEnrollmentUiTest extends TestCase
     }
 
     /**
-     * @return array{school: School, campus: Campus, year: \App\Domain\AcademicStructure\Infrastructure\AcademicYear, grade: GradeLevel, section: Section, student: Student}
+     * @return array{school: School, campus: Campus, year: AcademicYear, grade: GradeLevel, section: Section, student: Student}
      */
     private function buildPlacementContext(): array
     {
         $school = $this->createSchool();
         $campus = $this->createCampus($school);
-        $year = $this->createAcademicYear($school);
+        $year = $this->createAcademicYear($school, ['code' => 'SRC']);
         $grade = $this->createGradeLevel($school);
         $section = $this->createSection($year, $campus, $grade);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
@@ -550,7 +551,7 @@ class StudentEnrollmentUiTest extends TestCase
     public function transfer_to_a_different_academic_year_shows_a_clean_error(): void
     {
         ['school' => $school, 'campus' => $campus, 'grade' => $grade, 'section' => $sourceSection, 'student' => $student] = $this->buildPlacementContext();
-        $otherYear = $this->createAcademicYear($school);
+        $otherYear = $this->createAcademicYear($school, ['code' => 'TGT']);
         $targetSection = $this->createSection($otherYear, $campus, $grade);
         $sourceEnrollment = $this->service()->enroll($student, $sourceSection, '01', '2026-06-01');
         [$user] = $this->createSchoolAdmin('school_admin');
