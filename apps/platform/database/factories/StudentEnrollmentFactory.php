@@ -22,10 +22,26 @@ class StudentEnrollmentFactory extends Factory
 {
     protected $model = StudentEnrollment::class;
 
+    /**
+     * A private, per-process monotonic counter -- deliberately NOT
+     * Faker's `unique()`. `Factory::getRawAttributes()` always calls
+     * `definition()` as the seed value for its `array_merge()` reduce,
+     * before any caller-supplied `create([...])` override is applied,
+     * so `fake()->unique()->numberBetween(...)` consumes one slot of
+     * its finite tracked pool on every call regardless of whether the
+     * caller immediately overrides `roll_number` -- exactly what
+     * exhausted a 1-60 pool during a rollover test needing >60 real
+     * Enrollments in one placement. A plain incrementing integer can
+     * never exhaust and never collides, needs no per-test reset, and
+     * remains safe under whatever number of Enrollments a single test
+     * (or the whole suite) creates.
+     */
+    private static int $rollNumberSequence = 0;
+
     public function definition(): array
     {
         return [
-            'roll_number' => (string) fake()->unique()->numberBetween(1, 60),
+            'roll_number' => (string) ++self::$rollNumberSequence,
             'status' => 'active',
             'starts_on' => fake()->dateTimeBetween('-6 months', 'now')->format('Y-m-d'),
             'ends_on' => null,
