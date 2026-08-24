@@ -6,6 +6,8 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
+use App\Domain\Communications\Infrastructure\CommunicationApprovalPolicy;
+use App\Domain\Communications\Infrastructure\CommunicationApprovalRequest;
 use App\Domain\Communications\Infrastructure\CommunicationChannelPolicy;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
@@ -198,6 +200,28 @@ trait CreatesCommunicationFixtures
                 'school_id' => $school->id,
                 'message_id' => $messageId,
                 'recipient_user_id' => $recipient->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createApprovalPolicy(School $school, array $attributes = []): CommunicationApprovalPolicy
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationApprovalPolicy::factory()->create(array_merge([
+                'school_id' => $school->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createApprovalRequest(CommunicationAnnouncement $announcement, User $requester, array $attributes = []): CommunicationApprovalRequest
+    {
+        return app(TenantContext::class)->withSchool(
+            $announcement->school,
+            fn () => CommunicationApprovalRequest::factory()->create(array_merge([
+                'school_id' => $announcement->school_id,
+                'announcement_id' => $announcement->id,
+                'requested_by_user_id' => $requester->id,
             ], $attributes)),
         );
     }

@@ -7,6 +7,7 @@ export type HubNavTab =
     | 'scheduled'
     | 'sent'
     | 'failed'
+    | 'approvals'
     | 'analytics'
     | 'templates'
     | 'preferences'
@@ -18,6 +19,7 @@ interface Props {
     canAnnounce: boolean;
     canManage: boolean;
     canManageTemplates: boolean;
+    canApprove: boolean;
 }
 
 defineProps<Props>();
@@ -102,6 +104,18 @@ defineProps<Props>();
                             : 'text-slate-600 hover:text-slate-900'
                     "
                     >Sent</a
+                >
+            </li>
+            <li v-if="canApprove">
+                <a
+                    href="/app/communications/approvals"
+                    class="block rounded px-2 py-1"
+                    :class="
+                        active === 'approvals'
+                            ? 'bg-slate-100 font-medium text-slate-900'
+                            : 'text-slate-600 hover:text-slate-900'
+                    "
+                    >Approvals</a
                 >
             </li>
             <li v-if="canManage">

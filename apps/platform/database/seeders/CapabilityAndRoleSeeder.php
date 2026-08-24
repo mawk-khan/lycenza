@@ -125,6 +125,23 @@ class CapabilityAndRoleSeeder extends Seeder
             // consistent with the existing trust boundary between the
             // two roles, not a new one.
             ['key' => 'communications.emergency', 'label' => 'Declare Communication Hub announcements as Emergency', 'namespace' => 'school'],
+
+            // Phase 5A.12 -- Approval Workflow foundation. A distinct
+            // capability from `communications.announce`/`.manage`
+            // (brief §12): the ability to REVIEW and decide someone
+            // else's submitted communication is not implied by the
+            // ability to send one's own. Granted to BOTH senior
+            // school-scoped roles (`school_admin`, `principal`) --
+            // unlike `communications.emergency`, approval review is
+            // exactly the kind of governance action a Principal is
+            // expected to perform over communications submitted by
+            // less-privileged senders, and separation of duties
+            // (brief §13, enforced in
+            // App\Domain\Communications\Application\Approval\CommunicationApprovalService::decide())
+            // already prevents a requester from approving their own
+            // submission regardless of which role granted them this
+            // capability.
+            ['key' => 'communications.approve', 'label' => 'Approve or reject Communication Hub approval requests', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -158,7 +175,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.subjects.view', 'academics.subjects.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',
-                    'communications.templates.manage', 'communications.emergency',
+                    'communications.templates.manage', 'communications.emergency', 'communications.approve',
                 ],
             ],
             'principal' => [
@@ -179,7 +196,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
                     'communications.view', 'communications.send', 'communications.reply',
-                    'communications.announce', 'communications.templates.manage',
+                    'communications.announce', 'communications.templates.manage', 'communications.approve',
                 ],
             ],
         ];

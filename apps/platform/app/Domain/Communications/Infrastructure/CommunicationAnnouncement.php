@@ -135,6 +135,12 @@ class CommunicationAnnouncement extends Model
         return $this->hasMany(CommunicationAttachment::class, 'communication_announcement_id');
     }
 
+    /** @return HasMany<CommunicationApprovalRequest, $this> */
+    public function approvalRequests(): HasMany
+    {
+        return $this->hasMany(CommunicationApprovalRequest::class, 'announcement_id');
+    }
+
     public function priorityEnum(): CommunicationPriority
     {
         return CommunicationPriority::from($this->priority);
@@ -188,12 +194,37 @@ class CommunicationAnnouncement extends Model
     }
 
     /**
-     * Phase 5A.4 §31: still-canonical-content-editable, whether or not
-     * it has a schedule attached yet -- the SAME `title`/`body`/
-     * `priority`/audience/channel editing rules apply to both.
+     * Phase 5A.12 §16: distinct from `isEditable()` -- while pending,
+     * content is deliberately frozen (brief §29) until the requester
+     * withdraws or the approver decides.
+     */
+    public function isPendingApproval(): bool
+    {
+        return $this->status === 'pending_approval';
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->status === 'approved';
+    }
+
+    public function isRejected(): bool
+    {
+        return $this->status === 'rejected';
+    }
+
+    /**
+     * Phase 5A.4 §31, widened by Phase 5A.12 §29/§35/§36: still-
+     * canonical-content-editable in DRAFT/SCHEDULED (unchanged from
+     * 5A.4), and now also APPROVED/REJECTED -- editing either of those
+     * is exactly what re-enters the approval cycle
+     * (App\Domain\Communications\Application\Approval\CommunicationApprovalService::invalidateIfFingerprintChanged())
+     * rather than being blocked outright. PENDING_APPROVAL is
+     * deliberately NOT editable (brief §29: no silent editing behind
+     * the approver's back -- withdraw first).
      */
     public function isEditable(): bool
     {
-        return $this->isDraft() || $this->isScheduled();
+        return $this->isDraft() || $this->isScheduled() || $this->isApproved() || $this->isRejected();
     }
 }

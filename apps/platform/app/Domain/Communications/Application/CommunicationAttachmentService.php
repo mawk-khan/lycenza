@@ -2,6 +2,7 @@
 
 namespace App\Domain\Communications\Application;
 
+use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Exceptions\AttachmentStorageException;
 use App\Domain\Communications\Application\Exceptions\AttachmentTooLargeException;
 use App\Domain\Communications\Application\Exceptions\AttachmentTypeNotAllowedException;
@@ -63,6 +64,7 @@ class CommunicationAttachmentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly CommunicationApprovalService $approvalService,
     ) {}
 
     public function upload(CommunicationAnnouncement $announcement, User $actor, UploadedFile $file): CommunicationAttachment
@@ -72,11 +74,23 @@ class CommunicationAttachmentService
                 throw new InvalidAnnouncementTransitionException($announcement->status, 'attach');
             }
 
-            return $this->store($announcement->school, $actor, $file, [
+            $attachment = $this->store($announcement->school, $actor, $file, [
                 'communication_announcement_id' => $announcement->id,
             ], "communications/announcements/{$announcement->id}", fn ($q) => $q->where('communication_announcement_id', $announcement->id), [
                 'announcementId' => $announcement->id,
             ]);
+
+            // Phase 5A.12 §25: an attachment is an approval-sensitive
+            // field exactly like title/body/channels -- adding one to
+            // an already-APPROVED announcement invalidates its
+            // approval, the SAME fingerprint-recompute-and-compare hook
+            // App\Domain\Communications\Application\AnnouncementService::updateDraft()
+            // calls. A no-op for a Thread-owned upload (not reached
+            // here) and for the overwhelming majority of announcements
+            // that never used approval at all.
+            $this->approvalService->invalidateIfFingerprintChanged($announcement, $actor);
+
+            return $attachment;
         });
     }
 
@@ -126,6 +140,7 @@ class CommunicationAttachmentService
             }
 
             $metadata = [];
+            $announcement = null;
 
             if ($attachment->communication_announcement_id !== null) {
                 $announcement = $attachment->announcement;
@@ -160,6 +175,15 @@ class CommunicationAttachmentService
             });
 
             Storage::disk($attachment->storage_disk)->delete($attachment->storage_path);
+
+            // Phase 5A.12 §25: removing an attachment is exactly as
+            // approval-sensitive as adding one -- see upload()'s own
+            // comment. Deliberately AFTER the attachment row is already
+            // gone, so the recomputed fingerprint reflects the true
+            // post-removal attachment set.
+            if ($announcement !== null) {
+                $this->approvalService->invalidateIfFingerprintChanged($announcement, $actor);
+            }
         });
     }
 

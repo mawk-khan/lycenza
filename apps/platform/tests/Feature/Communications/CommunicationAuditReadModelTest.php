@@ -3,6 +3,7 @@
 namespace Tests\Feature\Communications;
 
 use App\Domain\Communications\Application\AnnouncementService;
+use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\CommunicationAuditReadModel;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
@@ -148,5 +149,42 @@ class CommunicationAuditReadModelTest extends TestCase
         $timeline = $this->readModel()->timelineForAnnouncement($schoolB, $announcementA, includeEmergencyJustification: true);
 
         $this->assertSame(0, $timeline->total());
+    }
+
+    /**
+     * Phase 5A.12 §47/§91 -- the approval workflow's own events (requested,
+     * approved, invalidated) become visible through THIS SAME Phase
+     * 5A.11 audit surface -- no separate approval-specific audit view.
+     */
+    #[Test]
+    public function approval_requested_approved_and_invalidated_events_appear_in_the_timeline(): void
+    {
+        [$creator, $school] = $this->createSchoolAdmin('school_admin');
+        $approver = $this->createUser();
+        $approverMembership = $this->createMembership($approver, $school);
+        $this->assignSchoolRole($approverMembership, 'principal');
+        $this->createMembership($this->createUser(), $school);
+        $this->createApprovalPolicy($school, ['require_school_wide_approval' => true]);
+
+        $announcement = $this->announcements()->createDraft(
+            $school, $creator, 'T', 'B', CommunicationPriority::Normal, CommunicationAudienceType::SchoolWide,
+        );
+        $request = app(CommunicationApprovalService::class)->submit($announcement, $creator);
+        app(CommunicationApprovalService::class)->approve($request, $approver, 'looks good');
+
+        // Editing the now-approved announcement invalidates it.
+        $this->announcements()->updateDraft($announcement, $creator, title: 'Changed');
+
+        $timeline = $this->readModel()->timelineForAnnouncement($school, $announcement, includeEmergencyJustification: true);
+        $events = collect($timeline->items())->pluck('event')->all();
+
+        $this->assertContains('announcement.approval_requested', $events);
+        $this->assertContains('announcement.approved', $events);
+        $this->assertContains('announcement.approval_invalidated', $events);
+
+        $approvedEntry = collect($timeline->items())->first(fn ($e) => $e->event === 'announcement.approved');
+        $this->assertSame('Approved', $approvedEntry->label);
+        $this->assertSame($approver->name, $approvedEntry->actorName);
+        $this->assertSame('looks good', $approvedEntry->metadata['decisionNote']);
     }
 }

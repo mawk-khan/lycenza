@@ -38,6 +38,10 @@ class CommunicationAuditReadModel
     private const ALLOWED_METADATA_KEYS = [
         'audienceType', 'resolvedCount', 'scheduledAt', 'previousScheduledAt',
         'newScheduledAt', 'requirement', 'channel', 'requestedChannels', 'justification',
+        // Phase 5A.12 §47/§91 -- approval workflow evidence. Never a
+        // recipient list or message body; `fingerprint`/`requestId` are
+        // opaque identifiers only, safe to display for verification.
+        'reasons', 'fingerprint', 'previousFingerprint', 'decisionNote', 'requestId',
     ];
 
     /**
@@ -69,6 +73,12 @@ class CommunicationAuditReadModel
         'announcement.emergency_published' => 'Emergency published',
         'announcement.emergency_declared' => 'Marked Emergency',
         'communication.emergency_quiet_hours_bypass_used' => 'Quiet-hours bypass used',
+        // Phase 5A.12 §47/§91.
+        'announcement.approval_requested' => 'Submitted for approval',
+        'announcement.approved' => 'Approved',
+        'announcement.rejected' => 'Rejected',
+        'announcement.approval_withdrawn' => 'Approval withdrawn',
+        'announcement.approval_invalidated' => 'Approval invalidated by edit',
     ];
 
     public function __construct(private readonly TenantContext $context) {}

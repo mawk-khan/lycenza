@@ -2,9 +2,11 @@
 
 namespace App\Domain\Communications\Application;
 
+use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
+use App\Domain\Communications\Application\Exceptions\ApprovalRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmergencyCannotBeScheduledException;
 use App\Domain\Communications\Application\Exceptions\EmergencyJustificationRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmergencyMustBeRequiredException;
@@ -98,6 +100,7 @@ class AnnouncementService
         private readonly EmailAddressResolver $emailAddressResolver,
         private readonly CommunicationChannelPolicyService $channelPolicy,
         private readonly CommunicationDeliveryTimingPolicyService $timingPolicy,
+        private readonly CommunicationApprovalService $approvalService,
     ) {}
 
     /**
@@ -224,6 +227,17 @@ class AnnouncementService
                     'requirement' => $requirement?->value,
                 ], fn ($value) => $value !== null);
 
+                // Phase 5A.12 §36: editing a REJECTED announcement is
+                // exactly what re-enters it into the normal Draft
+                // editing cycle (brief §36's "Rejected -> Draft/Edit ->
+                // Submit new approval request") -- there is no active
+                // approval to invalidate for a rejected request (it was
+                // never granted), so this is a plain status reset, not
+                // an invalidation event.
+                if ($announcement->isRejected()) {
+                    $updates['status'] = 'draft';
+                }
+
                 $becameEmergency = false;
 
                 if ($dispatchMode !== null) {
@@ -258,6 +272,18 @@ class AnnouncementService
                 if ($becameEmergency) {
                     $this->auditEmergencyDeclared($announcement, $actor, $effectiveRequirement, $emergencyJustification);
                 }
+
+                // Phase 5A.12 §35: an approval-sensitive edit to an
+                // APPROVED (or already-SCHEDULED-via-approval)
+                // announcement invalidates its approval immediately and
+                // returns it to Draft, requiring resubmission -- no
+                // semantic-diff heuristics (brief §35), the fingerprint
+                // recomputed from THIS updated state is compared
+                // byte-for-byte against the active request's stored
+                // one. A no-op, single indexed lookup for the
+                // overwhelming majority of Schools that never use
+                // approval (brief §8's safe default).
+                $this->approvalService->invalidateIfFingerprintChanged($announcement, $actor);
 
                 return $announcement->fresh();
             });
@@ -338,13 +364,39 @@ class AnnouncementService
             $deliveryIds = [];
 
             $result = DB::transaction(function () use ($announcement, $actor, &$deliveryIds) {
+                // Phase 5A.12 §32/§33/§52/§62/§82/§83: evaluated FRESH,
+                // inside this same transaction, immediately before the
+                // atomic claim below -- never trusts a possibly-stale
+                // `$announcement` the caller already held. `approved`
+                // is only ever a valid claim source when a currently-
+                // matching-fingerprint approval genuinely exists
+                // (App\Domain\Communications\Application\Approval\CommunicationApprovalService::currentlyApprovedAndValid());
+                // `draft` is only a valid claim source when the
+                // School's CURRENT policy does not require approval for
+                // this announcement. Emergency is exempt entirely
+                // (brief §10/§40) -- its own capability/acknowledgement
+                // gate already governs it in
+                // App\Domain\Communications\Http\Controllers\AnnouncementController::publish().
+                $approvedSourceAllowed = ! $announcement->isEmergency()
+                    && $this->approvalService->currentlyApprovedAndValid($announcement);
+
+                $draftSourceAllowed = $announcement->isEmergency() || $approvedSourceAllowed
+                    || ! $this->approvalService->requirement($announcement)->required;
+
                 $claimed = CommunicationAnnouncement::query()
                     ->where('id', $announcement->id)
-                    ->where(function ($query) {
-                        $query->where('status', 'draft')
-                            ->orWhere(function ($query) {
-                                $query->where('status', 'scheduled')->where('scheduled_at', '<=', now());
-                            });
+                    ->where(function ($query) use ($approvedSourceAllowed, $draftSourceAllowed) {
+                        $query->where(function ($query) {
+                            $query->where('status', 'scheduled')->where('scheduled_at', '<=', now());
+                        });
+
+                        if ($approvedSourceAllowed) {
+                            $query->orWhere('status', 'approved');
+                        }
+
+                        if ($draftSourceAllowed) {
+                            $query->orWhere('status', 'draft');
+                        }
                     })
                     ->update(['status' => 'published', 'published_at' => now()]);
 
@@ -356,6 +408,11 @@ class AnnouncementService
                         // published by an earlier call, nothing more
                         // to do, no new deliveries dispatched.
                         return $fresh;
+                    }
+
+                    if (($fresh->status === 'draft' && ! $draftSourceAllowed)
+                        || ($fresh->status === 'approved' && ! $approvedSourceAllowed)) {
+                        throw new ApprovalRequiredException;
                     }
 
                     throw new InvalidAnnouncementTransitionException($fresh->status, 'publish');
@@ -568,9 +625,34 @@ class AnnouncementService
             }
 
             return DB::transaction(function () use ($announcement, $actor, $scheduledAtUtc) {
+                // Phase 5A.12 §34/§52: the same approval gate
+                // publish() applies -- 'approved' is a valid claim
+                // source only with a currently-matching fingerprint;
+                // 'draft' only when current policy does not require
+                // approval for this announcement. Reschedule() (a
+                // SEPARATE method, unchanged) never touches this gate
+                // at all -- brief §34's "schedule time is operational
+                // timing, not message meaning."
+                $approvedSourceAllowed = $this->approvalService->currentlyApprovedAndValid($announcement);
+                $draftSourceAllowed = $approvedSourceAllowed || ! $this->approvalService->requirement($announcement)->required;
+
                 $claimed = CommunicationAnnouncement::query()
                     ->where('id', $announcement->id)
-                    ->where('status', 'draft')
+                    ->where(function ($query) use ($approvedSourceAllowed, $draftSourceAllowed) {
+                        // Defensive base clause: if NEITHER source is
+                        // currently permitted, this must match zero
+                        // rows -- never fall through to an unqualified
+                        // group that would match ANY status.
+                        $query->whereRaw('1 = 0');
+
+                        if ($approvedSourceAllowed) {
+                            $query->orWhere('status', 'approved');
+                        }
+
+                        if ($draftSourceAllowed) {
+                            $query->orWhere('status', 'draft');
+                        }
+                    })
                     ->update([
                         'status' => 'scheduled',
                         'scheduled_at' => $scheduledAtUtc,
@@ -580,6 +662,11 @@ class AnnouncementService
                 $fresh = $announcement->fresh();
 
                 if ($claimed === 0) {
+                    if (($fresh->status === 'draft' && ! $draftSourceAllowed)
+                        || ($fresh->status === 'approved' && ! $approvedSourceAllowed)) {
+                        throw new ApprovalRequiredException;
+                    }
+
                     throw new InvalidAnnouncementTransitionException($fresh->status, 'schedule');
                 }
 

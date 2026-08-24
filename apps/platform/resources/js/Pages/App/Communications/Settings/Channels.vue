@@ -18,10 +18,17 @@ interface TimingPolicy {
     emergencyBypassAllowed: boolean;
 }
 
+interface ApprovalPolicy {
+    requireSchoolWideApproval: boolean;
+    requireRequiredCommunicationApproval: boolean;
+    requireNonPrivilegedSenderApproval: boolean;
+}
+
 interface Props {
     policies: ChannelPolicy[];
     emailChannelEnabled: boolean;
     timingPolicy: TimingPolicy;
+    approvalPolicy: ApprovalPolicy;
     schoolTimezone: string;
 }
 
@@ -45,6 +52,28 @@ function save() {
             recipient_can_opt_out: recipientCanOptOut.value,
         },
         { onFinish: () => (saving.value = false), preserveScroll: true },
+    );
+}
+
+const requireSchoolWideApproval = ref(props.approvalPolicy.requireSchoolWideApproval);
+const requireRequiredCommunicationApproval = ref(
+    props.approvalPolicy.requireRequiredCommunicationApproval,
+);
+const requireNonPrivilegedSenderApproval = ref(
+    props.approvalPolicy.requireNonPrivilegedSenderApproval,
+);
+const savingApproval = ref(false);
+
+function saveApprovalPolicy() {
+    savingApproval.value = true;
+    router.put(
+        '/app/communications/settings/approvals',
+        {
+            require_school_wide_approval: requireSchoolWideApproval.value,
+            require_required_communication_approval: requireRequiredCommunicationApproval.value,
+            require_non_privileged_sender_approval: requireNonPrivilegedSenderApproval.value,
+        },
+        { onFinish: () => (savingApproval.value = false), preserveScroll: true },
     );
 }
 
@@ -230,6 +259,52 @@ function saveTiming() {
                 @click="saveTiming"
             >
                 Save Timing Settings
+            </button>
+        </div>
+
+        <div class="mt-10 rounded border border-slate-200 p-4">
+            <h2 class="text-sm font-semibold">Approval workflow</h2>
+            <p class="mt-1 text-xs text-slate-400">
+                When enabled, a matching announcement must be approved by an authorized reviewer
+                before it can be published or scheduled. Off by default -- existing behavior is
+                unchanged until explicitly enabled below. Emergency communications never enter this
+                workflow.
+            </p>
+
+            <div class="mt-3 space-y-2 text-sm">
+                <label class="flex items-center gap-2">
+                    <input
+                        v-model="requireSchoolWideApproval"
+                        type="checkbox"
+                        class="rounded border-slate-300"
+                    />
+                    Require approval for school-wide announcements
+                </label>
+                <label class="flex items-center gap-2">
+                    <input
+                        v-model="requireRequiredCommunicationApproval"
+                        type="checkbox"
+                        class="rounded border-slate-300"
+                    />
+                    Require approval for communications marked Required
+                </label>
+                <label class="flex items-center gap-2">
+                    <input
+                        v-model="requireNonPrivilegedSenderApproval"
+                        type="checkbox"
+                        class="rounded border-slate-300"
+                    />
+                    Require approval when the sender does not have Communication management access
+                </label>
+            </div>
+
+            <button
+                type="button"
+                :disabled="savingApproval"
+                class="mt-4 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                @click="saveApprovalPolicy"
+            >
+                Save Approval Settings
             </button>
         </div>
     </main>

@@ -2,6 +2,8 @@
 
 use App\Domain\Communications\Http\Controllers\AnnouncementController;
 use App\Domain\Communications\Http\Controllers\CommunicationAnalyticsController;
+use App\Domain\Communications\Http\Controllers\CommunicationApprovalController;
+use App\Domain\Communications\Http\Controllers\CommunicationApprovalPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
 use App\Domain\Communications\Http\Controllers\CommunicationAuditController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
@@ -121,6 +123,24 @@ Route::middleware('auth')->group(function (): void {
             // analytics separation).
             Route::get('/{announcement}/audit', [CommunicationAuditController::class, 'show'])->name('audit');
             Route::get('/{announcement}/analytics', [CommunicationAnalyticsController::class, 'announcement'])->name('analytics');
+
+            // Phase 5A.12 §27/§29/§37: submit-for-approval and
+            // withdrawal, scoped to their owning Announcement --
+            // approve/reject live under their own
+            // `/app/communications/approvals` prefix below (brief §42),
+            // since a decision is made against the REQUEST, not the
+            // Announcement directly.
+            Route::post('/{announcement}/submit-approval', [AnnouncementController::class, 'submitForApproval'])->name('submit-approval');
+            Route::post('/{announcement}/withdraw-approval', [AnnouncementController::class, 'withdrawApproval'])->name('withdraw-approval');
+        });
+
+        // Phase 5A.12 §42/§45: registered BEFORE the '/{thread}'
+        // wildcard below, same reasoning as 'announcements' above.
+        Route::prefix('approvals')->name('approvals.')->group(function (): void {
+            Route::get('/', [CommunicationApprovalController::class, 'index'])->name('index');
+            Route::get('/{approvalRequest}', [CommunicationApprovalController::class, 'show'])->name('show');
+            Route::post('/{approvalRequest}/approve', [CommunicationApprovalController::class, 'approve'])->name('approve');
+            Route::post('/{approvalRequest}/reject', [CommunicationApprovalController::class, 'reject'])->name('reject');
         });
 
         // Phase 5A.6 §11: registered BEFORE the '/{thread}' wildcard
@@ -154,6 +174,11 @@ Route::middleware('auth')->group(function (): void {
             // page's quiet-hours section -- see
             // CommunicationDeliveryTimingPolicyController's docblock.
             Route::put('/timing', [CommunicationDeliveryTimingPolicyController::class, 'update'])->name('timing.update');
+
+            // Phase 5A.12 §41: write side of the same Channels settings
+            // page's Approval Workflow section -- see
+            // CommunicationApprovalPolicyController's docblock.
+            Route::put('/approvals', [CommunicationApprovalPolicyController::class, 'update'])->name('approvals.update');
         });
 
         // Phase 5A.7 §10: registered BEFORE the '/{thread}' wildcard

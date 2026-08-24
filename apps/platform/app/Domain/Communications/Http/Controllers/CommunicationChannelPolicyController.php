@@ -5,8 +5,10 @@ namespace App\Domain\Communications\Http\Controllers;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
 use App\Domain\Communications\Application\Policy\SchoolChannelPolicyService;
 use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Domain\Communications\Infrastructure\CommunicationApprovalPolicy;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryTimingPolicy;
 use App\Http\Controllers\Controller;
+use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
@@ -66,8 +68,28 @@ class CommunicationChannelPolicyController extends Controller
                 'quietHoursEnd' => $timing?->quiet_hours_end !== null ? substr((string) $timing->quiet_hours_end, 0, 5) : null,
                 'emergencyBypassAllowed' => $timing !== null && $timing->emergency_bypass_allowed,
             ],
+            // Phase 5A.12 §41: read side of the Approval Workflow
+            // settings section on this same page -- the write side is
+            // a separate controller
+            // (CommunicationApprovalPolicyController), mirroring the
+            // channel-policy/timing-policy split above exactly.
+            'approvalPolicy' => $this->presentApprovalPolicy($school),
             'schoolTimezone' => $school->timezone,
         ]);
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function presentApprovalPolicy(School $school): array
+    {
+        $policy = CommunicationApprovalPolicy::query()->where('school_id', $school->id)->first();
+
+        return [
+            'requireSchoolWideApproval' => $policy !== null && $policy->require_school_wide_approval,
+            'requireRequiredCommunicationApproval' => $policy !== null && $policy->require_required_communication_approval,
+            'requireNonPrivilegedSenderApproval' => $policy !== null && $policy->require_non_privileged_sender_approval,
+        ];
     }
 
     public function update(Request $request, TenantContext $context, SchoolChannelPolicyService $service): RedirectResponse

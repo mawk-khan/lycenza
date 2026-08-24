@@ -3,6 +3,7 @@
 namespace App\Domain\Communications\Http\Controllers;
 
 use App\Domain\Communications\Application\AnnouncementService;
+use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
@@ -146,6 +147,7 @@ class AnnouncementController extends Controller
         AnnouncementService $service,
         EmailAddressResolver $emailResolver,
         CommunicationChannelPolicyService $channelPolicy,
+        CommunicationApprovalService $approvalService,
         string $announcement,
     ): Response {
         $school = $context->requireSchool();
@@ -180,6 +182,17 @@ class AnnouncementController extends Controller
         $canEditOrSchedule = ($isCreator || $canManage) && $model->isEditable();
         $canDispatchEmergency = app(CapabilityResolver::class)->canInSchool($actor, 'communications.emergency', $school);
 
+        // Phase 5A.12 §44/§50: computed for every viewer who can reach
+        // this page at all (never restricted further -- the reasons
+        // are safe governance metadata, not private content). Emergency
+        // announcements always evaluate to `required: false` (brief
+        // §10) regardless of School policy.
+        $approvalRequirement = $approvalService->requirement($model);
+        $latestApprovalRequest = $approvalRequirement->required || $model->status !== 'draft'
+            ? $approvalService->latestRequest($model)
+            : null;
+        $canApprove = app(CapabilityResolver::class)->canInSchool($actor, 'communications.approve', $school);
+
         return Inertia::render('App/Communications/Announcements/Show', [
             // Phase 5A.10 §41: `emergencyJustification` is restricted
             // server-side -- never sent to the payload at all for an
@@ -200,7 +213,14 @@ class AnnouncementController extends Controller
             'channelDeliverySummary' => $model->isPublished() ? $this->channelDeliverySummary($model) : null,
             'canEdit' => $canEditOrSchedule,
             'canSchedule' => $canEditOrSchedule,
-            'canCancel' => ($isCreator || $canManage) && $model->isEditable(),
+            // Phase 5A.12: deliberately NOT the widened isEditable() --
+            // App\Domain\Communications\Application\AnnouncementService::cancel()
+            // was intentionally left untouched by this checkpoint (its
+            // own claim only accepts draft/scheduled sources); an
+            // APPROVED/REJECTED/PENDING_APPROVAL announcement is
+            // discarded via Withdraw (if pending) or by editing it back
+            // to Draft first, never a direct Cancel from those states.
+            'canCancel' => ($isCreator || $canManage) && ($model->isDraft() || $model->isScheduled()),
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
             'attachments' => $model->attachments->map(fn (CommunicationAttachment $a) => $this->presentAttachment($a))->all(),
             'canManageAttachments' => $canEditOrSchedule,
@@ -212,6 +232,27 @@ class AnnouncementController extends Controller
             // its own capability).
             'canViewAudit' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.audit.view', $school),
             'canViewAnalytics' => $canManage,
+            // Phase 5A.12 §44/§70-§73: approval-workflow status for the
+            // requester's own view. `canSubmitForApproval` is
+            // deliberately false while Emergency (brief §75 -- the
+            // Emergency composer/detail flow never shows this action).
+            'approvalRequirement' => [
+                'required' => $approvalRequirement->required,
+                'reasons' => $approvalRequirement->reasons,
+            ],
+            'latestApprovalRequest' => $latestApprovalRequest === null ? null : [
+                'id' => $latestApprovalRequest->id,
+                'status' => $latestApprovalRequest->status,
+                'requestedByName' => $latestApprovalRequest->requestedBy?->name,
+                'requestedAt' => $latestApprovalRequest->requested_at->toIso8601String(),
+                'decidedByName' => $latestApprovalRequest->decidedBy?->name,
+                'decidedAt' => $latestApprovalRequest->decided_at?->toIso8601String(),
+                'decisionNote' => $latestApprovalRequest->decision_note,
+            ],
+            'canSubmitForApproval' => ($isCreator || $canManage) && $model->isDraft()
+                && ! $model->isEmergency() && $approvalRequirement->required,
+            'canWithdrawApproval' => ($isCreator || $canManage) && $model->isPendingApproval(),
+            'canApprove' => $canApprove && $model->isPendingApproval(),
         ]);
     }
 
@@ -313,6 +354,59 @@ class AnnouncementController extends Controller
 
         try {
             $service->cancel($model, $actor);
+        } catch (CommunicationException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/communications/announcements/{$model->id}");
+    }
+
+    /**
+     * Phase 5A.12 §27 -- `communications.announce`-gated exactly like
+     * every other Announcement write action; the SAME creator-or-
+     * `communications.manage` ownership check applies. The service
+     * itself independently re-verifies the School's current policy
+     * actually requires approval (ApprovalNotRequiredException) and
+     * that Emergency never enters this queue
+     * (EmergencyCannotUseApprovalWorkflowException) -- this controller
+     * never trusts the composer UI to have hidden the button correctly.
+     */
+    public function submitForApproval(TenantContext $context, CommunicationApprovalService $approvalService, string $announcement): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.announce', $school);
+        $actor = $context->actor();
+
+        $model = CommunicationAnnouncement::query()->findOrFail($announcement);
+        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
+
+        try {
+            $approvalService->submit($model, $actor);
+        } catch (CommunicationException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/communications/announcements/{$model->id}");
+    }
+
+    /**
+     * Phase 5A.12 §29/§37 -- withdrawal returns the Announcement to
+     * editable Draft; historical evidence is preserved (the request row
+     * is marked `cancelled`, never deleted).
+     */
+    public function withdrawApproval(TenantContext $context, CommunicationApprovalService $approvalService, string $announcement): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.announce', $school);
+        $actor = $context->actor();
+
+        $model = CommunicationAnnouncement::query()->findOrFail($announcement);
+        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
+
+        try {
+            $approvalService->withdraw($model, $actor);
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         }

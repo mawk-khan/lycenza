@@ -11,6 +11,7 @@ interface Props {
     canAnnounce: boolean;
     canManage: boolean;
     canManageTemplates: boolean;
+    canApprove: boolean;
 }
 
 const props = defineProps<Props>();
@@ -43,6 +44,7 @@ function showMore() {
                 :can-announce="canAnnounce"
                 :can-manage="canManage"
                 :can-manage-templates="canManageTemplates"
+                :can-approve="canApprove"
             />
 
             <div>

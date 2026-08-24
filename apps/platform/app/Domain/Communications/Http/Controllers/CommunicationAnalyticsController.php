@@ -164,6 +164,7 @@ class CommunicationAnalyticsController extends Controller
             'canManage' => $canManage,
             'canManageChannelPolicy' => $canManage,
             'canManageTemplates' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.templates.manage', $school),
+            'canApprove' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.approve', $school),
         ];
     }
 }

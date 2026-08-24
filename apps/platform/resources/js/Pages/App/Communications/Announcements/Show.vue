@@ -46,6 +46,21 @@ interface AttachmentSummary {
     createdAt: string | null;
 }
 
+interface ApprovalRequirement {
+    required: boolean;
+    reasons: string[];
+}
+
+interface LatestApprovalRequest {
+    id: string;
+    status: string;
+    requestedByName: string | null;
+    requestedAt: string;
+    decidedByName: string | null;
+    decidedAt: string | null;
+    decisionNote: string | null;
+}
+
 const UNAVAILABLE_FAILURE_CODES = [
     'recipient_email_missing',
     'recipient_email_invalid',
@@ -68,6 +83,11 @@ interface Props {
     canManageAttachments: boolean;
     canViewAudit: boolean;
     canViewAnalytics: boolean;
+    approvalRequirement: ApprovalRequirement;
+    latestApprovalRequest: LatestApprovalRequest | null;
+    canSubmitForApproval: boolean;
+    canWithdrawApproval: boolean;
+    canApprove: boolean;
 }
 
 const props = defineProps<Props>();
@@ -157,6 +177,33 @@ function publish() {
     );
 }
 
+const submittingApproval = ref(false);
+const withdrawingApproval = ref(false);
+
+const approvalReasonLabels: Record<string, string> = {
+    school_wide: 'School-wide audience',
+    required_communication: 'Marked Required',
+    non_privileged_sender: 'Sender requires review',
+};
+
+function submitForApproval() {
+    submittingApproval.value = true;
+    router.post(
+        `/app/communications/announcements/${props.announcement.id}/submit-approval`,
+        {},
+        { onFinish: () => (submittingApproval.value = false) },
+    );
+}
+
+function withdrawApproval() {
+    withdrawingApproval.value = true;
+    router.post(
+        `/app/communications/announcements/${props.announcement.id}/withdraw-approval`,
+        {},
+        { onFinish: () => (withdrawingApproval.value = false) },
+    );
+}
+
 function cancelAnnouncement() {
     cancelling.value = true;
     router.post(
@@ -242,12 +289,15 @@ function formatFileSize(bytes: number): string {
                 class="rounded px-1.5 py-0.5 text-xs font-medium"
                 :class="{
                     'bg-slate-100 text-slate-600': announcement.status === 'draft',
+                    'bg-blue-100 text-blue-700': announcement.status === 'pending_approval',
+                    'bg-teal-100 text-teal-700': announcement.status === 'approved',
+                    'bg-rose-100 text-rose-700': announcement.status === 'rejected',
                     'bg-amber-100 text-amber-700': announcement.status === 'scheduled',
                     'bg-emerald-100 text-emerald-700': announcement.status === 'published',
                     'bg-red-100 text-red-600': announcement.status === 'cancelled',
                 }"
             >
-                {{ announcement.status }}
+                {{ announcement.status.replace('_', ' ') }}
             </span>
             <span
                 v-if="announcement.dispatchMode === 'emergency'"
@@ -269,6 +319,74 @@ function formatFileSize(bytes: number): string {
         >
             <p class="font-medium">Internal justification (restricted)</p>
             <p class="mt-1 whitespace-pre-wrap">{{ announcement.emergencyJustification }}</p>
+        </div>
+
+        <div
+            v-if="approvalRequirement.required || latestApprovalRequest"
+            class="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs"
+        >
+            <p v-if="announcement.status === 'pending_approval'" class="font-medium text-blue-700">
+                Pending approval
+                <template v-if="latestApprovalRequest">
+                    · submitted by
+                    {{ latestApprovalRequest.requestedByName ?? 'Unknown' }}</template
+                >
+            </p>
+            <p v-else-if="announcement.status === 'approved'" class="font-medium text-teal-700">
+                Approved
+                <template v-if="latestApprovalRequest?.decidedByName">
+                    · by {{ latestApprovalRequest.decidedByName }}</template
+                >
+            </p>
+            <p v-else-if="announcement.status === 'rejected'" class="font-medium text-rose-700">
+                Rejected
+                <template v-if="latestApprovalRequest?.decidedByName">
+                    · by {{ latestApprovalRequest.decidedByName }}</template
+                >
+            </p>
+            <p v-else class="font-medium text-slate-600">Approval required before publishing</p>
+
+            <p
+                v-if="announcement.status === 'rejected' && latestApprovalRequest?.decisionNote"
+                class="mt-1 text-rose-700"
+            >
+                Reason: {{ latestApprovalRequest.decisionNote }}
+            </p>
+
+            <p v-if="approvalRequirement.reasons.length > 0" class="mt-1 text-slate-500">
+                Required because:
+                {{
+                    approvalRequirement.reasons.map((r) => approvalReasonLabels[r] ?? r).join(', ')
+                }}
+            </p>
+
+            <div class="mt-2 flex gap-3">
+                <button
+                    v-if="canSubmitForApproval"
+                    type="button"
+                    :disabled="submittingApproval"
+                    class="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    @click="submitForApproval"
+                >
+                    Submit for approval
+                </button>
+                <button
+                    v-if="canWithdrawApproval"
+                    type="button"
+                    :disabled="withdrawingApproval"
+                    class="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 disabled:opacity-50"
+                    @click="withdrawApproval"
+                >
+                    Withdraw and edit
+                </button>
+                <a
+                    v-if="canApprove && latestApprovalRequest"
+                    class="rounded border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-700"
+                    :href="`/app/communications/approvals/${latestApprovalRequest.id}`"
+                >
+                    Review approval
+                </a>
+            </div>
         </div>
         <p class="mt-1 text-xs text-slate-500">
             by {{ announcement.createdByName ?? 'Unknown' }}
@@ -442,7 +560,10 @@ function formatFileSize(bytes: number): string {
             </div>
         </div>
 
-        <div v-if="canSchedule" class="mt-6 rounded border border-slate-200 p-4">
+        <div
+            v-if="canSchedule && ['draft', 'approved', 'scheduled'].includes(announcement.status)"
+            class="mt-6 rounded border border-slate-200 p-4"
+        >
             <h2 class="text-sm font-semibold">
                 {{ announcement.status === 'scheduled' ? 'Reschedule' : 'Schedule for later' }}
             </h2>
@@ -490,7 +611,10 @@ function formatFileSize(bytes: number): string {
 
         <div v-if="canEdit || canCancel" class="mt-6 flex gap-2">
             <button
-                v-if="canEdit && announcement.status === 'draft'"
+                v-if="
+                    canEdit &&
+                    (announcement.status === 'draft' || announcement.status === 'approved')
+                "
                 type="button"
                 :disabled="
                     publishing ||

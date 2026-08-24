@@ -32,6 +32,7 @@ interface Props {
     canAnnounce: boolean;
     canManage: boolean;
     canManageTemplates: boolean;
+    canApprove: boolean;
 }
 
 defineProps<Props>();
@@ -77,6 +78,7 @@ function readRate(bucket: ChannelBucket): string | null {
                 :can-announce="canAnnounce"
                 :can-manage="canManage"
                 :can-manage-templates="canManageTemplates"
+                :can-approve="canApprove"
             />
 
             <div>

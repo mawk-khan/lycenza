@@ -27,6 +27,7 @@ interface Props {
     canAnnounce: boolean;
     canManage: boolean;
     canManageTemplates: boolean;
+    canApprove: boolean;
 }
 
 defineProps<Props>();
@@ -53,6 +54,7 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
                 :can-announce="canAnnounce"
                 :can-manage="canManage"
                 :can-manage-templates="canManageTemplates"
+                :can-approve="canApprove"
             />
 
             <div>
