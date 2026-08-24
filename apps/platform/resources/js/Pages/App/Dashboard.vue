@@ -17,6 +17,7 @@ interface Props {
         canViewStudents: boolean;
         canViewGuardians: boolean;
         canViewCommunications: boolean;
+        canViewEnrollments: boolean;
     };
 }
 
@@ -68,6 +69,9 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewCommunications">
                     <a class="underline" href="/app/communications">Communication Hub</a>
+                </li>
+                <li v-if="nav.canViewEnrollments">
+                    <a class="underline" href="/app/enrollments">Enrollments</a>
                 </li>
             </ul>
         </nav>

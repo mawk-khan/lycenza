@@ -15,7 +15,11 @@ use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\GuardianContact;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -224,5 +228,77 @@ trait CreatesTenancyFixtures
     protected function createGuardianContact(Guardian $guardian, ContactType $type, string $rawValue, array $attributes = []): GuardianContact
     {
         return app(GuardianContactService::class)->create($guardian, $type, $rawValue, $attributes);
+    }
+
+    // --- Phase 1B.1: Student Enrollment fixtures -----------------------
+
+    /**
+     * academic_year_id/campus_id/grade_level_id are always derived from
+     * the given Section, exactly like the (not-yet-built) Phase 1B.4
+     * StudentEnrollmentService will derive them in production -- a test
+     * fixture must never be able to construct an inconsistent
+     * Section-vs-denormalized-parent state that real code could not
+     * produce.
+     */
+    protected function createStudentEnrollment(Student $student, Section $section, array $attributes = []): StudentEnrollment
+    {
+        return app(TenantContext::class)->withSchool(
+            $student->school,
+            fn () => StudentEnrollment::factory()->create(array_merge([
+                'school_id' => $student->school_id,
+                'student_id' => $student->id,
+                'academic_year_id' => $section->academic_year_id,
+                'campus_id' => $section->campus_id,
+                'grade_level_id' => $section->grade_level_id,
+                'section_id' => $section->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 1B.7A: Enrollment Rollover fixtures -----------------------
+
+    protected function createEnrollmentRolloverPlan(AcademicYear $sourceYear, AcademicYear $targetYear, array $attributes = []): EnrollmentRolloverPlan
+    {
+        return app(TenantContext::class)->withSchool(
+            $sourceYear->school,
+            fn () => EnrollmentRolloverPlan::factory()->create(array_merge([
+                'school_id' => $sourceYear->school_id,
+                'source_academic_year_id' => $sourceYear->id,
+                'target_academic_year_id' => $targetYear->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createEnrollmentRolloverMapping(EnrollmentRolloverPlan $plan, GradeLevel $sourceGradeLevel, GradeLevel $targetGradeLevel, array $attributes = []): EnrollmentRolloverMapping
+    {
+        return app(TenantContext::class)->withSchool(
+            $plan->school,
+            fn () => EnrollmentRolloverMapping::factory()->create(array_merge([
+                'school_id' => $plan->school_id,
+                'plan_id' => $plan->id,
+                'source_grade_level_id' => $sourceGradeLevel->id,
+                'target_grade_level_id' => $targetGradeLevel->id,
+            ], $attributes)),
+        );
+    }
+
+    /**
+     * `source_enrollment_id` must belong to the exact `$student` given
+     * (the DB's own double composite FK on `enrollment_rollover_items`
+     * enforces this structurally) -- callers pass a real
+     * StudentEnrollment produced for that Student, exactly like
+     * createStudentEnrollment() itself is used elsewhere.
+     */
+    protected function createEnrollmentRolloverItem(EnrollmentRolloverPlan $plan, Student $student, StudentEnrollment $sourceEnrollment, array $attributes = []): EnrollmentRolloverItem
+    {
+        return app(TenantContext::class)->withSchool(
+            $plan->school,
+            fn () => EnrollmentRolloverItem::factory()->create(array_merge([
+                'school_id' => $plan->school_id,
+                'plan_id' => $plan->id,
+                'student_id' => $student->id,
+                'source_enrollment_id' => $sourceEnrollment->id,
+            ], $attributes)),
+        );
     }
 }

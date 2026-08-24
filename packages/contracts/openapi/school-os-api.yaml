@@ -1671,6 +1671,253 @@ paths:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GuardianContact" } } }
 
+  # --- Phase 1B.5: Student Enrollment administrative surface
+
+  /schools/{schoolId}/enrollments:
+    get:
+      operationId: listEnrollments
+      summary: >
+        Administrative Enrollment directory across the School. Requires
+        enrollments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: campus_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: grade_level_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: section_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, completed, withdrawn, transferred, cancelled] } }
+        - { name: student_number, in: query, required: false, schema: { type: string } }
+        - { name: student_name, in: query, required: false, schema: { type: string } }
+        - { name: roll_number, in: query, required: false, schema: { type: string } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/EnrollmentSummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+
+  /schools/{schoolId}/enrollments/{enrollmentId}:
+    get:
+      operationId: getEnrollment
+      summary: Fetch one Enrollment's detail. Requires enrollments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EnrollmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Enrollment" } } }
+        "404":
+          description: Not found (including a cross-School id -- indistinguishable from nonexistent).
+
+  /schools/{schoolId}/enrollments/{enrollmentId}/complete:
+    post:
+      operationId: completeEnrollment
+      summary: >
+        Normal completion of an Enrollment. Requires enrollments.manage.
+        Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EnrollmentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ends_on], properties: { ends_on: { type: string, format: date } } }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Enrollment" } } }
+        "422":
+          description: Invalid transition (e.g. already terminal) or invalid date range.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollments/{enrollmentId}/withdraw:
+    post:
+      operationId: withdrawEnrollment
+      summary: Mid-course withdrawal. Requires enrollments.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EnrollmentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ends_on], properties: { ends_on: { type: string, format: date } } }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Enrollment" } } }
+        "422":
+          description: Invalid transition or invalid date range.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollments/{enrollmentId}/cancel:
+    post:
+      operationId: cancelEnrollment
+      summary: Administrative cancellation. Requires enrollments.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EnrollmentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ends_on], properties: { ends_on: { type: string, format: date } } }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Enrollment" } } }
+        "422":
+          description: Invalid transition or invalid date range.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollments/{enrollmentId}/transfer:
+    post:
+      operationId: transferEnrollment
+      summary: >
+        Atomic same-Academic-Year placement move to another Section.
+        Requires enrollments.manage. Idempotency-Key required. Returns
+        the newly created (target) Enrollment, not the source.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EnrollmentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_section_id, roll_number, effective_date]
+              properties:
+                target_section_id: { type: string, format: uuid }
+                roll_number: { type: string, maxLength: 255 }
+                effective_date: { type: string, format: date }
+      responses:
+        "201":
+          description: Created (the new target Enrollment).
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Enrollment" } } }
+        "422":
+          description: >
+            Cross-School/cross-Academic-Year/cross-GradeLevel target, a
+            duplicate roll number in the target Section, or an invalid
+            source transition -- fully atomic (the source Enrollment is
+            left untouched on any failure).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/students/{studentId}/enrollments:
+    get:
+      operationId: listStudentEnrollmentHistory
+      summary: Full historical Enrollment record for one Student. Requires enrollments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/StudentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/Enrollment" } } } }
+        "404":
+          description: Not found (including a cross-School Student id -- indistinguishable from nonexistent).
+    post:
+      operationId: createStudentEnrollment
+      summary: >
+        Enrolls a Student into a Section. AcademicYear/Campus/GradeLevel
+        are always derived from the given Section -- never accepted
+        independently. Requires enrollments.manage. Idempotency-Key
+        required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/StudentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnrollmentInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Enrollment" } } }
+        "422":
+          description: >
+            A second active Enrollment for this Student+Year, a
+            duplicate roll number in this Section+Year, or a blank
+            roll number.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/students/{studentId}/enrollments/current:
+    get:
+      operationId: getCurrentStudentEnrollment
+      summary: >
+        The active Enrollment for this Student in the given (or the
+        School's currently active) Academic Year. Requires
+        enrollments.view. `data` is `null` when no active Enrollment
+        exists for the resolved year -- never a historical/terminal row
+        substituted for "current".
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/StudentId" }
+        - { name: academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    nullable: true
+                    allOf: [{ $ref: "#/components/schemas/Enrollment" }]
+        "404":
+          description: Not found (cross-School Student id, or an explicit but foreign/nonexistent academic_year_id filter).
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1739,6 +1986,11 @@ components:
       schema: { type: string, format: uuid }
     ContactId:
       name: contactId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EnrollmentId:
+      name: enrollmentId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -2276,3 +2528,58 @@ components:
         is_legal_guardian: { type: boolean }
         is_emergency_contact: { type: boolean }
         is_authorized_pickup: { type: boolean }
+
+    # --- Phase 1B.5: Student Enrollment administrative surface
+
+    EnrollmentRef:
+      type: object
+      required: [id, name, code]
+      description: A minimal AcademicYear/Campus/GradeLevel/Section reference embedded in an Enrollment row.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+
+    EnrollmentSummary:
+      type: object
+      required: [id, student, academicYear, campus, gradeLevel, section, rollNumber, status, startsOn]
+      description: >
+        Shared shape for directory rows AND single-record detail (there
+        is no broader "full" shape) -- deliberately excludes Student
+        dateOfBirth and all Guardian data
+        (docs/security/DATA-CLASSIFICATION.md, "minimized default
+        visibility"). rollNumber is always a string, never coerced to
+        a number (e.g. "007" stays "007").
+      properties:
+        id: { type: string, format: uuid }
+        student: { $ref: "#/components/schemas/StudentSummary" }
+        academicYear: { $ref: "#/components/schemas/EnrollmentRef" }
+        campus: { $ref: "#/components/schemas/EnrollmentRef" }
+        gradeLevel: { $ref: "#/components/schemas/EnrollmentRef" }
+        section: { $ref: "#/components/schemas/EnrollmentRef" }
+        rollNumber: { type: string }
+        status: { type: string, enum: [active, completed, withdrawn, transferred, cancelled] }
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date, nullable: true }
+
+    Enrollment:
+      allOf:
+        - { $ref: "#/components/schemas/EnrollmentSummary" }
+        - type: object
+          required: [createdAt, updatedAt]
+          properties:
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+
+    EnrollmentInput:
+      type: object
+      required: [section_id, roll_number, starts_on]
+      description: >
+        The Section is the sole authoritative placement input --
+        academic_year_id/campus_id/grade_level_id/school_id/student_id
+        are never accepted here and are always derived server-side from
+        section_id (StudentEnrollmentService::enroll()).
+      properties:
+        section_id: { type: string, format: uuid }
+        roll_number: { type: string, maxLength: 255 }
+        starts_on: { type: string, format: date }

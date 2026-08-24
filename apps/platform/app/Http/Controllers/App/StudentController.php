@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\App;
 
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
+use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
@@ -112,7 +114,7 @@ class StudentController extends Controller
         return redirect("/app/students/{$student->id}");
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, string $student): Response
+    public function show(TenantContext $context, CapabilityResolver $capabilities, StudentEnrollmentReadService $enrollmentReads, string $student): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('students.view', $school);
@@ -124,7 +126,7 @@ class StudentController extends Controller
         // (docs/security/DATA-CLASSIFICATION.md).
         $model = Student::query()->with('guardianRelationships.guardian.contacts')->findOrFail($student);
 
-        return Inertia::render('App/Students/Show', [
+        $props = [
             'student' => $this->presentDetail($model),
             'relationships' => $model->guardianRelationships->map(function ($r) {
                 $primaryContact = $r->guardian->contacts->firstWhere('is_primary', true)
@@ -152,7 +154,29 @@ class StudentController extends Controller
             })->all(),
             'canManageStudents' => $capabilities->canInSchool($context->actor(), 'students.manage', $school),
             'canManageGuardians' => $capabilities->canInSchool($context->actor(), 'guardians.manage', $school),
-        ]);
+        ];
+
+        // Phase 1B.6: Enrollment data is included ONLY when the actor
+        // holds enrollments.view -- a user with students.view but not
+        // enrollments.view (Phase 1B.4's independent capability design)
+        // must see the Student's identity normally, with no Enrollment
+        // props present at all (this checkpoint's brief, section 35).
+        // enrollments.manage never implies enrollments.view (section 30)
+        // -- canManageEnrollments is only meaningful/present alongside
+        // canViewEnrollments.
+        if ($capabilities->canInSchool($context->actor(), 'enrollments.view', $school)) {
+            $current = $enrollmentReads->currentFor($model);
+            $history = $enrollmentReads->historyFor($model);
+
+            $props['canViewEnrollments'] = true;
+            $props['canManageEnrollments'] = $capabilities->canInSchool($context->actor(), 'enrollments.manage', $school);
+            $props['currentEnrollment'] = $current ? $this->presentEnrollment($current) : null;
+            $props['enrollmentHistory'] = $history->map(fn (StudentEnrollment $e) => $this->presentEnrollment($e))->values()->all();
+        } else {
+            $props['canViewEnrollments'] = false;
+        }
+
+        return Inertia::render('App/Students/Show', $props);
     }
 
     public function edit(TenantContext $context, string $student): Response
@@ -238,6 +262,30 @@ class StudentController extends Controller
             ...$this->presentSummary($student),
             'dateOfBirth' => $student->date_of_birth->toDateString(),
             'createdAt' => $student->created_at->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Phase 1B.6: mirrors StudentEnrollmentController's own
+     * presentSummary() exactly (a small, presentation-only duplication
+     * -- the same StudentController API/web duplication pattern already
+     * established above -- never a re-derivation of Enrollment business
+     * rules). Deliberately excludes dateOfBirth/Guardian PII.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentEnrollment(StudentEnrollment $enrollment): array
+    {
+        return [
+            'id' => $enrollment->id,
+            'academicYear' => ['id' => $enrollment->academicYear->id, 'name' => $enrollment->academicYear->name],
+            'campus' => ['id' => $enrollment->campus->id, 'name' => $enrollment->campus->name],
+            'gradeLevel' => ['id' => $enrollment->gradeLevel->id, 'name' => $enrollment->gradeLevel->name],
+            'section' => ['id' => $enrollment->section->id, 'name' => $enrollment->section->name],
+            'rollNumber' => $enrollment->roll_number,
+            'status' => $enrollment->status,
+            'startsOn' => $enrollment->starts_on->toDateString(),
+            'endsOn' => $enrollment->ends_on?->toDateString(),
         ];
     }
 }

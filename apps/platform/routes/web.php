@@ -18,6 +18,7 @@ use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
 use App\Http\Controllers\App\StudentController;
+use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\SystemStatusController;
@@ -101,6 +102,12 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/{student}/guardians/candidates', [StudentGuardianRelationshipController::class, 'candidateGuardians'])->name('guardians.candidates');
         Route::post('/{student}/guardians/link', [StudentGuardianRelationshipController::class, 'linkExisting'])->name('guardians.link');
         Route::post('/{student}/guardians', [StudentGuardianRelationshipController::class, 'linkNew'])->name('guardians.store');
+
+        // Phase 1B.6: Enrollment administrative UI -- a Student's own
+        // "enroll into a Section" flow, nested exactly like the
+        // guardians.* routes above.
+        Route::get('/{student}/enrollments/create', [StudentEnrollmentController::class, 'create'])->name('enrollments.create');
+        Route::post('/{student}/enrollments', [StudentEnrollmentController::class, 'store'])->name('enrollments.store');
     });
 
     Route::prefix('app/relationships')->name('app.relationships.')->group(function (): void {
@@ -253,5 +260,19 @@ Route::middleware('auth')->group(function (): void {
         // whichever type it is).
         Route::post('/{thread}/attachments', [CommunicationAttachmentController::class, 'storeForThread'])->name('threads.attachments.store');
         Route::delete('/{thread}/attachments/{attachment}', [CommunicationAttachmentController::class, 'destroyForThread'])->name('threads.attachments.destroy');
+    });
+
+    // Phase 1B.6: Enrollment administrative UI (docs/modules/STUDENT-ENROLLMENT.md,
+    // "Administrative UI"). Capability checks live inside the controller
+    // (AuthorizesCapability trait), matching every other App/ controller's
+    // pattern -- every action re-derives the active School from
+    // TenantContext, never a client-supplied id.
+    Route::prefix('app/enrollments')->name('app.enrollments.')->group(function (): void {
+        Route::get('/', [StudentEnrollmentController::class, 'index'])->name('index');
+        Route::post('/{enrollment}/complete', [StudentEnrollmentController::class, 'complete'])->name('complete');
+        Route::post('/{enrollment}/withdraw', [StudentEnrollmentController::class, 'withdraw'])->name('withdraw');
+        Route::post('/{enrollment}/cancel', [StudentEnrollmentController::class, 'cancel'])->name('cancel');
+        Route::get('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transferCreate'])->name('transfer.create');
+        Route::post('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transfer'])->name('transfer.store');
     });
 });

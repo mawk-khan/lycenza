@@ -65,6 +65,9 @@ matches nothing — fail-closed, identical in spirit to Layer 1, and
 proven independently against real Postgres in
 `tests/Feature/Postgres/RawIsolationTest.php` (raw SQL, bypassing
 Eloquent entirely) and `tests/Feature/Tenancy/SmokeTest.php`.
+See "TenantContext cleanup and aborted-transaction safety" below for
+what happens to this GUC when the connection's current transaction is
+aborted, not merely committed/rolled back normally.
 
 Critically, this is only meaningful because the runtime connection
 (`pgsql`, using the `school_os_app` role) is **not** a superuser and
@@ -77,10 +80,12 @@ asserts this directly against `pg_roles`, not just by convention.
   TenantScoped` job trait captures `school_id`/`campus_id`/`actor_id`/
   `request_id` into the job's own payload at dispatch time; its
   `middleware()` returns `SetTenantContextForJob`, which sets
-  `TenantContext` before `handle()` and clears it in a `finally` block
-  after — proven safe for sequential jobs targeting different Schools
-  in `tests/Feature/Tenancy/QueueContextPropagationTest.php`
+  `TenantContext` before `handle()` and clears it after — proven safe
+  for sequential jobs targeting different Schools in
+  `tests/Feature/Tenancy/QueueContextPropagationTest.php`
   (`RecordSchoolAuditPingJob` is the Phase 0B proof job).
+  `try`/`catch` (not a bare `finally`) since Phase 1B.4A — see
+  "TenantContext cleanup and aborted-transaction safety" below.
 - **Tenant-aware caches — implemented.** `App\Support\Tenancy\TenantCache`
   namespaces every key `school:{id}:{key}` (vs. `TenantCache::platformKey()`'s
   `platform:{key}`) and throws `TenantContextRequiredException` if
@@ -119,6 +124,143 @@ asserts this directly against `pg_roles`, not just by convention.
   path is explicit and treated as privileged — never the default query
   behavior any module reaches for. No such reporting path is
   implemented yet.
+
+## TenantContext cleanup and aborted-transaction safety (Phase 1B.4A)
+
+### GUC lifecycle
+
+`app.current_school_id` is a PostgreSQL **session-level** GUC
+(`set_config(name, value, is_local = false)`, never `SET LOCAL`/
+`is_local = true`) — it persists past `COMMIT`, which is exactly why
+`TenantContext::clear()`/`clearAll()` must explicitly `RESET` it at the
+end of every unit of work (request, queue job, test) rather than
+relying on transaction boundaries alone. "Session-level" does **not**
+mean "immune to `ROLLBACK`", though: proven directly (`BEGIN;
+SELECT set_config('app.current_school_id', 'x', false); <force an
+error>; RESET app.current_school_id; -- fails, SQLSTATE 25P02 --
+ROLLBACK; SELECT current_setting('app.current_school_id', true); --
+back to whatever it was before BEGIN`), a session-level `set_config`
+call made **inside** a transaction is still reverted automatically the
+moment that transaction is rolled back — it only *survives* a `COMMIT`.
+This is the fact the aborted-transaction defect below hinges on.
+
+### Root cause: aborted-transaction cleanup
+
+If the connection's current transaction is in PostgreSQL's **aborted**
+state (SQLSTATE `25P02`, "current transaction is aborted, commands
+ignored until end of transaction block" — the state PostgreSQL enters
+after ANY failed statement inside a transaction, until a `ROLLBACK`),
+**no statement other than `ROLLBACK`/`COMMIT`/`ROLLBACK TO SAVEPOINT`
+can execute** — including a plain `RESET app.current_school_id`. Before
+Phase 1B.4A, `TenantContext::withSchool()`'s `finally` block issued
+that `RESET` unconditionally; if the wrapped callback's own database
+write had just aborted the transaction (e.g. a duplicate-key insert
+attempted outside its own `DB::transaction()`), the `RESET` itself
+failed with `SQLSTATE 25P02` — and because this happened in a `finally`
+block, PHP's exception semantics meant this **new, unrelated** failure
+*replaced* the real original exception (e.g.
+`UniqueConstraintViolationException`) before it ever reached the
+caller. Two compounding effects made this "test-order flakiness"
+rather than a one-test failure:
+
+1. Every sanctioned Application service in this codebase (`StudentEnrollmentService`,
+   `StudentGuardianRelationshipService`, `AcademicYearService`, ...)
+   already wraps its own mutation in `DB::transaction()`, so by the
+   time `withSchool()`'s cleanup ran, that inner transaction had
+   already rolled back (to a savepoint) and the GUC had already
+   reverted automatically — masking the defect everywhere those
+   services are the only caller. It only reproduced through a raw,
+   unwrapped write (a raw-SQL Postgres integrity test, or a bug in
+   future code) — see
+   `tests/Feature/Tenancy/TenantContextAbortedTransactionTest.php`'s
+   "unwrapped" test group for a deterministic repro.
+2. `Tests\TestCase::tearDown()` called `TenantContext::clearAll()`
+   *unconditionally* on every test, regardless of pass/fail. If a test
+   left the shared connection aborted (per (1)), `clearAll()`'s own
+   `RESET` failed — and since that exception aborted `tearDown()`
+   itself, `DatabaseTransactions`' own `ROLLBACK` (registered as a
+   `beforeApplicationDestroyed` callback, run inside `parent::tearDown()`,
+   which this ordering bug prevented from ever executing) never ran —
+   leaving the **same poisoned connection** for whichever *unrelated*
+   test PHPUnit happened to run next. That test's very first database
+   statement would then fail with the same masking symptom, making the
+   failure appear to belong to a random, unrelated test class
+   depending on execution order — exactly the "test-order / suite-order
+   flakiness" first observed in the Phase 1B.4 checkpoint report.
+
+### Fix architecture
+
+- **`TenantContext::withSchool()`** now uses `try`/`catch` instead of
+  `try`/`finally`, with two distinct restoration paths:
+  - **Exception path** (`restoreAfterFailure()`): PHP-side state
+    (`$school`/`$campus`/`Context` entries) is restored
+    *unconditionally, first* — a database failure must never leave PHP
+    still believing the old context is active. The database-side GUC
+    restore is then attempted; a `SQLSTATE 25P02` failure from *that
+    specific attempt* is discarded (proven safe per "GUC lifecycle"
+    above — the callback's own failure already aborted the transaction
+    that will revert the GUC automatically once rolled back by whoever
+    owns it), and the **original exception continues propagating
+    unmodified**. Any other database error from the restore is never
+    swallowed — a genuine double-failure is never hidden.
+  - **Success path** (`restoreOnSuccess()`): unchanged behaviour for a
+    healthy connection. If the restore itself fails with `SQLSTATE
+    25P02` here — meaning the callback returned *normally* but somehow
+    left the connection poisoned (it caught and swallowed its own
+    database exception without rolling back or rethrowing) —
+    `TenantContext` never silently pretends the restore succeeded; it
+    raises `App\Support\Tenancy\TenantContextPoisonedConnectionException`
+    (wrapping the original `QueryException`) so the bug in the
+    swallowing code is impossible to miss.
+- **`TenantContext::clearAllTolerantly()`** (new) — for a caller that
+  cannot know whether the preceding unit of work succeeded or failed
+  (`Tests\TestCase::tearDown()`, which runs unconditionally and,
+  additionally, must run *before* `parent::tearDown()` since Laravel
+  flushes/nulls the application container as part of its own
+  teardown — there is no way to run cleanup after it). Always clears
+  PHP-side state; a `SQLSTATE 25P02` GUC-reset failure is logged
+  (`tenancy.context.reset_skipped_aborted_transaction`, never silent)
+  and skipped rather than thrown, so `Tests\TestCase::tearDown()`
+  always completes and `DatabaseTransactions`' own rollback (which
+  reverts the GUC automatically) always gets to run.
+- **`TenantContext::clearAllAfterFailure()`** (new) — `clearAll()`'s
+  counterpart for a caller with a `Throwable` already propagating and
+  no "previous context" to restore to (full reset, not nested
+  restoration). Used by `SetTenantContextForJob`.
+- **`SetTenantContextForJob`** now uses the same `try`/`catch` shape as
+  `withSchool()` (`clearAllAfterFailure()` on the job's own exception,
+  plain `clearAll()` on success) instead of a bare `finally`, for the
+  identical reason.
+
+### Transaction ownership (unchanged)
+
+`TenantContext` **never** issues its own `ROLLBACK` or `COMMIT` — it
+does not own the callback's transaction, and does not know whether
+some other code higher up the call stack still needs that transaction
+open. Every fix above only decides whether to *attempt* a GUC
+statement and how to react if that attempt fails with the one,
+specifically-proven-safe SQLSTATE — it never changes what the calling
+code's own transaction does.
+
+### Residual scope
+
+The same architectural risk (a bare `finally { $context->clearAll(); }`
+around a unit of work that might leave the connection aborted) exists
+in several other call sites not touched by Phase 1B.4A —
+`App\Http\Middleware\ResolveSchoolContext`,
+`App\Http\Middleware\Api\EnsureSchoolMembershipContext`,
+`App\Http\Controllers\Api\Internal\AiToolController`/`AiAuditController`,
+`App\Jobs\ProcessOutboxEventJob`, `App\Jobs\DeliverWebhookJob`. This
+checkpoint deliberately fixed only the two call sites directly
+implicated by the observed defect (`withSchool()`, used by every
+sanctioned Application service, and `SetTenantContextForJob`, the one
+production site `TenantContext`'s own docblock already named as
+load-bearing) plus the test-suite ordering bug that explained the
+empirically observed flakiness, rather than rewriting every
+`finally`-block call site speculatively. A dedicated follow-up sweep
+applying the same `try`/`catch` pattern to the remaining sites is
+recommended before relying on this guarantee universally in
+production.
 
 ## What is NOT yet implemented (Phase 0B honesty note)
 
