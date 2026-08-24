@@ -2102,6 +2102,252 @@ capability and no new cache. Carried forward as-is.
 duplicate-resolution workflow (8A.12's scope), no lifecycle/separation/
 rehire expansion (8A.13), no public/mobile API (8A.14), and no UI.
 
+## Employee Import & Duplicate Controls (8A.12, implemented)
+
+**Import is an untrusted-input boundary, not a bulk-write shortcut.**
+`EmployeeImportService::import()` never writes to an HR table directly
+— every row is pushed through the exact same authoritative Application
+services interactive creation already uses
+(`EmployeeService::create()`, `EmployeePersonalDetailService::setDetails()`,
+`EmploymentService::create()`, `EmployeeAssignmentService::create()`/
+`setPrimary()`), so every invariant those services already enforce
+(employee-number allocation, Employee/User linkage rules, Employment
+overlap rules, Assignment invariants, Department/Position/Campus
+ownership, HR audit, privacy classification, service-level field
+immutability) applies to imported rows identically, by construction,
+with no parallel code path to keep in sync.
+
+### Input format — normalized rows, not file parsing
+
+Input is `array<int, array<string, mixed>>` — one associative array per
+row, already parsed. **No CSV/XLSX parsing library was added** and
+**no HTTP endpoint or UI exists** — both deliberately deferred, per
+root `CLAUDE.md` rule 2 (no speculative infrastructure) and this
+checkpoint's own explicit permission to defer physical file parsing in
+favor of the smallest approved schema. A future checkpoint can add a
+thin file-parsing adapter in front of this exact same service without
+touching any invariant proven here.
+
+### Allow-listed input schema (the smallest approved schema)
+
+`EmployeeImportRow::fromArray()` accepts exactly 16 keys and rejects
+any other key with `EmployeeImportUnknownFieldException` before any
+duplicate check or database write: `full_name`, `user_id`,
+`date_of_birth`, `nationality`, `marital_status`, `preferred_language`,
+`personal_email`, `personal_phone`, `alternate_phone`,
+`employment_type`, `employment_starts_on`, `probation_ends_on`,
+`position_code`, `department_code`, `campus_code`,
+`assignment_starts_on`.
+
+**Deliberately excluded**: Qualifications, Experience, Certifications,
+Documents, reporting-manager assignment, any historical/backdated
+record, and every Highly Sensitive field (`government_id`,
+`bank_account_number`, `tax_identifier`, any document
+`storage_path`/`storage_disk`/`uploaded_by_user_id`). Also excluded:
+every caller-controllable ownership/lifecycle field
+(`record_status`, `status`, `manager_assignment_id`) — a row can never
+set its own status or manager linkage; those remain service-owned.
+Proven directly, per field, in
+`HrEmployeeImportSchemaTest`'s `#[DataProvider]` case.
+
+`full_name` is required and non-blank; it is preserved exactly as
+trimmed (outer whitespace only) — never internally normalized or
+split. Internal-whitespace-collapse/case-fold happens only inside the
+separate duplicate-detector comparison, never on the stored value.
+
+### Create-only policy — never merge
+
+Import **only ever creates** a new Employee (and, optionally, its
+first Employment/Assignment). It never updates an existing Employee's
+fields, even when a row's data is provided alongside a detected exact
+duplicate. There is no "upsert" mode and none is planned for this
+checkpoint — a detected duplicate is reported, not merged.
+
+### Authorization — reuses 8A.10 capabilities, no new capability
+
+**No new capability was created.** `hr.employees.manage` is always
+required. `hr.employees.personal.manage` is additionally required only
+when a row carries personal-tier fields (`hasPersonalData()`);
+`hr.employees.assignments.manage` only when a row carries employment/
+assignment-tier fields (`hasEmploymentData()`). This is the same
+per-section capability model 8A.10 already established for interactive
+create — import does not relax it. All required capabilities for a row
+are checked **before** any duplicate-detection query or transaction
+for that row begins — a row an actor is only partially authorized for
+fails with an authorization error, never a partial mutation
+(`HrEmployeeImportAuthorizationTest`).
+
+### Row transaction policy — one transaction per row, per-row atomicity
+
+Each row's entire service-call sequence (Employee → PersonalDetail →
+Employment → Assignment) runs inside one `DB::transaction()` closure,
+itself inside `TenantContext::withSchool()`. A failure at any step
+(e.g. an inactive Position/Department) rolls back the **entire row** —
+no Employee, no PersonalDetail, no EmploymentRecord, no Assignment,
+and no committed audit event survives a failed row
+(`HrEmployeeImportAtomicityTest`).
+
+### Batch failure policy — per-row atomicity, not whole-batch atomicity
+
+A batch is a plain PHP loop over rows, not one outer transaction. A
+failing row never rolls back any other row in the same batch —
+independent valid rows before and after a failed row commit
+independently, proven directly
+(`a_failed_row_does_not_roll_back_other_valid_rows_in_the_same_batch`).
+`EmployeeImportService::MAX_ROWS_PER_BATCH = 1000` bounds batch size to
+keep per-call memory and duration predictable; this is an
+in-process constant, not a configuration value, matching the brief's
+"smallest approved" guidance — revisit only if a real need for a
+larger batch is demonstrated.
+
+### Employee number and User linkage
+
+Employee-number allocation is untouched — imported Employees go
+through `EmployeeService::create()`'s existing, already
+concurrency-proven allocator (no import-specific numbering path).
+`user_id`, when supplied, is validated by the same linkage rules
+`EmployeeService` already enforces (a User must belong to the same
+School, and — unless intentionally reused for a rehire — not already
+be linked to another active Employee); an unrelated/cross-School
+User produces the same `UnrelatedUserLinkageException`-derived,
+redacted error an interactive create would.
+
+### Duplicate detection — exact and potential signals
+
+`EmployeeDuplicateDetector::detect()` runs before any transaction and
+short-circuits row processing on either signal:
+
+- **Exact** (`duplicate_exact`): an existing Employee in the same
+  School (including archived/inactive Employees — rehire detection is
+  intentional) already has `user_id` equal to the row's `user_id`.
+  Requires an authoritative key (`user_id`); a row with no `user_id`
+  can never produce an exact-duplicate result.
+- **Potential** (`duplicate_potential`): no `user_id` match, but at
+  least one existing Employee (any status) has a name that normalizes
+  identically — `mb_strtolower(preg_replace('/\s+/u', ' ', trim($fullName)))` —
+  evaluated at the SQL level via a parameterized
+  `regexp_replace`+`lower`+`trim` expression, never by loading every
+  Employee into PHP.
+
+### Same-name policy — no automatic merge, no false positive block
+
+Two Employees with the exact same name are a **legitimate possibility**
+in the domain (brief's own explicit acknowledgment) — a name match
+alone is reported as `duplicate_potential` (for a human to review
+later; no resolution workflow exists yet) but is **never** blocked,
+merged, or treated as authoritative. Proven with a real two-process
+concurrency test: two genuinely concurrent same-name imports with no
+`user_id` both succeed as two separate Employees, never a forced merge
+(`concurrent_imports_with_the_same_name_and_no_authoritative_key_both_succeed_as_separate_employees`).
+
+### Idempotency — safe to retry a duplicate row
+
+Re-submitting the identical row (same `user_id`) after it was already
+imported returns `duplicate_exact` referencing the existing Employee,
+never a second Employee and never a raw constraint-violation error —
+proven directly and under real concurrency (see below).
+
+### Reference resolution — tenant-safe by construction
+
+`position_code`/`department_code`/`campus_code` are resolved via
+`Model::where('school_id', $school->id)->where('code', strtoupper(trim($code)))->first()`
+— a code belonging to a different School and a code that does not
+exist anywhere produce the **identical** `EmployeeImportReferenceNotFoundException`
+(`reference_not_found`) result, with no distinguishing signal
+(`HrEmployeeImportReferenceTest`). An inactive Position/Department is
+rejected by the same domain exceptions
+(`AssignmentInactivePositionException`/`AssignmentInactiveDepartmentException`)
+interactive Assignment creation already throws — no bypass for import.
+
+### Employment / Assignment import scope
+
+A row may optionally carry `employment_type`+`employment_starts_on`
+(both required together, never one alone) to create a first
+`EmploymentRecord`, and `position_code` (implying employment data must
+also be present) to create a first `EmployeeAssignment`, set as the
+Employee's primary assignment. Employment overlap rules cannot be
+triggered by a single row against a brand-new Employee (there is no
+prior Employment to overlap) — the overlap invariant remains reachable
+and enforced identically for any *future* Employment change against an
+imported Employee, unchanged from 8A.4.
+
+### Error redaction
+
+Every row result carries `{field, code, message}` triples only — never
+the original row's values, never a raw exception class or message, and
+never an internal database id. `describeFailure()` maps every known
+domain exception
+(`EmployeeImportReferenceNotFoundException`, `UnrelatedUserLinkageException`,
+`EmploymentOverlapException`, `AssignmentInactivePositionException`,
+`AssignmentInactiveDepartmentException`,
+`AssignmentOutsideEmploymentRangeException`,
+`AssignmentDepartmentCampusScopeMismatchException`,
+`AssignmentCampusMismatchException`, `AssignmentDepartmentMismatchException`,
+`AssignmentPositionMismatchException`) to one of a fixed, safe code
+vocabulary (`validation`, `authorization`, `duplicate_exact`,
+`duplicate_potential`, `reference_not_found`, `employment_conflict`,
+`assignment_conflict`); any unmapped exception gets a fully generic
+`[null, 'validation', 'This row could not be processed.']` rather than
+leaking its class or message. Proven by serializing a full batch result
+to JSON and asserting neither a rejected personal-data value nor an
+internal id nor the word "Exception" appears anywhere in the output
+(`HrEmployeeImportResultTest`).
+
+### Concurrency — proven with real, separate OS processes
+
+`tests/Support/import-employee.php` mirrors the established
+`create-employee.php`/`set-assignment-manager.php` pattern: genuinely
+separate PHP processes race `EmployeeImportService::import()` against
+real PostgreSQL (`$connectionsToTransact = []`, so fixtures are truly
+committed and visible across processes). Three scenarios proven
+(`HrEmployeeImportConcurrencyTest`):
+
+1. Five concurrent imports linked to the **same** User → exactly one
+   `created`, four `duplicate_exact`, exactly one Employee row in the
+   database (the `UniqueConstraintViolationException` race path, not a
+   check-then-insert race window).
+2. Five concurrent imports for five distinct Employees → five unique
+   employee numbers (the existing allocator remains concurrency-safe
+   when reached through import).
+3. Two concurrent imports with the same name and no `user_id` → both
+   `created`, two Employees (no forced merge under real concurrency —
+   see "Same-name policy" above).
+
+### Audit and Activity Timeline compatibility
+
+No new audit event type exists or is needed for import. Because import
+reuses the exact same Application services, an imported Employee emits
+the identical `employee.created`/`employee.personal_details.updated`/
+`hr.employment.created`/`hr.assignment.created`/`hr.assignment.primary_changed`
+events interactive creation already emits, and is therefore immediately
+visible on `EmployeeActivityTimelineService`'s 8A.11 read projection
+with no changes to that service. A failed row leaves no committed
+audit event, matching its transactional rollback
+(`HrEmployeeImportAuditTimelineTest`).
+
+### Migrations
+
+**None.** No new table, no new column, no new index. `EmployeeImportRow`/
+`EmployeeImportResult`/`EmployeeDuplicateDetectionResult` are pure
+in-memory DTOs; every persisted row goes through existing 8A.1–8A.5
+tables via existing services.
+
+### UI / HTTP
+
+**Deferred, same decision and reasoning as 8A.10/8A.11.** No
+controller, route, or Vue page — `EmployeeImportService::import()` is
+a fully authorization-aware, transaction-safe Application-layer entry
+point ready for a future checkpoint to wire a file-upload/HTTP surface
+against, without redesigning any invariant proven here.
+
+### 8A.13 boundary
+
+8A.12 ships create-only bulk import and duplicate *detection* — no
+duplicate-resolution/merge workflow, no Employee separation/offboarding,
+no rehire workflow beyond the detector already recognizing an archived
+Employee as an exact/potential match (8A.13's scope), and no public/
+mobile API (8A.14).
+
 ## Employee lifecycle — state responsibility matrix
 
 Rejecting one overloaded status enum (brief's explicit warning) in
