@@ -1,8 +1,9 @@
-# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6)
+# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6 / 1B.7)
 
 Status: **schema + sanctioned write path + lifecycle transitions +
 authorization + read foundation + administrative HTTP/API + administrative
-UI.** Phase 1B.1 shipped the schema/model/RLS/composite-FK foundation;
+UI + rollover/promotion architecture decision (no rollover implementation
+yet).** Phase 1B.1 shipped the schema/model/RLS/composite-FK foundation;
 Phase 1B.2 added `StudentEnrollmentService::enroll()`, the only
 sanctioned way to create a StudentEnrollment; Phase 1B.3 added the four
 terminal lifecycle transitions (`complete()`/`withdraw()`/`cancel()`)
@@ -13,13 +14,12 @@ the canonical read layer; Phase 1B.4A hardened cross-cutting
 TenantContext cleanup; Phase 1B.5 exposed all of the above through the
 repository's existing authenticated School administrative `/api/v1`
 surface (see "Administrative HTTP boundary (Phase 1B.5)" below); Phase
-1B.6 adds the session-authenticated Vue/Inertia administrative UI over
-the SAME domain (see "Administrative UI (Phase 1B.6)" below) — it does
-not redesign the Enrollment domain, and it does not call the `/api/v1`
-JSON surface internally (it calls `StudentEnrollmentService`/
-`StudentEnrollmentReadService` directly, exactly like the JSON API
-controller does). No promotion/academic-year rollover yet — see
-"Deferred" below.
+1B.6 added the session-authenticated Vue/Inertia administrative UI over
+the SAME domain (see "Administrative UI (Phase 1B.6)" below); Phase
+1B.7 is an ARCHITECTURE-ONLY gate (see "Academic-Year Rollover &
+Promotion — Architecture Decision (Phase 1B.7)" below) — it decided the
+safe model for cross-year promotion but changed no production code.
+Rollover/promotion implementation begins at a future Phase 1B.7A.
 
 ## Identity vs enrollment boundary
 
@@ -1058,12 +1058,691 @@ The directory uses a `<table>` with `scope="col"` headers on
 desktop/tablet and a card list on mobile, mirroring
 `Students/Index.vue` exactly.
 
+## Academic-Year Rollover & Promotion — Architecture Decision (Phase 1B.7)
+
+**This is a decision record, not an implementation.** Phase 1B.7 changed
+no production code — no migration, model, service, controller, route,
+Vue page, job, or command. Every rule below is either **DECIDED**
+(binding on the eventual implementation checkpoints), **DEFERRED**
+(explicitly out of scope, to be decided later), or an **OPEN DECISION**
+(a genuine product question with no safe default, requiring a human
+answer before 1B.7A can start). Nothing here should be read as already
+implemented.
+
+### Terminology (DECIDED)
+
+- **Promotion** — one Student's academic placement moves from a source
+  AcademicYear's Enrollment to a target AcademicYear's Enrollment,
+  normally representing an advance to the next GradeLevel.
+- **Rollover** — the controlled, reviewed, bulk *operation* that
+  prepares and applies promotion (and repeat/retention/exclusion)
+  outcomes for a population of Students between one source and one
+  target AcademicYear. A rollover produces many individual promotions
+  (or repeats, or explicit exclusions) as its result.
+- **Repeat / Retention** — a promotion-plan *outcome*, not a new
+  Enrollment status: the target Enrollment's `grade_level_id` equals
+  the source Enrollment's `grade_level_id` (the Student stays at the
+  same GradeLevel), possibly in a different Section/Campus.
+- **Transfer** (Phase 1B.3, unchanged) — a same-AcademicYear placement
+  move (`StudentEnrollmentService::transferPlacement()`). Rollover
+  NEVER reuses `transferPlacement()` — a cross-year move is always a
+  new Enrollment row created by `enroll()`, exactly like
+  `CrossAcademicYearTransferException`'s own docblock already states
+  ("a different AcademicYear is promotion/rollover, not a transfer").
+
+### Current academic model (as verified in this codebase today)
+
+**AcademicYear** (`App\Domain\AcademicStructure\Infrastructure\AcademicYear`,
+`App\Domain\AcademicStructure\Application\AcademicYearService`):
+- Status is `draft → active → closed` (the model's own docblock also
+  lists `archived`, but no service method transitions any year to
+  it today — this is a pre-existing minor doc/code inconsistency,
+  not something this checkpoint touches or resolves).
+- Exactly one `active` AcademicYear per School, DB-enforced by a
+  partial unique index (`academic_years_one_active_per_school`) —
+  `AcademicYearService::activate()` closes whatever was previously
+  active in the same transaction.
+- **A year can be created and exist in `draft` status, with no
+  activation, indefinitely, and multiple `draft` years can coexist**
+  (the partial unique index only constrains `status = 'active'`) —
+  confirmed by reading `AcademicYearService::create()`/`activate()`
+  directly. A School can therefore create/configure next year's
+  AcademicYear (and its Sections) while this year is still active.
+  This is exactly the precondition Model B below depends on.
+- **AcademicYears cannot overlap within a School** —
+  `AcademicYearService::assertNoOverlap()` rejects any new year whose
+  `[starts_on, ends_on]` interval overlaps an existing one, checked at
+  creation time. This answers CLAUDE.md/brief section 20 directly:
+  non-overlapping is guaranteed, but **non-overlapping does not mean
+  contiguous** — a School's calendar can still have a gap between
+  `source.ends_on` and `target.starts_on` (e.g. a summer break), so
+  `target.starts_on := source.ends_on + 1 day` must NEVER be assumed.
+
+**GradeLevel** (`App\Domain\AcademicStructure\Infrastructure\GradeLevel`):
+- School-wide reference data, NOT AcademicYear-scoped (the same
+  GradeLevel row is reused across every year).
+- Has an explicit `sequence` integer ("never inferred from name/code"
+  per its own docblock) — but `sequence` is a same-year *display/sort*
+  ordering convention only. **No code anywhere in this repository
+  today treats `sequence + 1` (or any other GradeLevel relationship)
+  as "the next GradeLevel for promotion purposes."** There is no
+  `next_grade_level_id` column or equivalent.
+- No cross-year lineage concept exists for GradeLevel at all (it does
+  not need one — it is not year-scoped).
+
+**Section** (`App\Domain\AcademicStructure\Infrastructure\Section`):
+- Belongs to exactly one AcademicYear, one Campus, one GradeLevel
+  (composite-FK protected, Phase 0D). "Grade 5 A" in 2026-27 and
+  "Grade 5 A" in 2027-28 are permanently distinct rows.
+- Uniqueness is `(school_id, academic_year_id, campus_id,
+  grade_level_id, code)` — confirmed via the constraint name
+  `sections_school_id_academic_year_id_campus_id_grade_level_id_co`
+  encountered directly during Phase 1B.5/1B.6 test-writing.
+- `capacity` is nullable and **advisory only — "no admission-blocking
+  logic reads it yet"** per the model's own docblock. **NOT
+  AVAILABLE — FUTURE CAPACITY FEATURE.** Rollover dry-run in the first
+  implementation MUST NOT invent capacity enforcement.
+- **No cross-year lineage field exists on Section at all** — nothing
+  links "2026-27 Grade 5 A" to "2027-28 Grade 6 A" or "2027-28 Grade 5
+  A (repeat)". Confirmed by reading the model, its migration, and
+  every Academic Structure service; a repository-wide search for
+  `promote`/`promotion`/`rollover`/`section mapping`/`next grade`/
+  `graduate(d)` found zero existing implementation — only forward
+  references in comments deferring exactly this work (e.g.
+  `StudentEnrollmentService`'s docblock, `CrossAcademicYearTransferException`,
+  `IntraYearGradeChangeException`).
+
+**Student** (`App\Domain\Students\Infrastructure\Student`): `status` is
+`active`/`inactive` only — no `graduated`/`alumni`/`promoted` value
+exists, and `InvalidStudentStatusException`'s message explicitly lists
+only those two as supported.
+
+**Domain ownership** (`docs/architecture/DOMAIN-MAP.md`): rollover/
+promotion is squarely inside the existing **Students/SIS** module row
+("Student master record, enrollment status, **academic history**"),
+depending only on Academic Structure/Schools/Campuses — all
+dependencies it already has. **No new top-level domain/module is
+warranted;** every future class lives under `App\Domain\Students\...`
+alongside `StudentEnrollmentService`/`StudentEnrollmentReadService`.
+
+**ADR precedent**: every existing ADR (`docs/architecture/adr/0001`-`0028`)
+is a cross-cutting *platform* decision (tenancy, storage, webhooks, AI,
+secrets...); no ADR documents a single module's business rules —
+those live in the module's own doc (e.g. this file's existing
+"Lifecycle transitions", "Same-School integrity" sections). Rollover
+is a Students/SIS business-domain decision, so it belongs here, not in
+a new ADR — consistent with existing repository precedent.
+
+### Recommended architecture: Option B — persistent plan + items (DECIDED)
+
+Three options were compared:
+
+| | **A. Stateless bulk service** | **B. Persistent plan + items** | **C. Ad hoc per-request script** |
+| --- | --- | --- | --- |
+| Data integrity | OK for small schools, fragile at scale | Strong — every item's state is durable | Weak |
+| Auditability | Only via generic Enrollment events | Rich — plan/item provenance, reasons, timestamps | Poor |
+| Operator review | Must recompute preview every time | Dry-run persists for review/edit before execution | None |
+| Idempotency | Must be reconstructed per request | Item → `target_enrollment_id` is a natural idempotency key | None |
+| Resumability | None — a crash mid-batch loses progress | Each item's own row survives a crash | None |
+| Concurrency safety | Hard to detect staleness between preview and execute | Snapshot fields + revalidation at execution, same pattern as `webhook_deliveries` | Hard |
+| Complexity (first release) | Lower | Higher, but bounded | Lowest, unacceptable for production risk |
+| Future queue compatibility | Awkward retrofit | Natural — items are already the queue payload's unit of work | None |
+
+**Decision: Option B.** A School-wide, potentially 4-figure-Student
+bulk operation with real financial/academic consequences (wrong Grade,
+lost placement, duplicate Enrollment) needs the same "durable unit of
+work + explicit review + safe retry" shape this codebase already
+uses for exactly this class of problem: `webhook_deliveries` +
+`webhook_delivery_attempts` (CLAUDE.md sections 38-49) — one row per
+logical item, an atomic processing-lease claim (conditional `UPDATE`,
+never check-then-act), append-only history, and a fixed failure
+classification. Option A's per-request recomputation cannot survive a
+crash or support a "resolve blockers, come back tomorrow, execute"
+workflow a real school year-end needs. Option C (no persistence) was
+never seriously viable for a mutation this consequential and is
+rejected outright.
+
+**Persistent plan: YES.** Conceptual entities (names illustrative, not
+approved column lists — the actual migration is 1B.7A's job):
+
+- **`EnrollmentRolloverPlan`** — one row per rollover operation: School,
+  source AcademicYear, target AcademicYear, status (see lifecycle
+  below), actor/timestamps, and a configuration snapshot (default
+  GradeLevel mapping, default roll-number strategy).
+- **`EnrollmentRolloverItem`** — one row per (plan, Student): the
+  resolved source Enrollment, the proposed target Section/roll number/
+  decision (promote/repeat/exclude/manual), the last dry-run's result
+  code + reason, and — once executed — the resulting
+  `target_enrollment_id`. This is the idempotency anchor (section
+  "Idempotency" below).
+
+Both are School-owned, RLS-protected (`App\Support\Tenancy\BelongsToSchool`
++ `TenantRls`, exactly like every other tenant-owned table — CLAUDE.md
+sections 17-18), with composite FKs from `EnrollmentRolloverItem` to
+`(id, school_id)` on Student/AcademicYear/Section, the same pattern
+`membership_role_assignments`/`student_enrollments` already established
+(CLAUDE.md section 70). No caller-supplied `school_id` anywhere in this
+design — same as every other module in this codebase.
+
+### Source Enrollment selection (DECIDED)
+
+For one Student and the plan's source AcademicYear, the authoritative
+source row is resolved as:
+
+```
+rows := StudentEnrollment WHERE student_id = ? AND academic_year_id = source_year
+          AND status IN ('active', 'completed')
+```
+
+- **Exactly one row** → that is the authoritative source (subject to
+  further eligibility checks below).
+- **Zero rows** → NOT eligible for this plan (either the Student was
+  never enrolled in the source year, or every row for that year is
+  `withdrawn`/`cancelled`/`transferred` — a `transferred` row is
+  explicitly EXCLUDED from selection here: it is a superseded
+  historical artifact, never the authoritative row, per Phase 1B.3's
+  own transfer semantics. The row that *replaced* it, if any, is what
+  this query already finds instead).
+- **More than one row** → this is an **anomalous history** (Phase
+  1B.1's DB constraints only guarantee at most one `active` row per
+  Student/year — nothing prevents two independently-created
+  `completed` rows for the same Student/year in a pathological case).
+  The dry-run MUST flag this `MANUAL_REVIEW`, never silently pick
+  "the latest" — this directly addresses brief section 37's callout.
+
+**Eligibility matrix** (source status → rollover-eligible):
+
+| Source status | Eligible? | Reasoning |
+| --- | --- | --- |
+| `active` | **Yes** | The normal "prepare next year while this year is still running" case (Model B). |
+| `completed` | **Yes** | The normal "complete this year's placement first, then roll over" case — `complete()`'s own docblock ("the academic year's teaching period genuinely ended") makes this an equally valid, arguably more natural precondition. |
+| `withdrawn` | **No** (default) | The Student left before the year ended; automatically re-enrolling them next year would silently override that decision (brief section 36). A future manual re-enrollment is a distinct, explicit workflow, not a rollover default. |
+| `cancelled` | **No** | Never an operational placement; nothing to roll forward. |
+| `transferred` | **No, as a source row** | Superseded by definition — see selection rule above; it is never itself picked, and the plan does not need a separate rule to exclude it beyond the `status IN ('active','completed')` filter. |
+
+### Source completion semantics (DECIDED)
+
+**Rollover creates the target Enrollment; it never mutates the source
+Enrollment's lifecycle status.** Concretely: `EnrollmentPromotionService`
+(name illustrative) calls `StudentEnrollmentService::enroll()` for the
+target row and nothing else — it never calls `complete()`/`withdraw()`/
+`cancel()` on the source as part of promotion.
+
+Why, evaluated against the three options the brief poses:
+
+- **(A) Complete source immediately at rollover time** — rejected.
+  Schools legitimately prepare next year's classes while the current
+  year is still in session (this is exactly why per-year `active`
+  uniqueness was designed the way it was, and why `currentFor()` is
+  AcademicYear-aware rather than "latest active row globally").
+  Force-completing the source the moment a target row is prepared
+  would mark a still-ongoing placement "completed" while the Student
+  is still attending — actively wrong for any future module (Attendance,
+  Exams) that reads "is this Enrollment operationally current" for
+  today's date.
+- **(B) Source remains active/whatever it already is; completion is
+  independent** — **adopted.** This is trivially safe because the
+  domain already supports source(`active`, 2026-27) and
+  target(`active`, 2027-28) coexisting (per-year uniqueness, not
+  global). It requires zero new orchestration and zero new invariant.
+- **(C) Completion handled by a future AcademicYear-closure feature**
+  — compatible with (B), not a competing option: whenever that future
+  feature exists, it will call the SAME `StudentEnrollmentService::complete()`
+  every other caller uses; rollover does not need to know about it or
+  wait for it.
+
+**Precondition this implies:** the target AcademicYear and its target
+Sections must already exist (created through the ordinary, already-
+accepted Academic Structure setup flow) before a rollover plan can
+reference them. Rollover creates Enrollments, never AcademicYears/
+GradeLevels/Sections.
+
+### Grade progression (DECIDED: explicit, per-plan mapping — never inferred)
+
+**No automatic "next Grade."** `sequence` is not treated as a
+promotion contract (see "Current academic model" above) — using it
+would be exactly the "infer promotion from Grade names/codes" anti-
+pattern the brief explicitly forbids, just one layer more sophisticated
+(numbers instead of strings). A future implementation MAY offer
+`sequence + 1`'s GradeLevel as a **pre-filled UI suggestion** for a
+human to confirm or change (a pure UX convenience, decided at 1B.7F,
+not now) — but the plan's own explicit GradeLevel mapping is always
+what is stored and executed, never a live re-derivation.
+
+The plan stores an explicit **source GradeLevel → target GradeLevel**
+mapping (a small per-plan table/config, keyed by source GradeLevel),
+with two supported outcomes per source GradeLevel:
+
+- **Promote** — target GradeLevel differs from source (the normal
+  case).
+- **Repeat/retain** — target GradeLevel equals source GradeLevel
+  (explicitly configured, never a fallback/default when a mapping is
+  simply missing — a missing mapping is a blocking validation error,
+  never silently treated as "repeat").
+
+**Terminal grade**: a source GradeLevel with no configured target
+mapping at all produces `TERMINAL_GRADE` for every Student in it — no
+target Enrollment is created, and this is not an error; it is an
+expected outcome for a School's highest Grade. This checkpoint does
+**not** invent a Student "graduated"/"alumni" status (Student.status
+stays `active`/`inactive` — see "No new Enrollment status"/"No Student
+status abuse" below); what happens to a Student's identity after
+their terminal Grade (alumni tracking, deactivation, etc.) is
+explicitly deferred to a later, separate checkpoint.
+
+### Section mapping (DECIDED: explicit, per-plan, Section-authoritative)
+
+**No automatic mapping by Section name.** Confirmed no cross-year
+Section lineage exists in the schema (see above) — Sections are
+reorganized freely year to year in real schools, so "Section A → Section
+A" by name would be actively unsafe.
+
+The plan stores an explicit **source Section → target Section**
+mapping as its default per (source GradeLevel, target GradeLevel)
+pair, and the target Section remains the single authoritative
+placement input exactly as it already is for `enroll()`/
+`transferPlacement()` (CLAUDE.md's Section-authoritative-placement
+principle, unchanged) — the target's AcademicYear/Campus/GradeLevel
+are always read FROM the target Section, never independently stored/
+trusted on the plan item. Cross-campus promotion is supported for
+free by this same rule (the target Section simply may belong to a
+different Campus — no separate "Campus mapping" concept needed,
+mirroring how Transfer already allows a Campus change via Section
+alone).
+
+**Per-Student override** (brief section 13/35): the plan-level
+default mapping is only a default. Each `EnrollmentRolloverItem` can
+independently override:
+- decision (`promote` / `repeat` / `exclude` / `manual_review`),
+- target Section,
+- target roll number.
+
+An override never rewrites the mapping in a way the domain doesn't
+already support — it just picks a different (already valid) target
+Section for that one Student. Any override triggers revalidation of
+that item (never a stale cached "READY" after an edit).
+
+**Explicitly NOT overridable** once a plan exists: Student identity,
+the resolved source Enrollment, the source AcademicYear, and the
+target AcademicYear (changing the target year is a different plan,
+not an edit to this one).
+
+### Roll Number strategy (DECIDED: explicit or preserve-current; no auto-generation)
+
+Evaluated against the brief's four conceptual strategies, the
+narrowest safe first release is **A + B combined, never C or D**:
+
+- **Preserve source Roll Number** is the default suggestion per item
+  (pre-filled from the source Enrollment), because it is the
+  least-surprising behavior and requires no school-specific policy
+  knowledge.
+- **Explicit target Roll Number** is always accepted as an override
+  (required whenever the preserved value would collide, or whenever
+  the operator simply wants a different one).
+- **No silent auto-generation** (alphabetical, sequence-based, or
+  Student-Number-as-Roll-Number) in the first release — Roll Number
+  policy varies too much across Indian schools (admission order,
+  custom historical numbering, house-based schemes...) to hardcode
+  safely, and CLAUDE.md's roll-number rules (22, 55) already establish
+  that Roll Number is always caller-owned text, never system-derived.
+  A future **configurable generation policy** (brief strategy C/D)
+  is explicitly deferred, not rejected — it needs its own product
+  decision about which policy(ies) to support.
+
+**Conflict detection (dry-run, mandatory):** for every target Section,
+the set of proposed `(target_section_id, roll_number)` pairs across
+ALL items in the plan must be checked for (a) duplicates among
+themselves, and (b) collision with any `StudentEnrollment` row already
+persisted for that Section/year/roll-number combination — the exact
+`student_enrollments_school_id_academic_year_id_section_id_roll_`
+constraint's application-layer mirror, checked before execution, not
+discovered as a raw constraint violation.
+
+### Dry-run (DECIDED: mandatory, read-only, persists only plan/item metadata)
+
+Dry-run computes and stores, per item, a result code and reason — it
+**never** creates/updates/deletes a `StudentEnrollment`, touches
+`Student`, or touches `AcademicYear`. The only writes a dry-run makes
+are to the plan/item rows themselves (their own validation-result
+columns) — a failed or repeated dry-run has zero Enrollment-lifecycle
+side effects, satisfying brief section 44 exactly.
+
+Result-code taxonomy (illustrative; exact enum values are 1B.7B's job,
+not fixed here) grouped by category:
+
+| Category | Example codes | Meaning |
+| --- | --- | --- |
+| Ready | `READY` | No blockers; safe to execute as configured. |
+| Blocking | `INELIGIBLE_STATUS`, `MISSING_SOURCE`, `MULTIPLE_SOURCE_CANDIDATES`, `MISSING_GRADE_MAPPING`, `TERMINAL_GRADE`, `MISSING_TARGET_SECTION`, `CROSS_SCHOOL_REFERENCE`, `ROLL_NUMBER_CONFLICT`, `INVALID_DATE` | Execution must refuse this item until resolved. |
+| Review (non-blocking but not auto-ready) | `ALREADY_ENROLLED_MATCHES`, `MANUAL_REVIEW` | `ALREADY_ENROLLED_MATCHES` can execute as a no-op (idempotent); `MANUAL_REVIEW` requires an explicit human decision (e.g. anomalous source history) before it can become `READY`. |
+| Conflict | `ALREADY_ENROLLED_DIFFERS` | An existing target Enrollment does not match the plan's proposal — never auto-resolved, never overwritten. |
+| Excluded | `EXCLUDED` | Operator explicitly excluded this Student from this plan (e.g. already handled another way). |
+
+Plan-level summary counts (`total`/`ready`/`blocked`/`review`/`excluded`)
+are derived from item result codes, never separately maintained state
+that could drift from the items themselves.
+
+### Staleness detection (DECIDED)
+
+A dry-run result is a snapshot, not a guarantee — it can go stale
+between review and execution (brief sections 26, 53, 54). Detection
+strategy: **each item stores a snapshot of the source Enrollment's
+identity + status + `updated_at`** (and the target Section's identity
++ status) at dry-run time. Execution re-fetches the current source
+Enrollment and target Section fresh, inside the same transaction as
+the write (`lockForUpdate()`, exactly like `StudentEnrollmentService`'s
+own lifecycle methods already do), and compares against the snapshot:
+
+- **Source transferred/withdrawn/cancelled since dry-run** → item
+  fails closed as stale, re-flagged, never silently promoted from the
+  now-superseded snapshot.
+- **Target Section became inactive** → item fails closed.
+- **A target Enrollment now exists that didn't at dry-run time**
+  (concurrent manual enrollment, brief section 53) → re-run the
+  "already enrolled" check fresh (see below) rather than trusting the
+  stale "no target exists" snapshot.
+- **Roll Number now collides** (another item's execution, or a manual
+  create, landed first) → `StudentEnrollmentService::enroll()`'s own
+  `DuplicateEnrollmentRollNumberException` translation is the final
+  backstop even if the pre-execution revalidation somehow missed it.
+
+**Dry-run passing yesterday is never sufficient on its own** — the
+plan lifecycle (below) requires re-validation after any edit, and
+execution always performs its own fresh preflight regardless of when
+the plan was last validated.
+
+### Plan lifecycle (DECIDED, minimal)
+
+```
+draft → validated → executing → completed
+                                → completed_with_errors
+        (any edit)      ↘
+             └── back to draft (re-validation required)
+draft/validated → cancelled
+```
+
+- **`draft`** — being configured (mappings, per-item overrides). No
+  dry-run result is trusted yet.
+- **`validated`** — the most recent dry-run's results are current for
+  the plan's present configuration. Any edit to the plan or any item
+  immediately invalidates this (reverts to conceptually `draft` for
+  that item, or the whole plan — 1B.7A's exact granularity decision,
+  not fixed here) — this directly satisfies brief section 25's
+  "editing mappings after validation should invalidate the previous
+  dry-run."
+- **`executing`** — execution has started; the plan's configuration
+  becomes immutable (brief section 50) — corrections happen through
+  ordinary Enrollment workflows or a new plan, never by rewriting an
+  executing/executed plan.
+- **`completed`** / **`completed_with_errors`** — terminal; retained
+  as an operational/audit record (brief section 49 — no retention
+  duration invented, no hard-delete).
+- **`cancelled`** — an operator abandoned the plan before executing;
+  retained, not deleted.
+
+No unnecessary intermediate states (e.g. no separate "reviewed"
+state distinct from "validated" — reviewing IS validating in this
+design).
+
+### Atomicity, idempotency, resumability (DECIDED)
+
+- **Batch transaction: NO.** A whole-School single transaction across
+  potentially thousands of Students is rejected outright (brief
+  section 28) — lock duration, rollback cost, and contention make it
+  unsuitable, and it provides no partial-progress story at all.
+- **Per-item transaction: YES.** Each `EnrollmentRolloverItem`'s
+  execution is exactly one `DB::transaction()` that (a) re-validates
+  the snapshot, (b) calls `StudentEnrollmentService::enroll()` for the
+  target row, and (c) records the resulting `target_enrollment_id` and
+  a terminal item status, all inside that same transaction — mirroring
+  `StudentEnrollmentService::transferPlacement()`'s own "everything or
+  nothing for this one unit of work" shape. This directly answers
+  brief section 29: it is structurally impossible for this design to
+  produce "target created without recording it" or "source touched
+  without a target" (the source is never touched at all — see above).
+- **Chunking**: execution processes items in bounded chunks (exact
+  size is an implementation parameter, not an architecture question),
+  the same shape `ProcessOutboxEventJob`/webhook redispatch already
+  use for "don't hold one giant unit of work."
+- **Failure behavior**: one item's failure marks that item
+  `failed`/`review` and the batch continues to the next item — a
+  single Student's roll-number collision must never abort promotion
+  for the other 400 Students in the same plan. This is bounded,
+  visible in the plan's summary counts, and never silently swallowed.
+- **Idempotency**: `EnrollmentRolloverItem.target_enrollment_id` IS the
+  idempotency anchor — before executing an item, check whether it
+  already has one:
+  - **has one already** → skip (already executed; this is what makes
+    a retried/duplicate execution request safe — brief section 52).
+  - **none yet, but a matching target Enrollment now exists anyway**
+    (the "already enrolled" reconciliation from "Dry-run" above,
+    including the natural case where `StudentEnrollmentService::enroll()`
+    itself throws `ActiveEnrollmentConflictException` because a prior
+    partial run already created it) → record that Enrollment's id as
+    this item's `target_enrollment_id` and mark it succeeded, rather
+    than treating the domain's own natural uniqueness guarantee as a
+    hard failure. This turns `ActiveEnrollmentConflictException` from
+    "unexpected error" into "expected idempotent outcome," exactly
+    the way `WebhookSubscriptionController::destroy()`'s "deleting an
+    already-deleted relationship 404s harmlessly" turns a natural
+    domain guarantee into safe retry behavior.
+  - **none yet, and no matching target exists** → execute normally.
+- **Plan-level double-execute guard**: an `executing`/`completed`
+  plan cannot be re-submitted for execution (the plan `status` column
+  itself is that guard, checked with the same "conditional UPDATE,
+  never check-then-act" discipline `AcademicYearService::activate()`
+  already established) — PostgreSQL uniqueness remains the final
+  backstop underneath this, never the whole contract on its own
+  (brief section 52).
+- **Resumability**: because each item durably records its own
+  terminal state (`succeeded`/`failed`/`review`) and its
+  `target_enrollment_id`, a crashed/restarted execution run simply
+  re-scans "items in this plan not yet `succeeded`" — no in-memory
+  batch state is ever the only record of what happened, directly
+  satisfying brief section 51.
+
+### Concurrency (DECIDED)
+
+| Race | Handling |
+| --- | --- |
+| Source Enrollment locking | `lockForUpdate()` on the source row during per-item execution (same primitive `StudentEnrollmentService`'s own lifecycle methods already use) |
+| Target Enrollment race (two executions of the same item) | The idempotency anchor above + `ActiveEnrollmentConflictException` reconciliation |
+| Roll Number race | PostgreSQL's `student_enrollments_school_id_academic_year_id_section_id_roll_` unique constraint is the final backstop; `DuplicateEnrollmentRollNumberException` translation already exists and needs no new code |
+| AcademicYear state race (e.g. someone closes/reactivates the target year mid-execution) | Execution re-checks the target AcademicYear's current status as part of its fresh preflight (not just the dry-run snapshot) — no lock is taken on `AcademicYear` itself; that would risk contending with unrelated, already-existing AcademicYear operations, so revalidate-and-fail-closed is preferred over locking a resource this module does not own the lifecycle of |
+
+**Existing platform risk, not caused by this checkpoint**: Phase 1B.4A
+documented an intermittent `AcademicYearActivationConcurrencyTest`
+process-scheduling flakiness (a pre-existing P2). This architecture
+gate does not touch `AcademicYearActivationService`/its test, and
+nothing in this design requires activating/closing an AcademicYear as
+part of rollover execution (see "Academic Year activation" below) — so
+this risk is unchanged, not newly introduced, and remains tracked
+under its original P2, not re-classified here.
+
+### Academic Year activation (DECIDED: not coupled)
+
+Rollover execution never activates or closes an AcademicYear itself.
+The intended real-world sequence is: prepare the rollover plan for the
+still-`draft` (or already-`active`) target year → validate → execute
+(creating target Enrollments) → activate the target year later,
+whenever the School is ready, through the existing, independent
+`AcademicYearService::activate()` — completely decoupled in time from
+when target Enrollments were prepared. This is safe precisely because
+`enroll()` never required the target AcademicYear to be `active` in
+the first place (nothing in `StudentEnrollmentService::enroll()`
+checks `AcademicYear.status`).
+
+### Authorization (RECOMMENDATION ONLY — not seeded in this checkpoint)
+
+`enrollments.manage` is necessary but arguably not sufficient on its
+own: a single Enrollment edit and a 2,000-Student bulk rollover are
+very different blast radii, and CLAUDE.md's own capability philosophy
+(role names are never authorization; capabilities are; least privilege
+throughout) supports distinguishing them. **Recommendation:** a
+dedicated `enrollments.rollover.manage` capability (naming mirrors
+`integrations.webhooks.manage`'s own narrower-than-parent-domain
+precedent), required in ADDITION to `enrollments.manage` for every
+rollover-plan/execution action, granted to `school_admin`/`principal`
+by default in the same seeder as every other Phase 1B capability. This
+is a recommendation for 1B.7E to implement, if accepted — **no
+capability row, migration, or seeder change was made in this
+checkpoint.**
+
+### Audit (DECIDED)
+
+Reuses `AuditRecorder::school()` exactly as every other module does —
+no new audit mechanism. Plan-level events (`enrollment_rollover_plan.created`,
+`.validated`, `.execution_started`, `.completed`, `.cancelled` —
+illustrative names) carry the plan id and summary counts. Item-level
+events reuse the ALREADY-EXISTING `student_enrollment.created` event
+`StudentEnrollmentService::enroll()` fires today — rollover does not
+need a parallel "promotion succeeded" audit event for the Enrollment
+mutation itself, only for the promotion-specific *decision* (which
+plan/item produced it), avoiding duplicate audit noise (brief section
+41). A failed/skipped item is audited at the plan-item level (id +
+result code), never with Student PII in metadata — IDs and result
+codes only, matching every other audit call in this codebase.
+
+### Multi-tenancy (DECIDED)
+
+No new pattern — `BelongsToSchool` + `TenantRls` on both new tables
+(CLAUDE.md sections 17-18), composite FKs from `EnrollmentRolloverItem`
+to `(id, school_id)` on every referenced Student/AcademicYear/Section
+(CLAUDE.md section 70's established pattern), and `school_id` never
+accepted from request input anywhere in the future controller (CLAUDE.md
+section 19). A plan's source/target AcademicYear, every item's Student,
+source Enrollment, and target Section must all resolve to the SAME
+School — enforced the same way Phase 1B.2's `CrossSchoolEnrollmentException`
+already enforces it for a single Enrollment, applied per item.
+
+### Execution model: synchronous vs. queued (RECOMMENDATION ONLY)
+
+Given School OS already has queue infrastructure (Redis, existing job
+patterns), and this design's items are already the natural unit of
+queued work: **recommend a size threshold below which execution can
+run synchronously in the request** (a small School, tens of Students)
+**and above which it must be queued** (hundreds to thousands of
+Students) — the exact threshold is an implementation-time tuning
+decision, not an architecture question, and nothing above requires
+choosing it now: a per-item-transaction, resumable-by-durable-state
+design moves to a queue with zero change to the domain semantics
+(a queued worker just calls the same "execute one item" primitive a
+synchronous loop would). **No job class is created in this checkpoint.**
+
+### Future UI flow (DESCRIPTION ONLY — no Vue changed)
+
+```
+Academic Years
+  → Rollover / Promotion
+    → Select source Year, select/create target Year
+    → Configure GradeLevel mapping (promote/repeat) + default Section mapping
+    → Review per-Student exceptions/overrides
+    → Dry run
+    → Resolve blockers (missing mappings, roll-number conflicts, manual-review items)
+    → Review summary (counts: ready/blocked/review/excluded)
+    → Explicitly execute (high-risk confirmation, shows affected count)
+    → Results (succeeded/failed/review, retryable)
+```
+
+Individual (single-Student) promotion should reuse the SAME
+`EnrollmentPromotionService`/per-item primitive a bulk plan uses
+internally — e.g. a one-item plan, or a direct call to the same
+underlying method — never a second, incompatible "promote one
+Student" implementation. CSV import of target Section/roll number/
+decision is future work that would populate plan items through the
+same item model, not a parallel input path. None of this is built now.
+
+### No new Enrollment status / no Student status abuse (DECIDED)
+
+Promotion-plan outcomes (`promote`/`repeat`/`exclude`/`manual_review`)
+live ONLY on `EnrollmentRolloverItem.decision` — `StudentEnrollment.status`
+gains no new value (`promoted`/`pending_promotion` etc. are explicitly
+rejected) and `Student.status` is never used to represent rollover
+progress. Every Enrollment produced by rollover is an ordinary `active`
+row created by the ordinary `enroll()` path — indistinguishable, from
+the Enrollment table's own perspective, from one created by a single
+manual enrollment through the existing UI.
+
+### Options rejected
+
+| Option | Why rejected |
+| --- | --- |
+| Stateless bulk service (Option A) | No durable review/edit step, no crash resumability, no natural idempotency anchor — unacceptable for a whole-School mutation. |
+| Ad hoc per-request script (Option C) | No persistence, no auditability, no safe retry — not production-grade for this risk class. |
+| Infer target GradeLevel from `sequence + 1` | `sequence` was never established as a promotion contract; silent inference from any numeric/name proximity is exactly the anti-pattern the brief forbids. |
+| Infer target Section from matching name | No cross-year Section lineage exists in the schema; schools reorganize Sections yearly. |
+| Auto-generate Roll Numbers (alphabetical/sequential) | Roll Number policy is School-specific and out of this module's authority to assume; CLAUDE.md already establishes Roll Number as always caller-owned text. |
+| Complete source Enrollment automatically at rollover time | Would falsely mark a still-ongoing placement "completed" when rollover is prepared ahead of year-end (the common real-world case this design is built to support). |
+| Couple execution to AcademicYear activation | Would force activation timing decisions onto the rollover feature that belong entirely to the independent, already-accepted `AcademicYearService`. |
+| One whole-School transaction for execution | Lock duration/rollback cost/contention unacceptable at real School scale; no partial-progress story. |
+
+### Open decisions (genuine product questions, not implementation gaps)
+
+1. **Exact `enrollments.rollover.manage` capability name and default
+   role grants** — recommended above, but naming/grant-set is a
+   product call for whoever owns the capability catalog, not something
+   this gate can finalize alone.
+2. **Whether/when a future "AcademicYear closure" feature should
+   *offer* to bulk-complete that year's remaining `active` Enrollments**
+   — explicitly out of scope for rollover itself (see "Source
+   completion semantics"), but a real open question for a later
+   checkpoint that this gate deliberately does not answer.
+3. **Whether GradeLevel should eventually gain an explicit
+   `next_grade_level_id`/similar canonical relationship** (which would
+   let a future UI suggest mappings with more confidence than
+   `sequence + 1`) — a schema question for Academic Structure, not
+   Students/SIS, and not required for a safe first rollover
+   implementation (explicit per-plan mapping works without it).
+4. **Roll-Number auto-generation policy** (which policy, or policies,
+   a future configurable generator should support) — deferred, not
+   designed, because no default is safe without a specific product
+   decision about which Indian-school numbering convention(s) to
+   support first.
+5. **The exact size threshold for synchronous vs. queued execution** —
+   an implementation/ops tuning parameter, left to 1B.7C/1B.7D, not a
+   product decision.
+
+Everything else in this document is a technical architecture decision
+this gate is making now, not an open product question — per the
+brief's own instruction not to leave technical choices open merely
+because implementation hasn't started.
+
+### Recommended implementation checkpoint sequence
+
+1. **1B.7A — Rollover Plan Schema & Domain Foundation**: migrations for
+   `EnrollmentRolloverPlan`/`EnrollmentRolloverItem` (RLS, composite
+   FKs, plan lifecycle enum), bare model classes, no business logic yet.
+2. **1B.7B — Dry-Run / Eligibility / Conflict Engine**: source
+   selection, eligibility matrix, GradeLevel/Section mapping
+   validation, Roll Number conflict detection, result-code taxonomy —
+   entirely read-only against `StudentEnrollment`/`Section`, writes
+   only to the plan/item rows themselves.
+3. **1B.7C — Per-Student Promotion Execution**: `EnrollmentPromotionService`
+   orchestrating one item's execution via `StudentEnrollmentService::enroll()`,
+   the idempotency/staleness revalidation from this document, single-item
+   transaction boundary — no batch orchestration yet (callable for one
+   item at a time, proven correct and safe first).
+4. **1B.7D — Bulk/Resumable Execution & Audit**: chunked execution
+   over a whole plan, plan-level double-execute guard, resumability
+   after a simulated crash, full audit event set, and (only once this
+   is proven correct synchronously) the queued-execution path.
+5. **1B.7E — Administrative HTTP/API**: `/api/v1` surface for plan
+   CRUD/dry-run/execute, mirroring Phase 1B.5's conventions exactly,
+   including the `enrollments.rollover.manage` capability decision
+   above if accepted.
+6. **1B.7F — Administrative UI**: the Vue/Inertia flow described above,
+   mirroring Phase 1B.6's conventions.
+
+Each checkpoint should independently regression-test against the
+current full-platform baseline before proceeding, exactly like every
+prior Phase 1B checkpoint.
+
 ## Deferred (not yet implemented)
 
-- **Promotion / bulk academic-year rollover** — conceptually "complete
-  old Enrollment, create next-year Enrollment," but a bulk
-  `Promote Grade 5A → Grade 6A` engine is a later checkpoint (Phase
-  1B.7) once the Enrollment model itself is stable.
+- **Promotion / bulk academic-year rollover implementation** — the
+  architecture was decided in Phase 1B.7 (see "Academic-Year Rollover
+  & Promotion — Architecture Decision" above); no schema/service/API/
+  UI exists yet. Implementation begins at Phase 1B.7A.
 - **Transfer certificate / TC document generation, inter-school
   electronic transfer network** — out of scope for the transfer/
   withdrawal *status* concept this schema already supports.
