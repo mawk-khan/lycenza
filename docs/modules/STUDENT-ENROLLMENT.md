@@ -1,20 +1,25 @@
-# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5)
+# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6)
 
 Status: **schema + sanctioned write path + lifecycle transitions +
-authorization + read foundation + administrative HTTP/API.** Phase
-1B.1 shipped the schema/model/RLS/composite-FK foundation; Phase 1B.2
-added `StudentEnrollmentService::enroll()`, the only sanctioned way to
-create a StudentEnrollment; Phase 1B.3 added the four terminal
-lifecycle transitions (`complete()`/`withdraw()`/`cancel()`) and the
-atomic same-Academic-Year placement transfer (`transferPlacement()`);
-Phase 1B.4 added the `enrollments.view`/`enrollments.manage`
-capabilities and `StudentEnrollmentReadService`, the canonical read
-layer; Phase 1B.4A hardened cross-cutting TenantContext cleanup; Phase
-1B.5 exposes all of the above through the repository's existing
-authenticated School administrative `/api/v1` surface (see
-"Administrative HTTP boundary (Phase 1B.5)" below) — it does not
-redesign the Enrollment domain. Still no Vue UI, and no
-promotion/academic-year rollover yet — see "Deferred" below.
+authorization + read foundation + administrative HTTP/API + administrative
+UI.** Phase 1B.1 shipped the schema/model/RLS/composite-FK foundation;
+Phase 1B.2 added `StudentEnrollmentService::enroll()`, the only
+sanctioned way to create a StudentEnrollment; Phase 1B.3 added the four
+terminal lifecycle transitions (`complete()`/`withdraw()`/`cancel()`)
+and the atomic same-Academic-Year placement transfer
+(`transferPlacement()`); Phase 1B.4 added the `enrollments.view`/
+`enrollments.manage` capabilities and `StudentEnrollmentReadService`,
+the canonical read layer; Phase 1B.4A hardened cross-cutting
+TenantContext cleanup; Phase 1B.5 exposed all of the above through the
+repository's existing authenticated School administrative `/api/v1`
+surface (see "Administrative HTTP boundary (Phase 1B.5)" below); Phase
+1B.6 adds the session-authenticated Vue/Inertia administrative UI over
+the SAME domain (see "Administrative UI (Phase 1B.6)" below) — it does
+not redesign the Enrollment domain, and it does not call the `/api/v1`
+JSON surface internally (it calls `StudentEnrollmentService`/
+`StudentEnrollmentReadService` directly, exactly like the JSON API
+controller does). No promotion/academic-year rollover yet — see
+"Deferred" below.
 
 ## Identity vs enrollment boundary
 
@@ -929,10 +934,132 @@ source Student.
 - Admissions, Attendance, Exams, Fees — untouched.
 - Vue UI — Phase 1B.6.
 
+## Administrative UI (Phase 1B.6)
+
+`App\Http\Controllers\App\StudentEnrollmentController` is a
+session-authenticated Inertia controller (`/app/...`, NOT `/api/v1`)
+using the exact same architecture Phase 1A.6's `StudentController`/
+`GuardianController` already established: `TenantContext::requireSchool()`
+for the active School, `AuthorizesCapability::authorizeCapability()`
+for every action, and every mutation delegated to
+`StudentEnrollmentService`/every non-trivial read to
+`StudentEnrollmentReadService` -- the SAME two services Phase 1B.5's
+JSON API controller uses. It never calls the `/api/v1` HTTP surface
+internally, and duplicates no Enrollment business rule.
+
+### Page/route inventory
+
+| Method | URI | Inertia component | Purpose |
+| --- | --- | --- | --- |
+| GET | `/app/enrollments` | `App/Enrollments/Index` | Directory |
+| GET | `/app/students/{student}/enrollments/create` | `App/Enrollments/Create` | Enroll form |
+| POST | `/app/students/{student}/enrollments` | — (redirect) | Create |
+| POST | `/app/enrollments/{enrollment}/complete` | — (redirect) | Complete |
+| POST | `/app/enrollments/{enrollment}/withdraw` | — (redirect) | Withdraw |
+| POST | `/app/enrollments/{enrollment}/cancel` | — (redirect) | Cancel |
+| GET | `/app/enrollments/{enrollment}/transfer` | `App/Enrollments/Transfer` | Transfer form |
+| POST | `/app/enrollments/{enrollment}/transfer` | — (redirect) | Transfer |
+
+`App/Students/Show` (Phase 1A.6) gained an "Academic placement"
+section (current placement card + full history + inline
+Complete/Withdraw/Cancel forms + a Transfer link) -- the existing
+Student identity/Guardian sections are otherwise untouched.
+`App/Dashboard`'s nav gained an "Enrollments" link
+(`nav.canViewEnrollments`).
+
+### Capability-aware rendering, never the only protection
+
+Every route re-checks `enrollments.view`/`enrollments.manage` via
+`authorizeCapability()` regardless of what any prop implies (root
+CLAUDE.md rule 6: hiding a button is UX only). `StudentController::show()`
+includes `currentEnrollment`/`enrollmentHistory`/`canManageEnrollments`
+in its Inertia props ONLY when the actor holds `enrollments.view` --
+`canViewEnrollments` is always present (`true`/`false`), but the three
+other keys are entirely ABSENT (not just falsy) when `false`, so a
+user with `students.view` but not `enrollments.view` gets a normal
+Student page with zero Enrollment data in the response body, proven
+directly against Inertia props in
+`StudentEnrollmentUiTest::students_view_without_enrollments_view_sees_the_student_but_no_enrollment_data()`.
+`enrollments.manage` never implies `enrollments.view` here either
+(Phase 1B.4's independent-capability design, unchanged).
+
+### Create / Transfer input contract
+
+Identical to the JSON API (Phase 1B.5, section "Create input
+contract"/"Transfer input contract") -- only `section_id`/
+`roll_number`/`starts_on` (create) and `target_section_id`/
+`roll_number`/`effective_date` (transfer) are accepted;
+`school_id`/`academic_year_id`/`campus_id`/`grade_level_id`/
+`target_academic_year_id`/`target_campus_id`/`target_grade_level_id`
+in the request body are silently absent from `$request->validate()`'s
+result and can never reach the service. `roll_number` inputs use
+`type="text"` in Vue, never `type="number"` -- `"007"` round-trips
+exactly. Section options are labeled
+`"{GradeLevel} · Section {name} · {Campus} · {AcademicYear}"` so
+identical Section names across years/campuses/grades are never
+ambiguous (`sectionOptions()`, restricted to non-closed Academic
+Years/active Sections for create/transfer pickers -- a UI convenience
+only, never enforced server-side beyond what the domain already
+enforces).
+
+### Domain exception -> Inertia validation error mapping
+
+Every domain exception a user can plausibly trigger here is caught and
+re-thrown as Laravel's own `ValidationException` (the
+`GuardianController::storeContact()` pattern) so Inertia's
+`form.errors` renders it inline, reusing the exception's own
+already-safe message verbatim:
+
+| Exception | Field |
+| --- | --- |
+| `ActiveEnrollmentConflictException`, `CrossSchoolEnrollmentException` (create) | `section_id` |
+| `DuplicateEnrollmentRollNumberException`, `InvalidEnrollmentRollNumberException` (create) | `roll_number` |
+| `InvalidEnrollmentDateRangeException` (create) | `starts_on` |
+| `InvalidEnrollmentTransitionException`, `InvalidEnrollmentDateRangeException` (lifecycle) | `ends_on` |
+| `CrossAcademicYearTransferException`, `IntraYearGradeChangeException`, `CrossSchoolEnrollmentException` (transfer) | `target_section_id` |
+| `DuplicateEnrollmentRollNumberException`, `InvalidEnrollmentRollNumberException` (transfer) | `roll_number` |
+| `InvalidEnrollmentTransitionException`, `InvalidEnrollmentDateRangeException` (transfer) | `effective_date` |
+
+No exception class name, SQLSTATE, or constraint name ever reaches a
+session-flashed error string.
+
+### Lifecycle UI
+
+Complete/Withdraw/Cancel are three explicit, separately-labeled inline
+forms on the Student page (each collecting exactly one `ends_on`
+field) -- there is no generic status `<select>` and no single
+"transition" endpoint; each button posts to its own named backend
+action, matching CLAUDE.md's "no generic status endpoint" principle
+applied identically to this UI. Transfer is a dedicated page (mirrors
+`AddGuardian.vue`'s "pick another entity" pattern) with a
+`window.confirm()` step before submitting (matching this codebase's
+existing `unlink()` confirmation pattern in `Students/Show.vue`) that
+explicitly explains the current placement will close and a new one
+will open. A failed transfer (e.g. duplicate target roll number) never
+optimistically marks the source as transferred -- Inertia's error
+redirect re-renders the SAME transfer page with fresh server props, so
+the client never diverges from server truth; proved end-to-end in
+`StudentEnrollmentUiTest::transfer_failure_leaves_the_source_untouched_and_shows_a_clean_error()`.
+
+### Privacy, accessibility, responsiveness
+
+Every Enrollment Inertia prop (directory rows, Student-page current/
+history) excludes `dateOfBirth`/Guardian PII/`school_id`/encrypted
+values/lookup hashes -- proven directly against response props, not
+just by source inspection. `StatusBadge.vue` was extended from a fixed
+active/inactive binary to a keyed style map covering all 5 Enrollment
+statuses (`active`/`completed`/`withdrawn`/`transferred`/`cancelled`)
+-- existing Student/Guardian active/inactive rendering is
+byte-identical to before; status is still never conveyed by color
+alone (text label + decorative dot). Every form input has a real
+`<label for>`, `aria-invalid`, and an `aria-describedby`-linked error
+paragraph, matching `StudentIdentityFields.vue`'s established pattern.
+The directory uses a `<table>` with `scope="col"` headers on
+desktop/tablet and a card list on mobile, mirroring
+`Students/Index.vue` exactly.
+
 ## Deferred (not yet implemented)
 
-- **Administrative Vue UI** — the API above is fully authorized and
-  tested; no frontend consumes it yet. Phase 1B.6.
 - **Promotion / bulk academic-year rollover** — conceptually "complete
   old Enrollment, create next-year Enrollment," but a bulk
   `Promote Grade 5A → Grade 6A` engine is a later checkpoint (Phase
