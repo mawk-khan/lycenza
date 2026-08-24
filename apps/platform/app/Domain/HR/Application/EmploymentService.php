@@ -2,7 +2,10 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Exceptions\EmploymentAlreadyEndedException;
 use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
+use App\Domain\HR\Application\Exceptions\InvalidEmploymentEffectiveDateException;
+use App\Domain\HR\Application\Exceptions\InvalidEmploymentStatusTransitionException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\User;
@@ -14,20 +17,38 @@ use Illuminate\Support\Facades\DB;
 /**
  * The only sanctioned write path for EmploymentRecord (docs/modules/HR.md
  * "Temporal data strategy"/"Rehire strategy"), mirroring EmployeeService's
- * shape. `create()` doubles as the rehire pathway -- a second call for
- * an Employee whose first EmploymentRecord has already ended is exactly
- * what a rehire is; nothing at the schema level distinguishes "first
- * hire" from "rehire" beyond it being the Employee's 2nd+ row, so no
- * separate `rehire()` method exists.
+ * shape. `create()` doubles as the rehire pathway at the schema level --
+ * a second call for an Employee whose first EmploymentRecord has
+ * already ended is exactly what a rehire is; nothing here distinguishes
+ * "first hire" from "rehire" beyond it being the Employee's 2nd+ row.
+ * Phase 8A.13 adds `App\Domain\HR\Application\EmployeeLifecycleService`
+ * as the explicit REHIRE COMMAND on top of this primitive (enforcing
+ * the "prior history must exist" business precondition) -- it still
+ * calls straight through to this `create()`, never duplicating its
+ * overlap/allocation logic.
  *
  * Phase 8A.10: every public method requires a real `User $actor` and
  * authorizes `hr.employees.assignments.manage` at the Employee's School
  * (docs/modules/HR.md 8A.10 as-built: Employment/Assignment history and
  * reporting-manager changes share one capability boundary).
+ *
+ * Phase 8A.13: `end()` additionally enforces a closed terminal-status
+ * set, rejects a repeated end on an already-ended row (concurrency-safe
+ * via a row lock), and rejects an effective date before the
+ * EmploymentRecord's own `starts_on` -- see `end()`'s own docblock.
  */
 class EmploymentService
 {
     use AuthorizesCapability;
+
+    /**
+     * The closed set of terminal Employment statuses
+     * (docs/modules/HR.md "Employee lifecycle -- state responsibility
+     * matrix") -- the only valid `end()` targets. `draft`/`pre_joining`/
+     * `active`/`notice_period` are non-terminal Employment states and
+     * are never a valid "ending" transition.
+     */
+    private const array TERMINAL_STATUSES = ['separated', 'terminated', 'retired', 'deceased'];
 
     public function __construct(
         private readonly AuditRecorder $audit,
@@ -126,32 +147,60 @@ class EmploymentService
      * common case). Never touches `users`/`school_memberships` --
      * account deactivation is a distinct, explicit action outside this
      * checkpoint's scope (docs/modules/HR.md principle 2.6).
+     *
+     * Phase 8A.13: `$status` must be one of the closed terminal set
+     * (`InvalidEmploymentStatusTransitionException` otherwise -- no
+     * arbitrary caller string is ever written). The target row is
+     * re-fetched with `lockForUpdate()` INSIDE the transaction and its
+     * `ends_on` re-checked from that locked read before writing
+     * (`EmploymentAlreadyEndedException` if already ended) -- this is
+     * what makes two genuinely concurrent `end()` calls for the SAME
+     * EmploymentRecord serialize safely rather than racing to overwrite
+     * each other's end date/status (checkpoint 8A.13 sections 21/36).
+     * `$endsOn` before the row's own `starts_on` is rejected with a
+     * clean exception (`InvalidEmploymentEffectiveDateException`)
+     * rather than surfacing the database's own CHECK-constraint
+     * violation.
      */
     public function end(EmploymentRecord $employment, string $endsOn, User $actor, string $status = 'separated'): EmploymentRecord
     {
         $school = $employment->school;
         $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
 
+        if (! in_array($status, self::TERMINAL_STATUSES, true)) {
+            throw new InvalidEmploymentStatusTransitionException($employment->id, $status);
+        }
+
         return $this->context->withSchool($school, function () use ($school, $employment, $endsOn, $status, $actor) {
             return DB::transaction(function () use ($school, $employment, $endsOn, $status, $actor) {
-                $employment->update(['ends_on' => $endsOn, 'status' => $status]);
+                $locked = EmploymentRecord::query()->where('id', $employment->id)->lockForUpdate()->firstOrFail();
 
-                $closedAssignmentIds = $employment->assignments()
+                if ($locked->ends_on !== null) {
+                    throw new EmploymentAlreadyEndedException($locked->id, $locked->ends_on->toDateString());
+                }
+
+                if ($endsOn < $locked->starts_on->toDateString()) {
+                    throw new InvalidEmploymentEffectiveDateException($locked->id, $endsOn, 'before_employment_start');
+                }
+
+                $locked->update(['ends_on' => $endsOn, 'status' => $status]);
+
+                $closedAssignmentIds = $locked->assignments()
                     ->whereNull('ends_on')
                     ->pluck('id');
 
-                $employment->assignments()->whereNull('ends_on')->update(['ends_on' => $endsOn]);
+                $locked->assignments()->whereNull('ends_on')->update(['ends_on' => $endsOn]);
 
                 $this->closureCascade->clearDanglingManagerReferences($closedAssignmentIds->all());
 
-                $this->audit->school($school, 'hr.employment.ended', actor: $actor, subject: $employment, metadata: [
-                    'employeeId' => $employment->employee_id,
+                $this->audit->school($school, 'hr.employment.ended', actor: $actor, subject: $locked, metadata: [
+                    'employeeId' => $locked->employee_id,
                     'endsOn' => $endsOn,
                     'status' => $status,
                     'closedAssignmentIds' => $closedAssignmentIds->all(),
                 ]);
 
-                return $employment->fresh();
+                return $locked->fresh();
             });
         });
     }

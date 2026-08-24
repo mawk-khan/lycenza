@@ -2361,6 +2361,282 @@ favor of splitting by table:
 | **Suspended** | Deliberately **not** an HR-owned concept in 8A — "suspended" already exists as `school_memberships.status` (account/access suspension, Phase 0B). If a future disciplinary-suspension-from-duty concept is needed distinct from account suspension, it's a new, explicit `employment_records` state added with its own migration, not reused from `school_memberships`. | (existing `school_memberships.status`, unrelated) | Identity & Access (existing) |
 | **Account status** | `users`/`school_memberships` (existing, untouched) | (existing values) | Identity & Access |
 
+## Lifecycle, Separation & Rehire (8A.13, implemented)
+
+**No new table, no new column, no new capability.** 8A.4 already built
+the load-bearing primitives (`EmploymentService::create()`/`end()`,
+`AssignmentClosureCascade`) — this checkpoint's decision gate (its own
+section 3) resolved to "orchestration/transition semantics only": one
+new Application-layer command service
+(`App\Domain\HR\Application\EmployeeLifecycleService`, `separate()`/
+`rehire()`) plus a narrow, additive tightening of
+`EmploymentService::end()` itself to close a real pre-existing gap
+(arbitrary caller-supplied `$status` strings, no repeated-separation
+guard). Neither `separate()` nor `rehire()` writes to an HR table
+directly — both call straight through to `EmploymentService`/
+`EmployeeAssignmentService`, which remain the sole authoritative write
+paths, unchanged in their own responsibilities.
+
+### Employee lifecycle vs Employment lifecycle — kept fully distinct
+
+Confirmed by inspection, not assumed: `Employee.record_status`
+(`active`/`archived`) has **no write path anywhere in this codebase**
+beyond `EmployeeService::create()` setting it to `active` once, at
+creation. No `archive()`/`reactivate()` method exists for it, and
+8A.13 deliberately does **not** add one — no HR.md text couples
+Employment separation to Employee-record archival, and building that
+subsystem now would be scope creep beyond this checkpoint's named
+boundary (root `CLAUDE.md` rule 2). `EmployeeLifecycleService::rehire()`
+never reads `Employee.record_status` at all — proven directly
+(`HrEmployeeRehireTest::rehire_is_completely_independent_of_employee_record_status`,
+which force-sets `record_status = 'archived'` purely as test setup,
+since no service exists to do it, then proves rehire proceeds
+unaffected and the field is never touched as a side effect). If a
+future checkpoint adds real Employee archival, this independence is
+exactly what must be preserved — Employment lifecycle must never
+implicitly reactivate an archived Employee record, and vice versa.
+
+### Employment transition tightening (`EmploymentService::end()`)
+
+Pre-8A.13, `end(EmploymentRecord $employment, string $endsOn, User
+$actor, string $status = 'separated')` accepted **any** string for
+`$status` and could be called repeatedly on the same row, silently
+overwriting `ends_on`/`status` each time — a real gap, not a
+hypothetical one. 8A.13 closes both, narrowly, inside `end()` itself
+(benefiting every caller, not only the new lifecycle service):
+
+- **Closed terminal set**: `$status` must be one of `separated`,
+  `terminated`, `retired`, `deceased` (`EmploymentRecord::TERMINAL_STATUSES`
+  private const) — `active`/`draft`/`pre_joining`/`notice_period` or any
+  unrecognized string throws `InvalidEmploymentStatusTransitionException`
+  before any write.
+- **Repeated-separation guard, concurrency-safe**: the target row is
+  re-fetched with `lockForUpdate()` **inside** the transaction and its
+  `ends_on` re-checked from that locked read — a second `end()` call on
+  an already-ended row throws `EmploymentAlreadyEndedException` rather
+  than rewriting the original end date/status. The lock is what makes
+  two genuinely concurrent `end()` calls for the SAME row serialize
+  safely instead of racing (proven with two real, separate OS processes
+  — see "Concurrency" below), the identical `lockForUpdate()`-then-
+  re-check pattern `EmploymentService::create()`/`EmployeeNumberAllocator`/
+  `AcademicYearService` already established for their own invariants.
+- **Effective-date floor**: `$endsOn` before the row's own `starts_on`
+  throws `InvalidEmploymentEffectiveDateException` (reason
+  `before_employment_start`) instead of surfacing the database's own
+  `employment_records_date_range_check` CHECK-constraint violation as a
+  raw SQLSTATE.
+
+`EmploymentService::create()`'s own optional `status` attribute is
+**unchanged** — still accepts any of the 8 real values (e.g.
+`pre_joining` for a not-yet-started hire), matching existing,
+already-passing tests. Only the *ending* transition needed tightening;
+initial creation is not a "transition."
+
+### `EmployeeLifecycleService::separate()`
+
+Thin, additive wrapper over `EmploymentService::end()`. The ONE thing
+it adds on top, deliberately at the command layer and not inside
+`end()` itself, is a future-dating restriction: `$endsOn` after today
+(`Carbon::today()`, fixed-clock-tested) throws
+`InvalidEmploymentEffectiveDateException` (reason `future_dated`).
+HR.md defines no scheduled-separation semantics, so the checkpoint's
+own explicit preference ("if future-dated separation is NOT explicitly
+required, prefer rejecting it") is followed — `EmploymentService::end()`
+itself stays more permissive (no future-date check), preserved as a
+lower-level primitive for any future backdated-correction workflow.
+Everything else — terminal-status validation, the already-ended guard,
+Assignment closure, `AssignmentClosureCascade`'s manager-pointer
+cleanup, and the `hr.employment.ended` audit write — is 100% reused
+from `end()`, not reimplemented.
+
+**Target validation**: `separate(EmploymentRecord $employment, ...)`
+takes an already-resolved model, exactly like `EmploymentService::end()`/
+`EmployeeAssignmentService::end()` already do — there is no
+caller-supplied raw id anywhere in this signature, so "wrong Employment"
+is structurally avoided the same way 8A.4's Assignment IDOR shape was
+already made impossible by omitting `employee_id` from
+`employee_assignments` entirely.
+
+**Authorization**: reuses `hr.employees.assignments.manage` — the
+exact capability `EmploymentService`/`EmployeeAssignmentService`
+already require for Employment/Assignment mutations. No new capability.
+
+### `EmployeeLifecycleService::rehire()`
+
+An explicit lifecycle COMMAND, not a synonym for
+`EmploymentService::create()`. Requires the target Employee to already
+have at least one prior `EmploymentRecord`
+(`RehireRequiresEmploymentHistoryException` otherwise) — an Employee
+with zero employment history is a first hire, which continues to go
+through `EmploymentService::create()` directly, completely unchanged
+from 8A.4 (`rehire()` is additive, never a required detour).
+
+- **Overlap**: enforced entirely by the reused `create()` (its existing
+  Employee-row `lockForUpdate()` + overlap scan) — nothing in
+  `rehire()` duplicates that check. This is also what makes "rehire
+  while a current Employment is still open" impossible by construction
+  (an open-ended or not-yet-ended prior Employment always overlaps any
+  proposed new one), satisfying the checkpoint's "rehire is not an
+  alias for a second concurrent Employment" requirement with zero extra
+  code.
+- **Optional initial Assignment**: if `$position` is supplied, a brand
+  NEW `EmployeeAssignment` is created (via the unmodified
+  `EmployeeAssignmentService::create()`/`setPrimary()`) inside the SAME
+  transaction as the new EmploymentRecord — never a reactivation of any
+  historical Assignment, and never inheriting a prior reporting
+  manager (a new Assignment's `manager_assignment_id` starts `null` by
+  construction; restoring a reporting line is a separate, explicit
+  `ReportingHierarchyService::setManager()` call, not automated).
+  Omitting `$position` is a deliberate, valid "Employment-only" rehire.
+- **Atomicity**: if Assignment creation fails (inactive Position,
+  cross-School reference, ...), the whole rehire — including the
+  just-created EmploymentRecord — rolls back; no "rehired but
+  unassigned" partial result when an Assignment was actually requested
+  (proven, including that no `hr.employment.created` audit event
+  survives the rollback).
+- **Reference/ownership rules unchanged**: a rehire's initial Assignment
+  is validated by the exact same `EmployeeAssignmentService::create()`
+  checks as any other Assignment (School ownership, active-reference-
+  at-creation, Department/Campus compatibility) — no relaxed path for
+  rehire.
+- **Employee number and User linkage**: untouched. `rehire()` never
+  calls the employee-number allocator (that only happens inside
+  `EmployeeService::create()`, never invoked here) and never reads or
+  writes `employees.user_id`/`users`/`school_memberships` — proven
+  directly.
+
+**Authorization**: the SAME `hr.employees.assignments.manage`
+capability, checked once up front (before the prior-history check or
+any write) — a partially-authorized rehire request never partially
+executes. No new capability.
+
+### Assignment closure and reporting-hierarchy cleanup on separation
+
+100% reused from 8A.4/8A.5, exercised through the new command layer:
+every currently-open Assignment (primary and secondary) under the
+separated Employment closes to the same effective date; any OTHER
+still-open Assignment elsewhere that pointed at one of the
+now-closed ones as its `manager_assignment_id` has that pointer
+cleared by the existing `AssignmentClosureCascade` — proven for both
+directions (separating a manager clears the subordinate's now-dangling
+pointer without closing the subordinate's own Assignment; separating a
+subordinate never touches the manager's Assignment at all). An ended
+Assignment's own historical `manager_assignment_id` is left untouched,
+exactly as 8A.5 already documented.
+
+### User, membership, and authorization independence
+
+Proven directly, both for `separate()` and `rehire()`: the linked
+User's row, the `SchoolMembership.status`, and every authorization
+table (`roles`, `membership_role_assignments`, `platform_role_assignments`)
+are byte-for-byte unchanged before/after either operation — mirroring
+`PositionTest`'s established "full lifecycle never touches an
+authorization table" pattern. An already-suspended membership is
+neither caused nor lifted by separation; an Employee with no linked
+User (`user_id = null`) separates/rehires identically to one with a
+link. Account/access lifecycle remains entirely Identity & Access's
+own, separate decision (principle 2.6) — HR never makes it implicitly.
+
+### Concurrency
+
+Real, separate OS processes (`tests/Support/rehire-employee.php`,
+`tests/Support/separate-employment.php`, mirroring
+`import-employee.php`'s/`create-employee.php`'s established pattern),
+not a sequential simulation, stable across repeated runs:
+
+1. **Five concurrent rehires**, same Employee, same proposed dates —
+   exactly one `created`, four safe `EmploymentOverlapException`-derived
+   results (the `create()` Employee-row lock, reused unmodified,
+   already serializes this).
+2. **Two concurrent separations**, same EmploymentRecord — exactly one
+   actual transition, one safe `EmploymentAlreadyEndedException` result
+   (the NEW `end()` row lock this checkpoint adds is what makes this
+   safe — pre-8A.13 this would have raced).
+3. **Concurrent separate() + rehire()**, same Employee — no ad hoc lock
+   was introduced for this specific race; PostgreSQL's MVCC already
+   guarantees the invariant by construction, documented rather than
+   worked around: `rehire()`'s overlap scan (inside `create()`) only
+   ever reads COMMITTED `EmploymentRecord` state, so it either correctly
+   sees the still-open Employment (safely rejects with overlap) or the
+   already-closed one (safely proceeds) — never a torn read, and never
+   two simultaneously open EmploymentRecords regardless of which
+   operation's transaction commits first.
+
+### Read-model compatibility — zero code changes
+
+8A.8 Directory, 8A.9 Profile Workspace, and 8A.11 Activity Timeline
+required **no code changes** — their existing temporal
+(`starts_on <= today <= ends_on`) and `record_status`-only filtering
+already produces the correct answer for separated/rehired Employees,
+proven with dedicated integration tests: a separated Employee still
+appears in the Directory (record_status untouched) with no current
+position once their Employment has actually ended; a rehired
+Employee's Directory entry reflects the NEW current position, never
+the old one; the Profile Workspace's `employmentHistory` lists both
+EmploymentRecords with correct `isCurrent` flags; a future-dated
+rehire is correctly NOT current until its `starts_on` arrives; the
+Timeline surfaces `hr.employment.created`/`hr.employment.ended` for
+both the original hire and the rehire with no special new event and no
+actor/subject confusion.
+
+### No new audit event family
+
+`separate()`/`rehire()` emit **zero** new audit events — they exclusively
+reuse the existing `hr.employment.ended`/`hr.employment.created`
+(and, when an initial Assignment is requested, `hr.assignment.created`/
+`hr.assignment.primary_changed`) events `EmploymentService`/
+`EmployeeAssignmentService` already write, unchanged since 8A.4. No
+`hr.employee.separated`/`hr.employee.rehired` event type was added —
+HR.md defines no such requirement, and the existing events already
+express the underlying facts completely (checkpoint's own explicit
+"do not add duplicative events merely for naming aesthetics"). No
+change to `EmployeeActivityTimelineService`'s `EVENT_CATEGORIES`
+mapping was needed for the same reason.
+
+### Import boundary preserved
+
+8A.12's `EmployeeImportService` is **unmodified** — a regression test
+proves that importing a row for an already-separated Employee's linked
+User still resolves to `duplicate_exact` for human review, never an
+automatic rehire, even though a real `rehire()` now exists elsewhere in
+the codebase.
+
+### Security review highlights
+
+No unresolved P0/P1. Cross-School Employment IDOR: prevented (both
+operations authorize against the resolved model's own `->school`,
+never a caller-supplied id). Generic status-transition bypass: closed
+(`end()`'s new enum validation). Archived-Employee ambiguity: resolved
+by explicit non-coupling, tested directly (see above). Old-Assignment
+reactivation / old-manager auto-restoration: structurally impossible
+(`rehire()` only ever calls `EmployeeAssignmentService::create()` for a
+brand new row). Audit rollback: proven (a rolled-back rehire leaves no
+`hr.employment.created` event). Carried forward, unresolved by this
+checkpoint (unchanged): the shared `CapabilityResolver` ~60-second
+revocation-cache window (P3, first documented in 8A.10).
+
+### Migrations
+
+**None.**
+
+### Capability changes
+
+**None** — `hr.employees.assignments.manage` reused exactly.
+
+### UI / HTTP
+
+**Deferred**, same decision and reasoning as every prior 8A checkpoint
+since 8A.9: no controller, route, or Vue page.
+
+### 8A.14 boundary
+
+8A.13 ships Employment separation and rehire as authorized,
+transaction-safe Application-layer commands only — no public/mobile
+API (8A.14's scope), no accessibility/performance/security hardening
+pass (8A.15), no offboarding checklist/account deprovisioning, no
+Employee merge, no `EmployeeCategory`, and no Payroll/Attendance/Leave/
+AI automation.
+
 ## Authorization design
 
 **Superseded by "HR Permissions & Sensitive-Data Controls (8A.10,
