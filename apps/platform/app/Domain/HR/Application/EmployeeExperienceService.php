@@ -7,6 +7,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeExperience;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -21,6 +22,8 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeExperienceService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -29,8 +32,9 @@ class EmployeeExperienceService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function add(Employee $employee, array $attributes, ?User $actor = null): EmployeeExperience
+    public function add(Employee $employee, array $attributes, User $actor): EmployeeExperience
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         unset($attributes['school_id'], $attributes['employee_id']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
@@ -54,8 +58,9 @@ class EmployeeExperienceService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function update(Employee $employee, EmployeeExperience $experience, array $attributes, ?User $actor = null): EmployeeExperience
+    public function update(Employee $employee, EmployeeExperience $experience, array $attributes, User $actor): EmployeeExperience
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $experience);
         unset($attributes['school_id'], $attributes['employee_id']);
 
@@ -74,8 +79,9 @@ class EmployeeExperienceService
         });
     }
 
-    public function remove(Employee $employee, EmployeeExperience $experience, ?User $actor = null): void
+    public function remove(Employee $employee, EmployeeExperience $experience, User $actor): void
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $experience);
 
         $this->context->withSchool($employee->school, function () use ($employee, $experience, $actor) {

@@ -30,6 +30,7 @@ use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Str;
 
 /**
  * Test fixtures deliberately go through the SAME rules production code
@@ -105,6 +106,65 @@ trait CreatesTenancyFixtures
         $this->assignSchoolRole($membership, $roleKey);
 
         return [$user, $school];
+    }
+
+    /**
+     * Phase 8A.10: creates a User with an ACTIVE membership at $school
+     * and an ad hoc, non-system school-scoped Role holding exactly
+     * $capabilities -- no more, no less. This is the standard way
+     * 8A.10's authorization tests construct an actor with a precise
+     * capability set (e.g. "documents.manage but NOT sensitive.manage")
+     * without depending on -- or mutating -- the seeded system roles.
+     * Reuses the exact same Role/Capability/MembershipRoleAssignment
+     * tables production code uses; this is not a parallel test-only ACL
+     * mechanism (root CLAUDE.md rule 2 / 8A.10 brief section 3).
+     *
+     * @param  array<int, string>  $capabilities
+     */
+    protected function createUserWithCapabilities(School $school, array $capabilities, string $status = 'active'): User
+    {
+        $user = $this->createUser();
+        $membership = $this->createMembership($user, $school, $status);
+
+        if ($capabilities !== []) {
+            $role = Role::query()->create([
+                'key' => 'test.capability_grant.'.(string) Str::uuid(),
+                'name' => 'Test Capability Grant',
+                'scope' => 'school',
+                'is_system' => false,
+            ]);
+            $role->capabilities()->sync($capabilities);
+            $this->assignSchoolRole($membership, $role->key);
+        }
+
+        return $user;
+    }
+
+    /**
+     * Phase 8A.10 fixture convenience: an actor holding EVERY HR
+     * capability at $school. Used by pre-8A.10 (8A.1-8A.9) tests that
+     * are not themselves testing authorization -- once HR Application
+     * services require an authorized actor, these tests continue to
+     * exercise their original domain invariants (overlap validation,
+     * ownership checks, verification-reset rules, ...) unchanged, using
+     * an actor that is never the thing under test. 8A.10's OWN
+     * authorization tests use createUserWithCapabilities() directly
+     * with a narrow, deliberate capability list instead -- never this
+     * method, which would defeat the point of a deny test.
+     */
+    protected function fullHrActor(School $school): User
+    {
+        return $this->createUserWithCapabilities($school, [
+            'hr.employees.view', 'hr.employees.manage',
+            'hr.employees.personal.view', 'hr.employees.personal.manage',
+            'hr.employees.assignments.view', 'hr.employees.assignments.manage',
+            'hr.employees.qualifications.view', 'hr.employees.qualifications.manage',
+            'hr.employees.documents.view', 'hr.employees.documents.manage',
+            'hr.employees.sensitive.view', 'hr.employees.sensitive.manage',
+            'hr.employees.notes.view', 'hr.employees.notes.manage',
+            'hr.departments.view', 'hr.departments.manage',
+            'hr.positions.view', 'hr.positions.manage',
+        ]);
     }
 
     // --- Phase 0D: Academic Structure fixtures -----------------------

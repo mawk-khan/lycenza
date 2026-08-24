@@ -2,6 +2,7 @@
 
 use App\Domain\HR\Application\EmployeeService;
 use App\Models\School;
+use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
 
@@ -12,7 +13,11 @@ use Illuminate\Contracts\Console\Kernel;
 // PostgreSQL -- not a sequential simulation. Mirrors
 // activate-academic-year.php's identical pattern.
 //
-// Usage: php create-employee.php <schoolId> <fullName>
+// Usage: php create-employee.php <schoolId> <fullName> <actorId>
+// <actorId> is a User already holding hr.employees.manage at
+// <schoolId>, created and committed by the parent test before any
+// subprocess spawns (Phase 8A.10 -- EmployeeService::create() now
+// requires and authorizes a real actor).
 // Prints the allocated employee_number on success, or "rejected:<class>"
 // on failure.
 
@@ -22,13 +27,14 @@ $app = require __DIR__.'/../../bootstrap/app.php';
 $kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 
-[, $schoolId, $fullName] = $argv;
+[, $schoolId, $fullName, $actorId] = $argv;
 
 $context = $app->make(TenantContext::class);
 $school = School::query()->findOrFail($schoolId);
+$actor = User::query()->findOrFail($actorId);
 
 try {
-    $employee = $app->make(EmployeeService::class)->create($school, ['full_name' => $fullName]);
+    $employee = $app->make(EmployeeService::class)->create($school, ['full_name' => $fullName], $actor);
     echo $employee->employee_number;
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

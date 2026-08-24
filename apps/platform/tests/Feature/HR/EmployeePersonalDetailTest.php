@@ -91,7 +91,7 @@ class EmployeePersonalDetailTest extends TestCase
         $detail = app(EmployeePersonalDetailService::class)->setDetails($employee, [
             'personal_email' => 'asha.personal@example.com',
             'personal_phone' => '9876543210',
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame('asha.personal@example.com', $detail->personal_email);
         $this->assertSame($employee->id, $detail->employee_id);
@@ -103,9 +103,10 @@ class EmployeePersonalDetailTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $service = app(EmployeePersonalDetailService::class);
+        $actor = $this->fullHrActor($school);
 
-        $first = $service->setDetails($employee, ['personal_email' => 'first@example.com']);
-        $second = $service->setDetails($employee, ['personal_email' => 'second@example.com']);
+        $first = $service->setDetails($employee, ['personal_email' => 'first@example.com'], $actor);
+        $second = $service->setDetails($employee, ['personal_email' => 'second@example.com'], $actor);
 
         $this->assertSame($first->id, $second->id, 'Updating details must reuse the same 1:1 row, never create a second one.');
 

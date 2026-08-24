@@ -140,7 +140,7 @@ class EmployeeCertificationTest extends TestCase
             'name' => 'First Aid Certificate',
             'issuer' => 'Red Cross',
             'employee_id' => $otherEmployee->id,
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame($employee->id, $certification->employee_id, 'A caller-supplied employee_id in the attributes array must never override the authoritative Employee argument.');
     }
@@ -156,7 +156,7 @@ class EmployeeCertificationTest extends TestCase
             'issuer' => 'Red Cross',
             'verification_status' => 'verified',
             'verified_at' => now(),
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame('unverified', $certification->verification_status, 'verification_status must never be settable through add() -- only verify()/reject() may set it.');
         $this->assertNull($certification->verified_at);
@@ -172,7 +172,7 @@ class EmployeeCertificationTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeCertificationService::class)->update($employeeA, $certificationB, ['issuer' => 'Hacked Issuer']);
+        app(EmployeeCertificationService::class)->update($employeeA, $certificationB, ['issuer' => 'Hacked Issuer'], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -185,7 +185,7 @@ class EmployeeCertificationTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeCertificationService::class)->remove($employeeA, $certificationB);
+        app(EmployeeCertificationService::class)->remove($employeeA, $certificationB, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -195,7 +195,7 @@ class EmployeeCertificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $certification = $this->createEmployeeCertification($employee);
 
-        $verified = app(EmployeeCertificationService::class)->verify($employee, $certification);
+        $verified = app(EmployeeCertificationService::class)->verify($employee, $certification, $this->fullHrActor($school));
 
         $this->assertSame('verified', $verified->verification_status);
         $this->assertNotNull($verified->verified_at);
@@ -208,7 +208,7 @@ class EmployeeCertificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $certification = $this->createEmployeeCertification($employee);
 
-        $rejected = app(EmployeeCertificationService::class)->reject($employee, $certification);
+        $rejected = app(EmployeeCertificationService::class)->reject($employee, $certification, $this->fullHrActor($school));
 
         $this->assertSame('rejected', $rejected->verification_status);
         $this->assertNull($rejected->verified_at);
@@ -221,9 +221,10 @@ class EmployeeCertificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $certification = $this->createEmployeeCertification($employee);
         $service = app(EmployeeCertificationService::class);
-        $service->verify($employee, $certification);
+        $actor = $this->fullHrActor($school);
+        $service->verify($employee, $certification, $actor);
 
-        $edited = $service->update($employee, $certification, ['issuer' => 'A Different Issuer']);
+        $edited = $service->update($employee, $certification, ['issuer' => 'A Different Issuer'], $actor);
 
         $this->assertSame('unverified', $edited->verification_status, 'A caller must not be able to verify one certificate and silently transform it into another while keeping verified status.');
         $this->assertNull($edited->verified_at);
@@ -236,9 +237,10 @@ class EmployeeCertificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $certification = $this->createEmployeeCertification($employee, ['credential_number' => 'ORIGINAL-1']);
         $service = app(EmployeeCertificationService::class);
-        $service->verify($employee, $certification);
+        $actor = $this->fullHrActor($school);
+        $service->verify($employee, $certification, $actor);
 
-        $edited = $service->update($employee, $certification, ['credential_number' => 'CHANGED-2']);
+        $edited = $service->update($employee, $certification, ['credential_number' => 'CHANGED-2'], $actor);
 
         $this->assertSame('unverified', $edited->verification_status);
         $this->assertSame('CHANGED-2', $edited->credential_number);
@@ -251,9 +253,10 @@ class EmployeeCertificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $certification = $this->createEmployeeCertification($employee);
         $service = app(EmployeeCertificationService::class);
-        $service->verify($employee, $certification);
+        $actor = $this->fullHrActor($school);
+        $service->verify($employee, $certification, $actor);
 
-        $unchanged = $service->update($employee, $certification, []);
+        $unchanged = $service->update($employee, $certification, [], $actor);
 
         $this->assertSame('verified', $unchanged->verification_status);
     }
@@ -268,7 +271,7 @@ class EmployeeCertificationTest extends TestCase
             'name' => 'Confidential Certificate',
             'issuer' => 'Confidential Issuer',
             'credential_number' => 'SECRET-999',
-        ]);
+        ], $this->fullHrActor($school));
 
         app(TenantContext::class)->set($school);
         $event = SchoolAuditEvent::query()

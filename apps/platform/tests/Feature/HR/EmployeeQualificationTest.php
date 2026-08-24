@@ -139,7 +139,7 @@ class EmployeeQualificationTest extends TestCase
             'qualification_name' => 'Bachelor of Science',
             'institution' => 'Some University',
             'employee_id' => $otherEmployee->id,
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame($employee->id, $qualification->employee_id, 'A caller-supplied employee_id in the attributes array must never override the authoritative Employee argument.');
     }
@@ -156,7 +156,7 @@ class EmployeeQualificationTest extends TestCase
             'institution' => 'Some University',
             'verification_status' => 'verified',
             'verified_at' => now(),
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame('unverified', $qualification->verification_status, 'verification_status must never be settable through add() -- only verify()/reject() may set it.');
         $this->assertNull($qualification->verified_at);
@@ -172,7 +172,7 @@ class EmployeeQualificationTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeQualificationService::class)->update($employeeA, $qualificationB, ['grade_or_result' => 'Hacked']);
+        app(EmployeeQualificationService::class)->update($employeeA, $qualificationB, ['grade_or_result' => 'Hacked'], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -185,7 +185,7 @@ class EmployeeQualificationTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeQualificationService::class)->remove($employeeA, $qualificationB);
+        app(EmployeeQualificationService::class)->remove($employeeA, $qualificationB, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -199,7 +199,7 @@ class EmployeeQualificationTest extends TestCase
         $updated = app(EmployeeQualificationService::class)->update($employeeA, $qualification, [
             'grade_or_result' => 'Updated',
             'school_id' => $schoolB->id,
-        ]);
+        ], $this->fullHrActor($schoolA));
 
         $this->assertSame('Updated', $updated->grade_or_result);
         $this->assertSame($schoolA->id, $updated->school_id, 'A caller-supplied school_id in the attributes array must never move a record to a different School.');
@@ -212,7 +212,7 @@ class EmployeeQualificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $qualification = $this->createEmployeeQualification($employee);
 
-        $verified = app(EmployeeQualificationService::class)->verify($employee, $qualification);
+        $verified = app(EmployeeQualificationService::class)->verify($employee, $qualification, $this->fullHrActor($school));
 
         $this->assertSame('verified', $verified->verification_status);
         $this->assertNotNull($verified->verified_at);
@@ -225,7 +225,7 @@ class EmployeeQualificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $qualification = $this->createEmployeeQualification($employee);
 
-        $rejected = app(EmployeeQualificationService::class)->reject($employee, $qualification);
+        $rejected = app(EmployeeQualificationService::class)->reject($employee, $qualification, $this->fullHrActor($school));
 
         $this->assertSame('rejected', $rejected->verification_status);
         $this->assertNull($rejected->verified_at);
@@ -241,7 +241,7 @@ class EmployeeQualificationTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeQualificationService::class)->verify($employeeA, $qualificationB);
+        app(EmployeeQualificationService::class)->verify($employeeA, $qualificationB, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -251,9 +251,10 @@ class EmployeeQualificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $qualification = $this->createEmployeeQualification($employee);
         $service = app(EmployeeQualificationService::class);
-        $service->verify($employee, $qualification);
+        $actor = $this->fullHrActor($school);
+        $service->verify($employee, $qualification, $actor);
 
-        $edited = $service->update($employee, $qualification, ['grade_or_result' => 'Corrected Grade']);
+        $edited = $service->update($employee, $qualification, ['grade_or_result' => 'Corrected Grade'], $actor);
 
         $this->assertSame('unverified', $edited->verification_status, 'A material edit to a verified record must reset verification, not silently keep it verified.');
         $this->assertNull($edited->verified_at);
@@ -266,9 +267,10 @@ class EmployeeQualificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $qualification = $this->createEmployeeQualification($employee);
         $service = app(EmployeeQualificationService::class);
-        $service->reject($employee, $qualification);
+        $actor = $this->fullHrActor($school);
+        $service->reject($employee, $qualification, $actor);
 
-        $edited = $service->update($employee, $qualification, ['grade_or_result' => 'Corrected Grade']);
+        $edited = $service->update($employee, $qualification, ['grade_or_result' => 'Corrected Grade'], $actor);
 
         $this->assertSame('unverified', $edited->verification_status);
     }
@@ -280,9 +282,10 @@ class EmployeeQualificationTest extends TestCase
         $employee = $this->createEmployee($school);
         $qualification = $this->createEmployeeQualification($employee);
         $service = app(EmployeeQualificationService::class);
-        $service->verify($employee, $qualification);
+        $actor = $this->fullHrActor($school);
+        $service->verify($employee, $qualification, $actor);
 
-        $unchanged = $service->update($employee, $qualification, []);
+        $unchanged = $service->update($employee, $qualification, [], $actor);
 
         $this->assertSame('verified', $unchanged->verification_status);
     }
@@ -297,7 +300,7 @@ class EmployeeQualificationTest extends TestCase
         $updated = app(EmployeeQualificationService::class)->update($employee, $qualification, [
             'verification_status' => 'verified',
             'verified_at' => now(),
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame('unverified', $updated->verification_status, 'verification_status must never be settable through update() -- only verify()/reject() may set it.');
     }
@@ -313,7 +316,7 @@ class EmployeeQualificationTest extends TestCase
             'qualification_name' => 'Bachelor of Science',
             'institution' => 'Confidential University',
             'grade_or_result' => 'Distinction',
-        ]);
+        ], $this->fullHrActor($school));
 
         app(TenantContext::class)->set($school);
         $event = SchoolAuditEvent::query()

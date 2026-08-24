@@ -9,6 +9,8 @@ use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\School;
+use App\Models\User;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
@@ -65,14 +67,25 @@ use Illuminate\Support\Collection;
  */
 class EmployeeDirectoryService
 {
+    use AuthorizesCapability;
+
     public const int MAX_PER_PAGE = 100;
 
     public function __construct(
         private readonly TenantContext $context,
     ) {}
 
-    public function search(School $school, EmployeeDirectoryQuery $query): LengthAwarePaginator
+    /**
+     * Phase 8A.10: this is the authoritative, production-facing entry
+     * point (no controller exists yet -- docs/modules/HR.md 8A.10
+     * as-built) -- requires `hr.employees.view` at $school. The
+     * capability check runs BEFORE any query, so a caller lacking it
+     * learns nothing about $school's Employee data, not even a count.
+     */
+    public function search(School $school, EmployeeDirectoryQuery $query, User $actor): LengthAwarePaginator
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.view', $school);
+
         return $this->context->withSchool($school, fn () => $this->runSearch($school, $query));
     }
 

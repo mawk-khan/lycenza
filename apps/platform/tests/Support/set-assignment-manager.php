@@ -3,6 +3,7 @@
 use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Models\School;
+use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
 
@@ -15,7 +16,11 @@ use Illuminate\Contracts\Console\Kernel;
 // sequential simulation. Mirrors activate-academic-year.php's/
 // create-employee.php's identical pattern.
 //
-// Usage: php set-assignment-manager.php <schoolId> <subordinateAssignmentId> <managerAssignmentId>
+// Usage: php set-assignment-manager.php <schoolId> <subordinateAssignmentId> <managerAssignmentId> <actorId>
+// <actorId> is a User already holding hr.employees.assignments.manage
+// at <schoolId>, created and committed by the parent test before any
+// subprocess spawns (Phase 8A.10 -- setManager() now requires and
+// authorizes a real actor).
 // Prints "ok:<newManagerAssignmentId>" on success, or "rejected:<class>"
 // on failure (a ReportingHierarchyCycleException is the expected
 // rejection for exactly one of the two racing processes).
@@ -26,7 +31,7 @@ $app = require __DIR__.'/../../bootstrap/app.php';
 $kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 
-[, $schoolId, $subordinateAssignmentId, $managerAssignmentId] = $argv;
+[, $schoolId, $subordinateAssignmentId, $managerAssignmentId, $actorId] = $argv;
 
 $context = $app->make(TenantContext::class);
 $school = School::query()->findOrFail($schoolId);
@@ -35,8 +40,9 @@ $context->set($school);
 try {
     $subordinate = EmployeeAssignment::query()->findOrFail($subordinateAssignmentId);
     $manager = EmployeeAssignment::query()->findOrFail($managerAssignmentId);
+    $actor = User::query()->findOrFail($actorId);
 
-    $result = $app->make(ReportingHierarchyService::class)->setManager($subordinate, $manager);
+    $result = $app->make(ReportingHierarchyService::class)->setManager($subordinate, $manager, $actor);
     echo 'ok:'.$result->manager_assignment_id;
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

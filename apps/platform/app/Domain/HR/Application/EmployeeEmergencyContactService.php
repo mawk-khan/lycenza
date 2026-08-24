@@ -7,6 +7,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -26,6 +27,8 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeEmergencyContactService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -34,8 +37,9 @@ class EmployeeEmergencyContactService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function add(Employee $employee, array $attributes, ?User $actor = null): EmployeeEmergencyContact
+    public function add(Employee $employee, array $attributes, User $actor): EmployeeEmergencyContact
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         unset($attributes['school_id'], $attributes['employee_id'], $attributes['is_primary']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
@@ -60,8 +64,9 @@ class EmployeeEmergencyContactService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function update(Employee $employee, EmployeeEmergencyContact $contact, array $attributes, ?User $actor = null): EmployeeEmergencyContact
+    public function update(Employee $employee, EmployeeEmergencyContact $contact, array $attributes, User $actor): EmployeeEmergencyContact
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $contact);
         unset($attributes['school_id'], $attributes['employee_id'], $attributes['is_primary']);
 
@@ -80,8 +85,9 @@ class EmployeeEmergencyContactService
         });
     }
 
-    public function remove(Employee $employee, EmployeeEmergencyContact $contact, ?User $actor = null): void
+    public function remove(Employee $employee, EmployeeEmergencyContact $contact, User $actor): void
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $contact);
 
         $this->context->withSchool($employee->school, function () use ($employee, $contact, $actor) {
@@ -107,8 +113,9 @@ class EmployeeEmergencyContactService
      * (or, without the partial unique index, permanently) leave two
      * primaries.
      */
-    public function setPrimary(Employee $employee, EmployeeEmergencyContact $contact, ?User $actor = null): EmployeeEmergencyContact
+    public function setPrimary(Employee $employee, EmployeeEmergencyContact $contact, User $actor): EmployeeEmergencyContact
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $contact);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $contact, $actor) {

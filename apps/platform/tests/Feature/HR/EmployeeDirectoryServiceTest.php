@@ -244,8 +244,9 @@ class EmployeeDirectoryServiceTest extends TestCase
         $subordinateEmployment = $this->createEmploymentRecord($subordinateEmployee, ['starts_on' => '2020-01-01', 'ends_on' => null]);
         $subordinateAssignment = $this->createEmployeeAssignment($subordinateEmployment, $position, ['is_primary' => true, 'starts_on' => '2020-01-01', 'ends_on' => null]);
 
-        app(TenantContext::class)->withSchool($school, function () use ($subordinateAssignment, $managerAssignment) {
-            app(ReportingHierarchyService::class)->setManager($subordinateAssignment->fresh(), $managerAssignment->fresh());
+        $actor = $this->fullHrActor($school);
+        app(TenantContext::class)->withSchool($school, function () use ($subordinateAssignment, $managerAssignment, $actor) {
+            app(ReportingHierarchyService::class)->setManager($subordinateAssignment->fresh(), $managerAssignment->fresh(), $actor);
         });
 
         $entry = $this->searchOne($school, $subordinateEmployee->id);
@@ -458,7 +459,7 @@ class EmployeeDirectoryServiceTest extends TestCase
 
         app(TenantContext::class)->set($schoolB);
 
-        $result = app(EmployeeDirectoryService::class)->search($schoolA, new EmployeeDirectoryQuery);
+        $result = app(EmployeeDirectoryService::class)->search($schoolA, new EmployeeDirectoryQuery, $this->fullHrActor($schoolA));
 
         $this->assertCount(1, $result->items());
         $this->assertSame($employeeA->id, $result->items()[0]->employeeId);
@@ -482,7 +483,7 @@ class EmployeeDirectoryServiceTest extends TestCase
 
     private function search(School $school, ?EmployeeDirectoryQuery $query = null): LengthAwarePaginator
     {
-        return app(EmployeeDirectoryService::class)->search($school, $query ?? new EmployeeDirectoryQuery);
+        return app(EmployeeDirectoryService::class)->search($school, $query ?? new EmployeeDirectoryQuery, $this->fullHrActor($school));
     }
 
     private function searchOne(School $school, string $employeeId): EmployeeDirectoryEntry

@@ -203,7 +203,7 @@ class EmployeeDocumentTest extends TestCase
             'original_filename' => 'passport-scan.pdf',
             'mime_type' => 'application/pdf',
             'size_bytes' => 2048,
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame("schools/{$school->id}/employee-documents/passport-scan.pdf", $document->storage_path);
     }
@@ -223,7 +223,7 @@ class EmployeeDocumentTest extends TestCase
             'original_filename' => 'passport-scan.pdf',
             'mime_type' => 'application/pdf',
             'size_bytes' => 2048,
-        ]);
+        ], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -241,7 +241,7 @@ class EmployeeDocumentTest extends TestCase
             'mime_type' => 'application/pdf',
             'size_bytes' => 2048,
             'employee_id' => $otherEmployee->id,
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame($employee->id, $document->employee_id, 'A caller-supplied employee_id in the attributes array must never override the authoritative Employee argument.');
     }
@@ -256,7 +256,7 @@ class EmployeeDocumentTest extends TestCase
         $updated = app(EmployeeDocumentService::class)->update($employee, $document, [
             'storage_path' => 'employee-documents/hacked.pdf',
             'storage_disk' => 's3',
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame('employee-documents/original.pdf', $updated->storage_path, 'storage_path must be immutable after registration -- update() must never re-point a document at different file content.');
     }
@@ -266,7 +266,7 @@ class EmployeeDocumentTest extends TestCase
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $actualActor = $this->createUser();
+        $actualActor = $this->fullHrActor($school);
         $forgedActor = $this->createUser();
 
         $document = app(EmployeeDocumentService::class)->register($employee, [
@@ -283,32 +283,23 @@ class EmployeeDocumentTest extends TestCase
         $this->assertNotSame($forgedActor->id, $document->uploaded_by_user_id);
     }
 
-    #[Test]
-    public function register_with_no_actor_persists_a_null_uploaded_by_user_id_and_ignores_a_caller_supplied_value(): void
-    {
-        $school = $this->createSchool();
-        $employee = $this->createEmployee($school);
-        $forgedActor = $this->createUser();
-
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf',
-            'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 2048,
-            'uploaded_by_user_id' => $forgedActor->id,
-        ]);
-
-        $this->assertNull($document->uploaded_by_user_id, 'With no trusted $actor, uploaded_by_user_id must be null -- never a caller-forged value.');
-    }
+    // Phase 8A.10: a "register with no actor" case (formerly tested
+    // here) is now structurally impossible -- EmployeeDocumentService::
+    // register() requires a real, authorized `User $actor` (no HR
+    // application service accepts a null/anonymous actor as of this
+    // checkpoint, see docs/modules/HR.md 8A.10 as-built, "null actor").
+    // The remaining invariant this test protected -- a caller-supplied
+    // `uploaded_by_user_id` attribute can never override provenance --
+    // is still fully proven by
+    // register_derives_uploaded_by_user_id_from_the_actor_argument_not_the_caller_supplied_attribute
+    // above, using a real authorized actor.
 
     #[Test]
     public function update_cannot_change_the_original_uploaded_by_user_id(): void
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $originalUploader = $this->createUser();
+        $originalUploader = $this->fullHrActor($school);
         $impersonator = $this->createUser();
 
         $document = app(EmployeeDocumentService::class)->register($employee, [
@@ -323,7 +314,7 @@ class EmployeeDocumentTest extends TestCase
         $updated = app(EmployeeDocumentService::class)->update($employee, $document, [
             'uploaded_by_user_id' => $impersonator->id,
             'category' => 'other',
-        ]);
+        ], $originalUploader);
 
         $this->assertSame($originalUploader->id, $updated->uploaded_by_user_id, 'uploaded_by_user_id records original registration provenance and must be immutable via update().');
     }
@@ -333,8 +324,8 @@ class EmployeeDocumentTest extends TestCase
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $originalUploader = $this->createUser();
-        $laterUpdater = $this->createUser();
+        $originalUploader = $this->fullHrActor($school);
+        $laterUpdater = $this->fullHrActor($school);
 
         $document = app(EmployeeDocumentService::class)->register($employee, [
             'category' => 'id_proof',
@@ -370,7 +361,7 @@ class EmployeeDocumentTest extends TestCase
         $updated = app(EmployeeDocumentService::class)->update($employeeA, $document, [
             'category' => 'id_proof',
             'school_id' => $schoolB->id,
-        ]);
+        ], $this->fullHrActor($schoolA));
 
         $this->assertSame('id_proof', $updated->category);
         $this->assertSame($schoolA->id, $updated->school_id, 'A caller-supplied school_id in the attributes array must never move a record to a different School.');
@@ -386,7 +377,7 @@ class EmployeeDocumentTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeDocumentService::class)->update($employeeA, $documentB, ['category' => 'other']);
+        app(EmployeeDocumentService::class)->update($employeeA, $documentB, ['category' => 'other'], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -399,7 +390,7 @@ class EmployeeDocumentTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeDocumentService::class)->archive($employeeA, $documentB);
+        app(EmployeeDocumentService::class)->archive($employeeA, $documentB, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -409,7 +400,7 @@ class EmployeeDocumentTest extends TestCase
         $employee = $this->createEmployee($school);
         $document = $this->createEmployeeDocument($employee);
 
-        $archived = app(EmployeeDocumentService::class)->archive($employee, $document);
+        $archived = app(EmployeeDocumentService::class)->archive($employee, $document, $this->fullHrActor($school));
 
         $this->assertSame('archived', $archived->status);
         $this->assertFalse($archived->isActive());
@@ -422,7 +413,7 @@ class EmployeeDocumentTest extends TestCase
         $employee = $this->createEmployee($school);
         $document = $this->createEmployeeDocument($employee, ['classification_tier' => 'restricted']);
 
-        app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive']);
+        app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive'], $this->fullHrActor($school));
 
         app(TenantContext::class)->set($school);
         $event = SchoolAuditEvent::query()
@@ -447,7 +438,7 @@ class EmployeeDocumentTest extends TestCase
             'original_filename' => 'confidential-passport.pdf',
             'mime_type' => 'application/pdf',
             'size_bytes' => 2048,
-        ]);
+        ], $this->fullHrActor($school));
 
         app(TenantContext::class)->set($school);
         $event = SchoolAuditEvent::query()
@@ -469,11 +460,14 @@ class EmployeeDocumentTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $document = $this->createEmployeeDocument($employee);
+        // Created BEFORE the baseline counts -- see PositionTest's
+        // identical pattern/rationale.
+        $actor = $this->fullHrActor($school);
 
         $beforeRoles = DB::table('membership_role_assignments')->count();
         $beforePlatformRoles = DB::table('platform_role_assignments')->count();
 
-        app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive']);
+        app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive'], $actor);
 
         $this->assertSame($beforeRoles, DB::table('membership_role_assignments')->count());
         $this->assertSame($beforePlatformRoles, DB::table('platform_role_assignments')->count());

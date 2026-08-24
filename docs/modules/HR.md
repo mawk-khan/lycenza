@@ -1403,6 +1403,368 @@ baseline of 351 passed / 610 assertions.
 upload/download; `EmployeeCategory`; imports; public/mobile API;
 payroll/attendance/leave/recruitment/performance; AI/automation.
 
+## HR Permissions & Sensitive-Data Controls (8A.10, implemented)
+
+**This is a security-boundary checkpoint, not a capability-seeding
+task.** 8A.1–8A.9 deliberately built every HR domain service and both
+read models (`EmployeeDirectoryService`, `EmployeeProfileWorkspaceService`)
+with no HTTP surface at all, specifically because
+`Database\Seeders\CapabilityAndRoleSeeder` registered no `hr.*`
+capability yet (verified before any 8A.10 code was written, not
+assumed). 8A.10 closes that gap: it registers the capability family,
+and — because no controller exists yet to be the "obvious" enforcement
+point — puts the actual `Gate::authorize('capability', ...)` check
+**inside every HR Application service itself**, which is the true
+authoritative, production-facing entry point today. A future
+controller (8A.14+) calling these services inherits this protection
+for free; it is not expected to "remember" to re-check.
+
+**RLS vs authorization, restated precisely**: PostgreSQL RLS (already
+proven in `HrRawIsolationTest` since 8A.1) answers "which School's rows
+can this database session see" — it has never been, and is not now,
+an answer to "which operations may this actor perform." Both layers
+run on every request: `TenantContext::withSchool()` scopes the query,
+`Gate::authorize('capability', [$key, $school])` scopes the operation.
+`HrMultiSchoolAuthorizationTest::real_time_tenant_context_visibility_is_not_mistaken_for_authorization`
+proves this directly — a real, RLS-visible row, denied anyway, because
+the actor lacks the capability.
+
+**No new HR ACL engine.** Reused, verbatim: `capabilities`/`roles`/
+`role_capabilities`/`membership_role_assignments`/
+`platform_role_assignments` (unchanged schema), `CapabilityResolver`,
+`Gate::define('capability', ...)` (`AppServiceProvider::boot()`), and
+`App\Support\Authorization\AuthorizesCapability`. The only change to
+shared authorization infrastructure is one new method on that trait,
+`authorizeCapabilityFor(User $actor, string $capability, ?School
+$school)` — a thin `Gate::forUser($actor)->authorize(...)` wrapper for
+callers (Application-layer services) that hold an explicit `$actor`
+argument rather than running inside an authenticated HTTP request. No
+`hr_roles`/`employee_permissions`/`employee_acl` table was created or
+considered necessary.
+
+### Final capability list
+
+Reconciles 8A.0's original "Authorization design" draft below with
+what 8A.6/8A.7/8A.8/8A.9 actually built. One correction from that draft,
+made explicit here per root `CLAUDE.md` rule 15: qualification/
+experience/certification detail (8A.6) and employment/assignment
+history (8A.4/8A.5) are gated by their own dedicated capabilities
+(`hr.employees.qualifications.*`, `hr.employees.assignments.*`) — the
+8A.0 draft's privacy-matrix table listed them under
+`hr.employees.personal.*`, but 8A.6's own "implemented" section already
+registered and used the dedicated pair; this section is the final,
+authoritative word, not the 8A.0 draft.
+
+```
+hr.employees.view                    hr.employees.manage
+hr.employees.personal.view           hr.employees.personal.manage
+hr.employees.assignments.view        hr.employees.assignments.manage
+hr.employees.qualifications.view     hr.employees.qualifications.manage
+hr.employees.documents.view          hr.employees.documents.manage
+hr.employees.notes.view              hr.employees.notes.manage
+hr.employees.sensitive.view          hr.employees.sensitive.manage
+hr.departments.view                  hr.departments.manage
+hr.positions.view                    hr.positions.manage
+```
+
+All 18, `namespace = 'school'`. `.notes.*` is registered but unused —
+no `employee_notes` table exists yet (same "capability exists, data
+does not yet" precedent `.sensitive.*` itself already established in
+8A.0). No separate `.verify` capability was introduced for
+Qualification/Certification verification — `.qualifications.manage`
+covers add/update/remove/verify/reject uniformly, a deliberate
+capability-explosion-avoidance decision (root `CLAUDE.md`'s "don't add
+abstractions beyond what's needed", applied here to permissions);
+`HrMutationAuthorizationTest::qualifications_manage_grants_verification_by_this_checkpoints_design`
+documents this decision as a passing test, not just prose.
+
+### Default role grants
+
+`school_admin` and `principal` receive **only**
+`hr.employees.view`/`.manage`/`.personal.view` — exactly what 8A.0's
+draft already committed to, verified still correct and implemented
+byte-for-byte in `CapabilityAndRoleSeeder`. Every other `hr.*`
+capability (`.personal.manage`, `.assignments.*`, `.qualifications.*`,
+`.documents.*`, `.sensitive.*`, `.notes.*`, `hr.departments.*`,
+`hr.positions.*`) is granted to **no system role by default** — a
+School's own role configuration (`school.roles.manage`) must add
+whichever of these a real "HR Staff" role needs. This closes 8A.0's own
+flagged P1 finding ("default role capability grants must not include
+sensitive/personal.manage") and extends the same conservative default
+to the newly-registered `.assignments.*`/`.qualifications.*`/
+`.documents.*`/`hr.departments.*`/`hr.positions.*` pairs, none of which
+existed when that P1 was written. `HrCapabilityRegistryTest` proves the
+exact granted/not-granted set for both roles, and that no system role
+ever receives `.sensitive.*`.
+
+There is no "automatically grant every new School capability to
+School Admin" mechanism anywhere in this codebase — `CapabilityAndRoleSeeder`
+explicitly lists each role's capabilities; this was verified, not
+assumed, before deciding the default-grant boundary above.
+
+### Directory authorization (`EmployeeDirectoryService`)
+
+`search()` now requires `User $actor` and calls
+`authorizeCapabilityFor($actor, 'hr.employees.view', $school)` before
+running any query — a denied caller learns nothing, not even a row
+count. Everything 8A.8 already proved (12-field disclosure allow-list,
+search/filter/sort/pagination, tenant isolation) is unchanged;
+`HrDirectoryAuthorizationTest` adds the capability boundary itself, and
+`HrDefaultDenyTest`/`HrMultiSchoolAuthorizationTest` add the default-deny
+and multi-School proofs.
+
+### Profile authorization (`EmployeeProfileWorkspaceService`)
+
+**Entry gate**: `hr.employees.personal.view` is required to call
+`build()` at all — `hr.employees.view` (Directory) alone does **not**
+grant Profile access, by design
+(`HrDefaultDenyTest::directory_capability_alone_does_not_grant_profile_access`).
+The check runs before the Employee is even resolved, so it is School-
+scoped, never Employee-scoped — it cannot become a cross-tenant
+existence oracle, and a same-School denial (`AuthorizationException`)
+is never confused with a cross-School/nonexistent-id `null` (unchanged
+from 8A.9, both proven independently).
+
+**Section-level gating** (approach B from the checkpoint brief —
+"build section-by-section according to multiple view capabilities",
+chosen because it maps exactly onto the capability family already
+registered):
+
+| Section | Additional capability required | Behavior when absent |
+|---|---|---|
+| `summary`, `personalDetails`, `contact`, `addresses`, `emergencyContacts` | none beyond the `personal.view` entry gate | n/a — always present once the workspace is reachable at all |
+| `employmentHistory`, `assignments` (full history) | `hr.employees.assignments.view` | `[]` — not merely hidden, structurally absent from the returned DTO |
+| `qualifications`, `experience`, `certifications` | `hr.employees.qualifications.view` | `[]`, not queried at all |
+| `documents` (Restricted only) | `hr.employees.documents.view` | `[]`, not queried at all |
+| Highly Sensitive documents | never included here, any capability | excluded at the query level (unchanged from 8A.9) |
+
+`summary`'s current position/department/campus/manager fields (the
+same one-hop, Directory-tier-equivalent data 8A.8 exposes) remain
+visible to any `personal.view` holder without also requiring
+`assignments.view` — a deliberate, documented judgment call (the
+richer *history* lists are what `assignments.view` additionally
+gates, not the single current snapshot). Because `summary` needs the
+current Employment/Assignment resolved regardless, the underlying
+query for those two tables still runs even when `assignments.view` is
+absent; only the *output* `employmentHistory`/`assignments` arrays are
+gated. `HrProfileAuthorizationTest` proves every row of the table
+above, plus a dedicated side-channel test
+(`no_sensitive_document_side_channel_leaks_through_the_general_profile`)
+that plants two sentinel-valued Highly Sensitive documents and proves
+neither their content, category, nor count appears anywhere in the
+serialized profile for an actor with every OTHER capability except
+`sensitive.view`.
+
+### Highly Sensitive document read (`EmployeeSensitiveDocumentReadService`, new)
+
+A single new, deliberately narrow Application service —
+`App\Domain\HR\Application\EmployeeSensitiveDocumentReadService::forEmployee(School,
+string $employeeId, User $actor): ?array` — is the *only* place
+`classification_tier = highly_sensitive` `EmployeeDocument` metadata is
+reachable at all. Requires `hr.employees.sensitive.view` specifically;
+never satisfied by `.documents.view`/`.manage` or `.personal.view`.
+Returns the exact same narrow, safe shape 8A.9 already established
+(`EmployeeProfileDocumentEntry`: id/category/classification_tier/
+issued_on/expires_on/status) — never a raw Eloquent model, never
+`storage_path`/`storage_disk`/`original_filename`/`uploaded_by_user_id`,
+never a signed/public URL, never a physical file read. Tenant-safe
+resolution identical to `EmployeeProfileWorkspaceService::build()`
+(capability check before Employee resolution; `null` for both
+nonexistent and cross-School ids, indistinguishably).
+
+**Audit**: exactly one `hr.employee_document.sensitive_viewed`
+`SchoolAuditEvent` per successful read that actually returns at least
+one Highly Sensitive document — never one row per document, and never
+for a read that finds zero (nothing sensitive was actually exposed).
+Metadata is limited to the Employee id and the returned document ids;
+never storage paths, filenames, or categories of anything hidden.
+`HrSensitiveDocumentReadServiceTest` proves both the audit-on-non-empty
+and no-audit-on-empty cases explicitly.
+
+### Document classification-transition control (`EmployeeDocumentService`)
+
+The checkpoint's most safety-critical single rule, implemented in one
+place (`assertClassificationCapability()`): `hr.employees.documents.manage`
+is sufficient **only** when a document's classification stays
+`restricted` throughout the call. `hr.employees.sensitive.manage` is
+required whenever **either side** of an operation is `highly_sensitive`:
+
+- registering a **new** `highly_sensitive` document,
+- updating or archiving a document whose **current** tier is already
+  `highly_sensitive` — even when the update touches no classification
+  field at all (an ordinary document manager must not edit/archive a
+  Highly Sensitive record just because it is still reachable),
+- a classification-tier transition in **either direction**
+  (`restricted → highly_sensitive` or the reverse).
+
+A denied attempt leaves the record completely unchanged — proven for
+both transition directions, for a non-classification field update on
+an already-`highly_sensitive` record, and for archive
+(`HrDocumentClassificationAuthorizationTest`, 10 tests covering every
+row of the required test matrix's classification section). This is
+exactly the bypass the checkpoint brief's sections 9–12 warn about:
+"ordinary document-management permission must not automatically permit
+modification/downgrading of Highly Sensitive records" — closed by
+construction, not by convention.
+
+### Mutation authorization — the full map
+
+Every Application-service public mutation method now requires a real,
+non-nullable `User $actor` (see "Null actor" below) and authorizes
+before doing anything else:
+
+| Service / method(s) | Capability required |
+|---|---|
+| `EmployeeService::create()` | `hr.employees.manage` |
+| `DepartmentService::create/update/archive/reactivate/reparent()` | `hr.departments.manage` |
+| `PositionService::create/update/archive/reactivate()` | `hr.positions.manage` |
+| `EmploymentService::create/update/end()` | `hr.employees.assignments.manage` |
+| `EmployeeAssignmentService::create/end/setPrimary()` | `hr.employees.assignments.manage` |
+| `ReportingHierarchyService::setManager()` | `hr.employees.assignments.manage` |
+| `EmployeePersonalDetailService::setDetails()` | `hr.employees.personal.manage` |
+| `EmployeeAddressService::add/update/remove()` | `hr.employees.personal.manage` |
+| `EmployeeEmergencyContactService::add/update/remove/setPrimary()` | `hr.employees.personal.manage` |
+| `EmployeeQualificationService::add/update/remove/verify/reject()` | `hr.employees.qualifications.manage` |
+| `EmployeeExperienceService::add/update/remove()` | `hr.employees.qualifications.manage` |
+| `EmployeeCertificationService::add/update/remove/verify/reject()` | `hr.employees.qualifications.manage` |
+| `EmployeeDocumentService::register/update/archive()` | `.documents.manage` or `.sensitive.manage` (classification-aware, see above) |
+
+Reporting-manager changes deliberately share the Employment/Assignment
+capability (`.assignments.manage`), not a separate one — HR.md's own
+8A.5 design already treats `manager_assignment_id` as one more field of
+`employee_assignments`, not an independent subsystem, and no product
+requirement asks for finer separation yet.
+
+**Employee Core mutations**: `EmployeeService::create()` is the only
+mutation method that exists on that service as of 8A.9 (no
+update/archive/user-link method has been built yet — that is 8A.13's
+concern); it is protected. Employee-number allocation itself remains
+internal to `create()` and was never a separately callable operation,
+so it needed no capability of its own.
+
+### Null actor
+
+**No HR Application service accepts a null/anonymous actor.** Every
+`?User $actor = null` parameter from 8A.1–8A.9 became a required `User
+$actor` in 8A.10 — there is no legitimate system/internal HR mutation
+path today (no scheduled job, queued listener, or console command
+writes HR data), so "require a real actor everywhere" is the correct,
+simplest rule per the checkpoint brief's own guidance, not a narrower
+carve-out invented for convenience. One pre-existing 8A.7 test
+(`register_with_no_actor_persists_a_null_uploaded_by_user_id...`)
+tested a case that is now structurally impossible; it was retired with
+an inline comment explaining why, and the invariant it protected
+(a caller-supplied `uploaded_by_user_id` attribute can never override
+real provenance) remains fully proven by the sibling test that uses a
+real, authorized actor.
+
+### Platform / privileged actor
+
+**No HR-specific superadmin bypass exists, and none was built.**
+`docs/security/AUTHORIZATION.md` and `CapabilityResolverTest` already
+establish, and this checkpoint re-confirmed by inspection (not
+assumption), that Platform and School capabilities are resolved and
+cached completely independently — a Platform Super Admin has zero
+School capabilities without an explicit `SchoolMembership` + School-
+scoped role, exactly like any other actor. There is no existing
+"platform admin enters a School's context" elevation mechanism to reuse
+(`docs/security/AUTHORIZATION.md`'s own "What is NOT yet implemented"
+section already says so), so none was invented for HR. A Platform
+Super Admin who needs HR access gets it the same way anyone does: a
+real membership and an HR-capable role at that School.
+
+### Membership status
+
+Unchanged, reused as-is: `CapabilityResolver::schoolCapabilities()`
+already filters to `status = 'active'` memberships (Phase 0B), so a
+suspended/invited membership yields zero capabilities regardless of
+role assignments — no HR-specific membership-status model was
+introduced.
+
+### Capability revocation
+
+No automatic cache-invalidation-on-revoke hook exists anywhere in this
+codebase yet (`CapabilityResolver::forgetCache()` is a manual utility;
+nothing calls it automatically today when a `MembershipRoleAssignment`
+is deleted). 8A.10 follows this existing convention rather than adding
+a new one: `HrMutationAuthorizationTest::capability_revocation_takes_effect_on_the_next_check`
+deletes the assignment and explicitly calls `forgetCache()`, proving
+the mechanism works when a caller does invoke it — exactly what a
+future role-management controller action must do after mutating role
+assignments. Absent an explicit `forgetCache()` call, a change can
+remain visible for up to the resolver's existing 60-second cache TTL;
+this is pre-existing Phase 0B behavior, not something 8A.10 changed or
+was asked to change.
+
+### Manager / Position authorization separation
+
+Re-verified, not just re-asserted: `PositionTest`'s and
+`ReportingHierarchyTest`'s existing "never touches an authorization
+table" tests were updated to create their (now-required) authorized
+actor **before** capturing baseline Role/`MembershipRoleAssignment`/
+`PlatformRoleAssignment` counts, so the assertion still proves what it
+always proved — a Position/Department/Assignment/manager-pointer
+mutation itself adds zero authorization-table rows.
+`HrMutationAuthorizationTest::changing_position_department_or_manager_never_creates_an_authorization_row`
+adds one further end-to-end proof (Employment + Assignment creation
+through the authorized services) to the same effect.
+
+### Directory / Profile Web UI activation decision
+
+**Decision: A — authorization only, HTTP/UI remains deferred.**
+Activating the previously-deferred Directory/Profile Inertia routes
+now that capability gates exist would be a legitimate, HR.md-anticipated
+next step, but doing so in the same checkpoint that establishes the
+authorization foundation itself would leave no room to review the
+foundation in isolation first — and the checkpoint brief's own section
+37 permits either decision as long as it is not made prematurely
+(before authorization tests pass). No controller, route, or Vue page
+was added. `EmployeeDirectoryService`/`EmployeeProfileWorkspaceService`/
+`EmployeeSensitiveDocumentReadService` are now fully authorization-
+aware and ready for a future checkpoint (or a dedicated follow-up) to
+wire HTTP routes against, with the capability boundary already proven
+rather than added at the same time as the routes.
+
+### Migrations
+
+**NONE.** Every 8A.10 change is either a seeder-data addition
+(`CapabilityAndRoleSeeder`, new capability rows only — idempotent,
+`HrCapabilityRegistryTest` proves re-running it twice adds nothing and
+deletes nothing unrelated) or Application/test-layer code. No new
+table, no new column, on any existing HR or authorization table.
+
+### Tests added
+
+57 net new tests across 8 new files (`HrCapabilityRegistryTest`,
+`HrDefaultDenyTest`, `HrMultiSchoolAuthorizationTest`,
+`HrDirectoryAuthorizationTest`, `HrProfileAuthorizationTest`,
+`HrDocumentClassificationAuthorizationTest`,
+`HrSensitiveDocumentReadServiceTest`, `HrMutationAuthorizationTest`) —
+capability registry/idempotency/default-grants, default-deny for every
+entry point, same-User multi-School allow/deny, RLS-vs-RBAC and
+RBAC-vs-RLS separation, Directory and Profile capability boundaries,
+section-level Profile disclosure (including the sensitive-document
+side-channel proof), the full classification-transition bypass matrix,
+the narrow sensitive-document read path and its audit behavior, every
+remaining mutation capability's deny path, capability revocation, and
+Position/manager/authorization-table separation. One pre-existing 8A.7
+test was retired (see "Null actor" above) as its premise became
+structurally impossible; every other 8A.1–8A.9 test was updated only to
+supply a now-required authorized actor, never to weaken what it
+originally proved — full suite: 435 tests / 886 assertions / 0
+failures (`php artisan test tests/Feature/HR
+tests/Feature/Postgres/HrRawIsolationTest.php`), up from the 8A.9
+baseline of 378 / 705.
+
+### 8A.11 / 8A.14 boundary
+
+8A.10 adds exactly the audit events a successful sensitive-document
+read needs and no more — it does **not** build the Employee Activity
+Timeline UI/query aggregation (8A.11's scope), and it does **not**
+build any public/mobile API surface (8A.14's scope, unaffected by
+anything here beyond inheriting an already-authorization-aware service
+layer to build against).
+
 ## Employee lifecycle — state responsibility matrix
 
 Rejecting one overloaded status enum (brief's explicit warning) in
@@ -1417,6 +1779,17 @@ favor of splitting by table:
 | **Account status** | `users`/`school_memberships` (existing, untouched) | (existing values) | Identity & Access |
 
 ## Authorization design
+
+**Superseded by "HR Permissions & Sensitive-Data Controls (8A.10,
+implemented)" above** — this section is the original 8A.0-era draft,
+kept for historical record. Two corrections that section makes
+explicit: qualification/experience/certification detail and employment/
+assignment history are gated by their own dedicated capabilities
+(`hr.employees.qualifications.*`/`.assignments.*`), not by
+`hr.employees.personal.*` as the privacy-matrix table below still
+shows; and the exact default-role-grant set was verified and finalized
+in `CapabilityAndRoleSeeder`. Treat the 8A.10 section as authoritative
+for anything the two disagree on.
 
 New capabilities, `school` namespace, following the exact
 `<domain>.<resource>.<action>` convention confirmed from
@@ -1612,7 +1985,7 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.7  Employee Documents                                          (employee_documents — narrow scope, see "Documents" above) [implemented]
 8A.8  Employee Directory                                          (search/filter/paginate query layer — API+UI deferred, see "Employee Directory (8A.8, implemented)") [implemented]
 8A.9  Employee Profile Workspace                                  (Restricted-tier read model — tabbed UI deferred, see "Employee Profile Workspace (8A.9, implemented)") [implemented]
-8A.10 HR Permissions & Sensitive-Data Controls                    (capability seeder rollout, field-suppression proof)
+8A.10 HR Permissions & Sensitive-Data Controls                    (capability seeder rollout, field-suppression proof) [implemented]
 8A.11 Audit & Activity Timeline                                   (AuditRecorder wiring across all HR mutations + a read timeline view)
 8A.12 Employee Import & Duplicate Controls                        (narrow CSV/XLSX importer, preview/dry-run/row errors)
 8A.13 Lifecycle, Separation & Rehire                               (employment_records.status transitions, separation workflow, rehire proof)

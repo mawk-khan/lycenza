@@ -124,7 +124,7 @@ class DepartmentTest extends TestCase
     {
         $school = $this->createSchool();
 
-        $department = app(DepartmentService::class)->create($school, ['name' => 'Finance', 'code' => 'fin']);
+        $department = app(DepartmentService::class)->create($school, ['name' => 'Finance', 'code' => 'fin'], actor: $this->fullHrActor($school));
 
         $this->assertSame('FIN', $department->code);
         $this->assertSame('active', $department->status);
@@ -140,7 +140,7 @@ class DepartmentTest extends TestCase
 
         $this->expectException(DepartmentCampusMismatchException::class);
 
-        app(DepartmentService::class)->create($school, ['name' => 'Facilities', 'code' => 'FAC'], campus: $foreignCampus);
+        app(DepartmentService::class)->create($school, ['name' => 'Facilities', 'code' => 'FAC'], actor: $this->fullHrActor($school), campus: $foreignCampus);
     }
 
     #[Test]
@@ -152,7 +152,7 @@ class DepartmentTest extends TestCase
 
         $this->expectException(DepartmentParentMismatchException::class);
 
-        app(DepartmentService::class)->create($school, ['name' => 'Payroll', 'code' => 'PAY'], parent: $foreignParent);
+        app(DepartmentService::class)->create($school, ['name' => 'Payroll', 'code' => 'PAY'], actor: $this->fullHrActor($school), parent: $foreignParent);
     }
 
     #[Test]
@@ -168,7 +168,7 @@ class DepartmentTest extends TestCase
             'campus_id' => (string) Str::orderedUuid(),
             'parent_department_id' => (string) Str::orderedUuid(),
             'status' => 'inactive',
-        ]);
+        ], actor: $this->fullHrActor($schoolA));
 
         $this->assertSame('Updated Name', $updated->name);
         $this->assertSame($schoolA->id, $updated->school_id);
@@ -183,11 +183,12 @@ class DepartmentTest extends TestCase
         $school = $this->createSchool();
         $department = $this->createDepartment($school);
         $service = app(DepartmentService::class);
+        $actor = $this->fullHrActor($school);
 
-        $archived = $service->archive($department);
+        $archived = $service->archive($department, $actor);
         $this->assertSame('inactive', $archived->status);
 
-        $reactivated = $service->reactivate($archived);
+        $reactivated = $service->reactivate($archived, $actor);
         $this->assertSame('active', $reactivated->status);
     }
 
@@ -229,7 +230,7 @@ class DepartmentTest extends TestCase
 
         $this->expectException(DepartmentHierarchyCycleException::class);
 
-        app(DepartmentService::class)->reparent($department, $department);
+        app(DepartmentService::class)->reparent($department, $department, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -243,7 +244,7 @@ class DepartmentTest extends TestCase
         $this->expectException(DepartmentHierarchyCycleException::class);
 
         // A -> B -> C already; reparenting A under C would close the loop.
-        app(DepartmentService::class)->reparent($a, $c);
+        app(DepartmentService::class)->reparent($a, $c, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -253,7 +254,7 @@ class DepartmentTest extends TestCase
         $parent = $this->createDepartment($school);
         $child = $this->createDepartment($school, ['parent_department_id' => $parent->id]);
 
-        $updated = app(DepartmentService::class)->reparent($child, null);
+        $updated = app(DepartmentService::class)->reparent($child, null, $this->fullHrActor($school));
 
         $this->assertNull($updated->parent_department_id);
     }

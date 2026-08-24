@@ -9,6 +9,7 @@ use App\Domain\HR\Application\Exceptions\SelfReportingException;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -49,14 +50,17 @@ use Illuminate\Support\Facades\DB;
  */
 class ReportingHierarchyService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
     ) {}
 
-    public function setManager(EmployeeAssignment $subordinate, ?EmployeeAssignment $manager, ?User $actor = null): EmployeeAssignment
+    public function setManager(EmployeeAssignment $subordinate, ?EmployeeAssignment $manager, User $actor): EmployeeAssignment
     {
         $school = $subordinate->school;
+        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $subordinate, $manager, $actor) {
             if ($manager !== null) {

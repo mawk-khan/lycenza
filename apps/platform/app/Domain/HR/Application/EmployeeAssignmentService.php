@@ -16,6 +16,7 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -31,9 +32,14 @@ use Illuminate\Support\Facades\DB;
  * "Assignment attached to the wrong Employee" IDOR shape this
  * checkpoint's brief warns about is structurally impossible here, not
  * merely tested against.
+ *
+ * Phase 8A.10: every public method requires a real `User $actor` and
+ * authorizes `hr.employees.assignments.manage` at the owning School.
  */
 class EmployeeAssignmentService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -53,11 +59,13 @@ class EmployeeAssignmentService
         EmploymentRecord $employment,
         array $attributes,
         Position $position,
+        User $actor,
         ?Campus $campus = null,
         ?Department $department = null,
-        ?User $actor = null,
     ): EmployeeAssignment {
         $school = $employment->school;
+        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+
         $startsOn = $attributes['starts_on'];
         $endsOn = $attributes['ends_on'] ?? null;
 
@@ -94,9 +102,10 @@ class EmployeeAssignmentService
         });
     }
 
-    public function end(EmployeeAssignment $assignment, string $endsOn, ?User $actor = null): EmployeeAssignment
+    public function end(EmployeeAssignment $assignment, string $endsOn, User $actor): EmployeeAssignment
     {
         $school = $assignment->school;
+        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $assignment, $endsOn, $actor) {
             return DB::transaction(function () use ($school, $assignment, $endsOn, $actor) {
@@ -128,9 +137,10 @@ class EmployeeAssignmentService
      * with a new open primary (docs/modules/HR.md's partial index is
      * scoped the same way).
      */
-    public function setPrimary(EmployeeAssignment $assignment, ?User $actor = null): EmployeeAssignment
+    public function setPrimary(EmployeeAssignment $assignment, User $actor): EmployeeAssignment
     {
         $school = $assignment->school;
+        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $assignment, $actor) {
             return DB::transaction(function () use ($school, $assignment, $actor) {

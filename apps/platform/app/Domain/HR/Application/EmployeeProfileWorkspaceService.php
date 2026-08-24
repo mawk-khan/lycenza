@@ -16,6 +16,9 @@ use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\School;
+use App\Models\User;
+use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 
@@ -61,20 +64,73 @@ use Illuminate\Support\Carbon;
  * exactly one hop from the current primary Assignment's live
  * `manager_assignment_id` pointer (8A.5) -- no recursion, no
  * historical-manager reconstruction claim.
+ *
+ * Phase 8A.10 -- SECTION-LEVEL AUTHORIZATION (docs/modules/HR.md 8A.10
+ * as-built): `build()` is the authoritative, production-facing entry
+ * point (no controller exists yet). Accessing the Profile Workspace AT
+ * ALL requires `hr.employees.personal.view` at $school -- Directory
+ * access (`hr.employees.view`) alone does NOT imply Profile access,
+ * deliberately (a Directory-only actor must never reach Restricted
+ * data). That entry check runs BEFORE the Employee is even resolved,
+ * so it never distinguishes "no capability" from "employee doesn't
+ * exist" -- both simply deny, and a same-School denial throws while a
+ * cross-School target still returns `null` exactly as before (the
+ * capability check is School-scoped, never Employee-scoped, so it
+ * cannot become a cross-tenant existence oracle either way).
+ *
+ * Beyond that entry gate, three further sections are gated
+ * independently and are simply ABSENT (`[]`) from the returned DTO --
+ * never fetched in the first place -- when the actor lacks the
+ * corresponding capability:
+ *   - `employmentHistory`/`assignments` (full history) require
+ *     `hr.employees.assignments.view`. The single CURRENTLY EFFECTIVE
+ *     EmploymentRecord/Assignment is still resolved regardless (a
+ *     `personal.view` holder may see `summary`'s current
+ *     position/department/campus/manager -- Directory-tier-equivalent
+ *     data), but the full history lists are not.
+ *   - `qualifications`/`experience`/`certifications` require
+ *     `hr.employees.qualifications.view` -- not queried at all
+ *     without it.
+ *   - `documents` (Restricted only; Highly Sensitive is NEVER included
+ *     here regardless, unchanged from 8A.9) requires
+ *     `hr.employees.documents.view` -- not queried at all without it.
+ * No section reports a count/placeholder for what it's hiding --
+ * absence is total, matching 8A.9's own "never a sensitive count/
+ * existence side-channel" principle extended to every gated section.
  */
 class EmployeeProfileWorkspaceService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly TenantContext $context,
+        private readonly CapabilityResolver $capabilities,
     ) {}
 
-    public function build(School $school, string $employeeId): ?EmployeeProfileWorkspace
+    public function build(School $school, string $employeeId, User $actor): ?EmployeeProfileWorkspace
     {
-        return $this->context->withSchool($school, fn () => $this->buildWithinContext($school, $employeeId));
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.view', $school);
+
+        $canViewAssignments = $this->capabilities->canInSchool($actor, 'hr.employees.assignments.view', $school);
+        $canViewQualifications = $this->capabilities->canInSchool($actor, 'hr.employees.qualifications.view', $school);
+        $canViewDocuments = $this->capabilities->canInSchool($actor, 'hr.employees.documents.view', $school);
+
+        return $this->context->withSchool($school, fn () => $this->buildWithinContext(
+            $school,
+            $employeeId,
+            $canViewAssignments,
+            $canViewQualifications,
+            $canViewDocuments,
+        ));
     }
 
-    private function buildWithinContext(School $school, string $employeeId): ?EmployeeProfileWorkspace
-    {
+    private function buildWithinContext(
+        School $school,
+        string $employeeId,
+        bool $canViewAssignments,
+        bool $canViewQualifications,
+        bool $canViewDocuments,
+    ): ?EmployeeProfileWorkspace {
         $employee = Employee::query()->where('school_id', $school->id)->find($employeeId);
 
         if ($employee === null) {
@@ -141,28 +197,34 @@ class EmployeeProfileWorkspaceService
 
         $manager = $this->resolveManager($school, $currentAssignment);
 
-        $qualifications = EmployeeQualification::query()
+        // Phase 8A.10: not queried at all without hr.employees.qualifications.view
+        // -- see this class's docblock.
+        $qualifications = ! $canViewQualifications ? collect() : EmployeeQualification::query()
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderByDesc('starts_on')
             ->orderBy('id')
             ->get();
 
-        $experience = EmployeeExperience::query()
+        $experience = ! $canViewQualifications ? collect() : EmployeeExperience::query()
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderByDesc('starts_on')
             ->orderBy('id')
             ->get();
 
-        $certifications = EmployeeCertification::query()
+        $certifications = ! $canViewQualifications ? collect() : EmployeeCertification::query()
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderByDesc('issued_on')
             ->orderBy('id')
             ->get();
 
-        $documents = EmployeeDocument::query()
+        // Phase 8A.10: not queried at all without hr.employees.documents.view.
+        // Highly Sensitive is excluded from this query regardless (8A.9,
+        // unchanged) -- see App\Domain\HR\Application\EmployeeSensitiveDocumentReadService
+        // for the separately-authorized Highly Sensitive read path.
+        $documents = ! $canViewDocuments ? collect() : EmployeeDocument::query()
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->where('classification_tier', 'restricted')
@@ -218,7 +280,13 @@ class EmployeeProfileWorkspaceService
                 email: $c->email,
                 isPrimary: $c->is_primary,
             ))->all(),
-            employmentHistory: $employments->map(fn (EmploymentRecord $e) => new EmployeeProfileEmploymentEntry(
+            // Phase 8A.10: the full history lists are ABSENT ([]) without
+            // hr.employees.assignments.view, even though $employments/
+            // $assignments were already fetched above to compute
+            // summary's current-position/department/campus/manager
+            // fields (Directory-tier-equivalent data, visible under
+            // personal.view alone) -- see this class's docblock.
+            employmentHistory: ! $canViewAssignments ? [] : $employments->map(fn (EmploymentRecord $e) => new EmployeeProfileEmploymentEntry(
                 id: $e->id,
                 employmentType: $e->employment_type,
                 startsOn: $e->starts_on->toDateString(),
@@ -227,7 +295,7 @@ class EmployeeProfileWorkspaceService
                 status: $e->status,
                 isCurrent: $currentEmployment !== null && $e->id === $currentEmployment->id,
             ))->all(),
-            assignments: $assignments->map(function (EmployeeAssignment $a) use ($departmentsById, $positionsById, $campusesById, $currentAssignment) {
+            assignments: ! $canViewAssignments ? [] : $assignments->map(function (EmployeeAssignment $a) use ($departmentsById, $positionsById, $campusesById, $currentAssignment) {
                 $department = $a->department_id ? $departmentsById->get($a->department_id) : null;
                 $position = $a->position_id ? $positionsById->get($a->position_id) : null;
                 $campus = $a->campus_id ? $campusesById->get($a->campus_id) : null;

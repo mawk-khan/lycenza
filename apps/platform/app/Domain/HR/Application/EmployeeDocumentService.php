@@ -5,8 +5,10 @@ namespace App\Domain\HR\Application;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
+use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantStoragePath;
 use Illuminate\Support\Facades\DB;
@@ -53,7 +55,7 @@ use InvalidArgumentException;
  * `AuditRecorder`'s own `actor_user_id` on each audit event).
  * `register()` never trusts a caller-supplied value for this column --
  * it is always derived from the trusted `$actor` argument
- * (`$actor?->id`), after stripping any caller-supplied
+ * (`$actor->id`), after stripping any caller-supplied
  * `uploaded_by_user_id` out of `$attributes` first (mass-assignment
  * would otherwise let a caller forge provenance, since the column is
  * `$fillable`). `update()` strips it unconditionally and never
@@ -63,6 +65,8 @@ use InvalidArgumentException;
  */
 class EmployeeDocumentService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -79,8 +83,10 @@ class EmployeeDocumentService
      *                                            by the caller (e.g. a future backfill/import process
      *                                            recording a historical upload time).
      */
-    public function register(Employee $employee, array $attributes, ?User $actor = null): EmployeeDocument
+    public function register(Employee $employee, array $attributes, User $actor): EmployeeDocument
     {
+        $this->assertClassificationCapability($actor, $employee->school, targetTier: $attributes['classification_tier'] ?? null, currentTier: null);
+
         unset(
             $attributes['school_id'], $attributes['employee_id'], $attributes['status'],
             $attributes['uploaded_by_user_id'],
@@ -99,7 +105,7 @@ class EmployeeDocumentService
                     'employee_id' => $employee->id,
                     'school_id' => $employee->school_id,
                     'storage_path' => TenantStoragePath::for($employee->school, $fragment),
-                    'uploaded_by_user_id' => $actor?->id,
+                    'uploaded_by_user_id' => $actor->id,
                     'status' => 'active',
                 ]);
 
@@ -118,9 +124,15 @@ class EmployeeDocumentService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function update(Employee $employee, EmployeeDocument $document, array $attributes, ?User $actor = null): EmployeeDocument
+    public function update(Employee $employee, EmployeeDocument $document, array $attributes, User $actor): EmployeeDocument
     {
         $this->assertOwnership($employee, $document);
+        $this->assertClassificationCapability(
+            $actor,
+            $employee->school,
+            targetTier: array_key_exists('classification_tier', $attributes) ? $attributes['classification_tier'] : $document->classification_tier,
+            currentTier: $document->classification_tier,
+        );
         unset(
             $attributes['school_id'], $attributes['employee_id'], $attributes['status'],
             $attributes['storage_disk'], $attributes['storage_path'], $attributes['uploaded_by_user_id'],
@@ -145,9 +157,10 @@ class EmployeeDocumentService
         });
     }
 
-    public function archive(Employee $employee, EmployeeDocument $document, ?User $actor = null): EmployeeDocument
+    public function archive(Employee $employee, EmployeeDocument $document, User $actor): EmployeeDocument
     {
         $this->assertOwnership($employee, $document);
+        $this->assertClassificationCapability($actor, $employee->school, targetTier: $document->classification_tier, currentTier: $document->classification_tier);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $document, $actor) {
             return DB::transaction(function () use ($employee, $document, $actor) {
@@ -161,6 +174,27 @@ class EmployeeDocumentService
                 return $document->fresh();
             });
         });
+    }
+
+    /**
+     * The one place classification-aware authorization lives (see this
+     * class's docblock). `$currentTier` is `null` only for a brand-new
+     * `register()` call (no existing row to have a "current" tier).
+     * `hr.employees.sensitive.manage` is required whenever EITHER side
+     * of the transition is `highly_sensitive` -- ordinary
+     * `hr.employees.documents.manage` is sufficient only when both the
+     * current and target tier are `restricted` (or, for register(),
+     * simply not `highly_sensitive`).
+     */
+    private function assertClassificationCapability(User $actor, School $school, ?string $targetTier, ?string $currentTier): void
+    {
+        $touchesHighlySensitive = $targetTier === 'highly_sensitive' || $currentTier === 'highly_sensitive';
+
+        $this->authorizeCapabilityFor(
+            $actor,
+            $touchesHighlySensitive ? 'hr.employees.sensitive.manage' : 'hr.employees.documents.manage',
+            $school,
+        );
     }
 
     private function assertOwnership(Employee $employee, EmployeeDocument $document): void

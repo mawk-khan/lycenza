@@ -7,6 +7,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -18,9 +19,16 @@ use Illuminate\Support\Facades\DB;
  * what a rehire is; nothing at the schema level distinguishes "first
  * hire" from "rehire" beyond it being the Employee's 2nd+ row, so no
  * separate `rehire()` method exists.
+ *
+ * Phase 8A.10: every public method requires a real `User $actor` and
+ * authorizes `hr.employees.assignments.manage` at the Employee's School
+ * (docs/modules/HR.md 8A.10 as-built: Employment/Assignment history and
+ * reporting-manager changes share one capability boundary).
  */
 class EmploymentService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -30,9 +38,11 @@ class EmploymentService
     /**
      * @param  array{employment_type: string, starts_on: string, ends_on?: string|null, status?: string, probation_ends_on?: string|null}  $attributes
      */
-    public function create(Employee $employee, array $attributes, ?User $actor = null): EmploymentRecord
+    public function create(Employee $employee, array $attributes, User $actor): EmploymentRecord
     {
         $school = $employee->school;
+        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+
         $startsOn = $attributes['starts_on'];
         $endsOn = $attributes['ends_on'] ?? null;
 
@@ -79,10 +89,12 @@ class EmploymentService
      *
      * @param  array<string, mixed>  $attributes
      */
-    public function update(EmploymentRecord $employment, array $attributes, ?User $actor = null): EmploymentRecord
+    public function update(EmploymentRecord $employment, array $attributes, User $actor): EmploymentRecord
     {
-        unset($attributes['school_id'], $attributes['employee_id'], $attributes['starts_on'], $attributes['ends_on'], $attributes['status']);
         $school = $employment->school;
+        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+
+        unset($attributes['school_id'], $attributes['employee_id'], $attributes['starts_on'], $attributes['ends_on'], $attributes['status']);
 
         return $this->context->withSchool($school, function () use ($school, $employment, $attributes, $actor) {
             return DB::transaction(function () use ($school, $employment, $attributes, $actor) {
@@ -109,9 +121,10 @@ class EmploymentService
      * account deactivation is a distinct, explicit action outside this
      * checkpoint's scope (docs/modules/HR.md principle 2.6).
      */
-    public function end(EmploymentRecord $employment, string $endsOn, string $status = 'separated', ?User $actor = null): EmploymentRecord
+    public function end(EmploymentRecord $employment, string $endsOn, User $actor, string $status = 'separated'): EmploymentRecord
     {
         $school = $employment->school;
+        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $employment, $endsOn, $status, $actor) {
             return DB::transaction(function () use ($school, $employment, $endsOn, $status, $actor) {

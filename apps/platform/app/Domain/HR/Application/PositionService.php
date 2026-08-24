@@ -6,6 +6,7 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -17,9 +18,15 @@ use Illuminate\Support\Facades\DB;
  * or grants a Role/Capability/MembershipRoleAssignment -- Position is
  * organizational/job data only (docs/modules/HR.md principle 2.4,
  * Position != Authorization Role).
+ *
+ * Phase 8A.10: every public method requires a real `User $actor` and
+ * authorizes `hr.positions.manage` at $school before doing anything
+ * else.
  */
 class PositionService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -28,8 +35,10 @@ class PositionService
     /**
      * @param  array{name: string, code: string, description?: string|null}  $attributes
      */
-    public function create(School $school, array $attributes, ?User $actor = null): Position
+    public function create(School $school, array $attributes, User $actor): Position
     {
+        $this->authorizeCapabilityFor($actor, 'hr.positions.manage', $school);
+
         return $this->context->withSchool($school, function () use ($school, $attributes, $actor) {
             return DB::transaction(function () use ($school, $attributes, $actor) {
                 $position = Position::query()->create([
@@ -52,10 +61,12 @@ class PositionService
     /**
      * @param  array<string, mixed>  $attributes  name/code/description keys are applied; school_id/status are always stripped below
      */
-    public function update(Position $position, array $attributes, ?User $actor = null): Position
+    public function update(Position $position, array $attributes, User $actor): Position
     {
-        unset($attributes['school_id'], $attributes['status']);
         $school = $position->school;
+        $this->authorizeCapabilityFor($actor, 'hr.positions.manage', $school);
+
+        unset($attributes['school_id'], $attributes['status']);
 
         return $this->context->withSchool($school, function () use ($school, $position, $attributes, $actor) {
             return DB::transaction(function () use ($school, $position, $attributes, $actor) {
@@ -70,13 +81,17 @@ class PositionService
         });
     }
 
-    public function archive(Position $position, ?User $actor = null): Position
+    public function archive(Position $position, User $actor): Position
     {
+        $this->authorizeCapabilityFor($actor, 'hr.positions.manage', $position->school);
+
         return $this->setStatus($position, 'inactive', 'hr.position.archived', $actor);
     }
 
-    public function reactivate(Position $position, ?User $actor = null): Position
+    public function reactivate(Position $position, User $actor): Position
     {
+        $this->authorizeCapabilityFor($actor, 'hr.positions.manage', $position->school);
+
         return $this->setStatus($position, 'active', 'hr.position.reactivated', $actor);
     }
 

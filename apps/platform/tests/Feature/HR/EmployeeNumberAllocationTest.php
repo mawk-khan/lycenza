@@ -30,7 +30,7 @@ class EmployeeNumberAllocationTest extends TestCase
     {
         $school = $this->createSchool();
 
-        $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Asha Verma']);
+        $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Asha Verma'], $this->fullHrActor($school));
 
         $this->assertSame('EMP-000001', $employee->employee_number);
     }
@@ -40,10 +40,11 @@ class EmployeeNumberAllocationTest extends TestCase
     {
         $school = $this->createSchool();
         $service = app(EmployeeService::class);
+        $actor = $this->fullHrActor($school);
 
-        $first = $service->create($school, ['full_name' => 'Asha Verma']);
-        $second = $service->create($school, ['full_name' => 'Rahul Nair']);
-        $third = $service->create($school, ['full_name' => 'Priya Iyer']);
+        $first = $service->create($school, ['full_name' => 'Asha Verma'], $actor);
+        $second = $service->create($school, ['full_name' => 'Rahul Nair'], $actor);
+        $third = $service->create($school, ['full_name' => 'Priya Iyer'], $actor);
 
         $this->assertSame('EMP-000001', $first->employee_number);
         $this->assertSame('EMP-000002', $second->employee_number);
@@ -56,10 +57,12 @@ class EmployeeNumberAllocationTest extends TestCase
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
         $service = app(EmployeeService::class);
+        $actorA = $this->fullHrActor($schoolA);
+        $actorB = $this->fullHrActor($schoolB);
 
-        $employeeA1 = $service->create($schoolA, ['full_name' => 'Asha Verma']);
-        $employeeB1 = $service->create($schoolB, ['full_name' => 'Rahul Nair']);
-        $employeeA2 = $service->create($schoolA, ['full_name' => 'Priya Iyer']);
+        $employeeA1 = $service->create($schoolA, ['full_name' => 'Asha Verma'], $actorA);
+        $employeeB1 = $service->create($schoolB, ['full_name' => 'Rahul Nair'], $actorB);
+        $employeeA2 = $service->create($schoolA, ['full_name' => 'Priya Iyer'], $actorA);
 
         $this->assertSame('EMP-000001', $employeeA1->employee_number);
         $this->assertSame('EMP-000001', $employeeB1->employee_number, 'School B\'s first employee must also be EMP-000001 -- numbering is School-scoped, not global.');
@@ -114,8 +117,9 @@ class EmployeeNumberAllocationTest extends TestCase
     {
         $school = $this->createSchool();
         $service = app(EmployeeService::class);
+        $actor = $this->fullHrActor($school);
 
-        $first = $service->create($school, ['full_name' => 'Asha Verma']);
+        $first = $service->create($school, ['full_name' => 'Asha Verma'], $actor);
         $this->assertSame('EMP-000001', $first->employee_number);
 
         // Reproduces EmployeeService::create()'s real transaction shape: the
@@ -142,7 +146,7 @@ class EmployeeNumberAllocationTest extends TestCase
         );
         $this->assertSame(2, $counter->next_value, 'The failed attempt\'s increment must be fully rolled back -- the counter must read exactly as it did after the first successful creation, not 3.');
 
-        $second = $service->create($school, ['full_name' => 'Rahul Nair']);
+        $second = $service->create($school, ['full_name' => 'Rahul Nair'], $actor);
         $this->assertSame('EMP-000002', $second->employee_number, 'No gap: the failed attempt above never actually consumed a number once its enclosing transaction rolled back, because the increment and the (attempted) Employee insert share one atomic unit of work.');
     }
 }

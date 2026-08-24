@@ -68,6 +68,52 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'academics.years.manage', 'label' => 'Manage Academic Years and Terms', 'namespace' => 'school'],
             ['key' => 'academics.subjects.view', 'label' => 'View Subjects and Subject Offerings', 'namespace' => 'school'],
             ['key' => 'academics.subjects.manage', 'label' => 'Manage Subjects and Subject Offerings', 'namespace' => 'school'],
+
+            // Phase 8A.10 (docs/modules/HR.md "Authorization design",
+            // first drafted in 8A.0 and finalized here) -- HR/Employee
+            // Records capabilities. `hr.employees.view`/`.manage` gate
+            // Directory-tier (Internal) fields only. `.personal.*`
+            // gates Restricted-tier personal data (DOB, personal
+            // contact, addresses, emergency contacts).
+            // `.assignments.*` gates Employment/Assignment history and
+            // reporting-manager changes. `.qualifications.*` gates
+            // Qualification/Experience/Certification records
+            // (including verify/reject -- no separate verify
+            // capability is introduced, see HR.md's 8A.10 as-built
+            // section for why). `.documents.*` gates Restricted
+            // EmployeeDocument metadata only; `.sensitive.*` is the
+            // SEPARATE, non-negotiable boundary for
+            // `classification_tier = highly_sensitive` metadata and
+            // for any classification transition into/out of that tier
+            // -- never satisfied by `.documents.manage` alone. `.notes.*`
+            // is registered now (no `employee_notes` table exists yet,
+            // matching the same "capability exists, data does not yet"
+            // precedent `.sensitive.*` itself already established in
+            // 8A.0) so a future checkpoint has a landing spot without a
+            // mid-flight capability-family change. `hr.departments.*`/
+            // `hr.positions.*` gate HR organizational reference-data
+            // administration, structurally unrelated to the
+            // `academics.*` capabilities above (HR Department/Position
+            // are a different domain than Academic Structure, see
+            // HR.md's terminology table).
+            ['key' => 'hr.employees.view', 'label' => 'View Employee Directory (Internal-tier fields)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.manage', 'label' => 'Create and manage Employee core records', 'namespace' => 'school'],
+            ['key' => 'hr.employees.personal.view', 'label' => 'View Employee personal details, contacts and addresses (Restricted)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.personal.manage', 'label' => 'Manage Employee personal details, contacts and addresses (Restricted)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.assignments.view', 'label' => 'View Employee employment/assignment history and reporting lines', 'namespace' => 'school'],
+            ['key' => 'hr.employees.assignments.manage', 'label' => 'Manage Employee employment/assignment history and reporting lines', 'namespace' => 'school'],
+            ['key' => 'hr.employees.qualifications.view', 'label' => 'View Employee qualifications, experience and certifications', 'namespace' => 'school'],
+            ['key' => 'hr.employees.qualifications.manage', 'label' => 'Manage Employee qualifications, experience and certifications, including verification', 'namespace' => 'school'],
+            ['key' => 'hr.employees.documents.view', 'label' => 'View Employee document metadata (Restricted tier only)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.documents.manage', 'label' => 'Manage Employee document metadata (Restricted tier only)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.notes.view', 'label' => 'View Employee HR notes (reserved; not yet modeled)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.notes.manage', 'label' => 'Manage Employee HR notes (reserved; not yet modeled)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.sensitive.view', 'label' => 'View Highly Sensitive Employee data (e.g. highly_sensitive documents)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.sensitive.manage', 'label' => 'Manage Highly Sensitive Employee data and classification transitions', 'namespace' => 'school'],
+            ['key' => 'hr.departments.view', 'label' => 'View HR Departments', 'namespace' => 'school'],
+            ['key' => 'hr.departments.manage', 'label' => 'Manage HR Departments', 'namespace' => 'school'],
+            ['key' => 'hr.positions.view', 'label' => 'View Positions', 'namespace' => 'school'],
+            ['key' => 'hr.positions.manage', 'label' => 'Manage Positions', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -99,6 +145,19 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.structure.view', 'academics.structure.manage',
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
+                    // Phase 8A.10, HR.md "Authorization design": ONLY
+                    // Directory-tier view/manage + Restricted personal
+                    // VIEW are granted by default -- deliberately NOT
+                    // `.personal.manage`, `.assignments.*`,
+                    // `.qualifications.*`, `.documents.*`,
+                    // `.sensitive.*`, `.notes.*`, `hr.departments.*`,
+                    // `hr.positions.*`. See the security register's
+                    // explicit P1 finding this closes: default HR
+                    // capability grants must not silently broaden to
+                    // every School Admin -- a School's own role
+                    // configuration must explicitly add whichever of
+                    // these an actual "HR Staff" role needs.
+                    'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
                 ],
             ],
             'principal' => [
@@ -118,6 +177,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.structure.view', 'academics.structure.manage',
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
+                    // Phase 8A.10: same default-grant boundary as
+                    // school_admin above -- view/manage/personal.view
+                    // only, nothing else by default.
+                    'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
                 ],
             ],
         ];

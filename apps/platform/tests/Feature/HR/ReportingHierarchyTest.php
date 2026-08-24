@@ -84,7 +84,7 @@ class ReportingHierarchyTest extends TestCase
         $subordinate = $this->createEmployeeAssignment($employmentA, $position);
         $manager = $this->createEmployeeAssignment($employmentB, $position);
 
-        $updated = app(ReportingHierarchyService::class)->setManager($subordinate, $manager);
+        $updated = app(ReportingHierarchyService::class)->setManager($subordinate, $manager, $this->fullHrActor($school));
 
         $this->assertSame($manager->id, $updated->manager_assignment_id);
     }
@@ -106,7 +106,7 @@ class ReportingHierarchyTest extends TestCase
 
         $this->expectException(AssignmentManagerMismatchException::class);
 
-        app(ReportingHierarchyService::class)->setManager($subordinateA, $managerB);
+        app(ReportingHierarchyService::class)->setManager($subordinateA, $managerB, $this->fullHrActor($schoolA));
     }
 
     // --- Self-report / same-Employee / cycle prevention --------------------
@@ -140,7 +140,7 @@ class ReportingHierarchyTest extends TestCase
 
         $this->expectException(SelfReportingException::class);
 
-        app(ReportingHierarchyService::class)->setManager($assignment, $assignment);
+        app(ReportingHierarchyService::class)->setManager($assignment, $assignment, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -156,7 +156,7 @@ class ReportingHierarchyTest extends TestCase
 
         $this->expectException(SameEmployeeReportingException::class);
 
-        app(ReportingHierarchyService::class)->setManager($teacherAssignment, $coordinatorAssignment);
+        app(ReportingHierarchyService::class)->setManager($teacherAssignment, $coordinatorAssignment, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -166,9 +166,10 @@ class ReportingHierarchyTest extends TestCase
         $position = $this->createPosition($school);
         [$a, $b, $c] = $this->createIndependentAssignments($school, $position, 3);
         $service = app(ReportingHierarchyService::class);
+        $actor = $this->fullHrActor($school);
 
-        $service->setManager($a, $b);
-        $service->setManager($b, $c);
+        $service->setManager($a, $b, $actor);
+        $service->setManager($b, $c, $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertSame($b->id, $a->fresh()->manager_assignment_id);
@@ -182,14 +183,15 @@ class ReportingHierarchyTest extends TestCase
         $position = $this->createPosition($school);
         [$a, $b, $c] = $this->createIndependentAssignments($school, $position, 3);
         $service = app(ReportingHierarchyService::class);
+        $actor = $this->fullHrActor($school);
 
-        $service->setManager($a, $b);
-        $service->setManager($b, $c);
+        $service->setManager($a, $b, $actor);
+        $service->setManager($b, $c, $actor);
 
         $this->expectException(ReportingHierarchyCycleException::class);
 
         // A -> B -> C already; C -> A would close the loop.
-        $service->setManager($c, $a);
+        $service->setManager($c, $a, $actor);
     }
 
     #[Test]
@@ -199,15 +201,16 @@ class ReportingHierarchyTest extends TestCase
         $position = $this->createPosition($school);
         [$a, $b, $c, $d] = $this->createIndependentAssignments($school, $position, 4);
         $service = app(ReportingHierarchyService::class);
+        $actor = $this->fullHrActor($school);
 
-        $service->setManager($a, $b);
-        $service->setManager($b, $c);
-        $service->setManager($c, $d);
+        $service->setManager($a, $b, $actor);
+        $service->setManager($b, $c, $actor);
+        $service->setManager($c, $d, $actor);
 
         $this->expectException(ReportingHierarchyCycleException::class);
 
         // A -> B -> C -> D already; D -> A would close the loop.
-        $service->setManager($d, $a);
+        $service->setManager($d, $a, $actor);
     }
 
     // --- Manager change ------------------------------------------------------
@@ -219,9 +222,10 @@ class ReportingHierarchyTest extends TestCase
         $position = $this->createPosition($school);
         [$subordinate, $originalManager, $newManager] = $this->createIndependentAssignments($school, $position, 3);
         $service = app(ReportingHierarchyService::class);
+        $actor = $this->fullHrActor($school);
 
-        $service->setManager($subordinate, $originalManager);
-        $service->setManager($subordinate, $newManager);
+        $service->setManager($subordinate, $originalManager, $actor);
+        $service->setManager($subordinate, $newManager, $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertSame($newManager->id, $subordinate->fresh()->manager_assignment_id);
@@ -248,9 +252,10 @@ class ReportingHierarchyTest extends TestCase
         $position = $this->createPosition($school);
         [$subordinate, $manager] = $this->createIndependentAssignments($school, $position, 2);
         $service = app(ReportingHierarchyService::class);
+        $actor = $this->fullHrActor($school);
 
-        $service->setManager($subordinate, $manager);
-        $cleared = $service->setManager($subordinate, null);
+        $service->setManager($subordinate, $manager, $actor);
+        $cleared = $service->setManager($subordinate, null, $actor);
 
         $this->assertNull($cleared->manager_assignment_id);
     }
@@ -263,9 +268,10 @@ class ReportingHierarchyTest extends TestCase
         $school = $this->createSchool();
         $position = $this->createPosition($school);
         [$subordinate, $manager] = $this->createIndependentAssignments($school, $position, 2);
-        app(ReportingHierarchyService::class)->setManager($subordinate, $manager);
+        $actor = $this->fullHrActor($school);
+        app(ReportingHierarchyService::class)->setManager($subordinate, $manager, $actor);
 
-        app(EmployeeAssignmentService::class)->end($manager, '2026-12-31');
+        app(EmployeeAssignmentService::class)->end($manager, '2026-12-31', $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertNull($subordinate->fresh()->manager_assignment_id);
@@ -277,9 +283,10 @@ class ReportingHierarchyTest extends TestCase
         $school = $this->createSchool();
         $position = $this->createPosition($school);
         [$subordinate, $manager] = $this->createIndependentAssignments($school, $position, 2);
-        app(ReportingHierarchyService::class)->setManager($subordinate, $manager);
+        $actor = $this->fullHrActor($school);
+        app(ReportingHierarchyService::class)->setManager($subordinate, $manager, $actor);
 
-        app(EmployeeAssignmentService::class)->end($subordinate, '2026-12-31');
+        app(EmployeeAssignmentService::class)->end($subordinate, '2026-12-31', $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertSame($manager->id, $subordinate->fresh()->manager_assignment_id, 'The ended Assignment\'s own record of who it reported to while open must remain intact.');
@@ -292,14 +299,15 @@ class ReportingHierarchyTest extends TestCase
         $employee = $this->createEmployee($school);
         $subordinateEmployee = $this->createEmployee($school);
         $position = $this->createPosition($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01']);
-        $managerAssignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2022-01-01'], $position);
+        $actor = $this->fullHrActor($school);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
+        $managerAssignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2022-01-01'], $position, $actor);
 
-        $subordinateEmployment = app(EmploymentService::class)->create($subordinateEmployee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01']);
-        $subordinateAssignment = app(EmployeeAssignmentService::class)->create($subordinateEmployment, ['starts_on' => '2022-01-01'], $position);
-        app(ReportingHierarchyService::class)->setManager($subordinateAssignment, $managerAssignment);
+        $subordinateEmployment = app(EmploymentService::class)->create($subordinateEmployee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
+        $subordinateAssignment = app(EmployeeAssignmentService::class)->create($subordinateEmployment, ['starts_on' => '2022-01-01'], $position, $actor);
+        app(ReportingHierarchyService::class)->setManager($subordinateAssignment, $managerAssignment, $actor);
 
-        app(EmploymentService::class)->end($employment, '2026-03-31', 'separated');
+        app(EmploymentService::class)->end($employment, '2026-03-31', $actor, 'separated');
 
         app(TenantContext::class)->set($school);
         $this->assertSame('2026-03-31', $managerAssignment->fresh()->ends_on->toDateString());
@@ -314,13 +322,16 @@ class ReportingHierarchyTest extends TestCase
         $school = $this->createSchool();
         $position = $this->createPosition($school);
         [$subordinate, $manager] = $this->createIndependentAssignments($school, $position, 2);
+        // Created BEFORE the baseline counts -- see PositionTest's
+        // identical pattern/rationale.
+        $actor = $this->fullHrActor($school);
 
         app(TenantContext::class)->set($school);
         $rolesBefore = Role::query()->count();
         $membershipRoleAssignmentsBefore = MembershipRoleAssignment::query()->count();
         $platformRoleAssignmentsBefore = PlatformRoleAssignment::query()->count();
 
-        app(ReportingHierarchyService::class)->setManager($subordinate, $manager);
+        app(ReportingHierarchyService::class)->setManager($subordinate, $manager, $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertSame($rolesBefore, Role::query()->count());

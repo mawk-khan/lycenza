@@ -235,7 +235,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentCampusMismatchException::class);
 
-        app(EmployeeAssignmentService::class)->create($employmentA, ['starts_on' => '2026-01-01'], $positionA, campus: $campusB);
+        app(EmployeeAssignmentService::class)->create($employmentA, ['starts_on' => '2026-01-01'], $positionA, $this->fullHrActor($schoolA), campus: $campusB);
     }
 
     #[Test]
@@ -250,7 +250,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentDepartmentMismatchException::class);
 
-        app(EmployeeAssignmentService::class)->create($employmentA, ['starts_on' => '2026-01-01'], $positionA, department: $departmentB);
+        app(EmployeeAssignmentService::class)->create($employmentA, ['starts_on' => '2026-01-01'], $positionA, $this->fullHrActor($schoolA), department: $departmentB);
     }
 
     #[Test]
@@ -264,7 +264,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentPositionMismatchException::class);
 
-        app(EmployeeAssignmentService::class)->create($employmentA, ['starts_on' => '2026-01-01'], $positionB);
+        app(EmployeeAssignmentService::class)->create($employmentA, ['starts_on' => '2026-01-01'], $positionB, $this->fullHrActor($schoolA));
     }
 
     // --- Service: Campus / Department compatibility --------------------------
@@ -283,6 +283,7 @@ class EmployeeAssignmentTest extends TestCase
             $employment,
             ['starts_on' => '2026-01-01'],
             $position,
+            $this->fullHrActor($school),
             campus: $campus,
             department: $schoolWideDepartment,
         );
@@ -305,6 +306,7 @@ class EmployeeAssignmentTest extends TestCase
             $employment,
             ['starts_on' => '2026-01-01'],
             $position,
+            $this->fullHrActor($school),
             campus: $campus,
             department: $scopedDepartment,
         );
@@ -329,6 +331,7 @@ class EmployeeAssignmentTest extends TestCase
             $employment,
             ['starts_on' => '2026-01-01'],
             $position,
+            $this->fullHrActor($school),
             campus: $southCampus,
             department: $departmentScopedToNorth,
         );
@@ -346,7 +349,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentDepartmentCampusScopeMismatchException::class);
 
-        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $position, department: $scopedDepartment);
+        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $position, $this->fullHrActor($school), department: $scopedDepartment);
     }
 
     // --- Service: active-reference-at-creation rules --------------------------
@@ -362,7 +365,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentInactiveDepartmentException::class);
 
-        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $position, department: $inactiveDepartment);
+        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $position, $this->fullHrActor($school), department: $inactiveDepartment);
     }
 
     #[Test]
@@ -375,7 +378,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentInactivePositionException::class);
 
-        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $inactivePosition);
+        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $inactivePosition, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -386,9 +389,10 @@ class EmployeeAssignmentTest extends TestCase
         $employment = $this->createEmploymentRecord($employee);
         $position = $this->createPosition($school);
         $department = $this->createDepartment($school);
-        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $position, department: $department);
+        $actor = $this->fullHrActor($school);
+        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $position, $actor, department: $department);
 
-        app(DepartmentService::class)->archive($department);
+        app(DepartmentService::class)->archive($department, $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertSame($department->id, $assignment->fresh()->department_id);
@@ -406,7 +410,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentOutsideEmploymentRangeException::class);
 
-        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-05-01', 'ends_on' => '2027-05-31'], $position);
+        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-05-01', 'ends_on' => '2027-05-31'], $position, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -419,7 +423,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentOutsideEmploymentRangeException::class);
 
-        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01', 'ends_on' => '2027-06-30'], $position);
+        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01', 'ends_on' => '2027-06-30'], $position, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -432,7 +436,7 @@ class EmployeeAssignmentTest extends TestCase
 
         $this->expectException(AssignmentOutsideEmploymentRangeException::class);
 
-        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01', 'ends_on' => null], $position);
+        app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01', 'ends_on' => null], $position, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -443,7 +447,7 @@ class EmployeeAssignmentTest extends TestCase
         $employment = $this->createEmploymentRecord($employee, ['starts_on' => '2026-06-01', 'ends_on' => null]);
         $position = $this->createPosition($school);
 
-        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01', 'ends_on' => null], $position);
+        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01', 'ends_on' => null], $position, $this->fullHrActor($school));
 
         $this->assertNull($assignment->ends_on);
     }
@@ -456,7 +460,7 @@ class EmployeeAssignmentTest extends TestCase
         $employment = $this->createEmploymentRecord($employee, ['starts_on' => '2026-01-01', 'ends_on' => null]);
         $position = $this->createPosition($school);
 
-        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01', 'ends_on' => '2026-12-31'], $position);
+        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-06-01', 'ends_on' => '2026-12-31'], $position, $this->fullHrActor($school));
 
         $this->assertSame('2026-12-31', $assignment->ends_on->toDateString());
     }
@@ -472,9 +476,10 @@ class EmployeeAssignmentTest extends TestCase
         $teacherPosition = $this->createPosition($school, ['code' => 'TCH']);
         $coordinatorPosition = $this->createPosition($school, ['code' => 'COORD']);
         $service = app(EmployeeAssignmentService::class);
+        $actor = $this->fullHrActor($school);
 
-        $service->create($employment, ['starts_on' => '2026-01-01'], $teacherPosition);
-        $service->create($employment, ['starts_on' => '2026-01-01'], $coordinatorPosition);
+        $service->create($employment, ['starts_on' => '2026-01-01'], $teacherPosition, $actor);
+        $service->create($employment, ['starts_on' => '2026-01-01'], $coordinatorPosition, $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertCount(2, $employment->assignments()->get());
@@ -488,7 +493,7 @@ class EmployeeAssignmentTest extends TestCase
         $employment = $this->createEmploymentRecord($employee, ['starts_on' => '2026-01-01', 'ends_on' => null]);
         $position = $this->createPosition($school);
 
-        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01', 'is_primary' => true], $position);
+        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01', 'is_primary' => true], $position, $this->fullHrActor($school));
 
         $this->assertFalse($assignment->is_primary, 'create() must never let a caller create an already-primary assignment -- setPrimary() is the sole promotion path.');
     }
@@ -527,7 +532,7 @@ class EmployeeAssignmentTest extends TestCase
         $original = $this->createEmployeeAssignment($employment, $position, ['is_primary' => true, 'starts_on' => '2026-01-01', 'ends_on' => null]);
         $replacement = $this->createEmployeeAssignment($employment, $position, ['is_primary' => false, 'starts_on' => '2026-01-01', 'ends_on' => null]);
 
-        app(EmployeeAssignmentService::class)->setPrimary($replacement);
+        app(EmployeeAssignmentService::class)->setPrimary($replacement, $this->fullHrActor($school));
 
         app(TenantContext::class)->set($school);
         $this->assertFalse($original->fresh()->is_primary);
@@ -547,8 +552,9 @@ class EmployeeAssignmentTest extends TestCase
             'ends_on' => '2024-01-01',
         ]);
 
-        $newPrimary = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2024-01-02'], $position);
-        $promoted = app(EmployeeAssignmentService::class)->setPrimary($newPrimary);
+        $actor = $this->fullHrActor($school);
+        $newPrimary = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2024-01-02'], $position, $actor);
+        $promoted = app(EmployeeAssignmentService::class)->setPrimary($newPrimary, $actor);
 
         $this->assertTrue($promoted->is_primary);
     }
@@ -562,10 +568,11 @@ class EmployeeAssignmentTest extends TestCase
         $teacherPosition = $this->createPosition($school, ['code' => 'TCH']);
         $coordinatorPosition = $this->createPosition($school, ['code' => 'COORD']);
         $service = app(EmployeeAssignmentService::class);
+        $actor = $this->fullHrActor($school);
 
-        $primary = $service->create($employment, ['starts_on' => '2026-01-01'], $teacherPosition);
-        $service->setPrimary($primary);
-        $secondary = $service->create($employment, ['starts_on' => '2026-01-01'], $coordinatorPosition);
+        $primary = $service->create($employment, ['starts_on' => '2026-01-01'], $teacherPosition, $actor);
+        $service->setPrimary($primary, $actor);
+        $secondary = $service->create($employment, ['starts_on' => '2026-01-01'], $coordinatorPosition, $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertTrue($primary->fresh()->is_primary);
@@ -598,9 +605,10 @@ class EmployeeAssignmentTest extends TestCase
         $employee = $this->createEmployee($school);
         $employment = $this->createEmploymentRecord($employee, ['starts_on' => '2026-01-01', 'ends_on' => null]);
         $position = $this->createPosition($school);
-        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $position);
+        $actor = $this->fullHrActor($school);
+        $assignment = app(EmployeeAssignmentService::class)->create($employment, ['starts_on' => '2026-01-01'], $position, $actor);
 
-        $ended = app(EmployeeAssignmentService::class)->end($assignment, '2026-12-31');
+        $ended = app(EmployeeAssignmentService::class)->end($assignment, '2026-12-31', $actor);
 
         $this->assertSame('2026-12-31', $ended->ends_on->toDateString());
     }

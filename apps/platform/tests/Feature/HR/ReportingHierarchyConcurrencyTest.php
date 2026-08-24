@@ -62,11 +62,15 @@ class ReportingHierarchyConcurrencyTest extends TestCase
         $employeeB = $this->createEmployee($this->school);
         $employmentB = $this->createEmploymentRecord($employeeB);
         $b = $this->createEmployeeAssignment($employmentB, $position);
+        // Committed BEFORE the subprocesses spawn -- no DB transactions
+        // in this test ($connectionsToTransact = [] above), same as
+        // EmployeeNumberConcurrencyTest's identical pattern.
+        $actor = $this->fullHrActor($this->school);
 
         $script = __DIR__.'/../../Support/set-assignment-manager.php';
 
-        $process1 = new Process(['php', $script, $this->school->id, $a->id, $b->id]); // A's manager -> B
-        $process2 = new Process(['php', $script, $this->school->id, $b->id, $a->id]); // B's manager -> A
+        $process1 = new Process(['php', $script, $this->school->id, $a->id, $b->id, $actor->id]); // A's manager -> B
+        $process2 = new Process(['php', $script, $this->school->id, $b->id, $a->id, $actor->id]); // B's manager -> A
         $process1->start();
         $process2->start();
         $process1->wait();

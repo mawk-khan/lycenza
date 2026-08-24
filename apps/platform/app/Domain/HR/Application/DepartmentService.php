@@ -10,6 +10,7 @@ use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -23,9 +24,17 @@ use Illuminate\Support\Facades\DB;
  * App\Domain\HR\Application\EmployeeAddressService already established
  * for `Employee $employee`, applied here to Campus/parent-Department
  * ownership.
+ *
+ * Phase 8A.10: every public method requires a real `User $actor` and
+ * authorizes `hr.departments.manage` at $school before doing anything
+ * else -- this is the authoritative production entry point (no
+ * controller exists yet), so authorization lives here, not "assumed
+ * done by a future caller" (docs/modules/HR.md 8A.10 as-built section).
  */
 class DepartmentService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -34,8 +43,10 @@ class DepartmentService
     /**
      * @param  array{name: string, code: string, description?: string|null}  $attributes
      */
-    public function create(School $school, array $attributes, ?Campus $campus = null, ?Department $parent = null, ?User $actor = null): Department
+    public function create(School $school, array $attributes, User $actor, ?Campus $campus = null, ?Department $parent = null): Department
     {
+        $this->authorizeCapabilityFor($actor, 'hr.departments.manage', $school);
+
         return $this->context->withSchool($school, function () use ($school, $attributes, $campus, $parent, $actor) {
             $this->assertCampusBelongsToSchool($school, $campus);
             $this->assertParentBelongsToSchool($school, $parent);
@@ -68,10 +79,12 @@ class DepartmentService
      *
      * @param  array<string, mixed>  $attributes  name/code/description keys are applied; school_id/campus_id/parent_department_id/status are always stripped below
      */
-    public function update(Department $department, array $attributes, ?User $actor = null): Department
+    public function update(Department $department, array $attributes, User $actor): Department
     {
-        unset($attributes['school_id'], $attributes['campus_id'], $attributes['parent_department_id'], $attributes['status']);
         $school = $department->school;
+        $this->authorizeCapabilityFor($actor, 'hr.departments.manage', $school);
+
+        unset($attributes['school_id'], $attributes['campus_id'], $attributes['parent_department_id'], $attributes['status']);
 
         return $this->context->withSchool($school, function () use ($school, $department, $attributes, $actor) {
             return DB::transaction(function () use ($school, $department, $attributes, $actor) {
@@ -86,13 +99,17 @@ class DepartmentService
         });
     }
 
-    public function archive(Department $department, ?User $actor = null): Department
+    public function archive(Department $department, User $actor): Department
     {
+        $this->authorizeCapabilityFor($actor, 'hr.departments.manage', $department->school);
+
         return $this->setStatus($department, 'inactive', 'hr.department.archived', $actor);
     }
 
-    public function reactivate(Department $department, ?User $actor = null): Department
+    public function reactivate(Department $department, User $actor): Department
     {
+        $this->authorizeCapabilityFor($actor, 'hr.departments.manage', $department->school);
+
         return $this->setStatus($department, 'active', 'hr.department.reactivated', $actor);
     }
 
@@ -104,9 +121,10 @@ class DepartmentService
      * additionally rejected by the database CHECK constraint as a
      * backstop, but that alone cannot catch an indirect cycle.
      */
-    public function reparent(Department $department, ?Department $newParent, ?User $actor = null): Department
+    public function reparent(Department $department, ?Department $newParent, User $actor): Department
     {
         $school = $department->school;
+        $this->authorizeCapabilityFor($actor, 'hr.departments.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $department, $newParent, $actor) {
             if ($newParent !== null) {

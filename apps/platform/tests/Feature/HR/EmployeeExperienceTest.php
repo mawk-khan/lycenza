@@ -126,7 +126,7 @@ class EmployeeExperienceTest extends TestCase
             'job_title' => 'Some Role',
             'starts_on' => '2020-01-01',
             'employee_id' => $otherEmployee->id,
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame($employee->id, $experience->employee_id, 'A caller-supplied employee_id in the attributes array must never override the authoritative Employee argument.');
     }
@@ -141,7 +141,7 @@ class EmployeeExperienceTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeExperienceService::class)->update($employeeA, $experienceB, ['organization' => 'Hacked Organization']);
+        app(EmployeeExperienceService::class)->update($employeeA, $experienceB, ['organization' => 'Hacked Organization'], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -154,7 +154,7 @@ class EmployeeExperienceTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeExperienceService::class)->remove($employeeA, $experienceB);
+        app(EmployeeExperienceService::class)->remove($employeeA, $experienceB, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -168,7 +168,7 @@ class EmployeeExperienceTest extends TestCase
         $updated = app(EmployeeExperienceService::class)->update($employeeA, $experience, [
             'organization' => 'Updated Organization',
             'school_id' => $schoolB->id,
-        ]);
+        ], $this->fullHrActor($schoolA));
 
         $this->assertSame('Updated Organization', $updated->organization);
         $this->assertSame($schoolA->id, $updated->school_id, 'A caller-supplied school_id in the attributes array must never move a record to a different School.');

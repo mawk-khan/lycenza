@@ -162,7 +162,7 @@ class EmployeeAddressTest extends TestCase
             'address_type' => 'current',
             'address_line1' => '221B Baker Street',
             'employee_id' => $otherEmployee->id,
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame($employee->id, $address->employee_id, 'A caller-supplied employee_id in the attributes array must never override the authoritative Employee argument.');
     }
@@ -177,7 +177,7 @@ class EmployeeAddressTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeAddressService::class)->update($employeeA, $addressB, ['city' => 'Hacked City']);
+        app(EmployeeAddressService::class)->update($employeeA, $addressB, ['city' => 'Hacked City'], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -190,7 +190,7 @@ class EmployeeAddressTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeAddressService::class)->remove($employeeA, $addressB);
+        app(EmployeeAddressService::class)->remove($employeeA, $addressB, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -204,7 +204,7 @@ class EmployeeAddressTest extends TestCase
         $updated = app(EmployeeAddressService::class)->update($employeeA, $address, [
             'city' => 'Updated City',
             'school_id' => $schoolB->id,
-        ]);
+        ], $this->fullHrActor($schoolA));
 
         $this->assertSame('Updated City', $updated->city);
         $this->assertSame($schoolA->id, $updated->school_id, 'A caller-supplied school_id in the attributes array must never move a record to a different School.');

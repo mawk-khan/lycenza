@@ -6,6 +6,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -21,6 +22,8 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeePersonalDetailService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -29,8 +32,10 @@ class EmployeePersonalDetailService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function setDetails(Employee $employee, array $attributes, ?User $actor = null): EmployeePersonalDetail
+    public function setDetails(Employee $employee, array $attributes, User $actor): EmployeePersonalDetail
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
+
         unset($attributes['school_id'], $attributes['employee_id']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {

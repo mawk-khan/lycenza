@@ -35,7 +35,7 @@ class EmployeeUserLinkageTest extends TestCase
         $employee = app(EmployeeService::class)->create($school, [
             'full_name' => 'Asha Verma',
             'user_id' => $user->id,
-        ]);
+        ], $user);
 
         $this->assertSame($user->id, $employee->user_id);
     }
@@ -51,7 +51,7 @@ class EmployeeUserLinkageTest extends TestCase
         app(EmployeeService::class)->create($school, [
             'full_name' => 'Asha Verma',
             'user_id' => $unrelatedUser->id,
-        ]);
+        ], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -65,7 +65,7 @@ class EmployeeUserLinkageTest extends TestCase
         app(EmployeeService::class)->create($targetSchool, [
             'full_name' => 'Asha Verma',
             'user_id' => $user->id,
-        ]);
+        ], $this->fullHrActor($targetSchool));
 
         $this->assertNotSame($otherSchool->id, $targetSchool->id);
     }
@@ -79,8 +79,8 @@ class EmployeeUserLinkageTest extends TestCase
         $this->createMembership($user, $schoolA);
         $this->createMembership($user, $schoolB);
 
-        $employeeA = app(EmployeeService::class)->create($schoolA, ['full_name' => 'Asha Verma', 'user_id' => $user->id]);
-        $employeeB = app(EmployeeService::class)->create($schoolB, ['full_name' => 'Asha Verma', 'user_id' => $user->id]);
+        $employeeA = app(EmployeeService::class)->create($schoolA, ['full_name' => 'Asha Verma', 'user_id' => $user->id], $this->fullHrActor($schoolA));
+        $employeeB = app(EmployeeService::class)->create($schoolB, ['full_name' => 'Asha Verma', 'user_id' => $user->id], $this->fullHrActor($schoolB));
 
         $this->assertSame($user->id, $employeeA->user_id);
         $this->assertSame($user->id, $employeeB->user_id);
@@ -128,7 +128,7 @@ class EmployeeUserLinkageTest extends TestCase
     public function a_users_membership_being_later_suspended_does_not_retroactively_break_an_established_linkage(): void
     {
         [$user, $school] = $this->createSchoolAdmin();
-        $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Asha Verma', 'user_id' => $user->id]);
+        $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Asha Verma', 'user_id' => $user->id], $user);
 
         SchoolMembership::query()
             ->where('user_id', $user->id)

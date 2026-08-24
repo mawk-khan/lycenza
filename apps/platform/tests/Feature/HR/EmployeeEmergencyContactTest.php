@@ -89,7 +89,7 @@ class EmployeeEmergencyContactTest extends TestCase
         $original = $this->createEmployeeEmergencyContact($employee, ['is_primary' => true]);
         $replacement = $this->createEmployeeEmergencyContact($employee, ['is_primary' => false]);
 
-        app(EmployeeEmergencyContactService::class)->setPrimary($employee, $replacement);
+        app(EmployeeEmergencyContactService::class)->setPrimary($employee, $replacement, $this->fullHrActor($school));
 
         app(TenantContext::class)->set($school);
         $this->assertFalse($original->fresh()->is_primary);
@@ -107,7 +107,7 @@ class EmployeeEmergencyContactTest extends TestCase
             'name' => 'Attempted Primary',
             'phone' => '5551234567',
             'is_primary' => true,
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertFalse($contact->is_primary, 'add() must never let a caller create an already-primary contact -- setPrimary() is the sole promotion path.');
     }
@@ -123,7 +123,7 @@ class EmployeeEmergencyContactTest extends TestCase
             'name' => 'Real Contact',
             'phone' => '5551234567',
             'employee_id' => $otherEmployee->id,
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame($employee->id, $contact->employee_id);
     }
@@ -159,7 +159,7 @@ class EmployeeEmergencyContactTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeEmergencyContactService::class)->update($employeeA, $contactB, ['name' => 'Hacked Name']);
+        app(EmployeeEmergencyContactService::class)->update($employeeA, $contactB, ['name' => 'Hacked Name'], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -172,7 +172,7 @@ class EmployeeEmergencyContactTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeEmergencyContactService::class)->remove($employeeA, $contactB);
+        app(EmployeeEmergencyContactService::class)->remove($employeeA, $contactB, $this->fullHrActor($school));
     }
 
     #[Test]
@@ -185,6 +185,6 @@ class EmployeeEmergencyContactTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeEmergencyContactService::class)->setPrimary($employeeA, $contactB);
+        app(EmployeeEmergencyContactService::class)->setPrimary($employeeA, $contactB, $this->fullHrActor($school));
     }
 }

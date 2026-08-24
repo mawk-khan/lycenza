@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -21,9 +22,16 @@ use Illuminate\Support\Facades\DB;
  * School/tenant context, validate the (optional) User linkage,
  * atomically allocate the employee number, persist the Employee,
  * audit, emit the domain event.
+ *
+ * Phase 8A.10: requires a real `User $actor` and authorizes
+ * `hr.employees.manage` at $school before doing anything else -- an
+ * ordinary School member must not be able to create HR records merely
+ * by having any membership.
  */
 class EmployeeService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly EmployeeNumberAllocator $allocator,
         private readonly EmployeeNumberFormatter $formatter,
@@ -34,8 +42,10 @@ class EmployeeService
     /**
      * @param  array{full_name: string, user_id?: string|null}  $attributes
      */
-    public function create(School $school, array $attributes, ?User $actor = null): Employee
+    public function create(School $school, array $attributes, User $actor): Employee
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+
         $userId = $attributes['user_id'] ?? null;
 
         return $this->context->withSchool($school, function () use ($school, $attributes, $userId, $actor) {

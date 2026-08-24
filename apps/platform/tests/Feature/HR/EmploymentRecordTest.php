@@ -160,7 +160,7 @@ class EmploymentRecordTest extends TestCase
         $employment = app(EmploymentService::class)->create($employee, [
             'employment_type' => 'permanent',
             'starts_on' => '2026-01-01',
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame('active', $employment->status);
         $this->assertSame($employee->id, $employment->employee_id);
@@ -176,7 +176,7 @@ class EmploymentRecordTest extends TestCase
             'employment_type' => 'permanent',
             'starts_on' => '2027-01-01',
             'status' => 'pre_joining',
-        ]);
+        ], $this->fullHrActor($school));
 
         $this->assertSame('pre_joining', $employment->status);
     }
@@ -197,7 +197,7 @@ class EmploymentRecordTest extends TestCase
             'starts_on' => '2020-01-01',
             'ends_on' => '2021-01-01',
             'status' => 'terminated',
-        ]);
+        ], $this->fullHrActor($schoolA));
 
         $this->assertSame('fixed_term', $updated->employment_type);
         $this->assertSame($schoolA->id, $updated->school_id);
@@ -213,12 +213,13 @@ class EmploymentRecordTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $service = app(EmploymentService::class);
+        $actor = $this->fullHrActor($school);
 
-        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01', 'ends_on' => '2025-03-31']);
+        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01', 'ends_on' => '2025-03-31'], $actor);
 
         $this->expectException(EmploymentOverlapException::class);
 
-        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01', 'ends_on' => '2026-01-01']);
+        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01', 'ends_on' => '2026-01-01'], $actor);
     }
 
     #[Test]
@@ -227,12 +228,13 @@ class EmploymentRecordTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $service = app(EmploymentService::class);
+        $actor = $this->fullHrActor($school);
 
-        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2020-01-01', 'ends_on' => null]);
+        $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2020-01-01', 'ends_on' => null], $actor);
 
         $this->expectException(EmploymentOverlapException::class);
 
-        $service->create($employee, ['employment_type' => 'contract', 'starts_on' => '2026-01-01']);
+        $service->create($employee, ['employment_type' => 'contract', 'starts_on' => '2026-01-01'], $actor);
     }
 
     #[Test]
@@ -241,9 +243,10 @@ class EmploymentRecordTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $service = app(EmploymentService::class);
+        $actor = $this->fullHrActor($school);
 
-        $first = $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01', 'ends_on' => '2025-03-31']);
-        $second = $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2025-04-01']);
+        $first = $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01', 'ends_on' => '2025-03-31'], $actor);
+        $second = $service->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2025-04-01'], $actor);
 
         $this->assertNotSame($first->id, $second->id);
     }
@@ -253,9 +256,10 @@ class EmploymentRecordTest extends TestCase
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01']);
+        $actor = $this->fullHrActor($school);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
 
-        $ended = app(EmploymentService::class)->end($employment, '2026-03-31', 'retired');
+        $ended = app(EmploymentService::class)->end($employment, '2026-03-31', $actor, 'retired');
 
         $this->assertSame('2026-03-31', $ended->ends_on->toDateString());
         $this->assertSame('retired', $ended->status);
@@ -268,15 +272,17 @@ class EmploymentRecordTest extends TestCase
         $employee = $this->createEmployee($school);
         $department = $this->createDepartment($school);
         $position = $this->createPosition($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01']);
+        $actor = $this->fullHrActor($school);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
         $assignment = app(EmployeeAssignmentService::class)->create(
             $employment,
             ['starts_on' => '2022-01-01'],
             $position,
+            $actor,
             department: $department,
         );
 
-        app(EmploymentService::class)->end($employment, '2026-03-31', 'separated');
+        app(EmploymentService::class)->end($employment, '2026-03-31', $actor, 'separated');
 
         app(TenantContext::class)->set($school);
         $this->assertSame('2026-03-31', $assignment->fresh()->ends_on->toDateString());
@@ -288,14 +294,16 @@ class EmploymentRecordTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $position = $this->createPosition($school);
-        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01']);
+        $actor = $this->fullHrActor($school);
+        $employment = app(EmploymentService::class)->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $actor);
         $closedAssignment = app(EmployeeAssignmentService::class)->create(
             $employment,
             ['starts_on' => '2022-01-01', 'ends_on' => '2023-01-01'],
             $position,
+            $actor,
         );
 
-        app(EmploymentService::class)->end($employment, '2026-03-31', 'separated');
+        app(EmploymentService::class)->end($employment, '2026-03-31', $actor, 'separated');
 
         app(TenantContext::class)->set($school);
         $this->assertSame('2023-01-01', $closedAssignment->fresh()->ends_on->toDateString());
@@ -307,19 +315,20 @@ class EmploymentRecordTest extends TestCase
     public function rehire_preserves_employee_identity_and_creates_an_independent_second_employment(): void
     {
         $school = $this->createSchool();
-        $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Asha Verma']);
+        $actor = $this->fullHrActor($school);
+        $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Asha Verma'], $actor);
         $employmentService = app(EmploymentService::class);
 
         $firstEmployment = $employmentService->create($employee, [
             'employment_type' => 'permanent',
             'starts_on' => '2022-06-01',
-        ]);
-        $endedFirst = $employmentService->end($firstEmployment, '2025-03-31', 'separated');
+        ], $actor);
+        $endedFirst = $employmentService->end($firstEmployment, '2025-03-31', $actor, 'separated');
 
         $secondEmployment = $employmentService->create($employee, [
             'employment_type' => 'permanent',
             'starts_on' => '2026-06-01',
-        ]);
+        ], $actor);
 
         app(TenantContext::class)->set($school);
 
@@ -352,13 +361,14 @@ class EmploymentRecordTest extends TestCase
         $positionB = $this->createPosition($school, ['code' => 'TCH-B']);
         $employmentService = app(EmploymentService::class);
         $assignmentService = app(EmployeeAssignmentService::class);
+        $actor = $this->fullHrActor($school);
 
-        $firstEmployment = $employmentService->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01']);
-        $firstAssignment = $assignmentService->create($firstEmployment, ['starts_on' => '2022-06-01'], $positionA);
-        $employmentService->end($firstEmployment, '2025-03-31', 'separated');
+        $firstEmployment = $employmentService->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2022-06-01'], $actor);
+        $firstAssignment = $assignmentService->create($firstEmployment, ['starts_on' => '2022-06-01'], $positionA, $actor);
+        $employmentService->end($firstEmployment, '2025-03-31', $actor, 'separated');
 
-        $secondEmployment = $employmentService->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01']);
-        $secondAssignment = $assignmentService->create($secondEmployment, ['starts_on' => '2026-06-01'], $positionB);
+        $secondEmployment = $employmentService->create($employee, ['employment_type' => 'permanent', 'starts_on' => '2026-06-01'], $actor);
+        $secondAssignment = $assignmentService->create($secondEmployment, ['starts_on' => '2026-06-01'], $positionB, $actor);
 
         app(TenantContext::class)->set($school);
 

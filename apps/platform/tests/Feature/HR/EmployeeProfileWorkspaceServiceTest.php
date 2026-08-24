@@ -303,8 +303,9 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
         $subordinateEmployment = $this->createEmploymentRecord($subordinateEmployee, ['starts_on' => '2020-01-01', 'ends_on' => null]);
         $subordinateAssignment = $this->createEmployeeAssignment($subordinateEmployment, $position, ['is_primary' => true, 'starts_on' => '2020-01-01', 'ends_on' => null]);
 
-        app(TenantContext::class)->withSchool($school, function () use ($subordinateAssignment, $managerAssignment) {
-            app(ReportingHierarchyService::class)->setManager($subordinateAssignment->fresh(), $managerAssignment->fresh());
+        $actor = $this->fullHrActor($school);
+        app(TenantContext::class)->withSchool($school, function () use ($subordinateAssignment, $managerAssignment, $actor) {
+            app(ReportingHierarchyService::class)->setManager($subordinateAssignment->fresh(), $managerAssignment->fresh(), $actor);
         });
 
         $workspace = $this->build($school, $subordinateEmployee->id);
@@ -493,7 +494,7 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
 
         app(TenantContext::class)->set($schoolB);
 
-        app(EmployeeProfileWorkspaceService::class)->build($schoolA, $employeeA->id);
+        app(EmployeeProfileWorkspaceService::class)->build($schoolA, $employeeA->id, $this->fullHrActor($schoolA));
 
         $this->assertSame($schoolB->id, app(TenantContext::class)->school()?->id, 'Ambient TenantContext must be restored to what it was before the service call.');
     }
@@ -502,6 +503,6 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
 
     private function build(School $school, string $employeeId): ?EmployeeProfileWorkspace
     {
-        return app(EmployeeProfileWorkspaceService::class)->build($school, $employeeId);
+        return app(EmployeeProfileWorkspaceService::class)->build($school, $employeeId, $this->fullHrActor($school));
     }
 }

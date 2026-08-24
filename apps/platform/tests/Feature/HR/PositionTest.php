@@ -119,7 +119,7 @@ class PositionTest extends TestCase
     {
         $school = $this->createSchool();
 
-        $position = app(PositionService::class)->create($school, ['name' => 'Accountant', 'code' => 'acc']);
+        $position = app(PositionService::class)->create($school, ['name' => 'Accountant', 'code' => 'acc'], $this->fullHrActor($school));
 
         $this->assertSame('ACC', $position->code);
         $this->assertSame('active', $position->status);
@@ -136,7 +136,7 @@ class PositionTest extends TestCase
             'name' => 'Updated Title',
             'school_id' => $schoolB->id,
             'status' => 'inactive',
-        ]);
+        ], $this->fullHrActor($schoolA));
 
         $this->assertSame('Updated Title', $updated->name);
         $this->assertSame($schoolA->id, $updated->school_id);
@@ -149,11 +149,12 @@ class PositionTest extends TestCase
         $school = $this->createSchool();
         $position = $this->createPosition($school);
         $service = app(PositionService::class);
+        $actor = $this->fullHrActor($school);
 
-        $archived = $service->archive($position);
+        $archived = $service->archive($position, $actor);
         $this->assertSame('inactive', $archived->status);
 
-        $reactivated = $service->reactivate($archived);
+        $reactivated = $service->reactivate($archived, $actor);
         $this->assertSame('active', $reactivated->status);
     }
 
@@ -200,6 +201,13 @@ class PositionTest extends TestCase
     public function the_full_position_lifecycle_never_touches_an_authorization_table(): void
     {
         $school = $this->createSchool();
+        // Created BEFORE the baseline counts below -- 8A.10's own
+        // authorization capability grant (a Role + a
+        // MembershipRoleAssignment) is test SETUP, not part of what
+        // this test measures. The assertion is that the POSITION
+        // LIFECYCLE ITSELF adds no further authorization-table rows
+        // beyond this one, already-accounted-for grant.
+        $actor = $this->fullHrActor($school);
 
         app(TenantContext::class)->set($school);
         $rolesBefore = Role::query()->count();
@@ -207,10 +215,10 @@ class PositionTest extends TestCase
         $platformRoleAssignmentsBefore = PlatformRoleAssignment::query()->count();
 
         $service = app(PositionService::class);
-        $position = $service->create($school, ['name' => 'Vice Principal', 'code' => 'VP']);
-        $position = $service->update($position, ['description' => 'Deputy academic and operational lead.']);
-        $position = $service->archive($position);
-        $service->reactivate($position);
+        $position = $service->create($school, ['name' => 'Vice Principal', 'code' => 'VP'], $actor);
+        $position = $service->update($position, ['description' => 'Deputy academic and operational lead.'], $actor);
+        $position = $service->archive($position, $actor);
+        $service->reactivate($position, $actor);
 
         app(TenantContext::class)->set($school);
         $this->assertSame($rolesBefore, Role::query()->count(), 'Position lifecycle must never create/delete a Role.');

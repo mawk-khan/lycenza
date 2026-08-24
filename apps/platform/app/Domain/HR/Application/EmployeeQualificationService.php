@@ -7,6 +7,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -36,6 +37,8 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeQualificationService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -44,8 +47,9 @@ class EmployeeQualificationService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function add(Employee $employee, array $attributes, ?User $actor = null): EmployeeQualification
+    public function add(Employee $employee, array $attributes, User $actor): EmployeeQualification
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         unset($attributes['school_id'], $attributes['employee_id'], $attributes['verification_status'], $attributes['verified_at']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
@@ -71,8 +75,9 @@ class EmployeeQualificationService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function update(Employee $employee, EmployeeQualification $qualification, array $attributes, ?User $actor = null): EmployeeQualification
+    public function update(Employee $employee, EmployeeQualification $qualification, array $attributes, User $actor): EmployeeQualification
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $qualification);
         unset($attributes['school_id'], $attributes['employee_id'], $attributes['verification_status'], $attributes['verified_at']);
 
@@ -99,8 +104,9 @@ class EmployeeQualificationService
         });
     }
 
-    public function remove(Employee $employee, EmployeeQualification $qualification, ?User $actor = null): void
+    public function remove(Employee $employee, EmployeeQualification $qualification, User $actor): void
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $qualification);
 
         $this->context->withSchool($employee->school, function () use ($employee, $qualification, $actor) {
@@ -116,8 +122,9 @@ class EmployeeQualificationService
         });
     }
 
-    public function verify(Employee $employee, EmployeeQualification $qualification, ?User $actor = null): EmployeeQualification
+    public function verify(Employee $employee, EmployeeQualification $qualification, User $actor): EmployeeQualification
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $qualification);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $qualification, $actor) {
@@ -134,8 +141,9 @@ class EmployeeQualificationService
         });
     }
 
-    public function reject(Employee $employee, EmployeeQualification $qualification, ?User $actor = null): EmployeeQualification
+    public function reject(Employee $employee, EmployeeQualification $qualification, User $actor): EmployeeQualification
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $qualification);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $qualification, $actor) {

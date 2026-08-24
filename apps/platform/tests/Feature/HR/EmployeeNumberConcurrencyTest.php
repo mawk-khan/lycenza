@@ -49,13 +49,18 @@ class EmployeeNumberConcurrencyTest extends TestCase
     public function five_real_concurrent_processes_creating_employees_for_the_same_school_receive_five_distinct_numbers(): void
     {
         $this->school = $this->createSchool();
+        // Created and committed BEFORE the subprocesses spawn (this test
+        // uses no DB transactions -- $connectionsToTransact = [] above
+        // -- so it is genuinely visible to every separate OS process
+        // below, exactly like $this->school itself).
+        $actor = $this->fullHrActor($this->school);
 
         $script = __DIR__.'/../../Support/create-employee.php';
         $processCount = 5;
         $processes = [];
 
         for ($i = 0; $i < $processCount; $i++) {
-            $process = new Process(['php', $script, $this->school->id, "Concurrent Employee {$i}"]);
+            $process = new Process(['php', $script, $this->school->id, "Concurrent Employee {$i}", $actor->id]);
             $process->start();
             $processes[] = $process;
         }

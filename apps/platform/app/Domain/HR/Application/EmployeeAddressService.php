@@ -7,6 +7,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -23,6 +24,8 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeAddressService
 {
+    use AuthorizesCapability;
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -31,8 +34,10 @@ class EmployeeAddressService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function add(Employee $employee, array $attributes, ?User $actor = null): EmployeeAddress
+    public function add(Employee $employee, array $attributes, User $actor): EmployeeAddress
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
+
         unset($attributes['school_id'], $attributes['employee_id']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
@@ -56,8 +61,9 @@ class EmployeeAddressService
     /**
      * @param  array<string, mixed>  $attributes
      */
-    public function update(Employee $employee, EmployeeAddress $address, array $attributes, ?User $actor = null): EmployeeAddress
+    public function update(Employee $employee, EmployeeAddress $address, array $attributes, User $actor): EmployeeAddress
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $address);
         unset($attributes['school_id'], $attributes['employee_id']);
 
@@ -75,8 +81,9 @@ class EmployeeAddressService
         });
     }
 
-    public function remove(Employee $employee, EmployeeAddress $address, ?User $actor = null): void
+    public function remove(Employee $employee, EmployeeAddress $address, User $actor): void
     {
+        $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $address);
 
         $this->context->withSchool($employee->school, function () use ($employee, $address, $actor) {
