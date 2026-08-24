@@ -697,4 +697,122 @@ class EnrollmentRolloverUiTest extends TestCase
 
         $this->get('/app/enrollment-rollovers')->assertOk();
     }
+
+    // ==================================================================
+    // Phase 1B Closure Gate, Section 21 -- >100-Item request-boundary
+    // regression (closes the 1B.7F P3: BoundsRolloverExecutionRequest's
+    // 100-item-per-request cap was previously proven only at the
+    // service layer / by manufacturing an already-interrupted DB state
+    // -- never by a real request that actually crosses the boundary
+    // through the WEB HTTP layer this trait is reportedly shared with).
+    // ==================================================================
+
+    #[Test]
+    public function starting_a_plan_with_101_ready_items_processes_at_most_100_in_one_web_request_and_resume_completes_the_rest(): void
+    {
+        ['school' => $school, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection] = $this->buildContext();
+        $planId = $this->planId($school, $sourceYear, $targetYear);
+        $plan = $this->freshPlan($school, $planId);
+        $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
+
+        $totalItems = 101;
+        $students = app(TenantContext::class)->withSchool($school, function () use ($school, $sourceSection, $totalItems) {
+            $created = [];
+            for ($i = 1; $i <= $totalItems; $i++) {
+                $rollNumber = str_pad((string) $i, 3, '0', STR_PAD_LEFT);
+                $student = Student::factory()->for($school, 'school')->create(['student_number' => "S-BOUND-{$rollNumber}"]);
+                // Not createStudentEnrollment()/the StudentEnrollment
+                // factory here: its faker default
+                // (fake()->unique()->numberBetween(1, 60)) is evaluated
+                // eagerly before our explicit `roll_number` override
+                // applies, and exhausts its 60-value unique pool well
+                // before 101 rows -- an existing factory-only quirk,
+                // irrelevant to production, not worth touching for one
+                // test. A direct create() with every field this
+                // Enrollment's five parents require sidesteps it.
+                StudentEnrollment::query()->create([
+                    'school_id' => $school->id,
+                    'student_id' => $student->id,
+                    'academic_year_id' => $sourceSection->academic_year_id,
+                    'campus_id' => $sourceSection->campus_id,
+                    'grade_level_id' => $sourceSection->grade_level_id,
+                    'section_id' => $sourceSection->id,
+                    'roll_number' => $rollNumber,
+                    'status' => 'active',
+                    'starts_on' => '2026-06-01',
+                ]);
+                $created[] = ['student' => $student, 'rollNumber' => $rollNumber];
+            }
+
+            return $created;
+        });
+
+        [$user] = $this->createSchoolAdmin('school_admin');
+        $this->grantCapabilities($user, $school, ['enrollments.manage', 'enrollments.rollovers.manage', 'enrollments.view', 'enrollments.rollovers.view']);
+        $this->activate($user, $school);
+
+        // Populate Items (all `undecided` -> `review`).
+        $this->post("/app/enrollment-rollovers/{$planId}/validate");
+
+        // Decide every Item directly through the service (fixture setup,
+        // not the HTTP boundary under test here) so each is `promote`
+        // with its own distinct, explicit target Roll Number.
+        app(TenantContext::class)->withSchool($school, function () use ($plan, $planId, $students) {
+            foreach ($students as ['student' => $student, 'rollNumber' => $rollNumber]) {
+                $item = EnrollmentRolloverItem::query()->where('plan_id', $planId)->where('student_id', $student->id)->firstOrFail();
+                $this->planService()->setItemDecision($this->freshPlan($plan->school, $planId), $item, 'promote', null, 'explicit', $rollNumber);
+            }
+        });
+
+        // Revalidate now that every Item has a decision -- all 101
+        // should classify as `ready`.
+        $this->post("/app/enrollment-rollovers/{$planId}/validate");
+        $this->assertSame('validated', $this->freshPlan($school, $planId)->status);
+        $readyCount = app(TenantContext::class)->withSchool($school, fn () => EnrollmentRolloverItem::query()->where('plan_id', $planId)->where('validation_result', 'ready')->count());
+        $this->assertSame($totalItems, $readyCount, 'fixture setup must produce exactly 101 ready Items before the boundary is exercised');
+
+        // ---- The actual boundary: ONE web Start request. ----
+        $this->post("/app/enrollment-rollovers/{$planId}/start")->assertRedirect("/app/enrollment-rollovers/{$planId}");
+
+        $planAfterStart = $this->freshPlan($school, $planId);
+        $succeededAfterStart = app(TenantContext::class)->withSchool($school, fn () => EnrollmentRolloverItem::query()->where('plan_id', $planId)->where('execution_status', 'succeeded')->count());
+        $pendingAfterStart = app(TenantContext::class)->withSchool($school, fn () => EnrollmentRolloverItem::query()->where('plan_id', $planId)->whereNull('execution_status')->count());
+        $targetEnrollmentsAfterStart = app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->where('academic_year_id', $targetYear->id)->count());
+
+        $this->assertSame('executing', $planAfterStart->status, 'the Plan must remain executing, never silently finalize, when work remains');
+        $this->assertLessThanOrEqual(100, $succeededAfterStart, 'no single web request may process more than 100 Items');
+        $this->assertGreaterThanOrEqual(1, $pendingAfterStart, 'at least one Item must remain pending after a single capped request');
+        $this->assertSame($succeededAfterStart, $targetEnrollmentsAfterStart, 'exactly one target Enrollment per succeeded Item, no more');
+        $this->assertSame($totalItems, $succeededAfterStart + $pendingAfterStart, 'every Item is accounted for as either succeeded or still pending -- none lost');
+
+        // The Show page must reflect this honestly (no fabricated
+        // completion, Resume is the correct next action) -- and no
+        // automatic second execution request is ever made by this test
+        // or by the page itself.
+        $this->get("/app/enrollment-rollovers/{$planId}")->assertInertia(fn ($page) => $page
+            ->where('plan.status', 'executing')
+            ->where('plan.executionSummary.succeeded', $succeededAfterStart)
+            ->where('plan.executionSummary.pending', $pendingAfterStart)
+        );
+
+        // ---- ONE web Resume request completes the remainder. ----
+        $this->post("/app/enrollment-rollovers/{$planId}/resume")->assertRedirect("/app/enrollment-rollovers/{$planId}");
+
+        $planAfterResume = $this->freshPlan($school, $planId);
+        $this->assertSame('completed', $planAfterResume->status, 'no blockers exist, so the Plan must reach completed after Resume finishes the remaining Items');
+
+        $succeededAfterResume = app(TenantContext::class)->withSchool($school, fn () => EnrollmentRolloverItem::query()->where('plan_id', $planId)->where('execution_status', 'succeeded')->count());
+        $this->assertSame($totalItems, $succeededAfterResume, 'every Item must have succeeded once Resume drains the remainder');
+
+        $targetEnrollmentsAfterResume = app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->where('academic_year_id', $targetYear->id)->count());
+        $this->assertSame($totalItems, $targetEnrollmentsAfterResume, 'exactly 101 target Enrollments total -- no duplicates created across the Start+Resume pair');
+
+        foreach ($students as ['student' => $student, 'rollNumber' => $rollNumber]) {
+            $targetCount = app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->where('student_id', $student->id)->where('academic_year_id', $targetYear->id)->count());
+            $this->assertSame(1, $targetCount, "Student {$rollNumber} must have exactly one target Enrollment, never a duplicate");
+        }
+
+        $sourceStillActiveCount = app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->where('academic_year_id', $sourceYear->id)->where('status', 'active')->count());
+        $this->assertSame($totalItems, $sourceStillActiveCount, 'source Enrollments are never auto-completed by rollover execution -- this remains explicitly deferred scope');
+    }
 }

@@ -872,4 +872,92 @@ class EnrollmentRolloverApiTest extends TestCase
         // Immediately issue a valid, unrelated operation -- no SQLSTATE 25P02.
         $this->asUser($user)->getJson("/api/v1/schools/{$school->id}/enrollment-rollovers")->assertOk();
     }
+
+    // ==================================================================
+    // Phase 1B Closure Gate, Section 21 -- >100-Item request-boundary
+    // regression, API side. The WEB layer carries the reported 1B.7F
+    // P3 and is the mandatory boundary test; this is the cheap
+    // corroborating check that BoundsRolloverExecutionRequest enforces
+    // the identical 100-item cap through the API controller sharing
+    // the same trait.
+    // ==================================================================
+
+    #[Test]
+    public function starting_a_plan_with_101_ready_items_processes_at_most_100_in_one_api_request_and_resume_completes_the_rest(): void
+    {
+        ['school' => $school, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection] = $this->buildContext();
+        $planId = $this->planId($school, $sourceYear, $targetYear);
+        $plan = $this->freshPlan($school, $planId);
+        $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
+
+        $totalItems = 101;
+        $students = app(TenantContext::class)->withSchool($school, function () use ($school, $sourceSection, $totalItems) {
+            $created = [];
+            for ($i = 1; $i <= $totalItems; $i++) {
+                $rollNumber = str_pad((string) $i, 3, '0', STR_PAD_LEFT);
+                $student = Student::factory()->for($school, 'school')->create(['student_number' => "S-API-BOUND-{$rollNumber}"]);
+                // See the identical comment in
+                // EnrollmentRolloverUiTest's twin of this test: the
+                // StudentEnrollment factory's faker default exhausts
+                // its 60-value unique pool before 101 rows, so a
+                // direct create() sidesteps it.
+                StudentEnrollment::query()->create([
+                    'school_id' => $school->id,
+                    'student_id' => $student->id,
+                    'academic_year_id' => $sourceSection->academic_year_id,
+                    'campus_id' => $sourceSection->campus_id,
+                    'grade_level_id' => $sourceSection->grade_level_id,
+                    'section_id' => $sourceSection->id,
+                    'roll_number' => $rollNumber,
+                    'status' => 'active',
+                    'starts_on' => '2026-06-01',
+                ]);
+                $created[] = ['student' => $student, 'rollNumber' => $rollNumber];
+            }
+
+            return $created;
+        });
+
+        $user = $this->createUser();
+        $this->grantCapabilities($user, $school, ['enrollments.manage', 'enrollments.rollovers.manage']);
+
+        $this->asUser($user)->withHeader('Idempotency-Key', 'test-api-bound-validate-1')
+            ->postJson("/api/v1/schools/{$school->id}/enrollment-rollovers/{$planId}/validate");
+
+        app(TenantContext::class)->withSchool($school, function () use ($plan, $planId, $students) {
+            foreach ($students as ['student' => $student, 'rollNumber' => $rollNumber]) {
+                $item = EnrollmentRolloverItem::query()->where('plan_id', $planId)->where('student_id', $student->id)->firstOrFail();
+                $this->planService()->setItemDecision($this->freshPlan($plan->school, $planId), $item, 'promote', null, 'explicit', $rollNumber);
+            }
+        });
+
+        $this->asUser($user)->withHeader('Idempotency-Key', 'test-api-bound-validate-2')
+            ->postJson("/api/v1/schools/{$school->id}/enrollment-rollovers/{$planId}/validate");
+        $this->assertSame('validated', $this->freshPlan($school, $planId)->status);
+
+        // ---- The actual boundary: ONE API Start request. ----
+        $startResponse = $this->asUser($user)->withHeader('Idempotency-Key', 'test-api-bound-start-1')
+            ->postJson("/api/v1/schools/{$school->id}/enrollment-rollovers/{$planId}/start");
+        $startResponse->assertOk();
+        $startResponse->assertJsonPath('data.planStatus', 'executing');
+
+        $succeededAfterStart = (int) $startResponse->json('data.succeeded');
+        $pendingAfterStart = app(TenantContext::class)->withSchool($school, fn () => EnrollmentRolloverItem::query()->where('plan_id', $planId)->whereNull('execution_status')->count());
+
+        $this->assertLessThanOrEqual(100, $succeededAfterStart, 'no single API request may process more than 100 Items');
+        $this->assertGreaterThanOrEqual(1, $pendingAfterStart, 'at least one Item must remain pending after a single capped API request');
+        $this->assertSame($totalItems, $succeededAfterStart + $pendingAfterStart, 'every Item is accounted for as either succeeded or still pending -- none lost');
+
+        // ---- ONE API Resume request completes the remainder. ----
+        $resumeResponse = $this->asUser($user)->withHeader('Idempotency-Key', 'test-api-bound-resume-1')
+            ->postJson("/api/v1/schools/{$school->id}/enrollment-rollovers/{$planId}/resume");
+        $resumeResponse->assertOk();
+        $resumeResponse->assertJsonPath('data.planStatus', 'completed');
+
+        $targetEnrollmentsAfterResume = app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->where('academic_year_id', $targetYear->id)->count());
+        $this->assertSame($totalItems, $targetEnrollmentsAfterResume, 'exactly 101 target Enrollments total -- no duplicates created across the Start+Resume pair');
+
+        $sourceStillActiveCount = app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->where('academic_year_id', $sourceYear->id)->where('status', 'active')->count());
+        $this->assertSame($totalItems, $sourceStillActiveCount, 'source Enrollments are never auto-completed by rollover execution');
+    }
 }
