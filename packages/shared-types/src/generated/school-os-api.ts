@@ -619,6 +619,74 @@ export interface paths {
         patch: operations["updateSubjectOffering"];
         trace?: never;
     };
+    "/schools/{schoolId}/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Employee Directory search (Directory-tier only). Requires hr.employees.view. */
+        get: operations["listEmployees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/employees/{employeeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Employee Profile Workspace (Restricted-tier, section-authorized). Requires hr.employees.personal.view as the entry gate; each section additionally requires its own 8A.10 capability, exactly as the interactive Profile Workspace already does. */
+        get: operations["getEmployeeProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/employees/{employeeId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Employee Activity Timeline (capability-category-filtered, event-time-sensitivity-aware). Requires hr.employees.personal.view as the entry gate. */
+        get: operations["getEmployeeActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/employees/{employeeId}/sensitive-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Highly Sensitive EmployeeDocument metadata -- a SEPARATE, narrowly-authorized read path from the general Profile endpoint (section 12/14/59). Requires hr.employees.sensitive.view. Never returns a storage path/disk or a file URL; a successful non-empty read is audited exactly once (hr.employee_document.sensitive_viewed) by the underlying service, not by this endpoint itself. */
+        get: operations["getEmployeeSensitiveDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -943,6 +1011,223 @@ export interface components {
             sequence?: number | null;
             weekly_periods_target?: number | null;
         };
+        /** @description Directory-tier only (docs/modules/HR.md "Employee Directory (8A.8)") -- no personal/Restricted/Highly Sensitive field exists on this schema. */
+        EmployeeDirectoryEntry: {
+            /** Format: uuid */
+            employee_id: string;
+            employee_number: string;
+            display_name: string;
+            /** Format: uuid */
+            position_id: string | null;
+            position_name: string | null;
+            /** Format: uuid */
+            department_id: string | null;
+            department_name: string | null;
+            /** Format: uuid */
+            campus_id: string | null;
+            campus_name: string | null;
+            /** Format: uuid */
+            manager_employee_id: string | null;
+            manager_employee_number: string | null;
+            manager_display_name: string | null;
+        };
+        EmployeeProfileSummary: {
+            /** Format: uuid */
+            employee_id: string;
+            employee_number: string;
+            display_name: string;
+            /** @enum {string} */
+            employee_record_status: "active" | "archived";
+            user_linked: boolean;
+            /** @enum {string|null} */
+            current_employment_status: "draft" | "pre_joining" | "active" | "notice_period" | "separated" | "terminated" | "retired" | "deceased" | null;
+            /** Format: uuid */
+            position_id: string | null;
+            position_name: string | null;
+            /** Format: uuid */
+            department_id: string | null;
+            department_name: string | null;
+            /** Format: uuid */
+            campus_id: string | null;
+            campus_name: string | null;
+            /** Format: uuid */
+            manager_employee_id: string | null;
+            manager_employee_number: string | null;
+            manager_display_name: string | null;
+        };
+        /** @description null when the Employee has no EmployeePersonalDetail row -- never an empty object. */
+        EmployeeProfilePersonalDetails: {
+            /** Format: date */
+            date_of_birth: string | null;
+            nationality: string | null;
+            marital_status: string | null;
+            preferred_language: string | null;
+        } | null;
+        EmployeeProfileContact: {
+            personal_email: string | null;
+            personal_phone: string | null;
+            alternate_phone: string | null;
+        } | null;
+        EmployeeProfileAddress: {
+            /** Format: uuid */
+            id: string;
+            address_type: string;
+            address_line1: string | null;
+            address_line2: string | null;
+            city: string | null;
+            state_region: string | null;
+            postal_code: string | null;
+            country_code: string | null;
+        };
+        EmployeeProfileEmergencyContact: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            relationship: string | null;
+            phone: string | null;
+            alternate_phone: string | null;
+            email: string | null;
+            is_primary: boolean;
+        };
+        EmployeeProfileEmployment: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            employment_type: "permanent" | "probationary" | "fixed_term" | "part_time" | "temporary" | "contract" | "consultant";
+            /** Format: date */
+            starts_on: string;
+            /** Format: date */
+            ends_on: string | null;
+            /** Format: date */
+            probation_ends_on: string | null;
+            /** @enum {string} */
+            status: "draft" | "pre_joining" | "active" | "notice_period" | "separated" | "terminated" | "retired" | "deceased";
+            is_current: boolean;
+        };
+        EmployeeProfileAssignment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            employment_record_id: string;
+            is_primary: boolean;
+            /** Format: date */
+            starts_on: string;
+            /** Format: date */
+            ends_on: string | null;
+            is_current: boolean;
+            /** Format: uuid */
+            position_id: string | null;
+            position_name: string | null;
+            /** Format: uuid */
+            department_id: string | null;
+            department_name: string | null;
+            /** Format: uuid */
+            campus_id: string | null;
+            campus_name: string | null;
+        };
+        EmployeeProfileQualification: {
+            /** Format: uuid */
+            id: string;
+            qualification_type: string;
+            qualification_name: string;
+            specialization: string | null;
+            institution: string | null;
+            awarding_body: string | null;
+            country_code: string | null;
+            /** Format: date */
+            starts_on: string | null;
+            /** Format: date */
+            completed_on: string | null;
+            grade_or_result: string | null;
+            /** @enum {string} */
+            verification_status: "unverified" | "verified" | "rejected";
+            /** Format: date-time */
+            verified_at: string | null;
+        };
+        EmployeeProfileExperience: {
+            /** Format: uuid */
+            id: string;
+            organization: string;
+            job_title: string | null;
+            /** Format: date */
+            starts_on: string;
+            /** Format: date */
+            ends_on: string | null;
+            description: string | null;
+            location: string | null;
+            country_code: string | null;
+        };
+        EmployeeProfileCertification: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            issuer: string | null;
+            credential_number: string | null;
+            /** Format: date */
+            issued_on: string | null;
+            /** Format: date */
+            expires_on: string | null;
+            /** @enum {string} */
+            verification_status: "unverified" | "verified" | "rejected";
+            /** Format: date-time */
+            verified_at: string | null;
+        };
+        /** @description Restricted-tier only -- classification_tier is always "restricted" on this schema; highly_sensitive documents never appear here (see the dedicated sensitive-documents endpoint). Deliberately excludes original_filename/mime_type/size_bytes/ storage_disk/storage_path/uploaded_by_user_id permanently. */
+        EmployeeProfileDocument: {
+            /** Format: uuid */
+            id: string;
+            category: string;
+            /** @enum {string} */
+            classification_tier: "restricted";
+            /** Format: date */
+            issued_on: string | null;
+            /** Format: date */
+            expires_on: string | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+        };
+        /** @description Identical safe shape to EmployeeProfileDocument, but classification_tier is always "highly_sensitive" -- reachable only through the dedicated sensitive-documents endpoint. */
+        EmployeeSensitiveDocument: {
+            /** Format: uuid */
+            id: string;
+            category: string;
+            /** @enum {string} */
+            classification_tier: "highly_sensitive";
+            /** Format: date */
+            issued_on: string | null;
+            /** Format: date */
+            expires_on: string | null;
+            /** @enum {string} */
+            status: "active" | "archived";
+        };
+        /** @description The complete Employee Profile Workspace (docs/modules/HR.md "Employee Profile Workspace (8A.9)"). Section-level 8A.10 authorization is enforced server-side before this response is built -- an unauthorized section is [] (repeatable) or the section is simply not populated beyond what the actor's capabilities allow; this schema itself describes the maximal shape, not a per-actor guarantee that every field is present. */
+        EmployeeProfile: {
+            summary: components["schemas"]["EmployeeProfileSummary"];
+            personal_details: components["schemas"]["EmployeeProfilePersonalDetails"];
+            contact: components["schemas"]["EmployeeProfileContact"];
+            addresses: components["schemas"]["EmployeeProfileAddress"][];
+            emergency_contacts: components["schemas"]["EmployeeProfileEmergencyContact"][];
+            employment_history: components["schemas"]["EmployeeProfileEmployment"][];
+            assignments: components["schemas"]["EmployeeProfileAssignment"][];
+            qualifications: components["schemas"]["EmployeeProfileQualification"][];
+            experience: components["schemas"]["EmployeeProfileExperience"][];
+            certifications: components["schemas"]["EmployeeProfileCertification"][];
+            documents: components["schemas"]["EmployeeProfileDocument"][];
+        };
+        /** @description A disclosure projection over SchoolAuditEvent (docs/modules/HR.md "Audit & Activity Timeline (8A.11)") -- raw audit metadata never appears here. */
+        EmployeeActivityEntry: {
+            /** Format: uuid */
+            id: string;
+            event_type: string;
+            /** @enum {string} */
+            category: "employee" | "personal" | "employment" | "professional" | "document" | "sensitive_access";
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: uuid */
+            actor_user_id: string | null;
+            actor_display_name: string | null;
+            changed_fields: string[];
+        };
     };
     responses: never;
     parameters: {
@@ -955,6 +1240,16 @@ export interface components {
         AcademicYearId: string;
         /** @description When true, includes inactive/archived reference rows (default excludes them). */
         IncludeInactive: boolean;
+        /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+        EmployeeId: string;
+        /** @description When true, includes Employees whose record_status is archived (default excludes them). */
+        EmployeeIncludeArchived: boolean;
+        /** @description Activity Timeline category filter. An unrecognized value is treated as no filter, never an error -- rejecting it would itself be an authorization side channel (section 30). */
+        EmployeeCategory: "employee" | "personal" | "employment" | "professional" | "document" | "sensitive_access";
+        /** @description Inclusive lower bound on SchoolAuditEvent.occurred_at (not a domain effective date). */
+        EmployeeOccurredFrom: string;
+        /** @description Inclusive upper bound on SchoolAuditEvent.occurred_at (not a domain effective date). */
+        EmployeeOccurredTo: string;
     };
     requestBodies: never;
     headers: {
@@ -2719,6 +3014,241 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["SubjectOffering"];
                     };
+                };
+            };
+        };
+    };
+    listEmployees: {
+        parameters: {
+            query?: {
+                /** @description Matches employee_number prefix or full_name substring. */
+                search?: string;
+                campus_id?: string;
+                department_id?: string;
+                position_id?: string;
+                /** @description Allow-listed server-side; an unrecognized value falls back to the default rather than erroring. */
+                sort?: "full_name" | "employee_number";
+                direction?: "asc" | "desc";
+                /** @description When true, includes Employees whose record_status is archived (default excludes them). */
+                include_archived?: components["parameters"]["EmployeeIncludeArchived"];
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployeeDirectoryEntry"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.employees.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid query parameter (e.g. page < 1). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getEmployeeProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployeeProfile"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.employees.personal.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Employee does not exist, or belongs to a different School -- deliberately indistinguishable (section 20/51/83's cross-tenant-probing convention). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getEmployeeActivity: {
+        parameters: {
+            query?: {
+                /** @description Activity Timeline category filter. An unrecognized value is treated as no filter, never an error -- rejecting it would itself be an authorization side channel (section 30). */
+                category?: components["parameters"]["EmployeeCategory"];
+                /** @description Inclusive lower bound on SchoolAuditEvent.occurred_at (not a domain effective date). */
+                occurred_from?: components["parameters"]["EmployeeOccurredFrom"];
+                /** @description Inclusive upper bound on SchoolAuditEvent.occurred_at (not a domain effective date). */
+                occurred_to?: components["parameters"]["EmployeeOccurredTo"];
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. meta.total reflects only events the caller's capabilities permit -- a hidden Highly Sensitive event is never counted (no side-channel, section 18/40). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployeeActivityEntry"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.employees.personal.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Employee does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid query parameter (e.g. occurred_from not a real date). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getEmployeeSensitiveDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (an empty array is a valid, unaudited result -- no sensitive document exists for this Employee). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployeeSensitiveDocument"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.employees.sensitive.view in this School -- identical response whether or not sensitive documents actually exist (no existence oracle, section 60). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Employee does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

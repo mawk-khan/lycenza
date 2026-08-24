@@ -8,6 +8,10 @@ use App\Domain\AcademicStructure\Http\Controllers\RoomController;
 use App\Domain\AcademicStructure\Http\Controllers\SectionController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
+use App\Domain\HR\Http\Controllers\EmployeeActivityController;
+use App\Domain\HR\Http\Controllers\EmployeeDirectoryController;
+use App\Domain\HR\Http\Controllers\EmployeeProfileController;
+use App\Domain\HR\Http\Controllers\EmployeeSensitiveDocumentController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
 use App\Http\Controllers\Api\Internal\AiToolController;
 use App\Http\Controllers\Api\Internal\HealthController;
@@ -231,6 +235,29 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/subject-offerings/{subjectOffering}', [SubjectOfferingController::class, 'update'])
                 ->middleware(['capability:academics.subjects.manage', 'throttle:school-api-mutations'])
                 ->name('schools.subject-offerings.update');
+
+            // Phase 8A.14: read-only HR transport. Deliberately NO
+            // `capability:` route middleware anywhere in this block --
+            // every one of these controllers calls straight through to
+            // an already-authoritative 8A.8/8A.9/8A.10/8A.11 Application
+            // service (EmployeeDirectoryService/EmployeeProfileWorkspaceService/
+            // EmployeeActivityTimelineService/EmployeeSensitiveDocumentReadService)
+            // that performs its OWN `hr.employees.*` capability check
+            // against the real authenticated actor before running any
+            // query -- adding a second, route-level capability check
+            // here would either exactly duplicate that check or risk
+            // silently drifting from it (docs/modules/HR.md 8A.14 "no
+            // divergent capability matrix"). `{employee}` is always a
+            // raw route-parameter string, never implicit Eloquent
+            // route-model binding -- see each controller's own docblock.
+            Route::get('/employees', [EmployeeDirectoryController::class, 'index'])
+                ->name('schools.employees.index');
+            Route::get('/employees/{employee}', [EmployeeProfileController::class, 'show'])
+                ->name('schools.employees.show');
+            Route::get('/employees/{employee}/activity', [EmployeeActivityController::class, 'index'])
+                ->name('schools.employees.activity.index');
+            Route::get('/employees/{employee}/sensitive-documents', [EmployeeSensitiveDocumentController::class, 'index'])
+                ->name('schools.employees.sensitive-documents.index');
         });
 });
 

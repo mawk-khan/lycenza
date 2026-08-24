@@ -2637,6 +2637,299 @@ pass (8A.15), no offboarding checklist/account deprovisioning, no
 Employee merge, no `EmployeeCategory`, and no Payroll/Attendance/Leave/
 AI automation.
 
+## API & Mobile-Ready Read Layer (8A.14, implemented)
+
+**No second HR query/domain implementation.** Every endpoint below is
+a thin `App\Domain\HR\Http\Controllers\*` adapter calling straight
+through to the exact same already-authoritative 8A.8/8A.9/8A.10/8A.11
+Application service an internal caller already uses
+(`EmployeeDirectoryService`, `EmployeeProfileWorkspaceService`,
+`EmployeeActivityTimelineService`, `EmployeeSensitiveDocumentReadService`)
+— and, since every one of those services' DTOs (`EmployeeDirectoryEntry`,
+`EmployeeProfileWorkspace`/its section DTOs, `EmployeeActivityTimelineEntry`,
+`EmployeeProfileDocumentEntry`) already ships its own exhaustive,
+snake_case `toArray()`, the controllers add **zero** additional
+mapping — `response()->json(['data' => $dto->toArray()])` (or the
+paginated equivalent) is the entire transport layer. Read-only:
+**no** create/update/delete/separate/rehire/import endpoint exists at
+this version.
+
+### API foundation reused, not reinvented
+
+Inspected before writing any route (`docs/architecture/API.md`, the
+existing `/api/v1` surface): a real, production-shaped API foundation
+already exists —
+
+- **Auth**: Laravel Sanctum personal-access-token bearer auth
+  (`auth:sanctum` route middleware), exactly as every other
+  `/schools/{school}/...` resource already uses.
+- **School/tenant context**: `App\Http\Middleware\Api\EnsureSchoolMembershipContext`
+  (`school-membership` alias) — re-verifies a real, active
+  `SchoolMembership` server-side (never trusts a client-supplied
+  `school_id`), sets `TenantContext`, and returns a tenant-safe `404`
+  (not `403`) for a School the caller has no membership in.
+  `{school}` itself uses ordinary Laravel route-model binding (safe —
+  `School` is the tenant root, not itself a tenant-owned resource).
+- **Versioning**: the existing `/api/v1` prefix — reused exactly, no
+  parallel `v2`/`beta`/`hr-v1` boundary.
+- **Error envelope**: the existing global `{"error": {message, status,
+  code, requestId, errors}}` JSON shape (`bootstrap/app.php`'s
+  exception renderer) — reused exactly. `AuthorizationException` → 403,
+  `AuthenticationException` → 401, `abort(404)` → 404,
+  `ValidationException` → 422 with `errors`.
+- **Contract source of truth**: `packages/contracts/openapi/school-os-api.yaml`
+  — this checkpoint adds the 4 new paths plus their request/response
+  schemas there (not a second, hand-maintained spec), and regenerates
+  `packages/shared-types` (`npm run generate && npm run type-check`,
+  both clean) so CI's drift check stays honest.
+
+No new authentication mechanism, no new tenant selector, no new
+response-envelope standard, no HR-specific bearer token, and no
+`user_id`/`actor_id` accepted from the request as identity — the actor
+is always `$request->user()` from the verified Sanctum token.
+
+### `{employee}` resolution — never implicit route-model binding
+
+Mirrors `App\Http\Controllers\Api\V1\WebhookDeliveryController`'s
+already-documented pattern exactly: `{employee}` is always a raw route
+STRING, never `Employee $employee` implicit binding (which would risk
+resolving across Schools before `TenantContext` is guaranteed active).
+Every controller passes that raw string straight through to the
+authoritative service (`EmployeeProfileWorkspaceService::build()`,
+`EmployeeActivityTimelineService::get()`,
+`EmployeeSensitiveDocumentReadService::forEmployee()`), each of which
+already does its own School-scoped `Employee::query()->where('school_id',
+$school->id)->find($employeeId)` and returns `null` — identically —
+for both a genuinely nonexistent id and one belonging to a different
+School. The controller's only job is `abort_if($result === null, 404)`.
+No new tenant-safety code was written for Employee resolution — 100%
+reused from 8A.9/8A.10/8A.11.
+
+### No divergent capability matrix — no `capability:` route middleware
+
+Deliberately, on every one of these 4 routes: `EmployeeDirectoryService::search()`,
+`EmployeeProfileWorkspaceService::build()`,
+`EmployeeActivityTimelineService::get()`, and
+`EmployeeSensitiveDocumentReadService::forEmployee()` already perform
+their own `hr.employees.*` capability check against the real
+authenticated actor, before running any query — exactly the same
+check whether called from an HTTP request, a test, or a future queued
+job. Adding a second, route-level `capability:` middleware check would
+either exactly duplicate that check (redundant) or silently drift from
+it over time (dangerous — two independently-maintained authorization
+statements for the same operation). This also matches the existing
+repository convention: no GET route anywhere in `routes/api.php`
+(Campus, Webhook, Academic Structure) uses `capability:` middleware —
+only mutating routes do, because those controllers do NOT already
+self-authorize the way every HR Application service does.
+
+### Endpoint inventory
+
+| Method | Path | Backing service | Entry capability |
+|---|---|---|---|
+| GET | `/api/v1/schools/{school}/employees` | `EmployeeDirectoryService::search()` | `hr.employees.view` |
+| GET | `/api/v1/schools/{school}/employees/{employee}` | `EmployeeProfileWorkspaceService::build()` | `hr.employees.personal.view` (+ per-section capability, unchanged from 8A.10) |
+| GET | `/api/v1/schools/{school}/employees/{employee}/activity` | `EmployeeActivityTimelineService::get()` | `hr.employees.personal.view` (+ per-category capability, unchanged from 8A.11) |
+| GET | `/api/v1/schools/{school}/employees/{employee}/sensitive-documents` | `EmployeeSensitiveDocumentReadService::forEmployee()` | `hr.employees.sensitive.view` |
+
+No new capability was created — all four reuse exactly the 8A.10
+capability set.
+
+### Directory contract
+
+Query parameters map 1:1 onto `EmployeeDirectoryQuery`'s own existing,
+already-safe constructor: `search`, `campus_id`, `department_id`,
+`position_id`, `sort`, `direction`, `include_archived`, `page`,
+`per_page`. **Sort injection is structurally impossible at the
+transport layer** — the controller never builds `orderBy($request->sort)`
+itself; `EmployeeDirectoryQuery`'s own constructor is the sole
+allow-list authority (falls back to its documented default for any
+unrecognized value), proven directly with a SQL-metacharacter-laden
+`sort` value producing an ordinary `200`, never an error. `per_page` is
+clamped to `EmployeeDirectoryService::MAX_PER_PAGE` (100) by the same
+Query object, not by the controller. A foreign-School
+`campus_id`/`department_id`/`position_id` filter yields zero results,
+identical to a nonexistent one — no existence-check was added to the
+request validator (would itself be a cross-tenant oracle). Response
+entry shape is the unmodified, exhaustive 8A.8 12-key
+`EmployeeDirectoryEntry::toArray()` — Directory-tier only, proven with
+a dedicated sentinel test that Restricted data (personal email, DOB)
+never appears even when present on the Employee.
+
+### Profile contract
+
+Root shape is the unmodified 8A.9 `EmployeeProfileWorkspace::toArray()`
+— `summary`, `personal_details`, `contact`, `addresses`,
+`emergency_contacts`, `employment_history`, `assignments`,
+`qualifications`, `experience`, `certifications`, `documents`.
+Section-level 8A.10 authorization is enforced entirely inside
+`EmployeeProfileWorkspaceService::build()` — an unauthorized
+repeatable section serializes as `[]`, an unauthorized singleton
+section is unaffected (singletons are personal-tier, gated only by
+the entry capability) — proven by granting capabilities one at a time
+and asserting only the intended section changes. **Highly Sensitive
+documents never appear here, with no `?include_sensitive=true` escape
+hatch** — `documents` is always Restricted-tier only, by the
+service's own query-level exclusion (8A.9's original acceptance gate,
+unchanged). An Employee with no linked `user_id`, a separated
+Employment, a rehired Employment, and a future-dated Employment are
+all correctly represented using the exact same temporal
+(`starts_on <= today <= ends_on`) logic 8A.9/8A.13 already
+established — zero Profile code changed for 8A.13 compatibility.
+
+### Highly Sensitive documents — a genuinely separate endpoint
+
+`GET .../sensitive-documents` is a **distinct route and controller**
+from the Profile endpoint, matching 8A.10's original separation
+decision exactly. `EmployeeSensitiveDocumentReadService::forEmployee()`
+owns 100% of the safety-critical behavior this endpoint depends on:
+the `hr.employees.sensitive.view` capability check, tenant-safe
+`null`-for-not-found-or-cross-School resolution, and the
+exactly-once `hr.employee_document.sensitive_viewed` audit write for a
+non-empty read (never for an empty one, never duplicated by this
+controller). Response shape is the unmodified, exhaustive 6-key
+`EmployeeProfileDocumentEntry::toArray()` — no `storage_path`,
+`storage_disk`, `original_filename`, or file URL exists anywhere in
+this response, proven directly with sentinel storage values. A denial
+(`documents.view` but not `sensitive.view`) is identical whether or
+not sensitive documents actually exist for that Employee — no
+existence side-channel.
+
+### Timeline contract
+
+Query parameters map 1:1 onto `EmployeeActivityTimelineQuery`:
+`category`, `occurred_from`, `occurred_to`, `page`, `per_page` — **no
+free-text search parameter exists or is read**, matching 8A.11's own
+"category + date range is the complete filter surface" decision
+exactly; an extra `search`/`q` parameter is silently ignored (never
+wired to anything). An unrecognized `category` value is treated as "no
+filter," never a `422` — rejecting it would itself be the
+authorization side-channel 8A.11 already designed against. `meta.total`
+reflects **visible events only** (proven directly: a
+`documents.view`-only actor requesting `category=document` against an
+Employee with only a `highly_sensitive` document sees `total: 0`, not
+a count that would reveal a hidden document exists). Historical
+sensitivity (a document's classification-transition history) is
+preserved exactly as 8A.11 designed it — proven end-to-end through the
+HTTP layer with the same create → upgrade → sensitive-view →
+edit-while-sensitive → downgrade sequence 8A.11's own tests used.
+
+### Pagination
+
+Both paginated endpoints (Directory, Timeline) use the identical,
+previously-designed-but-never-yet-implemented `PaginationMeta` OpenAPI
+schema (`page`/`perPage`/`total`) — this checkpoint is the FIRST real
+endpoint to use it, faithfully, rather than inventing a competing
+shape. `{"data": [...], "meta": {"page", "perPage", "total"}}` — `data`
+matches the existing repository-wide convention for every non-paginated
+list response (Campus, Webhook, Academic Structure all already return
+bare `{"data": [...]}`); `meta` is additive, not a parallel envelope.
+Single-resource responses (Profile, sensitive documents) remain plain
+`{"data": {...}}`, matching `CampusController::show()`'s exact
+existing shape. Default page size 25, maximum 100 — both service-owned
+constants (`EmployeeDirectoryService::MAX_PER_PAGE`,
+`EmployeeActivityTimelineService::MAX_PER_PAGE`), not reimplemented at
+the transport layer; `per_page=100000` clamps to 100, proven directly.
+
+### Serialization
+
+UUIDs are plain canonical strings. Date-only domain fields
+(`starts_on`, `issued_on`, `date_of_birth`, ...) remain `YYYY-MM-DD` —
+untouched Carbon `->toDateString()` calls already baked into the 8A.9
+DTOs. Audit timestamps use `->toIso8601String()` (already the 8A.11
+convention, e.g. `2026-08-24T10:48:05+00:00`) — proven with a
+regex-matched contract test, never re-formatted at the transport
+layer. Booleans (`is_current`, `is_primary`, `user_linked`) serialize
+as real JSON booleans, never `0`/`1`. A missing singleton section
+(`personal_details`, `contact`) is `null`; an empty repeatable section
+is `[]` — both proven directly, matching 8A.9's own documented
+null-vs-empty contract exactly, unchanged.
+
+### Error semantics and tenant isolation
+
+Same-School actor lacking the required capability → `403` (via the
+service's own `AuthorizationException`, before any Employee/audit row
+is even queried). Cross-School Employee or a genuinely nonexistent one
+→ identical `404`, proven directly to be byte-for-byte the same status
+and (for the denial case) the same message — no existence oracle
+anywhere in this checkpoint's 4 endpoints. Invalid query parameters
+(`page=0`, a non-numeric `page`, an unparseable `occurred_from`) → `422`
+via ordinary `$request->validate()`, never a raw `500`/SQLSTATE/stack
+trace — proven with a dedicated test asserting none of those internal
+details ever appear in a response body. A denied sensitive-document
+read never echoes the target document's own id.
+
+### RLS vs. authorization — both proven independently
+
+A same-School row being RLS-visible is not authorization — proven
+directly: an actor with a real, active membership in the target School
+(so the row is genuinely reachable under RLS) but lacking
+`hr.employees.view`/`.personal.view`/`.sensitive.view` still receives
+`403`, never data. Independently, a capability granted in School A
+never leaks into School B for the same authenticated User — proven
+with one User holding a real `hr.employees.view` grant in School A and
+only an ordinary membership in School B: School A's Directory succeeds,
+School B's is `403`.
+
+### Performance
+
+Every controller issues **zero** additional queries beyond what its
+backing service already issues — `toArray()` on a plain DTO cannot
+trigger a query, so the transport layer is, by construction, free.
+Proven with a differential query-count technique (query count for a
+handful of items vs. many, on the identical resource/actor/endpoint) —
+an absolute-count assertion would either be too strict for the real
+HTTP path's legitimate baseline overhead (Sanctum token lookup, actor
+hydration, the membership check, several independent capability
+checks) or too loose to catch a genuine per-item regression; the
+differential proves the actual claim ("no query per serialized item")
+directly. Default pagination remains bounded even with 30+ Employees
+in a School — no unbounded collection is ever returned.
+
+### Deliberately NOT built in this checkpoint
+
+- **No mutation endpoint** — create/update/separate/rehire/Assignment/
+  professional-record/document-metadata writes all remain
+  Application-service-only, unreachable from `/api/v1` at this version
+  (8A.13's `EmployeeLifecycleService`, 8A.4's `EmploymentService`/
+  `EmployeeAssignmentService`, etc. are never wired to a route here).
+- **No Employee Import API** — `EmployeeImportService` (8A.12) is not
+  exposed; no `POST .../employees/import`, no CSV/XLSX upload.
+- **No file download** — no signed/public URL, no `Storage::get()`/
+  `temporaryUrl()` anywhere in this checkpoint; 8A.7 remains
+  metadata-only, and the sensitive-documents endpoint returns metadata,
+  never file bytes or a file reference.
+- **No new rate limiter.** No named `throttle:*` limiter is applied to
+  any of these 4 routes — this matches the EXISTING, already-shared gap
+  across every other `/schools/{school}/...` GET route in this
+  repository (Campus/Webhook/Academic Structure reads carry no
+  endpoint-level throttle either; only mutations do, via
+  `school-api-mutations`/`webhook-admin`). Not a regression introduced
+  here — flagged, as the checkpoint itself directs, for 8A.15
+  hardening consideration rather than solved unilaterally with a new,
+  HR-specific limiter.
+- **No response caching / cache headers.** No `Cache-Control` header
+  exists on ANY endpoint in this codebase yet (verified by inspection,
+  not assumed) — this checkpoint does not invent one for HR alone, for
+  the same reasoning as the rate-limiter gap above.
+- **No web Directory/Profile/Timeline UI** — remains deferred exactly
+  as 8A.8/8A.9/8A.11 already left it; this checkpoint is API-only.
+
+### Migrations / capabilities
+
+**None.** Pure transport/read checkpoint — no new table, no new
+capability, no `hr.api.*`/`hr.mobile.*` transport-specific capability
+family.
+
+### 8A.15 boundary
+
+8A.14 ships a stable, versioned, mobile-ready read transport for
+Directory/Profile/Timeline/Highly-Sensitive-document-metadata only —
+no accessibility/performance/security hardening pass (that is 8A.15's
+explicit scope, including the rate-limiting and cache-header gaps
+flagged above), no mutation API, no file transfer, no offline sync,
+and no push notifications.
+
 ## Authorization design
 
 **Superseded by "HR Permissions & Sensitive-Data Controls (8A.10,

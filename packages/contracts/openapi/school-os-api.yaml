@@ -1260,6 +1260,180 @@ paths:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SubjectOffering" } } }
 
+  # Phase 8A.14 -- read-only HR transport (docs/modules/HR.md "API &
+  # Mobile-Ready Read Layer (8A.14, implemented)"). Every operation
+  # here is a GET adapting an already-authoritative 8A.8/8A.9/8A.10/
+  # 8A.11 Application service -- no HR mutation/import/lifecycle
+  # endpoint exists at this version. None of these paths declare a
+  # `capability:` route requirement in this spec's sense because the
+  # underlying service performs its own capability check against the
+  # real authenticated actor (see each operation's summary for the
+  # capability actually enforced).
+  /schools/{schoolId}/employees:
+    get:
+      operationId: listEmployees
+      summary: >
+        Employee Directory search (Directory-tier only). Requires
+        hr.employees.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: search, in: query, required: false, description: "Matches employee_number prefix or full_name substring.", schema: { type: string } }
+        - { name: campus_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: department_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: position_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: sort, in: query, required: false, description: "Allow-listed server-side; an unrecognized value falls back to the default rather than erroring.", schema: { type: string, enum: [full_name, employee_number], default: full_name } }
+        - { name: direction, in: query, required: false, schema: { type: string, enum: [asc, desc], default: asc } }
+        - { $ref: "#/components/parameters/EmployeeIncludeArchived" }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/EmployeeDirectoryEntry" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.employees.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid query parameter (e.g. page < 1).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/employees/{employeeId}:
+    get:
+      operationId: getEmployeeProfile
+      summary: >
+        Employee Profile Workspace (Restricted-tier, section-authorized).
+        Requires hr.employees.personal.view as the entry gate; each
+        section additionally requires its own 8A.10 capability, exactly
+        as the interactive Profile Workspace already does.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/EmployeeProfile" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.employees.personal.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: >
+            Employee does not exist, or belongs to a different School --
+            deliberately indistinguishable (section 20/51/83's
+            cross-tenant-probing convention).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/employees/{employeeId}/activity:
+    get:
+      operationId: getEmployeeActivity
+      summary: >
+        Employee Activity Timeline (capability-category-filtered,
+        event-time-sensitivity-aware). Requires
+        hr.employees.personal.view as the entry gate.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+        - { $ref: "#/components/parameters/EmployeeCategory" }
+        - { $ref: "#/components/parameters/EmployeeOccurredFrom" }
+        - { $ref: "#/components/parameters/EmployeeOccurredTo" }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: >
+            OK. meta.total reflects only events the caller's
+            capabilities permit -- a hidden Highly Sensitive event is
+            never counted (no side-channel, section 18/40).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/EmployeeActivityEntry" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.employees.personal.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Employee does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid query parameter (e.g. occurred_from not a real date).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/employees/{employeeId}/sensitive-documents:
+    get:
+      operationId: getEmployeeSensitiveDocuments
+      summary: >
+        Highly Sensitive EmployeeDocument metadata -- a SEPARATE,
+        narrowly-authorized read path from the general Profile
+        endpoint (section 12/14/59). Requires hr.employees.sensitive.view.
+        Never returns a storage path/disk or a file URL; a successful
+        non-empty read is audited exactly once
+        (hr.employee_document.sensitive_viewed) by the underlying
+        service, not by this endpoint itself.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+      responses:
+        "200":
+          description: OK (an empty array is a valid, unaudited result -- no sensitive document exists for this Employee).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/EmployeeSensitiveDocument" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: >
+            Authenticated but lacking hr.employees.sensitive.view in
+            this School -- identical response whether or not sensitive
+            documents actually exist (no existence oracle, section 60).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Employee does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1311,6 +1485,41 @@ components:
       required: false
       description: When true, includes inactive/archived reference rows (default excludes them).
       schema: { type: boolean, default: false }
+    EmployeeId:
+      name: employeeId
+      in: path
+      required: true
+      description: >
+        Employee UUID (not User id, not EmploymentRecord id, not the
+        display employee_number) -- Phase 8A.14 section 57.
+      schema: { type: string, format: uuid }
+    EmployeeIncludeArchived:
+      name: include_archived
+      in: query
+      required: false
+      description: When true, includes Employees whose record_status is archived (default excludes them).
+      schema: { type: boolean, default: false }
+    EmployeeCategory:
+      name: category
+      in: query
+      required: false
+      description: >
+        Activity Timeline category filter. An unrecognized value is
+        treated as no filter, never an error -- rejecting it would
+        itself be an authorization side channel (section 30).
+      schema: { type: string, enum: [employee, personal, employment, professional, document, sensitive_access] }
+    EmployeeOccurredFrom:
+      name: occurred_from
+      in: query
+      required: false
+      description: Inclusive lower bound on SchoolAuditEvent.occurred_at (not a domain effective date).
+      schema: { type: string, format: date }
+    EmployeeOccurredTo:
+      name: occurred_to
+      in: query
+      required: false
+      description: Inclusive upper bound on SchoolAuditEvent.occurred_at (not a domain effective date).
+      schema: { type: string, format: date }
 
   headers:
     XRequestId:
@@ -1665,3 +1874,232 @@ components:
         is_required: { type: boolean, default: true }
         sequence: { type: integer, nullable: true }
         weekly_periods_target: { type: integer, nullable: true }
+
+    # Phase 8A.14 -- HR read-only transport schemas. Deliberately
+    # snake_case property names, UNLIKE every schema above this line --
+    # this accurately reflects the REAL, already-committed JSON shape
+    # every App\Domain\HR\Application\*::toArray() DTO has produced
+    # since 8A.8/8A.9/8A.10/8A.11 (this file is the source of truth for
+    # the SHAPE the implementation already has, not a license to
+    # rename it to match an unrelated module's casing convention).
+
+    EmployeeDirectoryEntry:
+      type: object
+      description: Directory-tier only (docs/modules/HR.md "Employee Directory (8A.8)") -- no personal/Restricted/Highly Sensitive field exists on this schema.
+      required: [employee_id, employee_number, display_name, position_id, position_name, department_id, department_name, campus_id, campus_name, manager_employee_id, manager_employee_number, manager_display_name]
+      properties:
+        employee_id: { type: string, format: uuid }
+        employee_number: { type: string }
+        display_name: { type: string }
+        position_id: { type: string, format: uuid, nullable: true }
+        position_name: { type: string, nullable: true }
+        department_id: { type: string, format: uuid, nullable: true }
+        department_name: { type: string, nullable: true }
+        campus_id: { type: string, format: uuid, nullable: true }
+        campus_name: { type: string, nullable: true }
+        manager_employee_id: { type: string, format: uuid, nullable: true }
+        manager_employee_number: { type: string, nullable: true }
+        manager_display_name: { type: string, nullable: true }
+
+    EmployeeProfileSummary:
+      type: object
+      required: [employee_id, employee_number, display_name, employee_record_status, user_linked, current_employment_status, position_id, position_name, department_id, department_name, campus_id, campus_name, manager_employee_id, manager_employee_number, manager_display_name]
+      properties:
+        employee_id: { type: string, format: uuid }
+        employee_number: { type: string }
+        display_name: { type: string }
+        employee_record_status: { type: string, enum: [active, archived] }
+        user_linked: { type: boolean }
+        current_employment_status: { type: string, nullable: true, enum: [draft, pre_joining, active, notice_period, separated, terminated, retired, deceased] }
+        position_id: { type: string, format: uuid, nullable: true }
+        position_name: { type: string, nullable: true }
+        department_id: { type: string, format: uuid, nullable: true }
+        department_name: { type: string, nullable: true }
+        campus_id: { type: string, format: uuid, nullable: true }
+        campus_name: { type: string, nullable: true }
+        manager_employee_id: { type: string, format: uuid, nullable: true }
+        manager_employee_number: { type: string, nullable: true }
+        manager_display_name: { type: string, nullable: true }
+
+    EmployeeProfilePersonalDetails:
+      type: object
+      nullable: true
+      description: null when the Employee has no EmployeePersonalDetail row -- never an empty object.
+      required: [date_of_birth, nationality, marital_status, preferred_language]
+      properties:
+        date_of_birth: { type: string, format: date, nullable: true }
+        nationality: { type: string, nullable: true }
+        marital_status: { type: string, nullable: true }
+        preferred_language: { type: string, nullable: true }
+
+    EmployeeProfileContact:
+      type: object
+      nullable: true
+      required: [personal_email, personal_phone, alternate_phone]
+      properties:
+        personal_email: { type: string, nullable: true }
+        personal_phone: { type: string, nullable: true }
+        alternate_phone: { type: string, nullable: true }
+
+    EmployeeProfileAddress:
+      type: object
+      required: [id, address_type, address_line1, address_line2, city, state_region, postal_code, country_code]
+      properties:
+        id: { type: string, format: uuid }
+        address_type: { type: string }
+        address_line1: { type: string, nullable: true }
+        address_line2: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        state_region: { type: string, nullable: true }
+        postal_code: { type: string, nullable: true }
+        country_code: { type: string, nullable: true }
+
+    EmployeeProfileEmergencyContact:
+      type: object
+      required: [id, name, relationship, phone, alternate_phone, email, is_primary]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        relationship: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        alternate_phone: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        is_primary: { type: boolean }
+
+    EmployeeProfileEmployment:
+      type: object
+      required: [id, employment_type, starts_on, ends_on, probation_ends_on, status, is_current]
+      properties:
+        id: { type: string, format: uuid }
+        employment_type: { type: string, enum: [permanent, probationary, fixed_term, part_time, temporary, contract, consultant] }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date, nullable: true }
+        probation_ends_on: { type: string, format: date, nullable: true }
+        status: { type: string, enum: [draft, pre_joining, active, notice_period, separated, terminated, retired, deceased] }
+        is_current: { type: boolean }
+
+    EmployeeProfileAssignment:
+      type: object
+      required: [id, employment_record_id, is_primary, starts_on, ends_on, is_current, position_id, position_name, department_id, department_name, campus_id, campus_name]
+      properties:
+        id: { type: string, format: uuid }
+        employment_record_id: { type: string, format: uuid }
+        is_primary: { type: boolean }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date, nullable: true }
+        is_current: { type: boolean }
+        position_id: { type: string, format: uuid, nullable: true }
+        position_name: { type: string, nullable: true }
+        department_id: { type: string, format: uuid, nullable: true }
+        department_name: { type: string, nullable: true }
+        campus_id: { type: string, format: uuid, nullable: true }
+        campus_name: { type: string, nullable: true }
+
+    EmployeeProfileQualification:
+      type: object
+      required: [id, qualification_type, qualification_name, specialization, institution, awarding_body, country_code, starts_on, completed_on, grade_or_result, verification_status, verified_at]
+      properties:
+        id: { type: string, format: uuid }
+        qualification_type: { type: string }
+        qualification_name: { type: string }
+        specialization: { type: string, nullable: true }
+        institution: { type: string, nullable: true }
+        awarding_body: { type: string, nullable: true }
+        country_code: { type: string, nullable: true }
+        starts_on: { type: string, format: date, nullable: true }
+        completed_on: { type: string, format: date, nullable: true }
+        grade_or_result: { type: string, nullable: true }
+        verification_status: { type: string, enum: [unverified, verified, rejected] }
+        verified_at: { type: string, format: date-time, nullable: true }
+
+    EmployeeProfileExperience:
+      type: object
+      required: [id, organization, job_title, starts_on, ends_on, description, location, country_code]
+      properties:
+        id: { type: string, format: uuid }
+        organization: { type: string }
+        job_title: { type: string, nullable: true }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date, nullable: true }
+        description: { type: string, nullable: true }
+        location: { type: string, nullable: true }
+        country_code: { type: string, nullable: true }
+
+    EmployeeProfileCertification:
+      type: object
+      required: [id, name, issuer, credential_number, issued_on, expires_on, verification_status, verified_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        issuer: { type: string, nullable: true }
+        credential_number: { type: string, nullable: true }
+        issued_on: { type: string, format: date, nullable: true }
+        expires_on: { type: string, format: date, nullable: true }
+        verification_status: { type: string, enum: [unverified, verified, rejected] }
+        verified_at: { type: string, format: date-time, nullable: true }
+
+    EmployeeProfileDocument:
+      type: object
+      description: >
+        Restricted-tier only -- classification_tier is always
+        "restricted" on this schema; highly_sensitive documents never
+        appear here (see the dedicated sensitive-documents endpoint).
+        Deliberately excludes original_filename/mime_type/size_bytes/
+        storage_disk/storage_path/uploaded_by_user_id permanently.
+      required: [id, category, classification_tier, issued_on, expires_on, status]
+      properties:
+        id: { type: string, format: uuid }
+        category: { type: string }
+        classification_tier: { type: string, enum: [restricted] }
+        issued_on: { type: string, format: date, nullable: true }
+        expires_on: { type: string, format: date, nullable: true }
+        status: { type: string, enum: [active, archived] }
+
+    EmployeeSensitiveDocument:
+      type: object
+      description: Identical safe shape to EmployeeProfileDocument, but classification_tier is always "highly_sensitive" -- reachable only through the dedicated sensitive-documents endpoint.
+      required: [id, category, classification_tier, issued_on, expires_on, status]
+      properties:
+        id: { type: string, format: uuid }
+        category: { type: string }
+        classification_tier: { type: string, enum: [highly_sensitive] }
+        issued_on: { type: string, format: date, nullable: true }
+        expires_on: { type: string, format: date, nullable: true }
+        status: { type: string, enum: [active, archived] }
+
+    EmployeeProfile:
+      type: object
+      description: >
+        The complete Employee Profile Workspace (docs/modules/HR.md
+        "Employee Profile Workspace (8A.9)"). Section-level 8A.10
+        authorization is enforced server-side before this response is
+        built -- an unauthorized section is [] (repeatable) or the
+        section is simply not populated beyond what the actor's
+        capabilities allow; this schema itself describes the maximal
+        shape, not a per-actor guarantee that every field is present.
+      required: [summary, personal_details, contact, addresses, emergency_contacts, employment_history, assignments, qualifications, experience, certifications, documents]
+      properties:
+        summary: { $ref: "#/components/schemas/EmployeeProfileSummary" }
+        personal_details: { $ref: "#/components/schemas/EmployeeProfilePersonalDetails" }
+        contact: { $ref: "#/components/schemas/EmployeeProfileContact" }
+        addresses: { type: array, items: { $ref: "#/components/schemas/EmployeeProfileAddress" } }
+        emergency_contacts: { type: array, items: { $ref: "#/components/schemas/EmployeeProfileEmergencyContact" } }
+        employment_history: { type: array, items: { $ref: "#/components/schemas/EmployeeProfileEmployment" } }
+        assignments: { type: array, items: { $ref: "#/components/schemas/EmployeeProfileAssignment" } }
+        qualifications: { type: array, items: { $ref: "#/components/schemas/EmployeeProfileQualification" } }
+        experience: { type: array, items: { $ref: "#/components/schemas/EmployeeProfileExperience" } }
+        certifications: { type: array, items: { $ref: "#/components/schemas/EmployeeProfileCertification" } }
+        documents: { type: array, items: { $ref: "#/components/schemas/EmployeeProfileDocument" } }
+
+    EmployeeActivityEntry:
+      type: object
+      description: A disclosure projection over SchoolAuditEvent (docs/modules/HR.md "Audit & Activity Timeline (8A.11)") -- raw audit metadata never appears here.
+      required: [id, event_type, category, occurred_at, actor_user_id, actor_display_name, changed_fields]
+      properties:
+        id: { type: string, format: uuid }
+        event_type: { type: string }
+        category: { type: string, enum: [employee, personal, employment, professional, document, sensitive_access] }
+        occurred_at: { type: string, format: date-time }
+        actor_user_id: { type: string, format: uuid, nullable: true }
+        actor_display_name: { type: string, nullable: true }
+        changed_fields: { type: array, items: { type: string } }
