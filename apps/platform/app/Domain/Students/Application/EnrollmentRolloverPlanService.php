@@ -3,9 +3,16 @@
 namespace App\Domain\Students\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Students\Application\Exceptions\CrossSchoolRolloverPlanException;
+use App\Domain\Students\Application\Exceptions\InvalidRollNumberStrategyException;
+use App\Domain\Students\Application\Exceptions\InvalidRolloverItemDecisionException;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanYearsException;
 use App\Domain\Students\Application\Exceptions\OpenRolloverPlanConflictException;
+use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Models\School;
 use App\Models\User;
@@ -16,14 +23,18 @@ use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
- * Phase 1B.7A: the ONLY sanctioned write path for an
- * EnrollmentRolloverPlan's header in this checkpoint --
- * `createDraft()` is deliberately the sole method. Mapping/item
- * creation, dry-run, and execution have NO sanctioned service yet
- * (Phase 1B.7B/1B.7C) -- see docs/modules/STUDENT-ENROLLMENT.md
- * ("Academic-Year Rollover & Promotion — Architecture Decision (Phase
- * 1B.7)"). Never create/update an EnrollmentRolloverPlan row directly
- * from a future controller/import.
+ * Phase 1B.7A/1B.7B: the ONLY sanctioned write path for an
+ * EnrollmentRolloverPlan's header (`createDraft()`) AND for the plan's
+ * configuration (`upsertMapping()`/`setItemDecision()`) -- both
+ * configuration methods increment `configuration_version` in the SAME
+ * transaction as their write, the one mechanism the accepted
+ * architecture relies on to invalidate a prior dry-run
+ * (docs/modules/STUDENT-ENROLLMENT.md, "Validation invalidation").
+ * Never mutate a mapping/item row directly from anywhere else --
+ * `EnrollmentRolloverItem`/`EnrollmentRolloverMapping` population
+ * during dry-run (`EnrollmentRolloverDryRunService`) is the one
+ * deliberate exception, and it never touches `configuration_version`
+ * (discovering a new eligible Student is not an operator decision).
  *
  * Deliberately authorization-neutral, matching every other Application
  * service in this codebase -- a future controller must call
@@ -79,6 +90,130 @@ class EnrollmentRolloverPlanService
                 throw $this->translateUniqueViolation($e);
             }
         });
+    }
+
+    /**
+     * Creates (or updates) either a Grade-level default mapping
+     * (`$sourceSection === null`) or a Section-specific override
+     * (`$sourceSection` given) -- one row shape, two granularities,
+     * exactly per the accepted architecture. `$targetSection === null`
+     * is valid -- it fixes only the target Grade, deferring the exact
+     * target Section to a future per-Item override.
+     */
+    public function upsertMapping(
+        EnrollmentRolloverPlan $plan,
+        GradeLevel $sourceGradeLevel,
+        ?Section $sourceSection,
+        GradeLevel $targetGradeLevel,
+        ?Section $targetSection,
+        ?User $actor = null,
+    ): EnrollmentRolloverMapping {
+        $this->assertConfigurable($plan);
+
+        foreach ([$sourceGradeLevel, $targetGradeLevel] as $gradeLevel) {
+            if ($gradeLevel->school_id !== $plan->school_id) {
+                throw new CrossSchoolRolloverPlanException;
+            }
+        }
+        foreach (array_filter([$sourceSection, $targetSection]) as $section) {
+            if ($section->school_id !== $plan->school_id) {
+                throw new CrossSchoolRolloverPlanException;
+            }
+        }
+
+        return $this->context->withSchool($plan->school, function () use ($plan, $sourceGradeLevel, $sourceSection, $targetGradeLevel, $targetSection, $actor) {
+            return DB::transaction(function () use ($plan, $sourceGradeLevel, $sourceSection, $targetGradeLevel, $targetSection, $actor) {
+                $lockedPlan = EnrollmentRolloverPlan::query()->whereKey($plan->id)->lockForUpdate()->firstOrFail();
+
+                $mapping = EnrollmentRolloverMapping::query()->updateOrCreate(
+                    [
+                        'plan_id' => $plan->id,
+                        'source_grade_level_id' => $sourceGradeLevel->id,
+                        'source_section_id' => $sourceSection?->id,
+                    ],
+                    [
+                        'school_id' => $plan->school_id,
+                        'target_grade_level_id' => $targetGradeLevel->id,
+                        'target_section_id' => $targetSection?->id,
+                    ],
+                );
+
+                $lockedPlan->increment('configuration_version');
+
+                $this->audit->school($plan->school, 'enrollment_rollover_plan.configuration_changed', actor: $actor, subject: $lockedPlan, metadata: [
+                    'change' => 'mapping',
+                    'sourceGradeLevelId' => $sourceGradeLevel->id,
+                    'sourceSectionId' => $sourceSection?->id,
+                ]);
+
+                return $mapping;
+            });
+        });
+    }
+
+    /**
+     * Sets one Item's operator-controlled configuration -- decision,
+     * target Section override, Roll Number strategy/value. Never
+     * touched by dry-run's own population step (which only ever
+     * INSERTS a brand-new Item with `decision = 'undecided'` and
+     * leaves every configuration field exactly as the DB default
+     * until an operator calls this method).
+     */
+    public function setItemDecision(
+        EnrollmentRolloverPlan $plan,
+        EnrollmentRolloverItem $item,
+        string $decision,
+        ?Section $targetSectionOverride = null,
+        ?string $rollNumberStrategy = null,
+        ?string $targetRollNumber = null,
+        ?User $actor = null,
+    ): EnrollmentRolloverItem {
+        $this->assertConfigurable($plan);
+
+        if (! in_array($decision, ['undecided', 'promote', 'repeat', 'exclude', 'manual_review'], true)) {
+            throw new InvalidRolloverItemDecisionException($decision);
+        }
+        if ($rollNumberStrategy !== null && ! in_array($rollNumberStrategy, ['explicit', 'preserve_source'], true)) {
+            throw new InvalidRollNumberStrategyException($rollNumberStrategy);
+        }
+        if ($targetSectionOverride !== null && $targetSectionOverride->school_id !== $plan->school_id) {
+            throw new CrossSchoolRolloverPlanException;
+        }
+
+        return $this->context->withSchool($plan->school, function () use ($plan, $item, $decision, $targetSectionOverride, $rollNumberStrategy, $targetRollNumber, $actor) {
+            return DB::transaction(function () use ($plan, $item, $decision, $targetSectionOverride, $rollNumberStrategy, $targetRollNumber, $actor) {
+                $lockedPlan = EnrollmentRolloverPlan::query()->whereKey($plan->id)->lockForUpdate()->firstOrFail();
+
+                $item->update([
+                    'decision' => $decision,
+                    'target_section_id' => $targetSectionOverride?->id,
+                    'roll_number_strategy' => $rollNumberStrategy,
+                    'target_roll_number' => $targetRollNumber,
+                ]);
+
+                $lockedPlan->increment('configuration_version');
+
+                $this->audit->school($plan->school, 'enrollment_rollover_plan.configuration_changed', actor: $actor, subject: $lockedPlan, metadata: [
+                    'change' => 'item_decision',
+                    'itemId' => $item->id,
+                ]);
+
+                return $item->refresh();
+            });
+        });
+    }
+
+    /**
+     * Shared gate for every configuration mutation AND for dry-run
+     * itself (`EnrollmentRolloverDryRunService::run()` calls this too)
+     * -- both share the identical allowed-status set (`draft`/
+     * `validated`), per the accepted Plan lifecycle.
+     */
+    public function assertConfigurable(EnrollmentRolloverPlan $plan): void
+    {
+        if (! in_array($plan->status, ['draft', 'validated'], true)) {
+            throw new RolloverPlanNoLongerConfigurableException;
+        }
     }
 
     private function translateUniqueViolation(UniqueConstraintViolationException $e): Throwable

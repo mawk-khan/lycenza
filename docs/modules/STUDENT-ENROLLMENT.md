@@ -1,9 +1,10 @@
-# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6 / 1B.7 / 1B.7A)
+# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6 / 1B.7 / 1B.7A / 1B.7B)
 
 Status: **schema + sanctioned write path + lifecycle transitions +
 authorization + read foundation + administrative HTTP/API + administrative
 UI + rollover/promotion architecture decision + rollover schema/domain
-foundation (no dry-run/execution/API/UI for rollover yet).** Phase 1B.1
+foundation + rollover dry-run/eligibility/conflict engine (no rollover
+execution/API/UI yet).** Phase 1B.1
 shipped the schema/model/RLS/composite-FK foundation;
 Phase 1B.2 added `StudentEnrollmentService::enroll()`, the only
 sanctioned way to create a StudentEnrollment; Phase 1B.3 added the four
@@ -19,12 +20,15 @@ surface (see "Administrative HTTP boundary (Phase 1B.5)" below); Phase
 the SAME domain (see "Administrative UI (Phase 1B.6)" below); Phase
 1B.7 was an ARCHITECTURE-ONLY gate (see "Academic-Year Rollover &
 Promotion — Architecture Decision (Phase 1B.7)" below) that decided the
-safe model for cross-year promotion; Phase 1B.7A implements the first
-slice of that decision — the durable plan/mapping/item schema and a
-single `EnrollmentRolloverPlanService::createDraft()` method (see
-"Schema & Domain Foundation (Phase 1B.7A)" below) — with no dry-run,
-no eligibility engine, no execution, no HTTP/API, and no UI for
-rollover yet (Phase 1B.7B onward).
+safe model for cross-year promotion; Phase 1B.7A implemented the
+durable plan/mapping/item schema and
+`EnrollmentRolloverPlanService::createDraft()` (see "Schema & Domain
+Foundation (Phase 1B.7A)" below); Phase 1B.7B implemented the
+persistent dry-run/eligibility/conflict-detection engine
+(`EnrollmentRolloverDryRunService`) plus `upsertMapping()`/
+`setItemDecision()` on the plan service (see "Dry-Run, Eligibility &
+Conflict Engine (Phase 1B.7B)" below) — still zero Enrollment mutation,
+no execution, no HTTP/API, and no UI for rollover (Phase 1B.7C onward).
 
 ## Identity vs enrollment boundary
 
@@ -1716,11 +1720,8 @@ because implementation hasn't started.
 
 1. **1B.7A — Rollover Plan Schema & Domain Foundation — IMPLEMENTED**,
    see "Schema & Domain Foundation (Phase 1B.7A)" below.
-2. **1B.7B — Dry-Run / Eligibility / Conflict Engine**: source
-   selection, eligibility matrix, GradeLevel/Section mapping
-   validation, Roll Number conflict detection, result-code taxonomy —
-   entirely read-only against `StudentEnrollment`/`Section`, writes
-   only to the plan/item rows themselves.
+2. **1B.7B — Dry-Run / Eligibility / Conflict Engine — IMPLEMENTED**,
+   see "Dry-Run, Eligibility & Conflict Engine (Phase 1B.7B)" below.
 3. **1B.7C — Per-Student Promotion Execution**: `EnrollmentPromotionService`
    orchestrating one item's execution via `StudentEnrollmentService::enroll()`,
    the idempotency/staleness revalidation from this document, single-item
@@ -1844,21 +1845,231 @@ mirroring `StudentEnrollmentService::enroll()`'s pre-write same-School
 check exactly), writes inside one transaction, translates the open-plan
 partial-unique violation to `OpenRolloverPlanConflictException`, and
 audits `enrollment_rollover_plan.created` via the existing
-`AuditRecorder`. Mapping and item creation have **no service yet** —
-tests construct them via factories/direct Eloquent `create()` under
-`TenantContext`, exactly like `SectionFactory`-based tests already
-build a full graph before any orchestrating service exists; a
-mapping/item-creation service arrives with Phase 1B.7B, which needs
-real mapping/eligibility validation logic anyway.
+`AuditRecorder`. Mapping and item creation had **no service yet** as
+of this checkpoint — mapping configuration and item population/
+validation land in Phase 1B.7B (below), which needed real mapping/
+eligibility validation logic to do either safely.
+
+## Dry-Run, Eligibility & Conflict Engine (Phase 1B.7B)
+
+Implements the persistent VALIDATION engine on top of Phase 1B.7A's
+schema -- answers "if this exact configuration were executed now, what
+would happen for every Student?" by writing ONLY rollover planning
+state. **No migration was needed** -- every column Phase 1B.7B
+populates (`EnrollmentRolloverItem.validation_result`/
+`validation_reason`/the four `*_snapshot` columns,
+`EnrollmentRolloverPlan.status`/`validated_configuration_version`/
+`validated_at`) already existed, exactly as 1B.7A's own docblocks
+anticipated. Nothing in this checkpoint creates, completes, withdraws,
+cancels, or transfers a `StudentEnrollment`, and nothing mutates
+`Student`/`AcademicYear`/`Section`/`Campus`/`GradeLevel` -- proven
+directly by a before/after row-fingerprint test
+(`EnrollmentRolloverDryRunServiceTest::dry_run_changes_zero_rows_in_every_academic_table()`).
+
+### `RollNumberNormalizer` (small refactor)
+
+`StudentEnrollmentService`'s private `normalizeRollNumber()` (trim,
+reject blank) was extracted verbatim into
+`App\Domain\Students\Application\RollNumberNormalizer::normalize()` --
+a pure, side-effect-free string rule with no DB access and no
+authorization -- so the dry-run engine can evaluate whether a
+PROPOSED Roll Number would be valid without duplicating subtly
+different logic. `StudentEnrollmentService::enroll()`/
+`transferPlacement()` now call the shared normalizer instead of their
+own private method; behavior is unchanged (proven by the full,
+unmodified Phase 1B.1-1B.6 regression suite still passing).
+
+### `EnrollmentRolloverPlanService` additions
+
+Two new methods, both incrementing `configuration_version` in the SAME
+transaction as their write (the accepted staleness mechanism) and both
+gated by a shared `assertConfigurable()` (plan must be `draft` or
+`validated`, else `RolloverPlanNoLongerConfigurableException` --
+identical allowed-status set for configuration AND dry-run):
+
+- **`upsertMapping(plan, sourceGradeLevel, ?sourceSection, targetGradeLevel, ?targetSection)`**
+  -- creates or updates either granularity of mapping in one call
+  (`?sourceSection === null` -> Grade-level default; given -> Section-
+  specific override), same-School checked before any write.
+- **`setItemDecision(plan, item, decision, ?targetSectionOverride, ?rollNumberStrategy, ?targetRollNumber)`**
+  -- sets one Item's operator-controlled configuration. Rejects an
+  unrecognized `decision` (`InvalidRolloverItemDecisionException`) or
+  `roll_number_strategy` (`InvalidRollNumberStrategyException`) before
+  writing anything.
+
+Neither method is reachable from an HTTP endpoint yet (no controller
+exists) -- tests call them directly, exactly like `createDraft()`.
+
+### `EnrollmentRolloverDryRunService::run()`
+
+The one public entry point. Population and validation happen in a
+single pass:
+
+1. **Population** -- finds every Student with an eligible
+   (`active`/`completed`) source-year Enrollment who has no Item yet in
+   this plan, and creates one (`decision` left at its `undecided`
+   default). This is bookkeeping, not an operator decision -- it never
+   touches `configuration_version`. An ambiguous Student (>1 eligible
+   candidate) still gets exactly one Item, anchored to the lowest-id
+   candidate purely as a technical placeholder to satisfy the schema's
+   NOT NULL `source_enrollment_id` -- the anchor carries no decision
+   weight because the ambiguity itself immediately classifies the Item
+   `review`/`multiple_source_candidates`, which can never become
+   `ready`. A Student whose ONLY source-year rows are
+   `withdrawn`/`cancelled` is never populated into the plan at all --
+   not even as a "blocked" Item (this checkpoint's brief, sections 16/77).
+2. **Validation** -- re-evaluates EVERY Item (new or pre-existing)
+   against the plan's CURRENT configuration and the database's CURRENT
+   state, then persists a result + reason + staleness snapshots for
+   every Item and updates the Plan's own validation state -- but ONLY
+   if `configuration_version` is still exactly what was captured at the
+   start of the run (`StaleRolloverConfigurationException` otherwise,
+   and the ENTIRE persistence transaction rolls back -- nothing from
+   that attempt is recorded, not even a partial Item update).
+
+Batches every query (candidate discovery, fresh source lookup, target
+Section lookup, already-enrolled lookup, persisted-conflict lookup) --
+no per-Item query, regardless of plan size.
+
+### Deterministic evaluation priority (per Item)
+
+1. **Source ambiguity** -- >1 eligible (`active`/`completed`) source-year
+   row for this Student right now (re-derived fresh on every run, not
+   cached from population time) -> `review`/`multiple_source_candidates`.
+2. **Source eligibility** -- the anchored `source_enrollment_id`'s
+   CURRENT status is not `active`/`completed` (e.g. transferred/
+   withdrawn/cancelled since population, or since a prior dry-run) ->
+   `blocked`/`source_status_ineligible`.
+3. **Mapping resolution** -- Section-specific mapping (keyed by the
+   source Enrollment's own `section_id`) takes precedence over a
+   Grade-level default (keyed by `grade_level_id`); never both, never
+   chosen by creation time -- the two partial unique indexes from
+   1B.7A make each level structurally unambiguous already.
+4. **Decision**:
+   - `exclude` -> `excluded` (non-blocking), reason `terminal_grade` if
+     no mapping exists at all for this source Grade, else no reason.
+   - `undecided`/`manual_review` -> `review`, reason `terminal_grade`
+     if no mapping exists, else `undecided`. Dry-run never invents a
+     decision.
+   - `promote` -- requires a mapping whose target Grade differs from
+     the source Grade (else `blocked`/`target_grade_mismatch`, never
+     silently reinterpreted as `repeat`).
+   - `repeat` -- requires a mapping whose target Grade EQUALS the
+     source Grade (else `blocked`/`target_grade_mismatch`, never
+     silently reinterpreted as `promote`).
+   - no mapping at all for `promote`/`repeat` -> `blocked`/`missing_mapping`.
+5. **Target Section resolution** -- the Item's own `target_section_id`
+   override takes precedence over the mapping's default; neither ->
+   `blocked`/`missing_target_section`. Whatever resolves is then
+   independently verified (never trusted from the mapping/override
+   alone) to belong to the plan's `target_academic_year_id` (else
+   `blocked`/`target_wrong_academic_year`) and to the mapping's
+   `target_grade_level_id` (else `blocked`/`target_grade_mismatch`) --
+   Section remains the sole placement authority, exactly like `enroll()`/
+   `transferPlacement()` already require.
+6. **Roll Number resolution** -- `preserve_source` normalizes the
+   source Enrollment's own `roll_number`; `explicit` normalizes
+   `target_roll_number`; anything else (including a null strategy)
+   resolves to nothing. A normalization failure (blank after trim) ->
+   `blocked`/`invalid_roll_number`. Uses `RollNumberNormalizer` --
+   the identical rule `StudentEnrollmentService::enroll()` enforces,
+   never a subtly different copy. No automatic generation exists or
+   is reachable.
+7. **Already-enrolled check** (batched across all remaining Items) --
+   any existing target-year Enrollment for this Student, regardless of
+   status:
+   - an `active` one matching the proposal exactly (Section + Roll
+     Number) -> `already_enrolled`/`already_enrolled_match`
+     (non-blocking NO-OP). `target_enrollment_id` is deliberately left
+     NULL here -- see `EnrollmentRolloverDryRunService`'s own docblock
+     for why conflating "resolved" with "executed" would corrupt
+     `EnrollmentRolloverItem::hasExecuted()`'s meaning for Phase
+     1B.7C; recording the provenance link is execution's job, not
+     dry-run's.
+   - an `active` one that differs -> `blocked`/`already_enrolled_conflict`.
+   - only non-`active` (terminal) target-year history exists -> `review`/
+     `already_enrolled_conflict` (anomalous enough to need a human
+     look, not necessarily wrong).
+8. **In-plan duplicate detection** (set-based, in-memory, over every
+   Item still in play) -- grouped by (target Section, normalized Roll
+   Number); every member of a colliding group is
+   `blocked`/`roll_number_conflict_in_plan`, never "first Student
+   wins," never order-dependent.
+9. **Persisted conflict with another Student** (one batched query
+   across every remaining target Section) -- an existing Enrollment at
+   the exact (Section, Roll Number) belonging to someone else ->
+   `blocked`/`roll_number_conflict_existing`. Whatever survives every
+   prior step is `ready`.
+
+### Plan readiness
+
+A Plan becomes `validated` (with `validated_configuration_version` set
+to the version just evaluated, and `validated_at` stamped) only when
+**zero** Items are `review` or `blocked` -- `ready`/`excluded`/
+`already_enrolled` never block validation. Otherwise the Plan's status
+is left untouched (typically `draft`) and `validated_configuration_version`
+is NOT advanced, so a stale plan can never be mistaken for a validated
+one. Every Item's result is still persisted either way, so an operator
+can see exactly what needs fixing.
+
+### Result taxonomy
+
+| `validation_result` | Blocks Plan validation? | Meaning |
+| --- | --- | --- |
+| `ready` | No | Safe to execute as configured (Phase 1B.7C). |
+| `excluded` | No | Operator decision -- never executed, never a problem. |
+| `already_enrolled` | No | Idempotent no-op -- a matching Enrollment already exists. |
+| `review` | Yes | Needs a human DECISION (ambiguous source, undecided, anomalous already-enrolled history) -- not necessarily a configuration mistake. |
+| `blocked` | Yes | A structural/configuration problem an operator must fix (mapping, target placement, Roll Number, or a hard conflict). |
+
+Reason codes (`validation_reason`, a plain string, no DB enumeration):
+`multiple_source_candidates`, `source_status_ineligible`,
+`missing_mapping`, `missing_target_section`,
+`target_wrong_academic_year`, `target_grade_mismatch`,
+`invalid_roll_number`, `roll_number_conflict_in_plan`,
+`roll_number_conflict_existing`, `already_enrolled_match`,
+`already_enrolled_conflict`, `undecided`, `terminal_grade`. There is no
+`stale_configuration` reason code stored on an Item -- staleness at the
+PLAN level is a thrown `StaleRolloverConfigurationException` that
+aborts the whole persistence transaction, not an Item-level result.
+
+### Staleness / revalidation (proven, not just designed)
+
+Re-running dry-run after the underlying state changes correctly
+detects it every time, without any special-casing: a source transfer
+after a first successful validation flips that Item to
+`blocked`/`source_status_ineligible` on the next run; a manually
+created target Enrollment that exactly matches the proposal resolves
+to `already_enrolled` (no duplicate, no error); a Roll Number occupied
+by another Student afterward flips the Plan out of `validated`; editing
+a mapping through `upsertMapping()` after validation increments
+`configuration_version`, which `isValidatedForCurrentConfiguration()`
+immediately reports as stale. Running dry-run twice with nothing
+changed is fully idempotent -- identical summary, no duplicate Items,
+`configuration_version` untouched (validating is never a configuration
+edit).
+
+### Audit
+
+`enrollment_rollover_plan.validated` (Plan reaches `validated`) or
+`enrollment_rollover_plan.validation_completed` (blockers remain) --
+one event per dry-run run, carrying only the plan id, evaluated
+`configurationVersion`, and summary counts, never Student PII, Roll
+Numbers, or names. `enrollment_rollover_plan.configuration_changed` is
+emitted by `upsertMapping()`/`setItemDecision()`. No per-Item audit
+event exists (deliberately -- brief section 59) and no NEW audit event
+was needed for the Enrollment domain itself, since dry-run creates no
+Enrollment.
 
 ## Deferred (not yet implemented)
 
-- **Promotion / bulk academic-year rollover dry-run, execution, API,
-  and UI** — the architecture was decided in Phase 1B.7 and the
-  durable plan/mapping/item schema + `createDraft()` landed in Phase
-  1B.7A (see "Schema & Domain Foundation (Phase 1B.7A)" above); no
-  dry-run/eligibility engine, execution, HTTP/API, or UI exists yet.
-  Implementation continues at Phase 1B.7B.
+- **Promotion / bulk academic-year rollover execution, API, and UI** —
+  the architecture was decided in Phase 1B.7, the durable plan/mapping/
+  item schema + `createDraft()` landed in Phase 1B.7A, and the dry-run/
+  eligibility/conflict engine landed in Phase 1B.7B (see "Dry-Run,
+  Eligibility & Conflict Engine (Phase 1B.7B)" above) — no Enrollment
+  is ever created by any of this yet; execution, HTTP/API, and UI
+  remain fully deferred. Implementation continues at Phase 1B.7C.
 - **Transfer certificate / TC document generation, inter-school
   electronic transfer network** — out of scope for the transfer/
   withdrawal *status* concept this schema already supports.

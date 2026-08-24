@@ -1,0 +1,520 @@
+<?php
+
+namespace App\Domain\Students\Application;
+
+use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
+use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanChronologyException;
+use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Models\User;
+use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Phase 1B.7B: the persistent rollover DRY-RUN / VALIDATION engine --
+ * see docs/modules/STUDENT-ENROLLMENT.md ("Academic-Year Rollover &
+ * Promotion — Architecture Decision (Phase 1B.7)") for the accepted
+ * design this implements. Answers "if this exact configuration were
+ * executed now, what would happen for every Student?" by writing ONLY
+ * rollover planning state (`EnrollmentRolloverItem` validation/
+ * snapshot columns, `EnrollmentRolloverPlan` validation/status
+ * columns) -- it creates or modifies ZERO `StudentEnrollment`/
+ * `Student`/`AcademicYear`/`Section`/`Campus`/`GradeLevel` rows. No
+ * target Enrollment is created here; that is Phase 1B.7C's job.
+ *
+ * `run()` does two things in one pass:
+ *
+ *   1. POPULATION -- discovers every Student with an eligible
+ *      (`active`/`completed`) source-year Enrollment who does not yet
+ *      have an Item in this plan, and creates one anchored to their
+ *      resolved source Enrollment (`decision` left at its DB default,
+ *      `undecided`). This is bookkeeping, not an operator decision --
+ *      it never touches `configuration_version`. An ambiguous Student
+ *      (more than one eligible candidate) still gets exactly one Item
+ *      (the schema requires a non-null `source_enrollment_id`), anchored
+ *      to the lowest-id candidate purely as a technical placeholder --
+ *      it carries no decision weight because the ambiguity itself
+ *      immediately classifies the Item `review`/`multiple_source_candidates`,
+ *      which can never become `ready`.
+ *   2. VALIDATION -- re-evaluates EVERY Item (newly populated or
+ *      pre-existing) against the plan's CURRENT configuration and the
+ *      database's CURRENT state, in the deterministic priority order
+ *      documented on `evaluateItem()`, then persists a validation
+ *      result + reason + staleness snapshots for every Item and
+ *      updates the Plan's own validation state -- but ONLY if the
+ *      Plan's `configuration_version` is still exactly what was
+ *      captured at the start of this run (`StaleRolloverConfigurationException`
+ *      otherwise, and NOTHING is persisted).
+ *
+ * `target_enrollment_id` is deliberately left NULL by this service even
+ * for an exact already-enrolled match -- see `evaluateAlreadyEnrolled()`'s
+ * docblock for why conflating "resolved" with "executed" would corrupt
+ * `EnrollmentRolloverItem::hasExecuted()`'s meaning for the future
+ * execution checkpoint (Phase 1B.7C).
+ *
+ * Deliberately authorization-neutral, matching every other Application
+ * service in this codebase.
+ */
+class EnrollmentRolloverDryRunService
+{
+    /**
+     * validation_result values. "already_enrolled" and "excluded" are
+     * non-blocking NO-OPs; "ready" is executable; "review" and
+     * "blocked" both prevent the Plan from becoming `validated"` (the
+     * accepted architecture's brief groups CONFLICT under BLOCKED --
+     * see this class's own docblock on `evaluateItem()`).
+     */
+    private const RESULT_READY = 'ready';
+
+    private const RESULT_EXCLUDED = 'excluded';
+
+    private const RESULT_ALREADY_ENROLLED = 'already_enrolled';
+
+    private const RESULT_REVIEW = 'review';
+
+    private const RESULT_BLOCKED = 'blocked';
+
+    public function __construct(
+        private readonly AuditRecorder $audit,
+        private readonly TenantContext $context,
+        private readonly EnrollmentRolloverPlanService $planService,
+    ) {}
+
+    /**
+     * @param  callable(): void|null  $beforePersist  Test-only seam: invoked after the (potentially
+     *                                                expensive) calculation completes but before the
+     *                                                persistence transaction begins/re-checks
+     *                                                `configuration_version` -- lets a test deterministically
+     *                                                simulate the "configuration changed mid-validation" race
+     *                                                (section 97 of this checkpoint's brief) without relying on
+     *                                                real concurrency/timing.
+     * @return array{total: int, ready: int, excluded: int, already_enrolled: int, review: int, blocked: int, validated: bool, configurationVersion: int}
+     */
+    public function run(EnrollmentRolloverPlan $plan, ?User $actor = null, ?callable $beforePersist = null): array
+    {
+        $this->planService->assertConfigurable($plan);
+
+        return $this->context->withSchool($plan->school, function () use ($plan, $actor, $beforePersist) {
+            $capturedVersion = $plan->configuration_version;
+
+            $sourceYear = $plan->sourceAcademicYear;
+            $targetYear = $plan->targetAcademicYear;
+            if (! ($targetYear->starts_on > $sourceYear->starts_on)) {
+                throw new InvalidRolloverPlanChronologyException;
+            }
+
+            $candidatesByStudent = StudentEnrollment::query()
+                ->where('academic_year_id', $plan->source_academic_year_id)
+                ->whereIn('status', ['active', 'completed'])
+                ->get()
+                ->groupBy('student_id');
+
+            $this->populateItems($plan, $candidatesByStudent);
+
+            $items = EnrollmentRolloverItem::query()->where('plan_id', $plan->id)->get();
+            $mappings = $plan->mappings()->get();
+            $mappingsBySection = $mappings->whereNotNull('source_section_id')->keyBy('source_section_id');
+            $mappingsByGrade = $mappings->whereNull('source_section_id')->keyBy('source_grade_level_id');
+
+            $freshSources = StudentEnrollment::query()
+                ->whereIn('id', $items->pluck('source_enrollment_id')->unique()->all())
+                ->get()->keyBy('id');
+
+            [$results, $readyCandidates] = $this->evaluateStructural($items, $candidatesByStudent, $freshSources, $mappingsBySection, $mappingsByGrade);
+
+            [$newResults, $readyCandidates] = $this->resolveTargetSections($plan, $readyCandidates);
+            $results += $newResults;
+
+            [$newResults, $readyCandidates] = $this->evaluateAlreadyEnrolled($plan, $readyCandidates);
+            $results += $newResults;
+
+            [$newResults, $readyCandidates] = $this->evaluateInPlanConflicts($readyCandidates);
+            $results += $newResults;
+
+            $results += $this->evaluatePersistedConflicts($plan, $readyCandidates);
+
+            if ($beforePersist !== null) {
+                $beforePersist();
+            }
+
+            return DB::transaction(function () use ($plan, $capturedVersion, $items, $results, $actor) {
+                $lockedPlan = EnrollmentRolloverPlan::query()->whereKey($plan->id)->lockForUpdate()->firstOrFail();
+
+                if ($lockedPlan->configuration_version !== $capturedVersion) {
+                    throw new StaleRolloverConfigurationException;
+                }
+
+                foreach ($items as $item) {
+                    $r = $results[$item->id];
+                    $item->update([
+                        'validation_result' => $r['result'],
+                        'validation_reason' => $r['reason'],
+                        'source_enrollment_status_snapshot' => $r['sourceStatusSnapshot'] ?? null,
+                        'source_enrollment_updated_at_snapshot' => $r['sourceUpdatedAtSnapshot'] ?? null,
+                        'target_section_status_snapshot' => $r['targetStatusSnapshot'] ?? null,
+                        'target_section_updated_at_snapshot' => $r['targetUpdatedAtSnapshot'] ?? null,
+                    ]);
+                }
+
+                $summary = $this->summarize($results);
+                $isFullyValidated = ($summary['review'] + $summary['blocked']) === 0;
+
+                if ($isFullyValidated) {
+                    $lockedPlan->update([
+                        'status' => 'validated',
+                        'validated_configuration_version' => $capturedVersion,
+                        'validated_at' => now(),
+                    ]);
+                    $this->audit->school($lockedPlan->school, 'enrollment_rollover_plan.validated', actor: $actor, subject: $lockedPlan, metadata: [
+                        'configurationVersion' => $capturedVersion,
+                        'summary' => $summary,
+                    ]);
+                } else {
+                    $this->audit->school($lockedPlan->school, 'enrollment_rollover_plan.validation_completed', actor: $actor, subject: $lockedPlan, metadata: [
+                        'configurationVersion' => $capturedVersion,
+                        'summary' => $summary,
+                    ]);
+                }
+
+                return $summary + ['validated' => $isFullyValidated, 'configurationVersion' => $capturedVersion];
+            });
+        });
+    }
+
+    /**
+     * Discovers Students eligible for this plan's source Academic Year
+     * who don't yet have an Item, and creates one for each -- never
+     * touches an EXISTING Item's configuration, never touches
+     * `configuration_version` (this is bookkeeping, not a decision).
+     */
+    private function populateItems(EnrollmentRolloverPlan $plan, Collection $candidatesByStudent): void
+    {
+        $existingStudentIds = EnrollmentRolloverItem::query()
+            ->where('plan_id', $plan->id)
+            ->pluck('student_id')
+            ->flip();
+
+        foreach ($candidatesByStudent as $studentId => $candidates) {
+            if ($existingStudentIds->has($studentId)) {
+                continue;
+            }
+
+            // Ambiguity (>1 candidate) is resolved to `review` during
+            // evaluation regardless of which row is anchored here --
+            // the lowest-id row is a deterministic placeholder only,
+            // never a silent "pick the winner" (this checkpoint's
+            // brief, section 76).
+            $chosen = $candidates->sortBy('id')->first();
+
+            EnrollmentRolloverItem::query()->create([
+                'school_id' => $plan->school_id,
+                'plan_id' => $plan->id,
+                'student_id' => $studentId,
+                'source_enrollment_id' => $chosen->id,
+                'decision' => 'undecided',
+            ]);
+        }
+    }
+
+    /**
+     * Pass 1 -- structural/source/decision/mapping resolution, in the
+     * exact deterministic priority this checkpoint's brief (section
+     * 43) requires: source ambiguity/eligibility -> decision -> mapping
+     * -> (Roll Number resolved but NOT yet conflict-checked). Never
+     * queries per-Item -- `$candidatesByStudent`/`$freshSources`/
+     * `$mappingsBySection`/`$mappingsByGrade` are all pre-batched by
+     * the caller.
+     *
+     * @return array{0: array<string, array<string, mixed>>, 1: array<string, array<string, mixed>>}
+     */
+    private function evaluateStructural(
+        Collection $items,
+        Collection $candidatesByStudent,
+        Collection $freshSources,
+        Collection $mappingsBySection,
+        Collection $mappingsByGrade,
+    ): array {
+        $results = [];
+        $readyCandidates = [];
+
+        foreach ($items as $item) {
+            $freshSource = $freshSources->get($item->source_enrollment_id);
+            $candidates = $candidatesByStudent->get($item->student_id, collect());
+
+            $snapshot = [
+                'sourceStatusSnapshot' => $freshSource?->status,
+                'sourceUpdatedAtSnapshot' => $freshSource?->updated_at,
+            ];
+
+            if ($candidates->count() > 1) {
+                $results[$item->id] = $snapshot + ['result' => self::RESULT_REVIEW, 'reason' => 'multiple_source_candidates'];
+
+                continue;
+            }
+
+            if ($freshSource === null || ! in_array($freshSource->status, ['active', 'completed'], true)) {
+                $results[$item->id] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => 'source_status_ineligible'];
+
+                continue;
+            }
+
+            $mapping = $mappingsBySection->get($freshSource->section_id) ?? $mappingsByGrade->get($freshSource->grade_level_id);
+
+            if ($item->decision === 'exclude') {
+                $results[$item->id] = $snapshot + ['result' => self::RESULT_EXCLUDED, 'reason' => $mapping === null ? 'terminal_grade' : null];
+
+                continue;
+            }
+
+            if (! in_array($item->decision, ['promote', 'repeat'], true)) {
+                $results[$item->id] = $snapshot + ['result' => self::RESULT_REVIEW, 'reason' => $mapping === null ? 'terminal_grade' : 'undecided'];
+
+                continue;
+            }
+
+            if ($mapping === null) {
+                $results[$item->id] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => 'missing_mapping'];
+
+                continue;
+            }
+
+            if (($item->decision === 'promote' && $mapping->isRepeat()) || ($item->decision === 'repeat' && ! $mapping->isRepeat())) {
+                $results[$item->id] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => 'target_grade_mismatch'];
+
+                continue;
+            }
+
+            $targetSectionId = $item->target_section_id ?? $mapping->target_section_id;
+            if ($targetSectionId === null) {
+                $results[$item->id] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => 'missing_target_section'];
+
+                continue;
+            }
+
+            $rollNumber = $this->resolveRollNumber($item, $freshSource);
+            if ($rollNumber === null) {
+                $results[$item->id] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => 'invalid_roll_number'];
+
+                continue;
+            }
+
+            $readyCandidates[$item->id] = [
+                'item' => $item,
+                'targetSectionId' => $targetSectionId,
+                'rollNumber' => $rollNumber,
+                'mapping' => $mapping,
+                'snapshot' => $snapshot,
+            ];
+        }
+
+        return [$results, $readyCandidates];
+    }
+
+    /**
+     * Pass 2 -- batch-fetches every distinct proposed target Section
+     * exactly once, then validates each candidate's target Year/Grade
+     * against it (never trusts the mapping/item alone). Sections
+     * dropped here never reach conflict detection.
+     *
+     * @param  array<string, array<string, mixed>>  $readyCandidates
+     * @return array{0: array<string, array<string, mixed>>, 1: array<string, array<string, mixed>>}
+     */
+    private function resolveTargetSections(EnrollmentRolloverPlan $plan, array $readyCandidates): array
+    {
+        $sectionIds = array_unique(array_column($readyCandidates, 'targetSectionId'));
+        $sections = Section::query()->whereIn('id', $sectionIds)->get()->keyBy('id');
+
+        $results = [];
+        $stillCandidates = [];
+        foreach ($readyCandidates as $itemId => $c) {
+            $targetSection = $sections->get($c['targetSectionId']);
+            $snapshot = $c['snapshot'] + [
+                'targetStatusSnapshot' => $targetSection?->status,
+                'targetUpdatedAtSnapshot' => $targetSection?->updated_at,
+            ];
+
+            if ($targetSection === null || $targetSection->academic_year_id !== $plan->target_academic_year_id) {
+                $results[$itemId] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => 'target_wrong_academic_year'];
+
+                continue;
+            }
+
+            if ($targetSection->grade_level_id !== $c['mapping']->target_grade_level_id) {
+                $results[$itemId] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => 'target_grade_mismatch'];
+
+                continue;
+            }
+
+            $stillCandidates[$itemId] = [...$c, 'snapshot' => $snapshot];
+        }
+
+        return [$results, $stillCandidates];
+    }
+
+    /**
+     * Pass 3 -- one batched query for every Student still in play,
+     * checking whether they already have ANY Enrollment in the target
+     * Academic Year (this checkpoint's brief, sections 35/36).
+     *
+     * An exact match (same Section, same Roll Number, `active`) is a
+     * non-blocking NO-OP. A mismatch (different Section/Roll, or the
+     * existing row is `active` but differs) is BLOCKED -- never
+     * overwritten, never auto-transferred. An existing row that is
+     * NOT `active` (only terminal history in the target year, no
+     * currently-active placement) is REVIEW, not a hard block --
+     * anomalous enough to need a human look, but not necessarily wrong.
+     *
+     * `target_enrollment_id` is intentionally left untouched (null)
+     * here even for an exact match -- see this class's own top
+     * docblock. Recording which pre-existing Enrollment satisfies the
+     * proposal is Phase 1B.7C's job, at the moment it actually
+     * reconciles/executes, not dry-run's.
+     *
+     * @param  array<string, array<string, mixed>>  $readyCandidates
+     * @return array{0: array<string, array<string, mixed>>, 1: array<string, array<string, mixed>>}
+     */
+    private function evaluateAlreadyEnrolled(EnrollmentRolloverPlan $plan, array $readyCandidates): array
+    {
+        $studentIds = array_unique(array_map(fn ($c) => $c['item']->student_id, $readyCandidates));
+
+        $targetYearEnrollmentsByStudent = StudentEnrollment::query()
+            ->whereIn('student_id', $studentIds)
+            ->where('academic_year_id', $plan->target_academic_year_id)
+            ->get()
+            ->groupBy('student_id');
+
+        $results = [];
+        $stillCandidates = [];
+        foreach ($readyCandidates as $itemId => $c) {
+            $existing = $targetYearEnrollmentsByStudent->get($c['item']->student_id, collect());
+
+            if ($existing->isEmpty()) {
+                $stillCandidates[$itemId] = $c;
+
+                continue;
+            }
+
+            $activeExisting = $existing->firstWhere('status', 'active');
+
+            if ($activeExisting === null) {
+                $results[$itemId] = $c['snapshot'] + ['result' => self::RESULT_REVIEW, 'reason' => 'already_enrolled_conflict'];
+
+                continue;
+            }
+
+            if ($activeExisting->section_id === $c['targetSectionId'] && $activeExisting->roll_number === $c['rollNumber']) {
+                $results[$itemId] = $c['snapshot'] + ['result' => self::RESULT_ALREADY_ENROLLED, 'reason' => 'already_enrolled_match'];
+            } else {
+                $results[$itemId] = $c['snapshot'] + ['result' => self::RESULT_BLOCKED, 'reason' => 'already_enrolled_conflict'];
+            }
+        }
+
+        return [$results, $stillCandidates];
+    }
+
+    /**
+     * Pass 4 -- set-based, in-memory grouping by (target Section, Roll
+     * Number). Every member of a colliding group is BLOCKED -- never
+     * "first Student wins," and never order-dependent (this
+     * checkpoint's brief, sections 33/50).
+     *
+     * @param  array<string, array<string, mixed>>  $readyCandidates
+     * @return array{0: array<string, array<string, mixed>>, 1: array<string, array<string, mixed>>}
+     */
+    private function evaluateInPlanConflicts(array $readyCandidates): array
+    {
+        $results = [];
+        $groups = [];
+        foreach ($readyCandidates as $itemId => $c) {
+            $groups[$c['targetSectionId'].':'.$c['rollNumber']][] = $itemId;
+        }
+
+        $stillCandidates = $readyCandidates;
+        foreach ($groups as $itemIds) {
+            if (count($itemIds) < 2) {
+                continue;
+            }
+            foreach ($itemIds as $itemId) {
+                $results[$itemId] = $stillCandidates[$itemId]['snapshot'] + ['result' => self::RESULT_BLOCKED, 'reason' => 'roll_number_conflict_in_plan'];
+                unset($stillCandidates[$itemId]);
+            }
+        }
+
+        return [$results, $stillCandidates];
+    }
+
+    /**
+     * Pass 5 (final) -- one batched query across every distinct
+     * remaining target Section for the target Academic Year, checking
+     * for a Roll Number already occupied by a DIFFERENT Student
+     * (already-enrolled same-Student matches were resolved in pass 3).
+     * Whatever survives this pass is READY.
+     *
+     * @param  array<string, array<string, mixed>>  $readyCandidates
+     * @return array<string, array<string, mixed>>
+     */
+    private function evaluatePersistedConflicts(EnrollmentRolloverPlan $plan, array $readyCandidates): array
+    {
+        $sectionIds = array_unique(array_column($readyCandidates, 'targetSectionId'));
+
+        $persistedByKey = StudentEnrollment::query()
+            ->where('academic_year_id', $plan->target_academic_year_id)
+            ->whereIn('section_id', $sectionIds)
+            ->get()
+            ->keyBy(fn (StudentEnrollment $e) => $e->section_id.':'.$e->roll_number);
+
+        $results = [];
+        foreach ($readyCandidates as $itemId => $c) {
+            $existing = $persistedByKey->get($c['targetSectionId'].':'.$c['rollNumber']);
+
+            if ($existing !== null && $existing->student_id !== $c['item']->student_id) {
+                $results[$itemId] = $c['snapshot'] + ['result' => self::RESULT_BLOCKED, 'reason' => 'roll_number_conflict_existing'];
+
+                continue;
+            }
+
+            $results[$itemId] = $c['snapshot'] + ['result' => self::RESULT_READY, 'reason' => null];
+        }
+
+        return $results;
+    }
+
+    private function resolveRollNumber(EnrollmentRolloverItem $item, StudentEnrollment $freshSource): ?string
+    {
+        try {
+            return match ($item->roll_number_strategy) {
+                'preserve_source' => RollNumberNormalizer::normalize($freshSource->roll_number),
+                'explicit' => RollNumberNormalizer::normalize((string) $item->target_roll_number),
+                default => null,
+            };
+        } catch (InvalidEnrollmentRollNumberException) {
+            return null;
+        }
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $results
+     * @return array{total: int, ready: int, excluded: int, already_enrolled: int, review: int, blocked: int}
+     */
+    private function summarize(array $results): array
+    {
+        $counts = [
+            self::RESULT_READY => 0,
+            self::RESULT_EXCLUDED => 0,
+            self::RESULT_ALREADY_ENROLLED => 0,
+            self::RESULT_REVIEW => 0,
+            self::RESULT_BLOCKED => 0,
+        ];
+
+        foreach ($results as $r) {
+            $counts[$r['result']]++;
+        }
+
+        return ['total' => count($results), ...$counts];
+    }
+}

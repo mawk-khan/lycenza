@@ -9,7 +9,6 @@ use App\Domain\Students\Application\Exceptions\CrossSchoolEnrollmentException;
 use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberException;
 use App\Domain\Students\Application\Exceptions\IntraYearGradeChangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
-use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentTransitionException;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
@@ -83,7 +82,7 @@ class StudentEnrollmentService
             throw new CrossSchoolEnrollmentException;
         }
 
-        $rollNumber = $this->normalizeRollNumber($rollNumber);
+        $rollNumber = RollNumberNormalizer::normalize($rollNumber);
 
         return $this->context->withSchool($student->school, function () use ($student, $section, $rollNumber, $startsOn, $actor) {
             try {
@@ -179,7 +178,7 @@ class StudentEnrollmentService
             throw new IntraYearGradeChangeException;
         }
 
-        $rollNumber = $this->normalizeRollNumber($rollNumber);
+        $rollNumber = RollNumberNormalizer::normalize($rollNumber);
 
         return $this->context->withSchool($sourceEnrollment->school, function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor) {
             try {
@@ -297,16 +296,6 @@ class StudentEnrollmentService
         ]);
 
         return $enrollment;
-    }
-
-    private function normalizeRollNumber(string $rollNumber): string
-    {
-        $rollNumber = trim($rollNumber);
-        if ($rollNumber === '') {
-            throw new InvalidEnrollmentRollNumberException;
-        }
-
-        return $rollNumber;
     }
 
     private function translateUniqueViolation(UniqueConstraintViolationException $e, string $rollNumber): Throwable
