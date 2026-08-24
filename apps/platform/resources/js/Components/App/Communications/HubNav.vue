@@ -7,6 +7,7 @@ export type HubNavTab =
     | 'scheduled'
     | 'sent'
     | 'failed'
+    | 'analytics'
     | 'templates'
     | 'preferences'
     | 'settings';
@@ -113,6 +114,18 @@ defineProps<Props>();
                             : 'text-slate-600 hover:text-slate-900'
                     "
                     >Failed</a
+                >
+            </li>
+            <li v-if="canManage">
+                <a
+                    href="/app/communications/analytics"
+                    class="block rounded px-2 py-1"
+                    :class="
+                        active === 'analytics'
+                            ? 'bg-slate-100 font-medium text-slate-900'
+                            : 'text-slate-600 hover:text-slate-900'
+                    "
+                    >Analytics</a
                 >
             </li>
             <li v-if="canManageTemplates">

@@ -66,6 +66,8 @@ interface Props {
     canAnnounce: boolean;
     attachments: AttachmentSummary[];
     canManageAttachments: boolean;
+    canViewAudit: boolean;
+    canViewAnalytics: boolean;
 }
 
 const props = defineProps<Props>();
@@ -384,7 +386,23 @@ function formatFileSize(bytes: number): string {
             v-else-if="announcement.recipientCount !== null"
             class="mt-4 rounded border border-slate-200 p-4"
         >
-            <h2 class="text-sm font-semibold">Delivered to</h2>
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-semibold">Delivered to</h2>
+                <div v-if="canViewAnalytics || canViewAudit" class="flex gap-3 text-xs">
+                    <a
+                        v-if="canViewAnalytics"
+                        class="text-slate-500 underline"
+                        :href="`/app/communications/announcements/${announcement.id}/analytics`"
+                        >View analytics</a
+                    >
+                    <a
+                        v-if="canViewAudit"
+                        class="text-slate-500 underline"
+                        :href="`/app/communications/announcements/${announcement.id}/audit`"
+                        >View audit</a
+                    >
+                </div>
+            </div>
             <p class="mt-1 text-sm">
                 {{ announcement.recipientCount }} recipients (resolved at publish time)
             </p>

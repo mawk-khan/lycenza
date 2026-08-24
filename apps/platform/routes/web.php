@@ -1,7 +1,9 @@
 <?php
 
 use App\Domain\Communications\Http\Controllers\AnnouncementController;
+use App\Domain\Communications\Http\Controllers\CommunicationAnalyticsController;
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
+use App\Domain\Communications\Http\Controllers\CommunicationAuditController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationDeliveryTimingPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
@@ -110,6 +112,15 @@ Route::middleware('auth')->group(function (): void {
             // below (brief §11's exact route shape).
             Route::post('/{announcement}/attachments', [CommunicationAttachmentController::class, 'store'])->name('attachments.store');
             Route::delete('/{announcement}/attachments/{attachment}', [CommunicationAttachmentController::class, 'destroy'])->name('attachments.destroy');
+
+            // Phase 5A.11: read-only audit/delivery-analytics surfaces
+            // for one Announcement -- distinct capabilities
+            // (communications.audit.view / communications.manage, brief
+            // §30), distinct controllers (CommunicationAuditController /
+            // CommunicationAnalyticsController, brief §4's audit-vs-
+            // analytics separation).
+            Route::get('/{announcement}/audit', [CommunicationAuditController::class, 'show'])->name('audit');
+            Route::get('/{announcement}/analytics', [CommunicationAnalyticsController::class, 'announcement'])->name('analytics');
         });
 
         // Phase 5A.6 §11: registered BEFORE the '/{thread}' wildcard
@@ -148,6 +159,12 @@ Route::middleware('auth')->group(function (): void {
         // Phase 5A.7 §10: registered BEFORE the '/{thread}' wildcard
         // below, same reasoning as 'announcements'/'templates' above.
         Route::get('/participants/search', [CommunicationHubController::class, 'searchParticipants'])->name('participants.search');
+
+        // Phase 5A.11 §25/§32: the School-wide operational delivery
+        // overview -- registered BEFORE the '/{thread}' wildcard below,
+        // same reasoning as every other literal-segment route in this
+        // group.
+        Route::get('/analytics', [CommunicationAnalyticsController::class, 'overview'])->name('analytics');
 
         Route::get('/{thread}', [CommunicationHubController::class, 'show'])->name('show');
         Route::post('/{thread}/messages', [CommunicationHubController::class, 'storeMessage'])->name('messages.store');

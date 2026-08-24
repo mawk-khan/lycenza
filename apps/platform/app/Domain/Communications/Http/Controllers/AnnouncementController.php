@@ -204,6 +204,14 @@ class AnnouncementController extends Controller
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
             'attachments' => $model->attachments->map(fn (CommunicationAttachment $a) => $this->presentAttachment($a))->all(),
             'canManageAttachments' => $canEditOrSchedule,
+            // Phase 5A.11 §34/§12/§30: the announcement detail page's
+            // own links into the audit timeline / delivery analytics
+            // surfaces -- gated by the SAME capabilities those
+            // controllers themselves enforce, never inferred from
+            // `canManage` alone for audit (communications.audit.view is
+            // its own capability).
+            'canViewAudit' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.audit.view', $school),
+            'canViewAnalytics' => $canManage,
         ]);
     }
 
