@@ -7,6 +7,7 @@ use App\Domain\Guardians\Application\GuardianService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\GuardianContact;
+use App\Domain\Identity\Application\AccountLinkService;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
@@ -91,14 +92,24 @@ class GuardianController extends Controller
         return redirect("/app/guardians/{$guardian->id}");
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, string $guardian): Response
+    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, string $guardian): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('guardians.view', $school);
 
         $model = Guardian::query()->with(['contacts', 'studentRelationships.student'])->findOrFail($guardian);
 
+        // Phase 5B.2: the optional, explicit School OS account link --
+        // App\Domain\Identity\Application\AccountLinkService is the
+        // sole source of truth; never inferred here.
+        $link = $accountLinks->activeLinkForGuardian($model);
+
         return Inertia::render('App/Guardians/Show', [
+            'accountLink' => $link === null ? null : [
+                'schoolMembershipId' => $link->school_membership_id,
+                'memberName' => $link->membership->user->name,
+                'membershipActive' => $link->membership->isActive(),
+            ],
             'guardian' => $this->presentSummary($model),
             'contacts' => $model->contacts->map(fn (GuardianContact $c) => $this->presentContact($c))->all(),
             'students' => $model->studentRelationships->map(fn ($r) => [

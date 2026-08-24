@@ -17,6 +17,7 @@ use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
+use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationTemplate;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Http\Controllers\Controller;
@@ -162,10 +163,25 @@ class AnnouncementController extends Controller
 
         $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
         $isCreator = $model->created_by_user_id === $actor->id;
+        // Phase 5B.2: a linked Guardian/Student's own login is a real
+        // IN_APP recipient too, but the immutable AUDIENCE snapshot
+        // (communication_announcement_recipients) records the Guardian/
+        // Student identity, not the linked User -- so the plain
+        // snapshot check below never recognizes them. The delivery-
+        // tracking table (communication_recipients) is checked as a
+        // second, additive signal: it exists only once a real IN_APP
+        // delivery was actually planned for this exact User
+        // (App\Domain\Communications\Application\AnnouncementService::deliverInAppForLinkedDomainParty()),
+        // which is the correct "did this person genuinely receive
+        // this" answer regardless of which audience type produced it.
         $isRecipient = CommunicationAnnouncementRecipient::query()
             ->where('announcement_id', $model->id)
             ->where('user_id', $actor->id)
-            ->exists();
+            ->exists()
+            || ($model->message_id !== null && CommunicationRecipient::query()
+                ->where('message_id', $model->message_id)
+                ->where('recipient_user_id', $actor->id)
+                ->exists());
 
         abort_unless($isCreator || $isRecipient || $canManage, 403);
 

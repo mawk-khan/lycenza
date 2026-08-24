@@ -40,6 +40,8 @@ use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Identity\Application\AccountLinkService;
+use App\Domain\Identity\Infrastructure\StudentGuardianAccountLink;
 use App\Domain\Students\Infrastructure\Student;
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Models\Campus;
@@ -108,6 +110,7 @@ class AnnouncementService
         private readonly CommunicationChannelPolicyService $channelPolicy,
         private readonly CommunicationDeliveryTimingPolicyService $timingPolicy,
         private readonly CommunicationApprovalService $approvalService,
+        private readonly AccountLinkService $accountLinks,
     ) {}
 
     /**
@@ -594,7 +597,9 @@ class AnnouncementService
                 // $timingDecisions/$requirement/$deliveryIds this
                 // transaction already computed once above.
                 if ($resolved->studentIds !== []) {
-                    $this->snapshotStudentRecipients($fresh, $resolved->studentIds);
+                    $this->snapshotAndDeliverStudentRecipients(
+                        $fresh, $resolved->studentIds, $message, $requestedChannels, $timingDecisions, $requirement, $deliveryIds,
+                    );
                 }
 
                 if ($resolved->guardianIds !== []) {
@@ -1004,36 +1009,67 @@ class AnnouncementService
     }
 
     /**
-     * Phase 5B.1 §7/§11: Students have NO reachable channel today (no
-     * User/SchoolMembership link, no canonical contact endpoint) -- the
-     * immutable logical-recipient snapshot is the entirety of what
-     * publishing a Student-audience Announcement produces. Re-validates
-     * same-school + active at snapshot time, mirroring
+     * Phase 5B.1 §7/§11, extended by Phase 5B.2: a Student has NO
+     * reachable EMAIL endpoint today (no canonical contact endpoint
+     * exists), and IN_APP is available ONLY through an explicit,
+     * currently-active App\Domain\Identity\Infrastructure\StudentGuardianAccountLink
+     * (never fabricated -- root CLAUDE.md non-negotiable identity
+     * rule). The immutable logical-recipient snapshot is ALWAYS
+     * written regardless of link state. Re-validates same-school +
+     * active Student status at snapshot time, mirroring
      * snapshotRecipients()'s own "resolved a moment ago, no longer
      * eligible -- skip rather than fail the whole publish" behavior.
      *
      * @param  array<int, string>  $studentIds
+     * @param  array<int, CommunicationChannel>  $requestedChannels
+     * @param  array<string, CommunicationTimingDecision>  $timingDecisions
+     * @param  array<int, string>  $deliveryIds
      */
-    private function snapshotStudentRecipients(CommunicationAnnouncement $announcement, array $studentIds): void
-    {
-        $validIds = Student::query()
+    private function snapshotAndDeliverStudentRecipients(
+        CommunicationAnnouncement $announcement,
+        array $studentIds,
+        CommunicationMessage $message,
+        array $requestedChannels,
+        array $timingDecisions,
+        CommunicationRequirement $requirement,
+        array &$deliveryIds,
+    ): void {
+        $students = Student::query()
             ->where('school_id', $announcement->school_id)
             ->whereIn('id', $studentIds)
             ->where('status', 'active')
-            ->pluck('id');
+            ->get(['id'])
+            ->keyBy('id');
+
+        if ($students->isEmpty()) {
+            return;
+        }
 
         $now = now();
-        $rows = $validIds->map(fn (string $id) => [
+        $snapshotRows = $students->map(fn (Student $student) => [
             'id' => (string) new UuidV7,
             'school_id' => $announcement->school_id,
             'announcement_id' => $announcement->id,
-            'student_id' => $id,
+            'student_id' => $student->id,
             'created_at' => $now,
             'updated_at' => $now,
         ])->values()->all();
 
-        if ($rows !== []) {
-            CommunicationAnnouncementRecipient::query()->insert($rows);
+        CommunicationAnnouncementRecipient::query()->insert($snapshotRows);
+
+        if (! in_array(CommunicationChannel::InApp, $requestedChannels, true)) {
+            return;
+        }
+
+        $links = $this->accountLinks->activeLinksForStudents($announcement->school, $students->keys()->all());
+        $timingDecision = $timingDecisions[CommunicationChannel::InApp->value];
+
+        foreach ($students as $student) {
+            $this->deliverInAppForLinkedDomainParty(
+                $announcement, $message, studentId: $student->id, guardianId: null,
+                link: $links->get($student->id), requirement: $requirement,
+                timingDecision: $timingDecision, deliveryIds: $deliveryIds,
+            );
         }
     }
 
@@ -1092,10 +1128,29 @@ class AnnouncementService
 
         CommunicationAnnouncementRecipient::query()->insert($snapshotRows);
 
+        // Phase 5B.2 §49: ONE batched link lookup for the whole
+        // Guardian chunk, never one query per Guardian.
+        $links = $this->accountLinks->activeLinksForGuardians($announcement->school, $guardians->keys()->all());
+
         foreach ($guardians as $guardian) {
             $recipient = null;
 
             foreach ($requestedChannels as $channel) {
+                // Phase 5B.2 §20/§27: IN_APP for a Guardian is a
+                // COMPLETELY separate code path from EMAIL below --
+                // it never touches evaluateForDomainParty() (GuardianContact-
+                // based) at all, and reuses the real membership pipeline
+                // via the linked SchoolMembership instead.
+                if ($channel === CommunicationChannel::InApp) {
+                    $this->deliverInAppForLinkedDomainParty(
+                        $announcement, $message, studentId: null, guardianId: $guardian->id,
+                        link: $links->get($guardian->id), requirement: $requirement,
+                        timingDecision: $timingDecisions[$channel->value], deliveryIds: $deliveryIds,
+                    );
+
+                    continue;
+                }
+
                 $decision = $this->channelPolicy->evaluateForDomainParty($announcement->school, $channel, $requirement);
 
                 if (! $decision->allowed) {
@@ -1146,6 +1201,90 @@ class AnnouncementService
                     $deliveryIds[] = $delivery->id;
                 }
             }
+        }
+    }
+
+    /**
+     * Phase 5B.2 §20/§21/§27/§48: the ONE place IN_APP is planned for a
+     * Student or Guardian logical recipient -- shared by both
+     * snapshotAndDeliverStudentRecipients() and
+     * snapshotAndDeliverGuardianRecipients() (exactly one of
+     * $studentId/$guardianId is set). No link, or a link to a
+     * currently-INACTIVE membership, both resolve to the identical
+     * `recipient_ineligible` suppression a departed SchoolMembership
+     * recipient already gets in the membership loop above -- a
+     * historical link to a since-revoked membership never silently
+     * reactivates it (brief §21).
+     *
+     * Once a link resolves to a real ACTIVE membership, this reuses
+     * the EXACT SAME primitives the membership loop uses --
+     * CommunicationChannelPolicyService::evaluate() (never
+     * evaluateForDomainParty()) and
+     * CommunicationDeliveryFactory::createRecipient() keyed to the
+     * linked membership's user_id -- so the resulting
+     * CommunicationRecipient/CommunicationDelivery rows are, from the
+     * delivery pipeline's perspective, indistinguishable from an
+     * ordinary member's (brief §22: the AUDIENCE snapshot still says
+     * Student/Guardian; only the DELIVERY additionally identifies the
+     * account endpoint used).
+     *
+     * @param  array<int, string>  $deliveryIds
+     */
+    private function deliverInAppForLinkedDomainParty(
+        CommunicationAnnouncement $announcement,
+        CommunicationMessage $message,
+        ?string $studentId,
+        ?string $guardianId,
+        ?StudentGuardianAccountLink $link,
+        CommunicationRequirement $requirement,
+        CommunicationTimingDecision $timingDecision,
+        array &$deliveryIds,
+    ): void {
+        $membership = $link?->membership;
+
+        if ($membership === null || ! $membership->isActive()) {
+            CommunicationDeliveryPolicyDecision::query()->create([
+                'school_id' => $announcement->school_id,
+                'message_id' => $message->id,
+                'recipient_student_id' => $studentId,
+                'recipient_guardian_id' => $guardianId,
+                'channel' => CommunicationChannel::InApp->value,
+                'reason' => CommunicationPolicyReason::RecipientIneligible->value,
+            ]);
+
+            return;
+        }
+
+        $decision = $this->channelPolicy->evaluate($announcement->school, $membership->id, CommunicationChannel::InApp, $requirement);
+
+        if (! $decision->allowed) {
+            // Defensive only -- evaluate() always allows IN_APP once a
+            // real, non-null membership id is passed (brief §10 of
+            // Phase 5A.5's own policy engine); kept for symmetry should
+            // that invariant ever change.
+            CommunicationDeliveryPolicyDecision::query()->create([
+                'school_id' => $announcement->school_id,
+                'message_id' => $message->id,
+                'recipient_student_id' => $studentId,
+                'recipient_guardian_id' => $guardianId,
+                'channel' => CommunicationChannel::InApp->value,
+                'reason' => $decision->reason->value,
+            ]);
+
+            return;
+        }
+
+        $recipient = $this->deliveryFactory->createRecipient($announcement->school_id, $message->id, $membership->user_id);
+
+        $delivery = $this->deliveryFactory->createDelivery(
+            $recipient,
+            CommunicationChannel::InApp,
+            null,
+            $timingDecision->shouldDefer ? $timingDecision->availableAt : null,
+        );
+
+        if (! $timingDecision->shouldDefer) {
+            $deliveryIds[] = $delivery->id;
         }
     }
 

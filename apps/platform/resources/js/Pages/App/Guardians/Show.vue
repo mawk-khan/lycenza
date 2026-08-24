@@ -24,6 +24,17 @@ interface LinkedStudent {
     isAuthorizedPickup: boolean;
 }
 
+interface AccountLink {
+    schoolMembershipId: string;
+    memberName: string;
+    membershipActive: boolean;
+}
+
+interface MembershipCandidate {
+    schoolMembershipId: string;
+    name: string;
+}
+
 interface Props {
     guardian: {
         id: string;
@@ -35,9 +46,67 @@ interface Props {
     contacts: Contact[];
     students: LinkedStudent[];
     canManage: boolean;
+    accountLink: AccountLink | null;
 }
 
 const props = defineProps<Props>();
+
+// --- Phase 5B.2: School OS account link ---------------------------------
+
+const showLinkPicker = ref(false);
+const linkQuery = ref('');
+const linkCandidates = ref<MembershipCandidate[]>([]);
+const linkSearching = ref(false);
+const linking = ref(false);
+const unlinking = ref(false);
+let linkSearchDebounce: ReturnType<typeof setTimeout> | undefined;
+
+function searchLinkCandidates(): void {
+    const q = linkQuery.value.trim();
+    clearTimeout(linkSearchDebounce);
+    linkSearchDebounce = setTimeout(async () => {
+        linkSearching.value = true;
+        try {
+            const response = await fetch(
+                `/app/guardians/${props.guardian.id}/account-link/search?q=${encodeURIComponent(q)}`,
+                { headers: { Accept: 'application/json' } },
+            );
+            const body = await response.json();
+            linkCandidates.value = body.candidates as MembershipCandidate[];
+        } finally {
+            linkSearching.value = false;
+        }
+    }, 250);
+}
+
+function linkAccount(candidate: MembershipCandidate): void {
+    linking.value = true;
+    router.post(
+        `/app/guardians/${props.guardian.id}/account-link`,
+        { school_membership_id: candidate.schoolMembershipId },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                linking.value = false;
+                showLinkPicker.value = false;
+                linkQuery.value = '';
+                linkCandidates.value = [];
+            },
+        },
+    );
+}
+
+function unlinkAccount(): void {
+    const confirmed = window.confirm(
+        'Unlink this School OS account? The Guardian record and any past communications are kept -- only future in-app reachability changes.',
+    );
+    if (!confirmed) return;
+    unlinking.value = true;
+    router.delete(`/app/guardians/${props.guardian.id}/account-link`, {
+        preserveScroll: true,
+        onFinish: () => (unlinking.value = false),
+    });
+}
 
 function fullName(): string {
     return [props.guardian.firstName, props.guardian.middleName, props.guardian.lastName]
@@ -273,6 +342,75 @@ function submitContact(): void {
                     />
                 </li>
             </ul>
+        </section>
+
+        <!-- School OS account link -->
+        <section class="mt-8">
+            <h2 class="text-sm font-medium text-slate-500">School OS account</h2>
+            <p class="mt-1 text-xs text-slate-400">
+                Optional. Linking an existing School OS account lets this Guardian receive in-app
+                communications when they sign in. It does not create a new account and does not
+                affect their email/mobile contact information used for email delivery.
+            </p>
+
+            <div v-if="accountLink" class="mt-3 rounded border border-slate-200 p-4 text-sm">
+                <p>
+                    Linked to <span class="font-medium">{{ accountLink.memberName }}</span>
+                    <span v-if="!accountLink.membershipActive" class="ml-2 text-amber-600"
+                        >(membership inactive -- in-app currently unavailable)</span
+                    >
+                </p>
+                <button
+                    v-if="canManage"
+                    type="button"
+                    class="mt-2 text-red-600 underline"
+                    :disabled="unlinking"
+                    @click="unlinkAccount"
+                >
+                    Unlink
+                </button>
+            </div>
+
+            <div v-else-if="canManage">
+                <button
+                    v-if="!showLinkPicker"
+                    type="button"
+                    class="mt-3 text-sm font-medium underline"
+                    @click="showLinkPicker = true"
+                >
+                    Link account
+                </button>
+                <div v-else class="relative mt-3">
+                    <input
+                        v-model="linkQuery"
+                        type="text"
+                        placeholder="Search School OS accounts by name…"
+                        class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        @input="searchLinkCandidates"
+                    />
+                    <ul
+                        v-if="linkCandidates.length > 0"
+                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    >
+                        <li
+                            v-for="candidate in linkCandidates"
+                            :key="candidate.schoolMembershipId"
+                            class="cursor-pointer px-3 py-2 hover:bg-slate-50"
+                            @click="linkAccount(candidate)"
+                        >
+                            {{ candidate.name }}
+                        </li>
+                    </ul>
+                    <button
+                        type="button"
+                        class="mt-2 text-xs text-slate-400 underline"
+                        @click="showLinkPicker = false"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+            <p v-else class="mt-3 text-sm text-slate-500">Not linked.</p>
         </section>
     </main>
 </template>
