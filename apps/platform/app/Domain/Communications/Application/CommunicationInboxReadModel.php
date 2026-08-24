@@ -9,6 +9,7 @@ use App\Domain\Communications\Infrastructure\CommunicationThreadParticipant;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -116,9 +117,7 @@ class CommunicationInboxReadModel
             return CommunicationAnnouncement::query()
                 ->where('status', 'published')
                 ->whereNotNull('message_id')
-                ->whereIn('id', fn ($q) => $q->select('announcement_id')
-                    ->from('communication_announcement_recipients')
-                    ->where('user_id', $actor->id))
+                ->where(fn ($q) => $this->applyRecipientVisibility($q, $actor))
                 ->whereExists(function ($q) use ($actor) {
                     $q->selectRaw('1')
                         ->from('communication_recipients as cr')
@@ -271,9 +270,7 @@ class CommunicationInboxReadModel
             } else {
                 // Brief §12/§40: the actual resolved-recipient snapshot,
                 // never "every published announcement in the School."
-                $query->whereIn('id', fn ($q) => $q->select('announcement_id')
-                    ->from('communication_announcement_recipients')
-                    ->where('user_id', $actor->id));
+                $query->where(fn ($q) => $this->applyRecipientVisibility($q, $actor));
             }
 
             if ($search !== null && $search !== '') {
@@ -334,9 +331,7 @@ class CommunicationInboxReadModel
                 ->where('title', 'ilike', "%{$search}%")
                 ->where(function ($q) use ($actor, $canManage) {
                     $q->where('created_by_user_id', $actor->id)
-                        ->orWhereIn('id', fn ($sub) => $sub->select('announcement_id')
-                            ->from('communication_announcement_recipients')
-                            ->where('user_id', $actor->id));
+                        ->orWhere(fn ($visible) => $this->applyRecipientVisibility($visible, $actor));
 
                     if ($canManage) {
                         $q->orWhere('status', 'published');
@@ -407,6 +402,35 @@ class CommunicationInboxReadModel
      * (this actor's own IN_APP delivery per message) and attachment
      * presence (per message).
      *
+     * Phase 5B.2 -- widens "which announcements is this actor visible
+     * for" beyond `communication_announcement_recipients.user_id`
+     * (the immutable AUDIENCE snapshot, which records a Guardian/
+     * Student identity for a domain-audience Announcement, never the
+     * linked User -- Phase 5B.1). A linked Guardian/Student's own
+     * login is additionally visible via the real delivery-tracking
+     * row `App\Domain\Communications\Application\AnnouncementService::deliverInAppForLinkedDomainParty()`
+     * creates for them (`communication_recipients.recipient_user_id`),
+     * matching the identical additive fix
+     * App\Domain\Communications\Http\Controllers\AnnouncementController::show()
+     * already applies to its own `isRecipient` check. Callers wrap
+     * this in `where(fn ($q) => ...)`/`orWhere(fn ($q) => ...)` so it
+     * composes safely inside whatever surrounding WHERE clause they
+     * already have.
+     *
+     * @param  Builder<CommunicationAnnouncement>  $query
+     */
+    private function applyRecipientVisibility($query, User $actor): void
+    {
+        $query->whereIn('id', fn ($q) => $q->select('announcement_id')
+            ->from('communication_announcement_recipients')
+            ->where('user_id', $actor->id))
+            ->orWhereIn('id', fn ($q) => $q->select('ca.id')
+                ->from('communication_announcements as ca')
+                ->join('communication_recipients as cr', 'cr.message_id', '=', 'ca.message_id')
+                ->where('cr.recipient_user_id', $actor->id));
+    }
+
+    /**
      * @param  Collection<int, CommunicationAnnouncement>  $announcements
      * @return array{0: Collection<string, mixed>, 1: Collection<string, mixed>}
      */

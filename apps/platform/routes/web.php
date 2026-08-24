@@ -5,6 +5,7 @@ use App\Domain\Communications\Http\Controllers\CommunicationAnalyticsController;
 use App\Domain\Communications\Http\Controllers\CommunicationApprovalController;
 use App\Domain\Communications\Http\Controllers\CommunicationApprovalPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
+use App\Domain\Communications\Http\Controllers\CommunicationAudienceSearchController;
 use App\Domain\Communications\Http\Controllers\CommunicationAuditController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationDeliveryTimingPolicyController;
@@ -13,10 +14,12 @@ use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\DashboardController;
+use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
+use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
@@ -103,6 +106,11 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{student}/guardians/link', [StudentGuardianRelationshipController::class, 'linkExisting'])->name('guardians.link');
         Route::post('/{student}/guardians', [StudentGuardianRelationshipController::class, 'linkNew'])->name('guardians.store');
 
+        // Phase 5B.2: the optional School OS account link.
+        Route::get('/{student}/account-link/search', [StudentAccountLinkController::class, 'search'])->name('account-link.search');
+        Route::post('/{student}/account-link', [StudentAccountLinkController::class, 'store'])->name('account-link.store');
+        Route::delete('/{student}/account-link', [StudentAccountLinkController::class, 'destroy'])->name('account-link.destroy');
+
         // Phase 1B.6: Enrollment administrative UI -- a Student's own
         // "enroll into a Section" flow, nested exactly like the
         // guardians.* routes above.
@@ -125,6 +133,11 @@ Route::middleware('auth')->group(function (): void {
         Route::put('/{guardian}', [GuardianController::class, 'update'])->name('update');
         Route::post('/{guardian}/status', [GuardianController::class, 'changeStatus'])->name('status');
         Route::post('/{guardian}/contacts', [GuardianController::class, 'storeContact'])->name('contacts.store');
+
+        // Phase 5B.2: the optional School OS account link.
+        Route::get('/{guardian}/account-link/search', [GuardianAccountLinkController::class, 'search'])->name('account-link.search');
+        Route::post('/{guardian}/account-link', [GuardianAccountLinkController::class, 'store'])->name('account-link.store');
+        Route::delete('/{guardian}/account-link', [GuardianAccountLinkController::class, 'destroy'])->name('account-link.destroy');
     });
 
     Route::prefix('app/contacts')->name('app.contacts.')->group(function (): void {
@@ -241,6 +254,19 @@ Route::middleware('auth')->group(function (): void {
         // Phase 5A.7 §10: registered BEFORE the '/{thread}' wildcard
         // below, same reasoning as 'announcements'/'templates' above.
         Route::get('/participants/search', [CommunicationHubController::class, 'searchParticipants'])->name('participants.search');
+
+        // Phase 5B.1 §25/§26: registered BEFORE the '/{thread}'
+        // wildcard below, same reasoning as 'participants/search'
+        // above -- the Announcement composer's Student/Guardian
+        // audience-picker search.
+        Route::get('/audience/students/search', [CommunicationAudienceSearchController::class, 'students'])->name('audience.students.search');
+        Route::get('/audience/guardians/search', [CommunicationAudienceSearchController::class, 'guardians'])->name('audience.guardians.search');
+
+        // Phase 5B.3 §6/§7/§34: the Announcement composer's Grade/
+        // Section academic-cohort picker search -- same registration
+        // reasoning as 'audience/students|guardians/search' above.
+        Route::get('/audience/grade-levels/search', [CommunicationAudienceSearchController::class, 'gradeLevels'])->name('audience.grade-levels.search');
+        Route::get('/audience/sections/search', [CommunicationAudienceSearchController::class, 'sections'])->name('audience.sections.search');
 
         // Phase 5A.11 §25/§32: the School-wide operational delivery
         // overview -- registered BEFORE the '/{thread}' wildcard below,

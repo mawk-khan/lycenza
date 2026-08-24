@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentService;
@@ -114,7 +115,7 @@ class StudentController extends Controller
         return redirect("/app/students/{$student->id}");
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, StudentEnrollmentReadService $enrollmentReads, string $student): Response
+    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, StudentEnrollmentReadService $enrollmentReads, string $student): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('students.view', $school);
@@ -126,8 +127,16 @@ class StudentController extends Controller
         // (docs/security/DATA-CLASSIFICATION.md).
         $model = Student::query()->with('guardianRelationships.guardian.contacts')->findOrFail($student);
 
+        // Phase 5B.2: the optional, explicit School OS account link.
+        $link = $accountLinks->activeLinkForStudent($model);
+
         $props = [
             'student' => $this->presentDetail($model),
+            'accountLink' => $link === null ? null : [
+                'schoolMembershipId' => $link->school_membership_id,
+                'memberName' => $link->membership->user->name,
+                'membershipActive' => $link->membership->isActive(),
+            ],
             'relationships' => $model->guardianRelationships->map(function ($r) {
                 $primaryContact = $r->guardian->contacts->firstWhere('is_primary', true)
                     ?? $r->guardian->contacts->firstWhere('is_active', true);

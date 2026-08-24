@@ -30,8 +30,18 @@ interface Props {
 
 defineProps<Props>();
 
+const AUDIENCE_LABELS: Record<string, string> = {
+    school_wide: 'Entire School',
+    individual: 'Selected Members',
+    student: 'Students',
+    guardian: 'Guardians',
+    guardians_of_students: 'Guardians of Selected Students',
+    grade: 'Grade (Academic Cohort)',
+    section: 'Section (Academic Cohort)',
+};
+
 function audienceLabel(type: string): string {
-    return type === 'school_wide' ? 'Entire School' : 'Selected Members';
+    return AUDIENCE_LABELS[type] ?? type;
 }
 
 const tabs: Array<{ label: string; value: string | null }> = [

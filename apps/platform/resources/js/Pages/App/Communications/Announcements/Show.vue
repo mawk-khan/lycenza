@@ -26,10 +26,29 @@ interface EmailEligibility {
     policySuppressed: number;
 }
 
+interface DomainAudiencePreview {
+    studentCount: number;
+    guardianCount: number;
+    inAppReachable: number;
+    guardianEmailEligible: number;
+    guardianEmailUnavailable: number;
+}
+
+interface AcademicCohortPreview {
+    cohortType: string;
+    gradeLevelName: string | null;
+    sectionName: string | null;
+    academicYearLabel: string | null;
+    recipientKind: string;
+    isDynamic: boolean;
+}
+
 interface AudiencePreview {
     count: number;
     categoryBreakdown: Record<string, number>;
     email: EmailEligibility | null;
+    domain: DomainAudiencePreview | null;
+    academicCohort: AcademicCohortPreview | null;
 }
 
 interface ChannelDeliveryRow {
@@ -461,11 +480,46 @@ function formatFileSize(bytes: number): string {
             <h2 class="text-sm font-semibold">Audience</h2>
             <p class="mt-1 text-xs text-slate-500">
                 {{
-                    announcement.audienceType === 'school_wide'
-                        ? 'Entire School'
-                        : 'Selected Members'
+                    {
+                        school_wide: 'Entire School',
+                        individual: 'Selected Members',
+                        student: 'Students',
+                        guardian: 'Guardians',
+                        guardians_of_students: 'Guardians of Selected Students',
+                        grade: 'Grade (Academic Cohort)',
+                        section: 'Section (Academic Cohort)',
+                    }[announcement.audienceType] ?? announcement.audienceType
                 }}
             </p>
+
+            <div v-if="preview.academicCohort" class="mt-2 rounded bg-slate-50 p-2 text-xs">
+                <p class="text-slate-600">
+                    <span v-if="preview.academicCohort.cohortType === 'grade_level'">
+                        Grade: {{ preview.academicCohort.gradeLevelName }}
+                    </span>
+                    <span v-else> Section: {{ preview.academicCohort.sectionName }} </span>
+                    <span v-if="preview.academicCohort.academicYearLabel">
+                        &middot; {{ preview.academicCohort.academicYearLabel }}</span
+                    >
+                    &middot;
+                    {{
+                        preview.academicCohort.recipientKind === 'guardian'
+                            ? 'Guardians'
+                            : 'Students'
+                    }}
+                </p>
+                <p class="mt-1 text-slate-400">
+                    Recipient counts reflect current enrollment and are re-resolved again at
+                    publication{{
+                        announcement.status === 'scheduled'
+                            ? ' (and again at the scheduled send time)'
+                            : ''
+                    }}
+                    -- a Student who joins or leaves this Grade/Section before then changes who
+                    actually receives this message.
+                </p>
+            </div>
+
             <p class="mt-2 text-sm">Estimated recipients: {{ preview.count }}</p>
             <ul
                 v-if="Object.keys(preview.categoryBreakdown).length > 0"
@@ -496,6 +550,31 @@ function formatFileSize(bytes: number): string {
                 >
                     <span>Optional email disabled (policy/preference)</span>
                     <span>{{ preview.email.policySuppressed }}</span>
+                </div>
+            </div>
+
+            <div v-if="preview.domain" class="mt-3 border-t border-slate-100 pt-2 text-xs">
+                <p class="text-slate-400">
+                    Students/Guardians have a different reachability profile from School members --
+                    they have no in-app inbox unless a portal account is linked.
+                </p>
+                <div class="mt-1 flex justify-between text-slate-500">
+                    <span>In-app reachable</span>
+                    <span>{{ preview.domain.inAppReachable }}</span>
+                </div>
+                <div
+                    v-if="preview.domain.guardianCount > 0"
+                    class="flex justify-between text-slate-500"
+                >
+                    <span>Guardian email eligible</span>
+                    <span>{{ preview.domain.guardianEmailEligible }}</span>
+                </div>
+                <div
+                    v-if="preview.domain.guardianEmailUnavailable > 0"
+                    class="flex justify-between text-amber-600"
+                >
+                    <span>Guardian email unavailable</span>
+                    <span>{{ preview.domain.guardianEmailUnavailable }}</span>
                 </div>
             </div>
         </div>

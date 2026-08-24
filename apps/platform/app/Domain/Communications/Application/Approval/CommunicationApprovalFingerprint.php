@@ -19,6 +19,35 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
  * "schedule time is operational timing, not message meaning") and
  * anything resolved only at publish time (the actual recipient
  * snapshot, brief §19/§53).
+ *
+ * Phase 5B.1 §22/§44: `domainAudienceIds` (canonicalized Student ids
+ * for `student`/`guardians_of_students`, Guardian ids for `guardian`)
+ * is approval-sensitive for the SAME reason `individualMemberIds`
+ * already is -- changing WHO a message targets changes what was
+ * approved. Deliberately EXCLUDES any GuardianContact/destination
+ * value -- contact-destination resolution happens at PUBLISH time
+ * (docs/communication-hub/
+ * PHASE-5B-1-STUDENT-GUARDIAN-AUDIENCE-REACHABILITY.md §"Approval
+ * fingerprint semantics": approval binds to WHO is targeted, not to
+ * where a message happens to be deliverable right now -- editing a
+ * Guardian's email after approval never invalidates it, matching
+ * brief §44's documented choice), and never hashes a decrypted
+ * contact value (brief §22/§32).
+ *
+ * Phase 5B.3 §31/§32: `academicCohort` hashes the cohort DEFINITION
+ * only -- cohortType, academicYearId, gradeLevelId/sectionId,
+ * recipientKind -- the same fields
+ * App\Domain\Communications\Application\AnnouncementService::syncAcademicCohort()
+ * validates and persists. It deliberately NEVER includes any resolved
+ * Student/Guardian id (those are re-resolved fresh at publish time,
+ * exactly like `domainAudienceIds` excludes GuardianContact values
+ * above) and never includes an account-link/reachability state.
+ * Consequence (brief §32, mirroring §44's "enrollment changes never
+ * invalidate approval"): a Student transferring into or out of the
+ * approved Grade/Section AFTER approval does not change this
+ * fingerprint and therefore never invalidates the approval -- only
+ * changing WHICH Grade/Section/AcademicYear/recipient-kind was
+ * approved does.
  */
 class CommunicationApprovalFingerprint
 {
@@ -35,7 +64,10 @@ class CommunicationApprovalFingerprint
         // always be reflected here. Fingerprint correctness is a
         // security boundary (brief §17/§32), not just a convenience
         // read.
-        $announcement = $announcement->fresh(['requestedChannels', 'audienceMembers', 'attachments']);
+        $announcement = $announcement->fresh(['requestedChannels', 'audienceMembers', 'domainAudienceMembers', 'attachments', 'academicCohort']);
+
+        $isDomainAudience = in_array($announcement->audience_type, ['student', 'guardian', 'guardians_of_students'], true);
+        $isAcademicCohortAudience = in_array($announcement->audience_type, ['grade', 'section'], true);
 
         return [
             'title' => trim($announcement->title),
@@ -49,6 +81,25 @@ class CommunicationApprovalFingerprint
             'individualMemberIds' => $announcement->audience_type === 'individual'
                 ? $this->sortedUnique($announcement->audienceMembers->pluck('school_membership_id')->all())
                 : [],
+            // Phase 5B.1: canonicalized -- student_id for
+            // student/guardians_of_students, guardian_id for guardian.
+            'domainAudienceIds' => $isDomainAudience
+                ? $this->sortedUnique($announcement->domainAudienceMembers
+                    ->pluck($announcement->audience_type === 'guardian' ? 'guardian_id' : 'student_id')
+                    ->all())
+                : [],
+            // Phase 5B.3 §31/§32: cohort DEFINITION only -- see class
+            // docblock. Deliberately not canonicalized/sorted like the
+            // id lists above: this is a single scalar tuple, not a set.
+            'academicCohort' => $isAcademicCohortAudience && $announcement->academicCohort !== null
+                ? [
+                    'cohortType' => $announcement->academicCohort->cohort_type,
+                    'academicYearId' => $announcement->academicCohort->academic_year_id,
+                    'gradeLevelId' => $announcement->academicCohort->grade_level_id,
+                    'sectionId' => $announcement->academicCohort->section_id,
+                    'recipientKind' => $announcement->academicCohort->recipient_kind,
+                ]
+                : null,
             // Brief §21: canonicalized channel set.
             'channels' => $this->sortedUnique($announcement->requestedChannels->pluck('channel')->all()),
             // Brief §25/§66: identity only, never bytes/storage paths.

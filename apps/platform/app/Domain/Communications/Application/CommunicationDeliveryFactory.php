@@ -19,12 +19,51 @@ use Illuminate\Support\Facades\DB;
  */
 class CommunicationDeliveryFactory
 {
+    /**
+     * Phase 5B.2 §40/§49: idempotent-by-construction (root CLAUDE.md
+     * rule 30) -- the `(message_id, recipient_user_id)` unique
+     * constraint is the authoritative guard. Never triggered by the
+     * plain membership-audience loop (a userId only ever appears once
+     * per chunk there), but genuinely reachable once a linked Guardian/
+     * Student's IN_APP delivery
+     * (App\Domain\Communications\Application\AnnouncementService::deliverInAppForLinkedDomainParty())
+     * resolves to the SAME underlying User a School-wide/Individual
+     * audience already reached in a hypothetical future combined
+     * resolution -- defense-in-depth against exactly that, even though
+     * today's audience types remain mutually exclusive per
+     * Announcement.
+     */
     public function createRecipient(string $schoolId, string $messageId, string $recipientUserId): CommunicationRecipient
+    {
+        try {
+            return DB::transaction(fn () => CommunicationRecipient::query()->create([
+                'school_id' => $schoolId,
+                'message_id' => $messageId,
+                'recipient_user_id' => $recipientUserId,
+            ]));
+        } catch (UniqueConstraintViolationException) {
+            return CommunicationRecipient::query()
+                ->where('message_id', $messageId)
+                ->where('recipient_user_id', $recipientUserId)
+                ->firstOrFail();
+        }
+    }
+
+    /**
+     * Phase 5B.1 §9: the Guardian-side counterpart to createRecipient()
+     * -- reuses the exact same `communication_recipients` row shape
+     * (widened by this checkpoint's migration to accept a nullable
+     * `recipient_guardian_id` instead of `recipient_user_id`), so
+     * everything downstream (CommunicationDelivery, ProcessCommunicationDeliveryJob,
+     * the channel driver registry) needs zero changes to serve a
+     * Guardian recipient.
+     */
+    public function createRecipientForGuardian(string $schoolId, string $messageId, string $recipientGuardianId): CommunicationRecipient
     {
         return CommunicationRecipient::query()->create([
             'school_id' => $schoolId,
             'message_id' => $messageId,
-            'recipient_user_id' => $recipientUserId,
+            'recipient_guardian_id' => $recipientGuardianId,
         ]);
     }
 

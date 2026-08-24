@@ -2,22 +2,31 @@
 
 namespace App\Domain\Communications\Application;
 
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
+use App\Domain\Communications\Application\Audience\AcademicCohortSelection;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
+use App\Domain\Communications\Application\Channels\GuardianEmailAddressResolver;
 use App\Domain\Communications\Application\Exceptions\ApprovalRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmergencyCannotBeScheduledException;
 use App\Domain\Communications\Application\Exceptions\EmergencyJustificationRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmergencyMustBeRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmptyAudienceException;
+use App\Domain\Communications\Application\Exceptions\InvalidAcademicCohortException;
 use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransitionException;
 use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberException;
 use App\Domain\Communications\Application\Exceptions\InvalidScheduledTimeException;
 use App\Domain\Communications\Application\Exceptions\UnsupportedAnnouncementChannelException;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
 use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService;
+use App\Domain\Communications\Application\Policy\CommunicationPolicyReason;
+use App\Domain\Communications\Application\Policy\CommunicationTimingDecision;
 use App\Domain\Communications\Application\Policy\CommunicationTimingReason;
+use App\Domain\Communications\Domain\CommunicationAcademicCohortType;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationDispatchMode;
@@ -28,13 +37,19 @@ use App\Domain\Communications\Events\CommunicationAnnouncementCreated;
 use App\Domain\Communications\Events\CommunicationAnnouncementPublished;
 use App\Domain\Communications\Events\CommunicationAnnouncementScheduled;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
+use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAcademicCohort;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
+use App\Domain\Communications\Infrastructure\CommunicationAnnouncementDomainAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
+use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Identity\Application\AccountLinkService;
+use App\Domain\Identity\Infrastructure\StudentGuardianAccountLink;
+use App\Domain\Students\Infrastructure\Student;
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Models\Campus;
 use App\Models\School;
@@ -98,13 +113,16 @@ class AnnouncementService
         private readonly CommunicationAudienceResolverRegistry $audienceResolvers,
         private readonly CommunicationDeliveryFactory $deliveryFactory,
         private readonly EmailAddressResolver $emailAddressResolver,
+        private readonly GuardianEmailAddressResolver $guardianEmailAddressResolver,
         private readonly CommunicationChannelPolicyService $channelPolicy,
         private readonly CommunicationDeliveryTimingPolicyService $timingPolicy,
         private readonly CommunicationApprovalService $approvalService,
+        private readonly AccountLinkService $accountLinks,
     ) {}
 
     /**
      * @param  array<int, string>  $individualMemberUserIds  only used when $audienceType is Individual
+     * @param  array<int, string>  $domainAudienceMemberIds  only used when $audienceType is Student/Guardian/GuardiansOfStudents -- Student ids for Student/GuardiansOfStudents, Guardian ids for Guardian (brief §11/§12/§13)
      * @param  array<int, CommunicationChannel>  $channels  in_app is always included regardless of what's passed (brief §15)
      */
     public function createDraft(
@@ -121,6 +139,8 @@ class AnnouncementService
         CommunicationRequirement $requirement = CommunicationRequirement::Optional,
         CommunicationDispatchMode $dispatchMode = CommunicationDispatchMode::Standard,
         ?string $emergencyJustification = null,
+        array $domainAudienceMemberIds = [],
+        ?AcademicCohortSelection $academicCohort = null,
     ): CommunicationAnnouncement {
         // Phase 5A.10 §6/§23: validated BEFORE any write, independent
         // of whatever the controller already validated -- an
@@ -132,7 +152,7 @@ class AnnouncementService
         // re-checked in this service.
         $this->assertValidDispatchMode($dispatchMode, $requirement, $emergencyJustification);
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement, $dispatchMode, $emergencyJustification) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement, $dispatchMode, $emergencyJustification, $domainAudienceMemberIds, $academicCohort) {
             $isEmergency = $dispatchMode === CommunicationDispatchMode::Emergency;
 
             $announcement = CommunicationAnnouncement::query()->create([
@@ -156,6 +176,14 @@ class AnnouncementService
                 $this->syncAudienceMembers($announcement, $individualMemberUserIds);
             }
 
+            if ($this->isDomainAudienceType($audienceType)) {
+                $this->syncDomainAudienceMembers($announcement, $audienceType, $domainAudienceMemberIds);
+            }
+
+            if ($this->isAcademicCohortAudienceType($audienceType)) {
+                $this->syncAcademicCohort($announcement, $audienceType, $academicCohort);
+            }
+
             $this->syncChannels($announcement, $channels);
 
             $this->audit->school($school, 'announcement.created', actor: $creator, subject: $announcement, metadata: [
@@ -175,10 +203,8 @@ class AnnouncementService
     /**
      * @param  array<int, string>|null  $individualMemberUserIds  null leaves the current member list untouched
      * @param  array<int, CommunicationChannel>|null  $channels  null leaves the current channel selection untouched
-     */
-    /**
-     * @param  array<int, string>|null  $individualMemberUserIds  null leaves the current member list untouched
-     * @param  array<int, CommunicationChannel>|null  $channels  null leaves the current channel selection untouched
+     * @param  array<int, string>|null  $domainAudienceMemberIds  null leaves the current domain-audience selection untouched
+     * @param  AcademicCohortSelection|null  $academicCohort  null leaves the current academic-cohort selection untouched
      */
     public function updateDraft(
         CommunicationAnnouncement $announcement,
@@ -191,8 +217,10 @@ class AnnouncementService
         ?CommunicationRequirement $requirement = null,
         ?CommunicationDispatchMode $dispatchMode = null,
         ?string $emergencyJustification = null,
+        ?array $domainAudienceMemberIds = null,
+        ?AcademicCohortSelection $academicCohort = null,
     ): CommunicationAnnouncement {
-        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification) {
+        return $this->context->withSchool($announcement->school, function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification, $domainAudienceMemberIds, $academicCohort) {
             // Phase 5A.4 §31: a SCHEDULED announcement remains editable
             // up until it is claimed for publication -- the exact same
             // content-editing rules as a draft (its own canonical
@@ -219,7 +247,7 @@ class AnnouncementService
 
             $this->assertValidDispatchMode($effectiveDispatchMode, $effectiveRequirement, $effectiveJustification);
 
-            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification, $effectiveRequirement) {
+            return DB::transaction(function () use ($announcement, $actor, $title, $body, $priority, $individualMemberUserIds, $channels, $requirement, $dispatchMode, $emergencyJustification, $effectiveRequirement, $domainAudienceMemberIds, $academicCohort) {
                 $updates = array_filter([
                     'title' => $title,
                     'body' => $body,
@@ -261,6 +289,14 @@ class AnnouncementService
 
                 if ($individualMemberUserIds !== null && $announcement->audienceTypeEnum() === CommunicationAudienceType::Individual) {
                     $this->syncAudienceMembers($announcement, $individualMemberUserIds);
+                }
+
+                if ($domainAudienceMemberIds !== null && $this->isDomainAudienceType($announcement->audienceTypeEnum())) {
+                    $this->syncDomainAudienceMembers($announcement, $announcement->audienceTypeEnum(), $domainAudienceMemberIds);
+                }
+
+                if ($academicCohort !== null && $this->isAcademicCohortAudienceType($announcement->audienceTypeEnum())) {
+                    $this->syncAcademicCohort($announcement, $announcement->audienceTypeEnum(), $academicCohort);
                 }
 
                 if ($channels !== null) {
@@ -563,20 +599,43 @@ class AnnouncementService
                     }
                 }
 
+                // Phase 5B.1 §9/§11/§12/§15/§16/§17: Student/Guardian
+                // logical recipients are snapshotted and (for Guardian
+                // EMAIL only) delivered through a SEPARATE code path
+                // from the membership loop above -- never interleaved
+                // with it. This keeps the well-tested membership loop
+                // completely unchanged (docs/communication-hub/
+                // PHASE-5B-1-STUDENT-GUARDIAN-AUDIENCE-REACHABILITY.md
+                // §6's backward-compatibility requirement) while
+                // reusing the SAME $message/$requestedChannels/
+                // $timingDecisions/$requirement/$deliveryIds this
+                // transaction already computed once above.
+                if ($resolved->studentIds !== []) {
+                    $this->snapshotAndDeliverStudentRecipients(
+                        $fresh, $resolved->studentIds, $message, $requestedChannels, $timingDecisions, $requirement, $deliveryIds,
+                    );
+                }
+
+                if ($resolved->guardianIds !== []) {
+                    $this->snapshotAndDeliverGuardianRecipients(
+                        $fresh, $resolved->guardianIds, $message, $requestedChannels, $timingDecisions, $requirement, $deliveryIds,
+                    );
+                }
+
                 $fresh->update([
                     'message_id' => $message->id,
-                    'recipient_count' => count($resolved->userIds),
+                    'recipient_count' => $resolved->count(),
                 ]);
 
                 $this->audit->school($fresh->school, 'announcement.published', actor: $actor, subject: $fresh, metadata: [
                     'audienceType' => $fresh->audience_type,
-                    'resolvedCount' => count($resolved->userIds),
+                    'resolvedCount' => $resolved->count(),
                 ]);
 
                 if ($emergencyBypassRequested) {
                     $this->audit->school($fresh->school, 'announcement.emergency_published', actor: $actor, subject: $fresh, metadata: [
                         'requestedChannels' => array_map(fn (CommunicationChannel $c) => $c->value, $requestedChannels),
-                        'resolvedCount' => count($resolved->userIds),
+                        'resolvedCount' => $resolved->count(),
                     ]);
                 }
 
@@ -585,7 +644,7 @@ class AnnouncementService
                     $fresh->id,
                     $message->id,
                     $fresh->audience_type,
-                    count($resolved->userIds),
+                    $resolved->count(),
                     $actor->id,
                 ));
 
@@ -896,6 +955,464 @@ class AnnouncementService
         if ($rows !== []) {
             CommunicationAnnouncementAudienceMember::query()->insert($rows);
         }
+    }
+
+    private function isDomainAudienceType(CommunicationAudienceType $type): bool
+    {
+        return in_array($type, [
+            CommunicationAudienceType::Student,
+            CommunicationAudienceType::Guardian,
+            CommunicationAudienceType::GuardiansOfStudents,
+        ], true);
+    }
+
+    /**
+     * Phase 5B.1 §11/§12/§13: the authored selection for
+     * Student/Guardian/GuardiansOfStudents -- parallel to
+     * syncAudienceMembers() above. `$ids` means "Student ids" for
+     * Student/GuardiansOfStudents (guardians_of_students' INPUT is
+     * Students, its OUTPUT is derived, never authored directly) and
+     * "Guardian ids" for Guardian. Re-validates same-school + active
+     * status at AUTHORING time too (not just resolve time) -- a forged
+     * cross-School id is rejected here by the composite FK at INSERT
+     * time even before that, but this existence/activity check
+     * produces a clean InvalidAudienceMemberException (422) rather
+     * than a raw constraint-violation exception.
+     *
+     * @param  array<int, string>  $ids
+     */
+    private function syncDomainAudienceMembers(CommunicationAnnouncement $announcement, CommunicationAudienceType $type, array $ids): void
+    {
+        $ids = array_values(array_unique($ids));
+        $usesStudentColumn = $type !== CommunicationAudienceType::Guardian;
+
+        if ($usesStudentColumn) {
+            $validIds = Student::query()
+                ->where('school_id', $announcement->school_id)
+                ->whereIn('id', $ids)
+                ->where('status', 'active')
+                ->pluck('id');
+        } else {
+            $validIds = Guardian::query()
+                ->where('school_id', $announcement->school_id)
+                ->whereIn('id', $ids)
+                ->where('status', 'active')
+                ->pluck('id');
+        }
+
+        if ($validIds->count() !== count($ids)) {
+            throw new InvalidAudienceMemberException;
+        }
+
+        CommunicationAnnouncementDomainAudienceMember::query()->where('announcement_id', $announcement->id)->delete();
+
+        $now = now();
+        $rows = $validIds->map(fn (string $id) => [
+            'id' => (string) new UuidV7,
+            'school_id' => $announcement->school_id,
+            'announcement_id' => $announcement->id,
+            'student_id' => $usesStudentColumn ? $id : null,
+            'guardian_id' => $usesStudentColumn ? null : $id,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->values()->all();
+
+        if ($rows !== []) {
+            CommunicationAnnouncementDomainAudienceMember::query()->insert($rows);
+        }
+    }
+
+    /**
+     * Phase 5B.3 §6/§7: is this audience type an academic-cohort type
+     * (`grade`/`section`)? Parallel to isDomainAudienceType() above.
+     */
+    private function isAcademicCohortAudienceType(CommunicationAudienceType $type): bool
+    {
+        return in_array($type, [
+            CommunicationAudienceType::Grade,
+            CommunicationAudienceType::Section,
+        ], true);
+    }
+
+    /**
+     * Phase 5B.3 §6/§7/§31: validates and persists the authored
+     * academic-cohort selection for `audience_type = grade`/`section`.
+     * Root CLAUDE.md rule 19 applied to cohort selection: a
+     * caller-supplied AcademicYear/GradeLevel/Section id is never
+     * trusted at face value -- each is re-verified to belong to
+     * $announcement->school_id here, at authoring time, even though
+     * the composite `(id, school_id)` foreign keys on
+     * communication_announcement_academic_cohorts would also reject a
+     * genuinely cross-School id at INSERT time. A Section's own
+     * academic_year_id is additionally cross-checked against the
+     * caller-supplied academic_year_id (brief §7) so a Section can
+     * never be silently paired with the wrong AcademicYear.
+     *
+     * Only the cohort DEFINITION is persisted here -- no Student/
+     * Guardian id is resolved or stored (brief §3/§31): resolution
+     * happens fresh, every time, in GradeAudienceResolver/
+     * SectionAudienceResolver.
+     */
+    private function syncAcademicCohort(CommunicationAnnouncement $announcement, CommunicationAudienceType $type, ?AcademicCohortSelection $selection): void
+    {
+        if ($selection === null) {
+            throw new InvalidAcademicCohortException;
+        }
+
+        $expectedCohortType = $type === CommunicationAudienceType::Grade
+            ? CommunicationAcademicCohortType::GradeLevel
+            : CommunicationAcademicCohortType::Section;
+
+        if ($selection->cohortType !== $expectedCohortType) {
+            throw new InvalidAcademicCohortException;
+        }
+
+        $academicYearExists = AcademicYear::query()
+            ->where('school_id', $announcement->school_id)
+            ->where('id', $selection->academicYearId)
+            ->exists();
+
+        if (! $academicYearExists) {
+            throw new InvalidAcademicCohortException;
+        }
+
+        if ($expectedCohortType === CommunicationAcademicCohortType::GradeLevel) {
+            if ($selection->gradeLevelId === null) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $gradeLevelExists = GradeLevel::query()
+                ->where('school_id', $announcement->school_id)
+                ->where('id', $selection->gradeLevelId)
+                ->where('status', 'active')
+                ->exists();
+
+            if (! $gradeLevelExists) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $gradeLevelId = $selection->gradeLevelId;
+            $sectionId = null;
+        } else {
+            if ($selection->sectionId === null) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $section = Section::query()
+                ->where('school_id', $announcement->school_id)
+                ->where('id', $selection->sectionId)
+                ->where('status', 'active')
+                ->first();
+
+            if ($section === null || $section->academic_year_id !== $selection->academicYearId) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $gradeLevelId = null;
+            $sectionId = $selection->sectionId;
+        }
+
+        CommunicationAnnouncementAcademicCohort::query()->where('announcement_id', $announcement->id)->delete();
+
+        CommunicationAnnouncementAcademicCohort::query()->create([
+            'school_id' => $announcement->school_id,
+            'announcement_id' => $announcement->id,
+            'cohort_type' => $expectedCohortType->value,
+            'academic_year_id' => $selection->academicYearId,
+            'grade_level_id' => $gradeLevelId,
+            'section_id' => $sectionId,
+            'recipient_kind' => $selection->recipientKind->value,
+        ]);
+    }
+
+    /**
+     * Phase 5B.1 §7/§11, extended by Phase 5B.2: a Student has NO
+     * reachable EMAIL endpoint today (no canonical contact endpoint
+     * exists), and IN_APP is available ONLY through an explicit,
+     * currently-active App\Domain\Identity\Infrastructure\StudentGuardianAccountLink
+     * (never fabricated -- root CLAUDE.md non-negotiable identity
+     * rule). The immutable logical-recipient snapshot is ALWAYS
+     * written regardless of link state. Re-validates same-school +
+     * active Student status at snapshot time, mirroring
+     * snapshotRecipients()'s own "resolved a moment ago, no longer
+     * eligible -- skip rather than fail the whole publish" behavior.
+     *
+     * @param  array<int, string>  $studentIds
+     * @param  array<int, CommunicationChannel>  $requestedChannels
+     * @param  array<string, CommunicationTimingDecision>  $timingDecisions
+     * @param  array<int, string>  $deliveryIds
+     */
+    private function snapshotAndDeliverStudentRecipients(
+        CommunicationAnnouncement $announcement,
+        array $studentIds,
+        CommunicationMessage $message,
+        array $requestedChannels,
+        array $timingDecisions,
+        CommunicationRequirement $requirement,
+        array &$deliveryIds,
+    ): void {
+        $students = Student::query()
+            ->where('school_id', $announcement->school_id)
+            ->whereIn('id', $studentIds)
+            ->where('status', 'active')
+            ->get(['id'])
+            ->keyBy('id');
+
+        if ($students->isEmpty()) {
+            return;
+        }
+
+        $now = now();
+        $snapshotRows = $students->map(fn (Student $student) => [
+            'id' => (string) new UuidV7,
+            'school_id' => $announcement->school_id,
+            'announcement_id' => $announcement->id,
+            'student_id' => $student->id,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->values()->all();
+
+        CommunicationAnnouncementRecipient::query()->insert($snapshotRows);
+
+        if (! in_array(CommunicationChannel::InApp, $requestedChannels, true)) {
+            return;
+        }
+
+        $links = $this->accountLinks->activeLinksForStudents($announcement->school, $students->keys()->all());
+        $timingDecision = $timingDecisions[CommunicationChannel::InApp->value];
+
+        foreach ($students as $student) {
+            $this->deliverInAppForLinkedDomainParty(
+                $announcement, $message, studentId: $student->id, guardianId: null,
+                link: $links->get($student->id), requirement: $requirement,
+                timingDecision: $timingDecision, deliveryIds: $deliveryIds,
+            );
+        }
+    }
+
+    /**
+     * Phase 5B.1 §9/§17/§20/§21/§34/§35: snapshots each Guardian as an
+     * immutable logical recipient (ALWAYS -- even one with zero
+     * reachable channels, brief §34's "all 100 remain in the immutable
+     * logical recipient snapshot"), then plans a real delivery ONLY for
+     * `email` where BOTH school channel policy allows it (reusing
+     * CommunicationChannelPolicyService::evaluate() UNCHANGED, with a
+     * null $schoolMembershipId -- brief §18/§20's "flow through the
+     * SAME policy engine, no second implementation") AND a canonical
+     * GuardianContact email destination actually exists.
+     *
+     * `in_app` is requested for every Announcement (syncChannels()
+     * always includes it) but a Guardian never has an in-app inbox
+     * (brief §16) -- evaluate() already returns
+     * suppress(RecipientIneligible) for a null membership id, so this
+     * loop naturally records that as a policy-decision row and creates
+     * no delivery, with zero special-casing needed.
+     *
+     * @param  array<int, string>  $guardianIds
+     * @param  array<int, CommunicationChannel>  $requestedChannels
+     * @param  array<string, CommunicationTimingDecision>  $timingDecisions
+     * @param  array<int, string>  $deliveryIds
+     */
+    private function snapshotAndDeliverGuardianRecipients(
+        CommunicationAnnouncement $announcement,
+        array $guardianIds,
+        CommunicationMessage $message,
+        array $requestedChannels,
+        array $timingDecisions,
+        CommunicationRequirement $requirement,
+        array &$deliveryIds,
+    ): void {
+        $guardians = Guardian::query()
+            ->where('school_id', $announcement->school_id)
+            ->whereIn('id', $guardianIds)
+            ->where('status', 'active')
+            ->get(['id'])
+            ->keyBy('id');
+
+        if ($guardians->isEmpty()) {
+            return;
+        }
+
+        $now = now();
+        $snapshotRows = $guardians->map(fn (Guardian $guardian) => [
+            'id' => (string) new UuidV7,
+            'school_id' => $announcement->school_id,
+            'announcement_id' => $announcement->id,
+            'guardian_id' => $guardian->id,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->values()->all();
+
+        CommunicationAnnouncementRecipient::query()->insert($snapshotRows);
+
+        // Phase 5B.2 §49: ONE batched link lookup for the whole
+        // Guardian chunk, never one query per Guardian.
+        $links = $this->accountLinks->activeLinksForGuardians($announcement->school, $guardians->keys()->all());
+
+        foreach ($guardians as $guardian) {
+            $recipient = null;
+
+            foreach ($requestedChannels as $channel) {
+                // Phase 5B.2 §20/§27: IN_APP for a Guardian is a
+                // COMPLETELY separate code path from EMAIL below --
+                // it never touches evaluateForDomainParty() (GuardianContact-
+                // based) at all, and reuses the real membership pipeline
+                // via the linked SchoolMembership instead.
+                if ($channel === CommunicationChannel::InApp) {
+                    $this->deliverInAppForLinkedDomainParty(
+                        $announcement, $message, studentId: null, guardianId: $guardian->id,
+                        link: $links->get($guardian->id), requirement: $requirement,
+                        timingDecision: $timingDecisions[$channel->value], deliveryIds: $deliveryIds,
+                    );
+
+                    continue;
+                }
+
+                $decision = $this->channelPolicy->evaluateForDomainParty($announcement->school, $channel, $requirement);
+
+                if (! $decision->allowed) {
+                    CommunicationDeliveryPolicyDecision::query()->create([
+                        'school_id' => $announcement->school_id,
+                        'message_id' => $message->id,
+                        'recipient_guardian_id' => $guardian->id,
+                        'channel' => $channel->value,
+                        'reason' => $decision->reason->value,
+                    ]);
+
+                    continue;
+                }
+
+                $destination = $channel === CommunicationChannel::Email
+                    ? $this->guardianEmailDestinationSnapshot($guardian)
+                    : null;
+
+                // Brief §17/§33/§35: school policy ALLOWS this channel,
+                // but no usable destination exists -- distinct from a
+                // policy suppression (never fabricates reachability,
+                // never crashes the whole publish for one bad Guardian
+                // endpoint).
+                if ($channel === CommunicationChannel::Email && $destination === null) {
+                    CommunicationDeliveryPolicyDecision::query()->create([
+                        'school_id' => $announcement->school_id,
+                        'message_id' => $message->id,
+                        'recipient_guardian_id' => $guardian->id,
+                        'channel' => $channel->value,
+                        'reason' => CommunicationPolicyReason::RecipientDestinationUnavailable->value,
+                    ]);
+
+                    continue;
+                }
+
+                $recipient ??= $this->deliveryFactory->createRecipientForGuardian($announcement->school_id, $message->id, $guardian->id);
+
+                $timingDecision = $timingDecisions[$channel->value];
+
+                $delivery = $this->deliveryFactory->createDelivery(
+                    $recipient,
+                    $channel,
+                    $destination,
+                    $timingDecision->shouldDefer ? $timingDecision->availableAt : null,
+                );
+
+                if (! $timingDecision->shouldDefer) {
+                    $deliveryIds[] = $delivery->id;
+                }
+            }
+        }
+    }
+
+    /**
+     * Phase 5B.2 §20/§21/§27/§48: the ONE place IN_APP is planned for a
+     * Student or Guardian logical recipient -- shared by both
+     * snapshotAndDeliverStudentRecipients() and
+     * snapshotAndDeliverGuardianRecipients() (exactly one of
+     * $studentId/$guardianId is set). No link, or a link to a
+     * currently-INACTIVE membership, both resolve to the identical
+     * `recipient_ineligible` suppression a departed SchoolMembership
+     * recipient already gets in the membership loop above -- a
+     * historical link to a since-revoked membership never silently
+     * reactivates it (brief §21).
+     *
+     * Once a link resolves to a real ACTIVE membership, this reuses
+     * the EXACT SAME primitives the membership loop uses --
+     * CommunicationChannelPolicyService::evaluate() (never
+     * evaluateForDomainParty()) and
+     * CommunicationDeliveryFactory::createRecipient() keyed to the
+     * linked membership's user_id -- so the resulting
+     * CommunicationRecipient/CommunicationDelivery rows are, from the
+     * delivery pipeline's perspective, indistinguishable from an
+     * ordinary member's (brief §22: the AUDIENCE snapshot still says
+     * Student/Guardian; only the DELIVERY additionally identifies the
+     * account endpoint used).
+     *
+     * @param  array<int, string>  $deliveryIds
+     */
+    private function deliverInAppForLinkedDomainParty(
+        CommunicationAnnouncement $announcement,
+        CommunicationMessage $message,
+        ?string $studentId,
+        ?string $guardianId,
+        ?StudentGuardianAccountLink $link,
+        CommunicationRequirement $requirement,
+        CommunicationTimingDecision $timingDecision,
+        array &$deliveryIds,
+    ): void {
+        $membership = $link?->membership;
+
+        if ($membership === null || ! $membership->isActive()) {
+            CommunicationDeliveryPolicyDecision::query()->create([
+                'school_id' => $announcement->school_id,
+                'message_id' => $message->id,
+                'recipient_student_id' => $studentId,
+                'recipient_guardian_id' => $guardianId,
+                'channel' => CommunicationChannel::InApp->value,
+                'reason' => CommunicationPolicyReason::RecipientIneligible->value,
+            ]);
+
+            return;
+        }
+
+        $decision = $this->channelPolicy->evaluate($announcement->school, $membership->id, CommunicationChannel::InApp, $requirement);
+
+        if (! $decision->allowed) {
+            // Defensive only -- evaluate() always allows IN_APP once a
+            // real, non-null membership id is passed (brief §10 of
+            // Phase 5A.5's own policy engine); kept for symmetry should
+            // that invariant ever change.
+            CommunicationDeliveryPolicyDecision::query()->create([
+                'school_id' => $announcement->school_id,
+                'message_id' => $message->id,
+                'recipient_student_id' => $studentId,
+                'recipient_guardian_id' => $guardianId,
+                'channel' => CommunicationChannel::InApp->value,
+                'reason' => $decision->reason->value,
+            ]);
+
+            return;
+        }
+
+        $recipient = $this->deliveryFactory->createRecipient($announcement->school_id, $message->id, $membership->user_id);
+
+        $delivery = $this->deliveryFactory->createDelivery(
+            $recipient,
+            CommunicationChannel::InApp,
+            null,
+            $timingDecision->shouldDefer ? $timingDecision->availableAt : null,
+        );
+
+        if (! $timingDecision->shouldDefer) {
+            $deliveryIds[] = $delivery->id;
+        }
+    }
+
+    /**
+     * @return array{email: string}|null
+     */
+    private function guardianEmailDestinationSnapshot(Guardian $guardian): ?array
+    {
+        $email = $this->guardianEmailAddressResolver->resolve($guardian);
+
+        return $email === null ? null : ['email' => $email];
     }
 
     /**

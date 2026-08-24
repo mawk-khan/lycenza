@@ -2,12 +2,17 @@
 
 namespace App\Domain\Communications\Http\Controllers;
 
+use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
+use App\Domain\Communications\Application\Audience\AcademicCohortSelection;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
+use App\Domain\Communications\Application\Channels\GuardianEmailAddressResolver;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
+use App\Domain\Communications\Domain\CommunicationAcademicCohortRecipientKind;
+use App\Domain\Communications\Domain\CommunicationAcademicCohortType;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationDispatchMode;
@@ -16,7 +21,9 @@ use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
+use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationTemplate;
+use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\SchoolMembership;
@@ -77,10 +84,20 @@ class AnnouncementController extends Controller
         ]);
     }
 
-    public function create(TenantContext $context, Request $request): Response
+    public function create(TenantContext $context, Request $request, CurrentAcademicYearResolver $academicYearResolver): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.announce', $school);
+
+        // Phase 5B.3 §6/§7: Grade/Section cohort audiences always
+        // target the School's CURRENT AcademicYear -- there is no
+        // year-picker in the composer (a closed/archived year has no
+        // meaningful "send a message to its Students" use case).
+        // `null` here means the School has no active AcademicYear yet,
+        // in which case the composer disables the Grade/Section
+        // audience options entirely rather than letting a selection
+        // fail deep inside syncAcademicCohort().
+        $currentAcademicYear = $academicYearResolver->tryResolve($school);
 
         // Brief §13: "Use Template" pre-fills the composer -- reading
         // an ACTIVE template only (brief §10's chosen policy: an
@@ -108,6 +125,10 @@ class AnnouncementController extends Controller
                 'body' => $template->body,
                 'priority' => $template->priority,
             ],
+            'currentAcademicYear' => $currentAcademicYear === null ? null : [
+                'id' => $currentAcademicYear->id,
+                'label' => $currentAcademicYear->name,
+            ],
         ]);
     }
 
@@ -134,9 +155,11 @@ class AnnouncementController extends Controller
                 requirement: CommunicationRequirement::from($validated['requirement'] ?? 'optional'),
                 dispatchMode: CommunicationDispatchMode::from($validated['dispatch_mode'] ?? 'standard'),
                 emergencyJustification: $validated['emergency_justification'] ?? null,
+                domainAudienceMemberIds: $validated['domain_audience_member_ids'] ?? [],
+                academicCohort: $this->academicCohortSelectionFromInput($validated, $validated['audience_type']),
             );
         } catch (CommunicationException $e) {
-            throw ValidationException::withMessages(['member_user_ids' => [$e->getMessage()]]);
+            throw ValidationException::withMessages([$this->audienceErrorField($validated['audience_type']) => [$e->getMessage()]]);
         }
 
         return redirect("/app/communications/announcements/{$announcement->id}");
@@ -146,6 +169,7 @@ class AnnouncementController extends Controller
         TenantContext $context,
         AnnouncementService $service,
         EmailAddressResolver $emailResolver,
+        GuardianEmailAddressResolver $guardianEmailResolver,
         CommunicationChannelPolicyService $channelPolicy,
         CommunicationApprovalService $approvalService,
         string $announcement,
@@ -154,14 +178,31 @@ class AnnouncementController extends Controller
         $this->authorizeCapability('communications.view', $school);
         $actor = $context->actor();
 
-        $model = CommunicationAnnouncement::query()->with(['createdBy:id,name', 'requestedChannels', 'attachments'])->findOrFail($announcement);
+        $model = CommunicationAnnouncement::query()
+            ->with(['createdBy:id,name', 'requestedChannels', 'attachments', 'academicCohort.gradeLevel:id,name,code', 'academicCohort.section:id,name,code', 'academicCohort.academicYear:id,name'])
+            ->findOrFail($announcement);
 
         $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
         $isCreator = $model->created_by_user_id === $actor->id;
+        // Phase 5B.2: a linked Guardian/Student's own login is a real
+        // IN_APP recipient too, but the immutable AUDIENCE snapshot
+        // (communication_announcement_recipients) records the Guardian/
+        // Student identity, not the linked User -- so the plain
+        // snapshot check below never recognizes them. The delivery-
+        // tracking table (communication_recipients) is checked as a
+        // second, additive signal: it exists only once a real IN_APP
+        // delivery was actually planned for this exact User
+        // (App\Domain\Communications\Application\AnnouncementService::deliverInAppForLinkedDomainParty()),
+        // which is the correct "did this person genuinely receive
+        // this" answer regardless of which audience type produced it.
         $isRecipient = CommunicationAnnouncementRecipient::query()
             ->where('announcement_id', $model->id)
             ->where('user_id', $actor->id)
-            ->exists();
+            ->exists()
+            || ($model->message_id !== null && CommunicationRecipient::query()
+                ->where('message_id', $model->message_id)
+                ->where('recipient_user_id', $actor->id)
+                ->exists());
 
         abort_unless($isCreator || $isRecipient || $canManage, 403);
 
@@ -208,6 +249,25 @@ class AnnouncementController extends Controller
                 'categoryBreakdown' => $preview->categoryBreakdown,
                 'email' => in_array('email', $requestedChannels, true)
                     ? $this->emailPreview($preview, $model, $school, $emailResolver, $channelPolicy, $context)
+                    : null,
+                // Phase 5B.1 §28: Student/Guardian targets have a
+                // different reachability profile from SchoolMembership
+                // recipients -- reported separately rather than folded
+                // into the counts above, which remain membership-only.
+                'domain' => $preview->studentIds !== [] || $preview->guardianIds !== []
+                    ? $this->domainAudiencePreview($preview, $requestedChannels, $guardianEmailResolver)
+                    : null,
+                // Phase 5B.3 §14/§54: cohort label/academic-year info
+                // for the Grade/Section audience types -- deliberately
+                // separate from `domain` above (which reports reachable
+                // COUNTS only). Never null when the audience type is an
+                // academic cohort and a definition was actually saved;
+                // `null` only for a grade/section draft whose cohort
+                // hasn't been authored yet (shouldn't normally happen
+                // since createDraft() requires one, but handled
+                // defensively for a not-yet-refreshed stale read).
+                'academicCohort' => $this->isAcademicCohortAudienceType($model->audience_type)
+                    ? $this->academicCohortPreview($model)
                     : null,
             ],
             'channelDeliverySummary' => $model->isPublished() ? $this->channelDeliverySummary($model) : null,
@@ -289,9 +349,11 @@ class AnnouncementController extends Controller
                 requirement: isset($validated['requirement']) ? CommunicationRequirement::from($validated['requirement']) : null,
                 dispatchMode: isset($validated['dispatch_mode']) ? CommunicationDispatchMode::from($validated['dispatch_mode']) : null,
                 emergencyJustification: $validated['emergency_justification'] ?? null,
+                domainAudienceMemberIds: $this->isDomainAudienceType($model->audience_type) ? ($validated['domain_audience_member_ids'] ?? []) : null,
+                academicCohort: $this->isAcademicCohortAudienceType($model->audience_type) ? $this->academicCohortSelectionFromInput($validated, $model->audience_type) : null,
             );
         } catch (CommunicationException $e) {
-            throw ValidationException::withMessages(['body' => [$e->getMessage()]]);
+            throw ValidationException::withMessages([$this->audienceErrorField($model->audience_type) => [$e->getMessage()]]);
         }
 
         return redirect("/app/communications/announcements/{$model->id}");
@@ -494,9 +556,31 @@ class AnnouncementController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:10000'],
             'priority' => ['required', 'in:normal,important,urgent,critical'],
-            'audience_type' => ['required', 'in:individual,school_wide'],
+            'audience_type' => ['required', 'in:individual,school_wide,student,guardian,guardians_of_students,grade,section'],
             'member_user_ids' => ['required_if:audience_type,individual', 'array'],
             'member_user_ids.*' => ['string'],
+            // Phase 5B.1: the Student ids for 'student'/
+            // 'guardians_of_students', the Guardian ids for 'guardian'
+            // -- re-validated (same-school, active) inside
+            // AnnouncementService::syncDomainAudienceMembers(), never
+            // trusted from this shape check alone.
+            'domain_audience_member_ids' => ['required_if:audience_type,student,guardian,guardians_of_students', 'array'],
+            'domain_audience_member_ids.*' => ['string'],
+            // Phase 5B.3 §6/§7/§31: the Grade/Section cohort definition
+            // -- re-validated (same-school ownership, Section<->
+            // AcademicYear consistency) inside
+            // AnnouncementService::syncAcademicCohort(), never trusted
+            // from this shape check alone (root CLAUDE.md rule 19).
+            // Exactly one of grade_level_id/section_id is meaningful,
+            // matching audience_type -- both are merely 'nullable'
+            // here (not 'prohibited') so the composer can submit the
+            // same object shape for either type without conditionally
+            // omitting a key.
+            'academic_cohort' => ['required_if:audience_type,grade,section', 'array'],
+            'academic_cohort.academic_year_id' => ['required_if:audience_type,grade,section', 'string'],
+            'academic_cohort.grade_level_id' => ['required_if:audience_type,grade', 'nullable', 'string'],
+            'academic_cohort.section_id' => ['required_if:audience_type,section', 'nullable', 'string'],
+            'academic_cohort.recipient_kind' => ['required_if:audience_type,grade,section', 'in:student,guardian'],
             'channels' => ['sometimes', 'array'],
             'channels.*' => ['string', Rule::in($allowedChannels)],
             'source_template_id' => ['nullable', 'string'],
@@ -531,6 +615,52 @@ class AnnouncementController extends Controller
         }
 
         return CommunicationTemplate::query()->where('status', 'active')->find($templateId)?->id;
+    }
+
+    private function isDomainAudienceType(string $audienceType): bool
+    {
+        return in_array($audienceType, ['student', 'guardian', 'guardians_of_students'], true);
+    }
+
+    private function isAcademicCohortAudienceType(string $audienceType): bool
+    {
+        return in_array($audienceType, ['grade', 'section'], true);
+    }
+
+    private function audienceErrorField(string $audienceType): string
+    {
+        if ($this->isAcademicCohortAudienceType($audienceType)) {
+            return 'academic_cohort';
+        }
+
+        return $this->isDomainAudienceType($audienceType) ? 'domain_audience_member_ids' : 'member_user_ids';
+    }
+
+    /**
+     * Phase 5B.3 §6/§7: builds the AcademicCohortSelection DTO from
+     * validated request input for `audience_type = grade`/`section`.
+     * Shape-only construction -- ALL real validation (School/
+     * AcademicYear/GradeLevel/Section ownership, Section<->AcademicYear
+     * consistency) happens server-side inside
+     * AnnouncementService::syncAcademicCohort(), never here.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function academicCohortSelectionFromInput(array $validated, string $audienceType): ?AcademicCohortSelection
+    {
+        if (! $this->isAcademicCohortAudienceType($audienceType)) {
+            return null;
+        }
+
+        $cohort = $validated['academic_cohort'];
+
+        return new AcademicCohortSelection(
+            cohortType: $audienceType === 'grade' ? CommunicationAcademicCohortType::GradeLevel : CommunicationAcademicCohortType::Section,
+            academicYearId: $cohort['academic_year_id'],
+            gradeLevelId: $cohort['grade_level_id'] ?? null,
+            sectionId: $cohort['section_id'] ?? null,
+            recipientKind: CommunicationAcademicCohortRecipientKind::from($cohort['recipient_kind']),
+        );
     }
 
     /**
@@ -605,6 +735,70 @@ class AnnouncementController extends Controller
             'eligible' => $eligible,
             'missing' => count($notSuppressedUserIds) - $eligible,
             'policySuppressed' => $policySuppressed,
+        ];
+    }
+
+    /**
+     * Phase 5B.1 §28/§34: non-authoritative, exactly like emailPreview()
+     * above -- the definitive per-recipient decision is made again at
+     * publish time. Never returns an individual address (brief §28) --
+     * counts only. IN_APP is always 0 (brief §16: a Student/Guardian
+     * without an account link has no in-app inbox, never fabricated).
+     *
+     * @param  array<int, string>  $requestedChannels
+     * @return array{studentCount: int, guardianCount: int, inAppReachable: int, guardianEmailEligible: int, guardianEmailUnavailable: int}
+     */
+    private function domainAudiencePreview(ResolvedAudience $preview, array $requestedChannels, GuardianEmailAddressResolver $guardianEmailResolver): array
+    {
+        $guardianEmailEligible = 0;
+        $guardianEmailUnavailable = 0;
+
+        if ($preview->guardianIds !== [] && in_array('email', $requestedChannels, true)) {
+            $guardians = Guardian::query()->whereIn('id', $preview->guardianIds)->get(['id']);
+
+            foreach ($guardians as $guardian) {
+                if ($guardianEmailResolver->resolve($guardian) !== null) {
+                    $guardianEmailEligible++;
+                } else {
+                    $guardianEmailUnavailable++;
+                }
+            }
+        }
+
+        return [
+            'studentCount' => count($preview->studentIds),
+            'guardianCount' => count($preview->guardianIds),
+            'inAppReachable' => 0,
+            'guardianEmailEligible' => $guardianEmailEligible,
+            'guardianEmailUnavailable' => $guardianEmailUnavailable,
+        ];
+    }
+
+    /**
+     * Phase 5B.3 §14/§54: cohort DEFINITION label only (grade/section
+     * name, AcademicYear label, recipient kind) -- the actual reachable
+     * counts are reported separately by domainAudiencePreview() above.
+     * `isDynamic: true` always -- this is a documentation/UX signal for
+     * the composer to show its "resolved again at publication" caveat
+     * (brief §17), never a stored field.
+     *
+     * @return array{cohortType: string, gradeLevelName: string|null, sectionName: string|null, academicYearLabel: string|null, recipientKind: string, isDynamic: bool}|null
+     */
+    private function academicCohortPreview(CommunicationAnnouncement $model): ?array
+    {
+        $cohort = $model->academicCohort;
+
+        if ($cohort === null) {
+            return null;
+        }
+
+        return [
+            'cohortType' => $cohort->cohort_type,
+            'gradeLevelName' => $cohort->gradeLevel?->name,
+            'sectionName' => $cohort->section?->name,
+            'academicYearLabel' => $cohort->academicYear?->name,
+            'recipientKind' => $cohort->recipient_kind,
+            'isDynamic' => true,
         ];
     }
 
