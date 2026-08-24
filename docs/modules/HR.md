@@ -3424,14 +3424,129 @@ No P0/P1 currently open — 8A.0 ships no runtime code.
 8A.9  Employee Profile Workspace                                  (Restricted-tier read model — tabbed UI deferred, see "Employee Profile Workspace (8A.9, implemented)") [implemented]
 8A.10 HR Permissions & Sensitive-Data Controls                    (capability seeder rollout, field-suppression proof) [implemented]
 8A.11 Audit & Activity Timeline                                   (AuditRecorder wiring across all HR mutations + a read timeline view) [implemented]
-8A.12 Employee Import & Duplicate Controls                        (narrow CSV/XLSX importer, preview/dry-run/row errors)
-8A.13 Lifecycle, Separation & Rehire                               (employment_records.status transitions, separation workflow, rehire proof)
-8A.14 API & Mobile-Ready Read Layer                               (stable versioned read contracts, sparse fieldsets)
-8A.15 Accessibility, Performance & Security Hardening              (index review, a11y pass, security regression suite)
-8A.16 Full Regression & Phase Closure                             (merge-readiness gate per CLAUDE.md/root brief section 32)
+8A.12 Employee Import & Duplicate Controls                        (narrow CSV/XLSX importer, preview/dry-run/row errors) [implemented]
+8A.13 Lifecycle, Separation & Rehire                               (employment_records.status transitions, separation workflow, rehire proof) [implemented]
+8A.14 API & Mobile-Ready Read Layer                               (stable versioned read contracts, sparse fieldsets) [implemented]
+8A.15 Accessibility, Performance & Security Hardening              (index review, a11y pass, security regression suite) [implemented]
+8A.16 Full Regression & Phase Closure                             (merge-readiness gate per CLAUDE.md/root brief section 32) [implemented — see "Phase 8A Closure (8A.16)" below]
 ```
 
 No reordering from the brief's own list was needed — repository
 evidence (existing dependency-safe order: Department/Position before
 Employment/Assignment; no separate hierarchy table needed for 8A.5)
 already matched it.
+
+## Phase 8A Closure (8A.16, implemented)
+
+Full-regression and phase-closure gate. Zero production code changes
+were required — every invariant, test baseline, and hardening measure
+introduced in 8A.0–8A.15 was re-verified intact against a genuinely
+clean-install database, and no Phase 8A defect was found. This section
+is the closure record; it does not introduce new HR behavior.
+
+**Commit chain.** All 16 commits (8A.0–8A.15) verified present and
+unaltered on `feature/phase-8a-hr-employee-records` via `git log`.
+
+**Clean-install validation.** A fresh `hr8a16` Postgres/Redis pair
+(isolated Docker Compose project, dedicated volumes, no interaction
+with the shared `school-os` compose project) was brought up from a
+genuinely empty database. `php artisan platform:test-db-reset --force`
+migrated all 57 migrations (14 of them HR's, spanning the 8A.0–8A.7
+era only — no migration was added 8A.8 onward) and ran the full
+`DatabaseSeeder` cleanly. All 13 HR tables confirmed
+`relrowsecurity = t` and `relforcerowsecurity = t`. Migration
+reversibility proven: `migrate:rollback` (full batch) then `migrate`
+both completed with zero errors, RLS state identical before and after.
+
+**Capabilities.** Exactly 18 `hr.*` capability keys and exactly 6
+default role grants (`school_admin`/`principal`, each
+`hr.employees.view`/`.manage`/`.personal.view` only — no
+`sensitive.*`/`.notes.*` by default, matching the 8A.10 decision).
+Re-running `CapabilityAndRoleSeeder` alone reproduced byte-identical
+counts, proving idempotence. `CapabilityResolver`'s P3 (no in-app
+membership/role/capability mutation surface exists yet) remains
+**RETAINED**, not closed — no new mutation surface was introduced by
+8A.1–8A.15, so there is nothing yet to invalidate the 60s cache for.
+
+**Merge readiness.** Local `main` has diverged substantially since
+Phase 8A branched (45 independent commits: Communications, Phase 5A/5B,
+Phase 1A/1B). A disposable rehearsal merge (temporary worktree/branch
+off current `main`, never touching the feature branch or real `main`)
+found 5 textual conflicts — `CapabilityAndRoleSeeder.php`,
+`routes/api.php`, `tests/Concerns/CreatesTenancyFixtures.php`,
+`packages/contracts/openapi/school-os-api.yaml`, and its generated
+`school-os-api.ts` — all purely additive, non-overlapping insertions
+by independent phases at the same insertion point. The rehearsal was
+aborted and the disposable worktree/branch fully deleted per this
+checkpoint's own instruction; no conflict was resolved on the feature
+branch. **MERGE READINESS: READY WITH DOCUMENTED FINDING** — the
+conflicts are real but require no design reconciliation, only a
+routine textual merge at actual integration time.
+
+**Test results.** Authoritative HR suite:
+`php artisan test tests/Feature/HR tests/Feature/Postgres/HrRawIsolationTest.php`
+→ 725 passed, 2200 assertions, 0 failures (exact match to the
+committed 8A.15 baseline — zero drift). Full repository regression
+(no path filter, Vite assets rebuilt first) → 1060 passed, 3091
+assertions, 0 failures (exact match to the pre-8A.16 baseline).
+`vendor/bin/pint --test` and `vendor/bin/phpstan analyse` both clean.
+OpenAPI regeneration (`npm run generate && npm run type-check` in
+`packages/shared-types`) produced **zero diff** against the committed
+generated bindings — no undocumented drift between the hand-authored
+YAML and the generated TypeScript.
+
+**API surface audit.** `php artisan route:list` confirms exactly 4 HR
+routes, all `GET|HEAD` — no accidental mutation verb. A grep audit of
+`app/Domain/HR` found no `Storage::`/file-download call (Documents
+remain metadata-only, matching the deferred-physical-upload decision),
+no direct `DB::table()`/raw-SQL bulk-write bypass (the sole
+`updateOrCreate()` in `EmployeePersonalDetailService` is a
+documented, single-model 1:1-upsert invariant, not a bypass), and no
+role-name string comparison (capability checks only).
+
+**Fresh API smoke test.** Against the clean-install database, with a
+real `php artisan serve` process and real Sanctum tokens (not the
+PHPUnit harness): authenticated Directory/Profile/Activity requests
+returned `200`; a school-admin request for `sensitive-documents`
+correctly returned `403` (school_admin holds no `hr.employees.sensitive.*`
+capability by default); unauthenticated returned `401`; an
+authenticated member without `hr.employees.view` returned `403`; a
+malformed-UUID employee id and a cross-School employee id both
+returned `404` (tenant-safe, non-enumerating); a malformed
+`campus_id` filter returned `422`; and the directory response carried
+`Cache-Control: no-store, private` as expected from 8A.15's hardening
+middleware.
+
+**Concurrency.** Employee-number allocation, reporting-manager
+cycle/closure, import (same-User race and employee-number race),
+rehire race, and separation race are all covered by existing real
+two-or-more-process tests
+(`EmployeeNumberConcurrencyTest`, `ReportingHierarchyConcurrencyTest`,
+`HrEmployeeImportConcurrencyTest`, `HrEmployeeLifecycleConcurrencyTest`),
+all passing. Employment-overlap concurrency is additionally exercised
+by `HrEmployeeLifecycleConcurrencyTest`'s
+`a_concurrent_separation_and_rehire_never_produce_two_overlapping_open_employments`.
+The one narrower gap: the primary-Assignment invariant
+(`employee_assignments_one_primary_open_per_employment`, a partial
+unique index — the same proven-safe class as `AcademicYear`'s
+one-active-per-School constraint) has no *dedicated* two-real-process
+test of its own within Phase 8A, relying instead on the identical,
+already-proven demote-then-promote pattern shared with
+`AcademicYearService::activate()`/`EmployeeEmergencyContactService::setPrimary()`.
+This is a test-coverage note, not a defect — no test failed, and per
+this checkpoint's own instruction, no new concurrency implementation
+or test was manufactured to close it artificially.
+
+**Security.** No P0/P1 found. No new P2 found (all P2/P3 items
+tracked from 8A.0–8A.15 were closed in their own checkpoints or
+remain explicitly deferred and documented, e.g. CapabilityResolver
+P3 above).
+
+**Files changed by 8A.16 itself:** this documentation section and the
+five `[implemented]` markers above, in `docs/modules/HR.md` only — no
+application code, no migration, no test file. `git status` on the
+feature branch was clean before this edit (Vite's gitignored
+`public/build/*` output aside); this is a documentation-only closure
+per this checkpoint's own "valid outcome (A)."
+
+**PHASE 8A VERDICT: CLOSED.**

@@ -223,6 +223,11 @@ it uses a narrow HR-scoped table instead). Payroll itself is untouched
 by this note and remains scoped to this Phase 0J entry, in its
 originally documented order.
 
+**Closure (2026-08-24):** Phase 8A (8A.0–8A.16) is complete — see
+`docs/modules/HR.md`'s "Phase 8A Closure (8A.16, implemented)" section
+for the full regression/closure record. Payroll (the remainder of this
+Phase 0J entry) remains not started.
+
 ## Phase 0K — Operational Modules
 
 Transport, Library, Inventory, Canteen, Hostel, Health, Visitor/Safety
