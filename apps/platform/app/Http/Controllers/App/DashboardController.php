@@ -52,6 +52,8 @@ class DashboardController extends Controller
                 'canViewGuardians' => $school !== null && $capabilities->canInSchool($user, 'guardians.view', $school),
                 // Phase 5A: Communication Hub.
                 'canViewCommunications' => $school !== null && $capabilities->canInSchool($user, 'communications.view', $school),
+                // Phase 1B.6: Enrollment administration.
+                'canViewEnrollments' => $school !== null && $capabilities->canInSchool($user, 'enrollments.view', $school),
             ],
         ]);
     }

@@ -159,6 +159,25 @@ class CapabilityAndRoleSeeder extends Seeder
             // submission regardless of which role granted them this
             // capability.
             ['key' => 'communications.approve', 'label' => 'Approve or reject Communication Hub approval requests', 'namespace' => 'school'],
+
+            // Phase 1B.4 (docs/modules/STUDENT-ENROLLMENT.md
+            // "Authorization") -- Student academic placement/enrollment,
+            // deliberately its own pair rather than reusing
+            // students.view/students.manage: Enrollment is a distinct
+            // resource from Student identity (Phase 1A vs Phase 1B's
+            // explicit identity/enrollment boundary), and a School may
+            // later want to delegate Enrollment administration
+            // separately from Student identity administration (e.g. a
+            // future registrar-style role) without this checkpoint
+            // inventing that role now. `enrollments.manage` is
+            // independent of `enrollments.view` -- the CapabilityResolver
+            // has no capability-inheritance mechanism (see
+            // docs/security/AUTHORIZATION.md), so a role granted only
+            // `.manage` would NOT implicitly gain `.view`; every role
+            // that needs both must be granted both explicitly, exactly
+            // like every other view/manage pair in this catalog.
+            ['key' => 'enrollments.view', 'label' => 'View Student Enrollment placement and history', 'namespace' => 'school'],
+            ['key' => 'enrollments.manage', 'label' => 'Manage Student Enrollment (create, complete, withdraw, cancel, transfer)', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -195,6 +214,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',
                     'communications.templates.manage', 'communications.emergency', 'communications.approve',
+                    'enrollments.view', 'enrollments.manage',
                 ],
             ],
             'principal' => [
@@ -226,6 +246,14 @@ class CapabilityAndRoleSeeder extends Seeder
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.announce', 'communications.templates.manage', 'communications.approve',
+                    // Phase 1B.4: Enrollment/academic placement is the
+                    // same kind of hands-on operational concern for a
+                    // Principal as Student/Guardian identity already is
+                    // (placing/withdrawing/transferring Students is a
+                    // routine Principal task, not School-Admin-only
+                    // administration) -- matches the identical rationale
+                    // just above for students.*/guardians.*.
+                    'enrollments.view', 'enrollments.manage',
                 ],
             ],
         ];
