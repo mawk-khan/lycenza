@@ -29,9 +29,20 @@ class EmployeeDirectoryController extends Controller
     {
         $validated = $request->validate([
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'campus_id' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'department_id' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'position_id' => ['sometimes', 'nullable', 'string', 'max:255'],
+            // Phase 8A.15: `uuid` format is enforced HERE, not left to
+            // flow through to EmployeeDirectoryService's `ea.campus_id`/
+            // `ea.department_id`/`ea.position_id` comparisons -- those
+            // columns are UUID-typed, so PostgreSQL raises a raw
+            // `invalid input syntax for type uuid` QueryException (a
+            // 500, not a safe empty result) for a non-UUID string.
+            // This was a REAL bug found during this checkpoint's own
+            // abuse-input testing, not a hypothetical one -- a
+            // nonexistent-but-still-UUID-shaped id already correctly
+            // yields zero results via the existing tenant-safe query,
+            // unaffected by this fix.
+            'campus_id' => ['sometimes', 'nullable', 'uuid'],
+            'department_id' => ['sometimes', 'nullable', 'uuid'],
+            'position_id' => ['sometimes', 'nullable', 'uuid'],
             'sort' => ['sometimes', 'nullable', 'string'],
             'direction' => ['sometimes', 'nullable', 'string'],
             'include_archived' => ['sometimes', 'boolean'],

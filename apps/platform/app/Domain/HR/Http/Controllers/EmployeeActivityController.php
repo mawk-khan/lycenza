@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
  * Phase 8A.14 -- the sole HTTP transport for the 8A.11 Employee
@@ -29,6 +30,14 @@ class EmployeeActivityController extends Controller
 {
     public function index(Request $request, School $school, string $employee): JsonResponse
     {
+        // Phase 8A.15: reject a malformed (non-UUID) id as the same
+        // tenant-safe 404 a nonexistent/cross-School Employee already
+        // produces -- otherwise it reaches
+        // `EmployeeActivityTimelineService::get()`'s `Employee::query()->find($employeeId)`
+        // and crashes PostgreSQL with `invalid input syntax for type
+        // uuid` (a raw 500, confirmed empirically).
+        abort_if(! Str::isUuid($employee), 404);
+
         $validated = $request->validate([
             'category' => ['sometimes', 'nullable', 'string'],
             'occurred_from' => ['sometimes', 'nullable', 'date'],

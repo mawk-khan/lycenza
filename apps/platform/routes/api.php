@@ -250,13 +250,24 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // divergent capability matrix"). `{employee}` is always a
             // raw route-parameter string, never implicit Eloquent
             // route-model binding -- see each controller's own docblock.
+            //
+            // Phase 8A.15: `throttle:hr-api-reads` (School+actor-keyed,
+            // 120/min) and `private-no-store` (Cache-Control: private,
+            // no-store -- this data must never become shared-cacheable)
+            // added to all four; the sensitive-document endpoint uses
+            // the stricter `throttle:hr-api-sensitive-reads` (20/min)
+            // instead. See docs/modules/HR.md 8A.15 as-built.
             Route::get('/employees', [EmployeeDirectoryController::class, 'index'])
+                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
                 ->name('schools.employees.index');
             Route::get('/employees/{employee}', [EmployeeProfileController::class, 'show'])
+                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
                 ->name('schools.employees.show');
             Route::get('/employees/{employee}/activity', [EmployeeActivityController::class, 'index'])
+                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
                 ->name('schools.employees.activity.index');
             Route::get('/employees/{employee}/sensitive-documents', [EmployeeSensitiveDocumentController::class, 'index'])
+                ->middleware(['throttle:hr-api-sensitive-reads', 'private-no-store'])
                 ->name('schools.employees.sensitive-documents.index');
         });
 });

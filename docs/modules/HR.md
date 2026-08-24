@@ -2930,6 +2930,291 @@ explicit scope, including the rate-limiting and cache-header gaps
 flagged above), no mutation API, no file transfer, no offline sync,
 and no push notifications.
 
+## Accessibility, Performance & Security Hardening (8A.15, implemented)
+
+**No new HR business feature.** This checkpoint closes the two
+concrete 8A.14 findings (no read-rate limiter, no Cache-Control
+policy), performs a deep review of the carried CapabilityResolver P3,
+validates Directory/Profile/Timeline query plans at realistic
+multi-tenant scale, and fixes two genuine bugs the abuse-input testing
+this checkpoint required actually found — see below.
+
+### Accessibility decision
+
+**Gate 4 classification: A — NO ACTIVE HR VISUAL UI.** Web Directory/
+Profile/Timeline UI remain exactly where 8A.8/8A.9/8A.11/8A.14 left
+them: deferred. The only active HR-facing surface is the JSON API
+(8A.14) — non-visual, not a WCAG artifact. No HR web page was created
+in this checkpoint merely to have something to run an accessibility
+audit against (the checkpoint's own explicit prohibition). Accordingly:
+accessibility UI remediation is **NOT APPLICABLE** to the current
+surface; real accessibility work (semantic structure, focus
+management, contrast, etc.) is deferred to whichever future checkpoint
+actually builds the web Directory/Profile/Timeline pages, and must be
+enforced there, not retrofitted here against nothing.
+
+### Rate limiting — closes the 8A.14 finding
+
+Two new named limiters in the existing
+`App\Providers\RateLimiterServiceProvider` (no new rate-limiting
+framework — reuses the exact `tenantKey()` School+actor keying
+`school-api-mutations`/`webhook-admin` already established, never
+IP-only):
+
+- **`hr-api-reads`** — 120/min, applied to Directory/Profile/Timeline.
+  Matches `public-api`'s existing generosity (page-through-100-rows/
+  search-as-you-type workflows stay practical), but precisely
+  School+actor-keyed since every caller here is already authenticated.
+- **`hr-api-sensitive-reads`** — 20/min, applied ONLY to the Highly
+  Sensitive document metadata endpoint. Matches `webhook-admin`'s
+  existing precedent for "rarer, more sensitive operator actions than
+  routine data reads."
+
+Both are genuinely shared, reusable limiter definitions (not a
+per-endpoint bespoke check inside a controller) — `routes/api.php`
+adds `throttle:hr-api-reads`/`throttle:hr-api-sensitive-reads` to the
+four routes' middleware arrays, nothing else. Proven end-to-end
+(`tests/Feature/HR/HrEmployeeApiRateLimitTest.php`, 11 tests): exact
+limit enforcement per endpoint; Directory/Profile/Timeline share ONE
+bucket (mixing routes/query strings never creates a new bucket);
+sensitive documents use the stricter, independent bucket; same User
+has independent buckets per School; different Users in the same School
+have independent buckets; an unauthorized (403) request against an
+Employee that happens to have sensitive documents consumes the
+identical limiter shape as one that doesn't (no hidden-resource-state
+side channel); ordinary pagination stays practical under the limit.
+
+**A real, pre-existing, cross-cutting bug was found and fixed while
+testing this**: `bootstrap/app.php`'s custom JSON exception-rendering
+callback built a brand-new `response()->json(...)` without merging
+`$e->getHeaders()` — silently dropping `Retry-After` (and Laravel's
+`X-RateLimit-*` headers) on **every** `throttle:*`-protected route
+across the whole API, not just HR's new ones. Fixed narrowly by
+merging `getHeaders()` when the thrown exception exposes it
+(`method_exists($e, 'getHeaders')`), mirroring the existing `errorCode()`
+pattern already used for the `code` field. This benefits every
+existing limiter (`login`, `school-api-mutations`, `webhook-admin`,
+...), not only HR's new ones. `Tests\Feature\RateLimiting\SchoolApiMutationsThrottleTest`
+and friends remain green, and `HrEmployeeApiRateLimitTest` proves
+`Retry-After` is now present.
+
+**8A.14 rate-limit finding: CLOSED.**
+
+### Cache-Control — closes the 8A.14 finding
+
+A new, deliberately GENERIC platform middleware —
+`App\Http\Middleware\Api\EnsurePrivateNoStoreResponse` (`private-no-store`
+alias) — sets `Cache-Control: private, no-store` on the response.
+Applied to all four HR read routes. No repository-wide Cache-Control
+convention existed before this checkpoint (verified by inspection, not
+assumed) — this middleware is additive and opt-in per route; it changes
+behavior for no other existing endpoint. Proven
+(`tests/Feature/HR/HrEmployeeApiCacheControlTest.php`, 10 tests): all
+four success (200) responses carry the policy; a 403/404/422 (all
+thrown from *inside* the route's own middleware stack, where Laravel's
+pipeline still lets each traversed middleware process the resulting
+error Response) also carry it; no response ever carries a contradictory
+`public`/`s-maxage`/`max-age` directive; the middleware never alters
+the JSON body; a sensitive-document read remains audited exactly once
+under the new middleware. A 401 (missing/invalid token) or 429
+(throttled) response does **not** carry this header — both are thrown
+by framework-PRIORITIZED middleware (`Authenticate`/`ThrottleRequests`)
+that runs *before* `private-no-store` in actual execution order
+(Laravel's `$middlewarePriority`, same mechanism
+`RateLimiterServiceProvider::tenantKey()`'s own docblock already
+documents), so `private-no-store` is never entered for those responses
+at all — an accepted, understood, evidence-based limitation, not an
+oversight.
+
+**8A.14 cache-header finding: CLOSED** (for every response this
+middleware can actually reach).
+
+### CapabilityResolver P3 — deep review, RETAINED with evidence
+
+Full inspection performed: exact cache key
+(`school:{schoolId}:capabilities:user:{userId}`, already School+User
+scoped — no cross-School collision possible, confirmed directly by a
+new test), 60-second TTL, `CapabilityResolver::forgetCache()` already
+exists and already works correctly in both directions (revoke-then-deny,
+regrant-then-allow — both proven directly, never only via a
+test-only shortcut masking a broken mechanism).
+
+**The gap is not in the mechanism — it is that nothing in production
+calls it.** A repository-wide search found no controller or service
+anywhere that writes `membership_role_assignments`, changes
+`school_memberships.status`, or mutates `role_capabilities`.
+`docs/security/AUTHORIZATION.md`'s own "What is NOT yet implemented"
+section already says so explicitly ("a UI for managing role
+assignments... only the data model + a seeded system catalog exist"),
+and the pre-existing `tests/Feature/HR/HrMutationAuthorizationTest.php::capability_revocation_takes_effect_on_the_next_check()`
+already documents, in its own comment, that "this repository has no
+automatic revoke-triggered invalidation hook yet, so a real caller
+doing a role change must call this itself." Building a full
+role/membership-management mutation subsystem to close this would be a
+broad Identity & Access redesign entirely outside Phase 8A's HR
+scope — squarely the "feature expansion" this hardening checkpoint's
+own non-negotiables forbid, and there is no narrow, correct fix
+available within HR's boundary (per the checkpoint's own explicit
+"retain P3 and document exact evidence" instruction for exactly this
+situation).
+
+New evidence gathered this checkpoint
+(`tests/Feature/HR/HrCapabilityCacheHardeningTest.php`, 6 tests):
+cache-key School/User isolation proven directly; a granted capability
+is proven cached (second check issues zero queries); revoking a role
+assignment WITHOUT calling `forgetCache()` is proven to leave the
+stale grant servable for the remainder of the 60-second window (the
+retained gap, demonstrated rather than merely asserted); calling the
+existing `forgetCache()` immediately denies; the identical pattern is
+proven for membership suspension; a regrant followed by `forgetCache()`
+correctly resolves the new capability.
+
+**P3 status: RETAINED — Low.** Not a new HR-introduced risk; a
+pre-existing, Phase 0B-documented, cross-cutting platform decision
+whose only safe closure path (wiring a real mutation service to
+`forgetCache()`) does not yet exist to wire into.
+
+### Query-plan review — evidence at realistic multi-tenant scale
+
+Performed against the isolated `hr8a15` PostgreSQL instance, seeded to
+20,500 Employees across 11 Schools (500 for one "target" School, ~2,000
+each for 10 "noise" Schools) and 55,200 `school_audit_events` rows
+(5,200 for the target School), using real `EXPLAIN ANALYZE` — not
+guesswork:
+
+- **Directory** (`employees` table): the paginated list query, the
+  `include_archived` count query, and the Position/Department/Campus
+  `whereExists` filter subquery all use `Index Scan`/`Bitmap Index Scan
+  using employees_school_id_index` once the table has realistic
+  cross-tenant volume (a single-School-only seed misleadingly showed a
+  sequential scan, because with 100% of rows matching the filter, a
+  seq scan is genuinely the correct plan — confirming the *existing*
+  `school_id` index was never actually the issue, only an unrealistic
+  single-tenant fixture would suggest one). The `full_name ILIKE
+  '%...%'` substring filter still requires a row-by-row check, but ONLY
+  across the already-narrowed ~500 School-scoped rows (not all 20,500),
+  executing in under 1ms. **No index change.**
+- **Profile** (`employment_records`/`employee_assignments`/
+  `employee_qualifications`/etc.): all already carry an `employee_id`
+  (or `employment_record_id`) index; Profile queries filter by exactly
+  that column, independent of total table size. **No index change.**
+- **Timeline** (`school_audit_events`): the count and page queries both
+  use `Bitmap Index Scan using school_audit_events_school_id_index`
+  once realistic cross-tenant volume exists (same single-tenant-seed
+  caveat as Directory above), narrowing 55,200 total rows to this
+  School's 5,200 before the `subject_id`/`metadata->>'employeeId'`
+  filter runs — 208 matching events found in ~1.6ms total. Confirms
+  8A.11's own original decision ("current indexing is sufficient... no
+  expression index on `metadata->>'employeeId'`") is correct, now with
+  real evidence at meaningfully larger scale, not just at 8A.11's
+  original small-fixture size. **No index change.**
+
+### Profile response size
+
+`EmployeeProfileWorkspace` returns the Employee's FULL owned-history
+collections (no `take(N)` cap was added — the API contract is
+unchanged). Assessed, not guessed: unlike audit history (which grows
+indefinitely over an Employee's tenure), Employment/Assignment/
+Qualification/Experience/Certification/Document counts are bounded by
+real HR/career cardinality (a career realistically produces single or
+low-double-digit rows per section over decades, not thousands) — the
+query-plan evidence above (employee_id-indexed, independent of total
+table size) confirms this remains fast regardless. No hidden
+truncation was introduced; none was found necessary.
+
+### Sensitive-document response size
+
+`EmployeeSensitiveDocumentReadService::forEmployee()` remains
+unbounded (no pagination added, no OpenAPI/contract change). Assessed:
+Highly Sensitive documents (government ID, bank details, tax
+identifiers — the only real categories this schema was ever designed
+for, docs/modules/HR.md's privacy classification matrix) are bounded
+by genuine domain cardinality — realistically single digits per
+Employee for the lifetime of their record, never comparable to an
+audit trail's inherent growth. Pagination would add API-contract
+complexity (OpenAPI/generated-types/HR.md updates) for a risk this
+checkpoint's own domain analysis does not demonstrate. **Documented as
+bounded by domain constraint, not re-engineered.**
+
+### API parameter abuse hardening
+
+`tests/Feature/HR/HrEmployeeApiAbuseInputTest.php` (19 tests) proves
+the existing Laravel validation rules already reject array-valued
+scalar parameters (`search[]=`, `sort[]=`, `per_page[]=`,
+`category[]=`), out-of-PHP-int-range integers, negative/zero/non-integer
+`page`, and malformed booleans/dates — all with `422`, never `500` —
+by construction, with **no controller code change required** for those
+cases. `search` already had `max:255` since 8A.14 (confirmed, not
+re-added). A reversed Timeline date range (`occurred_from >
+occurred_to`) safely yields an empty result, not an error, matching
+the checkpoint's own "do not hide historical activity unexpectedly"
+guidance — no artificial range limit was added.
+
+**Two genuine bugs were found and fixed** by this abuse testing (not
+hypothetical — reproduced with a real PostgreSQL error before the
+fix):
+
+1. A non-UUID-format `campus_id`/`department_id`/`position_id`
+   Directory filter reached `EmployeeDirectoryService`'s UUID-typed
+   column comparison and crashed with a raw
+   `invalid input syntax for type uuid` `QueryException` (an unhandled
+   500). Fixed by validating these three parameters with Laravel's
+   `uuid` rule in `EmployeeDirectoryController` — rejected with `422`
+   now, before ever reaching the query. A well-formed but nonexistent
+   or foreign-School id still correctly yields zero results (proven
+   directly) — this fix narrows the input format, it does not change
+   tenant-safety semantics.
+2. A non-UUID-format `{employee}` route value reached the SAME kind of
+   UUID-typed comparison inside `EmployeeProfileWorkspaceService::build()`/
+   `EmployeeActivityTimelineService::get()`/
+   `EmployeeSensitiveDocumentReadService::forEmployee()` and crashed
+   identically. Fixed by adding a `Str::isUuid($employee)` pre-check in
+   all three controllers, `abort(404)` otherwise — the exact same
+   tenant-safe 404 a genuinely nonexistent/cross-School Employee id
+   already produces, never a distinguishing signal.
+
+### Privacy regression (re-run after all hardening changes)
+
+All pre-existing 8A.14 negative-disclosure, section-authorization,
+cross-School, and historical-sensitivity tests remain green, unchanged
+— the rate-limit/cache-control middleware and the two UUID-validation
+fixes touch only transport-boundary code, never the DTOs/services that
+own disclosure. `HrEmployeeApiRateLimitTest`/`HrEmployeeApiCacheControlTest`
+additionally prove neither new middleware leaks personal/sensitive
+data into a throttled/error response body.
+
+### Logging / redaction
+
+Grepped the HR API surface (controllers, the two new middlewares, the
+two new limiters) for `Log::`/`logger(`/`dump(`/`dd(`/`var_dump(`:
+none found. No new logging was introduced by this checkpoint.
+
+### Security headers / CORS
+
+No repository-wide `X-Content-Type-Options`/`Content-Security-Policy`/
+CORS configuration exists to inspect or regress (verified — no
+`config/cors.php`, no security-header middleware anywhere in this
+codebase). This predates 8A.14/8A.15 entirely and is not an HR-scoped
+gap to fix unilaterally; HR introduced no new CORS rule and no new
+security-header regression. `Content-Type: application/json` is
+already correct on every HR response (framework default via
+`response()->json()`).
+
+### Migrations / capabilities
+
+**None.** Query-plan evidence showed the existing indexes are
+sufficient at realistic scale; no new HR capability was needed for
+rate limiting, caching, or the UUID-validation fixes.
+
+### 8A.16 boundary
+
+8A.15 hardens the existing 8A.1–8A.14 surface only — no new HR
+business feature, no mutation/import/file-transfer endpoint, no web
+Directory/Profile/Timeline UI (still deferred, to be accessibility-
+reviewed when actually built), and the CapabilityResolver P3 remains
+explicitly retained (not silently dropped) for Phase 8A.16's full
+regression and phase-closure review to carry forward accurately.
+
 ## Authorization design
 
 **Superseded by "HR Permissions & Sensitive-Data Controls (8A.10,

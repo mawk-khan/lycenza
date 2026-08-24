@@ -1309,6 +1309,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /schools/{schoolId}/employees/{employeeId}:
     get:
@@ -1346,6 +1347,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /schools/{schoolId}/employees/{employeeId}/activity:
     get:
@@ -1393,6 +1395,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
   /schools/{schoolId}/employees/{employeeId}/sensitive-documents:
     get:
@@ -1404,7 +1407,10 @@ paths:
         Never returns a storage path/disk or a file URL; a successful
         non-empty read is audited exactly once
         (hr.employee_document.sensitive_viewed) by the underlying
-        service, not by this endpoint itself.
+        service, not by this endpoint itself. Phase 8A.15: rate-limited
+        by the stricter `hr-api-sensitive-reads` policy (20/min,
+        School+actor-keyed) rather than the 120/min policy the other
+        three HR endpoints share.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/EmployeeId" }
@@ -1433,6 +1439,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
 
 components:
   securitySchemes:
@@ -1532,6 +1539,27 @@ components:
         (docs/architecture/API.md, "Idempotency"); absent on a request's
         first, freshly-executed response.
       schema: { type: string, enum: ["true"] }
+    RetryAfter:
+      description: >
+        Phase 8A.15 -- seconds until the caller's rate-limit window
+        resets. Present on every 429 across the whole `/api/v1` surface
+        (not HR-specific) since `bootstrap/app.php`'s exception
+        renderer merges `ThrottleRequestsException::getHeaders()`.
+      schema: { type: integer }
+
+  responses:
+    TooManyRequests:
+      description: >
+        Phase 8A.15 -- the caller's School+actor-scoped rate limit
+        (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for
+        the sensitive-documents endpoint) has been exceeded. The same
+        global error envelope as every other `/api/v1` error; never a
+        cross-School/Highly-Sensitive existence signal.
+      headers:
+        Retry-After: { $ref: "#/components/headers/RetryAfter" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
     ResponseMeta:

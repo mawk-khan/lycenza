@@ -89,6 +89,29 @@ class RateLimiterServiceProvider extends ServiceProvider
             return Limit::perMinute(12)->by($user !== null ? $user->id : $request->ip());
         });
 
+        // Phase 8A.15: the four HR read endpoints (Directory/Profile/
+        // Timeline/sensitive documents) are authenticated, School-
+        // scoped GET routes reaching real PostgreSQL queries over
+        // Restricted/Highly Sensitive data -- reusing `tenantKey()`
+        // gives them the same (School, actor) isolation
+        // `school-api-mutations` already established, never IP-only
+        // (an internet-facing authenticated read API is not exempt
+        // from abuse control merely because it is read-only). Generous
+        // enough that ordinary Directory search-as-you-type/pagination/
+        // mobile polling stays practical -- 120/min matches
+        // `public-api`'s existing generosity, but precisely School+
+        // actor-keyed rather than IP-keyed since every caller here is
+        // already authenticated.
+        RateLimiter::for('hr-api-reads', fn (Request $request) => Limit::perMinute(120)->by($this->tenantKey($request)));
+
+        // The Highly Sensitive document metadata endpoint specifically
+        // (checkpoint 8A.15 section 9): a deliberately stricter limiter,
+        // matching `webhook-admin`'s existing precedent for "rarer,
+        // more sensitive operator actions than routine data reads" --
+        // reading Highly Sensitive metadata is not a page-through-100-
+        // rows workflow the way Directory search is.
+        RateLimiter::for('hr-api-sensitive-reads', fn (Request $request) => Limit::perMinute(20)->by($this->tenantKey($request)));
+
         // Deliberately NO limiter for /health/live or /health/ready
         // (section 32) -- infrastructure must be able to poll them as
         // frequently as its own probe interval requires, and both are

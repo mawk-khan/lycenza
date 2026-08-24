@@ -41,7 +41,16 @@ class AcademicStructureRateLimitingTest extends TestCase
     #[Test]
     public function no_new_per_endpoint_limiter_was_introduced_for_academic_structure_routes(): void
     {
-        $registeredLimiters = ['login', 'public-api', 'school-api-mutations', 'webhook-admin', 'internal-service', 'internal-diagnostics'];
+        // Phase 8A.15 added exactly two new, deliberate, SHARED limiters
+        // (never a new one-per-endpoint limiter, which is what this
+        // guard actually exists to catch) for the four HR read
+        // endpoints, which live under the same `api.v1.schools.*` route
+        // namespace this scan covers: `hr-api-reads` (Directory/
+        // Profile/Timeline) and the stricter `hr-api-sensitive-reads`
+        // (Highly Sensitive document metadata) -- see
+        // App\Providers\RateLimiterServiceProvider and
+        // Tests\Feature\HR\HrEmployeeApiRateLimitTest.
+        $registeredLimiters = ['login', 'public-api', 'school-api-mutations', 'webhook-admin', 'internal-service', 'internal-diagnostics', 'hr-api-reads', 'hr-api-sensitive-reads'];
 
         foreach (Route::getRoutes() as $route) {
             if (! str_starts_with((string) $route->getName(), 'api.v1.schools.')) {

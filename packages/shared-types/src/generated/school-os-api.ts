@@ -677,7 +677,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Highly Sensitive EmployeeDocument metadata -- a SEPARATE, narrowly-authorized read path from the general Profile endpoint (section 12/14/59). Requires hr.employees.sensitive.view. Never returns a storage path/disk or a file URL; a successful non-empty read is audited exactly once (hr.employee_document.sensitive_viewed) by the underlying service, not by this endpoint itself. */
+        /** Highly Sensitive EmployeeDocument metadata -- a SEPARATE, narrowly-authorized read path from the general Profile endpoint (section 12/14/59). Requires hr.employees.sensitive.view. Never returns a storage path/disk or a file URL; a successful non-empty read is audited exactly once (hr.employee_document.sensitive_viewed) by the underlying service, not by this endpoint itself. Phase 8A.15: rate-limited by the stricter `hr-api-sensitive-reads` policy (20/min, School+actor-keyed) rather than the 120/min policy the other three HR endpoints share. */
         get: operations["getEmployeeSensitiveDocuments"];
         put?: never;
         post?: never;
@@ -1229,7 +1229,18 @@ export interface components {
             changed_fields: string[];
         };
     };
-    responses: never;
+    responses: {
+        /** @description Phase 8A.15 -- the caller's School+actor-scoped rate limit (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for the sensitive-documents endpoint) has been exceeded. The same global error envelope as every other `/api/v1` error; never a cross-School/Highly-Sensitive existence signal. */
+        TooManyRequests: {
+            headers: {
+                "Retry-After": components["headers"]["RetryAfter"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+    };
     parameters: {
         Page: number;
         PerPage: number;
@@ -1257,6 +1268,8 @@ export interface components {
         XRequestId: string;
         /** @description Present and "true" only when this response is a replay of a previously completed request with the same Idempotency-Key (docs/architecture/API.md, "Idempotency"); absent on a request's first, freshly-executed response. */
         IdempotencyReplayed: "true";
+        /** @description Phase 8A.15 -- seconds until the caller's rate-limit window resets. Present on every 429 across the whole `/api/v1` surface (not HR-specific) since `bootstrap/app.php`'s exception renderer merges `ThrottleRequestsException::getHeaders()`. */
+        RetryAfter: number;
     };
     pathItems: never;
 }
@@ -3079,6 +3092,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            429: components["responses"]["TooManyRequests"];
         };
     };
     getEmployeeProfile: {
@@ -3130,6 +3144,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            429: components["responses"]["TooManyRequests"];
         };
     };
     getEmployeeActivity: {
@@ -3200,6 +3215,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            429: components["responses"]["TooManyRequests"];
         };
     };
     getEmployeeSensitiveDocuments: {
@@ -3251,6 +3267,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            429: components["responses"]["TooManyRequests"];
         };
     };
 }

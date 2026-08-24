@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
  * Phase 8A.14 -- the sole HTTP transport for Highly Sensitive
@@ -28,6 +29,12 @@ class EmployeeSensitiveDocumentController extends Controller
 {
     public function index(Request $request, School $school, string $employee): JsonResponse
     {
+        // Phase 8A.15: reject a malformed (non-UUID) id as the same
+        // tenant-safe 404 a nonexistent/cross-School Employee already
+        // produces -- see EmployeeProfileController's identical fix
+        // for the raw-500 this otherwise causes.
+        abort_if(! Str::isUuid($employee), 404);
+
         $entries = app(EmployeeSensitiveDocumentReadService::class)->forEmployee($school, $employee, $request->user());
 
         abort_if($entries === null, 404);

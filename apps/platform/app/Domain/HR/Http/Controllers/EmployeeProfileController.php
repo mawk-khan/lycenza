@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
  * Phase 8A.14 -- the sole HTTP transport for the 8A.9 Employee Profile
@@ -30,6 +31,15 @@ class EmployeeProfileController extends Controller
 {
     public function show(Request $request, School $school, string $employee): JsonResponse
     {
+        // Phase 8A.15: a malformed (non-UUID) id would otherwise reach
+        // the service's `Employee::query()->where('school_id', ...)->find($employeeId)`
+        // and crash PostgreSQL with `invalid input syntax for type
+        // uuid` (a raw 500, confirmed empirically during this
+        // checkpoint's own abuse-input testing) -- rejected here as
+        // the SAME tenant-safe 404 a genuinely nonexistent/cross-School
+        // Employee already produces, never a distinguishing error.
+        abort_if(! Str::isUuid($employee), 404);
+
         $workspace = app(EmployeeProfileWorkspaceService::class)->build($school, $employee, $request->user());
 
         abort_if($workspace === null, 404);
