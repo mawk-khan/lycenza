@@ -10,6 +10,7 @@ use App\Domain\Students\Application\Exceptions\InvalidRollNumberStrategyExceptio
 use App\Domain\Students\Application\Exceptions\InvalidRolloverItemDecisionException;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanYearsException;
 use App\Domain\Students\Application\Exceptions\OpenRolloverPlanConflictException;
+use App\Domain\Students\Application\Exceptions\RolloverItemAlreadyExecutedException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
@@ -158,6 +159,12 @@ class EnrollmentRolloverPlanService
      * INSERTS a brand-new Item with `decision = 'undecided'` and
      * leaves every configuration field exactly as the DB default
      * until an operator calls this method).
+     *
+     * Phase 1B.7C: refuses once the Item has already produced a real
+     * target Enrollment (`target_enrollment_id` set) -- reconfiguring
+     * an executed Item would silently orphan its provenance link, the
+     * exact corruption `target_enrollment_id`'s FK integrity exists to
+     * prevent (see RolloverItemAlreadyExecutedException).
      */
     public function setItemDecision(
         EnrollmentRolloverPlan $plan,
@@ -169,6 +176,10 @@ class EnrollmentRolloverPlanService
         ?User $actor = null,
     ): EnrollmentRolloverItem {
         $this->assertConfigurable($plan);
+
+        if ($item->target_enrollment_id !== null) {
+            throw new RolloverItemAlreadyExecutedException;
+        }
 
         if (! in_array($decision, ['undecided', 'promote', 'repeat', 'exclude', 'manual_review'], true)) {
             throw new InvalidRolloverItemDecisionException($decision);

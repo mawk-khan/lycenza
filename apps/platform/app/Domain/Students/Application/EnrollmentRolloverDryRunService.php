@@ -3,7 +3,6 @@
 namespace App\Domain\Students\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\Section;
-use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanChronologyException;
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
@@ -486,15 +485,7 @@ class EnrollmentRolloverDryRunService
 
     private function resolveRollNumber(EnrollmentRolloverItem $item, StudentEnrollment $freshSource): ?string
     {
-        try {
-            return match ($item->roll_number_strategy) {
-                'preserve_source' => RollNumberNormalizer::normalize($freshSource->roll_number),
-                'explicit' => RollNumberNormalizer::normalize((string) $item->target_roll_number),
-                default => null,
-            };
-        } catch (InvalidEnrollmentRollNumberException) {
-            return null;
-        }
+        return RollNumberNormalizer::resolveForStrategy($item->roll_number_strategy, $item->target_roll_number, $freshSource->roll_number);
     }
 
     /**

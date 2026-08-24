@@ -24,4 +24,29 @@ class RollNumberNormalizer
 
         return $rollNumber;
     }
+
+    /**
+     * Phase 1B.7C: the ONE shared rule for resolving a rollover Item's
+     * proposed Roll Number from its `roll_number_strategy`, used
+     * identically by EnrollmentRolloverDryRunService (evaluating a
+     * PROPOSAL) and EnrollmentRolloverItemExecutionService
+     * (re-deriving the SAME value as a revalidation before
+     * materializing it) -- extracted here rather than left duplicated
+     * so a Roll Number is never resolved two subtly different ways.
+     * Never throws -- returns null for an unset/invalid strategy or a
+     * blank explicit/source value; the caller decides what an
+     * unresolved Roll Number means for its own step.
+     */
+    public static function resolveForStrategy(?string $strategy, ?string $explicitValue, string $sourceRollNumber): ?string
+    {
+        try {
+            return match ($strategy) {
+                'preserve_source' => self::normalize($sourceRollNumber),
+                'explicit' => self::normalize((string) $explicitValue),
+                default => null,
+            };
+        } catch (InvalidEnrollmentRollNumberException) {
+            return null;
+        }
+    }
 }

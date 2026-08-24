@@ -297,7 +297,7 @@ class EnrollmentRolloverSchemaTest extends TestCase
     {
         ['school' => $school, 'campus' => $campus, 'year' => $sourceYear, 'grade' => $grade, 'section' => $sectionA, 'student' => $student] = $this->buildFullPlacementContext();
         $sectionB = $this->createSection($sourceYear, $campus, $grade, ['name' => 'B', 'code' => 'B']);
-        $transferredEnrollment = $this->createStudentEnrollment($student, $sectionA, ['status' => 'transferred', 'roll_number' => '01', 'ends_on' => '2026-06-30']);
+        $transferredEnrollment = $this->createStudentEnrollment($student, $sectionA, ['status' => 'transferred', 'roll_number' => '01', 'starts_on' => '2026-01-01', 'ends_on' => '2026-06-30']);
         $activeEnrollment = $this->createStudentEnrollment($student, $sectionB, ['status' => 'active', 'roll_number' => '02', 'starts_on' => '2026-07-01']);
         $targetYear = $this->createAcademicYear($school, ['code' => 'TGT']);
         $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);

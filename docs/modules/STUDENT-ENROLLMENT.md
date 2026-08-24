@@ -2061,15 +2061,165 @@ event exists (deliberately -- brief section 59) and no NEW audit event
 was needed for the Enrollment domain itself, since dry-run creates no
 Enrollment.
 
+## Per-Student Promotion Execution (Phase 1B.7C)
+
+Implements the ONE-item execution primitive the accepted architecture
+("Atomicity, idempotency, resumability" above) already anticipated —
+`App\Domain\Students\Application\EnrollmentRolloverItemExecutionService::execute(EnrollmentRolloverItem $item, ?User $actor = null)`
+materializes exactly the target-year `StudentEnrollment` ONE
+already-validated Item describes. No whole-Plan loop, no queue, no
+HTTP/API, no UI — see "Deferred" below.
+
+### Schema
+
+No migration. Every column this checkpoint needed
+(`execution_status`, `target_enrollment_id`, `executed_at`) already
+existed on `enrollment_rollover_items` from Phase 1B.7A, left `NULL`
+specifically so this checkpoint could populate them.
+`execution_status` gained one value beyond its original 1B.7A docblock
+vocabulary (`pending|succeeded|failed|skipped`): `reconciled`, for the
+already-enrolled/idempotent-match outcome the accepted architecture's
+"already enrolled" reconciliation explicitly calls for — the column
+has no database CHECK constraint (matching `decision`/
+`validation_result`'s own precedent), so this is a vocabulary
+extension, not a schema change.
+
+### Trusted creation primitive
+
+`StudentEnrollmentService::enroll()` — the SAME public method ordinary
+Enrollment creation uses, called nested inside this service's own
+`DB::transaction()`. This is safe, not merely convenient: Laravel
+promotes a nested `DB::transaction()` to a real PostgreSQL SAVEPOINT,
+so `enroll()`'s own `UniqueConstraintViolationException` handling only
+ever rolls back to that SAVEPOINT — never the whole connection —
+before translating and rethrowing `ActiveEnrollmentConflictException`/
+`DuplicateEnrollmentRollNumberException`. This checkpoint's own
+insert-race reconciliation test
+(`a_roll_number_claimed_by_another_student_after_validation_is_detected_and_recoverable`)
+proves the connection remains fully usable immediately afterward — no
+SQLSTATE 25P02, no need for a second, separately-opened transaction to
+recover. `TenantContext::withSchool()` nests the same way (always
+restores whatever was active before its own callback ran), and since
+`enroll()` is always called here for the SAME School this service
+already established, the nested re-set is a same-value no-op.
+
+### Execution preconditions (checked in this order, one deterministic lock order: Plan -> Item -> source Enrollment)
+
+1. **Idempotent replay first** (`Item.target_enrollment_id !== null`)
+   — re-verifies the referenced target Enrollment still coheres with
+   the Item's Student/target Academic Year and returns it unchanged; a
+   retried/duplicate `execute()` call is always safe regardless of
+   whether the Plan is STILL validated (a later edit to OTHER items
+   must never retroactively fail a replay of THIS item's own
+   already-complete work). A genuine mismatch here — the referenced
+   Enrollment no longer coheres — raises a hard `RuntimeException`
+   (structurally near-impossible given `target_enrollment_id`'s
+   `restrictOnDelete()` FK from 1B.7A; defense in depth only).
+2. **Plan currently execution-ready**: `status === 'validated'` AND
+   `validated_configuration_version === configuration_version`
+   (`RolloverPlanNotExecutionReadyException` otherwise) — `status`
+   alone is not sufficient, since `upsertMapping()`/`setItemDecision()`
+   bump `configuration_version` without touching `status`.
+3. **Item classification**: `excluded` → marked `skipped`, zero
+   academic writes. `ready`/`already_enrolled` → proceeds.
+   Anything else (`review`/`blocked`/`undecided`) →
+   `RolloverItemNotExecutableException` — defense in depth; a
+   validated Plan already structurally guarantees no such Item exists.
+4. **Source Enrollment snapshot revalidation**: the fresh, locked
+   source row's `status`/`updated_at` must exactly match the Item's
+   1B.7B snapshot columns, or execution stops as
+   `source_changed_since_validation` — the identical staleness
+   detection the "Staleness detection" section above already
+   documented, now proven under a real sanctioned
+   `transferPlacement()` call in this checkpoint's own test.
+5. **Target Section resolution + revalidation**: the target Section is
+   re-derived (Item-level override if set, else the Plan's Section-
+   specific or Grade-level default mapping — no persisted
+   "resolved target Section" column exists, so this is a bounded
+   re-derivation, not a second independent planning pass; see the
+   service's own docblock on `resolveTargetSectionId()` for the exact
+   two-guard proof of why it is safe), then its fresh `status`/
+   `updated_at` must match the Item's snapshot, or execution stops as
+   `target_section_changed_since_validation`.
+6. **Roll Number re-derivation**: `RollNumberNormalizer::resolveForStrategy()`
+   — the SAME shared rule 1B.7B's dry-run engine uses (extracted in
+   this checkpoint specifically so both services apply one rule, never
+   two subtly different ones) — applied to the (snapshot-proven-
+   unchanged) source Roll Number, never auto-generated.
+7. **Existing target-year Enrollment pre-check**: an active existing
+   row that exactly matches (Section + Roll Number) reconciles
+   idempotently (`execution_status = 'reconciled'`, zero new
+   Enrollments); one that does not match invalidates the Plan
+   (`existing_target_enrollment_conflict_at_execution`) rather than
+   overwriting/transferring it; an `already_enrolled`-classified Item
+   finding no active match anymore invalidates as
+   `already_enrolled_match_no_longer_valid`.
+
+### External-state drift always demotes Plan readiness, never just the one Item
+
+Every drift/conflict path (source changed, target Section changed,
+existing-target mismatch, Roll Number race) calls one shared
+`invalidateForDrift()`: the Item is marked `execution_status = 'failed'`,
+`validation_result = 'blocked'` with a specific reason code: the Plan's
+`status` reverts to `draft` and `validated_configuration_version` is
+cleared — `configuration_version` itself is deliberately left
+untouched (this is not a configuration edit, so it must not look like
+one, matching the "Plan lifecycle" section's "reverts to conceptually
+draft" language above). `validated_at` is deliberately preserved as
+the historical record of the last real review.
+
+### Insert-race and Roll Number race reconciliation
+
+Both are backstopped by the exact database constraints the
+"Concurrency" section above already named
+(`student_enrollments_one_active_per_student_year`,
+`student_enrollments_school_id_academic_year_id_section_id_roll_`) —
+caught via `enroll()`'s own already-translated
+`ActiveEnrollmentConflictException`/`DuplicateEnrollmentRollNumberException`,
+then reconciled (if the race winner exactly matches the proposal) or
+invalidated (otherwise) on the SAME still-healthy transaction, per the
+SAVEPOINT reasoning above. Proven with a REAL two-OS-process
+concurrency test
+(`EnrollmentRolloverItemExecutionConcurrencyTest`, mirroring
+`AcademicYearActivationConcurrencyTest`'s established pattern) — two
+genuinely separate PHP processes executing the identical Item leave
+exactly one active target Enrollment.
+
+### `setItemDecision()` guard
+
+Refuses to reconfigure an Item once `target_enrollment_id` is set
+(`RolloverItemAlreadyExecutedException`) — the primary, fail-fast
+defense against silently orphaning `target_enrollment_id`'s provenance
+guarantee; the idempotent-replay integrity check above is the second,
+structural line of defense for any path that bypasses this guard.
+
+### Audit
+
+`enrollment_rollover.item_succeeded` (creation),
+`enrollment_rollover.item_reconciled` (idempotent match),
+`enrollment_rollover.item_skipped` (excluded), and
+`enrollment_rollover.item_execution_failed` +
+`enrollment_rollover_plan.execution_invalidated` (drift) — every event
+carries only plan/item/enrollment ids, the configuration version, and
+a reason code, never Student PII, Roll Numbers, or names. Successful
+creation's `student_enrollment.created` audit (from `enroll()` itself)
+commits inside the SAME transaction as `item_succeeded` — proven by a
+dedicated audit-count test that a rejected/rolled-back attempt
+produces neither.
+
 ## Deferred (not yet implemented)
 
-- **Promotion / bulk academic-year rollover execution, API, and UI** —
+- **Whole-Plan / bulk academic-year rollover execution, API, and UI** —
   the architecture was decided in Phase 1B.7, the durable plan/mapping/
-  item schema + `createDraft()` landed in Phase 1B.7A, and the dry-run/
-  eligibility/conflict engine landed in Phase 1B.7B (see "Dry-Run,
-  Eligibility & Conflict Engine (Phase 1B.7B)" above) — no Enrollment
-  is ever created by any of this yet; execution, HTTP/API, and UI
-  remain fully deferred. Implementation continues at Phase 1B.7C.
+  item schema + `createDraft()` landed in Phase 1B.7A, the dry-run/
+  eligibility/conflict engine landed in Phase 1B.7B, and the
+  per-Student promotion EXECUTION primitive landed in Phase 1B.7C (see
+  "Per-Student Promotion Execution (Phase 1B.7C)" above) — a single
+  already-validated Item can now be executed one at a time, but
+  nothing loops a whole Plan yet: no chunked/resumable bulk
+  orchestration, no queue job, no scheduler, no rollover command, no
+  rollover HTTP/API, no rollover Vue UI. Implementation continues at
+  Phase 1B.7D.
 - **Transfer certificate / TC document generation, inter-school
   electronic transfer network** — out of scope for the transfer/
   withdrawal *status* concept this schema already supports.
