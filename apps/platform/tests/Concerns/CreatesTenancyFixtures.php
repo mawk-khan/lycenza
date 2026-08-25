@@ -32,6 +32,7 @@ use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -323,6 +324,21 @@ trait CreatesTenancyFixtures
                 'campus_id' => $section->campus_id,
                 'grade_level_id' => $section->grade_level_id,
                 'section_id' => $section->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 1C.1: Student Subject Enrollment fixtures ------------------
+
+    protected function createStudentSubjectEnrollment(Student $student, SubjectOffering $offering, array $attributes = []): StudentSubjectEnrollment
+    {
+        return app(TenantContext::class)->withSchool(
+            $student->school,
+            fn () => StudentSubjectEnrollment::factory()->create(array_merge([
+                'school_id' => $student->school_id,
+                'student_id' => $student->id,
+                'subject_offering_id' => $offering->id,
+                'academic_year_id' => $offering->academic_year_id,
             ], $attributes)),
         );
     }
