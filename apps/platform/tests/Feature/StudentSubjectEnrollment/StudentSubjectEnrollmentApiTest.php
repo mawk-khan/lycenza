@@ -173,4 +173,62 @@ class StudentSubjectEnrollmentApiTest extends TestCase
         $this->assertArrayNotHasKey('feeStatus', $json);
         $this->assertArrayNotHasKey('medical', $json);
     }
+
+    // --- Inactive SubjectOffering eligibility (Phase 1C.1A) ----------------
+
+    #[Test]
+    public function enrolling_against_an_inactive_offering_is_rejected(): void
+    {
+        ['school' => $school, 'offering' => $offering, 'student' => $student] = $this->buildCompatibleContext();
+        app(TenantContext::class)->withSchool($school, fn () => $offering->update(['status' => 'inactive']));
+        $user = $this->createUser();
+        $this->grantManageAndView($user, $school);
+
+        $response = $this->asUser($user)
+            ->withHeader('Idempotency-Key', 'sub-enroll-inactive-001')
+            ->postJson("/api/v1/schools/{$school->id}/students/{$student->id}/subject-enrollments", [
+                'subject_offering_id' => $offering->id, 'starts_on' => '2026-06-01',
+            ]);
+
+        $response->assertUnprocessable();
+        $this->assertStringNotContainsString('SQLSTATE', json_encode($response->json()));
+    }
+
+    #[Test]
+    public function transferring_to_an_inactive_target_offering_is_rejected(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'year' => $year, 'grade' => $grade, 'offering' => $french, 'student' => $student] = $this->buildCompatibleContext();
+        $spanish = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($school, ['code' => 'ES']), ['is_required' => false, 'status' => 'inactive']);
+        $user = $this->createUser();
+        $this->grantManageAndView($user, $school);
+        $source = $this->asUser($user)
+            ->withHeader('Idempotency-Key', 'sub-transfer-inactive-source')
+            ->postJson("/api/v1/schools/{$school->id}/students/{$student->id}/subject-enrollments", [
+                'subject_offering_id' => $french->id, 'starts_on' => '2026-06-01',
+            ])->json('data.id');
+
+        $response = $this->asUser($user)
+            ->withHeader('Idempotency-Key', 'sub-transfer-inactive-001')
+            ->postJson("/api/v1/schools/{$school->id}/subject-enrollments/{$source}/transfer", [
+                'target_subject_offering_id' => $spanish->id, 'effective_date' => '2026-09-01',
+            ]);
+
+        $response->assertUnprocessable();
+        $this->assertStringNotContainsString('SQLSTATE', json_encode($response->json()));
+    }
+
+    #[Test]
+    public function the_roster_for_an_inactive_offering_returns_an_empty_authorized_response(): void
+    {
+        ['school' => $school, 'offering' => $offering] = $this->buildCompatibleContext();
+        app(TenantContext::class)->withSchool($school, fn () => $offering->update(['status' => 'inactive']));
+        $user = $this->createUser();
+        $this->grantManageAndView($user, $school);
+
+        $response = $this->asUser($user)->getJson("/api/v1/schools/{$school->id}/subject-offerings/{$offering->id}/roster");
+
+        $response->assertOk();
+        $response->assertJsonPath('data', []);
+        $response->assertJsonPath('meta.count', 0);
+    }
 }

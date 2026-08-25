@@ -23,6 +23,15 @@ use App\Support\Tenancy\TenantContext;
  *
  * Deliberately set-based (a single query per method, no per-Student
  * loop) -- see the checkpoint's query-count/scale test.
+ *
+ * Phase 1C.1A: an inactive SubjectOffering always reports an empty
+ * current roster ([] / 0), for both required and elective offerings,
+ * short-circuiting before any query runs -- an inactive offering must
+ * never surface as a Communications audience. This is a READ-time
+ * current-eligibility gate only: existing StudentSubjectEnrollment
+ * history rows are never touched, and reactivating the offering
+ * restores the ordinary roster derivation with no other state change
+ * required.
  */
 class SubjectOfferingRosterReadService
 {
@@ -35,6 +44,10 @@ class SubjectOfferingRosterReadService
      */
     public function currentRosterStudentIds(SubjectOffering $offering): array
     {
+        if (! $offering->isActive()) {
+            return [];
+        }
+
         return $this->context->withSchool($offering->school, fn () => $offering->is_required
             ? $this->impliedRosterQuery($offering)->pluck('id')->all()
             : $this->explicitRosterQuery($offering)->pluck('student_id')->all());
@@ -42,6 +55,10 @@ class SubjectOfferingRosterReadService
 
     public function currentRosterCount(SubjectOffering $offering): int
     {
+        if (! $offering->isActive()) {
+            return 0;
+        }
+
         return $this->context->withSchool($offering->school, fn () => $offering->is_required
             ? $this->impliedRosterQuery($offering)->count()
             : $this->explicitRosterQuery($offering)->count());

@@ -5,11 +5,13 @@ namespace Tests\Feature\StudentSubjectEnrollment;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\Exceptions\ActiveSubjectEnrollmentConflictException;
 use App\Domain\Students\Application\Exceptions\CrossSchoolSubjectEnrollmentException;
+use App\Domain\Students\Application\Exceptions\InactiveSubjectOfferingException;
 use App\Domain\Students\Application\Exceptions\IncompatibleSubjectOfferingException;
 use App\Domain\Students\Application\Exceptions\InvalidSubjectEnrollmentTransitionException;
 use App\Domain\Students\Application\Exceptions\RequiredSubjectOfferingEnrollmentException;
 use App\Domain\Students\Application\StudentSubjectEnrollmentService;
 use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use PHPUnit\Framework\Attributes\Test;
@@ -236,5 +238,106 @@ class StudentSubjectEnrollmentServiceTest extends TestCase
         $this->assertSame('active', $target->status);
         $this->assertSame($spanish->id, $target->subject_offering_id);
         $this->assertNotSame($source->id, $target->id, 'no ambiguous duplicate current assignment -- two distinct rows');
+    }
+
+    // --- F. Inactive SubjectOffering eligibility (Phase 1C.1A) -------------
+
+    #[Test]
+    public function enrolling_into_an_inactive_offering_is_rejected(): void
+    {
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $year = $this->createAcademicYear($school);
+        $grade = $this->createGradeLevel($school);
+        $section = $this->createSection($year, $campus, $grade);
+        $subject = $this->createSubject($school);
+        $offering = $this->createSubjectOffering($year, $campus, $grade, $subject, ['is_required' => false, 'status' => 'inactive']);
+        $student = $this->createStudent($school, ['student_number' => 'S-5001']);
+        $this->createStudentEnrollment($student, $section);
+
+        try {
+            $this->service()->enroll($student, $offering, '2026-06-01');
+            $this->fail('Expected InactiveSubjectOfferingException was not thrown.');
+        } catch (InactiveSubjectOfferingException) {
+            $count = app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::query()->count());
+            $this->assertSame(0, $count, 'no row is created when enrollment is rejected');
+        }
+    }
+
+    #[Test]
+    public function transferring_into_an_inactive_target_offering_is_rejected(): void
+    {
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $year = $this->createAcademicYear($school);
+        $grade = $this->createGradeLevel($school);
+        $section = $this->createSection($year, $campus, $grade);
+        $french = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($school, ['code' => 'FR']), ['is_required' => false]);
+        $spanish = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($school, ['code' => 'ES']), ['is_required' => false, 'status' => 'inactive']);
+        $student = $this->createStudent($school, ['student_number' => 'S-5002']);
+        $this->createStudentEnrollment($student, $section);
+        $source = $this->service()->enroll($student, $french, '2026-06-01');
+
+        $this->expectException(InactiveSubjectOfferingException::class);
+
+        try {
+            $this->service()->transfer($source, $spanish, '2026-09-01');
+        } finally {
+            $refreshedSource = app(TenantContext::class)->withSchool($school, fn () => $source->fresh());
+            $this->assertSame('active', $refreshedSource->status, 'the source row must remain unchanged when the target is rejected');
+            $targetCount = app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::query()->where('subject_offering_id', $spanish->id)->count());
+            $this->assertSame(0, $targetCount, 'no target row is created when the target offering is inactive');
+        }
+    }
+
+    #[Test]
+    public function transferring_out_of_a_now_inactive_source_offering_still_succeeds(): void
+    {
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $year = $this->createAcademicYear($school);
+        $grade = $this->createGradeLevel($school);
+        $section = $this->createSection($year, $campus, $grade);
+        $french = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($school, ['code' => 'FR']), ['is_required' => false]);
+        $spanish = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($school, ['code' => 'ES']), ['is_required' => false]);
+        $student = $this->createStudent($school, ['student_number' => 'S-5003']);
+        $this->createStudentEnrollment($student, $section);
+        $source = $this->service()->enroll($student, $french, '2026-06-01');
+
+        // The source offering becomes inactive AFTER the Student already
+        // has active participation in it -- the guard is target-only, so
+        // moving the Student OUT of it must remain fully possible.
+        app(TenantContext::class)->withSchool($school, fn () => $french->update(['status' => 'inactive']));
+
+        $target = $this->service()->transfer($source, $spanish, '2026-09-01');
+
+        $this->assertSame('active', $target->status);
+        $this->assertSame($spanish->id, $target->subject_offering_id);
+        $refreshedSource = app(TenantContext::class)->withSchool($school, fn () => $source->fresh());
+        $this->assertSame('transferred', $refreshedSource->status);
+    }
+
+    #[Test]
+    public function withdrawing_from_a_now_inactive_offering_still_succeeds(): void
+    {
+        ['student' => $student, 'offering' => $offering] = $this->compatibleContext();
+        $enrollment = $this->service()->enroll($student, $offering, '2026-06-01');
+        app(TenantContext::class)->withSchool($enrollment->school, fn () => $offering->update(['status' => 'inactive']));
+
+        $withdrawn = $this->service()->withdraw($enrollment, '2026-08-01');
+
+        $this->assertSame('withdrawn', $withdrawn->status);
+    }
+
+    #[Test]
+    public function cancelling_from_a_now_inactive_offering_still_succeeds(): void
+    {
+        ['student' => $student, 'offering' => $offering] = $this->compatibleContext();
+        $enrollment = $this->service()->enroll($student, $offering, '2026-06-01');
+        app(TenantContext::class)->withSchool($enrollment->school, fn () => $offering->update(['status' => 'inactive']));
+
+        $cancelled = $this->service()->cancel($enrollment, '2026-06-05');
+
+        $this->assertSame('cancelled', $cancelled->status);
     }
 }
