@@ -179,6 +179,15 @@ already invented their own file-handling or notification logic is
 expensive to unwind. Communications now builds directly on Phase 0C's
 notification infrastructure rather than inventing its own.
 
+**Communications is complete** (Phase 5A/5B, `docs/communication-hub/`).
+
+**Documents (Phase 0E.1, in progress):** foundation schema only
+(`documents` table) — see `docs/modules/DOCUMENTS.md` for the full
+domain contract, the owning-entity boundary decision, and what remains
+deferred (write service, HTTP/API, capabilities, download
+authorization, the promised `employee_documents` reconciliation from
+ADR 0028).
+
 ## Phase 0F — People
 
 Students/SIS, Guardians, Admissions. First real domain events

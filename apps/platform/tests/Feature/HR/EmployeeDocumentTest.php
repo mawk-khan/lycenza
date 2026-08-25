@@ -501,16 +501,29 @@ class EmployeeDocumentTest extends TestCase
     }
 
     /**
-     * Confirms no shared/generic `documents` table was accidentally
-     * introduced -- 8A.7 remains a narrow, HR-scoped metadata table,
-     * never a parallel Documents subsystem.
+     * Phase 0E.1 (published after this test was originally written)
+     * added the shared `documents` table this test used to assert the
+     * absence of -- that was always the EXPECTED trigger for revisiting
+     * this assertion, not a Phase 8A regression (HR.md/ADR 0028
+     * explicitly promised a future reconciliation step once a real
+     * Documents module existed; docs/modules/DOCUMENTS.md's own
+     * "Non-goals of this checkpoint" confirms that reconciliation has
+     * NOT yet happened). What must remain true regardless: HR's own
+     * `employee_documents` table was never silently replaced/absorbed
+     * by that new table, and `EmployeeDocumentService` still never
+     * reads/writes it -- Phase 8A.7 remains exactly the narrow,
+     * HR-scoped metadata table it always was.
      */
     #[Test]
-    public function no_generic_documents_table_exists_in_the_schema(): void
+    public function employee_documents_remains_its_own_table_independent_of_the_shared_documents_module(): void
     {
-        $this->assertFalse(
-            Schema::hasTable('documents'),
-            'A generic `documents` table must not exist -- Phase 8A.7 deliberately did not introduce a parallel Documents subsystem (Case C dependency-discovery outcome).',
+        $this->assertTrue(Schema::hasTable('employee_documents'), 'employee_documents must still exist.');
+
+        $source = file_get_contents((new ReflectionClass(EmployeeDocumentService::class))->getFileName());
+        $this->assertStringNotContainsString(
+            "table('documents')",
+            $source,
+            'EmployeeDocumentService must never read/write the shared `documents` table -- the Phase 0E.1/Phase 8A reconciliation promised by ADR 0028 has not happened yet, so the two remain independent.',
         );
     }
 }

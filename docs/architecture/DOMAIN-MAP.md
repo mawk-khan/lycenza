@@ -100,7 +100,7 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 
 | Module | Owns | Depends on | Notes |
 |---|---|---|---|
-| **Documents** | File/document records and access control (ADR 0012) | Identity & Access, Tenancy | Depended on by any Layer 2–3 module that attaches files; itself depends on nothing above Layer 0. |
+| **Documents** | File/document records and access control (ADR 0012) | Identity & Access, Tenancy | Depended on by any Layer 2–3 module that attaches files; itself depends on nothing above Layer 0. **In progress (Phase 0E.1)**: foundation schema only (`documents` table, `App\Domain\Documents\Infrastructure\Document`) — no write service, HTTP surface, or capability yet. See `docs/modules/DOCUMENTS.md`. |
 | **Communications** | Message templates, delivery (SMS/email/WhatsApp/push), delivery logs | Identity & Access, Guardians, Students/SIS, HR | Depended on by most Layer 3 modules for notifications; must not depend back on them — it receives *what* to send via events/explicit calls, not by reaching into their tables. |
 
 ## Layer 5 — Oversight (read-mostly; consumers, never dependencies)
