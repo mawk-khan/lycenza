@@ -12,7 +12,8 @@ operationalized it.
 ## Checkpoint roadmap
 
 ```
-0E.1  Documents Domain Foundation   (documents table, Document model — this checkpoint) [implemented]
+0E.1  Documents Domain Foundation   (documents table, Document model) [implemented]
+0E.2  Document Write Path & Storage Integration   (DocumentService, real object storage, Employee owner activated — this checkpoint) [implemented]
 ```
 
 Later checkpoints (write service, download authorization, HTTP/API,
@@ -232,9 +233,279 @@ Never `--filter=Documents` (repository-wide convention, CLAUDE.md rule
   isolation under the unprivileged `school_os_app` role, independent
   of Eloquent's `SchoolScope`.
 
-No concurrency test is included in this checkpoint — no allocator,
-uniqueness rule, or one-current-row invariant exists yet (the
-exactly-one-owner CHECK is enforced per-row at INSERT time, not a
+No concurrency test is included in the 0E.1 schema-only checkpoint — no
+allocator, uniqueness rule, or one-current-row invariant exists yet
+(the exactly-one-owner CHECK is enforced per-row at INSERT time, not a
 race-prone cross-row invariant like `AcademicYear`'s one-active-per-
-School or `EmployeeAssignment`'s one-primary-open-per-employment). A
-future write/allocation-shaped checkpoint should re-evaluate this.
+School or `EmployeeAssignment`'s one-primary-open-per-employment).
+0E.2's own `archive()` operation is likewise a plain idempotent status
+update, not a race-prone invariant — see its own section below for why
+sequential-call simulation is sufficient there too.
+
+## Document Write Path & Storage Integration (0E.2, implemented)
+
+The Documents module's first production write path — `DocumentService`
+(`App\Domain\Documents\Application\DocumentService`). Structurally
+mirrors `App\Domain\Communications\Application\CommunicationAttachmentService`,
+the one existing production precedent in this repository for
+"validate, write a real object, then persist metadata with
+compensation" (Phase 5A.6) — adapted for the exclusive-arc multi-
+owner-type schema (0E.1) and owner-domain (not participant-based)
+authorization.
+
+### Typed input, not an unbounded array
+
+`CreateDocumentData` (owner descriptor + `classificationTier` + a real
+Laravel `UploadedFile`) is the only way to call
+`DocumentService::create()` — there is no
+`Document::create($request->all())`-shaped path anywhere. Caller-
+controlled fields are exactly: which owner, which classification tier,
+and the file itself. Everything else (`school_id`, `storage_disk`,
+`storage_path`, `uploaded_by_user_id`, `status`, and the server-
+sniffed `mime_type`/`size_bytes`) is derived server-side and cannot be
+overridden by a caller — proven by
+`DocumentServiceCreateTest::server_derived_metadata_cannot_be_overridden_by_the_caller`.
+
+### Owner descriptor — application-layer only, closed to three types
+
+`DocumentOwner` (`App\Domain\Documents\Application\DocumentOwner`) is
+a final class with a private constructor and exactly three named
+factory methods (`::employee()`/`::student()`/`::guardian()`) — there
+is no way to construct one with an arbitrary `$type` string, a model
+class name, or a Laravel morph-map key. `DocumentService` converts it
+internally into exactly one of the 0E.1 exclusive-arc columns; this is
+an application-boundary convenience, not a return to a polymorphic
+database schema (the `documents` table itself is completely unchanged
+by 0E.2).
+
+### Active write owner types
+
+**Employee: ACTIVATED.** Reuses HR's own already-established two-tier
+authorization boundary verbatim
+(`App\Domain\HR\Application\EmployeeDocumentService::assertClassificationCapability()`,
+Phase 8A.10/8A.11) rather than inventing a new Documents-specific
+policy: `hr.employees.documents.manage` for `public`/`internal`/
+`sensitive`, `hr.employees.sensitive.manage` for `highly_sensitive`.
+This module's four-tier vocabulary collapses to that same two-way
+split for Employee owners specifically — it is not a new capability
+and not a new policy, only this checkpoint's first real caller of an
+authorization boundary that already existed.
+
+**Student: DEFERRED. Guardian: DEFERRED.** Neither
+`students.manage`/`students.view` nor `guardians.manage`/
+`guardians.view` names documents/attachments anywhere in their own
+capability labels (`CapabilityAndRoleSeeder`) — they are broad
+identity-management capabilities ("create, update, status, Guardian
+links" / "Guardians, Guardian contact information, and Guardian
+links"), and this checkpoint's own governing brief explicitly warns
+against stretching a broad identity capability to cover document
+management, or inferring write authority from a Guardian/Student
+relationship. Rather than invent an unreviewed capability, 0E.2
+activates writes for Employee only and documents Student/Guardian as
+an explicit, deliberate deferral — `DocumentOwnerTypeNotSupportedException`
+is thrown for either, before any storage or database side effect,
+proven even when the actor holds the corresponding broad
+`students.manage`/`guardians.manage` capability (so the deferral is a
+real authorization boundary, not merely "no test exercises it yet").
+Schema support (the `student_id`/`guardian_id` columns and their
+composite foreign keys) and write-service activation are deliberately
+not the same thing — activating either later is an additive change to
+`DocumentService` alone, no migration required.
+
+**No generic `documents.*` capability was added.** Option A from this
+checkpoint's own decision framework (existing owner-domain capability
+sufficient) applied cleanly for the one owner type this checkpoint
+activates; inventing a capability "for symmetry" with Student/Guardian
+before their own authorization boundary is actually decided would have
+been exactly the premature design root CLAUDE.md rule 2 warns against.
+
+### Classification
+
+Required, no default, validated against the exact same canonical
+four-tier vocabulary 0E.1 established
+(`InvalidDocumentClassificationException` for a missing or invalid
+value) — the database CHECK constraint remains the final defense in
+depth, this is the first line. `highly_sensitive` carries the extra
+authorization requirement described above; the other three tiers do
+not currently distinguish between each other for authorization
+purposes (all three need only the ordinary `hr.employees.documents.manage`
+capability) — this is an explicit, evidence-based decision (HR's own
+capability model has no finer split than "ordinary vs. highly
+sensitive"), not an oversight.
+
+### File validation
+
+`config/documents.php`: `disk` (default `local`, ADR 0011's S3-
+compatible technology reached via `DOCUMENTS_DISK=s3` in a real
+deployment — independent of `config('filesystems.default')`, matching
+`config('communications.attachments.disk')`'s own precedent so an
+unrelated future default-disk change never silently relocates Document
+storage), `max_file_size_mb` (default 10), and `allowed_mime_types` (a
+real, server-sniffed MIME type mapped to its allowed declared
+extension(s) — never the client-supplied Content-Type header; a
+mismatch between sniffed type and declared extension is rejected
+exactly like a disallowed type). Deliberately excludes SVG (can embed
+script) and every macro-enabled Office format, mirroring
+`config('communications.attachments.allowed_mime_types')`'s own
+exclusions exactly.
+
+### Storage
+
+Private only — `local` (`storage_path('app/private')`) or `s3`
+(MinIO/S3-compatible, ADR 0011), never `public`. 0E.2 is the Documents
+module's own first production caller of
+`App\Support\Tenancy\TenantStoragePath::for()` — HR's
+`EmployeeDocumentService` and Communications'
+`CommunicationAttachmentService` already called it in production
+before this checkpoint, so "zero callers" only ever described the
+Documents module's own prior non-use of it, not the helper itself (see
+0E.1's own corrected note above). The persisted key is always
+`TenantStoragePath::for($school, "documents/{ownerType}/{ownerId}/{serverGeneratedUuid}.{extension}")`
+— never a caller-supplied path, never the raw original filename.
+Object-key uniqueness comes from a fresh UUIDv7 per upload, not
+filename uniqueness — two uploads with an identical original filename
+for the identical owner produce two distinct keys and two distinct
+`documents` rows, proven by
+`DocumentServiceCreateTest::two_uploads_with_the_same_original_filename_produce_distinct_object_keys_and_rows`.
+`original_filename` is preserved only as sanitized (basename, control-
+characters stripped, length-capped) DISPLAY metadata — never used to
+build the storage key, defeating path traversal via a crafted
+filename.
+
+### Upload sequence and storage/database compensation
+
+PostgreSQL transactions cannot atomically cover a MinIO/S3 object
+write, so the ordering is deliberate (identical shape to
+`CommunicationAttachmentService::store()`):
+
+1. Resolve the declared owner under the trusted School (fails closed,
+   identically, for "does not exist" and "exists in a different
+   School" — `DocumentOwnerNotFoundException` never distinguishes the
+   two).
+2. Authorize the actor for that owner type + the requested
+   classification tier — before any I/O.
+3. Cheap, no-I/O validation (classification tier, MIME/extension
+   allow-list, size limit).
+4. Write bytes to the configured disk under the server-generated key.
+5. Create the `documents` row + `document.created` audit event inside
+   one DB transaction.
+
+If step 5 throws, the object written in step 4 is deleted
+(compensation) before the exception propagates — proven, not merely
+asserted, by `DocumentServiceCompensationTest`, which forces a real
+transaction failure (a mocked `AuditRecorder` throwing mid-transaction)
+after a genuine successful object write, and confirms: no `documents`
+row, no committed audit event, and the object physically removed from
+storage. If step 4 throws, no DB write is ever attempted (proven by a
+faked-disk failure test and a real-network-failure test against actual
+MinIO in `DocumentMinioStorageTest`).
+
+**Compensation-failure operational limitation (documented, not
+solved):** if the compensating `Storage::delete()` call in step 5's
+catch block itself fails (e.g. storage becomes unreachable at the
+exact moment compensation runs), the result is a genuinely orphaned
+object with no `documents` row referencing it. This checkpoint does
+not build an orphan-reaper/cleanup-queue subsystem for that bounded,
+rare failure mode — matching this checkpoint's own explicit scope
+limit ("do not build a full orphan-reaper subsystem unless ADR
+requires it"). No application-level access path to the orphan was
+demonstrated, no `documents` metadata row exists to expose it, and the
+object remains private under the same storage policy as any other
+object on the disk — but this is still a genuine residual data-
+retention/privacy/operational risk, not a resolved one, until some
+future storage-level cleanup actually removes it. Classified P3 (Low)
+accordingly, not "no impact."
+
+### Metadata provenance
+
+`mime_type`/`size_bytes` are always the server's own observation of
+the uploaded file (Symfony's real content-based MIME sniffing,
+`UploadedFile::getSize()`), never a caller-declared claim.
+`uploaded_by_user_id` is the trusted `$actor` argument's id, exactly
+like `EmployeeDocumentService::register()`'s own provenance rule — a
+caller cannot forge who uploaded a Document.
+
+### Document status on create / archive semantics
+
+Every `create()` begins `active` — there is no path to create a
+Document already `archived`. `archive()` is the only status
+transition: matches `documents`' 0E.1 never-hard-deleted lifecycle
+exactly (`EmployeeDocumentService::archive()`'s identical shape) —
+status only, object physically untouched, metadata otherwise
+unchanged. Repeated archive is deterministic (idempotent). Archive
+re-derives the correct owner-domain capability from the Document's own
+persisted owner column (never trusts a caller-supplied classification/
+owner claim), and is denied cross-School exactly like create. No
+`update()`/owner-switch/classification-downgrade operation exists —
+the exclusive-arc columns and `classification_tier` are immutable
+after creation in this checkpoint; introducing either is a distinct,
+deliberate later decision, not an oversight.
+
+### Audit
+
+Two events, `App\Support\Audit\AuditRecorder::school()`, no new audit
+table: `document.created` and `document.archived`. Metadata carries
+`documentId`/`ownerType`/`classificationTier`/`sizeBytes`/`mimeType` —
+never `storagePath`/`storage_path` (least disclosure, proven by
+`DocumentServiceCreateTest::a_successful_create_produces_exactly_one_audit_event_with_no_storage_path`).
+An authorization or validation failure produces zero audit events
+(proven for both create and archive).
+
+### What 0E.2 still does not do
+
+No download/signed URL, no HTTP/API, no UI, no checksum (still no
+`checksum` column — ADR 0012 does not mandate it at initial upload,
+and platform convention does not provide it "essentially for free" for
+this table the way `CommunicationAttachment`'s own separate
+`checksum_sha256` column does for its own table), no malware scanning,
+no retention policy, no `employee_documents` reconciliation (ADR
+0028's promise remains unperformed — `EmployeeDocumentService` is
+untouched, confirmed by the existing HR regression suite passing
+unchanged), and no `update()`/owner-switch/classification-transition
+operation. `App\Domain\Communications\Application\CommunicationAttachmentService`
+is unaffected — `TenantStoragePath` itself was not modified, confirmed
+by the full Communications regression suite passing unchanged.
+
+### Test strategy (0E.2 addition)
+
+Authoritative selector unchanged in form, now covering more files under
+the same two paths:
+
+```
+php artisan test tests/Feature/Documents tests/Feature/Postgres/DocumentRawIsolationTest.php
+```
+
+New files: `DocumentServiceCreateTest.php` (owner resolution/
+authorization/classification/file-validation/audit/metadata-provenance/
+cross-School/multi-School-capability-isolation/RLS-vs-RBAC-independence),
+`DocumentServiceArchiveTest.php` (archive semantics/authorization/
+audit), `DocumentServiceCompensationTest.php` (the critical storage-
+success-then-DB-failure compensation proof), and
+`DocumentMinioStorageTest.php` — a REAL object-storage integration
+test against actual MinIO (not `Storage::fake()`), proving the `s3`
+disk/`TenantStoragePath` wiring genuinely works end-to-end and that a
+real unreachable-endpoint failure still leaves zero `documents` rows.
+
+### Security register (0E.2)
+
+| Risk | Severity | Resolution |
+|---|---|---|
+| Cross-domain authorization bypass (a capability for one owner domain granting Document write access to another) | P0 if ever shipped without it | Structurally impossible for the activated Employee type (only `hr.employees.*` capabilities are checked); Student/Guardian are not activated at all, so there is no capability to bypass into for them. Verified by `DocumentServiceCreateTest::cross_domain_authorization_is_not_bypassed_by_a_generic_documents_capability`. |
+| Unauthorized object write (storage I/O before authorization) | P0 if ever shipped without it | Authorization is step 2 of the upload sequence, strictly before any Storage:: call. Verified by `authorization_failure_writes_no_object_and_no_row`. |
+| Storage-succeeds/DB-fails orphan object | P1 if unaddressed | Explicit compensation, proven (not merely asserted) by `DocumentServiceCompensationTest`. |
+| Same-User multi-School capability bleed | P1 if unaddressed | `CapabilityResolver`'s existing School-scoped cache/resolution reused as-is; verified by a dedicated test. |
+| Path traversal / storage-key collision via filename | P2 if unaddressed | Original filename never used to build the storage key (server-generated UUIDv7 component); display name sanitized. Verified by dedicated tests. |
+| Compensation itself failing (bounded orphan-object operational risk) | P3 (documented, not solved) | No cleanup-queue subsystem built for this checkpoint — see "compensation-failure operational limitation" above. No application-level access path demonstrated and no metadata row exists to expose the orphan, but this remains a genuine residual data-retention/privacy/operational risk, not a resolved one, until storage-level cleanup occurs. |
+
+No open P0/P1 as of this checkpoint.
+
+## Next checkpoint boundary
+
+Not yet decided — to be established from ADR 0012 + this document's
+own as-built state after 0E.2 is reviewed. Likely later concerns
+(explicitly not started): authorized read/download (signed/short-
+lived URL or authenticated streaming endpoint, ADR 0012's own stated
+requirement), metadata listing/search, retention, malware scanning,
+checksum, the `employee_documents` reconciliation, Student/Guardian
+write activation (contingent on a deliberate capability decision for
+each), and any HTTP/API/UI surface.

@@ -21,12 +21,11 @@ use Illuminate\Support\Carbon;
  * Exactly one of employee()/student()/guardian() is ever set -- see
  * the owning migration's docblock for why this is three separate
  * structural composite foreign keys rather than a single polymorphic
- * owner column. This checkpoint ships no write service: rows are
- * created via the factory in tests only, proving the schema/RLS/
- * constraint invariants hold. A future checkpoint adds
- * App\Domain\Documents\Application\DocumentService (or equivalent) as
- * the sanctioned write path, exactly like every other Phase 8A/1A/1B/
- * 5A table's own foundation-then-service split.
+ * owner column. Phase 0E.2 adds
+ * App\Domain\Documents\Application\DocumentService as the sanctioned
+ * write path for the Employee owner type (Student/Guardian remain
+ * deferred, see that class's own docblock) -- this model itself stays
+ * unchanged from 0E.1: no new column, no new relation shape.
  *
  * @property string $id
  * @property string $school_id
@@ -42,6 +41,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $uploaded_by_user_id
  * @property Carbon $uploaded_at
  * @property string $status active|archived
+ * @property-read string $owner_type employee|student|guardian
  */
 class Document extends Model
 {
