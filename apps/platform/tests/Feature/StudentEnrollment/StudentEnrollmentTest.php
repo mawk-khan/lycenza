@@ -184,7 +184,13 @@ class StudentEnrollmentTest extends TestCase
         $sectionB = $this->createSection($year, $campus, $grade, ['name' => 'B', 'code' => 'B']);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
 
-        $this->createStudentEnrollment($student, $sectionA, ['roll_number' => '01', 'status' => 'withdrawn', 'ends_on' => '2026-08-01']);
+        // starts_on is pinned explicitly (not left to the factory's
+        // `fake()->dateTimeBetween('-6 months', 'now')` default) --
+        // that default is a moving window against the real clock, and
+        // a random draw landing after this fixed ends_on would violate
+        // student_enrollments_date_range_check with a false failure
+        // unrelated to what this test actually asserts.
+        $this->createStudentEnrollment($student, $sectionA, ['roll_number' => '01', 'status' => 'withdrawn', 'starts_on' => '2026-07-01', 'ends_on' => '2026-08-01']);
         $second = $this->createStudentEnrollment($student, $sectionB, ['roll_number' => '02', 'status' => 'active']);
 
         $this->assertTrue($second->isActive());
