@@ -2333,20 +2333,316 @@ committed Item (each Item is its own committed transaction), so a
 future queue worker can call either method exactly as a synchronous
 caller does today, with zero change to academic semantics.
 
+## Rollover Authorization & Administrative HTTP/API (Phase 1B.7E)
+
+Exposes the already-accepted rollover domain (Phase 1B.7A-1B.7D)
+through the existing authenticated `/api/v1/schools/{school}/...`
+administrative surface. Finalizes the rollover-specific authorization
+model. Does NOT create the Vue/Inertia UI (Phase 1B.7F) or a queue
+(deferred, still no bound checkpoint number).
+
+### Capability family
+
+`enrollments.rollovers.view` / `enrollments.rollovers.manage` --
+three-segment naming mirroring `integrations.webhooks.*`'s existing
+sub-resource-of-a-domain precedent (rollover is a sub-resource of
+Enrollment the same way webhooks are a sub-resource of integrations)
+rather than a squashed `enrollment_rollovers.*` (no other capability
+key in the catalog uses an underscore).
+
+**Dual authorization is required for every rollover action** -- the
+dedicated capability is required IN ADDITION TO, never instead of, the
+base Enrollment one:
+
+| Action | Requires |
+| --- | --- |
+| List/detail/items | `enrollments.view` AND `enrollments.rollovers.view` |
+| Create/configure/validate/start/resume | `enrollments.manage` AND `enrollments.rollovers.manage` |
+
+Neither pair implies the other -- `CapabilityResolver` has no
+inheritance mechanism (same rule every other capability pair in this
+catalog already follows). Read actions authorize both inline
+(`AuthorizesCapability`, matching `StudentEnrollmentController`'s
+index/show pattern); every mutation route additionally carries BOTH
+`capability:` route middleware entries.
+
+### Default role grants
+
+- **`school_admin`**: `enrollments.rollovers.view` AND
+  `enrollments.rollovers.manage`.
+- **`principal`**: `enrollments.rollovers.view` ONLY -- a deliberate
+  break from the "Principal gets full parity with School Admin"
+  pattern every other `enrollments.*`/`students.*`/`guardians.*` pair
+  on this role follows. A Principal may legitimately inspect/review
+  academic rollover planning, but bulk EXECUTION can mutate hundreds/
+  thousands of next-year Enrollments in one action -- a materially
+  higher blast radius than any single `enrollments.manage` operation
+  -- so it stays School-Admin-only by default (least privilege),
+  matching this role's own existing view-only treatment of School
+  profile/Campus administration.
+- No new role was created (`registrar`/`academic_admin`/etc.) -- the
+  capability architecture already permits future custom role
+  assignments without inventing role semantics now.
+
+### Route inventory (10 routes)
+
+```
+GET    /schools/{school}/enrollment-rollovers
+POST   /schools/{school}/enrollment-rollovers
+GET    /schools/{school}/enrollment-rollovers/{rollover}
+GET    /schools/{school}/enrollment-rollovers/{rollover}/items
+PATCH  /schools/{school}/enrollment-rollovers/{rollover}/items/{item}
+POST   /schools/{school}/enrollment-rollovers/{rollover}/mappings
+PATCH  /schools/{school}/enrollment-rollovers/{rollover}/mappings/{mapping}
+POST   /schools/{school}/enrollment-rollovers/{rollover}/validate
+POST   /schools/{school}/enrollment-rollovers/{rollover}/start
+POST   /schools/{school}/enrollment-rollovers/{rollover}/resume
+```
+
+No generic `PATCH /enrollment-rollovers/{rollover}` exists -- Plan
+lifecycle is controlled by the three explicit actions
+(`validate`/`start`/`resume`) only; `status`/`configuration_version`/
+execution timestamps are never caller-controlled. No mapping DELETE
+route exists -- `EnrollmentRolloverPlanService` has no sanctioned
+removal method today, and this checkpoint does not invent one. No
+Plan cancellation route exists for the identical reason.
+
+Mappings and Items are NESTED under the Plan
+(`/enrollment-rollovers/{rollover}/mappings[/{mapping}]`, `/items[/{item}]`)
+specifically so nested ownership can be verified against the ROUTE's
+Plan, not merely the current School --
+`EnrollmentRolloverMapping::query()->where('plan_id', $plan->id)->findOrFail($mapping)`
+makes a same-School-but-different-Plan id 404 exactly like a
+foreign-School or random uuid.
+
+### Controllers stay thin
+
+`EnrollmentRolloverController` (Plan directory/create/detail +
+`validate`/`start`/`resume`), `EnrollmentRolloverMappingController`
+(create/update), `EnrollmentRolloverItemController` (directory +
+update) -- every read delegates to the new
+`EnrollmentRolloverReadService` (mirrors
+`StudentEnrollmentReadService`'s exact shape: plain Eloquent models/
+paginators, authorization-neutral, relies entirely on ambient
+SchoolScope/RLS), every mutation delegates to the already-accepted
+`EnrollmentRolloverPlanService`/`EnrollmentRolloverDryRunService`/
+`EnrollmentRolloverExecutionService`. No dry-run logic, mapping
+precedence, Roll Number validation, promotion rule, execution
+ordering, resumability, or staleness handling is duplicated in HTTP
+code.
+
+`EnrollmentRolloverMappingController::update()` reuses
+`upsertMapping()` exactly as-is (no new PlanService method was
+needed) -- it reads the EXISTING mapping's own source Grade/Section
+from the resolved, route-verified model (never from the request body)
+and only accepts a new target Grade/Section, so a caller can never
+re-key a PATCH onto a different mapping's identity.
+
+### Protected/caller-authority fields
+
+Never accepted from any rollover request body: `school_id`, `status`,
+`configuration_version`, `validated_configuration_version`,
+`created_by_user_id`, execution timestamps, `student_id`,
+`source_enrollment_id`, `validation_result`, `validation_reason`,
+`execution_status`, `target_enrollment_id`, snapshot columns. Every
+controller uses an explicit `$request->validate()` allow-list --
+anything else in the body is silently dropped before it ever reaches
+a service, proven directly in
+`EnrollmentRolloverApiTest::item_configuration_update_preserves_roll_number_text_and_ignores_protected_fields`.
+
+### Synchronous execution operational limitation
+
+No queue exists yet. `start()`/`resume()` reuse
+`EnrollmentRolloverExecutionService`'s existing `$afterEachItem`
+extension point (Phase 1B.7D's own deterministic-interruption test
+seam) for a second, legitimate production purpose: bounding ONE
+synchronous HTTP request to `EnrollmentRolloverController::MAX_ITEMS_PER_REQUEST`
+(100) Items, server-owned and never caller-controlled. A Plan with
+more pending Items than that simply returns with the Plan still
+`executing`; the client issues additional `resume()` calls to
+continue. This is a real, documented limitation (not silently
+papered over), and it required zero changes to the 1B.7D orchestrator
+itself -- it is reused, not redesigned.
+
+### Response privacy
+
+`RolloverItem`'s `student` field is the same minimized summary
+(id/studentNumber/first-middle-last name) `StudentEnrollmentController`
+already established -- never `date_of_birth`, Guardian data, contact
+values, lookup hashes, or encrypted fields. Snapshot/internal
+integrity columns are never serialized raw; only `validationResult`/
+`validationReason` (the human-meaningful state/reason) are exposed.
+
+### Deferred within this checkpoint
+
+No queue job/scheduler/command, no rollover Vue/Inertia UI (Phase
+1B.7F), no automatic source Enrollment completion, no automatic Roll
+Number generation, no AcademicYear activation/closure -- all
+unchanged from the domain layer's own existing invariants.
+
+## Rollover Administrative UI (Phase 1B.7F)
+
+Builds the human review/execution workflow on top of the already-
+accepted rollover services -- session-authenticated Inertia/Vue pages
+under `/app/enrollment-rollovers`, mirroring Phase 1B.6's exact
+convention (NOT the Bearer-token JSON API; the web layer calls the
+SAME `EnrollmentRolloverPlanService`/`EnrollmentRolloverDryRunService`/
+`EnrollmentRolloverExecutionService`/`EnrollmentRolloverReadService`
+directly, server-side -- Vue never calls `/api/v1` over HTTP).
+
+### Human workflow
+
+1. `/app/enrollment-rollovers` -- Plan directory.
+2. `/app/enrollment-rollovers/create` -- pick source + target Academic
+   Year (only fields collected; School/actor/status/version are
+   server-owned).
+3. `/app/enrollment-rollovers/{id}` -- the single Plan workspace:
+   Grade/Section mapping configuration, paginated Student Items with
+   inline decision/target/Roll-Number editing, Run Validation, and the
+   Start/Resume execution panel. One focused workspace, not a wizard
+   (no existing wizard convention in this repository).
+
+### Item population
+
+Items are never manually added ("Add Student to rollover" does not
+exist) -- they appear ONLY as a byproduct of Run Validation
+(`EnrollmentRolloverDryRunService::run()`'s own population step,
+unchanged from Phase 1B.7B). The UI reflects this truth directly: the
+Items panel shows "Run Validation to populate them" when a Plan has
+none yet.
+
+### Authorization
+
+Every page/action requires the finalized dual-capability pairs (Phase
+1B.7E) -- `enrollments.view` AND `enrollments.rollovers.view` for
+reads, `enrollments.manage` AND `enrollments.rollovers.manage` for
+every mutation -- enforced INSIDE each controller
+(`AuthorizesCapability` trait), matching every other `App/` controller
+in this codebase (route middleware is the API's pattern, not the
+web layer's). `canManage` is computed server-side and passed as a
+prop so Vue can hide mutation controls for UX, but every mutation
+route independently re-checks both capabilities regardless -- a
+Principal (`enrollments.rollovers.view` only) attempting a direct POST
+to any mutation route is rejected exactly as if no button existed
+(proven directly, not just by hiding a button).
+
+### Mapping / Item configuration
+
+`MappingsPanel.vue`/`ItemsPanel.vue` (Show.vue's two sub-components)
+submit directly to `EnrollmentRolloverMappingController`/
+`EnrollmentRolloverItemController` -- both new, both mirroring the
+Phase 1B.7E JSON API's identical controllers exactly (same protected-
+field allow-list, same nested Plan-ownership resolution, same
+`upsertMapping()`/`setItemDecision()` delegation, no Mapping Delete
+route since no sanctioned removal method exists). Roll Number inputs
+are always `type="text"`, never coerced with `Number()`/`parseInt` --
+"007" round-trips exactly.
+
+### Dry-run / validation review
+
+`plan.validationSummary` (Ready/Excluded/Already-enrolled/Review/
+Blocked/Unvalidated counts) is a NEW small read-only aggregate query
+(`EnrollmentRolloverReadService::validationSummary()`, added this
+checkpoint) -- distinct from the already-existing `executionSummary()`
+(a different dimension: what execution DID vs what validation
+PROPOSED). Needed because the "high-risk execution review" panel must
+show these counts even on a fresh page load, not only immediately
+after a `validate()` call's own transient response. Machine reason
+codes are translated to staff-facing text (`rolloverReasons.ts`)
+without changing their meaning; the original code remains available
+in the same prop.
+
+### Execution review, Start, Resume
+
+Start is enabled only when `status === 'validated'` AND
+`isValidatedForCurrentConfiguration` -- both server-computed flags,
+never inferred client-side from counts. `window.confirm()` (matching
+Phase 1B.6's `Transfer.vue` precedent) explains: target Enrollments
+will be created, source Enrollments will NOT change, and the request
+may leave the Plan `executing` if more Students remain. Resume uses
+its own confirmation and its own button, shown only when
+`status === 'executing'` -- a duplicate `Start` submission never
+silently becomes a Resume (the `RolloverPlanAlreadyExecutingException`
+409 conflict surfaces as a plain inline error).
+
+### Synchronous execution, honestly represented
+
+No queue exists. `start()`/`resume()` are capped to
+`App\Support\Rollover\BoundsRolloverExecutionRequest::MAX_ITEMS_PER_REQUEST`
+(100) Items per request -- a small shared trait extracted this
+checkpoint so the JSON API controller (Phase 1B.7E) and this web
+controller enforce the IDENTICAL cap, never two independently-tuned
+numbers. The UI never fabricates a progress bar, polling status check,
+or "processing in the background" message -- once the synchronous
+request returns, the page shows exactly the persisted Plan/Item state
+(`succeeded`/`reconciled`/`pending`/`failed` counts recomputed from the
+database), and if Items remain pending, the UI shows Resume; nothing
+calls Resume automatically.
+
+### Partial invalidation recovery
+
+If a per-Item execution discovers external drift mid-run, the Plan
+reverts to `draft` (Phase 1B.7C/1B.7D's existing invalidation
+behavior, unchanged) -- the Show page surfaces this as a prominent
+"Revalidation required" banner (never as `completed`/
+`completed_with_errors`), explicitly stating that already-created
+target Enrollments remain valid and were not undone. Re-running
+validation classifies the already-created targets as
+`already_enrolled` (existing Phase 1B.7D behavior); a subsequent Start
+never duplicates them.
+
+### Completed Plan history
+
+A `completed`/`completed_with_errors`/`cancelled` Plan renders fully
+read-only -- no mapping/item edit controls, no Run Validation, no
+Start/Resume -- but remains permanently viewable (no hard delete, no
+"edit completed Plan").
+
+### Privacy
+
+`ItemsPanel.vue`'s Student summary is the SAME minimized shape
+(id/studentNumber/first-middle-last name) as the JSON API and Phase
+1B.6's own Enrollment UI -- never `date_of_birth`, Guardian data,
+contact values, or encrypted/hash fields.
+
+### Accessibility / responsive
+
+Every form control has an associated `<label>`; invalid fields carry
+`aria-invalid`/`aria-describedby` (matching Phase 1B.6's established
+pattern); tables use semantic `<table>`/`<thead>`/`<th scope="col">`;
+status is always conveyed by text plus `StatusBadge` (extended this
+checkpoint with the rollover Plan-status/validation-result/execution-
+status vocabularies -- one superset component, matching how Phase
+1B.6 itself extended it, never a redesign); the Item table becomes a
+stacked card list below the `md` breakpoint, matching every other
+paginated table in this codebase.
+
+### Deferred within this checkpoint
+
+No queue job/scheduler, no automatic source Enrollment completion, no
+automatic Roll Number generation, no AcademicYear activation/closure --
+unchanged from the domain layer's own existing invariants.
+
 ## Deferred (not yet implemented)
 
-- **Rollover authorization, HTTP/API, and UI** — the architecture was
-  decided in Phase 1B.7, the durable plan/mapping/item schema landed in
-  Phase 1B.7A, the dry-run/eligibility/conflict engine landed in Phase
+- **Rollover queue-backed execution** — the architecture was decided
+  in Phase 1B.7, the durable plan/mapping/item schema landed in Phase
+  1B.7A, the dry-run/eligibility/conflict engine landed in Phase
   1B.7B, the per-Student promotion EXECUTION primitive landed in Phase
-  1B.7C, and PLAN-LEVEL bulk/resumable execution landed in Phase 1B.7D
-  (see "Bulk & Resumable Rollover Execution (Phase 1B.7D)" above) — a
-  whole validated Plan can now be started/resumed to completion, but
-  still: no queue job, no scheduler, no rollover command, no rollover
-  HTTP/API, no rollover Vue UI, and the recommended
-  `enrollments.rollover.manage` capability remains unseeded (every
-  rollover service stays authorization-neutral). Implementation
-  continues at Phase 1B.7E.
+  1B.7C, PLAN-LEVEL bulk/resumable execution landed in Phase 1B.7D,
+  authorization + the administrative HTTP/API landed in Phase 1B.7E,
+  and the human administrative UI landed in Phase 1B.7F (see
+  "Rollover Administrative UI (Phase 1B.7F)" above) — the full
+  persistent rollover workflow (create, configure, validate, start,
+  resume, inspect, recover from partial invalidation) is now reachable
+  end-to-end through both the API and the web UI. Still deferred: any
+  queue job/scheduler/background worker -- execution remains bounded
+  synchronous HTTP requests (100 Items per request, explicit Resume
+  for the rest), an intentional, honestly-represented operational
+  model rather than a silent limitation. A future queue-backed
+  execution enhancement remains a legitimate later operational
+  improvement, not a functional gap in Phase 1B's own acceptance
+  criteria.
 - **Transfer certificate / TC document generation, inter-school
   electronic transfer network** — out of scope for the transfer/
   withdrawal *status* concept this schema already supports.

@@ -2100,6 +2100,302 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/enrollment-rollovers:
+    get:
+      operationId: listEnrollmentRollovers
+      summary: >
+        Administrative rollover Plan directory. Requires
+        enrollments.view AND enrollments.rollovers.view (both,
+        independent -- CapabilityResolver has no inheritance).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: source_academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: target_academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [draft, validated, executing, completed, completed_with_errors, cancelled] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/RolloverPlanSummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+    post:
+      operationId: createEnrollmentRollover
+      summary: >
+        Creates a draft rollover Plan. Requires enrollments.manage AND
+        enrollments.rollovers.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RolloverPlanInput" }
+      responses:
+        "201":
+          description: Created
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverPlanSummary" } } }
+        "422":
+          description: >
+            Validation failure (including a foreign-School or
+            nonexistent Academic Year id -- indistinguishable), same
+            source/target year, or an open Plan already exists for this
+            year pair.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollment-rollovers/{rollover}:
+    get:
+      operationId: getEnrollmentRollover
+      summary: >
+        Rollover Plan detail -- metadata, Mappings, and a durable
+        execution summary. Requires enrollments.view AND
+        enrollments.rollovers.view. Never embeds the (potentially very
+        large) Item collection; see the separate paginated Items
+        endpoint.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverPlan" } } }
+        "404":
+          description: Not found (including a cross-School id -- indistinguishable from nonexistent).
+
+  /schools/{schoolId}/enrollment-rollovers/{rollover}/items:
+    get:
+      operationId: listEnrollmentRolloverItems
+      summary: >
+        Paginated rollover Item results for one Plan. Requires
+        enrollments.view AND enrollments.rollovers.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { name: validation_result, in: query, required: false, schema: { type: string, enum: [ready, excluded, already_enrolled, review, blocked] } }
+        - { name: execution_status, in: query, required: false, schema: { type: string, enum: [succeeded, reconciled, skipped, failed] } }
+        - { name: decision, in: query, required: false, schema: { type: string, enum: [undecided, promote, repeat, exclude, manual_review] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/RolloverItem" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+
+  /schools/{schoolId}/enrollment-rollovers/{rollover}/items/{item}:
+    patch:
+      operationId: updateEnrollmentRolloverItem
+      summary: >
+        Sets one Item's operator-controlled configuration (decision/
+        target Section override/Roll Number strategy/value). Requires
+        enrollments.manage AND enrollments.rollovers.manage.
+        Idempotency-Key required. Rejected once the Item has already
+        produced a target Enrollment, or while the Plan is executing/
+        terminal -- delegates entirely to
+        EnrollmentRolloverPlanService::setItemDecision().
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { $ref: "#/components/parameters/RolloverItemId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RolloverItemInput" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverItem" } } }
+        "404":
+          description: Not found (including an Item belonging to a DIFFERENT Plan than the route's -- indistinguishable from nonexistent).
+        "422":
+          description: Invalid decision/strategy, already-executed Item, or non-configurable Plan.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollment-rollovers/{rollover}/mappings:
+    post:
+      operationId: createEnrollmentRolloverMapping
+      summary: >
+        Creates/upserts a Grade-default (source_section_id omitted) or
+        Section-specific mapping. Requires enrollments.manage AND
+        enrollments.rollovers.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RolloverMappingInput" }
+      responses:
+        "201":
+          description: Created
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverMapping" } } }
+        "422":
+          description: Non-configurable Plan (executing/terminal), or a cross-School Grade/Section reference.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollment-rollovers/{rollover}/mappings/{mapping}:
+    patch:
+      operationId: updateEnrollmentRolloverMapping
+      summary: >
+        Changes an existing Mapping's target Grade/Section only.
+        Requires enrollments.manage AND enrollments.rollovers.manage.
+        Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { $ref: "#/components/parameters/RolloverMappingId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RolloverMappingUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverMapping" } } }
+        "404":
+          description: Not found (including a Mapping belonging to a DIFFERENT Plan than the route's -- indistinguishable from nonexistent).
+        "422":
+          description: Non-configurable Plan (executing/terminal).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollment-rollovers/{rollover}/validate:
+    post:
+      operationId: validateEnrollmentRollover
+      summary: >
+        Runs the dry-run/eligibility/conflict engine
+        (EnrollmentRolloverDryRunService::run()) -- persists ONLY
+        rollover planning state, zero StudentEnrollment/Student/
+        AcademicYear/GradeLevel/Section/Campus writes. Requires
+        enrollments.manage AND enrollments.rollovers.manage
+        (mutation-tier -- persists Plan/Item validation state; the
+        read-only capability pair cannot trigger it). Idempotency-Key
+        required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverDryRunSummary" } } }
+        "422":
+          description: Non-configurable Plan (executing/terminal), or invalid chronology.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollment-rollovers/{rollover}/start:
+    post:
+      operationId: startEnrollmentRollover
+      summary: >
+        Claims a validated Plan and executes it (delegates entirely to
+        EnrollmentRolloverExecutionService::start() -- no Item loop, no
+        Enrollment-creation call, in this controller). OPERATIONAL
+        LIMITATION: no queue exists yet -- this ONE synchronous request
+        processes at most 100 Items (server-owned, never
+        caller-controlled); a larger Plan requires additional calls to
+        /resume. The response always reflects the Plan's ACTUAL
+        persisted state, never a fabricated "completed". Requires
+        enrollments.manage AND enrollments.rollovers.manage.
+        Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverExecutionSummary" } } }
+        "409":
+          description: Plan is already executing -- use /resume instead; never an automatic silent resume.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Plan is not currently validated for its present configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/enrollment-rollovers/{rollover}/resume:
+    post:
+      operationId: resumeEnrollmentRollover
+      summary: >
+        Continues an already-executing Plan (delegates to
+        EnrollmentRolloverExecutionService::resume()). Same 100-Item
+        per-request cap as /start. Requires enrollments.manage AND
+        enrollments.rollovers.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverExecutionSummary" } } }
+        "422":
+          description: Plan is not currently executing -- nothing to resume (including an already-completed Plan; calling resume again is a clean no-op rejection, never a silent re-run).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2211,6 +2507,21 @@ components:
       required: false
       description: Inclusive upper bound on SchoolAuditEvent.occurred_at (not a domain effective date).
       schema: { type: string, format: date }
+    RolloverId:
+      name: rollover
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RolloverMappingId:
+      name: mapping
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RolloverItemId:
+      name: item
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   headers:
     XRequestId:
@@ -3037,6 +3348,151 @@ components:
         actor_display_name: { type: string, nullable: true }
         changed_fields: { type: array, items: { type: string } }
 
+    RolloverPlanSummary:
+      type: object
+      required: [id, sourceAcademicYear, targetAcademicYear, status, configurationVersion, createdAt]
+      description: >
+        Phase 1B.7E. Directory-row shape -- deliberately omits mappings
+        and executionSummary (only present on RolloverPlan detail) to
+        keep the directory listing cheap regardless of Plan count.
+      properties:
+        id: { type: string, format: uuid }
+        sourceAcademicYear: { $ref: "#/components/schemas/EnrollmentRef" }
+        targetAcademicYear: { $ref: "#/components/schemas/EnrollmentRef" }
+        status: { type: string, enum: [draft, validated, executing, completed, completed_with_errors, cancelled] }
+        configurationVersion: { type: integer }
+        validatedConfigurationVersion: { type: integer, nullable: true }
+        createdBy: { type: object, nullable: true, properties: { id: { type: string, format: uuid }, name: { type: string } } }
+        createdAt: { type: string, format: date-time }
+        validatedAt: { type: string, format: date-time, nullable: true }
+        executionStartedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    RolloverMapping:
+      type: object
+      required: [id, sourceGradeLevel, targetGradeLevel, isRepeat]
+      properties:
+        id: { type: string, format: uuid }
+        sourceGradeLevel: { $ref: "#/components/schemas/EnrollmentRef" }
+        sourceSection: { allOf: [{ $ref: "#/components/schemas/EnrollmentRef" }], nullable: true }
+        targetGradeLevel: { $ref: "#/components/schemas/EnrollmentRef" }
+        targetSection: { allOf: [{ $ref: "#/components/schemas/EnrollmentRef" }], nullable: true }
+        isRepeat: { type: boolean }
+
+    RolloverPlan:
+      allOf:
+        - { $ref: "#/components/schemas/RolloverPlanSummary" }
+        - type: object
+          required: [isValidatedForCurrentConfiguration, mappings, executionSummary]
+          properties:
+            isValidatedForCurrentConfiguration: { type: boolean }
+            mappings: { type: array, items: { $ref: "#/components/schemas/RolloverMapping" } }
+            executionSummary: { $ref: "#/components/schemas/RolloverExecutionSummary" }
+
+    RolloverPlanInput:
+      type: object
+      required: [source_academic_year_id, target_academic_year_id]
+      description: >
+        school_id/status/configuration_version/validated_configuration_version/created_by_user_id/execution
+        timestamps are never accepted -- School derives from the route,
+        actor from the authenticated User, every other field is
+        EnrollmentRolloverPlanService::createDraft()'s own invariant.
+      properties:
+        source_academic_year_id: { type: string, format: uuid }
+        target_academic_year_id: { type: string, format: uuid }
+
+    RolloverMappingInput:
+      type: object
+      required: [source_grade_level_id, target_grade_level_id]
+      properties:
+        source_grade_level_id: { type: string, format: uuid }
+        source_section_id: { type: string, format: uuid, nullable: true }
+        target_grade_level_id: { type: string, format: uuid }
+        target_section_id: { type: string, format: uuid, nullable: true }
+
+    RolloverMappingUpdateInput:
+      type: object
+      required: [target_grade_level_id]
+      description: >
+        Changes only WHAT an existing mapping points to -- its source
+        identity is read from the resolved mapping itself, never
+        accepted here (re-keying the source would address a DIFFERENT
+        mapping entirely; use RolloverMappingInput/POST for that).
+      properties:
+        target_grade_level_id: { type: string, format: uuid }
+        target_section_id: { type: string, format: uuid, nullable: true }
+
+    RolloverItem:
+      type: object
+      required: [id, student, sourceEnrollment, decision, validationResult, executionStatus]
+      description: >
+        Deliberately excludes dateOfBirth/Guardian PII/contact values/
+        lookup hashes/encrypted fields -- operational Student summary
+        only (docs/security/DATA-CLASSIFICATION.md). rollNumber-shaped
+        fields are always strings, never coerced to a number.
+      properties:
+        id: { type: string, format: uuid }
+        student: { $ref: "#/components/schemas/StudentSummary" }
+        sourceEnrollment:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            section: { allOf: [{ $ref: "#/components/schemas/EnrollmentRef" }], nullable: true }
+        decision: { type: string, enum: [undecided, promote, repeat, exclude, manual_review] }
+        targetSection: { allOf: [{ $ref: "#/components/schemas/EnrollmentRef" }], nullable: true }
+        rollNumberStrategy: { type: string, enum: [explicit, preserve_source], nullable: true }
+        targetRollNumber: { type: string, nullable: true }
+        validationResult: { type: string, enum: [ready, excluded, already_enrolled, review, blocked], nullable: true }
+        validationReason: { type: string, nullable: true }
+        executionStatus: { type: string, enum: [succeeded, reconciled, skipped, failed], nullable: true }
+        targetEnrollmentId: { type: string, format: uuid, nullable: true }
+        executedAt: { type: string, format: date-time, nullable: true }
+
+    RolloverItemInput:
+      type: object
+      required: [decision]
+      description: >
+        student_id/source_enrollment_id/validation_result/validation_reason/execution_status/target_enrollment_id/snapshot
+        columns/configuration_version are never accepted -- only these
+        four operator-editable fields reach
+        EnrollmentRolloverPlanService::setItemDecision().
+      properties:
+        decision: { type: string, enum: [undecided, promote, repeat, exclude, manual_review] }
+        target_section_id: { type: string, format: uuid, nullable: true }
+        roll_number_strategy: { type: string, enum: [explicit, preserve_source], nullable: true }
+        target_roll_number: { type: string, nullable: true }
+
+    RolloverDryRunSummary:
+      type: object
+      required: [total, ready, excluded, already_enrolled, review, blocked, validated, configurationVersion]
+      description: EnrollmentRolloverDryRunService::run()'s own return value, passed through unchanged.
+      properties:
+        total: { type: integer }
+        ready: { type: integer }
+        excluded: { type: integer }
+        already_enrolled: { type: integer }
+        review: { type: integer }
+        blocked: { type: integer }
+        validated: { type: boolean }
+        configurationVersion: { type: integer }
+
+    RolloverExecutionSummary:
+      type: object
+      required: [total, succeeded, reconciled, skipped, failed, pending]
+      description: >
+        Recomputed from persisted Items every time -- never an
+        in-memory counter. `planStatus` is present only on start()/
+        resume()'s own response (EnrollmentRolloverExecutionService's
+        return value), not on the Plan-detail-embedded executionSummary.
+      properties:
+        total: { type: integer }
+        succeeded: { type: integer }
+        reconciled: { type: integer }
+        skipped: { type: integer }
+        failed: { type: integer }
+        pending: { type: integer }
+        planStatus: { type: string, enum: [draft, validated, executing, completed, completed_with_errors, cancelled] }
+
   responses:
     TooManyRequests:
       description: >
@@ -3050,3 +3506,4 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+

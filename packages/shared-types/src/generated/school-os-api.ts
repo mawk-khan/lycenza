@@ -1051,6 +1051,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/enrollment-rollovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Administrative rollover Plan directory. Requires enrollments.view AND enrollments.rollovers.view (both, independent -- CapabilityResolver has no inheritance). */
+        get: operations["listEnrollmentRollovers"];
+        put?: never;
+        /** Creates a draft rollover Plan. Requires enrollments.manage AND enrollments.rollovers.manage. Idempotency-Key required. */
+        post: operations["createEnrollmentRollover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rollover Plan detail -- metadata, Mappings, and a durable execution summary. Requires enrollments.view AND enrollments.rollovers.view. Never embeds the (potentially very large) Item collection; see the separate paginated Items endpoint. */
+        get: operations["getEnrollmentRollover"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paginated rollover Item results for one Plan. Requires enrollments.view AND enrollments.rollovers.view. */
+        get: operations["listEnrollmentRolloverItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}/items/{item}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Sets one Item's operator-controlled configuration (decision/ target Section override/Roll Number strategy/value). Requires enrollments.manage AND enrollments.rollovers.manage. Idempotency-Key required. Rejected once the Item has already produced a target Enrollment, or while the Plan is executing/ terminal -- delegates entirely to EnrollmentRolloverPlanService::setItemDecision(). */
+        patch: operations["updateEnrollmentRolloverItem"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}/mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates/upserts a Grade-default (source_section_id omitted) or Section-specific mapping. Requires enrollments.manage AND enrollments.rollovers.manage. Idempotency-Key required. */
+        post: operations["createEnrollmentRolloverMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}/mappings/{mapping}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Changes an existing Mapping's target Grade/Section only. Requires enrollments.manage AND enrollments.rollovers.manage. Idempotency-Key required. */
+        patch: operations["updateEnrollmentRolloverMapping"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Runs the dry-run/eligibility/conflict engine (EnrollmentRolloverDryRunService::run()) -- persists ONLY rollover planning state, zero StudentEnrollment/Student/ AcademicYear/GradeLevel/Section/Campus writes. Requires enrollments.manage AND enrollments.rollovers.manage (mutation-tier -- persists Plan/Item validation state; the read-only capability pair cannot trigger it). Idempotency-Key required. */
+        post: operations["validateEnrollmentRollover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claims a validated Plan and executes it (delegates entirely to EnrollmentRolloverExecutionService::start() -- no Item loop, no Enrollment-creation call, in this controller). OPERATIONAL LIMITATION: no queue exists yet -- this ONE synchronous request processes at most 100 Items (server-owned, never caller-controlled); a larger Plan requires additional calls to /resume. The response always reflects the Plan's ACTUAL persisted state, never a fabricated "completed". Requires enrollments.manage AND enrollments.rollovers.manage. Idempotency-Key required. */
+        post: operations["startEnrollmentRollover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Continues an already-executing Plan (delegates to EnrollmentRolloverExecutionService::resume()). Same 100-Item per-request cap as /start. Requires enrollments.manage AND enrollments.rollovers.manage. Idempotency-Key required. */
+        post: operations["resumeEnrollmentRollover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1766,6 +1920,126 @@ export interface components {
             actor_display_name: string | null;
             changed_fields: string[];
         };
+        /** @description Phase 1B.7E. Directory-row shape -- deliberately omits mappings and executionSummary (only present on RolloverPlan detail) to keep the directory listing cheap regardless of Plan count. */
+        RolloverPlanSummary: {
+            /** Format: uuid */
+            id: string;
+            sourceAcademicYear: components["schemas"]["EnrollmentRef"];
+            targetAcademicYear: components["schemas"]["EnrollmentRef"];
+            /** @enum {string} */
+            status: "draft" | "validated" | "executing" | "completed" | "completed_with_errors" | "cancelled";
+            configurationVersion: number;
+            validatedConfigurationVersion?: number | null;
+            createdBy?: {
+                /** Format: uuid */
+                id?: string;
+                name?: string;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            validatedAt?: string | null;
+            /** Format: date-time */
+            executionStartedAt?: string | null;
+            /** Format: date-time */
+            completedAt?: string | null;
+        };
+        RolloverMapping: {
+            /** Format: uuid */
+            id: string;
+            sourceGradeLevel: components["schemas"]["EnrollmentRef"];
+            sourceSection?: components["schemas"]["EnrollmentRef"] | null;
+            targetGradeLevel: components["schemas"]["EnrollmentRef"];
+            targetSection?: components["schemas"]["EnrollmentRef"] | null;
+            isRepeat: boolean;
+        };
+        RolloverPlan: components["schemas"]["RolloverPlanSummary"] & {
+            isValidatedForCurrentConfiguration: boolean;
+            mappings: components["schemas"]["RolloverMapping"][];
+            executionSummary: components["schemas"]["RolloverExecutionSummary"];
+        };
+        /** @description school_id/status/configuration_version/validated_configuration_version/created_by_user_id/execution timestamps are never accepted -- School derives from the route, actor from the authenticated User, every other field is EnrollmentRolloverPlanService::createDraft()'s own invariant. */
+        RolloverPlanInput: {
+            /** Format: uuid */
+            source_academic_year_id: string;
+            /** Format: uuid */
+            target_academic_year_id: string;
+        };
+        RolloverMappingInput: {
+            /** Format: uuid */
+            source_grade_level_id: string;
+            /** Format: uuid */
+            source_section_id?: string | null;
+            /** Format: uuid */
+            target_grade_level_id: string;
+            /** Format: uuid */
+            target_section_id?: string | null;
+        };
+        /** @description Changes only WHAT an existing mapping points to -- its source identity is read from the resolved mapping itself, never accepted here (re-keying the source would address a DIFFERENT mapping entirely; use RolloverMappingInput/POST for that). */
+        RolloverMappingUpdateInput: {
+            /** Format: uuid */
+            target_grade_level_id: string;
+            /** Format: uuid */
+            target_section_id?: string | null;
+        };
+        /** @description Deliberately excludes dateOfBirth/Guardian PII/contact values/ lookup hashes/encrypted fields -- operational Student summary only (docs/security/DATA-CLASSIFICATION.md). rollNumber-shaped fields are always strings, never coerced to a number. */
+        RolloverItem: {
+            /** Format: uuid */
+            id: string;
+            student: components["schemas"]["StudentSummary"];
+            sourceEnrollment: {
+                /** Format: uuid */
+                id?: string;
+                section?: components["schemas"]["EnrollmentRef"] | null;
+            };
+            /** @enum {string} */
+            decision: "undecided" | "promote" | "repeat" | "exclude" | "manual_review";
+            targetSection?: components["schemas"]["EnrollmentRef"] | null;
+            /** @enum {string|null} */
+            rollNumberStrategy?: "explicit" | "preserve_source" | null;
+            targetRollNumber?: string | null;
+            /** @enum {string|null} */
+            validationResult: "ready" | "excluded" | "already_enrolled" | "review" | "blocked" | null;
+            validationReason?: string | null;
+            /** @enum {string|null} */
+            executionStatus: "succeeded" | "reconciled" | "skipped" | "failed" | null;
+            /** Format: uuid */
+            targetEnrollmentId?: string | null;
+            /** Format: date-time */
+            executedAt?: string | null;
+        };
+        /** @description student_id/source_enrollment_id/validation_result/validation_reason/execution_status/target_enrollment_id/snapshot columns/configuration_version are never accepted -- only these four operator-editable fields reach EnrollmentRolloverPlanService::setItemDecision(). */
+        RolloverItemInput: {
+            /** @enum {string} */
+            decision: "undecided" | "promote" | "repeat" | "exclude" | "manual_review";
+            /** Format: uuid */
+            target_section_id?: string | null;
+            /** @enum {string|null} */
+            roll_number_strategy?: "explicit" | "preserve_source" | null;
+            target_roll_number?: string | null;
+        };
+        /** @description EnrollmentRolloverDryRunService::run()'s own return value, passed through unchanged. */
+        RolloverDryRunSummary: {
+            total: number;
+            ready: number;
+            excluded: number;
+            already_enrolled: number;
+            review: number;
+            blocked: number;
+            validated: boolean;
+            configurationVersion: number;
+        };
+        /** @description Recomputed from persisted Items every time -- never an in-memory counter. `planStatus` is present only on start()/ resume()'s own response (EnrollmentRolloverExecutionService's return value), not on the Plan-detail-embedded executionSummary. */
+        RolloverExecutionSummary: {
+            total: number;
+            succeeded: number;
+            reconciled: number;
+            skipped: number;
+            failed: number;
+            pending: number;
+            /** @enum {string} */
+            planStatus?: "draft" | "validated" | "executing" | "completed" | "completed_with_errors" | "cancelled";
+        };
     };
     responses: {
         /** @description Phase 8A.15 -- the caller's School+actor-scoped rate limit (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for the sensitive-documents endpoint) has been exceeded. The same global error envelope as every other `/api/v1` error; never a cross-School/Highly-Sensitive existence signal. */
@@ -1804,6 +2078,9 @@ export interface components {
         EmployeeOccurredFrom: string;
         /** @description Inclusive upper bound on SchoolAuditEvent.occurred_at (not a domain effective date). */
         EmployeeOccurredTo: string;
+        RolloverId: string;
+        RolloverMappingId: string;
+        RolloverItemId: string;
     };
     requestBodies: never;
     headers: {
@@ -4784,6 +5061,407 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listEnrollmentRollovers: {
+        parameters: {
+            query?: {
+                source_academic_year_id?: string;
+                target_academic_year_id?: string;
+                status?: "draft" | "validated" | "executing" | "completed" | "completed_with_errors" | "cancelled";
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverPlanSummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+        };
+    };
+    createEnrollmentRollover: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RolloverPlanInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverPlanSummary"];
+                    };
+                };
+            };
+            /** @description Validation failure (including a foreign-School or nonexistent Academic Year id -- indistinguishable), same source/target year, or an open Plan already exists for this year pair. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getEnrollmentRollover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverPlan"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listEnrollmentRolloverItems: {
+        parameters: {
+            query?: {
+                validation_result?: "ready" | "excluded" | "already_enrolled" | "review" | "blocked";
+                execution_status?: "succeeded" | "reconciled" | "skipped" | "failed";
+                decision?: "undecided" | "promote" | "repeat" | "exclude" | "manual_review";
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverItem"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+        };
+    };
+    updateEnrollmentRolloverItem: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+                item: components["parameters"]["RolloverItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RolloverItemInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverItem"];
+                    };
+                };
+            };
+            /** @description Not found (including an Item belonging to a DIFFERENT Plan than the route's -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid decision/strategy, already-executed Item, or non-configurable Plan. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createEnrollmentRolloverMapping: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RolloverMappingInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverMapping"];
+                    };
+                };
+            };
+            /** @description Non-configurable Plan (executing/terminal), or a cross-School Grade/Section reference. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateEnrollmentRolloverMapping: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+                mapping: components["parameters"]["RolloverMappingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RolloverMappingUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverMapping"];
+                    };
+                };
+            };
+            /** @description Not found (including a Mapping belonging to a DIFFERENT Plan than the route's -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Non-configurable Plan (executing/terminal). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    validateEnrollmentRollover: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverDryRunSummary"];
+                    };
+                };
+            };
+            /** @description Non-configurable Plan (executing/terminal), or invalid chronology. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    startEnrollmentRollover: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverExecutionSummary"];
+                    };
+                };
+            };
+            /** @description Plan is already executing -- use /resume instead; never an automatic silent resume. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Plan is not currently validated for its present configuration. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    resumeEnrollmentRollover: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverExecutionSummary"];
+                    };
+                };
+            };
+            /** @description Plan is not currently executing -- nothing to resume (including an already-completed Plan; calling resume again is a clean no-op rejection, never a silent re-run). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
 }

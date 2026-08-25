@@ -224,6 +224,27 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'hr.departments.manage', 'label' => 'Manage HR Departments', 'namespace' => 'school'],
             ['key' => 'hr.positions.view', 'label' => 'View Positions', 'namespace' => 'school'],
             ['key' => 'hr.positions.manage', 'label' => 'Manage Positions', 'namespace' => 'school'],
+
+            // Phase 1B.7E (docs/modules/STUDENT-ENROLLMENT.md
+            // "Rollover Authorization & Administrative HTTP/API") --
+            // three-segment `enrollments.rollovers.*` naming mirrors
+            // `integrations.webhooks.*`'s existing sub-resource-of-a-
+            // domain precedent (rollover is a sub-resource of
+            // Enrollment the same way webhooks are a sub-resource of
+            // integrations) more closely than a squashed single-word
+            // `enrollment_rollovers.*` would -- no other capability key
+            // in this catalog uses an underscore. Deliberately its OWN
+            // pair, required IN ADDITION TO (never instead of)
+            // `enrollments.view`/`enrollments.manage` -- a bulk rollover
+            // can mutate hundreds/thousands of next-year Enrollments at
+            // once, a materially higher blast radius than any single
+            // Enrollment mutation `enrollments.manage` alone gates, so
+            // it earns its own explicit grant rather than being implied
+            // by the base Enrollment capability (CapabilityResolver has
+            // no capability-inheritance mechanism at all -- see
+            // `enrollments.*`'s own docblock above).
+            ['key' => 'enrollments.rollovers.view', 'label' => 'View Enrollment Rollover plans, mappings, and results', 'namespace' => 'school'],
+            ['key' => 'enrollments.rollovers.manage', 'label' => 'Manage Enrollment Rollover plans (configure, validate, start, resume execution)', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -274,6 +295,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     // configuration must explicitly add whichever of
                     // these an actual "HR Staff" role needs.
                     'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
+                    'enrollments.rollovers.view', 'enrollments.rollovers.manage',
                 ],
             ],
             'principal' => [
@@ -317,6 +339,21 @@ class CapabilityAndRoleSeeder extends Seeder
                     // school_admin above -- view/manage/personal.view
                     // only, nothing else by default.
                     'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
+                    // Phase 1B.7E: deliberately VIEW ONLY, breaking from
+                    // the "Principal gets full parity with School Admin"
+                    // pattern every other pair on this role just
+                    // followed. A Principal may legitimately inspect/
+                    // review academic rollover planning, but bulk
+                    // EXECUTION can mutate hundreds/thousands of
+                    // next-year Enrollments in one action -- a
+                    // materially higher blast radius than any single
+                    // enrollments.manage operation, so it stays
+                    // School-Admin-only by default (least privilege),
+                    // matching this role's own existing view-only
+                    // treatment of School profile/Campus administration
+                    // above for the identical "administrative, not
+                    // day-to-day operational" reasoning.
+                    'enrollments.rollovers.view',
                 ],
             ],
         ];

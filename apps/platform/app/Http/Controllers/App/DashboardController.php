@@ -54,6 +54,12 @@ class DashboardController extends Controller
                 'canViewCommunications' => $school !== null && $capabilities->canInSchool($user, 'communications.view', $school),
                 // Phase 1B.6: Enrollment administration.
                 'canViewEnrollments' => $school !== null && $capabilities->canInSchool($user, 'enrollments.view', $school),
+                // Phase 1B.7F: Enrollment Rollover -- dual capability,
+                // both required (docs/modules/STUDENT-ENROLLMENT.md,
+                // "Rollover Authorization & Administrative HTTP/API").
+                'canViewEnrollmentRollovers' => $school !== null
+                    && $capabilities->canInSchool($user, 'enrollments.view', $school)
+                    && $capabilities->canInSchool($user, 'enrollments.rollovers.view', $school),
             ],
         ]);
     }
