@@ -13,7 +13,8 @@ operationalized it.
 
 ```
 0E.1  Documents Domain Foundation   (documents table, Document model) [implemented]
-0E.2  Document Write Path & Storage Integration   (DocumentService, real object storage, Employee owner activated — this checkpoint) [implemented]
+0E.2  Document Write Path & Storage Integration   (DocumentService, real object storage, Employee owner activated) [implemented]
+0E.3  Authorized Document Read & Content Access   (DocumentReadService, metadata + streamed content, Employee owner activated — this checkpoint) [implemented]
 ```
 
 Later checkpoints (write service, download authorization, HTTP/API,
@@ -497,15 +498,212 @@ real unreachable-endpoint failure still leaves zero `documents` rows.
 | Path traversal / storage-key collision via filename | P2 if unaddressed | Original filename never used to build the storage key (server-generated UUIDv7 component); display name sanitized. Verified by dedicated tests. |
 | Compensation itself failing (bounded orphan-object operational risk) | P3 (documented, not solved) | No cleanup-queue subsystem built for this checkpoint — see "compensation-failure operational limitation" above. No application-level access path demonstrated and no metadata row exists to expose the orphan, but this remains a genuine residual data-retention/privacy/operational risk, not a resolved one, until storage-level cleanup occurs. |
 
+No open P0/P1 as of 0E.2.
+
+## Authorized Document Read & Content Access (0E.3, implemented)
+
+The Documents module's first read/content-access path —
+`DocumentReadService` (`App\Domain\Documents\Application\DocumentReadService`).
+Deliberately a separate class from `DocumentService` (mutation
+orchestration) — this class only ever reads, never mutates a
+`documents` row.
+
+**Central invariant:** knowing a Document UUID is never sufficient to
+access its metadata or bytes. Every public method resolves the
+Document under the trusted School first (fails closed, identically,
+for "does not exist" and "exists in a different School" —
+`DocumentNotFoundException` never distinguishes the two), derives
+owner type/classification from that already-persisted row — never from
+caller input, there is no `DocumentOwner` parameter anywhere on this
+class, unlike `DocumentService::create()` — and only then authorizes
+the actor. Storage is never touched before authorization succeeds.
+
+### Metadata vs. content — two distinct operations
+
+`metadata(School, documentId, User): DocumentMetadata` — a safe DTO
+(`documentId`/`ownerType`/`ownerId`/`classificationTier`/`status`/
+`originalFilename`/`mimeType`/`sizeBytes`/`uploadedAt`), never a raw
+`Document` Eloquent model, never `storage_disk`/`storage_path`.
+Deliberately excludes `uploaded_by_user_id` too — matching the
+narrower precedent `App\Domain\HR\Application\EmployeeProfileDocumentEntry`
+already established for the closest analogous read path in this
+repository; a caller needing "who uploaded this" belongs at the audit
+log, not this DTO.
+
+`content(School, documentId, User): DocumentContent` — opens the
+private stored object only after the identical authorization gate
+metadata() uses, returning `documentId`/`originalFilename`/`mimeType`/
+`sizeBytes` plus an open PHP stream (`Storage::readStream()`, never
+`Storage::get()` — proven structurally by
+`DocumentReadServiceStructuralTest::content_never_buffers_the_whole_file_via_storage_get`,
+so a future larger file size limit never couples to process memory).
+A metadata-only caller never triggers a storage read — proven by
+`DocumentReadServiceMetadataTest::metadata_lookup_does_not_touch_storage`.
+Stream ownership: the caller closes it (documented on `DocumentContent`
+itself) — `DocumentReadService` never closes a stream it just handed
+back, since doing so would make the result useless.
+
+### Owner activation (read)
+
+Identical to 0E.2's write-side decision, reconfirmed independently for
+reads: **Employee: ACTIVATED. Student: DEFERRED. Guardian: DEFERRED.**
+`students.manage`/`students.view` and `guardians.manage`/
+`guardians.view` still do not name documents/attachments anywhere in
+their capability labels — the same evidence that justified deferring
+writes justifies deferring reads. A Student/Guardian-owned Document
+(reachable in the database purely because 0E.1's schema always
+supported all three owner arms) is rejected by
+`DocumentOwnerTypeNotSupportedException` before any capability check
+or storage access is attempted, regardless of which broad
+identity-management capability the actor holds.
+
+### Authorization
+
+Reuses HR's existing two-tier READ boundary verbatim — the exact
+read-side counterpart of 0E.2's write-side reuse:
+`hr.employees.documents.view` for `public`/`internal`/`sensitive`,
+`hr.employees.sensitive.view` for `highly_sensitive`. **No new
+`documents.*` capability was added** — same Option A reasoning as
+0E.2. An actor holding only a Student-domain capability cannot read an
+Employee-owned Document (proven by
+`DocumentReadServiceMetadataTest::cross_domain_authorization_is_not_bypassed_by_a_generic_documents_capability`-equivalent
+coverage) — there is no generic capability for it to bypass into.
+
+**"public" classification is a data-classification tag, not a public
+object ACL.** A `documents.classification_tier = 'public'` row is
+still a tenant-owned private object behind `DocumentReadService`'s
+full authorization gate — `public` only means "safe for a broader
+audience *within* the School if a future policy grants it," never
+"reachable without authentication/authorization." This checkpoint
+introduces no unauthenticated/anonymous access path of any kind.
+
+### Archived Documents remain readable — evidence-based decision
+
+Neither `App\Domain\HR\Application\EmployeeProfileWorkspaceService`'s
+Restricted-tier document query nor
+`App\Domain\HR\Application\EmployeeSensitiveDocumentReadService`'s
+Highly Sensitive query filters by `status` — both already read
+archived rows identically to active ones in production. This
+checkpoint follows that same established precedent (Option A from
+this checkpoint's own decision gate) rather than inventing a new
+policy: an authorized actor can read an archived Document's metadata
+and content exactly like an active one. No object is ever physically
+removed on archive (0E.2), so there is no "content disappeared" race
+to reason about between a concurrent archive and a read.
+
+### Audit policy — evidence-based, not mechanically "audit everything"
+
+`App\Domain\HR\Application\EmployeeProfileWorkspaceService`'s
+ordinary/Restricted-tier document read is **not audited at all**;
+only `EmployeeSensitiveDocumentReadService`'s Highly Sensitive read
+is (`hr.employee_document.sensitive_viewed`). `DocumentReadService`
+reuses that exact boundary: `public`/`internal`/`sensitive` metadata/
+content access is not audited; `highly_sensitive` metadata/content
+access is, on success only, via two distinct events —
+`document.sensitive_metadata_viewed` and
+`document.sensitive_content_accessed` — never on authorization denial,
+a nonexistent/cross-School Document, an unsupported owner type, a
+missing object, or a storage failure. Neither event's metadata
+includes `storagePath`/`storage_path` (proven by a dedicated test).
+
+**Audit semantic, stated precisely (there is no HTTP layer to observe
+completion yet):** `document.sensitive_content_accessed` means "an
+authorized content stream was successfully opened," **not** "the
+file's bytes were fully delivered to an end user" — this checkpoint
+never claims a download-completion guarantee it cannot actually prove.
+No event is named `document.downloaded` or `document.download_completed`
+for this reason.
+
+### Storage read failure / missing object
+
+A single safe exception, `DocumentContentUnavailableException`, covers
+every content-read failure mode identically: a missing object
+(operational failure, manual storage corruption, an external
+lifecycle mistake), an unreachable disk, or an unknown/misconfigured
+disk name. Never the raw provider exception (no S3 XML, no MinIO
+internal error, no filesystem path), never `storage_path`/
+`storage_disk` in the message. No successful-access audit event is
+ever written for a failed read. Proven against both a faked-disk
+failure and a real unreachable MinIO endpoint
+(`DocumentReadMinioIntegrationTest`).
+
+### No database transaction around stream consumption
+
+Resolution and authorization complete first as plain reads (no row
+locking — a read has no reason to lock `documents` rows); the object
+stream opens afterward, entirely outside any `DB::transaction()`. No
+Document field is mutated by a read of any kind — no
+`last_accessed_at`/`view_count`/`download_count`, none of which exist
+in the 0E.1 schema and none of which this checkpoint adds.
+
+### Orphan non-addressability (existing 0E.2 P3 residual)
+
+The 0E.2 compensation-failure residual (a DB-transaction failure whose
+own compensating object-delete also fails can leave a private orphan
+object with no `documents` row referencing it) remains open,
+unrelated to and unaffected by this checkpoint. `DocumentReadService`'s
+entire public API starts from a Document UUID resolved under tenancy —
+there is no method accepting a raw bucket/key/path
+(`DocumentReadServiceStructuralTest` proves this by reflection: no
+public parameter name contains "path"/"key"/"disk"). An orphan object
+with no referencing row is therefore structurally unreachable through
+this service, not merely unreachable by convention.
+
+### What 0E.3 still does not do
+
+No HTTP/API, no UI, no signed/temporary URL (an internal stream
+remains the transport-neutral primitive; ADR 0012 does not mandate
+presigned URLs at this foundation stage), no listing/search (a
+Document must already be known by id), no Student/Guardian read
+activation, no `employee_documents` reconciliation, no checksum, no
+malware scanning, no retention. `EmployeeDocumentService`/
+`EmployeeSensitiveDocumentReadService` remain completely untouched
+(confirmed by the unchanged HR regression suite), and
+`CommunicationAttachmentService`/`TenantStoragePath` remain unaffected
+(confirmed by the unchanged Communications regression suite).
+
+### Test strategy (0E.3 addition)
+
+Authoritative selector unchanged in form:
+
+```
+php artisan test tests/Feature/Documents tests/Feature/Postgres/DocumentRawIsolationTest.php
+```
+
+New files: `DocumentReadServiceMetadataTest.php` (authorization order,
+not-found/cross-School, cross-domain bypass, unsupported owners,
+same-User multi-School, RLS-vs-RBAC, full classification matrix,
+audit policy, archived readability), `DocumentReadServiceContentTest.php`
+(stream correctness, authorization-before-storage, missing object,
+storage failure, archived content, audit policy, no DB mutation),
+`DocumentReadMinioIntegrationTest.php` (a REAL end-to-end write-then-
+read round trip against actual MinIO, plus a real post-authorization
+storage-read failure), and `DocumentReadServiceStructuralTest.php`
+(reflection-based proof of the public API surface, no raw-path/key/
+disk parameters, no signed-URL method, no `Storage::get()` whole-file
+buffering).
+
+### Security register (0E.3)
+
+| Risk | Severity | Resolution |
+|---|---|---|
+| Known-UUID-alone access (Document existence/metadata/content reachable without real authorization) | P0 if ever shipped without it | Every public method resolves under trusted School + authorizes from the Document's own persisted owner/classification before any data is returned. Verified across the full metadata/content test suites. |
+| Cross-domain authorization bypass (a capability for one owner domain granting read access to another) | P0 if ever shipped without it | Structurally impossible for the activated Employee type (only `hr.employees.*` capabilities checked); Student/Guardian are not activated, so there is no capability to bypass into for them. |
+| Highly Sensitive existence/metadata/content leak to an ordinary-capability actor | P1 if unaddressed | The identical authorization gate covers both metadata and content for every tier — an ordinary `hr.employees.documents.view` holder cannot learn a highly_sensitive Document's filename, size, MIME, or bytes. Verified by the classification-matrix test. |
+| Orphan object (0E.2 residual) becoming addressable via the new read path | P2 if unaddressed | Structurally impossible — see "Orphan non-addressability" above. |
+| Storage-path/disk/provider-error leakage on failure | P2 if unaddressed | Single generic `DocumentContentUnavailableException` for every failure mode; verified no message/audit metadata contains `storage_path`/`storage_disk`. |
+| Successful-access audit recorded on a failed/denied read | P2 if unaddressed | Audit calls sit strictly after both authorization and the storage read succeed; verified for denial, not-found, missing-object, and storage-failure paths. |
+| 0E.2 compensation-cleanup residual (private orphan object, no metadata row) | P3 (documented, not solved, carried forward unchanged from 0E.2) | Unrelated to and unaffected by 0E.3 — no new exposure introduced or removed by this checkpoint. |
+
 No open P0/P1 as of this checkpoint.
 
 ## Next checkpoint boundary
 
 Not yet decided — to be established from ADR 0012 + this document's
-own as-built state after 0E.2 is reviewed. Likely later concerns
-(explicitly not started): authorized read/download (signed/short-
-lived URL or authenticated streaming endpoint, ADR 0012's own stated
-requirement), metadata listing/search, retention, malware scanning,
-checksum, the `employee_documents` reconciliation, Student/Guardian
-write activation (contingent on a deliberate capability decision for
-each), and any HTTP/API/UI surface.
+own as-built state after 0E.3 is reviewed. Likely later concerns
+(explicitly not started): HTTP/API exposure of the now-safe
+`DocumentReadService`/`DocumentService` primitives, signed/temporary
+URLs (if ever justified beyond the internal stream), metadata
+listing/search, retention, malware scanning, checksum, the
+`employee_documents` reconciliation, and a deliberate Student/Guardian
+capability decision for both write and read activation.
