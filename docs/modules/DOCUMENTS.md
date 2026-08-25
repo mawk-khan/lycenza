@@ -14,7 +14,8 @@ operationalized it.
 ```
 0E.1  Documents Domain Foundation   (documents table, Document model) [implemented]
 0E.2  Document Write Path & Storage Integration   (DocumentService, real object storage, Employee owner activated) [implemented]
-0E.3  Authorized Document Read & Content Access   (DocumentReadService, metadata + streamed content, Employee owner activated — this checkpoint) [implemented]
+0E.3  Authorized Document Read & Content Access   (DocumentReadService, metadata + streamed content, Employee owner activated) [implemented]
+0E.4  Owner-Scoped Document Discovery & Metadata Listing   (DocumentListingService, ordinary + Highly Sensitive listing, Employee owner activated — this checkpoint) [implemented]
 ```
 
 Later checkpoints (write service, download authorization, HTTP/API,
@@ -697,13 +698,213 @@ buffering).
 
 No open P0/P1 as of this checkpoint.
 
+## Owner-Scoped Document Discovery & Metadata Listing (0E.4, implemented)
+
+The Documents module's first discovery/listing path —
+`DocumentListingService` (`App\Domain\Documents\Application\DocumentListingService`).
+A third, separate class from `DocumentService` (mutation) and
+`DocumentReadService` (known-id direct access) — listing begins from a
+known *owner*, not a known Document id, so it needed its own query
+projection rather than either of the other two classes. Never
+implemented as a loop calling `DocumentReadService::metadata()` per
+row — every operation here is one bounded SQL query with the
+classification predicate applied inside the `WHERE` clause, before
+PostgreSQL ever computes a count or a page.
+
+### Two explicit, separately-authorized operations
+
+Mirrors the exact split `EmployeeProfileWorkspaceService` (ordinary)
+/ `EmployeeSensitiveDocumentReadService` (Highly Sensitive) already
+established — never one operation that mixes tiers by actor privilege:
+
+- `list()` — `public`/`internal`/`sensitive` only, requires
+  `hr.employees.documents.view`. `highly_sensitive` rows are excluded
+  by the SQL `WHERE classification_tier IN (...)` clause itself, so
+  they never reach `total()`, never occupy a page slot, and never
+  affect ordering — proven by
+  `DocumentListingServiceOrdinaryTest::highly_sensitive_documents_are_completely_hidden_from_the_ordinary_list`
+  (2 ordinary + 3 Highly Sensitive Documents for one Employee; the
+  ordinary actor sees exactly 2 items, `total()` = 2) and
+  `..._highly_sensitive_documents_do_not_create_extra_pages` (20
+  ordinary + 30 Highly Sensitive at `perPage=10`: `total()` = 20,
+  `lastPage()` = 2, and page 3 — which would exist if the 30 hidden
+  rows counted — is empty, never a sparse page).
+- `listSensitive()` — `highly_sensitive` only, requires
+  `hr.employees.sensitive.view`. The two capabilities are never
+  assumed to imply each other (matching `DocumentService`'s/
+  `DocumentReadService`'s own two-tier split): ordinary-only cannot
+  call `listSensitive()`, sensitive-only cannot call `list()` and see
+  ordinary rows, and an actor holding both still gets two independent,
+  non-merged results depending on which method they call.
+
+**No new `documents.*` capability was added** — Option A applied
+again, identically to 0E.2/0E.3.
+
+### Owner activation, resolution, and archived policy — unchanged from 0E.2/0E.3
+
+Only Employee is activated (`DocumentOwnerTypeNotSupportedException`
+for Student/Guardian, thrown before any query). The owner is resolved
+under the trusted School exactly like `DocumentService`'s write path
+(`DocumentOwnerNotFoundException`, identical for nonexistent and
+cross-School ids — never `DocumentNotFoundException`, which is
+0E.3's distinct "a *Document* id didn't resolve" exception; listing
+never resolves a Document id, only an owner id, so it necessarily uses
+the owner-resolution exception). Archived Documents are never excluded
+— matching the exact precedent both HR listing services already
+established (neither filters by `status`) — so `DocumentListingQuery`
+has no status field at all; there is no repository precedent for one.
+
+### Visible-total-only — the hard privacy gate
+
+`total()`/`lastPage()`/page contents are computed from a query that
+already excludes the hidden tier, via Eloquent's `paginate()` running
+`COUNT(*)` against the SAME filtered `WHERE` clause the page query
+uses — never "paginate everything, then strip hidden rows in PHP,"
+which would leak hidden-row existence through inflated totals and
+sparse pages. `classification_tier` is never caller-controlled on
+either operation (no filter parameter exists on `DocumentListingQuery`
+that could smuggle `highly_sensitive` into `list()`) — each operation
+hardcodes its own tier predicate.
+
+### Pagination
+
+Reuses the exact `DEFAULT_PER_PAGE`/`MAX_PER_PAGE` (25/100) convention
+`EmployeeDirectoryQuery`/`EmployeeActivityTimelineQuery` already
+established, and the exact `LengthAwarePaginator`-wrapping-safe-DTOs
+pattern `EmployeeActivityTimelineService::get()` already established
+(construct a fresh `LengthAwarePaginator` from the mapped
+`DocumentMetadata` collection plus the original paginator's
+`total()`/`perPage()`/`currentPage()` — never the raw Eloquent
+paginator, which would carry `Document` models). `page`/`perPage` are
+clamped in `DocumentListingQuery`'s constructor (page ≥ 1, perPage ∈
+[1, 100]) — no unbounded/negative/zero input reaches the query.
+Ordering is fixed (`uploaded_at DESC, id DESC`), never caller-supplied
+— no sort-injection surface exists.
+
+### No search, no filters beyond pagination
+
+No filename/full-text search, no arbitrary classification/MIME/date
+filters — discovery is strictly "known owner → bounded metadata list."
+Free-text search and any cross-owner/global discovery remain explicitly
+out of scope for this checkpoint (their own privacy/security design
+questions, deferred).
+
+### Safe DTO shape — unchanged
+
+Reuses `DocumentMetadata` (0E.3) as-is for both operations' items — no
+new list-specific DTO was needed, since its existing field set was
+already safe for discovery (no `storage_disk`/`storage_path`,
+no uploaded_by_user_id). No raw `Document` Eloquent model ever crosses
+either method's return boundary.
+
+### No storage I/O
+
+Listing operates entirely from PostgreSQL metadata — no
+`Storage::readStream()`/`get()`/`exists()`/`files()`/`allFiles()`
+anywhere in `DocumentListingService`. A missing physical object does
+not remove a row from a listing (0E.3's `content()` is what safely
+handles that case, at actual access time, not discovery time).
+
+### Audit policy — reused precedent, not per-row noise
+
+`list()` (ordinary) is never audited, matching
+`EmployeeProfileWorkspaceService`'s own un-audited ordinary document
+read. `listSensitive()` audits exactly once per successful call that
+returns at least one row (`document.sensitive_list_viewed`, via
+`AuditRecorder::school()`, subject = the owning Employee, metadata
+limited to `ownerType`/`ownerId`/`count` — never a filename, storage
+path, or the full Document-id list) — the same "audit only if
+something sensitive was actually exposed" rule
+`EmployeeSensitiveDocumentReadService` already established, extended
+to listing: an empty authorized sensitive listing writes zero audit
+rows (nothing was actually exposed), and a 15-row sensitive listing
+still writes exactly one audit row, never fifteen — proven by
+`DocumentListingServicePerformanceTest::sensitive_listing_writes_at_most_one_audit_row_regardless_of_result_size`.
+
+### Query performance and index findings
+
+`EXPLAIN ANALYZE` was run via the ordinary `pgsql` connection (with
+the exact `app.current_school_id` GUC `DocumentListingService` sets at
+runtime — never the `pgsql_admin`/BYPASSRLS connection, which would
+silently skip the RLS predicate the planner always evaluates in
+production and could show a misleadingly different plan) against a
+representative fixture: 5 Schools × 30 Employees × 40 Documents each
+(6,063 rows total, mixed classification tiers, mixed active/archived
+status). Both the ordinary-list query and the sensitive-list query
+use `Index Scan using documents_employee_id_index` (0E.1's existing
+single-column index) — sub-millisecond execution (0.08–0.2ms) at this
+scale, since the `employee_id` index alone already narrows to one
+Employee's ~40 rows before the classification/status predicates ever
+need to filter in-memory. **No migration or new index was needed** —
+0E.1's existing indexes are sufficient; no speculative composite index
+was added.
+
+A dedicated differential query-count test
+(`DocumentListingServicePerformanceTest::ordinary_listing_query_count_does_not_grow_with_result_size`)
+confirms the query count itself stays flat (a small, fixed number)
+whether an owner has 3 or 63 Documents — proving no N+1 independent of
+the PostgreSQL plan evidence above.
+
+### Employee Document / Communication Attachment independence — unchanged
+
+`DocumentListingService` never queries `employee_documents` or
+`communication_attachments` — confirmed by grep, zero references.
+`EmployeeDocumentService`/`EmployeeSensitiveDocumentReadService`/
+`CommunicationAttachmentService` remain completely untouched (the
+unchanged HR and Communications regression suites confirm this).
+
+### What 0E.4 still does not do
+
+No HTTP/API, no UI, no signed/temporary URL, no global/cross-owner
+search, no Student/Guardian activation (write, read, or listing), no
+`employee_documents` reconciliation, no checksum, no malware scanning,
+no retention. The 0E.2 compensation-cleanup P3 residual remains open
+and unaffected — an orphan object (no `documents` row) is not listable,
+not countable, and not addressable through this checkpoint either,
+since listing operates exclusively on persisted `documents` rows.
+
+### Test strategy (0E.4 addition)
+
+Authoritative selector unchanged in form:
+
+```
+php artisan test tests/Feature/Documents tests/Feature/Postgres/DocumentRawIsolationTest.php
+```
+
+New files: `DocumentListingServiceOrdinaryTest.php` (authorization,
+cross-domain bypass, cross-School/same-User-multi-School isolation,
+RLS-vs-RBAC, the Highly-Sensitive-hiding acceptance gate and its
+pagination-oracle variant, archived inclusion, DTO shape, deterministic
+ordering, bounded-pagination-input clamping, unsupported owners),
+`DocumentListingServiceSensitiveTest.php` (the mirrored authorization/
+isolation matrix for `listSensitive()`, the both-capabilities-stay-
+separate test, audit policy — success/empty/denied — and audit-metadata
+privacy), and `DocumentListingServicePerformanceTest.php` (the N+1
+differential query-count proof and the one-audit-row-not-per-row proof).
+
+### Security register (0E.4)
+
+| Risk | Severity | Resolution |
+|---|---|---|
+| Highly Sensitive row/count/page-count leak through the ordinary list | P0 if ever shipped without it | Classification predicate is inside the SQL `WHERE` clause used for both `COUNT` and `SELECT`; proven by the hard acceptance-gate tests (exact `total()`/`lastPage()`/item-count assertions, sentinel-filename absence). |
+| Cross-domain authorization bypass via a listing operation | P0 if ever shipped without it | Structurally impossible for the activated Employee type; Student/Guardian are not activated, so there is no capability to bypass into. |
+| Sparse-page / inflated-total leak from PHP-side post-filtering | P1 if unaddressed | Never implemented that way — classification filtering happens in SQL before `paginate()` runs, not after. |
+| Per-row sensitive-audit amplification (N events for one list call) | P2 if unaddressed | Exactly one audit call per successful non-empty `listSensitive()` invocation, verified at 15-row scale. |
+| Misleading empty-result sensitive audit | P2 if unaddressed | No audit event written when zero Highly Sensitive rows are returned. |
+| Storage-path/disk leakage in listed metadata or audit | P2 if unaddressed | `DocumentMetadata` (reused from 0E.3) carries neither field; audit metadata is limited to `ownerType`/`ownerId`/`count`. |
+| Query-plan degradation / accidental full-table scan at scale | P3 if unaddressed | Verified via `EXPLAIN ANALYZE` at 6,063-row representative scale — existing 0E.1 index sufficient, no migration needed. |
+| 0E.2 compensation-cleanup residual (private orphan object, no metadata row) | P3 (documented, not solved, carried forward unchanged) | Unaffected by 0E.4 — listing only ever operates on persisted `documents` rows. |
+
+No open P0/P1 as of this checkpoint.
+
 ## Next checkpoint boundary
 
 Not yet decided — to be established from ADR 0012 + this document's
-own as-built state after 0E.3 is reviewed. Likely later concerns
+own as-built state after 0E.4 is reviewed. Likely later concerns
 (explicitly not started): HTTP/API exposure of the now-safe
-`DocumentReadService`/`DocumentService` primitives, signed/temporary
-URLs (if ever justified beyond the internal stream), metadata
-listing/search, retention, malware scanning, checksum, the
-`employee_documents` reconciliation, and a deliberate Student/Guardian
-capability decision for both write and read activation.
+`DocumentService`/`DocumentReadService`/`DocumentListingService`
+primitives, signed/temporary URLs (if ever justified beyond the
+internal stream), global/cross-owner search, retention, malware
+scanning, checksum, the `employee_documents` reconciliation, and a
+deliberate Student/Guardian capability decision for write, read, and
+listing activation.
