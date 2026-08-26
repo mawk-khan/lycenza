@@ -2,23 +2,19 @@
 
 namespace App\Domain\Documents\Application\Exceptions;
 
-use InvalidArgumentException;
-
 /**
  * Phase 0E.2 -- thrown for a missing or invalid `classification_tier`.
  * A safe application-layer validation failure, never a raw
  * `documents_classification_tier_check` QueryException reaching the
  * caller -- the database CHECK constraint (0E.1) remains the final
  * defense in depth, this is the first line.
+ *
+ * Phase 0E.5: maps to HTTP 422.
  */
-class InvalidDocumentClassificationException extends InvalidArgumentException
+class InvalidDocumentClassificationException extends DocumentException
 {
-    public readonly string $failureCode;
-
     public function __construct(public readonly string $given)
     {
-        $this->failureCode = 'invalid_document_classification';
-
-        parent::__construct("\"{$given}\" is not a valid Document classification tier.");
+        parent::__construct(422, 'INVALID_DOCUMENT_CLASSIFICATION', "\"{$given}\" is not a valid Document classification tier.");
     }
 }

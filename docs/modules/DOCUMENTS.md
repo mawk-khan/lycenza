@@ -15,7 +15,8 @@ operationalized it.
 0E.1  Documents Domain Foundation   (documents table, Document model) [implemented]
 0E.2  Document Write Path & Storage Integration   (DocumentService, real object storage, Employee owner activated) [implemented]
 0E.3  Authorized Document Read & Content Access   (DocumentReadService, metadata + streamed content, Employee owner activated) [implemented]
-0E.4  Owner-Scoped Document Discovery & Metadata Listing   (DocumentListingService, ordinary + Highly Sensitive listing, Employee owner activated — this checkpoint) [implemented]
+0E.4  Owner-Scoped Document Discovery & Metadata Listing   (DocumentListingService, ordinary + Highly Sensitive listing, Employee owner activated) [implemented]
+0E.5  Documents HTTP/API Transport   (DocumentController, six routes over 0E.2/0E.3/0E.4's services, Employee owner activated — this checkpoint) [implemented]
 ```
 
 Later checkpoints (write service, download authorization, HTTP/API,
@@ -897,14 +898,475 @@ differential query-count proof and the one-audit-row-not-per-row proof).
 
 No open P0/P1 as of this checkpoint.
 
+## Documents HTTP/API Transport (0E.5, implemented)
+
+Exposes 0E.2/0E.3/0E.4's already-authoritative Application services
+(`DocumentService`, `DocumentReadService`, `DocumentListingService`)
+over real HTTP, via a single new `App\Domain\Documents\Http\Controllers\DocumentController`.
+No new business logic exists at this checkpoint — every authorization
+decision, storage access, audit write, owner resolution, classification
+policy, and visible-total-filtering rule documented in the 0E.2/0E.3/0E.4
+sections above is reused unchanged. This checkpoint's job is exclusively
+transport: routes, request validation, response shaping, rate limits,
+cache headers, and HTTP-level error mapping.
+
+### Endpoint inventory
+
+Six routes, all under `/api/v1/schools/{school}`:
+
+```
+POST  /employees/{employee}/documents              storeForEmployee   — upload
+GET   /employees/{employee}/documents               indexForEmployee   — ordinary listing
+GET   /employees/{employee}/documents/sensitive      sensitiveIndexForEmployee — Highly Sensitive listing
+GET   /documents/{document}                          show               — direct metadata
+GET   /documents/{document}/content                  content            — streamed binary content
+POST  /documents/{document}/archive                  archive            — archive (204)
+```
+
+Student routes: **NONE**. Guardian routes: **NONE**. This checkpoint
+activates HTTP transport only for the Employee owner type, exactly
+matching 0E.2/0E.3/0E.4's own activation boundary — there is no
+structural blocker to adding Student/Guardian routes later, but doing
+so is a deliberate future decision, not an oversight here.
+
+The existing HR route `/employees/{employee}/sensitive-documents`
+(`EmployeeSensitiveDocumentController`) remains completely separate and
+unchanged — no route collision, no shared controller. `documents/sensitive`
+(a static third path segment) cannot collide with
+`employees/{employee}/documents` (a two-segment path) or with the
+differently-named `employees/{employee}/sensitive-documents` HR route:
+distinct segment counts and literals, no routing precedence ambiguity.
+
+### Layering — the controller is transport-only
+
+`DocumentController` validates input, calls exactly one Application
+service method per action, and shapes the response. It owns none of:
+
+- domain authorization (every service method already performs its own
+  capability check against the real authenticated actor before any
+  query or storage I/O runs — rule 3/24)
+- storage access (`DocumentReadService`/`DocumentService` are the only
+  callers of the `Storage` facade in the Documents module; the
+  controller never calls it)
+- audit writes (`AuditRecorder` never appears in the controller — every
+  audit event listed below is written by the service layer)
+- owner resolution (`DocumentOwner::employee($id)` is constructed from
+  the raw route parameter and handed to the service, which is the only
+  layer that resolves/authorizes it against a real row)
+- classification policy (which tier gates which capability, which tier
+  is hidden from the ordinary listing) — entirely inside
+  `DocumentListingService`/`DocumentReadService`/`DocumentService`
+- visible-total filtering (the SQL-level classification predicate from
+  0E.4 is unchanged and untouched by this checkpoint)
+- object compensation (the upload/cleanup sequencing from 0E.2 is
+  unchanged)
+
+This is proven, not just asserted: `DocumentControllerStructuralTest`
+greps the controller's own source for `Storage::`/`->readStream(`/
+`->put(`/`->delete(`/`temporaryUrl`/`signedUrl` (storage), `Gate::authorize`/
+`->can(`/`authorizeCapability` (authorization), and `AuditRecorder`
+(audit) — none of them appear.
+
+### Authentication / tenancy
+
+- `auth:sanctum` gates the entire route group these six routes live in
+  (the same group `EmployeeSensitiveDocumentController` and the rest of
+  the HR/Academic Structure routes already use).
+- `EnsureSchoolMembershipContext` (or the group's existing equivalent
+  school-membership middleware) resolves the trusted School context for
+  `{school}` — never a caller-controlled `school_id` (rule 19/68); the
+  School the request executes against is always the route/session-
+  verified one.
+- `{employee}` and `{document}` are always raw route-parameter strings,
+  never implicit Eloquent route-model binding — resolution happens
+  inside the Application services under tenant scope, matching
+  `EmployeeProfileController`/`EmployeeSensitiveDocumentController`'s
+  established pattern.
+- A cross-School resource id fails exactly the same way a nonexistent
+  one does: `DocumentNotFoundException`/`DocumentOwnerNotFoundException`
+  never distinguish "doesn't exist" from "exists in a different
+  School" (0E.2/0E.3's existing non-enumeration guarantee, unchanged;
+  proven at HTTP level by `DocumentHttpDirectAccessTest::a_cross_school_document_id_is_a_safe_404_on_both_routes`).
+- A malformed (non-UUID) `{employee}`/`{document}` is rejected via
+  `abort_if(! Str::isUuid($id), 404)` **before** it ever reaches a
+  query — the same guard `EmployeeProfileController`/
+  `EmployeeSensitiveDocumentController` already use, and for the same
+  reason: Eloquent's `find()`/a raw `WHERE id = ?` against a UUID-typed
+  column raises a raw PostgreSQL `invalid input syntax for type uuid`
+  (an uncaught 500) if a non-UUID string reaches it. Proven by
+  `DocumentHttpDirectAccessTest::a_malformed_document_uuid_is_a_safe_404_not_a_raw_sql_error`.
+
+### Upload contract
+
+`POST /employees/{employee}/documents`, `multipart/form-data`, exactly
+two accepted inputs:
+
+| Field | Rule |
+|---|---|
+| `file` | `required`, `file` |
+| `classification_tier` | `required`, `string` (validated against the real enum inside `DocumentService::create()`, not at the HTTP layer — `InvalidDocumentClassificationException` → 422) |
+
+- **Owner**: the Employee named by the `{employee}` route parameter —
+  never a body-supplied owner id or type.
+- **School**: the trusted route/session context — never a body
+  `school_id`.
+- **Actor**: `$request->user()` (the real authenticated Sanctum user) —
+  never a body-supplied actor/user id.
+
+Not accepted from the caller, at any layer: `school_id`,
+`employee_id` body override, `owner_type`, storage disk/path/object
+key, `mime_type`, `size_bytes`, `uploaded_by_user_id`, `status`. Every
+one of these is either derived server-side (trusted route context,
+real authenticated user) or computed by the service from the actual
+uploaded file (server-sniffed MIME type, real byte count) — there is
+no request field that could override any of them.
+
+Successful response: `201`, body `{"data": {...}}` where `data` is the
+same safe `DocumentMetadata` shape every other endpoint returns (see
+"Direct metadata" below) — no storage metadata (disk/path/key) in the
+response. The create response is built directly from the
+`Document` model `DocumentService::create()` returns, mapped through a
+private `presentCreated()` helper that constructs a `DocumentMetadata`
+inline — deliberately **not** a call to `DocumentReadService::metadata()`,
+which would risk writing an unintended `document.sensitive_metadata_viewed`
+audit event for a Highly Sensitive upload merely to serialize the
+create response. No false sensitive-read audit is ever generated by
+upload.
+
+### Ordinary / sensitive listing
+
+Two separate endpoints, mirroring 0E.4's two separate service methods
+exactly:
+
+- `GET .../employees/{employee}/documents` → `DocumentListingService::list()`
+  — returns `public`/`internal`/`sensitive` tier Documents. `highly_sensitive`
+  rows are excluded **at the SQL level** inside the Application service
+  (the classification predicate lives in the same `WHERE` clause used
+  for both `COUNT` and `SELECT` — 0E.4's existing hard privacy gate,
+  untouched by this checkpoint).
+- `GET .../employees/{employee}/documents/sensitive` → `DocumentListingService::listSensitive()`
+  — returns `highly_sensitive` rows only, and requires the
+  `hr.employees.sensitive.view` capability (or the equivalent source
+  capability the actor's role grants) — `documents_view` alone is
+  denied (`DocumentHttpListingTest::documents_view_alone_is_denied_the_sensitive_endpoint`
+  and the mirrored direct-metadata/content denial tests).
+
+**Visible-total-only pagination** is proven at the real-HTTP level, not
+just at the service-unit level: seeding 20 `internal` Documents and 30
+`highly_sensitive` Documents for the same Employee and paginating the
+ordinary endpoint at `per_page=10` produces `meta.total = 20` on every
+page (not 50), two pages of 10 real rows each, and an empty third page
+— with the literal string `highly_sensitive` never appearing anywhere
+in any of the three pages' raw JSON bodies
+(`DocumentHttpListingTest::highly_sensitive_documents_are_completely_hidden_from_the_ordinary_http_listing`).
+This is the HTTP-level restatement of 0E.4's own acceptance gate: no
+hidden-row leakage through inflated totals, sparse pages, or an
+extra page implying more rows exist than are ever actually returned.
+
+### Direct metadata
+
+`GET /documents/{document}` → `DocumentReadService::metadata()`,
+response `{"data": {...}}` with the same safe `DocumentMetadata` JSON
+shape used everywhere else in the module:
+
+```
+document_id, owner_type, owner_id, classification_tier, status,
+original_filename, mime_type, size_bytes, uploaded_at
+```
+
+Never present: storage disk, storage path, object key, bucket, or
+uploader identity — `DocumentMetadata` has never carried any of these
+fields since 0E.3, and this checkpoint does not add them. A Highly
+Sensitive Document's metadata remains gated by `hr.employees.sensitive.view`
+(an ordinary-view-only actor gets `403`, proven by
+`DocumentHttpDirectAccessTest::ordinary_document_view_alone_cannot_read_a_highly_sensitive_document_metadata`)
+and a successful sensitive read writes exactly one
+`document.sensitive_metadata_viewed` audit event, with no controller-level
+duplicate (`DocumentHttpDirectAccessTest::highly_sensitive_metadata_is_audited_exactly_once_with_no_controller_duplicate`).
+
+### Content delivery
+
+`GET /documents/{document}/content` streams the Document's bytes via
+`response()->streamDownload()` (Laravel/Symfony's framework-safe
+helper), driven by the already-open stream `DocumentReadService::content()`
+returns. The controller never performs its own Storage I/O and never
+buffers the whole file in memory — the streaming callback only calls
+`fpassthru($content->stream)` then closes the resource; `DocumentControllerStructuralTest`
+confirms no `Storage::get(`/whole-file-read pattern exists in the
+controller's source.
+
+Safe response headers on success:
+
+| Header | Value |
+|---|---|
+| `Content-Type` | The persisted, server-observed MIME type recorded at upload time |
+| `Content-Disposition` | `attachment`, filename passed through Symfony's `HeaderUtils::makeDisposition()` (via `streamDownload()`'s own filename parameter) — percent-encoded/escaped, never raw-concatenated, so spaces/quotes/Unicode/control characters in a filename cannot corrupt or inject into the header (`DocumentHttpDirectAccessTest::content_disposition_is_safe_for_unusual_filenames`) |
+| `Content-Length` | The persisted `size_bytes` recorded at upload time against the same object — never recomputed by buffering |
+| `Cache-Control` | `private, no-store` (route-level `private-no-store` middleware, same as every other Documents route) |
+
+The storage path/object key/disk is never exposed in any header or
+body at any point on this route.
+
+### Streaming semantic limitation (accept, do not overclaim)
+
+`DocumentReadService::content()` proves that an **authorized storage
+stream was successfully opened** — `DocumentContentUnavailableException`
+is thrown at open time, before any HTTP response exists, if the
+underlying object cannot be read (missing object, storage-provider
+error) — so a storage failure discovered at open time always renders
+as a clean JSON error, never a `200` with a broken body.
+
+What this checkpoint's implementation **cannot** prove, and does not
+claim to: that every byte was successfully delivered to the client
+after HTTP headers/body transmission has begun. A mid-stream storage or
+network failure after response start is not convertible into the
+standard JSON error envelope by this or any HTTP layer — once headers
+are sent, the response is committed. This is an inherent, bounded
+transport limitation of HTTP streaming generally, not a defect
+introduced by this implementation, and not something a future
+implementation can fully eliminate without a fundamentally different
+transfer protocol.
+
+This is explicitly **not** described as: a completed download, a
+transactionally guaranteed delivery, or a zero-risk transfer. It is
+recorded here as an accepted, bounded limitation — see "Security
+register" below, which does not create a new P-numbered finding for it
+unless a future security review classifies it as one.
+
+### Archive
+
+`POST /documents/{document}/archive` resolves the Document
+tenant-safely (a School-scoped `find()`, matching
+`DocumentReadService::resolveAuthorizedDocument()`'s own pattern —
+never an unscoped `findOrFail()`), then delegates to
+`DocumentService::archive()`, which performs its own authorization,
+the status transition, and the `document.archived` audit event exactly
+as documented in the 0E.2 section above. Response: `204 No Content` —
+no body, and deliberately no post-archive metadata read to build one,
+which would otherwise risk an unintended Highly Sensitive
+metadata-read audit merely to serialize a response. This is a status
+transition only: no hard delete, no physical object deletion. Exactly
+one `document.archived` event is written per successful call — the
+controller writes none of its own.
+
+### Error / non-enumeration policy
+
+Every Documents domain exception now extends a new common base,
+`App\Domain\Documents\Application\Exceptions\DocumentException`
+(mirroring `App\Support\Idempotency\Exceptions\IdempotencyException`/
+`App\Domain\AcademicStructure\Application\Exceptions\AcademicStructureException`'s
+established shape), carrying its own `getStatusCode()` and a stable
+`errorCode()` machine code, read generically by `bootstrap/app.php`'s
+existing exception-render closure — no new per-controller try/catch,
+no `bootstrap/app.php` change.
+
+| Exception | HTTP status | Machine code |
+|---|---|---|
+| `DocumentNotFoundException` | 404 | `DOCUMENT_NOT_FOUND` |
+| `DocumentOwnerNotFoundException` | 404 | `DOCUMENT_OWNER_NOT_FOUND` |
+| `DocumentOwnerTypeNotSupportedException` | 404 | `DOCUMENT_OWNER_TYPE_NOT_SUPPORTED` |
+| `InvalidDocumentClassificationException` | 422 | `INVALID_DOCUMENT_CLASSIFICATION` |
+| `DocumentTooLargeException` | 422 | `DOCUMENT_TOO_LARGE` |
+| `DocumentTypeNotAllowedException` | 422 | `DOCUMENT_TYPE_NOT_ALLOWED` |
+| `DocumentStorageException` | 503 | `DOCUMENT_STORAGE_UNAVAILABLE` |
+| `DocumentContentUnavailableException` | 503 | `DOCUMENT_CONTENT_UNAVAILABLE` |
+
+`DocumentNotFoundException`/`DocumentOwnerNotFoundException`/
+`DocumentOwnerTypeNotSupportedException` are the safe 404 family — all
+three are indistinguishable from an ordinary "doesn't exist" outcome.
+Notably, `DocumentOwnerTypeNotSupportedException`'s message no longer
+interpolates the owner type (`"Document writes for owner type
+\"{$ownerType}\" are not yet activated"`, the old Application-layer-only
+wording): now that this exception is HTTP-transport-reachable (via a
+raw fixture/seeded row whose `owner_type` isn't activated for reads —
+the write path never produces one), its message was changed to the
+generic `"No Document with that id was found in this School."` so an
+HTTP caller can never learn a protected Document's owner type merely
+from a 404 body. `$ownerType` remains available as a property for
+internal/log use only.
+
+Authorization failures use the framework's existing global
+`Illuminate\Auth\Access\AuthorizationException` → `403` mapping — the
+same one every other capability-gated endpoint in the codebase already
+uses. This checkpoint does **not** collapse 403 into 404 for
+"indistinguishability": the API deliberately returns 403 for an
+authenticated, correctly-scoped actor who lacks the required
+capability (proven by `DocumentHttpDirectAccessTest::ordinary_document_view_alone_cannot_read_a_highly_sensitive_document_metadata`/
+`..._content`), and 404 only for the genuinely non-enumerable cases
+above (wrong/nonexistent/cross-School id). Document the actual
+behavior: 403 and 404 are both used, deliberately, for different
+reasons — this is not a claim of blanket status-code
+indistinguishability.
+
+In all cases, error response bodies never disclose classification
+tier, filename, storage information, or the existence of a
+foreign-School resource.
+
+### Cache control
+
+The `private-no-store` middleware is applied to all six Documents
+routes (the same middleware `EmployeeSensitiveDocumentController` and
+the rest of the HR/Academic Structure routes already use). Every
+successful metadata/content/list/archive response carries
+`Cache-Control: private, no-store`, with no contradictory
+public/shared directive. Tested 403 and 404 responses on the direct
+Document routes also preserve `private, no-store`
+(`DocumentHttpCacheControlTest`) — this checkpoint does not assert or
+rely on any repository-wide pre-middleware behavior for 401/429
+responses that wasn't already independently true.
+
+### Rate limiting
+
+Four named limiters, registered in `RateLimiterServiceProvider`,
+keyed by School + authenticated actor via the same `tenantKey()`
+convention every other tenant-aware limiter in this codebase uses
+(rule 61) — never IP-only for an authenticated School API:
+
+| Limiter | Limit | Applied to |
+|---|---|---|
+| `documents-reads` | 120/min | Ordinary Employee document listing |
+| `documents-sensitive-reads` | 20/min | Sensitive Employee document listing, and the direct-by-id metadata route (`GET /documents/{document}`) uniformly — the route cannot know a Document's classification tier before the service resolves it, so the stricter bound is applied regardless of the actual tier, avoiding a side channel that would otherwise let rate-limit behavior itself reveal hidden classification |
+| `documents-content` | 20/min | Streamed content download — its own dedicated, equally strict bound, since transferring file bytes is more expensive than any metadata-only read |
+| `documents-writes` | 30/min | Upload and archive |
+
+A request beyond the limit returns the standard `429` envelope with a
+`Retry-After` header present (`DocumentHttpRateLimitTest::a_429_uses_the_standard_envelope_with_retry_after`),
+and buckets are isolated per School — one School's actors exhausting a
+limiter does not affect another School's. These are request-rate
+limiters only, not storage quotas — they say nothing about how much
+data a School may store.
+
+### Audit
+
+The controller writes zero audit events of its own
+(`DocumentControllerStructuralTest::the_controller_never_writes_an_audit_event_directly`).
+Every event below is written exactly once per successful triggering
+call, entirely inside the Application service layer, unchanged from
+0E.2/0E.3/0E.4:
+
+| Event | Written by | When |
+|---|---|---|
+| `document.created` | `DocumentService::create()` | Every successful upload |
+| `document.archived` | `DocumentService::archive()` | Every successful archive |
+| `document.sensitive_list_viewed` | `DocumentListingService::listSensitive()` | Once per successful non-empty sensitive listing call |
+| `document.sensitive_metadata_viewed` | `DocumentReadService::metadata()` | Once per successful Highly Sensitive direct metadata read |
+| `document.sensitive_content_accessed` | `DocumentReadService::content()` | Once per successful Highly Sensitive content stream open |
+
+`document.sensitive_content_accessed` means the storage stream was
+successfully **opened** with authorization already confirmed — it does
+not mean, and must never be represented as meaning, that the download
+completed (see "Streaming semantic limitation" above).
+
+### OpenAPI / generated types
+
+`packages/contracts/openapi/school-os-api.yaml` gained five new path
+items covering the six operations above (`POST`+`GET` share the
+`.../employees/{employee}/documents` path item as two operations under
+one path), a `Document` schema, a `DocumentId` path parameter
+component, a documented `multipart/form-data` upload request body, and
+a documented `type: string, format: binary` response for the content
+route. YAML validation: **pass**. Codegen (`npm run generate` in
+`packages/shared-types`): **pass**, with **no generated drift** — the
+committed `packages/shared-types/src/generated/school-os-api.ts` matches
+a fresh generation exactly. `packages/shared-types`' own `type-check`:
+**pass**. `apps/platform`'s `vue-tsc` type-check: **pass**. Generated
+TypeScript remains generator-authoritative — no hand edits were made
+to the generated file.
+
+### Routing
+
+Exactly six new Documents transport routes were added (enumerated
+above). The pre-existing HR route
+`/employees/{employee}/sensitive-documents` remains separate and
+unchanged — see "Endpoint inventory" above for why no collision is
+possible. No route exists at this checkpoint for: Student Documents,
+Guardian Documents, delete, generic/global search, or a signed/
+presigned URL.
+
+### Real HTTP validation
+
+0E.5 was validated against a real `artisan serve` HTTP server, a real
+Sanctum bearer token, real PostgreSQL, and real MinIO object storage —
+not PHPUnit's in-process test client alone. Validated over real HTTP:
+upload, ordinary listing, sensitive listing, direct metadata, binary
+content download, archive, cross-School denial, malformed-UUID
+handling, rate limiting (`429` + `Retry-After`), and `private, no-store`
+cache headers. `DocumentHttpMinioIntegrationTest` specifically exercises
+the real MinIO backend rather than `Storage::fake()`, to prove the
+streaming content path works against the actual object-storage
+provider this environment uses, not just an in-memory fake.
+
+### Security register (0E.5)
+
+| Risk | Severity | Resolution |
+|---|---|---|
+| Controller-level authorization/storage/audit bypass of the 0E.2–0E.4 service layer | P0 if ever introduced | Structurally prevented and continuously proven by `DocumentControllerStructuralTest` (source-grep for `Storage::`/`Gate::authorize`/`AuditRecorder`/etc.) — the controller has no code path capable of it. |
+| Raw PostgreSQL UUID error (500) from a malformed route parameter | P1 if unaddressed | `Str::isUuid()` guard rejects malformed `{employee}`/`{document}` before any query runs, on every one of the six routes; proven by `DocumentHttpDirectAccessTest::a_malformed_document_uuid_is_a_safe_404_not_a_raw_sql_error`. |
+| Owner-type disclosure via a 404 error message | P2 if unaddressed | `DocumentOwnerTypeNotSupportedException`'s message no longer interpolates `$ownerType` now that it is HTTP-reachable. |
+| Storage disk/path/object-key/uploader-identity leakage via any response header or body | P2 if unaddressed | `DocumentMetadata` (0E.3) never carries these fields; content-route headers are limited to `Content-Type`/`Content-Disposition`/`Content-Length`/`Cache-Control`, none of which expose storage location. |
+| Rate-limit bucket revealing hidden classification tier via differing limits per document | P3 if unaddressed | The direct metadata route uses the single stricter `documents-sensitive-reads` bound uniformly, regardless of the resolved Document's actual tier — no per-tier limiter exists to create the side channel. |
+| Whole-file buffering causing memory exhaustion on large Documents | P3 if unaddressed | `streamDownload()`/`fpassthru()` only — no `Storage::get()`/buffering pattern exists in the controller (`DocumentControllerStructuralTest`). |
+| Mid-stream transport failure after HTTP headers are sent | Bounded transport limitation, not a P-numbered finding | Documented above ("Streaming semantic limitation") as an inherent, accepted characteristic of HTTP streaming — not silently reclassified as a security defect absent an actual security-review finding to that effect. |
+| 0E.2 compensation-cleanup residual (private orphan object, no metadata row) | P3 (carried forward, unchanged) | Unaffected by 0E.5 — not represented by `DocumentMetadata`, not addressable, not listable, not exposed through any of the six new routes. |
+
+Checkpoint result: **P0: 0, P1: 0, P2: 0, P3: 1, P4: 0.** The single
+carried P3 is the 0E.2 compensation-cleanup residual — no new P3 was
+introduced by this checkpoint's own implementation, and the HTTP
+streaming limitation above is recorded as a documented transport
+limitation rather than manufactured into a second P3 absent an actual
+security-review finding to that effect.
+
+### What 0E.5 still does not do
+
+No Student Documents operations (upload, read, or listing), no
+Guardian Documents operations, no signed/presigned URLs, no HTTP
+`Range`/`206` partial-content support, no global/cross-owner search, no
+filename search, no UI, no retention policy, no malware scanning, no
+checksum verification, no orphan cleanup/reaper job, no
+`employee_documents` reconciliation, no Invoice owner-type support, and
+no storage quota enforcement. None of these are implemented at this
+checkpoint, and none should be inferred from anything above.
+
+### Test strategy (0E.5 addition)
+
+Authoritative selector, added to the existing suite:
+
+```
+php artisan test tests/Feature/Documents
+```
+
+New files: `DocumentControllerStructuralTest.php` (transport-only
+proof — no Storage/authorization/audit calls, no signed URL, no Range
+support, no whole-file buffering), `DocumentHttpUploadTest.php`,
+`DocumentHttpListingTest.php` (including the 20-ordinary/30-Highly-
+Sensitive visible-total-only HTTP proof), `DocumentHttpDirectAccessTest.php`
+(metadata/content, 403 vs 404, malformed UUID, cross-School denial,
+audited-once proofs), `DocumentHttpArchiveTest.php`,
+`DocumentHttpCacheControlTest.php`, `DocumentHttpRateLimitTest.php`
+(all four limiters, 429 envelope, `Retry-After`, per-School isolation),
+and `DocumentHttpMinioIntegrationTest.php` (real MinIO, not
+`Storage::fake()`).
+
+Results carried forward from the implementation pass (documentation-only
+continuation — not rerun for this edit, since no code/test/contract
+file changed):
+
+- Documents suite: **186 tests / 821 assertions / 0 failures**
+- Full regression: **2331 tests / 7364 assertions / 0 failures**
+- Pint: **pass**
+- PHPStan: **pass**
+- OpenAPI validation + generation + drift check: **pass, no drift**
+- `packages/shared-types` type-check: **pass**
+- `apps/platform` `vue-tsc` type-check: **pass**
+- Real HTTP smoke (artisan serve + Sanctum + PostgreSQL + MinIO): **pass**
+
 ## Next checkpoint boundary
 
 Not yet decided — to be established from ADR 0012 + this document's
-own as-built state after 0E.4 is reviewed. Likely later concerns
-(explicitly not started): HTTP/API exposure of the now-safe
-`DocumentService`/`DocumentReadService`/`DocumentListingService`
-primitives, signed/temporary URLs (if ever justified beyond the
-internal stream), global/cross-owner search, retention, malware
+own as-built state after 0E.5 is reviewed. Likely remaining
+architectural gaps (explicitly not assigned to any checkpoint yet):
+signed/temporary URLs (if ever justified beyond the internal stream),
+global/cross-owner search, retention, malware
 scanning, checksum, the `employee_documents` reconciliation, and a
 deliberate Student/Guardian capability decision for write, read, and
 listing activation.

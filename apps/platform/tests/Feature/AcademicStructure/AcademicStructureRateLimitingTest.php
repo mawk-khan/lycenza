@@ -50,7 +50,15 @@ class AcademicStructureRateLimitingTest extends TestCase
         // (Highly Sensitive document metadata) -- see
         // App\Providers\RateLimiterServiceProvider and
         // Tests\Feature\HR\HrEmployeeApiRateLimitTest.
-        $registeredLimiters = ['login', 'public-api', 'school-api-mutations', 'webhook-admin', 'internal-service', 'internal-diagnostics', 'hr-api-reads', 'hr-api-sensitive-reads'];
+        //
+        // Phase 0E.5 added four more, for the same reason: `documents-reads`/
+        // `documents-sensitive-reads`/`documents-content`/`documents-writes`
+        // -- see Tests\Feature\Documents\DocumentHttpRateLimitTest.
+        $registeredLimiters = [
+            'login', 'public-api', 'school-api-mutations', 'webhook-admin', 'internal-service', 'internal-diagnostics',
+            'hr-api-reads', 'hr-api-sensitive-reads',
+            'documents-reads', 'documents-sensitive-reads', 'documents-content', 'documents-writes',
+        ];
 
         foreach (Route::getRoutes() as $route) {
             if (! str_starts_with((string) $route->getName(), 'api.v1.schools.')) {

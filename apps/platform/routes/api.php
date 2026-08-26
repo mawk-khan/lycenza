@@ -8,6 +8,7 @@ use App\Domain\AcademicStructure\Http\Controllers\RoomController;
 use App\Domain\AcademicStructure\Http\Controllers\SectionController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
+use App\Domain\Documents\Http\Controllers\DocumentController;
 use App\Domain\Guardians\Http\Controllers\GuardianContactController;
 use App\Domain\Guardians\Http\Controllers\GuardianController;
 use App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController;
@@ -429,6 +430,58 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/employees/{employee}/sensitive-documents', [EmployeeSensitiveDocumentController::class, 'index'])
                 ->middleware(['throttle:hr-api-sensitive-reads', 'private-no-store'])
                 ->name('schools.employees.sensitive-documents.index');
+
+            // --- Phase 0E.5: Documents HTTP/API transport (ADR 0012,
+            // docs/modules/DOCUMENTS.md). Deliberately NO `capability:`
+            // route middleware anywhere in this block, for the exact
+            // same reason as the HR read block immediately above:
+            // DocumentService/DocumentReadService/DocumentListingService
+            // already perform their own owner-domain capability check
+            // against the real authenticated actor before any query or
+            // storage I/O -- a route-level check here would either
+            // duplicate or risk drifting from it. Only the Employee
+            // owner type is exposed; there is no Student/Guardian
+            // route (0E.2/0E.3/0E.4's own activation boundary,
+            // unchanged here). `{employee}`/`{document}` are raw
+            // route-parameter strings, resolved by the services
+            // themselves under tenant scope -- never implicit Eloquent
+            // route-model binding (same reasoning as
+            // EmployeeProfileController/EmployeeSensitiveDocumentController
+            // above). `documents/sensitive` (a static third segment)
+            // can never collide with `employees/{employee}/documents`
+            // (two segments) or with the unrelated, differently-named
+            // `employees/{employee}/sensitive-documents` HR route
+            // above -- distinct segment counts/literals, no route
+            // precedence ambiguity.
+            Route::post('/employees/{employee}/documents', [DocumentController::class, 'storeForEmployee'])
+                ->middleware(['throttle:documents-writes', 'private-no-store'])
+                ->name('schools.employees.documents.store');
+            Route::get('/employees/{employee}/documents', [DocumentController::class, 'indexForEmployee'])
+                ->middleware(['throttle:documents-reads', 'private-no-store'])
+                ->name('schools.employees.documents.index');
+            Route::get('/employees/{employee}/documents/sensitive', [DocumentController::class, 'sensitiveIndexForEmployee'])
+                ->middleware(['throttle:documents-sensitive-reads', 'private-no-store'])
+                ->name('schools.employees.documents.sensitive');
+
+            // Direct by-id Document routes. `documents-sensitive-reads`
+            // (the stricter bound) is applied to the metadata route
+            // uniformly, regardless of a given Document's actual
+            // classification tier -- the route cannot know the tier
+            // before DocumentReadService resolves it, and varying the
+            // limiter by hidden classification would itself be a side
+            // channel (docs/modules/DOCUMENTS.md "Rate limiting").
+            // Content streaming gets its own dedicated, equally strict
+            // `documents-content` limiter -- transferring actual file
+            // bytes is more expensive than any metadata-only read.
+            Route::get('/documents/{document}', [DocumentController::class, 'show'])
+                ->middleware(['throttle:documents-sensitive-reads', 'private-no-store'])
+                ->name('schools.documents.show');
+            Route::get('/documents/{document}/content', [DocumentController::class, 'content'])
+                ->middleware(['throttle:documents-content', 'private-no-store'])
+                ->name('schools.documents.content');
+            Route::post('/documents/{document}/archive', [DocumentController::class, 'archive'])
+                ->middleware(['throttle:documents-writes', 'private-no-store'])
+                ->name('schools.documents.archive');
         });
 });
 
