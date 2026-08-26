@@ -19,6 +19,7 @@ interface Props {
         canViewCommunications: boolean;
         canViewEnrollments: boolean;
         canViewEnrollmentRollovers: boolean;
+        canViewAdmissions: boolean;
     };
 }
 
@@ -76,6 +77,9 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewEnrollmentRollovers">
                     <a class="underline" href="/app/enrollment-rollovers">Enrollment Rollovers</a>
+                </li>
+                <li v-if="nav.canViewAdmissions">
+                    <a class="underline" href="/app/admissions">Admissions</a>
                 </li>
             </ul>
         </nav>

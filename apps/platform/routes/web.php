@@ -13,6 +13,8 @@ use App\Domain\Communications\Http\Controllers\CommunicationHubController;
 use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
+use App\Http\Controllers\App\AdmissionApplicationController;
+use App\Http\Controllers\App\ApplicantController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
@@ -333,5 +335,42 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/{rollover}/mappings/{mapping}', [EnrollmentRolloverMappingController::class, 'update'])->name('mappings.update');
 
         Route::patch('/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])->name('items.update');
+    });
+
+    // Phase 1D.6: Admissions administrative UI
+    // (docs/admissions/PHASE-1D-6-ADMINISTRATIVE-UI.md). Capability
+    // checks live inside each controller (AuthorizesCapability trait),
+    // matching every other App/ controller's pattern -- every action
+    // re-derives the active School from TenantContext, never a
+    // client-supplied id. 'applicants' and 'create' are registered
+    // BEFORE the '/{admissionApplication}' wildcard below, same
+    // reasoning as the Communications group's 'announcements'/
+    // 'templates' literal-segment routes.
+    Route::prefix('app/admissions')->name('app.admissions.')->group(function (): void {
+        Route::get('/', [AdmissionApplicationController::class, 'index'])->name('index');
+
+        Route::prefix('applicants')->name('applicants.')->group(function (): void {
+            Route::get('/', [ApplicantController::class, 'index'])->name('index');
+            Route::get('/create', [ApplicantController::class, 'create'])->name('create');
+            Route::post('/', [ApplicantController::class, 'store'])->name('store');
+            Route::get('/{applicant}', [ApplicantController::class, 'show'])->name('show');
+
+            Route::get('/{applicant}/applications/create', [AdmissionApplicationController::class, 'create'])->name('applications.create');
+            Route::post('/{applicant}/applications', [AdmissionApplicationController::class, 'store'])->name('applications.store');
+        });
+
+        // Guardian-picker adapter for the conversion form's "link
+        // existing Guardian" mode -- see AdmissionApplicationController's
+        // class docblock for why this is a narrow new pair rather than
+        // reusing /app/students/{student}/guardians/search|candidates.
+        Route::get('/guardians/search', [AdmissionApplicationController::class, 'searchGuardians'])->name('guardians.search');
+        Route::get('/guardians/candidates', [AdmissionApplicationController::class, 'candidateGuardians'])->name('guardians.candidates');
+
+        Route::get('/{admissionApplication}', [AdmissionApplicationController::class, 'show'])->name('show');
+        Route::post('/{admissionApplication}/submit', [AdmissionApplicationController::class, 'submit'])->name('submit');
+        Route::post('/{admissionApplication}/accept', [AdmissionApplicationController::class, 'accept'])->name('accept');
+        Route::post('/{admissionApplication}/reject', [AdmissionApplicationController::class, 'reject'])->name('reject');
+        Route::post('/{admissionApplication}/withdraw', [AdmissionApplicationController::class, 'withdraw'])->name('withdraw');
+        Route::post('/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])->name('convert');
     });
 });
