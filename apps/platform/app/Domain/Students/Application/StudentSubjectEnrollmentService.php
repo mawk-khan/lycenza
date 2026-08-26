@@ -5,6 +5,7 @@ namespace App\Domain\Students\Application;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\Exceptions\ActiveSubjectEnrollmentConflictException;
 use App\Domain\Students\Application\Exceptions\CrossSchoolSubjectEnrollmentException;
+use App\Domain\Students\Application\Exceptions\InactiveSubjectOfferingException;
 use App\Domain\Students\Application\Exceptions\IncompatibleSubjectOfferingException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
 use App\Domain\Students\Application\Exceptions\InvalidSubjectEnrollmentTransitionException;
@@ -57,6 +58,8 @@ class StudentSubjectEnrollmentService
         if ($student->school_id !== $offering->school_id) {
             throw new CrossSchoolSubjectEnrollmentException;
         }
+
+        $this->assertOfferingIsActive($offering);
 
         if ($offering->is_required) {
             throw new RequiredSubjectOfferingEnrollmentException;
@@ -112,6 +115,8 @@ class StudentSubjectEnrollmentService
             throw new CrossSchoolSubjectEnrollmentException;
         }
 
+        $this->assertOfferingIsActive($targetOffering);
+
         if ($targetOffering->is_required) {
             throw new RequiredSubjectOfferingEnrollmentException;
         }
@@ -156,6 +161,26 @@ class StudentSubjectEnrollmentService
                 throw $this->translateUniqueViolation($e);
             }
         });
+    }
+
+    /**
+     * Phase 1C.1A: a SubjectOffering must be active to become the
+     * TARGET of new participation -- mirrors the "deactivate, never
+     * delete" reference-entity convention every other Academic
+     * Structure entity already follows (docs/modules/ACADEMIC-STRUCTURE.md)
+     * and the identical precedent
+     * App\Domain\HR\Application\EmployeeAssignmentService already
+     * enforces for Position/Department. Deliberately never called for
+     * withdraw()/cancel()/transfer()'s SOURCE offering -- existing
+     * participation against an offering that later becomes inactive
+     * must remain fully manageable (history is preserved, only NEW
+     * participation is gated).
+     */
+    private function assertOfferingIsActive(SubjectOffering $offering): void
+    {
+        if (! $offering->isActive()) {
+            throw new InactiveSubjectOfferingException;
+        }
     }
 
     /**

@@ -33,8 +33,10 @@ class CommunicationAnnouncementAcademicCohortsRlsIsolationTest extends TestCase
         $campus = $this->createCampus($school);
         $grade = $this->createGradeLevel($school);
         $section = $this->createSection($year, $campus, $grade);
+        $subject = $this->createSubject($school);
+        $offering = $this->createSubjectOffering($year, $campus, $grade, $subject);
 
-        return ['year' => $year, 'grade' => $grade, 'section' => $section];
+        return ['year' => $year, 'grade' => $grade, 'section' => $section, 'offering' => $offering];
     }
 
     private function insertCohort(array $overrides): void
@@ -43,6 +45,7 @@ class CommunicationAnnouncementAcademicCohortsRlsIsolationTest extends TestCase
             'id' => (string) new UuidV7,
             'cohort_type' => 'grade_level',
             'section_id' => null,
+            'subject_offering_id' => null,
             'recipient_kind' => 'student',
             'created_at' => now(),
             'updated_at' => now(),
@@ -254,5 +257,122 @@ class CommunicationAnnouncementAcademicCohortsRlsIsolationTest extends TestCase
         });
 
         $this->assertTrue($rejected, 'The unique announcement_id constraint must reject a second cohort row for the same Announcement.');
+    }
+
+    // --- Phase 5C.1: subject_offering_id widening ---------------------------
+
+    #[Test]
+    public function a_cross_school_subject_offering_reference_is_rejected_at_insert_time(): void
+    {
+        [$creatorA, $schoolA] = $this->createSchoolAdmin('school_admin');
+        $yearA = $this->createAcademicYear($schoolA, ['status' => 'active']);
+        $announcementA = $this->createAnnouncement($schoolA, $creatorA, ['audience_type' => 'subject_offering']);
+        $schoolB = $this->createSchool();
+        ['offering' => $offeringB] = $this->graph($schoolB);
+
+        $rejected = false;
+
+        app(TenantContext::class)->withSchool($schoolA, function () use ($schoolA, $announcementA, $yearA, $offeringB, &$rejected): void {
+            try {
+                DB::connection('pgsql')->transaction(function () use ($schoolA, $announcementA, $yearA, $offeringB): void {
+                    $this->insertCohort([
+                        'school_id' => $schoolA->id,
+                        'announcement_id' => $announcementA->id,
+                        'academic_year_id' => $yearA->id,
+                        'cohort_type' => 'subject_offering',
+                        'grade_level_id' => null,
+                        'subject_offering_id' => $offeringB->id,
+                    ]);
+                });
+            } catch (QueryException) {
+                $rejected = true;
+            }
+        });
+
+        $this->assertTrue($rejected, 'The composite FK against subject_offerings(id, school_id) must reject a cross-School reference.');
+    }
+
+    #[Test]
+    public function a_row_naming_both_grade_level_and_subject_offering_is_rejected(): void
+    {
+        [$creator, $school] = $this->createSchoolAdmin('school_admin');
+        ['year' => $year, 'grade' => $grade, 'offering' => $offering] = $this->graph($school);
+        $announcement = $this->createAnnouncement($school, $creator, ['audience_type' => 'grade']);
+
+        $rejected = false;
+
+        app(TenantContext::class)->withSchool($school, function () use ($school, $announcement, $year, $grade, $offering, &$rejected): void {
+            try {
+                DB::connection('pgsql')->transaction(function () use ($school, $announcement, $year, $grade, $offering): void {
+                    $this->insertCohort([
+                        'school_id' => $school->id,
+                        'announcement_id' => $announcement->id,
+                        'academic_year_id' => $year->id,
+                        'grade_level_id' => $grade->id,
+                        'subject_offering_id' => $offering->id,
+                    ]);
+                });
+            } catch (QueryException) {
+                $rejected = true;
+            }
+        });
+
+        $this->assertTrue($rejected, 'num_nonnulls(grade_level_id, section_id, subject_offering_id) = 1 must reject a row naming both.');
+    }
+
+    #[Test]
+    public function a_row_with_cohort_type_subject_offering_but_a_grade_level_id_is_rejected(): void
+    {
+        [$creator, $school] = $this->createSchoolAdmin('school_admin');
+        ['year' => $year, 'grade' => $grade] = $this->graph($school);
+        $announcement = $this->createAnnouncement($school, $creator, ['audience_type' => 'subject_offering']);
+
+        $rejected = false;
+
+        app(TenantContext::class)->withSchool($school, function () use ($school, $announcement, $year, $grade, &$rejected): void {
+            try {
+                DB::connection('pgsql')->transaction(function () use ($school, $announcement, $year, $grade): void {
+                    $this->insertCohort([
+                        'school_id' => $school->id,
+                        'announcement_id' => $announcement->id,
+                        'academic_year_id' => $year->id,
+                        'cohort_type' => 'subject_offering',
+                        'grade_level_id' => $grade->id,
+                        'subject_offering_id' => null,
+                    ]);
+                });
+            } catch (QueryException) {
+                $rejected = true;
+            }
+        });
+
+        $this->assertTrue($rejected, 'caac_cohort_type_matches_check must reject cohort_type=subject_offering paired with a grade_level_id instead of subject_offering_id.');
+    }
+
+    #[Test]
+    public function school_a_cannot_select_school_bs_subject_offering_cohort(): void
+    {
+        [$creatorB, $schoolB] = $this->createSchoolAdmin('school_admin');
+        ['year' => $yearB, 'offering' => $offeringB] = $this->graph($schoolB);
+        $announcementB = $this->createAnnouncement($schoolB, $creatorB, ['audience_type' => 'subject_offering']);
+        $rowId = (string) new UuidV7;
+
+        app(TenantContext::class)->withSchool($schoolB, function () use ($schoolB, $announcementB, $yearB, $offeringB, $rowId): void {
+            $this->insertCohort([
+                'id' => $rowId,
+                'school_id' => $schoolB->id,
+                'announcement_id' => $announcementB->id,
+                'academic_year_id' => $yearB->id,
+                'cohort_type' => 'subject_offering',
+                'grade_level_id' => null,
+                'subject_offering_id' => $offeringB->id,
+            ]);
+        });
+
+        $schoolA = $this->createSchool();
+        $this->setSchool($schoolA->id);
+
+        $rows = DB::connection('pgsql')->select('select id from communication_announcement_academic_cohorts where id = ?', [$rowId]);
+        $this->assertCount(0, $rows);
     }
 }

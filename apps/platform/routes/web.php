@@ -14,6 +14,9 @@ use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\DashboardController;
+use App\Http\Controllers\App\EnrollmentRolloverController;
+use App\Http\Controllers\App\EnrollmentRolloverItemController;
+use App\Http\Controllers\App\EnrollmentRolloverMappingController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -268,6 +271,13 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/audience/grade-levels/search', [CommunicationAudienceSearchController::class, 'gradeLevels'])->name('audience.grade-levels.search');
         Route::get('/audience/sections/search', [CommunicationAudienceSearchController::class, 'sections'])->name('audience.sections.search');
 
+        // Phase 5C.1: the Announcement composer's SubjectOffering
+        // academic-cohort picker search -- same registration reasoning
+        // as 'audience/grade-levels|sections/search' above. Backend/API
+        // surface only in this checkpoint -- no composer UI option
+        // exists yet to reach it.
+        Route::get('/audience/subject-offerings/search', [CommunicationAudienceSearchController::class, 'subjectOfferings'])->name('audience.subject-offerings.search');
+
         // Phase 5A.11 §25/§32: the School-wide operational delivery
         // overview -- registered BEFORE the '/{thread}' wildcard below,
         // same reasoning as every other literal-segment route in this
@@ -300,5 +310,28 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{enrollment}/cancel', [StudentEnrollmentController::class, 'cancel'])->name('cancel');
         Route::get('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transferCreate'])->name('transfer.create');
         Route::post('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transfer'])->name('transfer.store');
+    });
+
+    // Phase 1B.7F: Enrollment Rollover administrative UI
+    // (docs/modules/STUDENT-ENROLLMENT.md, "Rollover Administrative
+    // UI"). Capability checks live inside each controller
+    // (AuthorizesCapability trait), matching every other App/
+    // controller's pattern -- every action re-derives the active
+    // School from TenantContext, never a client-supplied id. No
+    // Mapping delete / Plan cancellation routes exist -- neither has a
+    // sanctioned Application-service operation (Phase 1B.7E).
+    Route::prefix('app/enrollment-rollovers')->name('app.enrollment-rollovers.')->group(function (): void {
+        Route::get('/', [EnrollmentRolloverController::class, 'index'])->name('index');
+        Route::get('/create', [EnrollmentRolloverController::class, 'create'])->name('create');
+        Route::post('/', [EnrollmentRolloverController::class, 'store'])->name('store');
+        Route::get('/{rollover}', [EnrollmentRolloverController::class, 'show'])->name('show');
+        Route::post('/{rollover}/validate', [EnrollmentRolloverController::class, 'validate'])->name('validate');
+        Route::post('/{rollover}/start', [EnrollmentRolloverController::class, 'start'])->name('start');
+        Route::post('/{rollover}/resume', [EnrollmentRolloverController::class, 'resume'])->name('resume');
+
+        Route::post('/{rollover}/mappings', [EnrollmentRolloverMappingController::class, 'store'])->name('mappings.store');
+        Route::patch('/{rollover}/mappings/{mapping}', [EnrollmentRolloverMappingController::class, 'update'])->name('mappings.update');
+
+        Route::patch('/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])->name('items.update');
     });
 });

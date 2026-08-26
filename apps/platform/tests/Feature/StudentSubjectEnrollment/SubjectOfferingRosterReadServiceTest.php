@@ -238,4 +238,66 @@ class SubjectOfferingRosterReadServiceTest extends TestCase
         $this->assertCount(60, $roster);
         $this->assertLessThan(5, $queryCount, 'roster resolution must be a small, fixed number of queries regardless of roster size (no N+1)');
     }
+
+    // --- F. Inactive offering (Phase 1C.1A) ---------------------------------
+
+    #[Test]
+    public function an_inactive_required_offering_reports_an_empty_current_roster(): void
+    {
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $year = $this->createAcademicYear($school);
+        $grade = $this->createGradeLevel($school);
+        $section = $this->createSection($year, $campus, $grade);
+        $offering = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($school), ['is_required' => true, 'status' => 'inactive']);
+        $student = $this->createStudent($school, ['student_number' => 'S-1']);
+        $this->createStudentEnrollment($student, $section);
+
+        $this->assertSame([], $this->reads()->currentRosterStudentIds($offering));
+        $this->assertSame(0, $this->reads()->currentRosterCount($offering));
+    }
+
+    #[Test]
+    public function an_elective_offering_deactivated_after_enrollment_reports_an_empty_current_roster_without_touching_the_membership_row(): void
+    {
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $year = $this->createAcademicYear($school);
+        $grade = $this->createGradeLevel($school);
+        $section = $this->createSection($year, $campus, $grade);
+        $offering = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($school), ['is_required' => false]);
+        $student = $this->createStudent($school, ['student_number' => 'S-1']);
+        $this->createStudentEnrollment($student, $section);
+        $membership = $this->writes()->enroll($student, $offering, '2026-06-01');
+
+        $this->assertSame([$student->id], $this->reads()->currentRosterStudentIds($offering));
+
+        app(TenantContext::class)->withSchool($school, fn () => $offering->update(['status' => 'inactive']));
+
+        $this->assertSame([], $this->reads()->currentRosterStudentIds($offering));
+        $this->assertSame(0, $this->reads()->currentRosterCount($offering));
+        $refreshedMembership = app(TenantContext::class)->withSchool($school, fn () => $membership->fresh());
+        $this->assertSame('active', $refreshedMembership->status, 'deactivating the offering must never mutate the historical StudentSubjectEnrollment row');
+    }
+
+    #[Test]
+    public function reactivating_an_offering_restores_the_ordinary_roster_with_no_other_state_change(): void
+    {
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $year = $this->createAcademicYear($school);
+        $grade = $this->createGradeLevel($school);
+        $section = $this->createSection($year, $campus, $grade);
+        $offering = $this->createSubjectOffering($year, $campus, $grade, $this->createSubject($school), ['is_required' => false]);
+        $student = $this->createStudent($school, ['student_number' => 'S-1']);
+        $this->createStudentEnrollment($student, $section);
+        $this->writes()->enroll($student, $offering, '2026-06-01');
+
+        app(TenantContext::class)->withSchool($school, fn () => $offering->update(['status' => 'inactive']));
+        $this->assertSame([], $this->reads()->currentRosterStudentIds($offering));
+
+        app(TenantContext::class)->withSchool($school, fn () => $offering->update(['status' => 'active']));
+
+        $this->assertSame([$student->id], $this->reads()->currentRosterStudentIds($offering), 'reactivation must restore the ordinary roster with no other state change required');
+    }
 }

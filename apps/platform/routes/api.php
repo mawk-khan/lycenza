@@ -15,6 +15,9 @@ use App\Domain\HR\Http\Controllers\EmployeeActivityController;
 use App\Domain\HR\Http\Controllers\EmployeeDirectoryController;
 use App\Domain\HR\Http\Controllers\EmployeeProfileController;
 use App\Domain\HR\Http\Controllers\EmployeeSensitiveDocumentController;
+use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
+use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
+use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
@@ -429,6 +432,57 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/employees/{employee}/sensitive-documents', [EmployeeSensitiveDocumentController::class, 'index'])
                 ->middleware(['throttle:hr-api-sensitive-reads', 'private-no-store'])
                 ->name('schools.employees.sensitive-documents.index');
+
+            // --- Phase 1B.7E: Enrollment Rollover administrative HTTP
+            // surface (docs/modules/STUDENT-ENROLLMENT.md, "Rollover
+            // Authorization & Administrative HTTP/API"). Exposes the
+            // already-built rollover domain (Phase 1B.7A-1B.7D) -- it
+            // does not redesign it. Read actions authorize
+            // `enrollments.view` AND `enrollments.rollovers.view`
+            // inline (matching StudentEnrollmentController's identical
+            // pattern); every mutation action carries BOTH
+            // `capability:` route middleware entries (`enrollments.manage`
+            // AND `enrollments.rollovers.manage`, dual authorization --
+            // rollover's materially higher blast radius earns its own
+            // capability, required IN ADDITION TO the base Enrollment
+            // one, never instead of it). Mappings/Items are NESTED
+            // under the Plan specifically so nested-ownership can be
+            // verified against the ROUTE's Plan, not merely the current
+            // School.
+            Route::get('/enrollment-rollovers', [EnrollmentRolloverController::class, 'index'])
+                ->name('schools.enrollment-rollovers.index');
+            Route::post('/enrollment-rollovers', [EnrollmentRolloverController::class, 'store'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollment-rollovers.store');
+            Route::get('/enrollment-rollovers/{rollover}', [EnrollmentRolloverController::class, 'show'])
+                ->name('schools.enrollment-rollovers.show');
+
+            Route::get('/enrollment-rollovers/{rollover}/items', [EnrollmentRolloverItemController::class, 'index'])
+                ->name('schools.enrollment-rollovers.items.index');
+            Route::patch('/enrollment-rollovers/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollment-rollovers.items.update');
+
+            Route::post('/enrollment-rollovers/{rollover}/mappings', [EnrollmentRolloverMappingController::class, 'store'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollment-rollovers.mappings.store');
+            Route::patch('/enrollment-rollovers/{rollover}/mappings/{mapping}', [EnrollmentRolloverMappingController::class, 'update'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollment-rollovers.mappings.update');
+
+            // Explicit lifecycle actions only -- never a generic PATCH
+            // accepting `status`/`configuration_version`/execution
+            // timestamps from the caller (this checkpoint's brief,
+            // section 13).
+            Route::post('/enrollment-rollovers/{rollover}/validate', [EnrollmentRolloverController::class, 'validate'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollment-rollovers.validate');
+            Route::post('/enrollment-rollovers/{rollover}/start', [EnrollmentRolloverController::class, 'start'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollment-rollovers.start');
+            Route::post('/enrollment-rollovers/{rollover}/resume', [EnrollmentRolloverController::class, 'resume'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollment-rollovers.resume');
         });
 });
 

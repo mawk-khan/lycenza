@@ -377,3 +377,44 @@ re-run, consuming `SubjectOfferingRosterReadService::currentRosterStudentIds()`/
 `GuardianProjectionResolver` and the existing IN_APP/EMAIL reachability
 pipeline unchanged. This checkpoint deliberately does not start that
 work itself.
+
+## 29. Phase 1C.1A — SubjectOffering eligibility guard (correction)
+
+Discovered during Phase 1C's fresh-integration gate: this checkpoint's
+original write path (`StudentSubjectEnrollmentService::enroll()`/
+`transfer()`) never consulted `SubjectOffering.status`, contradicting
+this codebase's own established "deactivate, never delete"
+reference-entity convention (`docs/modules/ACADEMIC-STRUCTURE.md`,
+"Reference-data lifecycle") and the identical precedent
+`App\Domain\HR\Application\EmployeeAssignmentService` already enforces
+for Position/Department. An inactive `SubjectOffering` could silently
+accept brand-new Student participation.
+
+**The corrected rule**: a `SubjectOffering` must be active
+(`isActive()`) to become the TARGET of new participation.
+
+- `enroll()`: rejects an inactive offering with
+  `InactiveSubjectOfferingException` (422), checked immediately after
+  the cross-School check and before the required/elective check (a
+  foreign-School offering's status must never leak through exception
+  ordering).
+- `transfer()`: the same check applies to the TARGET offering only —
+  never the source. A Student already actively participating in an
+  offering that later becomes inactive can still be moved OUT of it.
+- `withdraw()`/`cancel()`: **never gated** on offering status — a
+  terminal transition against an existing membership must always
+  remain possible regardless of the offering's current status.
+
+**Roster contract**: `SubjectOfferingRosterReadService::currentRosterStudentIds()`/
+`currentRosterCount()` return `[]`/`0` for an inactive offering, for
+BOTH required and elective offerings, short-circuiting before any
+query runs — an inactive offering must never surface as a
+Communications audience (section 26's own consumer contract). This is
+a read-time current-eligibility gate only: no `StudentSubjectEnrollment`
+row is deleted, mutated, or auto-withdrawn when an offering becomes
+inactive, and reactivating the offering restores the ordinary roster
+derivation with no other state change required.
+
+No migration, no new capability, and no change to
+required-vs-elective semantics were needed — this is purely an
+application-layer eligibility check plus a read-side short-circuit.

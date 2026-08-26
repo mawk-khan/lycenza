@@ -28,6 +28,15 @@ namespace App\Domain\Communications\Domain;
  * calls for. There is no independent Class entity in the current
  * academic model (GradeLevel/Section are it) -- see
  * docs/communication-hub/PHASE-5B-3-ACADEMIC-COHORT-AUDIENCES.md.
+ *
+ * Phase 5C.1 adds `SubjectOffering` -- a third academic-cohort case,
+ * sharing the same `communication_announcement_academic_cohorts` row
+ * shape/`recipient_kind` projection as Grade/Section (still no
+ * `GuardiansOfSubjectOffering` case). Resolved against
+ * App\Domain\Students\Application\SubjectOfferingRosterReadService
+ * (Phase 1C), never against `student_enrollments`/
+ * `student_subject_enrollments` directly -- see
+ * docs/communication-hub/PHASE-5C-1-SUBJECT-OFFERING-AUDIENCES.md.
  */
 enum CommunicationAudienceType: string
 {
@@ -38,4 +47,5 @@ enum CommunicationAudienceType: string
     case GuardiansOfStudents = 'guardians_of_students';
     case Grade = 'grade';
     case Section = 'section';
+    case SubjectOffering = 'subject_offering';
 }
