@@ -556,7 +556,7 @@ class AnnouncementController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:10000'],
             'priority' => ['required', 'in:normal,important,urgent,critical'],
-            'audience_type' => ['required', 'in:individual,school_wide,student,guardian,guardians_of_students,grade,section'],
+            'audience_type' => ['required', 'in:individual,school_wide,student,guardian,guardians_of_students,grade,section,subject_offering'],
             'member_user_ids' => ['required_if:audience_type,individual', 'array'],
             'member_user_ids.*' => ['string'],
             // Phase 5B.1: the Student ids for 'student'/
@@ -566,21 +566,24 @@ class AnnouncementController extends Controller
             // trusted from this shape check alone.
             'domain_audience_member_ids' => ['required_if:audience_type,student,guardian,guardians_of_students', 'array'],
             'domain_audience_member_ids.*' => ['string'],
-            // Phase 5B.3 §6/§7/§31: the Grade/Section cohort definition
-            // -- re-validated (same-school ownership, Section<->
-            // AcademicYear consistency) inside
+            // Phase 5B.3 §6/§7/§31, extended by Phase 5C.1: the
+            // Grade/Section/SubjectOffering cohort definition -- re-
+            // validated (same-school ownership, Section/SubjectOffering
+            // <-> AcademicYear consistency) inside
             // AnnouncementService::syncAcademicCohort(), never trusted
             // from this shape check alone (root CLAUDE.md rule 19).
-            // Exactly one of grade_level_id/section_id is meaningful,
-            // matching audience_type -- both are merely 'nullable'
-            // here (not 'prohibited') so the composer can submit the
-            // same object shape for either type without conditionally
+            // Exactly one of grade_level_id/section_id/
+            // subject_offering_id is meaningful, matching audience_type
+            // -- all three are merely 'nullable' here (not
+            // 'prohibited') so the composer can submit the same object
+            // shape for any of the three types without conditionally
             // omitting a key.
-            'academic_cohort' => ['required_if:audience_type,grade,section', 'array'],
-            'academic_cohort.academic_year_id' => ['required_if:audience_type,grade,section', 'string'],
+            'academic_cohort' => ['required_if:audience_type,grade,section,subject_offering', 'array'],
+            'academic_cohort.academic_year_id' => ['required_if:audience_type,grade,section,subject_offering', 'string'],
             'academic_cohort.grade_level_id' => ['required_if:audience_type,grade', 'nullable', 'string'],
             'academic_cohort.section_id' => ['required_if:audience_type,section', 'nullable', 'string'],
-            'academic_cohort.recipient_kind' => ['required_if:audience_type,grade,section', 'in:student,guardian'],
+            'academic_cohort.subject_offering_id' => ['required_if:audience_type,subject_offering', 'nullable', 'string'],
+            'academic_cohort.recipient_kind' => ['required_if:audience_type,grade,section,subject_offering', 'in:student,guardian'],
             'channels' => ['sometimes', 'array'],
             'channels.*' => ['string', Rule::in($allowedChannels)],
             'source_template_id' => ['nullable', 'string'],
@@ -624,7 +627,7 @@ class AnnouncementController extends Controller
 
     private function isAcademicCohortAudienceType(string $audienceType): bool
     {
-        return in_array($audienceType, ['grade', 'section'], true);
+        return in_array($audienceType, ['grade', 'section', 'subject_offering'], true);
     }
 
     private function audienceErrorField(string $audienceType): string
@@ -637,12 +640,13 @@ class AnnouncementController extends Controller
     }
 
     /**
-     * Phase 5B.3 §6/§7: builds the AcademicCohortSelection DTO from
-     * validated request input for `audience_type = grade`/`section`.
-     * Shape-only construction -- ALL real validation (School/
-     * AcademicYear/GradeLevel/Section ownership, Section<->AcademicYear
-     * consistency) happens server-side inside
-     * AnnouncementService::syncAcademicCohort(), never here.
+     * Phase 5B.3 §6/§7, extended by Phase 5C.1: builds the
+     * AcademicCohortSelection DTO from validated request input for
+     * `audience_type = grade`/`section`/`subject_offering`. Shape-only
+     * construction -- ALL real validation (School/AcademicYear/
+     * GradeLevel/Section/SubjectOffering ownership, Section/
+     * SubjectOffering<->AcademicYear consistency) happens server-side
+     * inside AnnouncementService::syncAcademicCohort(), never here.
      *
      * @param  array<string, mixed>  $validated
      */
@@ -654,12 +658,19 @@ class AnnouncementController extends Controller
 
         $cohort = $validated['academic_cohort'];
 
+        $cohortType = match ($audienceType) {
+            'grade' => CommunicationAcademicCohortType::GradeLevel,
+            'section' => CommunicationAcademicCohortType::Section,
+            default => CommunicationAcademicCohortType::SubjectOffering,
+        };
+
         return new AcademicCohortSelection(
-            cohortType: $audienceType === 'grade' ? CommunicationAcademicCohortType::GradeLevel : CommunicationAcademicCohortType::Section,
+            cohortType: $cohortType,
             academicYearId: $cohort['academic_year_id'],
             gradeLevelId: $cohort['grade_level_id'] ?? null,
             sectionId: $cohort['section_id'] ?? null,
             recipientKind: CommunicationAcademicCohortRecipientKind::from($cohort['recipient_kind']),
+            subjectOfferingId: $cohort['subject_offering_id'] ?? null,
         );
     }
 
