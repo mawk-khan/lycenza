@@ -112,6 +112,32 @@ class RateLimiterServiceProvider extends ServiceProvider
         // rows workflow the way Directory search is.
         RateLimiter::for('hr-api-sensitive-reads', fn (Request $request) => Limit::perMinute(20)->by($this->tenantKey($request)));
 
+        // Phase 0E.5: Documents HTTP transport -- four risk profiles,
+        // each School+actor-keyed via the same `tenantKey()` (never
+        // IP-only for an authenticated School API). `documents-reads`
+        // mirrors `hr-api-reads`' generosity for ordinary Employee
+        // listing. `documents-sensitive-reads` mirrors
+        // `hr-api-sensitive-reads`'s stricter bound and is ALSO applied
+        // to the direct-by-id metadata route (`GET
+        // /documents/{document}`), since that route cannot know a
+        // Document's classification tier before the service resolves
+        // it -- applying the more conservative bound uniformly,
+        // regardless of which tier a given call happens to hit, avoids
+        // ever varying rate-limit behavior by hidden classification
+        // (no side channel). `documents-content` is separate again:
+        // streaming actual file bytes is more expensive than any
+        // metadata-only read, so it gets its own dedicated, equally
+        // strict bound rather than sharing either read bucket.
+        // `documents-writes` covers upload and archive -- both
+        // consequential mutations, stricter than general
+        // `school-api-mutations` for the same reason `webhook-admin`
+        // already is (rarer, costlier operator actions than routine
+        // data mutations).
+        RateLimiter::for('documents-reads', fn (Request $request) => Limit::perMinute(120)->by($this->tenantKey($request)));
+        RateLimiter::for('documents-sensitive-reads', fn (Request $request) => Limit::perMinute(20)->by($this->tenantKey($request)));
+        RateLimiter::for('documents-content', fn (Request $request) => Limit::perMinute(20)->by($this->tenantKey($request)));
+        RateLimiter::for('documents-writes', fn (Request $request) => Limit::perMinute(30)->by($this->tenantKey($request)));
+
         // Deliberately NO limiter for /health/live or /health/ready
         // (section 32) -- infrastructure must be able to poll them as
         // frequently as its own probe interval requires, and both are

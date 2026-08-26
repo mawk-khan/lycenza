@@ -10,6 +10,7 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
@@ -529,6 +530,41 @@ trait CreatesTenancyFixtures
             fn () => EmployeeDocument::factory()->create(array_merge([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 0E.1: Documents foundation -------------------------------
+
+    protected function createDocumentForEmployee(Employee $employee, array $attributes = []): Document
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => Document::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createDocumentForStudent(Student $student, array $attributes = []): Document
+    {
+        return app(TenantContext::class)->withSchool(
+            $student->school,
+            fn () => Document::factory()->create(array_merge([
+                'school_id' => $student->school_id,
+                'student_id' => $student->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createDocumentForGuardian(Guardian $guardian, array $attributes = []): Document
+    {
+        return app(TenantContext::class)->withSchool(
+            $guardian->school,
+            fn () => Document::factory()->create(array_merge([
+                'school_id' => $guardian->school_id,
+                'guardian_id' => $guardian->id,
             ], $attributes)),
         );
     }

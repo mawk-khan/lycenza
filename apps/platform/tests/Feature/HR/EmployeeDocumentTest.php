@@ -501,16 +501,34 @@ class EmployeeDocumentTest extends TestCase
     }
 
     /**
-     * Confirms no shared/generic `documents` table was accidentally
-     * introduced -- 8A.7 remains a narrow, HR-scoped metadata table,
-     * never a parallel Documents subsystem.
+     * Phase 0E.1 (published after this test was originally written)
+     * added the shared `documents` table this test used to assert the
+     * absence of. Phase 0E.6 / ADR 0029 has now made the actual
+     * reconciliation decision ADR 0028 promised: `employee_documents`
+     * and `documents` remain two permanently separate tables (no
+     * migration, no shared FK) -- not because reconciliation hasn't
+     * happened yet, but because it has, and the decision was "stay
+     * separate." What must remain true: HR's own `employee_documents`
+     * table is never silently replaced/absorbed by the generic table,
+     * and `EmployeeDocumentService` never reads/writes it -- this
+     * assertion is no longer a placeholder pending a future decision,
+     * it is the permanent architectural boundary ADR 0029 fixes.
      */
     #[Test]
-    public function no_generic_documents_table_exists_in_the_schema(): void
+    public function employee_documents_remains_its_own_table_independent_of_the_shared_documents_module(): void
     {
-        $this->assertFalse(
-            Schema::hasTable('documents'),
-            'A generic `documents` table must not exist -- Phase 8A.7 deliberately did not introduce a parallel Documents subsystem (Case C dependency-discovery outcome).',
+        $this->assertTrue(Schema::hasTable('employee_documents'), 'employee_documents must still exist.');
+
+        $source = file_get_contents((new ReflectionClass(EmployeeDocumentService::class))->getFileName());
+        $this->assertStringNotContainsString(
+            "table('documents')",
+            $source,
+            'EmployeeDocumentService must never read/write the shared `documents` table -- ADR 0029 permanently decided the two tables stay independent, never merged.',
+        );
+        $this->assertStringNotContainsString(
+            'Storage::',
+            $source,
+            'ADR 0029: any future real Employee file-upload capability must be built on DocumentService, never by adding a Storage:: call directly into EmployeeDocumentService.',
         );
     }
 }

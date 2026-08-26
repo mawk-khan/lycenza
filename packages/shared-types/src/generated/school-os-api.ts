@@ -1205,6 +1205,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/employees/{employeeId}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Phase 0E.5 -- owner-scoped ordinary Document listing (public/internal/sensitive tiers only). Requires hr.employees.documents.view. highly_sensitive rows are excluded at the SQL level -- never counted in meta.total, never occupying a page slot (docs/modules/DOCUMENTS.md "Visible-total-only pagination"). */
+        get: operations["listEmployeeDocuments"];
+        put?: never;
+        /** Phase 0E.5 -- uploads a generic Document owned by an Employee (ADR 0012, docs/modules/DOCUMENTS.md). Requires hr.employees.documents.manage, or hr.employees.sensitive.manage for classification_tier=highly_sensitive. A thin transport over DocumentService::create() -- authorization, MIME/size policy, and audit all remain in the Application service. */
+        post: operations["uploadEmployeeDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/employees/{employeeId}/documents/sensitive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Phase 0E.5 -- Highly Sensitive-only Document listing, a SEPARATE operation from the ordinary listing above (never a classification query filter on it). Requires hr.employees.sensitive.view. A successful non-empty read is audited exactly once (document.sensitive_list_viewed) by the underlying service, never per row. */
+        get: operations["listEmployeeSensitiveDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Phase 0E.5 -- direct by-id Document metadata (any classification tier). Requires hr.employees.documents.view, or hr.employees.sensitive.view for a highly_sensitive Document. Knowing a Document UUID is never sufficient by itself -- 404 is used identically for "does not exist", "belongs to a different School", and (via the underlying service) an owner type this checkpoint does not activate for reads (docs/modules/DOCUMENTS.md "404 vs 403"). */
+        get: operations["getDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/documents/{documentId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Phase 0E.5 -- streams the Document's bytes. Same authorization boundary as the metadata endpoint above. A successful highly_sensitive access is audited exactly once (document.sensitive_content_accessed) meaning an authorized stream was opened -- not that transport-level delivery to the client completed (docs/modules/DOCUMENTS.md "Content audit semantics"). No Range/206 support. Cache-Control is always private, no-store; Content-Disposition is always attachment. */
+        get: operations["getDocumentContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/documents/{documentId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Phase 0E.5 -- archives a Document (status only -- never a hard delete, never an object delete, never a classification/owner change). A thin transport over DocumentService::archive(). */
+        post: operations["archiveDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2040,6 +2126,24 @@ export interface components {
             /** @enum {string} */
             planStatus?: "draft" | "validated" | "executing" | "completed" | "completed_with_errors" | "cancelled";
         };
+        /** @description Phase 0E.5 -- the Documents module's shared safe metadata shape (docs/modules/DOCUMENTS.md "Document metadata JSON shape"), returned by the upload, both listing, and direct-metadata endpoints. Never includes storage_disk/storage_path/an object key/uploaded_by_user_id/a signed or public URL. */
+        Document: {
+            /** Format: uuid */
+            document_id: string;
+            /** @enum {string} */
+            owner_type: "employee";
+            /** Format: uuid */
+            owner_id: string;
+            /** @enum {string} */
+            classification_tier: "public" | "internal" | "sensitive" | "highly_sensitive";
+            /** @enum {string} */
+            status: "active" | "archived";
+            original_filename: string;
+            mime_type: string;
+            size_bytes: number;
+            /** Format: date-time */
+            uploaded_at: string;
+        };
     };
     responses: {
         /** @description Phase 8A.15 -- the caller's School+actor-scoped rate limit (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for the sensitive-documents endpoint) has been exceeded. The same global error envelope as every other `/api/v1` error; never a cross-School/Highly-Sensitive existence signal. */
@@ -2081,6 +2185,8 @@ export interface components {
         RolloverId: string;
         RolloverMappingId: string;
         RolloverItemId: string;
+        /** @description Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy). */
+        DocumentId: string;
     };
     requestBodies: never;
     headers: {
@@ -5462,6 +5568,352 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listEmployeeDocuments: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Document"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.employees.documents.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Employee does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    uploadEmployeeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @enum {string} */
+                    classification_tier: "public" | "internal" | "sensitive" | "highly_sensitive";
+                };
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Document"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking the required Employee-document capability for this classification tier. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Employee does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing/invalid file, missing/invalid classification_tier, disallowed file type, or file too large. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listEmployeeSensitiveDocuments: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (an empty result is valid and unaudited). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Document"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.employees.sensitive.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Employee does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy). */
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Document"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking the required capability for this Document's classification tier. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Document does not exist, belongs to a different School, or has an owner type not yet activated for reads. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getDocumentContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy). */
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK -- binary content. */
+            200: {
+                headers: {
+                    /** @description attachment; filename=... (the sanitized original filename). */
+                    "Content-Disposition"?: string;
+                    /** @description The persisted size_bytes recorded at upload time. */
+                    "Content-Length"?: number;
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking the required capability for this Document's classification tier. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Document does not exist, belongs to a different School, or has an owner type not yet activated for reads. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            /** @description The stored object could not be read (safe, generic -- never a raw storage-provider error). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    archiveDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy). */
+                documentId: components["parameters"]["DocumentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived. No body -- avoids an unintended Highly Sensitive metadata-read audit merely to build a response. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking the required capability for this Document's classification tier. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Document does not exist, belongs to a different School, or has an owner type not yet activated. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
         };
     };
 }

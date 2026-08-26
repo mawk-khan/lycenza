@@ -2396,6 +2396,246 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /schools/{schoolId}/employees/{employeeId}/documents:
+    post:
+      operationId: uploadEmployeeDocument
+      summary: >
+        Phase 0E.5 -- uploads a generic Document owned by an Employee
+        (ADR 0012, docs/modules/DOCUMENTS.md). Requires
+        hr.employees.documents.manage, or hr.employees.sensitive.manage
+        for classification_tier=highly_sensitive. A thin transport over
+        DocumentService::create() -- authorization, MIME/size policy,
+        and audit all remain in the Application service.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, classification_tier]
+              properties:
+                file: { type: string, format: binary }
+                classification_tier: { type: string, enum: [public, internal, sensitive, highly_sensitive] }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Document" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking the required Employee-document capability for this classification tier.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Employee does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Missing/invalid file, missing/invalid classification_tier, disallowed file type, or file too large.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    get:
+      operationId: listEmployeeDocuments
+      summary: >
+        Phase 0E.5 -- owner-scoped ordinary Document listing
+        (public/internal/sensitive tiers only). Requires
+        hr.employees.documents.view. highly_sensitive rows are excluded
+        at the SQL level -- never counted in meta.total, never
+        occupying a page slot (docs/modules/DOCUMENTS.md "Visible-total-only
+        pagination").
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Document" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.employees.documents.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Employee does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/employees/{employeeId}/documents/sensitive:
+    get:
+      operationId: listEmployeeSensitiveDocuments
+      summary: >
+        Phase 0E.5 -- Highly Sensitive-only Document listing, a
+        SEPARATE operation from the ordinary listing above (never a
+        classification query filter on it). Requires
+        hr.employees.sensitive.view. A successful non-empty read is
+        audited exactly once (document.sensitive_list_viewed) by the
+        underlying service, never per row.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK (an empty result is valid and unaudited).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Document" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.employees.sensitive.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Employee does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/documents/{documentId}:
+    get:
+      operationId: getDocument
+      summary: >
+        Phase 0E.5 -- direct by-id Document metadata (any classification
+        tier). Requires hr.employees.documents.view, or
+        hr.employees.sensitive.view for a highly_sensitive Document.
+        Knowing a Document UUID is never sufficient by itself --
+        404 is used identically for "does not exist", "belongs to a
+        different School", and (via the underlying service) an owner
+        type this checkpoint does not activate for reads
+        (docs/modules/DOCUMENTS.md "404 vs 403").
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/DocumentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Document" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking the required capability for this Document's classification tier.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Document does not exist, belongs to a different School, or has an owner type not yet activated for reads.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/documents/{documentId}/content:
+    get:
+      operationId: getDocumentContent
+      summary: >
+        Phase 0E.5 -- streams the Document's bytes. Same authorization
+        boundary as the metadata endpoint above. A successful
+        highly_sensitive access is audited exactly once
+        (document.sensitive_content_accessed) meaning an authorized
+        stream was opened -- not that transport-level delivery to the
+        client completed (docs/modules/DOCUMENTS.md "Content audit
+        semantics"). No Range/206 support. Cache-Control is always
+        private, no-store; Content-Disposition is always attachment.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/DocumentId" }
+      responses:
+        "200":
+          description: OK -- binary content.
+          headers:
+            Content-Disposition: { schema: { type: string }, description: "attachment; filename=... (the sanitized original filename)." }
+            Content-Length: { schema: { type: integer }, description: "The persisted size_bytes recorded at upload time." }
+            Cache-Control: { schema: { type: string, example: "private, no-store" } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking the required capability for this Document's classification tier.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Document does not exist, belongs to a different School, or has an owner type not yet activated for reads.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503":
+          description: The stored object could not be read (safe, generic -- never a raw storage-provider error).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/documents/{documentId}/archive:
+    post:
+      operationId: archiveDocument
+      summary: >
+        Phase 0E.5 -- archives a Document (status only -- never a hard
+        delete, never an object delete, never a classification/owner
+        change). A thin transport over DocumentService::archive().
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/DocumentId" }
+      responses:
+        "204":
+          description: Archived. No body -- avoids an unintended Highly Sensitive metadata-read audit merely to build a response.
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking the required capability for this Document's classification tier.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Document does not exist, belongs to a different School, or has an owner type not yet activated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2523,6 +2763,12 @@ components:
       required: true
       schema: { type: string, format: uuid }
 
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      description: Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy).
+      schema: { type: string, format: uuid }
   headers:
     XRequestId:
       description: Correlates this response with server-side logs/audit entries.
@@ -3493,6 +3739,26 @@ components:
         pending: { type: integer }
         planStatus: { type: string, enum: [draft, validated, executing, completed, completed_with_errors, cancelled] }
 
+
+    Document:
+      type: object
+      description: >
+        Phase 0E.5 -- the Documents module's shared safe metadata shape
+        (docs/modules/DOCUMENTS.md "Document metadata JSON shape"),
+        returned by the upload, both listing, and direct-metadata
+        endpoints. Never includes storage_disk/storage_path/an object
+        key/uploaded_by_user_id/a signed or public URL.
+      required: [document_id, owner_type, owner_id, classification_tier, status, original_filename, mime_type, size_bytes, uploaded_at]
+      properties:
+        document_id: { type: string, format: uuid }
+        owner_type: { type: string, enum: [employee] }
+        owner_id: { type: string, format: uuid }
+        classification_tier: { type: string, enum: [public, internal, sensitive, highly_sensitive] }
+        status: { type: string, enum: [active, archived] }
+        original_filename: { type: string }
+        mime_type: { type: string }
+        size_bytes: { type: integer }
+        uploaded_at: { type: string, format: date-time }
   responses:
     TooManyRequests:
       description: >
