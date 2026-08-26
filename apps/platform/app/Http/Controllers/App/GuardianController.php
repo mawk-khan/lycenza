@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Communications\Application\Policy\DomainCommunicationPreferenceReadModel;
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Application\GuardianService;
 use App\Domain\Guardians\Infrastructure\ContactType;
@@ -92,7 +93,7 @@ class GuardianController extends Controller
         return redirect("/app/guardians/{$guardian->id}");
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, string $guardian): Response
+    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, DomainCommunicationPreferenceReadModel $preferenceReadModel, string $guardian): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('guardians.view', $school);
@@ -104,7 +105,22 @@ class GuardianController extends Controller
         // sole source of truth; never inferred here.
         $link = $accountLinks->activeLinkForGuardian($model);
 
+        // Phase 5D.2 §31/§37: EMAIL preference/consent/endpoint status
+        // only -- never a decrypted contact value (the read model never
+        // exposes one; see GuardianEmailAddressResolver's docblock).
+        $emailState = $preferenceReadModel->forGuardianEmail($school, $model);
+        $actor = $context->actor();
+
         return Inertia::render('App/Guardians/Show', [
+            'communicationPreferences' => [
+                'email' => [
+                    'preferenceEnabled' => $emailState->preferenceEnabled,
+                    'consentStatus' => $emailState->consentStatus?->value,
+                    'endpointAvailable' => $emailState->endpointAvailable,
+                ],
+            ],
+            'canManageCommunicationPreferences' => $capabilities->canInSchool($actor, 'communications.manage', $school)
+                && $capabilities->canInSchool($actor, 'guardians.manage', $school),
             'accountLink' => $link === null ? null : [
                 'schoolMembershipId' => $link->school_membership_id,
                 'memberName' => $link->membership->user->name,

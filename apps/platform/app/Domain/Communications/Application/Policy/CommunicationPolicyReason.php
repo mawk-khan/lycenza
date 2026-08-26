@@ -34,4 +34,18 @@ enum CommunicationPolicyReason: string
      * CommunicationRecipient row is ever created.
      */
     case RecipientDestinationUnavailable = 'recipient_destination_unavailable';
+
+    /**
+     * Phase 5D.2 -- distinct from `RecipientPreferenceDisabled`: an
+     * ordinary channel preference means "I'd rather not," while a
+     * withdrawn consent record is a more explicit, deliberately
+     * recorded decision. Both suppress the SAME class of thing
+     * (OPTIONAL domain-recipient channel delivery) and are evaluated
+     * identically with respect to REQUIRED bypass (see
+     * App\Domain\Communications\Application\AnnouncementService's
+     * Guardian domain-email delivery path), but are kept as separate
+     * reason codes so analytics/audit never conflate "recipient
+     * preference" with "recorded consent decision."
+     */
+    case ConsentWithdrawn = 'consent_withdrawn';
 }

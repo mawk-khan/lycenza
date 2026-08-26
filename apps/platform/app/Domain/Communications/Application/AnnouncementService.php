@@ -23,13 +23,16 @@ use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberExcept
 use App\Domain\Communications\Application\Exceptions\InvalidScheduledTimeException;
 use App\Domain\Communications\Application\Exceptions\UnsupportedAnnouncementChannelException;
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
+use App\Domain\Communications\Application\Policy\CommunicationConsentService;
 use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService;
+use App\Domain\Communications\Application\Policy\CommunicationDomainPreferenceService;
 use App\Domain\Communications\Application\Policy\CommunicationPolicyReason;
 use App\Domain\Communications\Application\Policy\CommunicationTimingDecision;
 use App\Domain\Communications\Application\Policy\CommunicationTimingReason;
 use App\Domain\Communications\Domain\CommunicationAcademicCohortType;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Domain\Communications\Domain\CommunicationConsentStatus;
 use App\Domain\Communications\Domain\CommunicationDispatchMode;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Domain\CommunicationRequirement;
@@ -119,6 +122,8 @@ class AnnouncementService
         private readonly CommunicationDeliveryTimingPolicyService $timingPolicy,
         private readonly CommunicationApprovalService $approvalService,
         private readonly AccountLinkService $accountLinks,
+        private readonly CommunicationDomainPreferenceService $domainPreferences,
+        private readonly CommunicationConsentService $domainConsents,
     ) {}
 
     /**
@@ -1281,6 +1286,19 @@ class AnnouncementService
         // Guardian chunk, never one query per Guardian.
         $links = $this->accountLinks->activeLinksForGuardians($announcement->school, $guardians->keys()->all());
 
+        // Phase 5D.2 §21/§66: batched (never per-Guardian) preference/
+        // consent lookup for EMAIL only -- the one external channel
+        // this checkpoint makes preference/consent-aware (brief §7/§38:
+        // never IN_APP). A no-op query set (empty Collections) when
+        // EMAIL was not even requested for this Announcement.
+        $emailRequested = in_array(CommunicationChannel::Email, $requestedChannels, true);
+        $emailPreferences = $emailRequested
+            ? $this->domainPreferences->currentPreferencesForGuardians($announcement->school, $guardians->keys()->all(), CommunicationChannel::Email)
+            : collect();
+        $emailConsentStatuses = $emailRequested
+            ? $this->domainConsents->currentStatusesForGuardians($announcement->school, $guardians->keys()->all(), CommunicationChannel::Email)
+            : collect();
+
         foreach ($guardians as $guardian) {
             $recipient = null;
 
@@ -1312,6 +1330,46 @@ class AnnouncementService
                     ]);
 
                     continue;
+                }
+
+                // Phase 5D.2 §16/§21: REQUIRED bypasses Guardian-domain
+                // preference/consent, exactly like an ordinary
+                // SchoolMembership's own CommunicationPreference is
+                // bypassed for REQUIRED (see CommunicationRequirement's
+                // docblock) -- ONE unified bypass rule applied
+                // uniformly to both recipient-level suppression
+                // signals, not a new legal claim about REQUIRED school
+                // notices overriding consent (docs/communication-hub/
+                // PHASE-5D-2-GUARDIAN-STUDENT-PREFERENCES-CONSENT.md
+                // "REQUIRED semantics").
+                if ($channel === CommunicationChannel::Email && $requirement === CommunicationRequirement::Optional) {
+                    $preference = $emailPreferences->get($guardian->id);
+
+                    if ($preference !== null && ! $preference->isEnabled()) {
+                        CommunicationDeliveryPolicyDecision::query()->create([
+                            'school_id' => $announcement->school_id,
+                            'message_id' => $message->id,
+                            'recipient_guardian_id' => $guardian->id,
+                            'channel' => $channel->value,
+                            'reason' => CommunicationPolicyReason::RecipientPreferenceDisabled->value,
+                        ]);
+
+                        continue;
+                    }
+
+                    $consentStatus = $emailConsentStatuses->get($guardian->id);
+
+                    if ($consentStatus === CommunicationConsentStatus::Withdrawn) {
+                        CommunicationDeliveryPolicyDecision::query()->create([
+                            'school_id' => $announcement->school_id,
+                            'message_id' => $message->id,
+                            'recipient_guardian_id' => $guardian->id,
+                            'channel' => $channel->value,
+                            'reason' => CommunicationPolicyReason::ConsentWithdrawn->value,
+                        ]);
+
+                        continue;
+                    }
                 }
 
                 $destination = $channel === CommunicationChannel::Email

@@ -35,6 +35,12 @@ interface MembershipCandidate {
     name: string;
 }
 
+interface EmailPreferenceState {
+    preferenceEnabled: boolean | null;
+    consentStatus: 'granted' | 'withdrawn' | null;
+    endpointAvailable: boolean;
+}
+
 interface Props {
     guardian: {
         id: string;
@@ -47,6 +53,8 @@ interface Props {
     students: LinkedStudent[];
     canManage: boolean;
     accountLink: AccountLink | null;
+    communicationPreferences: { email: EmailPreferenceState };
+    canManageCommunicationPreferences: boolean;
 }
 
 const props = defineProps<Props>();
@@ -133,6 +141,29 @@ function deactivateContact(contact: Contact): void {
     );
     if (!confirmed) return;
     router.post(`/app/contacts/${contact.id}/deactivate`, {}, { preserveScroll: true });
+}
+
+// --- Phase 5D.2: domain communication preference/consent ----------------
+
+const updatingPreference = ref(false);
+const recordingConsent = ref(false);
+
+function setEmailPreference(enabled: boolean): void {
+    updatingPreference.value = true;
+    router.put(
+        `/app/guardians/${props.guardian.id}/communication-preference`,
+        { channel: 'email', enabled },
+        { preserveScroll: true, onFinish: () => (updatingPreference.value = false) },
+    );
+}
+
+function recordEmailConsent(status: 'granted' | 'withdrawn'): void {
+    recordingConsent.value = true;
+    router.post(
+        `/app/guardians/${props.guardian.id}/communication-consent`,
+        { channel: 'email', status },
+        { preserveScroll: true, onFinish: () => (recordingConsent.value = false) },
+    );
 }
 
 // --- Add contact --------------------------------------------------------
@@ -411,6 +442,100 @@ function submitContact(): void {
                 </div>
             </div>
             <p v-else class="mt-3 text-sm text-slate-500">Not linked.</p>
+        </section>
+
+        <!-- Domain communication preference / consent (Phase 5D.2) -->
+        <section class="mt-8">
+            <h2 class="text-sm font-medium text-slate-500">Communication preferences</h2>
+            <p class="mt-1 text-xs text-slate-400">
+                Governs optional Email communications sent directly to this Guardian's contact
+                information, independent of any School OS account link above. Required/Emergency
+                school communications are not affected by these settings.
+            </p>
+
+            <div class="mt-3 rounded border border-slate-200 p-4 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="font-medium">Email</span>
+                    <span
+                        class="rounded px-1.5 py-0.5 text-xs font-medium"
+                        :class="
+                            communicationPreferences.email.endpointAvailable
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-amber-100 text-amber-700'
+                        "
+                    >
+                        {{
+                            communicationPreferences.email.endpointAvailable
+                                ? 'Endpoint available'
+                                : 'No email endpoint available'
+                        }}
+                    </span>
+                </div>
+
+                <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <span class="text-slate-600">
+                        Preference:
+                        <span class="font-medium">{{
+                            communicationPreferences.email.preferenceEnabled === null
+                                ? 'Default (enabled)'
+                                : communicationPreferences.email.preferenceEnabled
+                                  ? 'Enabled'
+                                  : 'Opted out'
+                        }}</span>
+                    </span>
+                    <div v-if="canManageCommunicationPreferences" class="flex gap-2">
+                        <button
+                            type="button"
+                            :disabled="updatingPreference"
+                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+                            @click="setEmailPreference(true)"
+                        >
+                            Enable
+                        </button>
+                        <button
+                            type="button"
+                            :disabled="updatingPreference"
+                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+                            @click="setEmailPreference(false)"
+                        >
+                            Opt out
+                        </button>
+                    </div>
+                </div>
+
+                <div
+                    class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3"
+                >
+                    <span class="text-slate-600">
+                        Consent:
+                        <span class="font-medium">{{
+                            communicationPreferences.email.consentStatus === null
+                                ? 'Unknown'
+                                : communicationPreferences.email.consentStatus === 'granted'
+                                  ? 'Granted'
+                                  : 'Withdrawn'
+                        }}</span>
+                    </span>
+                    <div v-if="canManageCommunicationPreferences" class="flex gap-2">
+                        <button
+                            type="button"
+                            :disabled="recordingConsent"
+                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
+                            @click="recordEmailConsent('granted')"
+                        >
+                            Record granted
+                        </button>
+                        <button
+                            type="button"
+                            :disabled="recordingConsent"
+                            class="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-red-600 hover:bg-slate-50 disabled:opacity-50"
+                            @click="recordEmailConsent('withdrawn')"
+                        >
+                            Record withdrawn
+                        </button>
+                    </div>
+                </div>
+            </div>
         </section>
     </main>
 </template>
