@@ -4,6 +4,7 @@ namespace App\Domain\Communications\Http\Controllers;
 
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
@@ -152,6 +153,57 @@ class CommunicationAudienceSearchController extends Controller
             'sections' => $sections->map(fn (Section $s) => [
                 'id' => $s->id,
                 'label' => $s->gradeLevel !== null ? "{$s->gradeLevel->name} - {$s->name} ({$s->code})" : "{$s->name} ({$s->code})",
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Phase 5C.1: the Announcement composer's SubjectOffering
+     * cohort-picker search -- same shape/gate as gradeLevels()/
+     * sections() above. `academic_year_id` is required for the same
+     * reason sections() requires it: a SubjectOffering belongs to
+     * exactly one AcademicYear, so an unscoped search would be
+     * meaningless (and syncAcademicCohort() would reject a
+     * wrong-year selection anyway). Only `active` offerings are
+     * surfaced -- matching the GradeLevel/Section pickers' identical
+     * "not selectable while inactive" gate. Exposes only safe
+     * reference metadata (Subject name/code, GradeLevel, Campus,
+     * required/elective) -- never Student membership; a School user
+     * only sees a roster after actually creating/previewing the
+     * audience.
+     */
+    public function subjectOfferings(Request $request, TenantContext $context): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.announce', $school);
+
+        $academicYearId = trim((string) $request->string('academic_year_id'));
+        $q = trim((string) $request->string('q'));
+
+        if ($academicYearId === '') {
+            return response()->json(['subjectOfferings' => []]);
+        }
+
+        $offerings = SubjectOffering::query()
+            ->where('school_id', $school->id)
+            ->where('academic_year_id', $academicYearId)
+            ->where('status', 'active')
+            ->with(['subject:id,name,code', 'gradeLevel:id,name', 'campus:id,name'])
+            ->when($q !== '', fn ($query) => $query->whereHas('subject', fn ($query) => $query
+                ->where('name', 'ilike', "%{$q}%")
+                ->orWhere('code', 'ilike', "%{$q}%")))
+            ->orderBy('sequence')
+            ->limit(20)
+            ->get(['id', 'subject_id', 'grade_level_id', 'campus_id', 'is_required', 'sequence']);
+
+        return response()->json([
+            'subjectOfferings' => $offerings->map(fn (SubjectOffering $o) => [
+                'id' => $o->id,
+                'label' => trim(implode(' - ', array_filter([
+                    $o->subject?->name !== null ? "{$o->subject->name} ({$o->subject->code})" : null,
+                    $o->gradeLevel?->name,
+                    $o->campus?->name,
+                ]))).($o->is_required ? ' [required]' : ' [elective]'),
             ])->values(),
         ]);
     }

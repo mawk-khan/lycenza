@@ -44,6 +44,7 @@ const audienceType = ref<
     | 'guardians_of_students'
     | 'grade'
     | 'section'
+    | 'subject_offering'
 >('school_wide');
 const memberIds = ref('');
 
@@ -116,12 +117,17 @@ watch(audienceType, () => {
     cohortQuery.value = '';
 });
 
-// Phase 5B.3 §6/§7/§34: the Grade/Section academic-cohort picker --
-// mirrors the Student/Guardian search-then-select pattern above.
-// `recipientKind` ('student'|'guardian') is a field on the single
-// cohort selection, not a separate audience type (brief §5's
-// composable-model decision -- see CommunicationAudienceType's
-// docblock).
+// Phase 5B.3 §6/§7/§34, extended by Phase 5C.2: the Grade/Section/
+// SubjectOffering academic-cohort picker -- mirrors the
+// Student/Guardian search-then-select pattern above. `recipientKind`
+// ('student'|'guardian') is a field on the single cohort selection,
+// not a separate audience type (brief §5's composable-model decision
+// -- see CommunicationAudienceType's docblock). SubjectOffering search
+// results already carry a "[required]"/"[elective]" suffix in their
+// `label` (server-side, App\Domain\Communications\Http\Controllers\
+// CommunicationAudienceSearchController::subjectOfferings()) -- the
+// UI never needs to know which kind it is targeting, matching the
+// backend resolver's own required-vs-elective ignorance.
 interface CohortTarget {
     id: string;
     label: string;
@@ -141,6 +147,9 @@ function cohortSearchEndpoint(): string | null {
     if (audienceType.value === 'section') {
         return '/app/communications/audience/sections/search';
     }
+    if (audienceType.value === 'subject_offering') {
+        return '/app/communications/audience/subject-offerings/search';
+    }
     return null;
 }
 
@@ -155,14 +164,17 @@ function searchCohort() {
         cohortSearching.value = true;
         try {
             const params = new URLSearchParams({ q: cohortQuery.value.trim() });
-            if (audienceType.value === 'section') {
+            if (audienceType.value === 'section' || audienceType.value === 'subject_offering') {
                 params.set('academic_year_id', props.currentAcademicYear!.id);
             }
             const response = await fetch(`${endpoint}?${params.toString()}`, {
                 headers: { Accept: 'application/json' },
             });
             const body = await response.json();
-            cohortResults.value = (body.gradeLevels ?? body.sections ?? []) as CohortTarget[];
+            cohortResults.value = (body.gradeLevels ??
+                body.sections ??
+                body.subjectOfferings ??
+                []) as CohortTarget[];
         } finally {
             cohortSearching.value = false;
         }
@@ -216,7 +228,9 @@ function submit() {
                     ? selectedDomainTargets.value.map((t) => t.id)
                     : [],
             academic_cohort:
-                (audienceType.value === 'grade' || audienceType.value === 'section') &&
+                (audienceType.value === 'grade' ||
+                    audienceType.value === 'section' ||
+                    audienceType.value === 'subject_offering') &&
                 props.currentAcademicYear &&
                 selectedCohort.value
                     ? {
@@ -225,6 +239,10 @@ function submit() {
                               audienceType.value === 'grade' ? selectedCohort.value.id : null,
                           section_id:
                               audienceType.value === 'section' ? selectedCohort.value.id : null,
+                          subject_offering_id:
+                              audienceType.value === 'subject_offering'
+                                  ? selectedCohort.value.id
+                                  : null,
                           recipient_kind: cohortRecipientKind.value,
                       }
                     : undefined,
@@ -311,10 +329,13 @@ function submit() {
                     <option value="section" :disabled="!currentAcademicYear">
                         Section (Academic Cohort)
                     </option>
+                    <option value="subject_offering" :disabled="!currentAcademicYear">
+                        Subject Offering (Academic Cohort)
+                    </option>
                 </select>
                 <p v-if="!currentAcademicYear" class="mt-1 text-xs text-slate-400">
-                    Grade/Section audiences are unavailable -- this school has no active academic
-                    year set.
+                    Grade/Section/Subject Offering audiences are unavailable -- this school has no
+                    active academic year set.
                 </p>
             </div>
 
@@ -398,18 +419,36 @@ function submit() {
 
             <div
                 v-if="
-                    (audienceType === 'grade' || audienceType === 'section') && currentAcademicYear
+                    (audienceType === 'grade' ||
+                        audienceType === 'section' ||
+                        audienceType === 'subject_offering') &&
+                    currentAcademicYear
                 "
             >
                 <label class="block text-xs font-medium text-slate-500">
-                    {{ audienceType === 'grade' ? 'Grade' : 'Section' }}
+                    {{
+                        audienceType === 'grade'
+                            ? 'Grade'
+                            : audienceType === 'section'
+                              ? 'Section'
+                              : 'Subject Offering'
+                    }}
                 </label>
                 <p class="mt-1 text-xs text-slate-400">
-                    Academic year: {{ currentAcademicYear.label }}. Recipients are the Students
-                    currently enrolled in this {{ audienceType === 'grade' ? 'Grade' : 'Section' }}
-                    for this academic year -- resolved fresh again at publication (and, for a
-                    scheduled announcement, again at the scheduled time), never fixed to who's
-                    enrolled today.
+                    Academic year: {{ currentAcademicYear.label }}.
+                    <template v-if="audienceType === 'subject_offering'">
+                        Recipients are the Students currently on this Subject Offering's roster for
+                        this academic year (required offerings: everyone placed in the matching
+                        Grade/Campus; elective offerings: Students explicitly enrolled in it) --
+                        resolved fresh again at publication (and, for a scheduled announcement,
+                        again at the scheduled time), never fixed to today's roster.
+                    </template>
+                    <template v-else>
+                        Recipients are the Students currently enrolled in this
+                        {{ audienceType === 'grade' ? 'Grade' : 'Section' }} for this academic year
+                        -- resolved fresh again at publication (and, for a scheduled announcement,
+                        again at the scheduled time), never fixed to who's enrolled today.
+                    </template>
                 </p>
 
                 <div v-if="selectedCohort" class="mt-2 flex items-center gap-1">
@@ -431,7 +470,11 @@ function submit() {
                         v-model="cohortQuery"
                         type="text"
                         :placeholder="
-                            audienceType === 'grade' ? 'Search grades…' : 'Search sections…'
+                            audienceType === 'grade'
+                                ? 'Search grades…'
+                                : audienceType === 'section'
+                                  ? 'Search sections…'
+                                  : 'Search subject offerings by subject name or code…'
                         "
                         class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
                         @focus="searchCohort"
@@ -596,7 +639,10 @@ function submit() {
                     submitting ||
                     (dispatchMode === 'emergency' &&
                         (!emergencyJustification.trim() || !emergencyAcknowledged)) ||
-                    ((audienceType === 'grade' || audienceType === 'section') && !selectedCohort)
+                    ((audienceType === 'grade' ||
+                        audienceType === 'section' ||
+                        audienceType === 'subject_offering') &&
+                        !selectedCohort)
                 "
                 class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >

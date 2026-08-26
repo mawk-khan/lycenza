@@ -271,6 +271,13 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/audience/grade-levels/search', [CommunicationAudienceSearchController::class, 'gradeLevels'])->name('audience.grade-levels.search');
         Route::get('/audience/sections/search', [CommunicationAudienceSearchController::class, 'sections'])->name('audience.sections.search');
 
+        // Phase 5C.1: the Announcement composer's SubjectOffering
+        // academic-cohort picker search -- same registration reasoning
+        // as 'audience/grade-levels|sections/search' above. Backend/API
+        // surface only in this checkpoint -- no composer UI option
+        // exists yet to reach it.
+        Route::get('/audience/subject-offerings/search', [CommunicationAudienceSearchController::class, 'subjectOfferings'])->name('audience.subject-offerings.search');
+
         // Phase 5A.11 §25/§32: the School-wide operational delivery
         // overview -- registered BEFORE the '/{thread}' wildcard below,
         // same reasoning as every other literal-segment route in this

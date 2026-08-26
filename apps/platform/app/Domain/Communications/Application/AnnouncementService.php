@@ -5,6 +5,7 @@ namespace App\Domain\Communications\Application;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Audience\AcademicCohortSelection;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
@@ -1023,35 +1024,44 @@ class AnnouncementService
     }
 
     /**
-     * Phase 5B.3 §6/§7: is this audience type an academic-cohort type
-     * (`grade`/`section`)? Parallel to isDomainAudienceType() above.
+     * Phase 5B.3 §6/§7, extended by Phase 5C.1 §-: is this audience
+     * type an academic-cohort type (`grade`/`section`/
+     * `subject_offering`)? Parallel to isDomainAudienceType() above.
      */
     private function isAcademicCohortAudienceType(CommunicationAudienceType $type): bool
     {
         return in_array($type, [
             CommunicationAudienceType::Grade,
             CommunicationAudienceType::Section,
+            CommunicationAudienceType::SubjectOffering,
         ], true);
     }
 
     /**
-     * Phase 5B.3 §6/§7/§31: validates and persists the authored
-     * academic-cohort selection for `audience_type = grade`/`section`.
+     * Phase 5B.3 §6/§7/§31, extended by Phase 5C.1: validates and
+     * persists the authored academic-cohort selection for
+     * `audience_type = grade`/`section`/`subject_offering`.
      * Root CLAUDE.md rule 19 applied to cohort selection: a
-     * caller-supplied AcademicYear/GradeLevel/Section id is never
-     * trusted at face value -- each is re-verified to belong to
-     * $announcement->school_id here, at authoring time, even though
-     * the composite `(id, school_id)` foreign keys on
+     * caller-supplied AcademicYear/GradeLevel/Section/SubjectOffering
+     * id is never trusted at face value -- each is re-verified to
+     * belong to $announcement->school_id here, at authoring time, even
+     * though the composite `(id, school_id)` foreign keys on
      * communication_announcement_academic_cohorts would also reject a
-     * genuinely cross-School id at INSERT time. A Section's own
-     * academic_year_id is additionally cross-checked against the
-     * caller-supplied academic_year_id (brief §7) so a Section can
-     * never be silently paired with the wrong AcademicYear.
+     * genuinely cross-School id at INSERT time. A Section's/
+     * SubjectOffering's own academic_year_id is additionally
+     * cross-checked against the caller-supplied academic_year_id
+     * (brief §7) so it can never be silently paired with the wrong
+     * AcademicYear.
      *
      * Only the cohort DEFINITION is persisted here -- no Student/
      * Guardian id is resolved or stored (brief §3/§31): resolution
      * happens fresh, every time, in GradeAudienceResolver/
-     * SectionAudienceResolver.
+     * SectionAudienceResolver/SubjectOfferingAudienceResolver. A
+     * SubjectOffering must be `active` at SELECTION time, the same gate
+     * GradeLevel/Section already apply -- an offering that becomes
+     * inactive AFTER the cohort is authored is left exactly as-is (the
+     * roster service resolves it to empty on its own; this method is
+     * never re-run to react to that).
      */
     private function syncAcademicCohort(CommunicationAnnouncement $announcement, CommunicationAudienceType $type, ?AcademicCohortSelection $selection): void
     {
@@ -1059,9 +1069,12 @@ class AnnouncementService
             throw new InvalidAcademicCohortException;
         }
 
-        $expectedCohortType = $type === CommunicationAudienceType::Grade
-            ? CommunicationAcademicCohortType::GradeLevel
-            : CommunicationAcademicCohortType::Section;
+        $expectedCohortType = match ($type) {
+            CommunicationAudienceType::Grade => CommunicationAcademicCohortType::GradeLevel,
+            CommunicationAudienceType::Section => CommunicationAcademicCohortType::Section,
+            CommunicationAudienceType::SubjectOffering => CommunicationAcademicCohortType::SubjectOffering,
+            default => throw new InvalidAcademicCohortException,
+        };
 
         if ($selection->cohortType !== $expectedCohortType) {
             throw new InvalidAcademicCohortException;
@@ -1075,6 +1088,10 @@ class AnnouncementService
         if (! $academicYearExists) {
             throw new InvalidAcademicCohortException;
         }
+
+        $gradeLevelId = null;
+        $sectionId = null;
+        $subjectOfferingId = null;
 
         if ($expectedCohortType === CommunicationAcademicCohortType::GradeLevel) {
             if ($selection->gradeLevelId === null) {
@@ -1092,8 +1109,7 @@ class AnnouncementService
             }
 
             $gradeLevelId = $selection->gradeLevelId;
-            $sectionId = null;
-        } else {
+        } elseif ($expectedCohortType === CommunicationAcademicCohortType::Section) {
             if ($selection->sectionId === null) {
                 throw new InvalidAcademicCohortException;
             }
@@ -1108,8 +1124,23 @@ class AnnouncementService
                 throw new InvalidAcademicCohortException;
             }
 
-            $gradeLevelId = null;
             $sectionId = $selection->sectionId;
+        } else {
+            if ($selection->subjectOfferingId === null) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $offering = SubjectOffering::query()
+                ->where('school_id', $announcement->school_id)
+                ->where('id', $selection->subjectOfferingId)
+                ->where('status', 'active')
+                ->first();
+
+            if ($offering === null || $offering->academic_year_id !== $selection->academicYearId) {
+                throw new InvalidAcademicCohortException;
+            }
+
+            $subjectOfferingId = $selection->subjectOfferingId;
         }
 
         CommunicationAnnouncementAcademicCohort::query()->where('announcement_id', $announcement->id)->delete();
@@ -1121,6 +1152,7 @@ class AnnouncementService
             'academic_year_id' => $selection->academicYearId,
             'grade_level_id' => $gradeLevelId,
             'section_id' => $sectionId,
+            'subject_offering_id' => $subjectOfferingId,
             'recipient_kind' => $selection->recipientKind->value,
         ]);
     }
