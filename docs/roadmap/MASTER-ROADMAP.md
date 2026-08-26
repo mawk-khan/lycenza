@@ -209,7 +209,7 @@ Students/SIS, Guardians, Admissions. First real domain events
 `docs/architecture/EVENTS.md`) get real producers here, flowing through
 the Phase 0C outbox/consumer substrate rather than a bespoke mechanism.
 
-## Phase 0G — Finance and Fees
+## Phase 0G — Finance and Fees (in progress)
 
 Finance (core ledger), Fees, Payments — including the first real
 payment-gateway integration and inbound-webhook idempotency (ADR 0018,
@@ -219,6 +219,16 @@ and payment-provider/webhook idempotency), built against the
 financial-correctness rules in `docs/architecture/ARCHITECTURE.md` §10
 from day one. This is a security- and correctness-critical phase;
 expect the heaviest testing and review bar of any phase so far.
+
+**0G.0 — Finance Architecture & Module Plan (implemented):**
+architecture/domain-contract checkpoint, no code. Settled the one
+decision `ARCHITECTURE.md` §10 left open — Finance is a true
+double-entry ledger with a chart of accounts, not a subledger or a
+mutable-balance charge/payment tracker (ADR 0030). Full domain
+contract, checkpoint sequence (0G.1-0G.8), and security register:
+`docs/modules/FINANCE.md`. 0G.1 onward (ledger schema, posting
+services, authorization, receivables, payments, API, UI, closure) is
+not yet started.
 
 ## Phase 0H — Academic Operations
 
