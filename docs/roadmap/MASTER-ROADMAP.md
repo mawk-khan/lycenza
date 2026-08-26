@@ -170,7 +170,7 @@ Terms, Sections, Academic Departments, Rooms, and Subject Offerings
 Inertia page is pending — the existing pages follow an identical,
 quick-to-replicate pattern).
 
-## Phase 0E — Cross-Cutting Infrastructure
+## Phase 0E — Cross-Cutting Infrastructure (complete)
 
 Documents (ADR 0012) and Communications — built early, deliberately,
 because Layer 2–3 modules depend on them and retrofitting a shared
@@ -181,14 +181,26 @@ notification infrastructure rather than inventing its own.
 
 **Communications is complete** (Phase 5A/5B, `docs/communication-hub/`).
 
-**Documents (Phase 0E.1–0E.6, in progress):** foundation schema, write
-path, authorized read/content streaming, owner-scoped listing,
-HTTP/API transport, and the ADR 0028 `employee_documents` reconciliation
-decision (ADR 0029: the two tables stay permanently separate — no
-merge) are all implemented — see `docs/modules/DOCUMENTS.md` for the
-full domain contract and what remains deferred (Student/Guardian owner
-activation, signed URLs, retention policy, malware scanning, checksum/
-integrity, orphan cleanup, storage quota, UI).
+**Documents is complete (Phase 0E.1–0E.7):** foundation schema, write
+path, authorized read/content streaming, owner-scoped listing, and
+HTTP/API transport are implemented and verified end-to-end against
+isolated infrastructure (0E.7 closure — RLS, owner-integrity, real
+MinIO clean-room, full regression, zero unresolved P0/P1/P2). The ADR
+0028 `employee_documents` reconciliation obligation is discharged by
+ADR 0029: the two tables stay permanently separate, no merge. See
+`docs/modules/DOCUMENTS.md` for the full domain contract, the accepted
+P3 residual, and what remains deferred as non-blocking future work
+(Student/Guardian owner activation, signed URLs, retention policy,
+malware scanning, checksum/integrity, orphan cleanup, storage quota,
+UI) — none of these were closure-critical for the generic Documents
+infrastructure this phase scoped.
+
+**Both halves of Phase 0E (Documents and Communications) are complete.**
+"Complete" here means this phase's own cross-cutting infrastructure
+scope is closed, matching Phase 0D's precedent — it does not mean every
+possible future enhancement to either module has been built; those are
+tracked as each module's own deferred/future work, not as open Phase 0E
+obligations.
 
 ## Phase 0F — People
 

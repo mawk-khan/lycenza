@@ -17,7 +17,8 @@ operationalized it.
 0E.3  Authorized Document Read & Content Access   (DocumentReadService, metadata + streamed content, Employee owner activated) [implemented]
 0E.4  Owner-Scoped Document Discovery & Metadata Listing   (DocumentListingService, ordinary + Highly Sensitive listing, Employee owner activated) [implemented]
 0E.5  Documents HTTP/API Transport   (DocumentController, six routes over 0E.2/0E.3/0E.4's services, Employee owner activated) [implemented]
-0E.6  Employee Document Reconciliation Decision & Closure Review   (ADR 0029: employee_documents/documents stay permanently separate; remaining-obligations audit — this checkpoint) [implemented]
+0E.6  Employee Document Reconciliation Decision & Closure Review   (ADR 0029: employee_documents/documents stay permanently separate; remaining-obligations audit) [implemented]
+0E.7  Documents Hardening & Phase Closure   (isolated-infrastructure end-to-end verification; no feature work — this checkpoint) [implemented — Documents CLOSED]
 ```
 
 Later checkpoints (write service, download authorization, HTTP/API,
@@ -1565,19 +1566,466 @@ no new P0/P1/P2, and explicitly declined to convert either
 undecided-but-out-of-scope item (retention, malware scanning) into a
 fabricated finding or a fabricated fix.
 
-## Next checkpoint boundary
+## Documents Hardening & Phase Closure (0E.7, implemented)
 
-Not yet decided — to be established from ADR 0012 + this document's
-own as-built state after 0E.6 is reviewed. Every item in this
-checkpoint's remaining-obligations matrix above that isn't Class A
-(none currently outstanding) is either Class D (optional enhancement:
-signed URLs, Range/206) or Class E (explicitly deferred pending a
-separate decision this repository is not yet positioned to make:
-Student/Guardian owner-authorization design, retention **[LEGAL REVIEW
-REQUIRED]**, malware scanning, checksum/integrity, global search, UI,
-storage quota, invoice owner support once Finance/Phase 0G exists).
-None of these currently carries a written obligation the way the
-`employee_documents` reconciliation did — the next Documents checkpoint
-should be selected only once a concrete product/legal/security
-requirement actually names one of them, not by working down this list
-in the absence of one.
+0E.6 concluded that no remaining Documents item carries a closure-
+forcing written obligation. This checkpoint is therefore not a feature
+checkpoint: it is the closure gate that verifies the committed
+0E.1–0E.6 implementation is actually complete, secure, regression-safe,
+contract-consistent, and ready for integration into `main` — proven
+against **freshly provisioned, fully isolated infrastructure**
+(a dedicated `docs0e7` PostgreSQL/Redis/MinIO stack, not the shared
+`school-os` dev instance), not merely re-asserted from memory.
+
+### Final as-built architecture (reconfirmed)
+
+- **Persistence**: one table, `documents` (School-owned, UUIDv7
+  identity).
+- **Owner model**: exclusive arc — `employee_id`/`student_id`/
+  `guardian_id`, all nullable, each with its own composite FK to
+  `(id, school_id)` on its owning table; a database CHECK constraint
+  enforces exactly one is set.
+- **Production owner activation**: Employee — **YES** (write, read,
+  list, HTTP). Student — **NO**. Guardian — **NO**. This is a scope
+  decision, not a defect: the schema supports all three owner types
+  structurally (so a future owner-type activation is additive, never a
+  migration), but authorization/API activation is a separate,
+  deliberate decision per owner type, made once per type, not implied
+  by schema support existing.
+- **Classification**: canonical four-tier vocabulary (`public`/
+  `internal`/`sensitive`/`highly_sensitive`), no database default —
+  every insert states its real classification explicitly. `public`
+  is a classification label, not an ACL — every object is written to a
+  private bucket regardless of tier; there is no code path that ever
+  makes an object publicly reachable.
+- **Lifecycle**: `active`/`archived` only, database CHECK-enforced, no
+  hard delete, no physical purge — archiving is a status transition;
+  metadata and object both remain, and an archived Document's
+  authorized reads remain exactly as available as before archiving.
+- **Employee Document reconciliation (ADR 0029)**: `employee_documents`
+  (HR-specific metadata/history) and `documents` (generic real
+  file/object storage) remain two permanently separate tables — no
+  migration, no shared FK, no dual-read/dual-write. `EmployeeDocumentService`
+  performs no physical object-storage writes (structurally enforced,
+  see "Employee Document independence" below); any future real Employee
+  file-upload capability must be built on `DocumentService`'s Employee
+  owner arc.
+
+### Isolated closure infrastructure
+
+All 0E.7 validation ran against a dedicated, disposable Docker Compose
+project — `docs0e7` — never the shared `school-os` dev stack 0E.6's own
+closure review flagged as a process-coupling risk:
+
+- `docker compose -p docs0e7 -f docker-compose.yml -f <local port-remap override>`
+  brought up isolated `postgres`/`redis`/`minio` containers on their own
+  Docker network (`docs0e7_default`) and named volumes
+  (`docs0e7_postgres_data`/`docs0e7_redis_data`/`docs0e7_minio_data`) —
+  distinct from every `school-os_*`-prefixed shared resource, so no
+  shared container, volume, or data was ever touched. The only override
+  applied was host-port remapping (`15432`/`16380`/`19000`/`19001`/`18000`),
+  needed solely because the shared stack already occupies the standard
+  ports on this host — service-to-service traffic inside the isolated
+  network (`postgres`/`redis`/`minio`/`platform` by Compose service
+  name) never used those host ports at all.
+- **Required test bucket provisioning is explicit, not assumed**: the
+  isolated `docs0e7` MinIO starts with zero buckets. `school-os-local`
+  (the bucket `apps/platform/config/filesystems.php`'s `s3` disk
+  already declares) was created via `mc mb local/school-os-local`
+  against the isolated instance before any Documents test ran — the
+  same finding 0E.6 recorded (the *shared* instance was separately
+  missing this bucket) is not repeated here by relying on a
+  pre-existing bucket; 0E.7's harness provisions its own.
+- The isolated `postgres`/`school_os_test` database was populated via
+  the exact canonical command CLAUDE.md/`docs/modules/DOCUMENTS.md`
+  already mandate — `php artisan platform:test-db-reset --force` — run
+  with every required credential explicitly passed, never inferred.
+
+### Test-environment precedence, resolved explicitly
+
+0E.6 found that `docker compose run`'s `env_file: ./apps/platform/.env`
+injects development values (`QUEUE_CONNECTION=redis`, `MAIL_MAILER=log`)
+as real container environment variables *before* PHPUnit starts, and
+PHPUnit's own `<env>` overrides in `phpunit.xml` are silently skipped
+once those variables already exist in the process environment (the
+same class of issue CLAUDE.md rule 52 documents for `DB_DATABASE`).
+0E.7 does not patch this shared harness behavior (out of scope per this
+checkpoint's own closure-only mandate) — every closure test invocation
+instead passed the correct values explicitly via `-e`, and each
+resolved value was verified from inside the running container before
+trusting any test result:
+
+```
+APP_ENV=testing
+QUEUE_CONNECTION=sync
+MAIL_MAILER=array
+DB_HOST=postgres            (docs0e7 isolated instance)
+DB_DATABASE=school_os_test  (docs0e7 isolated instance)
+AWS_ENDPOINT=http://minio:9000  (docs0e7 isolated instance)
+AWS_BUCKET=school-os-local
+```
+
+Verified via `php artisan tinker` reading back `app()->environment()`/
+`config('queue.default')`/`config('mail.default')`/
+`config('database.connections.pgsql.host')`/
+`config('database.connections.pgsql.database')`/
+`config('filesystems.disks.s3.endpoint')`/`config('filesystems.disks.s3.bucket')`
+— all seven matched exactly. This is recorded as a **shared
+test-harness process finding** (a fast-follow for the docker/composer
+invocation convention itself), not a Documents application defect.
+
+### Clean install
+
+On the freshly created, empty isolated PostgreSQL instance:
+
+- **105** total repository migrations ran cleanly, in order, with zero
+  errors.
+- Exactly **1** Documents-specific migration exists:
+  `2026_08_29_090000_create_documents_table.php` (0E.1). No 0E.2–0E.6
+  checkpoint added, altered, or touched a migration — confirmed by
+  listing every migration file newer than the 0E.1 migration (none
+  exist).
+- `employee_documents` (`2026_08_23_101300_create_employee_documents_table.php`,
+  Phase 8A.7) is a separate, independent migration — confirmed
+  unrelated to and untouched by any Documents checkpoint.
+
+### `documents` table — schema closure verification (PostgreSQL catalog, not model definitions)
+
+`\d documents` against the isolated instance confirms, byte-for-byte
+against the committed migration: `id uuid`, `school_id uuid not null`,
+`employee_id`/`student_id`/`guardian_id uuid` (all nullable),
+`classification_tier`/`storage_disk`/`storage_path`/`original_filename`/
+`mime_type varchar not null`, `size_bytes bigint not null`,
+`uploaded_by_user_id uuid` (nullable), `uploaded_at timestamp not null`,
+`status varchar not null default 'active'`, `created_at`/`updated_at`.
+Three CHECK constraints present exactly as committed
+(`documents_classification_tier_check`, `documents_exactly_one_owner_check`,
+`documents_status_check`); five foreign keys present exactly as
+committed (plain `school_id` FK, three composite `(owner_id, school_id)`
+FKs, one `uploaded_by_user_id` FK with `ON DELETE SET NULL`).
+
+### RLS — verified via `pg_class`, not inferred
+
+```sql
+SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class
+WHERE relname IN ('documents','employee_documents');
+
+      relname       | relrowsecurity | relforcerowsecurity
+--------------------+----------------+---------------------
+ employee_documents | t              | t
+ documents          | t              | t
+```
+
+Both flags are `true` for `documents` — RLS is enabled **and forced**
+(force-RLS means even the table owner cannot bypass the policy without
+`BYPASSRLS`). The one active policy
+(`tenant_isolation_documents`) matches `school_id` against
+`current_setting('app.current_school_id')` on both `USING` and
+`WITH CHECK`.
+
+Raw-SQL, role-level proof (connecting as `school_os_app`, the real
+runtime role — confirmed `rolbypassrls = f`, `rolsuper = f`, unlike the
+`school_os` migration/admin role which is `t`/`t` for both, per ADR
+0021 — no application-layer authorization substitutes for this):
+
+- No `app.current_school_id` set → `SELECT count(*) FROM documents` →
+  **0 rows** (fail-closed, not "all rows").
+- Context = School A → sees exactly School A's rows; context = School B
+  → **zero** of School A's rows are visible, including via
+  `GROUP BY school_id` (no leaked count either).
+- A raw `UPDATE documents SET status = 'archived' WHERE school_id = <School A>`
+  issued while context = School B → **`UPDATE 0`** — RLS blocks the
+  write outright, not just the read; this is not something HTTP/service-
+  layer authorization could substitute for, since this bypassed the
+  application entirely.
+
+### Owner integrity — verified via direct DB insert, all nine combinations
+
+| Owner combination | Result |
+|---|---|
+| Employee only | **Allowed** |
+| Student only | **Allowed** (structural — no Student API activation, see above) |
+| Guardian only | **Allowed** (structural) |
+| No owner | **Rejected** — `documents_exactly_one_owner_check` |
+| Employee + Student | **Rejected** — same CHECK |
+| Employee + Guardian | **Rejected** — same CHECK |
+| Student + Guardian | **Rejected** — same CHECK |
+| Employee + Student + Guardian | **Rejected** — same CHECK |
+| Employee owner from School A, `school_id` = School B | **Rejected** — `documents_employee_id_school_id_foreign` |
+
+The same cross-School composite-FK rejection was independently verified
+for the Student and Guardian owner arcs
+(`documents_student_id_school_id_foreign`/
+`documents_guardian_id_school_id_foreign`) — a foreign-School owner
+reference is rejected by the database for all three owner types, not
+only the one with production API activation.
+
+### Schema rollback / reapply
+
+On the isolated instance: `migrate:rollback --path=<0E.1 migration> --database=pgsql_admin`
+dropped `documents` cleanly (verified: `employees`/`students`/
+`guardians`/`schools`/`users` and every other table remained untouched
+— only the targeted migration's `down()` executed); `migrate --database=pgsql_admin`
+reapplied it. Post-reapply catalog inspection confirmed RLS
+(enabled+forced), all three CHECK constraints, and all five foreign
+keys are byte-for-byte identical to the pre-rollback state. `employee_documents`
+was never part of this rollback/reapply cycle (independent migration,
+confirmed untouched throughout).
+
+### Storage — real MinIO clean-room test
+
+The isolated `docs0e7` MinIO instance started with **zero** buckets and
+**zero** objects. Against that genuinely empty backing store, with
+`DOCUMENTS_DISK=s3` (so uploads exercise the real S3-compatible driver,
+not `local`), a real running `artisan serve` process, and real Sanctum
+bearer tokens:
+
+- Upload → `201`, object landed at
+  `schools/{school_id}/documents/employee/{employee_id}/{server-generated-uuid}.pdf`
+  — tenant-namespaced, server-generated key; `original_filename` never
+  appears in the object key.
+- Two uploads with the **identical** `original_filename` (`dup.pdf`)
+  produced two distinct Document ids and two distinct objects in the
+  bucket (confirmed via `mc ls --recursive`, object count incremented
+  by exactly 2) — no overwrite.
+- List → `200`, metadata → `200`, content → `200` with the downloaded
+  bytes verified **byte-for-byte identical** to the uploaded file via
+  `diff`.
+- Archive → `204`; archived Document's metadata and content remained
+  readable afterward per established policy.
+- `mc anonymous get local/school-os-local` → `private` — the bucket
+  carries no public ACL; a `public`-classification Document is a
+  classification label enforced by application authorization, never a
+  storage-level public grant.
+- No signed URL was generated or returned at any point; no endpoint
+  response or header ever exposed a bucket name, disk name, or object
+  key.
+
+This closure-critical resulted required explicitly setting
+`DOCUMENTS_DISK=s3` (the module's own default is `local`,
+`config/documents.php`, intentionally independent of
+`filesystems.default` — see 0E.2) — the shared dev `.env` does not set
+this, so exercising the real S3-compatible path is an explicit,
+deliberate test action, not the default local-dev behavior. This
+`.env` change was made and reverted within the same closure session,
+gitignored, and never committed.
+
+### Write / read / list authorization — reconfirmed against real HTTP
+
+Exact capability strings, reconfirmed from source and from live
+requests: ordinary create/archive/read/list — `hr.employees.documents.manage`/
+`.view`; Highly Sensitive — `hr.employees.sensitive.manage`/`.view`. No
+generic `documents.manage`/`documents.view` capability exists anywhere
+in this codebase. Live-request evidence: an actor holding only
+`hr.employees.documents.{view,manage}` received `403` on the
+sensitive-list endpoint and cannot read a Highly Sensitive Document's
+metadata (proven at unit/feature-test level, unchanged this
+checkpoint); an actor holding neither capability received `403` on a
+same-School, correctly-scoped, existing Document id; an unauthenticated
+request received `401`; a cross-School Document id received `404`,
+identical in shape to a nonexistent id.
+
+### List privacy — reconfirmed at both layers
+
+The 20-ordinary/30-Highly-Sensitive fixture (0E.4's own hard privacy
+gate, re-verified this checkpoint at both the Application-service test
+layer and the HTTP transport test layer, both passing in the isolated
+run): the ordinary listing's `total` is **20**, `per_page=10` yields
+exactly **2** real pages of data plus one correctly-empty third page,
+and the literal string `highly_sensitive` never appears in any ordinary
+list response body at any page.
+
+### Audit, cache, rate limiting — reconfirmed
+
+Exact events unchanged: `document.created`, `document.archived`,
+`document.sensitive_list_viewed`, `document.sensitive_metadata_viewed`,
+`document.sensitive_content_accessed` — all on `AuditRecorder`/
+`SchoolAuditEvent`, no second audit table, no controller-written event.
+`Cache-Control: private, no-store`-equivalent directives (`no-store,
+private` / `no-cache, private`, header-order-only difference, same
+semantic directives) confirmed present on live 200/403/404/429
+responses during the real-HTTP smoke run. All four named rate limiters
+(`documents-reads` 120/min, `documents-sensitive-reads` 20/min,
+`documents-content` 20/min, `documents-writes` 30/min) confirmed live:
+`documents-content` was driven past its limit against the real running
+server, producing a `429` with the standard error envelope, `Retry-After`,
+`X-RateLimit-Limit`/`X-RateLimit-Remaining`/`X-RateLimit-Reset` all
+present. `AcademicStructureRateLimitingTest`'s shared limiter allow-list
+still passes unchanged.
+
+### Streaming
+
+Reconfirmed structurally (`DocumentControllerStructuralTest`, unchanged)
+and live: content responses stream (`streamDownload`/`fpassthru`, no
+`Storage::get()`/`file_get_contents()`), `Content-Disposition` carried
+no injection risk in the live smoke run, no storage path/disk/key ever
+appeared in a header, Range/206 remains unsupported, no signed URL
+exists. The mid-stream transport limitation documented in 0E.5 remains
+accurately described — this checkpoint did not change or need to
+change that documentation, since nothing about the streaming
+implementation changed.
+
+### OpenAPI / generated types
+
+Re-validated, unchanged since 0E.5: YAML parses (65 total paths,
+6 Documents-related path keys — 5 generic Documents + the separate
+pre-existing HR `sensitive-documents` path — confirmed by direct
+parse), 5 generic Documents path items covering 6 operations, `Document`
+schema and `DocumentId` parameter present, multipart upload and binary
+content response documented. `npm run generate` produces **zero
+diff** against the committed `school-os-api.ts`. `packages/shared-types`
+`type-check` and `apps/platform` `vue-tsc --noEmit` both pass with no
+output (no errors).
+
+### Performance
+
+No query, index, or listing-path code changed since 0E.4's own
+`EXPLAIN ANALYZE` evidence (documented there: `documents_employee_id_index`,
+sub-millisecond at ~6,063-row representative scale, no N+1 per the
+dedicated differential query-count test). No new evidence from 0E.5/
+0E.6/0E.7 suggests regression, so no new index was added and no new
+`EXPLAIN` run was needed — adding one without a regression signal would
+itself be exactly the speculative-change pattern CLAUDE.md rule 2
+forbids. Listing performs zero storage I/O, reconfirmed structurally
+this checkpoint (unchanged from 0E.4).
+
+### Concurrency / idempotency
+
+Same-filename uploads produce distinct UUIDs/object keys (reconfirmed
+live against real MinIO this checkpoint, not merely by unit test).
+Archive is a single, deterministic status transition with no
+retry-sensitive multi-step state. **Honest coverage limitation,
+carried forward unchanged**: no genuine multi-process/multi-worker
+concurrent-upload or concurrent-archive test exists for Documents (the
+same limitation 0E.2's docblocks already note for the general pattern)
+— this is not fabricated as tested; it is recorded as an accepted,
+documented gap, consistent with how this checkpoint treats every other
+absence of evidence.
+
+### Employee Document independence — enforced, both directions, reconfirmed
+
+`DocumentEmployeeDocumentIndependenceTest` (`DocumentService`/
+`DocumentReadService`/`DocumentListingService`/`DocumentController`
+never reference `employee_documents`; `employee_documents` carries no
+`document_id` FK) and `Tests\Feature\HR\EmployeeDocumentTest::employee_documents_remains_its_own_table_independent_of_the_shared_documents_module`
+(`EmployeeDocumentService` never references `documents` or `Storage::`)
+both pass in the isolated environment. ADR 0029 remains enforced by
+tests, not only by prose.
+
+### Final Documents suite / regression (isolated `docs0e7` environment)
+
+| Suite | Result |
+|---|---|
+| Documents suite (`tests/Feature/Documents` + `DocumentRawIsolationTest`) | **191 tests / 830 assertions / 0 failures** |
+| `EmployeeDocumentTest` + `HrEmployeeSensitiveDocumentApiTest` + `HrSensitiveDocumentReadServiceTest` + `AcademicStructureRateLimitingTest` (shared-surface regression) | **40 tests / 155 assertions / 0 failures** |
+| Pint | **PASS — 957 files, 0 style issues** |
+| PHPStan/Larastan | **PASS — 499 files, 0 errors** |
+| Full repository regression | **2336 tests / 7374 assertions / 0 failures** (matches the committed 0E.6 baseline exactly) |
+| OpenAPI generation drift | **NONE** |
+| `shared-types`/`vue-tsc` typecheck | **PASS** |
+
+Every result above was produced against the isolated `docs0e7`
+environment with explicitly-verified test environment values — none
+against the shared `school-os` instance.
+
+### Security review (0E.7)
+
+Full checklist reviewed against committed code, the isolated-environment
+test evidence above, and the real-HTTP smoke run; no item below was
+accepted on documentation alone where a live/DB-level check was
+feasible this checkpoint:
+
+| Risk | Status |
+|---|---|
+| Cross-School RLS failure | Verified closed — raw-SQL proof above |
+| Owner composite-FK bypass (any of the three arcs) | Verified closed — all three arcs individually tested |
+| Exactly-one-owner bypass | Verified closed — all 7 invalid combinations tested |
+| Unsupported (Student/Guardian) owner activation bypass | Verified closed — no route/capability exists; `DocumentOwnerTypeNotSupportedException` non-enumerating |
+| Generic capability bypass (`documents.manage`/`.view`) | Verified closed — no such capability exists in the codebase |
+| Highly Sensitive metadata/list/pagination leak | Verified closed — 20/30 fixture, both layers |
+| Caller `school_id`/storage key/disk/path injection | Verified closed — upload contract accepts only `file`/`classification_tier` |
+| MIME spoof / path traversal / file-size abuse | Verified closed — existing suite, re-run in isolation |
+| Same-filename overwrite | Verified closed — live MinIO proof, distinct objects |
+| Unauthorized object write before authorization | Verified closed — capability check precedes storage call (0E.2, unchanged) |
+| Object-success + DB-failure orphan | **Open — see P3 below** |
+| Raw orphan addressability via any API | Verified closed — not listable/readable/countable |
+| Storage path in DTO/API/audit/error | Verified closed — `DocumentMetadata` shape, live response inspection |
+| `public` classification interpreted as public ACL | Verified closed — bucket confirmed `private` via `mc anonymous get` |
+| Signed/public URL accidentally present | Verified closed — none generated, none in response |
+| Bucket enumeration in read/list services | Verified closed — no such call exists |
+| Raw Eloquent serialization | Verified closed — `DocumentMetadata::toArray()` only |
+| Archive hard delete / classification weakening | Verified closed — status-only transition, live-tested |
+| Cross-School direct UUID IDOR | Verified closed — live `404` |
+| Malformed UUID → raw SQL 500 | Verified closed — live `404` on both Employee and Document routes |
+| Rate-limit School bleed | Verified closed (existing test coverage, School+actor keying unchanged) |
+| Cacheable sensitive data | Verified closed — private/no-store directives present live on 200/403/404/429 |
+| Unsafe `Content-Disposition` | Verified closed — Symfony `HeaderUtils`, live-tested |
+| Whole-file buffering | Verified closed — structural test, unchanged |
+| Duplicate audit | Verified closed — existing suite, unchanged |
+| `EmployeeDocument` dual read/write | Verified closed — ADR 0029, both-direction tests |
+| `EmployeeDocument` FK drift | Verified closed — `document_id` column absence re-tested |
+| Student/Guardian accidental HTTP exposure | Verified closed — `route:list` shows exactly 6 Documents operations, no Student/Guardian path |
+| OpenAPI/runtime drift | Verified closed — zero generated diff |
+
+**P0: 0. P1: 0. P2: 0. P3: 1 (accepted, documented residual). P4: 0.**
+
+### P3 — final classification (carried, not closed)
+
+The 0E.2 compensation-cleanup residual: object write succeeds, then
+the database/audit transaction fails, then the compensating object
+delete *also* fails (a genuine double failure — disk/network/provider
+issue on the cleanup attempt itself). Result: a real object exists in
+private storage with **no** corresponding `documents` row.
+
+- The application cannot address this object: no code path anywhere in
+  `DocumentService`/`DocumentReadService`/`DocumentListingService`/the
+  HTTP layer looks up a Document by anything other than a `documents`
+  row — an object with no row is invisible to every one of them by
+  construction, not by a check that could be bypassed.
+- Private storage bounds exposure: the object sits in the same
+  tenant-namespaced, non-public bucket every other object uses — it is
+  not reachable by a guessable/public URL.
+- The retention/privacy/operational risk is real and remains open: the
+  object consumes storage indefinitely, contains whatever bytes were
+  actually uploaded (potentially Highly Sensitive), and has no
+  metadata-driven deletion process — this is a genuine, if narrow,
+  concern for a product handling children's records.
+- Cleanup remains deferred, deliberately: any reaper/purge job needs a
+  retention policy to run against (how long before an unreferenced
+  object is safe to delete? does a legal hold ever apply?), and
+  `docs/security/DATA-CLASSIFICATION.md` explicitly flags retention as
+  **[LEGAL REVIEW REQUIRED], not yet decided**. Building a cleanup
+  mechanism now would mean fabricating the retention policy this
+  repository has explicitly declined to invent without that review.
+
+This is neither "no impact" nor "resolved." It is an accepted,
+narrow, documented residual, unchanged in severity (**P3 — Low**)
+since 0E.2, re-evaluated (not merely re-asserted) at every subsequent
+checkpoint including this one.
+
+### Deferred / non-blocking future items (unchanged)
+
+Student owner activation, Guardian owner activation, signed URLs,
+Range/206, global/filename search, UI, retention policy **[LEGAL
+REVIEW REQUIRED]**, malware scanning, checksum/integrity, orphan
+cleanup/reaper, invoice owner support (blocked on Finance/Phase 0G
+existing at all), storage quota. None of these prevent Documents
+infrastructure closure — they were classified Class D/E in 0E.6's
+remaining-obligations matrix, and 0E.7 found no new ADR/security/legal
+evidence that changes that classification for any of them. They remain
+explicitly deferred, not implemented, and not scheduled by this
+checkpoint.
+
+### Documents status: CLOSED
+
+The generic Documents infrastructure (schema, storage integration,
+authorized read/content access, owner-scoped listing, HTTP/API
+transport, and the ADR 0028/0029 reconciliation decision) is complete,
+tested, and verified against isolated infrastructure end-to-end.
+**Closure explicitly means**: the committed Employee-owner-activated
+Documents module meets every ADR 0012 mandatory requirement this
+checkpoint could verify, with zero unresolved P0/P1/P2 findings and one
+accepted, unchanged P3 residual. It does **not** mean every
+schema-supported owner type is activated, or that every possible future
+Documents feature has been built — those remain explicitly deferred
+(above), and are not prerequisites to this closure.
