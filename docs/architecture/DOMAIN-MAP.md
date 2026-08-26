@@ -79,7 +79,7 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 
 | Module | Owns | Depends on | Notes |
 |---|---|---|---|
-| **Finance** | Core ledger, chart of accounts, financial-correctness primitives (`docs/architecture/ARCHITECTURE.md` §10) | Schools, Identity & Access | Foundational for Fees and Payroll; itself has no dependency on either. **In progress (Phase 0G.0)**: architecture/domain contract settled — true double-entry ledger (ADR 0030, `docs/modules/FINANCE.md`); no schema/code implemented yet. |
+| **Finance** | Core ledger, chart of accounts, financial-correctness primitives (`docs/architecture/ARCHITECTURE.md` §10) | Schools, Identity & Access | Foundational for Fees and Payroll; itself has no dependency on either. **In progress (Phase 0G.1)**: true double-entry ledger (ADR 0030, `docs/modules/FINANCE.md`) — the persistence kernel (`ledger_accounts`/`journal_entries`/`journal_lines`, RLS-protected, no float) exists; no posting service, authorization, receivables, payments, API, or UI yet. |
 | **Fees** | Fee structures, invoices, dues | Students/SIS, Academic Structure, Finance | |
 | **Payments** | Payment records, gateway reconciliation (ADR 0018) | Fees, Finance | Owns the inbound-webhook idempotency requirement from ADR 0018. |
 | **Academics** | Curriculum delivery, lesson planning, syllabus tracking | Academic Structure, Students/SIS, HR | |

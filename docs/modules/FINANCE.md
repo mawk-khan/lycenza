@@ -15,7 +15,7 @@ it.
 
 ```
 0G.0  Finance Architecture & Module Plan          (this document + ADR 0030)               [implemented]
-0G.1  Ledger Schema Foundation                    (ledger_accounts, journal_entries, journal_lines)   [not started]
+0G.1  Ledger Schema Foundation                    (ledger_accounts, journal_entries, journal_lines)   [implemented]
 0G.2  Posting & Reversal Application Services      (LedgerService, balance/derivation reads)           [not started]
 0G.3  Finance Authorization & Administrative Read Model   (finance.* capabilities, allow/deny tests)   [not started]
 0G.4  Fees / Receivables Foundation                (charges, invoices — post through the ledger)       [not started]
@@ -817,9 +817,626 @@ repository debt this checkpoint does not touch (see the Phase 0G.0
 implementation report for the full list; not repeated here as Finance
 scope).
 
+## 0G.1 as-built (Ledger Schema Foundation)
+
+Everything above this section is the 0G.0 architecture/domain contract,
+written before any code existed. This section records what 0G.1
+actually built against it — a persistence kernel only (no Application
+posting service, no HTTP, no capabilities, no audit events; those
+remain 0G.2+). No implementation claim below exists anywhere above
+this section; "Ledger structure (0G.1 design target)" above is left
+exactly as 0G.0 wrote it, as the historical target this section reports
+against, not silently rewritten to match the final schema.
+
+### Tables and migrations
+
+Four migrations,
+`apps/platform/database/migrations/2026_08_31_090000..090300_*.php`
+(chosen after inspecting `database/migrations` and the concurrently
+active `feature/phase-1d-admissions-foundation` branch's migrations,
+both dated no later than `2026_08_30`; no filename/table-name
+collision). All four were corrected directly (not superseded by new
+"fix" migrations) during the 0G.1 closure review, while still
+uncommitted — see "Posted line-set immutability" and "Currency scope"
+below for what changed and why:
+
+- `ledger_accounts` — `id` (uuid pk), `school_id`, `code`, `name`,
+  `type`, `currency` (char(3)), `is_system` (bool, default false),
+  `status` (default `active`), `created_at`/`updated_at`.
+- `journal_entries` — `id`, `school_id`, `currency` (char(3)),
+  `description`, `posted_at` (default now()),
+  `reversal_of_journal_entry_id` (nullable), `created_at` only (no
+  `updated_at` — rule 33), `posting_txid` (`xid8`, database-computed —
+  see "Posted line-set immutability" below).
+- `journal_lines` — `id`, `school_id`, `journal_entry_id`,
+  `ledger_account_id`, `currency` (char(3)), `debit_amount`
+  `NUMERIC(14,2)` nullable, `credit_amount` `NUMERIC(14,2)` nullable,
+  `created_at` only.
+- The fourth migration,
+  `2026_08_31_090300_add_journal_entry_posting_invariants.php`
+  (renamed from `add_balanced_journal_entry_enforcement` during the
+  closure review, since it now covers three invariants, not one:
+  balance enforcement, posted line-set immutability, and — added by
+  the posting-txid hardening pass — the unconditional `posting_txid`
+  assignment trigger), adds all three functions/triggers — kept
+  separate from the table-creation migrations so the table structure
+  and the cross-table-invariant enforcement are each a single,
+  independently reviewable unit.
+
+Verified directly against PostgreSQL's catalog (`\d <table>` via
+`pgsql_admin`), not just by reading the migration source — see
+"Postgres catalog verification" below.
+
+### Money precision/scale (resolved, not left arbitrary)
+
+`NUMERIC(14,2)` for `journal_lines.debit_amount`/`credit_amount` —
+the only monetary columns 0G.1 creates (`ledger_accounts` carries no
+amount column). Scale 2 comes directly from FINANCE.md's own "Money"
+section ("today: INR only, 2 decimal places / paise"). Precision 14
+(12 integer digits + 2 fractional, i.e. up to
+999,999,999,999.99) was chosen with deliberate headroom over any
+single posting or aggregate this repository's domain will plausibly
+produce (a whole School's total annual fee revenue, or a Payroll run's
+total payable, in INR), while still being an explicit, bounded limit —
+not an unconstrained `NUMERIC`, and not a number picked merely because
+it's common (`NUMERIC(10,2)`/`NUMERIC(15,2)` were both explicitly
+rejected as arbitrary — see the `journal_lines` migration's docblock).
+
+### Currency scope: INR-only, database-enforced (closure-review correction)
+
+The first draft of this section claimed "single-currency enforcement:
+composite FKs" and "School currency source: NONE" — accurate about the
+FK mechanism but imprecise about SCOPE: composite FKs alone only prove
+one journal transaction can't mix currencies across its own lines; they
+do NOT prove a School couldn't have, say, one INR account and a
+separate USD account both under the same `school_id`. The 0G.1 closure
+review required re-reading the binding text precisely rather than
+inferring. FINANCE.md's own words are unambiguous and stronger than
+mere per-School single-currency: the "Money" section says **"today:
+INR only"**, and the "Currency" section says **"even though INR is the
+only currency in scope today"** — Phase 0G is INR-only, globally, for
+every School, not merely single-currency-per-School (which would still
+technically permit School A = INR and School B = USD). This is now
+enforced directly, not just implied:
+
+- `ledger_accounts_currency_inr_only_check` — `CHECK (currency =
+  'INR')`.
+- `journal_entries_currency_inr_only_check` — `CHECK (currency =
+  'INR')`.
+- `journal_lines.currency` needs no separate CHECK — the composite
+  foreign keys already restrict it to values that exist on an
+  already-INR-only-checked parent row (see "Tenancy" below).
+
+The explicit `currency` column is retained on every table (per
+FINANCE.md's own "never inferred... hardcoded assumption" rule) — the
+CHECK bounds its allowed VALUE for Phase 0G, it does not remove the
+column. No School-level currency source (e.g. on `schools`) exists or
+was added — none is needed while the whole system is INR-only. A
+future multi-currency checkpoint loosens these two CHECK constraints
+via its own migration + ADR (FINANCE.md's "Multi-currency: out of
+scope for Phase 0G" already names this as the intended path) — it is
+not silently widened here, and this checkpoint does not design what
+that future School-currency-source mechanism would look like.
+
+Proven directly, both by CHECK-constraint rejection AND by composite-FK
+rejection (`tests/Feature/Finance/LedgerAccountTest.php`,
+`CurrencyAndTenancyConsistencyTest.php`,
+`JournalReversalStructuralTest.php`): a non-INR `ledger_accounts` row
+is rejected even when well-formed (e.g. `USD`); a non-INR
+`journal_entries` row is rejected, including a reversal attempt; a
+`journal_lines` row whose currency doesn't match its entry, or doesn't
+match its account, is rejected. Because INR-only makes it structurally
+impossible to construct a real non-INR parent row at all, the
+line/account-currency-mismatch test proves the account-side composite
+FK the same way the line/entry-currency-mismatch test proves the
+entry-side one, rather than pairing two different-but-valid
+currencies — see those tests' own docblocks for the precise reasoning.
+
+### Account types and code uniqueness
+
+Five-category taxonomy exactly as FINANCE.md names it — `asset`,
+`liability`, `equity`, `income`, `expense` (not "revenue") — enforced
+by a database CHECK, not merely documented.
+
+`code` is unique per School, case-insensitively, and this is now
+genuinely database-enforced (closure-review correction): the first
+draft used `App\Support\NormalizesCode` (uppercases on Eloquent
+assignment) plus a plain `unique(school_id, code)` constraint — the
+same pattern `GradeLevel`/`Subject` already use elsewhere in this
+repository, and one `NormalizesCode`'s own docblock explicitly defends
+as sufficient there ("the existing plain-string unique index already
+enforces case-insensitive uniqueness for free"). That defense relies on
+"every writer normalizes", which a raw SQL insert bypassing the
+Eloquent mutator does not — proven directly: before this correction, a
+raw lowercase `'cash'` insert after `'CASH'` already existed did NOT
+collide. For a financial reference invariant, 0G.1 does not rely on
+that assumption: `ledger_accounts_school_id_code_ci_unique`, a
+PostgreSQL expression unique index on `(school_id, upper(code))`,
+replaces the plain constraint — true case-insensitive uniqueness
+enforced by the database itself, immune to any caller bypassing the
+model layer (`NormalizesCode` is kept on the model too, for consistent
+storage/display, but is no longer the uniqueness guarantee). The same
+normalized code may still be reused by a different School (proven both
+via Eloquent and via a raw cross-School insert).
+
+No automatic code generation (no `MAX(code)+1`) — 0G.1 does not
+implement account numbering, matching FINANCE.md's explicit deferral.
+
+### Tenancy: RLS, UUIDv7, composite foreign keys
+
+`App\Support\Tenancy\BelongsToSchool`/`TenantRls::enable()` on all
+three tables (RLS enabled AND forced — verified via
+`pg_class.relrowsecurity`/`relforcerowsecurity`, not just migration
+source); UUIDv7 primary keys via `App\Support\Identifiers\GeneratesUuidV7`.
+Composite same-School foreign keys everywhere a child row references a
+School-scoped parent — extended, per this document's own "strong
+pattern" suggestion, to `(id, school_id, currency)` rather than just
+`(id, school_id)`, so the SAME foreign key that proves tenant
+consistency also proves currency consistency:
+
+- `journal_lines.(journal_entry_id, school_id, currency)` →
+  `journal_entries.(id, school_id, currency)` — `ON DELETE CASCADE`
+  (an admin-only concern; the runtime role cannot delete a
+  `journal_entries` row at all — see "Append-only enforcement" below).
+- `journal_lines.(ledger_account_id, school_id, currency)` →
+  `ledger_accounts.(id, school_id, currency)` — `ON DELETE RESTRICT`
+  (an account with any postings against it can never be deleted, even
+  by an admin connection).
+- `journal_entries.(reversal_of_journal_entry_id, school_id,
+  currency)` → `journal_entries.(id, school_id, currency)`
+  (self-referential — see "Reversal relationship" below).
+
+No global/nullable School anywhere. Proven under the real
+`school_os_app` runtime role, not merely `pgsql_admin`:
+`rolsuper = false`, `rolbypassrls = false`
+(`tests/Feature/Postgres/FinanceRawIsolationTest.php`).
+
+### Append-only enforcement
+
+`TenantRls::makeAppendOnly()` — the SAME existing mechanism
+`school_audit_events` already uses (ADR 0017) — `REVOKE UPDATE, DELETE`
+from `school_os_app` on `journal_entries` and `journal_lines`.
+Verified two ways: (1) `information_schema.role_table_grants` shows
+only `INSERT`/`SELECT` for `school_os_app` on both tables; (2) a raw
+`UPDATE`/`DELETE` attempt under that role, even against the caller's
+OWN School's OWN row, fails with a real "permission denied"
+`QueryException` — not merely zero rows affected (contrast with
+`ledger_accounts`, which is ordinary mutable reference data and is
+NOT append-only — ADR 0030 only requires this for posted facts).
+`ledger_accounts` keeps ordinary Laravel `timestamps()`;
+`journal_entries`/`journal_lines` use `created_at` only
+(`const UPDATED_AT = null` on both models) — there is no legitimate
+mutation path to justify an `updated_at` column on either.
+
+### Balance enforcement mechanism
+
+A `CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED` on
+`journal_entries` (fires once per inserted HEADER row, not per line —
+this is what makes the zero-lines case detectable, since a trigger on
+`journal_lines` could never fire when zero lines exist), calling a
+`plpgsql` function that `SELECT`s `count(*)`/`sum(debit_amount)`/
+`sum(credit_amount)` from `journal_lines` for that one
+`journal_entry_id` and raises a `check_violation` if fewer than two
+lines exist or debits ≠ credits. No `SECURITY DEFINER` — the function
+runs as the invoking role (the default, `SECURITY INVOKER`), which
+already has correct RLS access to its own School's `journal_lines`
+rows once `TenantContext` has set `app.current_school_id` for the
+transaction; no elevated privilege was needed or granted.
+
+Proven directly against real PostgreSQL, under the real
+`school_os_app` role, not by inspecting migration SQL
+(`tests/Feature/Finance/JournalEntryBalanceEnforcementTest.php`,
+`tests/Feature/Postgres/FinanceRawIsolationTest.php`):
+
+| Case | Result |
+|---|---|
+| Balanced two-line entry | commits |
+| Balanced multi-line (3-line) entry | commits |
+| Unbalanced entry | rejected |
+| Header with zero lines | rejected |
+| Single-line entry | rejected |
+| Two entries, each individually unbalanced but globally balanced (100/80 and 80/100) | BOTH rejected — proves this is a per-entry check, not an accidental global-sum check |
+| Two independently balanced entries in one transaction | both commit independently |
+
+**Important dependency for 0G.2, found during this checkpoint's own
+testing (not a defect — a real constraint of the chosen SECURITY
+INVOKER design, documented here so 0G.2 doesn't rediscover it the hard
+way):** because the trigger's own internal `SELECT` against
+`journal_lines` is itself RLS-scoped, `app.current_school_id` must
+still be set to the posting School at the moment the deferred check
+actually runs (real `COMMIT`, or an explicit `SET CONSTRAINTS ALL
+IMMEDIATE`) — not merely at the moment the rows were inserted. This is
+automatically true for any real request/job (`TenantContext` stays set
+for the entire unit of work, and Laravel's `DB::transaction()` commits
+while that context is still active), so 0G.2's `LedgerService` needs no
+special handling for this as long as it does not clear `TenantContext`
+before its own transaction commits. It was NOT automatically true for
+this checkpoint's own tests, which run inside `DatabaseTransactions`
+and use `TenantContext::withSchool()` scoped narrowly around fixture
+creation — the test suite's `forceConstraintCheck()` helpers had to be
+written to re-enter `withSchool()` around the forced check itself; see
+`JournalEntryBalanceEnforcementTest`'s docblock for the full
+explanation, kept there rather than repeated in full here.
+
+### Posted line-set immutability (closure-review addition)
+
+ADR 0030 requires posted accounting facts to be immutable. The
+original 0G.1 implementation proved `journal_entries`/`journal_lines`
+UPDATE/DELETE are rejected (append-only enforcement above) but left a
+real gap: nothing stopped a LATER, separate transaction from INSERTing
+an ADDITIONAL `journal_lines` row — even a balanced debit+credit
+pair — against an entry a PRIOR transaction had already committed.
+Every existing row would stay untouched while historical financial
+truth was silently extended. Found and fixed during the 0G.1 closure
+review, before any of this was committed.
+
+Mechanism: `journal_entries.posting_txid` (`xid8`, `NOT NULL DEFAULT
+pg_current_xact_id()`) records, permanently, the exact transaction that
+inserted the header row — internal persistence metadata, never a
+Finance business attribute, never application-set. A `BEFORE INSERT`
+trigger on `journal_lines` (`finance_reject_post_commit_line_insert()`,
+deliberately IMMEDIATE, not deferred — it must distinguish "still
+inside the original posting transaction" from "a later transaction"
+for every single line insert, including the legitimate ones during
+initial posting) compares the CURRENT transaction's id
+(`pg_current_xact_id()`) against the target entry's stored
+`posting_txid`: equal means this insert is part of the same atomic
+"header + lines" transaction that created the header (allowed);
+different means a separate, later transaction is attempting to extend
+an already-posted entry (rejected). `xid8` (not the classic 32-bit
+`xid`/`txid_current()`) is used specifically because it is 64-bit and
+does not wrap around — appropriate for a financial ledger meant to
+stay correct indefinitely. No `SECURITY DEFINER` — same SECURITY
+INVOKER reasoning as the balance trigger (the function's own
+`journal_entries` SELECT only reads the same School's row the line
+already belongs to). Concurrency safety comes from ordinary MVCC
+read-committed visibility, not a lock this trigger takes itself: a
+concurrent session can't even see an entry that's still uncommitted in
+another session (the composite foreign keys already reject that on
+their own), so the trigger only ever needs to tell "my own still-open
+transaction" apart from "an entry that already committed".
+
+**`posting_txid` itself was not yet spoof-proof when this section was
+first written — hardened in a follow-up pass, see "Posting_txid is
+database-authoritative" immediately below.**
+
+Proven directly against real PostgreSQL, under the real `school_os_app`
+role (`tests/Feature/Finance/JournalEntryLineSetImmutabilityTest.php`,
+`JournalEntryLineSetImmutabilityConcurrencyTest.php`) — each scenario
+below starts from a GENUINELY COMMITTED entry (these tests disable
+`DatabaseTransactions`, like `JournalReversalConcurrencyTest`, because
+the whole point requires a real commit, not a rolled-back test
+transaction):
+
+| Case | Result |
+|---|---|
+| One additional debit line, later transaction | rejected |
+| One additional credit line, later transaction | rejected |
+| A balanced debit+credit pair, later transaction | rejected (the first of the two lines already trips the trigger) |
+| A balanced multi-line extension, later transaction | rejected |
+| Two real concurrent processes both attempting to extend the same committed entry | BOTH rejected (deterministic, not a race — neither process's transaction id can ever equal the already-recorded `posting_txid`) |
+| Initial atomic posting (header + lines, same transaction) | still succeeds, unaffected |
+
+Combined with append-only UPDATE/DELETE revocation, this is what makes
+"a posted journal entry's balanced state cannot be invalidated by any
+later raw SQL" actually true: existing rows can't be changed or
+removed, and the row SET itself can't be extended either.
+
+### Posting_txid is database-authoritative, never caller-chosen (posting-txid hardening pass)
+
+The line-set-immutability trigger above trusts `journal_entries.
+posting_txid` completely — but a plain column `DEFAULT
+pg_current_xact_id()` only applies when a caller OMITS the column
+entirely; it does NOT stop a raw INSERT from explicitly supplying an
+arbitrary `xid8` value. Before this pass, the original "database-
+computed, never application-set" claim was true for every ordinary
+caller (Eloquent never sets it) but not yet STRUCTURALLY true — a raw
+SQL insert could have written any `posting_txid` it chose, including a
+value engineered to collide with a transaction id a future insert
+might present, which would have let that future transaction extend the
+entry's line set as if it were still the original posting. Found and
+fixed in a dedicated hardening pass, before any of this was committed.
+
+Fix: `finance_set_journal_entry_posting_txid()`, an UNCONDITIONAL
+`BEFORE INSERT` trigger on `journal_entries` (added alongside the other
+two triggers in the same posting-invariants migration), assigns
+`NEW.posting_txid := pg_current_xact_id();` for every single insert,
+with no `IF NEW.posting_txid IS NULL THEN` guard — it always overwrites
+whatever the caller provided (or didn't provide). The column's own
+`DEFAULT` is RETAINED (not removed) purely as harmless, redundant
+convenience — whatever value it fills in is immediately overwritten by
+this trigger regardless, so keeping it costs nothing and removing it
+would be schema churn with no invariant benefit — but it is no longer
+what makes the column trustworthy; the trigger is the sole source of
+truth. No `SECURITY DEFINER` — this trigger only ever touches the row
+already being inserted (`NEW`), needing no cross-row access at all,
+the simplest possible case for `SECURITY INVOKER`.
+
+Proven directly against real PostgreSQL, under the real `school_os_app`
+role, via a raw SQL spoof attempt
+(`tests/Feature/Finance/JournalEntryPostingTxidHardeningTest.php`):
+
+| Case | Result |
+|---|---|
+| Raw INSERT explicitly supplying `posting_txid = '1'::xid8` | the value is silently overwritten; the row's stored `posting_txid` equals the real `pg_current_xact_id()` of the actual inserting transaction, never `'1'` |
+| A balanced entry created with a spoofed `posting_txid`, committed, then a later transaction attempts one additional debit line | rejected |
+| Same spoofed-creation entry, later transaction attempts a balanced debit+credit pair | rejected |
+
+The historical-bypass proof matters specifically: it is not enough that
+the spoof gets overwritten at INSERT time in isolation — it must also
+be true that the entry's stored (now-genuine) `posting_txid` still
+correctly blocks a later extension attempt, i.e. the attacker gains
+nothing by trying. Both tests confirm this.
+
+`posting_txid` remains pure internal PostgreSQL transaction-identity
+metadata for this whole mechanism — it is never exposed as Finance
+business terminology, never in any model's `$fillable`
+(`App\Domain\Finance\Infrastructure\JournalEntry`'s docblock states
+this explicitly), and not a concept any future Finance DTO/API
+contract should ever need to carry.
+
+### Reversal relationship
+
+Structural, per ADR 0030's "Reversal linkage direction": the reversing
+entry's `reversal_of_journal_entry_id` points at the original; the
+original is never written to again. All proven directly, all
+IMMEDIATE constraints (no `SET CONSTRAINTS` needed —
+`tests/Feature/Finance/JournalReversalStructuralTest.php`):
+
+- Same School: required (composite FK).
+- Same currency: required (the same composite FK, extended with
+  `currency`).
+- Self-reversal: rejected (`CHECK (reversal_of_journal_entry_id IS
+  NULL OR reversal_of_journal_entry_id <> id)`).
+- A second reversal of the same original: rejected (partial unique
+  index `ON journal_entries (reversal_of_journal_entry_id) WHERE
+  reversal_of_journal_entry_id IS NOT NULL`).
+- A reversal of a nonexistent original: rejected (FK violation).
+- Concurrent double reversal: proven with two REAL, separate OS
+  processes (`Symfony\Process`, mirroring
+  `AcademicYearActivationConcurrencyTest`'s established pattern —
+  `tests/Feature/Finance/JournalReversalConcurrencyTest.php` +
+  `tests/Support/reverse-journal-entry.php`) racing to reverse the
+  SAME original entry: exactly one succeeds, the other fails with a
+  real database exception (the partial unique index), and the database
+  contains exactly one reversal afterward.
+- Semantic correctness of a reversal's LINES (that they actually invert
+  the original's debits/credits) is explicitly **not** proven here —
+  there is no reversal Application service yet; 0G.2 owns that
+  behavior and its own test coverage.
+
+### Money value object
+
+`App\Support\Money\Money` (`apps/platform/app/Support/Money/Money.php`),
+implemented as committed: immutable (`final`, `readonly` properties),
+amount stored as the exact decimal string given (never reformatted,
+never routed through float), explicit ISO-4217-shaped currency.
+
+**Composer/platform-requirement precision (closure-review correction):**
+the first draft of this document said "no new dependency" without
+distinguishing a PACKAGE from a PLATFORM REQUIREMENT — imprecise.
+`composer.json`'s `require` block gained `"ext-bcmath": "*"`, which is
+genuinely a NEW entry (confirmed by `git diff` — absent before 0G.1).
+This is correctly still **not a new package dependency** (`bcmath` is
+a PHP core extension, already compiled into the platform Docker image
+per `infrastructure/docker/platform.Dockerfile`, pulling in no vendor
+code) but it IS a new, explicit **platform requirement** — Composer
+now enforces it. It is not premature: `Money::equals()`/`isZero()`/
+`isPositive()`/`isNegative()` call `bccomp()` directly, today, and
+`MoneyTest` exercises all four — this is real, currently-executed
+0G.1 code, not a reservation for hypothetical 0G.2 arithmetic.
+`composer.lock`'s `content-hash` and `platform` block were stale
+relative to this `composer.json` change (`composer validate` failed
+until corrected) — resynchronized with `composer update --lock`
+(hash/platform-metadata only; verified via `git diff` that no package
+version changed). `composer validate`: PASS.
+
+Deliberately scoped to
+representation/validation only, per this document's own "Application
+representation" boundary — no `add()`/`subtract()`/`multiply()`;
+`negated()` is the one exception, included because it is pure sign
+manipulation (no arithmetic), useful to 0G.2 when building a
+reversal's inverted lines. Real Money arithmetic is explicitly 0G.2's
+concern (see `Money`'s own docblock for the stated boundary).
+
+**A real defect was found and fixed during this checkpoint's own unit
+testing**, worth recording precisely because it's a subtle PHP
+semantics trap easy to reintroduce: the first draft typed
+`of(string $amount, string $currency)` under `declare(strict_types=1)`
+in `Money.php`, on the (incorrect) assumption that this would make a
+`float` argument raise a `TypeError`. PHP's `strict_types` is
+determined by the CALLING file's own declaration, not the declared
+function's file — a caller without `declare(strict_types=1)` (proven
+directly by `MoneyTest`, which deliberately has no such declaration)
+would have its `float` argument silently coerced to a string BEFORE
+`string $amount` ever got a chance to reject it, defeating the "no
+float input" guarantee entirely regardless of what `Money.php` itself
+declared. Fixed by typing `of()`'s parameters `mixed` and explicitly
+checking `is_string()` before any other validation — the only
+caller-independent way to guarantee this. `MoneyTest::
+float_input_is_rejected_even_from_a_caller_without_strict_types`
+exists specifically to keep this proven, not merely asserted.
+
+Unit-tested in isolation (`tests/Unit/Support/Money/MoneyTest.php`,
+34 assertions): valid/invalid decimal shapes (including scientific
+notation, leading zeros, leading `+`, whitespace, `INF`/`NAN`), float
+rejection (the case above), currency format/case validation, value
+equality across different string forms (`"1"` == `"1.0"`), sign
+predicates, `negated()`, and that JSON/string serialization preserves
+the exact decimal string.
+
+### No canonical mutable balance, no polymorphic financial subject
+
+Both explicitly checked against the live PostgreSQL catalog, not just
+asserted in prose (`information_schema.columns`,
+`FinanceRawIsolationTest`/`LedgerAccountTest`): none of the three
+tables has a `balance`/`current_balance`/`running_balance`/
+`account_balance` column; neither `journal_entries` nor `journal_lines`
+has a `subject_type`/`subject_id`/`payable_type`/`payable_id`/
+`owner_type`/`owner_id` column.
+
+### Models, factories, authoritative test selector
+
+Models: `App\Domain\Finance\Infrastructure\{LedgerAccount,JournalEntry,JournalLine}`
+— `BelongsToSchool`, `GeneratesUuidV7`, `HasFactory`; no posting/
+reversal business methods (those are 0G.2's Application-layer
+services, not model behavior). `JournalLine::debit()`/`credit()`
+return `?Money`, built from the raw (uncast, never-through-float)
+NUMERIC string column plus the row's own currency — deliberately NOT
+using Laravel's built-in `decimal:2` Eloquent cast, which internally
+routes its value through `sprintf('%.2F', ...)` (a float coercion) —
+seemingly a minor implementation choice, but exactly the class of
+mistake `ARCHITECTURE.md` §10 rule 1 exists to prevent, so called out
+explicitly here.
+
+Factories (`database/factories/{LedgerAccountFactory,JournalEntryFactory,JournalLineFactory}.php`)
+are deliberately NOT safe to call bare for `JournalEntry`/`JournalLine`
+— `JournalLineFactory`'s default nested associations resolve to three
+DIFFERENT Schools, so a bare `->create()` fails immediately (an
+IMMEDIATE, not deferred, FK violation) rather than silently producing
+a cross-School line. `Tests\Concerns\CreatesFinanceFixtures::
+postBalancedJournalEntry()` is the one intentional, safe way these
+tests build a real, valid posted entry — see both files' docblocks.
+
+Authoritative Finance test selector for future checkpoints:
+
+```
+php artisan test \
+  tests/Feature/Finance \
+  tests/Feature/Postgres/FinanceRawIsolationTest.php \
+  tests/Unit/Support/Money
+```
+
+97 tests, 129 assertions, 0 failures (includes all three real
+two-process/multi-statement proofs — reversal concurrency, post-commit
+line-set extension concurrency, and the posting-txid raw-SQL spoof
+proof). Full suite: 2540 tests / 8654 assertions / 0 failures — the
+fresh pre-code baseline (2443/8525/0, captured in an isolated
+`finance0g1-baseline` Docker stack before any 0G.1 file was written)
+plus exactly these 97 new tests, no regressions elsewhere. (Two
+intermediate counts existed briefly during this checkpoint's earlier
+passes — 84/114/2527/8639 before the closure review, then
+94/125/2537/8650 after it and before the posting-txid hardening pass
+added 3 more tests — neither reported as a separate baseline, noted
+here only so the numbers in git/session history stay self-consistent.)
+
+### Migration reversibility
+
+Proven on the isolated `finance0g1` PostgreSQL instance, re-verified
+after both the closure-review corrections and the posting-txid
+hardening pass: clean install of all four migrations in order;
+`migrate:rollback --step=4` removes all three tables, all THREE
+triggers, and all three trigger functions cleanly (confirmed via
+`\dt`/`pg_proc`/`pg_trigger` showing nothing remains); reapplying
+restores the identical schema/constraints/RLS/triggers/`posting_txid`
+column/expression index. No migration predating Finance was touched;
+the four Finance migrations themselves were corrected in place (not
+superseded by new "fix" migrations) since they remained uncommitted
+throughout every pass.
+
+### Quality gates
+
+Pint: 999 files, 0 style issues (7 issues auto-fixed across the two
+earlier passes -- import ordering/unused imports in the first pass,
+one `phpdoc_align` after the closure-review model docblock addition;
+the posting-txid hardening pass introduced none). PHPStan/Larastan
+(`--memory-limit=512M`, the repository's configured level): 0 errors,
+no new baseline suppressions, across all three passes.
+
+### What 0G.1 intentionally does not implement
+
+No Application posting/reversal service (0G.2); no `finance.*`
+capabilities/authorization (0G.3); no `charges`/`invoices`/`payments`/
+`payment_provider_events`/`refunds` (0G.4/0G.5); no HTTP/API/OpenAPI
+(0G.6); no UI (0G.7); no audit-event emission (no Application service
+exists yet to raise one); no chart-of-accounts seed data (factories
+only); no semantic proof that a reversal's lines actually invert the
+original's amounts (structural relationship only — 0G.2's concern).
+
+### Security findings (0G.1, updated after closure review and the posting-txid hardening pass)
+
+No unresolved P0/P1/P2. Three real findings surfaced across the two
+correction passes, all since resolved by schema correction (not merely
+documentation):
+
+- **P1 (resolved): posted line-set mutability.** A later transaction
+  could INSERT additional lines — including a balanced pair — against
+  an already-committed entry, silently extending historical financial
+  truth while every existing row stayed untouched. Resolved by the
+  `posting_txid`/`BEFORE INSERT` trigger mechanism ("Posted line-set
+  immutability" above); proven rejected for single-line, balanced-pair,
+  and balanced-multi-line extension attempts, including under real
+  two-process concurrency.
+- **P1 (resolved): `posting_txid` was caller-spoofable via raw SQL.**
+  The line-set-immutability fix above trusted `journal_entries.
+  posting_txid` completely, but that column's `DEFAULT
+  pg_current_xact_id()` only fills a value when a caller omits the
+  column — a raw INSERT could still explicitly supply an arbitrary
+  `xid8`, which could have let a spoofed value defeat the very
+  protection it was meant to provide. Resolved by
+  `finance_set_journal_entry_posting_txid()`, an unconditional `BEFORE
+  INSERT` trigger that overwrites `posting_txid` on every insert
+  regardless of any caller-supplied value ("Posting_txid is
+  database-authoritative" above); proven both that a raw spoof attempt
+  is overwritten AND that the spoof cannot be used to later reopen the
+  entry's line set.
+- **P2 (resolved): currency scope overclaim.** The original report
+  described "single-currency enforcement" backed only by composite
+  FKs, which genuinely prevents one transaction from mixing currencies
+  but does not prevent a School from holding several currencies across
+  separate accounts/entries. Resolved by adding
+  `ledger_accounts_currency_inr_only_check`/
+  `journal_entries_currency_inr_only_check`, matching FINANCE.md's own
+  literal "today: INR only" scope — not a design change, a database
+  enforcement of what the binding text already said.
+- **P3 (resolved): account-code case-insensitive uniqueness relied on
+  Eloquent normalization alone.** A raw SQL insert bypassing
+  `NormalizesCode` could create a duplicate account code differing only
+  in case — the same latent gap `NormalizesCode`'s own docblock
+  accepts for non-financial reference tables elsewhere in this
+  repository, but not acceptable for a Highly Sensitive financial
+  reference invariant. Resolved by the
+  `ledger_accounts_school_id_code_ci_unique` expression unique index.
+- **P4 (informational, resolved by documentation): composer.json
+  characterization.** The original report said "no dependency change"
+  without distinguishing a package from a platform requirement.
+  `ext-bcmath` is a genuine new platform-requirement entry, correctly
+  attributed and justified ("Money value object" above); `composer.lock`
+  was resynchronized (`composer validate`: PASS).
+
+Every other risk this checkpoint's security review considered remains
+either resolved by the schema/trigger/grant design (cross-School leak,
+float money, unbalanced posting, mutable posted facts, double
+reversal/self reversal, role-based authorization, caller-controlled
+`school_id`, mutable canonical balance, polymorphic financial subject)
+or correctly out of scope because the relevant surface does not exist
+yet (payment-provider idempotency, payer/financial-subject confusion,
+allocation races, invoice numbering, reporting exposure — all 0G.4/
+0G.5+ concerns, catalogued in "Core entities"/"Concurrency risks"
+above, unchanged by this checkpoint). The SECURITY INVOKER/
+TenantContext-timing dependency documented under "Balance enforcement
+mechanism" above remains a genuine, non-blocking, documentation-
+resolved dependency (the natural request/job lifecycle already
+satisfies it) — the new line-set-immutability trigger shares the same
+property and the same resolution.
+
+### Next checkpoint boundary
+
+0G.2 — Posting & Reversal Application Services: a `LedgerService` (or
+equivalent) that performs the transactional "insert balanced header +
+lines" operation this checkpoint's tests currently perform ad hoc
+inline; reversal creation that also inverts and copies the original's
+lines (proving amounts, not just structure); real Money arithmetic
+where a caller genuinely needs it (e.g. verifying a proposed set of
+lines balances before attempting to post, ahead of the database's own
+authoritative check); domain events raised through the existing
+transactional outbox (ADR 0025); `school_audit_events` entries for
+posting/reversal operations once a real Application service exists to
+raise them.
+
 ## Roadmap relationship
 
 Implements the start of `docs/roadmap/MASTER-ROADMAP.md`'s **Phase
 0G — Finance and Fees**. Phase 0G is marked **IN PROGRESS** as of this
-checkpoint (0G.0 complete; 0G.1 onward not started) — see the
+checkpoint (0G.0 and 0G.1 complete; 0G.2 onward not started) — see the
 corresponding `MASTER-ROADMAP.md` edit in this same checkpoint.

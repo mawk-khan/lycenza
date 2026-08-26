@@ -226,9 +226,20 @@ decision `ARCHITECTURE.md` §10 left open — Finance is a true
 double-entry ledger with a chart of accounts, not a subledger or a
 mutable-balance charge/payment tracker (ADR 0030). Full domain
 contract, checkpoint sequence (0G.1-0G.8), and security register:
-`docs/modules/FINANCE.md`. 0G.1 onward (ledger schema, posting
-services, authorization, receivables, payments, API, UI, closure) is
-not yet started.
+`docs/modules/FINANCE.md`.
+
+**0G.1 — Ledger Schema Foundation (implemented):** the persistence
+kernel only — `ledger_accounts`, `journal_entries`, `journal_lines`
+(RLS-protected, same-School+same-currency composite foreign keys,
+`NUMERIC(14,2)` money, no float anywhere), the deferred
+constraint-trigger enforcing "debits equal credits" per entry, the
+structural (partial-unique-index-backed) reversal relationship proven
+safe under real two-process concurrency, and the first-party
+`App\Support\Money\Money` value object. No Application posting
+service, no capabilities, no API, no UI, no audit events yet — full
+as-built detail: `docs/modules/FINANCE.md` ("0G.1 as-built"). 0G.2
+onward (posting/reversal services, authorization, receivables,
+payments, API, UI, closure) is not yet started.
 
 ## Phase 0H — Academic Operations
 
