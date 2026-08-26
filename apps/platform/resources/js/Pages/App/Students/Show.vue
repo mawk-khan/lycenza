@@ -621,5 +621,20 @@ function unlink(r: Relationship): void {
             </div>
             <p v-else class="mt-3 text-sm text-slate-500">Not linked.</p>
         </section>
+
+        <!-- Communication preferences (Phase 5D.2) -->
+        <section class="mt-8">
+            <h2 class="text-sm font-medium text-slate-500">Communication preferences</h2>
+            <div class="mt-3 rounded border border-slate-200 p-4 text-sm text-slate-600">
+                <p>
+                    <span class="font-medium">In-app:</span> managed through this Student's linked
+                    School OS account preference above, once linked -- no separate setting here.
+                </p>
+                <p class="mt-2">
+                    <span class="font-medium">Email:</span> not available -- Students have no
+                    canonical email endpoint in School OS today.
+                </p>
+            </div>
+        </section>
     </main>
 </template>

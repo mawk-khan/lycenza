@@ -19,6 +19,7 @@ use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
+use App\Http\Controllers\App\GuardianCommunicationPreferenceController;
 use App\Http\Controllers\App\GuardianController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
@@ -142,6 +143,13 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/{guardian}/account-link/search', [GuardianAccountLinkController::class, 'search'])->name('account-link.search');
         Route::post('/{guardian}/account-link', [GuardianAccountLinkController::class, 'store'])->name('account-link.store');
         Route::delete('/{guardian}/account-link', [GuardianAccountLinkController::class, 'destroy'])->name('account-link.destroy');
+
+        // Phase 5D.2 §29/§30: administrative recording of the
+        // Guardian's own domain communication preference/consent --
+        // gated by BOTH communications.manage AND guardians.manage,
+        // see the controller's docblock.
+        Route::put('/{guardian}/communication-preference', [GuardianCommunicationPreferenceController::class, 'updatePreference'])->name('communication-preference.update');
+        Route::post('/{guardian}/communication-consent', [GuardianCommunicationPreferenceController::class, 'recordConsent'])->name('communication-consent.record');
     });
 
     Route::prefix('app/contacts')->name('app.contacts.')->group(function (): void {

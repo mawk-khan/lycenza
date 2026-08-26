@@ -15,6 +15,8 @@ use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryTimingPolicy;
+use App\Domain\Communications\Infrastructure\CommunicationDomainConsentEvent;
+use App\Domain\Communications\Infrastructure\CommunicationDomainPreference;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationPreference;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
@@ -181,6 +183,27 @@ trait CreatesCommunicationFixtures
             $school,
             fn () => CommunicationConversationPolicy::factory()->create(array_merge([
                 'school_id' => $school->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createDomainPreference(School $school, array $attributes = []): CommunicationDomainPreference
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationDomainPreference::factory()->create(array_merge([
+                'school_id' => $school->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createDomainConsentEvent(School $school, User $recordedBy, array $attributes = []): CommunicationDomainConsentEvent
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationDomainConsentEvent::factory()->create(array_merge([
+                'school_id' => $school->id,
+                'recorded_by_user_id' => $recordedBy->id,
             ], $attributes)),
         );
     }
