@@ -119,4 +119,35 @@ class AdmissionApplication extends Model
     {
         return $this->status === 'converted';
     }
+
+    /**
+     * Phase 1D.2 status helpers -- plain string-status checks, matching
+     * `isConverted()` above and `Campus::isActive()`/`GradeLevel::isActive()`'s
+     * identical precedent (no PHP backed enum; `status`'s allowed
+     * values remain an application-level concern, `ADMISSIONS.md` §6A).
+     */
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
+    }
+
+    public function isSubmitted(): bool
+    {
+        return $this->status === 'submitted';
+    }
+
+    public function isAccepted(): bool
+    {
+        return $this->status === 'accepted';
+    }
+
+    public function isRejected(): bool
+    {
+        return $this->status === 'rejected';
+    }
+
+    public function isWithdrawn(): bool
+    {
+        return $this->status === 'withdrawn';
+    }
 }
