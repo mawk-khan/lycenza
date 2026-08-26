@@ -1053,6 +1053,22 @@ does not prove authenticity — verification remains an explicit,
 separate HR domain action); full `hr.*` capability enforcement
 (8A.10).
 
+**Reconciliation decision (ADR 0029, Phase 0E.6, 2026-08-26)**: the
+"real shared Documents module" referenced above now exists
+(`docs/modules/DOCUMENTS.md`, Phase 0E.1–0E.5). ADR 0029 formally
+decided `employee_documents` and the generic `documents` table remain
+two permanently separate tables — no migration, no shared FK — because
+`employee_documents` has never held real file bytes (nothing to
+migrate) and its `category`/`issued_on`/`expires_on` fields have no
+generic equivalent. The binding forward rule from that ADR:
+**any future real Employee file-upload capability must be built on
+`App\Domain\Documents\Application\DocumentService`'s Employee owner
+arc, never by adding a `Storage::` call directly into
+`EmployeeDocumentService`** — enforced by
+`Tests\Feature\HR\EmployeeDocumentTest::employee_documents_remains_its_own_table_independent_of_the_shared_documents_module`
+and its Documents-side counterpart,
+`Tests\Feature\Documents\DocumentEmployeeDocumentIndependenceTest`.
+
 ## Employee Directory (8A.8, implemented)
 
 **Read/query foundation only — no controller, route, or UI.** This

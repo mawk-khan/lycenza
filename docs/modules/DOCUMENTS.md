@@ -16,7 +16,8 @@ operationalized it.
 0E.2  Document Write Path & Storage Integration   (DocumentService, real object storage, Employee owner activated) [implemented]
 0E.3  Authorized Document Read & Content Access   (DocumentReadService, metadata + streamed content, Employee owner activated) [implemented]
 0E.4  Owner-Scoped Document Discovery & Metadata Listing   (DocumentListingService, ordinary + Highly Sensitive listing, Employee owner activated) [implemented]
-0E.5  Documents HTTP/API Transport   (DocumentController, six routes over 0E.2/0E.3/0E.4's services, Employee owner activated — this checkpoint) [implemented]
+0E.5  Documents HTTP/API Transport   (DocumentController, six routes over 0E.2/0E.3/0E.4's services, Employee owner activated) [implemented]
+0E.6  Employee Document Reconciliation Decision & Closure Review   (ADR 0029: employee_documents/documents stay permanently separate; remaining-obligations audit — this checkpoint) [implemented]
 ```
 
 Later checkpoints (write service, download authorization, HTTP/API,
@@ -1360,13 +1361,223 @@ file changed):
 - `apps/platform` `vue-tsc` type-check: **pass**
 - Real HTTP smoke (artisan serve + Sanctum + PostgreSQL + MinIO): **pass**
 
+## Employee Document Reconciliation Decision & Closure Review (0E.6, implemented)
+
+0E.5's own closing report carried exactly one item forward that wasn't
+a fresh feature gap: "the promised `employee_documents` reconciliation
+from ADR 0028" — the one item `docs/roadmap/MASTER-ROADMAP.md`'s Phase
+0E entry had named as outstanding since before 0E.1 existed. This
+checkpoint's job was to determine, with evidence rather than
+assumption, whether that reconciliation (or any other remaining
+Documents gap) was actually closure-critical before inventing new
+feature work — per ADR 0012, this document's own as-built state,
+`docs/security/DATA-CLASSIFICATION.md`, and the HR module's own written
+obligation (ADR 0028).
+
+### Remaining-obligations matrix
+
+Every item evaluated, classified per the checkpoint brief's own
+taxonomy (A: required for ADR 0012/module closure; B: required before
+production use but its own checkpoint; C: cross-domain reconciliation;
+D: optional/future enhancement; E: explicitly deferred beyond Phase 0E):
+
+| Item | Class | Evidence |
+|---|---|---|
+| `employee_documents` reconciliation | **C — selected for this checkpoint** | ADR 0028's explicit written obligation ("inherits... an obligation to reconcile... rather than silently ignoring it"); named in `MASTER-ROADMAP.md`'s Phase 0E entry since 0E.1; re-flagged at every 0E.1–0E.5 checkpoint without being reopened prematurely. |
+| Student owner activation | E | ADR 0012/0E.1 schema already supports it (composite FK exists); no capability design exists yet for Student document access — a deliberate, separate authorization-design decision, not a Documents-module gap. |
+| Guardian owner activation | E | Same reasoning as Student. |
+| Signed/presigned URLs | D | ADR 0012 explicitly permits "a signed/short-lived URL **or** an authenticated streaming endpoint" — the streaming endpoint (0E.3/0E.5) already satisfies the requirement; a signed URL would be a provider-efficiency optimization, not a closure requirement. |
+| HTTP Range/206 | D | No ADR/platform requirement; current default file-size profile makes full-stream download acceptable (checkpoint brief section 13). |
+| Global/cross-owner search | E | Introduces its own existence-disclosure/authorization-design surface (checkpoint brief section 15); no current requirement names it. |
+| UI | E | Phase 0E is cross-cutting backend infrastructure (`MASTER-ROADMAP.md`'s own Phase 0E framing); UI belongs to consuming domains. |
+| Retention / data deletion policy | E | `docs/security/DATA-CLASSIFICATION.md` explicitly flags retention as **[LEGAL REVIEW REQUIRED], not yet made** — inventing a retention/purge policy without that review would fabricate a compliance decision this document is explicit about not being authorized to make. |
+| Malware scanning | E | ADR 0011 defers virus/malware scanning as "a separate design concern layered on top of this ADR"; ADR 0012 itself never mandates it; no scanner exists anywhere in this repository. Faking a `scan_status` column without a real scanner would be dishonest (the same reasoning 8A.7's migration docblock already used to justify omitting one from `employee_documents`). |
+| Checksum/content-integrity hash | E | No ADR mandates SHA-256/ETag/content-hash verification; upload/read tests already prove exact byte round-trip, which is a different, already-satisfied guarantee from a persisted cryptographic checksum. |
+| Orphan cleanup/reaper (the 0E.2 P3) | E, re-evaluated this checkpoint | See "Current P3 treatment" below — not required for closure. |
+| Invoice owner support | E | No `invoices` table exists anywhere in the repository yet (Finance/Phase 0G unstarted) — a composite FK to a nonexistent table is impossible, not merely deferred. |
+| Storage quota | E | No ADR/platform billing policy mandates per-School storage quotas; rate limiting (0E.5) already bounds request frequency, which is explicitly not the same thing. |
+
+Only the `employee_documents` reconciliation carried a real, named,
+written obligation (Class C) rather than being an open-ended future
+enhancement — that is why it, and not a cosmetically larger feature,
+was selected as this checkpoint's scope.
+
+### The decision: ADR 0029
+
+Full reasoning, evidence table, and consequences live in
+`docs/architecture/adr/0029-employee-document-reconciliation-decision.md`.
+Summary: **`employee_documents` and `documents` remain two permanently
+separate tables — no data migration, no schema merge, no shared foreign
+key.** This is a decision, not a further deferral, because:
+
+- `employee_documents` has never held a real stored file in any Phase
+  8A checkpoint (8A.7 through 8A.16, closed) — verified structurally,
+  not assumed: no `Storage::` call has ever existed in
+  `EmployeeDocumentService`'s source. There is no live file content on
+  either side of a hypothetical migration to lose or corrupt, which is
+  exactly what removes the dual-write/cutover risk the checkpoint brief
+  warned a careless reconciliation could introduce.
+- The Employee-owner authorization boundary was already unified before
+  this checkpoint: `DocumentService`/`DocumentReadService`/
+  `DocumentListingService` all reuse HR's own
+  `hr.employees.documents.{view,manage}`/`hr.employees.sensitive.{view,manage}`
+  capability pair for Employee-owned Documents (0E.2's own
+  `employeeDocumentCapability()` docblock), rather than inventing a
+  parallel policy. The only thing genuinely undecided was whether the
+  two *tables* should merge — not whether access to them was
+  consistently authorized.
+- `employee_documents.category`/`issued_on`/`expires_on` are real,
+  load-bearing HR-specific fields with no generic equivalent — adding
+  them to the shared `documents` table would be exactly the
+  Employee-specific speculative-field pattern CLAUDE.md rule 2 forbids
+  on a table also owned by Student/Guardian.
+- `documents.classification_tier`'s canonical four-tier vocabulary and
+  `employee_documents.classification_tier`'s narrower
+  `restricted`/`highly_sensitive`-only vocabulary are deliberately
+  different (0E.1's own migration docblock already recorded why) — not
+  an accidental drift a merge should "fix."
+
+The forward-looking, enforceable consequence: **any future real
+Employee file-upload capability must be built on `DocumentService`'s
+Employee owner arc, never by adding a `Storage::` call directly into
+`EmployeeDocumentService`.** `docs/modules/HR.md`'s `employee_documents`
+section now carries this same cross-reference, so the decision is
+visible from HR's own binding reference document (ADR 0028's
+designated location for Phase 8A decisions), not only from this
+document. `docs/roadmap/MASTER-ROADMAP.md`'s Phase 0E entry no longer
+carries "the promised reconciliation" as an open item — it references
+ADR 0029 instead.
+
+### Enforcement — both directions, not just documentation
+
+A decision recorded only in prose can drift silently the next time
+either module is touched. Two structural regression tests make the
+boundary a build failure, not a design-review hope:
+
+- `Tests\Feature\HR\EmployeeDocumentTest::employee_documents_remains_its_own_table_independent_of_the_shared_documents_module`
+  (pre-existing from 8A.7, updated this checkpoint to reflect the now-
+  *decided* state rather than a *pending* one) — asserts
+  `EmployeeDocumentService`'s source never references `documents` or
+  `Storage::`.
+- `Tests\Feature\Documents\DocumentEmployeeDocumentIndependenceTest`
+  (new this checkpoint) — the other direction: asserts
+  `DocumentService`/`DocumentReadService`/`DocumentListingService`/
+  `DocumentController` never reference `employee_documents`, and that
+  `employee_documents` carries no `document_id` FK to `documents`
+  (`employee_documents_has_no_foreign_key_to_generic_documents`) — a
+  permanent assertion per ADR 0029, not a placeholder pending a later
+  merge. Only an ADR that explicitly supersedes ADR 0029 could
+  legitimately require changing this test.
+
+### Current P3 treatment — re-evaluated, not closed
+
+The 0E.2 compensation-cleanup residual (object write succeeds, DB/audit
+transaction fails, compensation delete also fails → a private orphan
+object with no `documents` metadata row) was re-evaluated against ADR
+0012/module-closure policy this checkpoint, per the brief's explicit
+instruction to check whether closure requires an orphan-cleanup
+mechanism before deciding whether to build one.
+
+**Finding: no ADR, data-classification policy, or module-closure
+convention in this repository mandates an orphan-cleanup/reaper
+mechanism before Documents can close.** The existing guarantees remain
+intact and sufficient for the risk they cover: the orphan is not
+addressable through `DocumentReadService`, not listable, not
+countable, and not exposed through any of 0E.5's six HTTP routes — it
+is invisible to every code path a caller (human or AI) can reach. What
+remains true is exactly what 0E.2 through 0E.5 already recorded: this
+is a data-retention/privacy/operational cleanup risk (an object
+consuming storage and containing whatever bytes were uploaded,
+outside any metadata-driven retention/deletion process), not an
+access-control or confidentiality risk. Building a reaper job now,
+without a retention policy to run it against (retention itself is
+**[LEGAL REVIEW REQUIRED], not yet decided** —
+`docs/security/DATA-CLASSIFICATION.md`), would mean inventing cleanup
+*policy* (how long is an orphan kept before deletion? does a legal hold
+apply?) exactly where this repository has explicitly declined to
+invent retention policy generally. The P3 is carried forward unchanged,
+not closed, and not escalated — this checkpoint did not "mark it closed
+merely because a cleanup class exists" (the brief's own explicit
+caution), because no cleanup class was built.
+
+### Closure verification performed this checkpoint
+
+No production code, schema, route, or OpenAPI contract changed this
+checkpoint (the reconciliation decision required none of them — see
+"The decision" above). Verification therefore focused on confirming
+0E.1–0E.5's invariants still hold and that the two new/updated
+structural tests pass:
+
+- Documents suite + `DocumentRawIsolationTest` (authoritative selector):
+  re-run, see "Test strategy" below for results.
+- `Tests\Feature\HR\EmployeeDocumentTest` (modified this checkpoint):
+  re-run in full.
+- Pint / PHPStan: re-run (documentation and test-only changes, but
+  verified rather than assumed clean).
+- OpenAPI/generated types: **not touched, not re-run** — no HTTP
+  contract changed.
+- Full repository regression: re-run to confirm no cross-suite
+  regression from the two test-file edits.
+
+### What 0E.6 still does not do
+
+Does not migrate, merge, or write a single row of `employee_documents`
+data. Does not add a `document_id` FK. Does not build orphan cleanup,
+retention, malware scanning, checksum/integrity, signed URLs, Range/206,
+global search, a UI, storage quotas, or Student/Guardian owner
+activation — every one of these remains exactly as deferred as before
+this checkpoint (see the remaining-obligations matrix above for why
+each is not closure-critical). This checkpoint closes exactly one
+named, written obligation (ADR 0028's reconciliation promise) via a
+decision and its enforcement, and re-verifies existing invariants — it
+does not expand Documents' feature surface.
+
+### Test strategy (0E.6 addition)
+
+Authoritative selector unchanged:
+
+```
+php artisan test tests/Feature/Documents tests/Feature/Postgres/DocumentRawIsolationTest.php
+```
+
+New file: `DocumentEmployeeDocumentIndependenceTest.php` (four
+source-grep independence assertions plus the "no `document_id` FK
+exists on `employee_documents`" schema assertion, permanent per ADR
+0029 unless a future ADR explicitly supersedes it). Modified file:
+`Tests\Feature\HR\EmployeeDocumentTest` (updated docblock/assertion
+messages to reflect the ADR 0029 decision; added the reverse
+`Storage::` absence assertion to the same pre-existing test method
+rather than duplicating a near-identical new one).
+
+### Security register (0E.6)
+
+| Risk | Severity | Resolution |
+|---|---|---|
+| Reconciliation decision silently drifting (either module starts reading the other's table without review) | P2 if unenforced | Two structural regression tests, both directions, fail the build on drift — not just a documentation claim. |
+| A `document_id` FK appearing on `employee_documents` without a deliberate ADR supersession | P3 if unenforced | `DocumentEmployeeDocumentIndependenceTest::employee_documents_has_no_foreign_key_to_generic_documents` fails if one silently appears. |
+| Fabricated compliance/retention policy invented to "solve" the orphan P3 without legal review | P1 if it had been done | Explicitly not done this checkpoint — `docs/security/DATA-CLASSIFICATION.md`'s retention **[LEGAL REVIEW REQUIRED]** flag was respected, not worked around. |
+| Fabricated malware-scan status invented to look more "complete" | P1 if it had been done | Explicitly not done — no scanner exists, so no scan-status field or claim was added anywhere. |
+| 0E.2 compensation-cleanup residual (private orphan object, no metadata row) | P3 (carried forward, re-evaluated, not closed) | No ADR/policy mandates a cleanup mechanism before closure; existing non-addressability/non-listability guarantees remain the accepted mitigation. |
+
+Checkpoint result: **P0: 0, P1: 0, P2: 0, P3: 1, P4: 0.** The single
+carried P3 is the unchanged 0E.2 residual — this checkpoint introduced
+no new P0/P1/P2, and explicitly declined to convert either
+undecided-but-out-of-scope item (retention, malware scanning) into a
+fabricated finding or a fabricated fix.
+
 ## Next checkpoint boundary
 
 Not yet decided — to be established from ADR 0012 + this document's
-own as-built state after 0E.5 is reviewed. Likely remaining
-architectural gaps (explicitly not assigned to any checkpoint yet):
-signed/temporary URLs (if ever justified beyond the internal stream),
-global/cross-owner search, retention, malware
-scanning, checksum, the `employee_documents` reconciliation, and a
-deliberate Student/Guardian capability decision for write, read, and
-listing activation.
+own as-built state after 0E.6 is reviewed. Every item in this
+checkpoint's remaining-obligations matrix above that isn't Class A
+(none currently outstanding) is either Class D (optional enhancement:
+signed URLs, Range/206) or Class E (explicitly deferred pending a
+separate decision this repository is not yet positioned to make:
+Student/Guardian owner-authorization design, retention **[LEGAL REVIEW
+REQUIRED]**, malware scanning, checksum/integrity, global search, UI,
+storage quota, invoice owner support once Finance/Phase 0G exists).
+None of these currently carries a written obligation the way the
+`employee_documents` reconciliation did — the next Documents checkpoint
+should be selected only once a concrete product/legal/security
+requirement actually names one of them, not by working down this list
+in the absence of one.
