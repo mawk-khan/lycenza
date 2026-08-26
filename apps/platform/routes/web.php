@@ -8,6 +8,7 @@ use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController
 use App\Domain\Communications\Http\Controllers\CommunicationAudienceSearchController;
 use App\Domain\Communications\Http\Controllers\CommunicationAuditController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
+use App\Domain\Communications\Http\Controllers\CommunicationConversationPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationDeliveryTimingPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
 use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
@@ -252,11 +253,24 @@ Route::middleware('auth')->group(function (): void {
             // page's Approval Workflow section -- see
             // CommunicationApprovalPolicyController's docblock.
             Route::put('/approvals', [CommunicationApprovalPolicyController::class, 'update'])->name('approvals.update');
+
+            // Phase 5D.1 §16: School-level private-conversation
+            // safeguarding policy -- no dedicated settings page yet
+            // (see the controller's docblock), same registration
+            // reasoning as 'channels'/'timing'/'approvals' above.
+            Route::get('/conversations', [CommunicationConversationPolicyController::class, 'show'])->name('conversations');
+            Route::put('/conversations', [CommunicationConversationPolicyController::class, 'update'])->name('conversations.update');
         });
 
         // Phase 5A.7 §10: registered BEFORE the '/{thread}' wildcard
         // below, same reasoning as 'announcements'/'templates' above.
         Route::get('/participants/search', [CommunicationHubController::class, 'searchParticipants'])->name('participants.search');
+
+        // Phase 5D.1 §27: the conversation composer's Guardian/Student
+        // domain-participant search -- registered BEFORE the '/{thread}'
+        // wildcard below, same reasoning as 'participants/search' above.
+        Route::get('/participants/search/guardians', [CommunicationHubController::class, 'searchGuardianParticipants'])->name('participants.search-guardians');
+        Route::get('/participants/search/students', [CommunicationHubController::class, 'searchStudentParticipants'])->name('participants.search-students');
 
         // Phase 5B.1 §25/§26: registered BEFORE the '/{thread}'
         // wildcard below, same reasoning as 'participants/search'

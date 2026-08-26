@@ -10,6 +10,7 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationApprovalPolicy;
 use App\Domain\Communications\Infrastructure\CommunicationApprovalRequest;
 use App\Domain\Communications\Infrastructure\CommunicationChannelPolicy;
+use App\Domain\Communications\Infrastructure\CommunicationConversationPolicy;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
@@ -169,6 +170,16 @@ trait CreatesCommunicationFixtures
         return app(TenantContext::class)->withSchool(
             $school,
             fn () => CommunicationChannelPolicy::factory()->create(array_merge([
+                'school_id' => $school->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createConversationPolicy(School $school, array $attributes = []): CommunicationConversationPolicy
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => CommunicationConversationPolicy::factory()->create(array_merge([
                 'school_id' => $school->id,
             ], $attributes)),
         );

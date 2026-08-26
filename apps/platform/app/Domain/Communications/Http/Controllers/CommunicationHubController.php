@@ -13,6 +13,8 @@ use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Domain\Communications\Infrastructure\CommunicationThreadParticipant;
+use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\AuthorizesCapability;
@@ -139,6 +141,81 @@ class CommunicationHubController extends Controller
         ]);
     }
 
+    /**
+     * Phase 5D.1 §19: `guardian_ids`/`student_ids` are optional Guardian/
+     * Student domain participant targets, resolved and safeguarding-
+     * authorized by CommunicationThreadService::createThread() via
+     * ConversationParticipantAuthorizationService -- this controller
+     * never resolves or authorizes them itself (root CLAUDE.md rule 3).
+     * At least one of the three participant arrays must be non-empty.
+     */
+    /**
+     * Phase 5D.1 §27 -- the compose picker's Guardian search. Gated by
+     * `communications.conversations.guardians` (NOT `communications.send`
+     * alone, root CLAUDE.md rule 24) -- a staff member who cannot start
+     * a Guardian conversation at all should not be able to search for
+     * Guardian targets either. Returns only safe identity fields
+     * (name); eligibility (account link, School policy) is re-verified
+     * authoritatively at thread-creation time regardless of what this
+     * search returns (brief §10 -- "reject before thread creation," not
+     * "hide from search").
+     */
+    public function searchGuardianParticipants(Request $request, TenantContext $context): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.conversations.guardians', $school);
+
+        $q = trim((string) $request->string('q'));
+
+        $guardians = Guardian::query()
+            ->where('school_id', $school->id)
+            ->where('status', 'active')
+            ->when($q !== '', fn ($query) => $query
+                ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ["%{$q}%"]))
+            ->orderBy('first_name')
+            ->limit(20)
+            ->get(['id', 'first_name', 'last_name']);
+
+        return response()->json([
+            'guardians' => $guardians->map(fn (Guardian $g) => [
+                'id' => $g->id,
+                'label' => trim("{$g->first_name} {$g->last_name}"),
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Phase 5D.1 §27 -- the compose picker's Student search, gated by
+     * `communications.conversations.students`. See
+     * searchGuardianParticipants() for the identical "search never
+     * pre-filters eligibility" reasoning.
+     */
+    public function searchStudentParticipants(Request $request, TenantContext $context): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.conversations.students', $school);
+
+        $q = trim((string) $request->string('q'));
+
+        $students = Student::query()
+            ->where('school_id', $school->id)
+            ->where('status', 'active')
+            ->when($q !== '', fn ($query) => $query
+                ->where(fn ($query) => $query
+                    ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ["%{$q}%"])
+                    ->orWhere('student_number', 'ilike', "%{$q}%")))
+            ->orderBy('first_name')
+            ->limit(20)
+            ->get(['id', 'first_name', 'last_name', 'student_number']);
+
+        return response()->json([
+            'students' => $students->map(fn (Student $s) => [
+                'id' => $s->id,
+                'label' => trim("{$s->first_name} {$s->last_name}")." ({$s->student_number})",
+            ])->values(),
+        ]);
+    }
+
     public function store(Request $request, TenantContext $context, CommunicationThreadService $service): RedirectResponse
     {
         $school = $context->requireSchool();
@@ -147,9 +224,21 @@ class CommunicationHubController extends Controller
         $validated = $request->validate([
             'subject' => ['nullable', 'string', 'max:255'],
             'thread_type' => ['required', 'in:direct,group'],
-            'participant_user_ids' => ['required', 'array', 'min:1'],
+            'participant_user_ids' => ['sometimes', 'array'],
             'participant_user_ids.*' => ['string'],
+            'guardian_ids' => ['sometimes', 'array'],
+            'guardian_ids.*' => ['string'],
+            'student_ids' => ['sometimes', 'array'],
+            'student_ids.*' => ['string'],
         ]);
+
+        $participantUserIds = $validated['participant_user_ids'] ?? [];
+        $guardianIds = $validated['guardian_ids'] ?? [];
+        $studentIds = $validated['student_ids'] ?? [];
+
+        if ($participantUserIds === [] && $guardianIds === [] && $studentIds === []) {
+            throw ValidationException::withMessages(['participants' => ['At least one participant is required.']]);
+        }
 
         try {
             $thread = $service->createThread(
@@ -157,10 +246,12 @@ class CommunicationHubController extends Controller
                 $context->actor(),
                 $validated['thread_type'],
                 $validated['subject'] ?? null,
-                $validated['participant_user_ids'],
+                $participantUserIds,
+                guardianIds: $guardianIds,
+                studentIds: $studentIds,
             );
         } catch (CommunicationException $e) {
-            throw ValidationException::withMessages(['participant_user_ids' => [$e->getMessage()]]);
+            throw ValidationException::withMessages(['participants' => [$e->getMessage()]]);
         }
 
         return redirect("/app/communications/{$thread->id}");
@@ -204,6 +295,10 @@ class CommunicationHubController extends Controller
                 'userId' => $p->user_id,
                 'name' => $p->user->name,
                 'active' => $p->left_at === null,
+                // Phase 5D.1 §8/§28: domain provenance only -- never a
+                // broader authorization signal, and never any
+                // Guardian/Student field beyond identity (brief §27).
+                'domainParticipantType' => $p->hasDomainProvenance() ? $p->participant_kind->value : null,
             ])->all(),
             'messages' => collect($paginated->items())->reverse()->values()->map(fn (CommunicationMessage $m) => $this->presentMessage($m))->all(),
             'messagesMeta' => [

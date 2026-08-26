@@ -2,6 +2,9 @@
 
 namespace App\Domain\Communications\Infrastructure;
 
+use App\Domain\Communications\Domain\CommunicationParticipantKind;
+use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Students\Infrastructure\Student;
 use App\Models\User;
 use App\Support\Identifiers\GeneratesUuidV7;
 use App\Support\Tenancy\BelongsToSchool;
@@ -23,6 +26,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $last_read_at
  * @property bool $muted
  * @property bool $archived
+ * @property CommunicationParticipantKind $participant_kind
+ * @property string|null $guardian_id
+ * @property string|null $student_id
  */
 class CommunicationThreadParticipant extends Model
 {
@@ -37,6 +43,7 @@ class CommunicationThreadParticipant extends Model
     protected $fillable = [
         'school_id', 'thread_id', 'user_id', 'joined_at', 'left_at',
         'last_read_at', 'muted', 'archived',
+        'participant_kind', 'guardian_id', 'student_id',
     ];
 
     protected function casts(): array
@@ -47,6 +54,7 @@ class CommunicationThreadParticipant extends Model
             'last_read_at' => 'datetime',
             'muted' => 'boolean',
             'archived' => 'boolean',
+            'participant_kind' => CommunicationParticipantKind::class,
         ];
     }
 
@@ -67,8 +75,32 @@ class CommunicationThreadParticipant extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Guardian, $this> */
+    public function guardian(): BelongsTo
+    {
+        return $this->belongsTo(Guardian::class);
+    }
+
+    /** @return BelongsTo<Student, $this> */
+    public function student(): BelongsTo
+    {
+        return $this->belongsTo(Student::class);
+    }
+
     public function isActive(): bool
     {
         return $this->left_at === null;
+    }
+
+    /**
+     * Phase 5D.1 §8/§21 -- true whenever this authenticated
+     * SchoolMembership-backed participant joined in a Guardian/Student
+     * domain capacity rather than as a plain staff/member participant.
+     * Never, by itself, a broader authorization grant (brief §21) --
+     * purely provenance for display/audit.
+     */
+    public function hasDomainProvenance(): bool
+    {
+        return $this->participant_kind !== CommunicationParticipantKind::Membership;
     }
 }
