@@ -343,21 +343,230 @@ portals, guardian-to-guardian or student-to-student chat, unrestricted
 private Student messaging, real-time WebSockets/typing indicators,
 message edit/delete, conversation email forwarding, SMS/WhatsApp/Push
 chat, provider integrations, AI moderation, automated safeguarding
-analysis, user blocking/reporting. Additionally, and specific to this
-checkpoint's own scope cut: **no Vue composer UI was wired up** for the
-new Guardian/Student participant pickers or the conversation-policy
-settings page — the backend endpoints, authorization, and safeguarding
-foundation are complete and tested, but selecting a Guardian/Student
-target when composing a Thread, and administering the School policy
-toggle, both currently require a direct API call rather than a form.
+analysis, user blocking/reporting.
 
-## 27. Next recommendation
+~~No Vue composer UI was wired up for the new Guardian/Student
+participant pickers or the conversation-policy settings page~~ —
+**resolved in Phase 5D.1b, §28 below.** The rest of this list remains
+out of scope.
 
-Wire the Guardian/Student picker into the existing Communication Hub
-compose UI and the conversation-policy toggle into the existing
-Channels settings page — this is pure frontend work against an already
-complete, tested backend, and is the natural, low-risk next increment
-before broadening scope further (Phase 5D.2 preferences/consent, or an
-account-invitation/activation checkpoint). Both of those larger
-checkpoints depend on this foundation being real and exercised through
-an actual UI first.
+---
+
+# Phase 5D.1b — Guardian / Student Conversation UI & Policy Settings Completion
+
+Wires the Phase 5D.1 backend above into the Communication Hub's actual
+Vue/Inertia UI. **No backend safeguarding rule changed** — every
+capability check, policy gate, account-link resolution, and
+transactional all-or-nothing guarantee described in §1-§25 is reused
+exactly as built; this checkpoint is presentation and read-model
+enrichment only (two search endpoints gained additional safe,
+already-authorized fields; one settings payload gained one additional
+read-only key). No new migration, no new authorization rule.
+
+## 28. Participant picker design
+
+`Pages/App/Communications/Conversations.vue`'s compose form gained a
+category selector (`Members` / `Guardians` / `Students`, `role="tablist"`)
+reusing the exact same search-then-chip UX the Member picker already
+had (Phase 5A.7) — one unified `SearchResultItem`/`SelectedParticipant`
+shape normalizes all three categories' distinct backend response
+shapes client-side, so the rest of the composer (chips, submit,
+error handling) is category-agnostic. The category tab bar itself only
+renders when the actor has at least one Guardian/Student capability
+(`showCategoryTabs`); otherwise the page is visually identical to
+before this checkpoint.
+
+## 29. Guardian UX
+
+Selecting the Guardians category hits the existing (5D.1)
+`GET /app/communications/participants/search/guardians`, now enriched
+with two additive fields:
+
+- `guardianOfNames: string[]` — the same `is_primary OR
+  is_legal_guardian` eligible-relationship names only (never an
+  unrelated child), rendered as "Guardian of {names}" under the
+  Guardian's name.
+- `accountLinked: boolean` — the exact same active-link-plus-active-
+  membership eligibility `ConversationParticipantAuthorizationService`
+  itself re-checks at submit time (via the same
+  `AccountLinkService::activeLinksForGuardians()` batched read), never
+  re-derived in JavaScript. An `accountLinked: false` result renders
+  greyed out, as a disabled `<button disabled>` (not merely styled —
+  genuinely inert and skipped by keyboard tab order), labeled "No
+  School OS account linked" (brief §10) — it is displayed for context,
+  never selectable, and no account-provisioning action is offered.
+
+## 30. Student UX
+
+Structurally identical to Guardian (`gradeSectionLabel` — the
+Student's current ACTIVE enrollment's Grade/Section only, never
+history — instead of `guardianOfNames`). Honest per Phase 5D.1 §4/§11:
+since no real Student account exists in production today, the Students
+category — when actually reachable at all (capability + school policy
+both required) — will show the honest "No matching Student accounts
+found." empty state for any real School, never a fabricated eligible
+result. A calm, non-alarming note ("Student conversations are limited
+to Students with a linked, active School OS account and are subject to
+your school's communication policy") appears under the Student search
+box whenever the category is reachable, satisfying brief §15 without
+exposing any capability/policy implementation detail.
+
+## 31. Policy settings UI
+
+A new "Private conversations" section was added to the existing
+`Pages/App/Communications/Settings/Channels.vue` page (not a new page —
+brief §16/§21) with two checkboxes wired to the already-existing (5D.1)
+`PUT /app/communications/settings/conversations`
+(`CommunicationConversationPolicyController::update()` →
+`SchoolConversationPolicyService`). The READ side was folded into
+`CommunicationChannelPolicyController::show()`'s existing aggregated
+Inertia payload (`conversationPolicy` key, via
+`CommunicationConversationPolicyService::policyFor()`) — mirroring
+exactly how the Timing and Approval sections already share this one
+page — rather than keeping 5D.1's original standalone JSON `show()`
+action, which is now removed as superseded/unused (its `GET
+.../settings/conversations` route is gone; the `PUT` route and
+controller method are unchanged). Copy states the real defaults
+verbatim (Guardian allowed, Student disabled) and that a linked account
+alone never grants access on its own.
+
+## 32. Capability visibility
+
+`CommunicationHubController::conversations()` now also returns
+`canSelectGuardianParticipants`/`canSelectStudentParticipants`
+(`CapabilityResolver::canInSchool()` against
+`communications.conversations.guardians`/`.students`, exactly the same
+check the backend itself performs) and
+`guardianConversationsAllowedByPolicy`/`studentConversationsAllowedByPolicy`
+(`CommunicationConversationPolicyService::policyFor()`). The frontend
+uses these ONLY to decide what to show/explain — every one of these four
+values is independently re-verified server-side by
+`ConversationParticipantAuthorizationService` at actual submit time, so
+a forged request (edited page props, direct POST) fails exactly as the
+original 46 Phase 5D.1 tests already prove; none of those tests needed
+to change.
+
+## 33. Dual-role presentation
+
+Verified directly
+(`a_staff_membership_linked_as_guardian_is_found_via_both_the_member_and_guardian_search`,
+`after_creation_the_thread_detail_shows_the_correct_provenance_for_a_dual_role_membership`):
+the same underlying SchoolMembership/User is discoverable through both
+the plain Member search and the Guardian search (two independent,
+correctly-scoped queries — never a merged/deduplicated search result),
+and after thread creation `Pages/App/Communications/Show.vue` renders
+the correct badge (`Staff` implicit/no badge vs `Guardian`) for
+whichever context it was actually added in. No duplicate participant
+row is ever created (backend-enforced since 5D.1, re-confirmed here at
+the HTTP/UI layer).
+
+## 34. Thread/index display
+
+`CommunicationHubController::show()`'s `domainParticipantType` field
+(already added in 5D.1) is now actually rendered:
+`Pages/App/Communications/Show.vue` shows a small "Guardian"/"Student"
+badge next to a provenance participant's name; an ordinary staff
+participant is completely unchanged (no badge, verified by
+`an_ordinary_staff_participant_has_a_null_domain_participant_type`).
+The Conversations index list (`otherParticipantNames`) was left
+unchanged — it already only ever lists actual, authorized participants
+of a thread the viewer belongs to (Phase 5A.7/5A.8 privacy invariant),
+so no domain-identity leak was possible there before or after this
+checkpoint.
+
+## 35. Safe search payload
+
+Guardian search returns exactly `id`, `label`, `guardianOfNames`,
+`accountLinked` — verified by
+`guardian_search_never_returns_a_guardian_contact_field` (asserts the
+raw JSON never contains "email"/"mobile"/"contact"). Student search
+returns exactly `id`, `label`, `gradeSectionLabel`, `accountLinked` —
+verified by
+`student_search_never_returns_a_raw_student_model_field_beyond_the_narrow_dto`
+(asserts the exact key set). Neither endpoint touches
+`GuardianContact`/`date_of_birth`/any Restricted or Sensitive field
+(`docs/security/DATA-CLASSIFICATION.md`) — both are additive-only
+extensions of the 5D.1 endpoints' already-narrow `id`/`label` shape.
+
+## 36. Responsive / accessibility
+
+Chips wrap (`flex flex-wrap`) and truncate long names; the type badge
+and "Guardian of …" context line stay on their own small text row so a
+chip never forces horizontal scroll at mobile widths. Category tabs use
+`role="tablist"`/`role="tab"`/`aria-selected`; the search input carries
+an explicit `aria-label` naming the active category; an ineligible
+search result is a genuinely `disabled` `<button>` (correct keyboard/
+screen-reader semantics — announced as disabled and skipped by Tab —
+not merely dimmed with CSS); participant type is conveyed by a text
+label ("Staff"/"Guardian"/"Student") in addition to color, never color
+alone (WCAG 1.4.1). The two new policy checkboxes are native
+`<input type="checkbox">` wrapped in `<label>`, giving them an
+accessible name via implicit label association, identical to every
+other checkbox already on that settings page. No new component library
+or design system was introduced.
+
+## 37. UI/controller tests (Phase 5D.1b)
+
+22 new tests, all passing, 0 changes to the original 46 Phase 5D.1
+tests:
+
+- `CommunicationConversationPolicySettingsHubTest` (8) — default
+  display, Guardian/Student toggle persistence (independently),
+  unauthorized denial (view AND update), guest redirect, server
+  validation error, cross-School isolation.
+- `CommunicationConversationParticipantUiTest` (14) — capability/policy
+  visibility props, Guardian search payload (linked/unlinked/inactive-
+  membership/emergency-contact-only exclusion/no-contact-data
+  leakage), Student search payload (grade/section label, narrow DTO,
+  honest empty state), dual-role discoverability and post-creation
+  badge correctness, staff-participant badge is null.
+
+## 38. Full regression
+
+- **Original 46 Phase 5D.1 tests:** unchanged, all still pass.
+- **Full Communications suite:** 613 tests, 1792 assertions — up from
+  591/1668 pre-5D.1b by exactly the 22 new tests, 0 failures.
+- **Full application suite:** a clean run was obtained. **2511 tests,
+  8730 assertions, 0 failures, 0 errors.**
+- **MinIO environment status:** MinIO was confirmed genuinely
+  reachable/healthy in this sandbox
+  (`GET http://minio:9000/minio/health/live` → `200`, over the same
+  `school-os_default` Docker network the test runner uses). The 5
+  Documents MinIO-integration failures reported at the end of Phase
+  5D.1 were traced to this worktree's own local, untracked
+  `apps/platform/.env` pointing `AWS_ENDPOINT` at `http://localhost:9000`
+  instead of the compose network alias `http://minio:9000` — a sandbox
+  setup mistake, not a genuine service outage, a flaky test, or a
+  backend defect. Correcting that one local, non-version-controlled
+  line made all 6 previously-failing Documents MinIO tests pass
+  immediately, which is what produced the clean 2511/8730/0/0 result
+  above. No Documents test file, fixture, or application code was
+  touched to reach this.
+
+## 39. Quality gates (Phase 5D.1b)
+
+Pint ✅, PHPStan ✅ (no new baseline/suppressions), Prettier ✅,
+`vue-tsc --noEmit` ✅, ESLint ✅ (0 errors; the same 2 pre-existing,
+unrelated `Pagination.vue` `v-html` warnings as Phase 5D.1), `npm run
+build` ✅.
+
+## 40. Safety (Phase 5D.1b)
+
+`COMMUNICATION_EMAIL_ENABLED=false` unchanged. No real email, no SMTP/
+provider activation, no SMS/WhatsApp/Push, no deployment, no staging/
+production changes. All schema/data work stayed on `school_os_test`.
+
+## 41. Next recommendation
+
+The Guardian/Student conversation participation feature is now
+end-to-end complete and tested (backend safeguarding foundation +
+UI) — the natural next checkpoints are:
+
+- **Phase 5D.2 — Communication Preferences & Consent**, or
+- **Phase 5D Final Integration Gate** (merge readiness review across
+  all of Phase 5D's checkpoints).
+
+Given this UI completion closes the one deferred item Phase 5D.1
+explicitly flagged, a Final Integration Gate is the more natural
+immediate next step before opening a new sub-feature — but this is a
+product-sequencing decision for the requester, not made here.

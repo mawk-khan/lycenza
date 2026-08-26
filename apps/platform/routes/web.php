@@ -254,11 +254,11 @@ Route::middleware('auth')->group(function (): void {
             // CommunicationApprovalPolicyController's docblock.
             Route::put('/approvals', [CommunicationApprovalPolicyController::class, 'update'])->name('approvals.update');
 
-            // Phase 5D.1 §16: School-level private-conversation
-            // safeguarding policy -- no dedicated settings page yet
-            // (see the controller's docblock), same registration
-            // reasoning as 'channels'/'timing'/'approvals' above.
-            Route::get('/conversations', [CommunicationConversationPolicyController::class, 'show'])->name('conversations');
+            // Phase 5D.1 §16, wired into the Channels settings page in
+            // 5D.1b: write side of the page's Private conversations
+            // section -- READ is aggregated into
+            // CommunicationChannelPolicyController::show()'s existing
+            // payload, same split as 'timing'/'approvals' above.
             Route::put('/conversations', [CommunicationConversationPolicyController::class, 'update'])->name('conversations.update');
         });
 

@@ -15,6 +15,14 @@ interface Participant {
     userId: string;
     name: string;
     active: boolean;
+    // Phase 5D.1b §28: Guardian/Student domain provenance only -- see
+    // CommunicationHubController::show()'s docblock. Never a broader
+    // authorization signal, purely a display badge.
+    domainParticipantType: 'guardian' | 'student' | null;
+}
+
+function participantBadgeLabel(type: Participant['domainParticipantType']): string | null {
+    return type === 'guardian' ? 'Guardian' : type === 'student' ? 'Student' : null;
 }
 
 interface MessageAttachment {
@@ -167,13 +175,23 @@ function formatFileSize(bytes: number): string {
                 {{ isArchivedByMe ? 'Unarchive' : 'Archive' }}
             </button>
         </div>
-        <p class="mt-1 text-xs text-slate-500">
-            {{
-                participants
-                    .filter((p) => p.active)
-                    .map((p) => p.name)
-                    .join(', ')
-            }}
+        <p class="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-slate-500">
+            <template v-for="(p, index) in participants.filter((p) => p.active)" :key="p.userId">
+                <span v-if="index > 0">, </span>
+                <span
+                    >{{ p.name
+                    }}<span
+                        v-if="participantBadgeLabel(p.domainParticipantType)"
+                        class="ml-0.5 rounded px-1 py-px text-[10px] font-medium"
+                        :class="
+                            p.domainParticipantType === 'guardian'
+                                ? 'bg-sky-100 text-sky-700'
+                                : 'bg-emerald-100 text-emerald-700'
+                        "
+                        >{{ participantBadgeLabel(p.domainParticipantType) }}</span
+                    ></span
+                >
+            </template>
             ·
             <span :class="thread.status === 'open' ? 'text-emerald-600' : 'text-slate-400'">{{
                 thread.status
