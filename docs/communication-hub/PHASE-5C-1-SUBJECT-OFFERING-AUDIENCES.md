@@ -129,13 +129,10 @@ message.
 
 ## 9. Deferred to a later checkpoint
 
-- **Composer UI**: no Vue changes in this checkpoint. The backend/API
-  surface is fully wired and independently testable (validation,
-  `AnnouncementService::syncAcademicCohort()`, the resolver, the
-  `audience/subject-offerings/search` picker endpoint), but there is no
-  "Subject Offering" option in the Announcement composer's audience-
-  type dropdown yet, and no picker component. A School user cannot
-  reach this audience type through the Communications Hub UI today.
+- **Composer UI**: no Vue changes in this checkpoint — added by Phase
+  5C.2 (`docs/communication-hub/PHASE-5C-2-SUBJECT-OFFERING-AUDIENCE-COMPOSER.md`).
+  A School user can now reach this audience type through the
+  Communications Hub UI.
 - Teacher/staff academic audiences, Timetable audiences, Attendance-
   derived audiences, Exam groups, Fee-defaulter audiences, arbitrary
   SQL/filter-builder audiences, automatic AI-generated audience

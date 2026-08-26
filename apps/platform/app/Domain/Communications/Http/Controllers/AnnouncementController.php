@@ -179,7 +179,7 @@ class AnnouncementController extends Controller
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()
-            ->with(['createdBy:id,name', 'requestedChannels', 'attachments', 'academicCohort.gradeLevel:id,name,code', 'academicCohort.section:id,name,code', 'academicCohort.academicYear:id,name'])
+            ->with(['createdBy:id,name', 'requestedChannels', 'attachments', 'academicCohort.gradeLevel:id,name,code', 'academicCohort.section:id,name,code', 'academicCohort.academicYear:id,name', 'academicCohort.subjectOffering:id,subject_id,is_required', 'academicCohort.subjectOffering.subject:id,name,code'])
             ->findOrFail($announcement);
 
         $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
@@ -786,14 +786,15 @@ class AnnouncementController extends Controller
     }
 
     /**
-     * Phase 5B.3 §14/§54: cohort DEFINITION label only (grade/section
-     * name, AcademicYear label, recipient kind) -- the actual reachable
+     * Phase 5B.3 §14/§54, extended by Phase 5C.1/5C.2: cohort
+     * DEFINITION label only (grade/section/subject-offering name,
+     * AcademicYear label, recipient kind) -- the actual reachable
      * counts are reported separately by domainAudiencePreview() above.
      * `isDynamic: true` always -- this is a documentation/UX signal for
      * the composer to show its "resolved again at publication" caveat
      * (brief §17), never a stored field.
      *
-     * @return array{cohortType: string, gradeLevelName: string|null, sectionName: string|null, academicYearLabel: string|null, recipientKind: string, isDynamic: bool}|null
+     * @return array{cohortType: string, gradeLevelName: string|null, sectionName: string|null, subjectOfferingLabel: string|null, academicYearLabel: string|null, recipientKind: string, isDynamic: bool}|null
      */
     private function academicCohortPreview(CommunicationAnnouncement $model): ?array
     {
@@ -803,10 +804,17 @@ class AnnouncementController extends Controller
             return null;
         }
 
+        $offering = $cohort->subjectOffering;
+        $subjectOfferingLabel = $offering === null ? null : trim(
+            ($offering->subject?->name !== null ? "{$offering->subject->name} ({$offering->subject->code})" : 'Subject offering')
+            .($offering->is_required ? ' — Required' : ' — Elective')
+        );
+
         return [
             'cohortType' => $cohort->cohort_type,
             'gradeLevelName' => $cohort->gradeLevel?->name,
             'sectionName' => $cohort->section?->name,
+            'subjectOfferingLabel' => $subjectOfferingLabel,
             'academicYearLabel' => $cohort->academicYear?->name,
             'recipientKind' => $cohort->recipient_kind,
             'isDynamic' => true,

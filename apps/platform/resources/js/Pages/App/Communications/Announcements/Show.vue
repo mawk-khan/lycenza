@@ -38,6 +38,7 @@ interface AcademicCohortPreview {
     cohortType: string;
     gradeLevelName: string | null;
     sectionName: string | null;
+    subjectOfferingLabel: string | null;
     academicYearLabel: string | null;
     recipientKind: string;
     isDynamic: boolean;
@@ -488,6 +489,7 @@ function formatFileSize(bytes: number): string {
                         guardians_of_students: 'Guardians of Selected Students',
                         grade: 'Grade (Academic Cohort)',
                         section: 'Section (Academic Cohort)',
+                        subject_offering: 'Subject Offering (Academic Cohort)',
                     }[announcement.audienceType] ?? announcement.audienceType
                 }}
             </p>
@@ -497,7 +499,12 @@ function formatFileSize(bytes: number): string {
                     <span v-if="preview.academicCohort.cohortType === 'grade_level'">
                         Grade: {{ preview.academicCohort.gradeLevelName }}
                     </span>
-                    <span v-else> Section: {{ preview.academicCohort.sectionName }} </span>
+                    <span v-else-if="preview.academicCohort.cohortType === 'section'">
+                        Section: {{ preview.academicCohort.sectionName }}
+                    </span>
+                    <span v-else>
+                        Subject Offering: {{ preview.academicCohort.subjectOfferingLabel }}
+                    </span>
                     <span v-if="preview.academicCohort.academicYearLabel">
                         &middot; {{ preview.academicCohort.academicYearLabel }}</span
                     >
