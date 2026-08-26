@@ -89,11 +89,15 @@ every DECIDED point:
   `StudentGuardianRelationshipService::link`,
   `StudentEnrollmentService::enroll`) — Section/roll_number chosen at
   conversion time, never pre-stored on the application.
-- Guardian contact captured pre-conversion is a draft, non-canonical,
-  application-scoped snapshot — never a second encrypted/searchable
-  identity system; conversion reuses the existing
-  `GuardianContactService::findCandidatesBySchool()` lookup for an
-  explicit staff create-vs-link decision, never fuzzy/auto-linked.
+- **Superseded by §9 below (1D.0A hardening) and `ADMISSIONS.md` §9:**
+  Admissions stores no guardian/applicant contact data at all in v1, in
+  any form — guardian name/email/phone are supplied as direct input to
+  the conversion command itself and flow straight into the canonical
+  `GuardianService`/`GuardianContactService`, never staged in an
+  Admissions-owned column first. Conversion still reuses the existing
+  `GuardianContactService::findCandidatesBySchool()` lookup against
+  that conversion-time input for an explicit staff create-vs-link
+  decision, never fuzzy/auto-linked.
 - v1 always creates a new Student at conversion; re-admission/existing-
   Student linking is explicitly deferred (named as an open risk, not
   silently ignored).
@@ -117,21 +121,27 @@ every DECIDED point:
 ## 7. Implementation slices
 
 1. **1D.1 — Admissions Domain & Schema Foundation.** `App\Domain\Admissions`
-   module skeleton; `applicants` and `admission_applications` migrations
+   module skeleton; `applicants` (identity fields only — no contact
+   columns, per §9 hardening) and `admission_applications` migrations
    (composite FKs, RLS, the partial-unique "no duplicate simultaneous
    open application per Applicant/AcademicYear/Campus/GradeLevel"
-   index); `Applicant`/`AdmissionApplication` Eloquent models; RLS
+   index, the `status ⇔ conversion-provenance` CHECK from `ADMISSIONS.md`
+   §5); `Applicant`/`AdmissionApplication` Eloquent models; RLS
    isolation tests (real PostgreSQL, cross-School). No services, no
-   HTTP surface yet.
+   HTTP surface yet. This slice's schema is intentionally smaller after
+   1D.0A than originally scoped in 1D.0 — no guardian/contact table or
+   columns at all.
 2. **1D.2 — Application Lifecycle Service.** `AdmissionApplicationService`
    (create/update-while-draft/submit/accept/reject/withdraw), the
    status-transition guard, audit events (§15 of `ADMISSIONS.md`), and
    domain/unit tests for every legal and illegal transition.
 3. **1D.3 — Accepted → Student/SIS Conversion.** `ConvertAcceptedAdmission`,
-   composing the five existing services inside one transaction, the
-   Guardian create-vs-link lookup, conversion-provenance fields, the
-   idempotency guard, and the mandatory forced-failure atomicity test
-   (§11 of `ADMISSIONS.md`).
+   accepting guardian name/email/phone as direct command input (never
+   pre-stored, §9 hardening), composing the five existing services
+   inside one outer transaction, the Guardian create-vs-link lookup,
+   conversion-provenance fields, the idempotency guard, and the
+   mandatory forced-failure atomicity test (§11 of `ADMISSIONS.md` —
+   this checkpoint's own required proof, not assumed in advance).
 4. **1D.4 — Authorization + Read Service.** Seed `admissions.view`/
    `.manage` into `CapabilityAndRoleSeeder.php`, an `AdmissionApplicationReadService`
    for list/filter (§14 of `ADMISSIONS.md`), authorization tests (allow
@@ -155,3 +165,49 @@ nothing but this checkpoint's own new branch). The next gate should
 continue on `feature/phase-1d-admissions-foundation` (this checkpoint's
 branch), or a fresh branch from current `origin/main` if this one has
 since been merged.
+
+## 9. Hardening pass (1D.0A) — privacy and conversion boundary corrections
+
+A follow-up review of this checkpoint identified two problems in the
+original architecture, both corrected in place (this doc and
+`ADMISSIONS.md`) rather than in a separate document, since neither
+changes the module boundary or roadmap placement established above —
+only the internal design of two already-decided points.
+
+**1. Pre-conversion contact PII.** The original design proposed plain
+`applicant_guardian_email`/`_phone` columns on `AdmissionApplication`,
+reasoned to be safe because the data wasn't yet a canonical Guardian.
+That reasoning was wrong — pre-canonical PII is still PII. **Corrected
+decision: Admissions stores no guardian/applicant contact data at all,
+in any form, in v1.** Guardian name/email/phone are supplied as direct
+input to the conversion command at the moment of conversion and flow
+straight into the already-correct canonical `GuardianService`/
+`GuardianContactService` handling — Admissions never has a copy of
+this data to protect. This also further **simplifies** 1D.1's schema
+(one fewer set of columns, no encryption/hashing design needed in this
+domain at all) rather than complicating it. See `ADMISSIONS.md` §9 for
+the full reasoning, including why an Admissions-owned encrypted
+contact store was considered and explicitly deferred (`ContactLookupHasher`'s
+fixed, non-parameterized domain-prefix design means doing this
+properly requires a Support-layer decision this documentation-only
+checkpoint should not make as a side effect).
+
+**2. Conversion boundary precision.** Three points were tightened with
+direct code citations rather than general pattern-matching: (a) the
+status-value-vs-CHECK-constraint choice is now grounded in the actual
+`students`/`student_enrollments`/`student_subject_enrollments`
+migrations (application-level guard, matching precedent exactly — see
+`ADMISSIONS.md` §6A), with a genuine new CHECK proposed only for the
+cross-column `status ⇔ conversion-provenance` invariant (`ADMISSIONS.md`
+§5); (b) the transaction-atomicity claim was corrected from an
+implied-proven statement to an explicitly *required, not yet proven*
+invariant, with all five composed services' actual bodies now directly
+cited (`ADMISSIONS.md` §11); (c) Guardian optionality at conversion and
+the honest absence of any deterministic Student-level duplicate-
+detection mechanism are now both named explicitly rather than left
+implicit (`ADMISSIONS.md` §10-11).
+
+No change to domain ownership, aggregate model, lifecycle, tenancy/RLS
+pattern, or the recommended next checkpoint (§8 above) — 1D.1 remains
+the correct next step, now with a smaller, more precisely-specified
+schema.

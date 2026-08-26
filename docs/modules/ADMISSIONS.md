@@ -105,6 +105,10 @@ address (e.g. for offer letters), that becomes the first real consumer
 that justifies designing `Address` properly — not built speculatively
 here.
 
+**HARDENED (1D.0A): no `email`/`phone` on `Applicant` either.** See §9
+for the full reasoning — Admissions stores no contact data of any kind
+in v1, for the Applicant or for a guardian.
+
 ## 5. AdmissionApplication — minimal v1 fields
 
 - `id`, `school_id`
@@ -114,14 +118,30 @@ here.
 - `status` (see §6)
 - `decision_note` (nullable text — internal, staff-only, never in a
   broad/public API response; see §11)
-- `applicant_guardian_name`, `applicant_guardian_email`,
-  `applicant_guardian_phone` (all nullable plain strings — see §9,
-  this is deliberately NOT the canonical encrypted/searchable
-  `GuardianContact` pattern)
 - `converted_student_id`, `converted_student_enrollment_id` (nullable,
   composite FKs, restrict-on-delete — see §8)
 - `converted_at` (nullable timestamp)
 - `timestamps`
+
+**HARDENED (1D.0A): no guardian/contact columns of any kind on
+`AdmissionApplication` in v1** — not even a plain draft name or email/
+phone. See §9 for why, and why this is a schema-simplifying, not
+schema-complicating, decision.
+
+**Proposed DB invariant (CHECK, not yet migrated — see §11):**
+```sql
+CHECK (
+  (status = 'converted' AND converted_student_id IS NOT NULL
+    AND converted_student_enrollment_id IS NOT NULL AND converted_at IS NOT NULL)
+  OR
+  (status <> 'converted' AND converted_student_id IS NULL
+    AND converted_student_enrollment_id IS NULL AND converted_at IS NULL)
+)
+```
+This is the one CHECK this table needs — a genuine cross-column
+consistency invariant, the same category as
+`student_subject_enrollments_date_range_check`. `status`'s own
+*allowed values* are deliberately **not** a CHECK constraint — see §6A.
 
 **DECIDED: no `Section` on `AdmissionApplication`.** An application
 commits to AcademicYear + Campus + GradeLevel only. Section is chosen
@@ -181,6 +201,38 @@ has started, exactly matching the "prefer lifecycle status over
 deletion for submitted records" principle already used throughout this
 codebase.
 
+## 6A. Status constraint: application-level, not a DB CHECK (1D.0A)
+
+**HARDENED, resolved with direct precedent:** `AdmissionApplication.status`'s
+*allowed values* are enforced by an **application-level guard**
+(a dedicated exception, mirroring `InvalidStudentStatusException`),
+**not** a database CHECK constraint. This matches the exact,
+consistent precedent every comparable lifecycle-status column in this
+codebase already uses — confirmed by reading the actual migrations,
+not assumed:
+- `students` migration: `status` has no CHECK constraint;
+  `StudentService`/`InvalidStudentStatusException` guard the two
+  allowed values in application code.
+- `student_enrollments` migration
+  (`2026_08_23_130000_create_student_enrollments_table.php:92`):
+  `$table->string('status')->default('active'); // active|completed|withdrawn|transferred|cancelled`
+  — a comment, not a CHECK.
+- `student_subject_enrollments` migration
+  (`2026_08_24_100000_create_student_subject_enrollments_table.php:96`):
+  identical shape — comment only, no value CHECK (its actual CHECK
+  constraints, lines 120-123, are the date-range check and the
+  partial-unique-index, both cross-column/cross-row invariants, never
+  a status-value list).
+
+The repository's consistent pattern is: **status *values* are an
+application concern (they change — new transitions get added over
+time, and an app-level exception gives a clean domain error); status
+*consistency with other columns* is a database concern (it must never
+be violated even by a bug, so it's a CHECK).** `AdmissionApplication`
+follows this exactly: no value-list CHECK on `status` itself, but the
+real CHECK from §5 enforcing `status = 'converted' ⇔` provenance is
+complete.
+
 ## 7. Accepted is not converted
 
 **DECIDED, explicit boundary:** `accepted` is a staff **decision**.
@@ -203,14 +255,19 @@ services, in this order, inside one outer `DB::transaction()` (see
    `middle_name`, `last_name`, `date_of_birth` — the last four map
    directly from `Applicant`.
 2. `App\Domain\Guardians\Application\GuardianService::create(School $school, array $attributes, ?User $actor): Guardian`
-   — only if a canonical Guardian doesn't already exist (see §9's
-   create-vs-link decision).
+   — **optional** (§11), and only if a canonical Guardian doesn't
+   already exist (see §9's create-vs-link decision). `$attributes`
+   (name) comes as **direct input to the conversion command itself**
+   — Admissions never stores it beforehand (§9).
 3. `App\Domain\Guardians\Application\GuardianContactService::create(Guardian $guardian, ContactType $type, string $rawValue, array $attributes, ?User $actor): GuardianContact`
    — only when creating a new Guardian; requires the Guardian to
-   already exist, so it always runs after step 2.
+   already exist, so it always runs after step 2. `$rawValue` (email/
+   phone) is likewise **direct conversion-time input**, going straight
+   from the staff-facing conversion form/request into this call —
+   never staged in an Admissions-owned column first (§9).
 4. `App\Domain\Guardians\Application\StudentGuardianRelationshipService::link(Student $student, Guardian $guardian, RelationshipType $type, array $attributes, ?User $actor): StudentGuardianRelationship`
    — requires both the Student (step 1) and Guardian (step 2/existing)
-   to already exist.
+   to already exist; skipped entirely if no Guardian is supplied (§11).
 5. `App\Domain\Students\Application\StudentEnrollmentService::enroll(Student $student, Section $section, string $rollNumber, string $startsOn, ?User $actor): StudentEnrollment`
    — `$section`/`$rollNumber` are chosen by staff at conversion time
    (§5), never pre-stored on the application.
@@ -231,39 +288,91 @@ services, in this order, inside one outer `DB::transaction()` (see
   a Students/SIS-owned change, out of Admissions' own boundary — not
   decided here.
 
-## 9. Guardian strategy (avoiding a second identity system)
+## 9. Guardian strategy (avoiding a second identity system) — HARDENED (1D.0A)
 
-**DECIDED: Pattern A, adapted.** Guardian/contact information entered
-during the application (`applicant_guardian_name`/`_email`/`_phone` on
-`AdmissionApplication`, §5) is a **draft, non-canonical, application-
-scoped snapshot** — plain nullable columns, deliberately **not** run
-through the encrypted/hashed searchable-PII pipeline
-(`GuardianContact`'s `encrypted_value`/`lookup_hash`/`lookup_key_version`
-pattern, ADR 0028) in v1, because it is not yet a permanent identity
-and is not required to be searchable across applications by contact
-value (staff search by Applicant name/application context instead —
-§14). If this draft data is ever promoted to a cross-application
-searchable requirement, it must upgrade to the full `GuardianContact`
-pattern at that point, not grow ad hoc encryption of its own.
+**REVISED DECISION, replacing the original Pattern-A draft-column
+design: Admissions stores NO guardian/applicant contact data at all,
+ever, in v1 — not even a plain, non-canonical draft column.**
+
+### 9.1 Why the original draft-column design was rejected
+
+The original Phase 1D.0 draft proposed plain `applicant_guardian_email`/
+`_phone` columns, explicitly *not* run through the encrypted/hashed
+pipeline, reasoning that pre-canonical data didn't need the same
+protection. That reasoning was wrong: **pre-canonical PII is still
+PII.** A plain-text email/phone column — searchable in the trivial
+`LIKE`/`=` sense even if not indexed for it — is exactly the kind of
+column `GuardianContact` was built specifically to avoid (`docs/modules/
+STUDENT-GUARDIAN-IDENTITY.md`'s "Searchable PII" section, ADR 0028).
+Storing it in Admissions instead of Students/SIS does not change its
+sensitivity classification.
+
+The alternative — giving Admissions its **own** encrypted+hashed
+contact storage, reusing the Phase 1A cryptographic pattern — was also
+rejected for v1, for a concrete, code-grounded reason: `App\Support\
+Privacy\ContactLookupHasher::hash()` builds its HMAC domain string as
+`"guardian-contact|{$schoolId}|{$contactType}|{$normalizedValue}"` —
+`'guardian-contact'` is a **fixed literal prefix, deliberately not
+parameterized** (its own docblock: "if a second, unrelated exact-
+match-lookup need arises later... that is the point to decide whether
+to generalize this class or give the new need its own"). Standing up
+an Admissions-owned encrypted/searchable contact store correctly would
+require either generalizing `ContactLookupHasher` (a shared Support-
+layer change) or building a parallel hasher — real PHP changes, which
+this documentation-only checkpoint has no business quietly
+presupposing. That decision belongs to whichever future checkpoint
+actually implements it, not this one.
+
+### 9.2 The v1 design: contact data is never persisted by Admissions — only by the canonical services, at the moment they receive it
+
+`ConvertAcceptedAdmission` (§8) accepts guardian name/email/phone as
+**direct input to the conversion command itself** — a staff member
+supplies it (via whatever administrative UI/API a later checkpoint
+builds) at the moment of conversion, and it flows straight into
+`GuardianService::create()`/`GuardianContactService::create()`, which
+already implement the correct encrypted+hashed handling from the
+start. **Admissions never has its own copy of this data to protect,
+because it never stores it.** This fully resolves the "pre-canonical
+PII is still PII" problem by eliminating the pre-canonical storage
+step entirely, rather than trying to secure it.
 
 **Conversion-time create-vs-link (avoiding duplicate Guardian
-personas, §21's explicit "no fuzzy matching, no silent auto-link"):**
-before creating a new `Guardian`, `ConvertAcceptedAdmission` calls the
+personas — no fuzzy matching, no silent auto-link):** before creating
+a new `Guardian`, `ConvertAcceptedAdmission` calls the
 **already-existing**
 `GuardianContactService::findCandidatesBySchool(School $school, ContactType $type, string $rawValue): Collection`
-against the draft `applicant_guardian_email`/`_phone` (using the same
+against the staff-supplied conversion-time email/phone (using the same
 exact-match HMAC lookup Phase 1A already built for this exact purpose)
-and surfaces any candidates to staff. Staff make an **explicit**
-create-vs-link decision — the conversion command never auto-links by
-name or fuzzy contact match. If staff chooses "link", step 2/3 above
-are skipped and the existing `Guardian`/`GuardianContact` is reused
-directly in step 4.
+and surfaces any candidates to staff **before** creating anything.
+Staff make an **explicit** create-vs-link decision — the conversion
+command never auto-links by name or fuzzy contact match, and never
+auto-creates when a candidate exists without staff confirmation. If
+staff chooses "link", steps 2/3 in §8 are skipped and the existing
+`Guardian`/`GuardianContact` is reused directly in step 4.
 
-**DEFERRED:** guardian capture as a first-class, canonical, searchable
-Admissions concept (i.e., promoting draft fields into real
-`GuardianContact` rows before conversion, rather than only at
-conversion) — a real future enhancement, not required for v1's core
-loop (application → decision → conversion) to be useful.
+### 9.3 What this means for staff workflow (named honestly, not hidden)
+
+Because nothing is stored until conversion, staff cannot see "the
+guardian's email" while an application is merely `draft`/`submitted`/
+`accepted` — that information exists only in whatever the future
+conversion-time form captures, entered once, at conversion. If a
+future checkpoint's real usage shows this is actually a workflow
+problem (e.g. staff need to email an applicant's family *before*
+deciding), that becomes the concrete, evidenced justification for a
+**dedicated future checkpoint** — informally "Admissions Guardian
+Draft / Conversion Preparation" — to design a real Admissions-owned
+encrypted contact store properly (resolving the `ContactLookupHasher`
+generalization question deliberately, not as a side effect of this
+architecture-only gate). Not speculatively built now.
+
+### 9.4 Deferred
+
+- Guardian/contact capture in **any** form before conversion (draft or
+  canonical) — see §9.3.
+- Applicant's own contact (email/phone) — same reasoning; no evidence
+  a staff-operated v1 needs the *child's* contact information at all,
+  separate from whatever guardian contact conversion eventually
+  collects.
 
 ## 10. Existing Student / duplicate identity
 
@@ -285,6 +394,28 @@ known returning child), not an architectural guarantee — a future
 re-admission checkpoint should close this gap properly rather than
 this checkpoint attempting a partial, unproven answer.
 
+**HARDENED (1D.0A) — the honest truth about what deterministic
+protection actually exists today, stated explicitly rather than
+implied:**
+- **Already-converted provenance** (`converted_student_id IS NOT NULL`,
+  §11) deterministically prevents *the same `AdmissionApplication`*
+  from converting twice.
+- **`DuplicateStudentNumberException`** deterministically prevents two
+  Students sharing the identical `student_number` — but only catches
+  the case where staff happen to *reuse* an existing number, not the
+  general case of the same real person receiving two different
+  numbers.
+- **There is no deterministic cross-person identity key for `Student`
+  today** (`Student` carries no email/phone/government-ID the way
+  `Guardian` does via `GuardianContact`'s hash-lookup) — so, unlike
+  the Guardian create-vs-link flow in §9, Admissions has **no
+  mechanism** to detect "this Applicant is the same real child as an
+  existing Student" even if it wanted to in v1. This is a genuine gap,
+  not a design choice papering over one — it will remain open until a
+  future re-admission checkpoint deliberately designs a Student-level
+  matching key (which is itself a Students/SIS-owned decision, likely
+  requiring `StudentIdentifier`, §4, to exist first).
+
 ## 11. Conversion idempotency and transaction boundary
 
 **Idempotency (root CLAUDE.md rules 29-33's discipline, applied at the
@@ -298,21 +429,45 @@ already happened — defense-in-depth beneath whatever HTTP-level
 rule 29 requires that review explicitly when the actual endpoint is
 built; not decided here).
 
-**Transaction boundary (a real, load-bearing decision):** each of the
-five existing services in §8 already wraps its own single-table write
-in `TenantContext::withSchool()` + its own `DB::transaction()`
-internally. Calling all five bare in sequence would NOT be atomic — a
-failure on step 5 (`StudentEnrollmentService::enroll()`) after steps
-1-4 already committed would leave an orphaned `Student`+`Guardian`
-with no enrollment. **`ConvertAcceptedAdmission` MUST wrap the entire
-five-step sequence in one outer `DB::transaction()`** (Postgres nests
-these as savepoints without conflict) inside a single
-`TenantContext::withSchool()` block. A future implementation checkpoint
-must prove this with a real forced-failure integration test — inject a
-failure on the *last* step and assert **zero** Student/Guardian/
-relationship rows persist — mirroring this codebase's established
-"prove atomicity with a real forced-failure test" discipline (e.g.
-Phase 1B's transfer-rollback-on-conflict test).
+**Transaction boundary (a real, load-bearing decision; wording
+corrected in 1D.0A — see below):** each of the five services in §8
+does wrap its own single-table write in `TenantContext::withSchool()`
++ its own `DB::transaction()` internally — directly confirmed by
+reading `StudentService::create()`, `GuardianService::create()`,
+`GuardianContactService::create()`, `StudentGuardianRelationshipService::link()`,
+and `StudentEnrollmentService::enroll()`'s actual bodies (not assumed
+from the general pattern). **The required invariant:**
+`ConvertAcceptedAdmission` must wrap the entire sequence in one outer
+`DB::transaction()` inside a single `TenantContext::withSchool()`
+block, so a failure on a later step rolls back everything already
+committed by earlier steps (Postgres nests `DB::transaction()` calls
+as savepoints, and each service's own `try`/`catch` blocks only
+translate specific exceptions to a friendlier type — none of them
+swallow an exception in a way that would suppress the outer
+transaction's rollback).
+
+**HARDENED (1D.0A):** the original wording above stated this
+composition "would NOT be atomic" without one outer transaction as if
+already proven safe *with* one. That overclaimed certainty this
+architecture-only checkpoint cannot actually establish — nested-
+transaction/savepoint composition across five independently-authored
+services has not been exercised together anywhere in this codebase
+yet. **1D.3 (the implementation checkpoint that builds
+`ConvertAcceptedAdmission`) MUST prove this holds** with a real
+forced-failure integration test — inject a failure on the *last* step
+and assert **zero** Student/Guardian/relationship rows persist —
+mirroring this codebase's established "prove atomicity with a real
+forced-failure test" discipline (e.g. Phase 1B's transfer-rollback-on-
+conflict test). Until that test exists and passes, atomicity is a
+**documented requirement**, not a proven property.
+
+**Guardian optionality:** `StudentGuardianRelationshipService::link()`
+is a separate call from `StudentService::create()` — nothing in
+`Student`'s schema or `StudentService` requires a
+`StudentGuardianRelationship` to exist. A Guardian is therefore
+**optional** at conversion: if staff supply no guardian information,
+`ConvertAcceptedAdmission` skips steps 2-4 in §8 entirely and still
+successfully creates the Student + Enrollment from steps 1 and 5 alone.
 
 ## 12. Tenancy / RLS
 
@@ -338,9 +493,10 @@ codebase uses — no exceptions, no hand-rolled equivalent:
   (`tests/Feature/Postgres/RawIsolationTest.php`'s shape) at
   implementation time.
 
-No School-spanning Applicant identity in v1 (§13's "same real-world
-child applying to two Schools = two independent tenant-scoped rows" —
-no global person-matching).
+No School-spanning Applicant identity in v1: the same real-world child
+applying to two Schools is represented as two fully independent,
+tenant-scoped `Applicant` rows — no global person-matching across
+Schools.
 
 ## 13. Authorization
 
@@ -375,26 +531,27 @@ conversion command happens to call into those services internally.
 just scoped): Applicant name, `AdmissionApplication` status, academic
 year/campus/grade level, `created_at` ordering.
 
-**Not searchable by contact value in v1**: `applicant_guardian_email`/
-`_phone` are plain draft fields (§9), not run through the encrypted+
-hashed lookup pipeline — no wildcard/plaintext scan is needed or
-built, because search-by-contact isn't a v1 requirement (unlike
-`GuardianContactService::findCandidatesBySchool()`, which is an
-internal conversion-time lookup, not a staff-facing search feature).
+**Not searchable by contact value in v1**: Admissions stores no
+contact value at all (§9, hardened in 1D.0A), so there is nothing to
+search — `GuardianContactService::findCandidatesBySchool()` remains an
+internal, conversion-time-only lookup against staff-supplied input,
+never a staff-facing search feature or an Admissions-owned column.
 
-**Never stored**: DOB beyond what mirrors `Student` (§4), any field
-`Student`/`Guardian` themselves don't carry, application-fee/payment
-data (§16), documents/attachments (§16).
+**Never stored**: any guardian/applicant contact value in any form
+(§9), DOB beyond what mirrors `Student` (§4), any field `Student`/
+`Guardian` themselves don't carry, application-fee/payment data (§16),
+documents/attachments (§16).
 
 ## 15. Audit
 
 Every meaningful transition gets an audit event, following
 `AuditRecorder`'s existing `$audit->school($school, 'event.name',
 actor:, subject:, metadata:)` shape (ADR 0017), metadata limited to
-IDs/status/academic-context IDs — **never** name, DOB, or draft
-guardian contact values (mirrors `StudentService`'s own "audit
-metadata never carries a Student's name/date_of_birth" rule, applied
-identically here since `Applicant` carries the same sensitivity):
+IDs/status/academic-context IDs — **never** name, DOB, or (at
+conversion) the guardian contact value staff supplied as command input
+(mirrors `StudentService`'s own "audit metadata never carries a
+Student's name/date_of_birth" rule, applied identically here since
+`Applicant` carries the same sensitivity):
 - `admission_application.created`
 - `admission_application.submitted`
 - `admission_application.accepted`
@@ -444,6 +601,9 @@ established for Phase 1C's subject enrollment guards.
 - **Re-admission / existing-Student linking** — see §10.
 - **Rejection reason taxonomy (`reason_code`)** — see §5's
   `decision_note`; free text only in v1.
+- **Guardian/Applicant contact capture in any form** (draft, canonical,
+  or otherwise) before conversion time — see §9 (hardened in 1D.0A;
+  supersedes the original Phase 1D.0 draft-column proposal).
 
 ## 17. Implementation slices
 
