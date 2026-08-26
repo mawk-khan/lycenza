@@ -245,6 +245,25 @@ class CapabilityAndRoleSeeder extends Seeder
             // `enrollments.*`'s own docblock above).
             ['key' => 'enrollments.rollovers.view', 'label' => 'View Enrollment Rollover plans, mappings, and results', 'namespace' => 'school'],
             ['key' => 'enrollments.rollovers.manage', 'label' => 'Manage Enrollment Rollover plans (configure, validate, start, resume execution)', 'namespace' => 'school'],
+
+            // Phase 1D.4 (docs/modules/ADMISSIONS.md §13) -- Admissions
+            // pre-Student application workflow (Applicant,
+            // AdmissionApplication). A single pair, matching
+            // `enrollments.*`'s own reasoning for staying one pair
+            // rather than one capability per lifecycle action
+            // (`admissions.create`/`.accept`/`.convert` are deliberately
+            // NOT separate capabilities -- every lifecycle transition,
+            // including conversion, is gated by the same
+            // `admissions.manage`, mirroring `enrollments.manage`
+            // covering create/complete/withdraw/cancel/transfer as one
+            // capability rather than five). No capability-inheritance
+            // exists in this codebase (`CapabilityResolver` has no
+            // implication mechanism -- see `enrollments.*`'s own
+            // docblock above) -- `admissions.manage` does NOT imply
+            // `admissions.view`; every role needing both is granted both
+            // explicitly below.
+            ['key' => 'admissions.view', 'label' => 'View Admission Applicants and Applications', 'namespace' => 'school'],
+            ['key' => 'admissions.manage', 'label' => 'Manage Admission Applicants and Applications (create, update, decide, convert)', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -296,6 +315,20 @@ class CapabilityAndRoleSeeder extends Seeder
                     // these an actual "HR Staff" role needs.
                     'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
                     'enrollments.rollovers.view', 'enrollments.rollovers.manage',
+                    // Phase 1D.4: same full view+manage parity already
+                    // granted for students.*/guardians.*/enrollments.*
+                    // above -- Admissions is the identical kind of
+                    // hands-on, day-to-day operational concern for a
+                    // School Admin (reviewing applications, deciding,
+                    // and converting an accepted Applicant into a
+                    // Student is routine administrative work, not a
+                    // rare/high-blast-radius action the way bulk
+                    // Enrollment Rollover execution is -- conversion
+                    // creates exactly one Student/Enrollment per call,
+                    // matching a single enrollments.manage operation's
+                    // scope, never enrollments.rollovers.manage's
+                    // hundreds-of-records-at-once scope).
+                    'admissions.view', 'admissions.manage',
                 ],
             ],
             'principal' => [
@@ -354,6 +387,15 @@ class CapabilityAndRoleSeeder extends Seeder
                     // above for the identical "administrative, not
                     // day-to-day operational" reasoning.
                     'enrollments.rollovers.view',
+                    // Phase 1D.4: same reasoning as school_admin above --
+                    // reviewing/deciding/converting Admission
+                    // Applications is the identical hands-on operational
+                    // concern already justifying full parity for
+                    // students.*/guardians.*/enrollments.* on this role,
+                    // not the "administrative, not day-to-day" case that
+                    // keeps Principal at view-only for School profile/
+                    // Campus/enrollments.rollovers.
+                    'admissions.view', 'admissions.manage',
                 ],
             ],
         ];
