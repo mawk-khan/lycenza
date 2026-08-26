@@ -24,11 +24,17 @@ interface ApprovalPolicy {
     requireNonPrivilegedSenderApproval: boolean;
 }
 
+interface ConversationPolicy {
+    allowGuardianConversations: boolean;
+    allowStudentConversations: boolean;
+}
+
 interface Props {
     policies: ChannelPolicy[];
     emailChannelEnabled: boolean;
     timingPolicy: TimingPolicy;
     approvalPolicy: ApprovalPolicy;
+    conversationPolicy: ConversationPolicy;
     schoolTimezone: string;
 }
 
@@ -74,6 +80,34 @@ function saveApprovalPolicy() {
             require_non_privileged_sender_approval: requireNonPrivilegedSenderApproval.value,
         },
         { onFinish: () => (savingApproval.value = false), preserveScroll: true },
+    );
+}
+
+const allowGuardianConversations = ref(props.conversationPolicy.allowGuardianConversations);
+const allowStudentConversations = ref(props.conversationPolicy.allowStudentConversations);
+const savingConversationPolicy = ref(false);
+const conversationPolicyError = ref<string | null>(null);
+
+function saveConversationPolicy() {
+    savingConversationPolicy.value = true;
+    conversationPolicyError.value = null;
+    router.put(
+        '/app/communications/settings/conversations',
+        {
+            allow_guardian_conversations: allowGuardianConversations.value,
+            allow_student_conversations: allowStudentConversations.value,
+        },
+        {
+            preserveScroll: true,
+            onFinish: () => (savingConversationPolicy.value = false),
+            onError: (errors: Record<string, string>) => {
+                const first = Object.values(errors)[0];
+                conversationPolicyError.value =
+                    typeof first === 'string'
+                        ? first
+                        : 'Could not save private conversation settings.';
+            },
+        },
     );
 }
 
@@ -305,6 +339,59 @@ function saveTiming() {
                 @click="saveApprovalPolicy"
             >
                 Save Approval Settings
+            </button>
+        </div>
+
+        <div class="mt-10 rounded border border-slate-200 p-4">
+            <h2 class="text-sm font-semibold">Private conversations</h2>
+            <p class="mt-1 text-xs text-slate-400">
+                Controls whether staff with the relevant permission may start a private conversation
+                directly with a Guardian or Student who has a linked School OS account. A linked
+                account alone never grants this on its own -- the staff member must also hold the
+                matching permission, re-checked on every conversation started.
+            </p>
+
+            <div class="mt-3 space-y-3 text-sm">
+                <label class="flex items-center gap-2">
+                    <input
+                        v-model="allowGuardianConversations"
+                        type="checkbox"
+                        class="rounded border-slate-300"
+                    />
+                    Guardian conversations
+                </label>
+                <p class="pl-6 text-xs text-slate-400">
+                    Allowed by default. Turning this off prevents every staff member from starting a
+                    new private conversation with a Guardian, regardless of their permissions.
+                </p>
+
+                <label class="flex items-center gap-2">
+                    <input
+                        v-model="allowStudentConversations"
+                        type="checkbox"
+                        class="rounded border-slate-300"
+                    />
+                    Student conversations
+                </label>
+                <p class="pl-6 text-xs text-slate-400">
+                    Disabled by default -- Student messaging is controlled and requires this school
+                    to opt in explicitly, in addition to a staff member holding the separate
+                    Student-conversation permission. No Student account currently existing at this
+                    school does not prevent enabling this in advance.
+                </p>
+            </div>
+
+            <p v-if="conversationPolicyError" class="mt-2 text-xs text-red-600">
+                {{ conversationPolicyError }}
+            </p>
+
+            <button
+                type="button"
+                :disabled="savingConversationPolicy"
+                class="mt-4 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                @click="saveConversationPolicy"
+            >
+                Save Private Conversation Settings
             </button>
         </div>
     </main>

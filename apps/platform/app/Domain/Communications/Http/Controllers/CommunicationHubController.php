@@ -8,11 +8,15 @@ use App\Domain\Communications\Application\CommunicationThreadService;
 use App\Domain\Communications\Application\ConversationReadModel;
 use App\Domain\Communications\Application\ConversationThreadSummary;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
+use App\Domain\Communications\Application\Policy\CommunicationConversationPolicyService;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Domain\Communications\Infrastructure\CommunicationThreadParticipant;
+use App\Domain\Guardians\Infrastructure\Guardian;
+use App\Domain\Identity\Application\AccountLinkService;
+use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\AuthorizesCapability;
@@ -51,7 +55,7 @@ class CommunicationHubController extends Controller
      * unchanged from Phase 5A.7 -- same query, same pagination, same
      * filters, same unread badge.
      */
-    public function conversations(TenantContext $context, ConversationReadModel $readModel, Request $request): Response
+    public function conversations(TenantContext $context, ConversationReadModel $readModel, CommunicationConversationPolicyService $conversationPolicy, Request $request): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.view', $school);
@@ -100,6 +104,19 @@ class CommunicationHubController extends Controller
             'canManageChannelPolicy' => $canManage,
             'canManageTemplates' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.templates.manage', $school),
             'canApprove' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.approve', $school),
+            // Phase 5D.1b §8: the composer only shows a Guardian/Student
+            // participant category when the actor genuinely holds the
+            // capability -- backend remains authoritative regardless
+            // (ConversationParticipantAuthorizationService re-checks
+            // everything at submit time; a forged request still fails
+            // exactly as the Phase 5D.1 tests prove). The policy flags
+            // let the composer explain WHY the category is unavailable
+            // when the capability is present but the School has turned
+            // it off (brief §9), without ever exposing more than that.
+            'canSelectGuardianParticipants' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.conversations.guardians', $school),
+            'canSelectStudentParticipants' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.conversations.students', $school),
+            'guardianConversationsAllowedByPolicy' => $conversationPolicy->policyFor($school)->allowGuardianConversations,
+            'studentConversationsAllowedByPolicy' => $conversationPolicy->policyFor($school)->allowStudentConversations,
         ]);
     }
 
@@ -139,6 +156,116 @@ class CommunicationHubController extends Controller
         ]);
     }
 
+    /**
+     * Phase 5D.1 §27, extended 5D.1b §6/§10/§11/§24/§25 -- the compose
+     * picker's Guardian search. Gated by
+     * `communications.conversations.guardians` (NOT `communications.send`
+     * alone, root CLAUDE.md rule 24) -- a staff member who cannot start
+     * a Guardian conversation at all should not be able to search for
+     * Guardian targets either.
+     *
+     * `accountLinked` is the same active-link-plus-active-membership
+     * eligibility `ConversationParticipantAuthorizationService` itself
+     * checks (via AccountLinkService::activeLinksForGuardians(), the
+     * exact same batched read path) -- surfaced here ONLY as a boolean
+     * so the composer can grey out an unselectable result (brief §10),
+     * never re-derived independently in JavaScript. `guardianOfNames`
+     * is limited to the same `is_primary OR is_legal_guardian`
+     * eligibility GuardianProjectionResolver already established --
+     * never every child a Guardian happens to be associated with
+     * (brief §6 "do not expose ... unrelated children"). No
+     * GuardianContact field (email/phone) is ever included (brief §24).
+     */
+    public function searchGuardianParticipants(Request $request, TenantContext $context, AccountLinkService $accountLinks): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.conversations.guardians', $school);
+
+        $q = trim((string) $request->string('q'));
+
+        $guardians = Guardian::query()
+            ->where('school_id', $school->id)
+            ->where('status', 'active')
+            ->when($q !== '', fn ($query) => $query
+                ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ["%{$q}%"]))
+            ->with(['students' => fn ($query) => $query
+                ->where('status', 'active')
+                ->where(fn ($q2) => $q2
+                    ->where('student_guardian_relationships.is_primary', true)
+                    ->orWhere('student_guardian_relationships.is_legal_guardian', true))])
+            ->orderBy('first_name')
+            ->limit(20)
+            ->get(['id', 'first_name', 'last_name']);
+
+        $links = $accountLinks->activeLinksForGuardians($school, $guardians->pluck('id')->all());
+
+        return response()->json([
+            'guardians' => $guardians->map(fn (Guardian $g) => [
+                'id' => $g->id,
+                'label' => trim("{$g->first_name} {$g->last_name}"),
+                'guardianOfNames' => $g->students->map(fn (Student $s) => trim("{$s->first_name} {$s->last_name}"))->values(),
+                'accountLinked' => $links->has($g->id) && $links->get($g->id)->membership->isActive(),
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Phase 5D.1 §27, extended 5D.1b §7/§10/§11/§25 -- the compose
+     * picker's Student search, gated by
+     * `communications.conversations.students`. `gradeSectionLabel` is
+     * the Student's current ACTIVE enrollment only -- never a full
+     * enrollment history, and never any field beyond Grade/Section name
+     * (brief §25 -- a narrow DTO, not a Student model serialization).
+     * `accountLinked` mirrors searchGuardianParticipants()'s identical
+     * reasoning.
+     */
+    public function searchStudentParticipants(Request $request, TenantContext $context, AccountLinkService $accountLinks): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.conversations.students', $school);
+
+        $q = trim((string) $request->string('q'));
+
+        $students = Student::query()
+            ->where('school_id', $school->id)
+            ->where('status', 'active')
+            ->when($q !== '', fn ($query) => $query
+                ->where(fn ($query) => $query
+                    ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ["%{$q}%"])
+                    ->orWhere('student_number', 'ilike', "%{$q}%")))
+            ->with(['enrollments' => fn ($query) => $query
+                ->where('status', 'active')
+                ->with(['gradeLevel:id,name', 'section:id,name'])])
+            ->orderBy('first_name')
+            ->limit(20)
+            ->get(['id', 'first_name', 'last_name', 'student_number']);
+
+        $links = $accountLinks->activeLinksForStudents($school, $students->pluck('id')->all());
+
+        return response()->json([
+            'students' => $students->map(function (Student $s) use ($links) {
+                $enrollment = $s->enrollments->first();
+
+                return [
+                    'id' => $s->id,
+                    'label' => trim("{$s->first_name} {$s->last_name}")." ({$s->student_number})",
+                    'gradeSectionLabel' => $enrollment !== null
+                        ? trim(implode(' - ', array_filter([$enrollment->gradeLevel?->name, $enrollment->section?->name])))
+                        : null,
+                    'accountLinked' => $links->has($s->id) && $links->get($s->id)->membership->isActive(),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Phase 5D.1 §19: `guardian_ids`/`student_ids` are optional Guardian/
+     * Student domain participant targets, resolved and safeguarding-
+     * authorized by CommunicationThreadService::createThread() via
+     * ConversationParticipantAuthorizationService -- this controller
+     * never resolves or authorizes them itself (root CLAUDE.md rule 3).
+     * At least one of the three participant arrays must be non-empty.
+     */
     public function store(Request $request, TenantContext $context, CommunicationThreadService $service): RedirectResponse
     {
         $school = $context->requireSchool();
@@ -147,9 +274,21 @@ class CommunicationHubController extends Controller
         $validated = $request->validate([
             'subject' => ['nullable', 'string', 'max:255'],
             'thread_type' => ['required', 'in:direct,group'],
-            'participant_user_ids' => ['required', 'array', 'min:1'],
+            'participant_user_ids' => ['sometimes', 'array'],
             'participant_user_ids.*' => ['string'],
+            'guardian_ids' => ['sometimes', 'array'],
+            'guardian_ids.*' => ['string'],
+            'student_ids' => ['sometimes', 'array'],
+            'student_ids.*' => ['string'],
         ]);
+
+        $participantUserIds = $validated['participant_user_ids'] ?? [];
+        $guardianIds = $validated['guardian_ids'] ?? [];
+        $studentIds = $validated['student_ids'] ?? [];
+
+        if ($participantUserIds === [] && $guardianIds === [] && $studentIds === []) {
+            throw ValidationException::withMessages(['participants' => ['At least one participant is required.']]);
+        }
 
         try {
             $thread = $service->createThread(
@@ -157,10 +296,12 @@ class CommunicationHubController extends Controller
                 $context->actor(),
                 $validated['thread_type'],
                 $validated['subject'] ?? null,
-                $validated['participant_user_ids'],
+                $participantUserIds,
+                guardianIds: $guardianIds,
+                studentIds: $studentIds,
             );
         } catch (CommunicationException $e) {
-            throw ValidationException::withMessages(['participant_user_ids' => [$e->getMessage()]]);
+            throw ValidationException::withMessages(['participants' => [$e->getMessage()]]);
         }
 
         return redirect("/app/communications/{$thread->id}");
@@ -204,6 +345,10 @@ class CommunicationHubController extends Controller
                 'userId' => $p->user_id,
                 'name' => $p->user->name,
                 'active' => $p->left_at === null,
+                // Phase 5D.1 §8/§28: domain provenance only -- never a
+                // broader authorization signal, and never any
+                // Guardian/Student field beyond identity (brief §27).
+                'domainParticipantType' => $p->hasDomainProvenance() ? $p->participant_kind->value : null,
             ])->all(),
             'messages' => collect($paginated->items())->reverse()->values()->map(fn (CommunicationMessage $m) => $this->presentMessage($m))->all(),
             'messagesMeta' => [

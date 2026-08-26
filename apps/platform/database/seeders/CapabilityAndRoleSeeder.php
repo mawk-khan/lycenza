@@ -160,6 +160,26 @@ class CapabilityAndRoleSeeder extends Seeder
             // capability.
             ['key' => 'communications.approve', 'label' => 'Approve or reject Communication Hub approval requests', 'namespace' => 'school'],
 
+            // Phase 5D.1 §17 -- an active StudentGuardianAccountLink
+            // only proves authenticated reachability (brief §5); it is
+            // never, by itself, authorization for a staff member to
+            // start a private conversation with that Guardian/Student.
+            // Deliberately separate from `communications.send` (which
+            // only ever targeted other SchoolMemberships directly) and
+            // from `guardians.view`/`students.manage` (an unrelated
+            // module's capability is never inferred as authority here,
+            // root CLAUDE.md rule 24) -- see
+            // App\Domain\Communications\Application\ConversationParticipantAuthorizationService.
+            // `.students` is deliberately granted to NO system role
+            // below (brief §15's stricter safeguarding default); a
+            // School must explicitly create/extend a role with it, and
+            // even then
+            // App\Domain\Communications\Application\Policy\CommunicationConversationPolicyService's
+            // own school-level toggle defaults Student conversations to
+            // disabled independently of this capability.
+            ['key' => 'communications.conversations.guardians', 'label' => 'Start private Communication Hub conversations with linked Guardians', 'namespace' => 'school'],
+            ['key' => 'communications.conversations.students', 'label' => 'Start private Communication Hub conversations with linked Students', 'namespace' => 'school'],
+
             // Phase 1B.4 (docs/modules/STUDENT-ENROLLMENT.md
             // "Authorization") -- Student academic placement/enrollment,
             // deliberately its own pair rather than reusing
@@ -281,6 +301,14 @@ class CapabilityAndRoleSeeder extends Seeder
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',
                     'communications.templates.manage', 'communications.emergency', 'communications.approve',
+                    // Phase 5D.1 §14: School Admin is the day-to-day
+                    // operator of Guardian contact/communication (same
+                    // hands-on rationale as guardians.manage above) --
+                    // deliberately NOT `.conversations.students` (brief
+                    // §15's stricter safeguarding default withholds it
+                    // from every system role; a School must explicitly
+                    // grant it).
+                    'communications.conversations.guardians',
                     'enrollments.view', 'enrollments.manage',
                     // Phase 8A.10, HR.md "Authorization design": ONLY
                     // Directory-tier view/manage + Restricted personal
@@ -327,6 +355,12 @@ class CapabilityAndRoleSeeder extends Seeder
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.announce', 'communications.templates.manage', 'communications.approve',
+                    // Phase 5D.1 §14: same rationale as school_admin
+                    // above -- a Principal routinely contacts parents,
+                    // matching this role's existing guardians.manage
+                    // grant. `.conversations.students` withheld, same
+                    // reasoning as school_admin.
+                    'communications.conversations.guardians',
                     // Phase 1B.4: Enrollment/academic placement is the
                     // same kind of hands-on operational concern for a
                     // Principal as Student/Guardian identity already is

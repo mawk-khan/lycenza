@@ -3,6 +3,7 @@
 namespace App\Domain\Communications\Http\Controllers;
 
 use App\Domain\Communications\Application\Policy\CommunicationChannelPolicyService;
+use App\Domain\Communications\Application\Policy\CommunicationConversationPolicyService;
 use App\Domain\Communications\Application\Policy\SchoolChannelPolicyService;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Infrastructure\CommunicationApprovalPolicy;
@@ -30,7 +31,7 @@ class CommunicationChannelPolicyController extends Controller
 
     private const MANAGEABLE_CHANNELS = [CommunicationChannel::InApp, CommunicationChannel::Email];
 
-    public function show(TenantContext $context, CommunicationChannelPolicyService $channelPolicy): Response
+    public function show(TenantContext $context, CommunicationChannelPolicyService $channelPolicy, CommunicationConversationPolicyService $conversationPolicy): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.manage', $school);
@@ -74,6 +75,12 @@ class CommunicationChannelPolicyController extends Controller
             // (CommunicationApprovalPolicyController), mirroring the
             // channel-policy/timing-policy split above exactly.
             'approvalPolicy' => $this->presentApprovalPolicy($school),
+            // Phase 5D.1b §16: read side of this same page's Private
+            // conversations section -- the write side is
+            // CommunicationConversationPolicyController::update(),
+            // mirroring the channel-policy/timing-policy/approval-policy
+            // split this page already established exactly.
+            'conversationPolicy' => $this->presentConversationPolicy($school, $conversationPolicy),
             'schoolTimezone' => $school->timezone,
         ]);
     }
@@ -89,6 +96,19 @@ class CommunicationChannelPolicyController extends Controller
             'requireSchoolWideApproval' => $policy !== null && $policy->require_school_wide_approval,
             'requireRequiredCommunicationApproval' => $policy !== null && $policy->require_required_communication_approval,
             'requireNonPrivilegedSenderApproval' => $policy !== null && $policy->require_non_privileged_sender_approval,
+        ];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function presentConversationPolicy(School $school, CommunicationConversationPolicyService $conversationPolicy): array
+    {
+        $view = $conversationPolicy->policyFor($school);
+
+        return [
+            'allowGuardianConversations' => $view->allowGuardianConversations,
+            'allowStudentConversations' => $view->allowStudentConversations,
         ];
     }
 
