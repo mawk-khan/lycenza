@@ -325,8 +325,32 @@ rejection to a typed exception). `finance.payments.view` only (no
 `.manage` — provider ingestion is a trusted system boundary, never a
 human capability). No signature verification, HTTP/provider adapter,
 refunds, or UI. Full as-built detail: `docs/modules/FINANCE.md` ("0G.5
-as-built"). 0G.6 onward (HTTP/API transport, closure) is not yet
-started.
+as-built").
+
+**0G.6 — Finance / Fees / Payments HTTP & API Transport (implemented):**
+thin HTTP controllers exposing the already-authorized 0G.2-0G.5
+Application boundary over this repo's canonical `/api/v1` transport —
+`LedgerAccountController`/`JournalEntryController`
+(`App\Domain\Finance\Http\Controllers`), `ChargeController`
+(`App\Domain\Fees\Http\Controllers`), `PaymentController`
+(`App\Domain\Payments\Http\Controllers`, READ-ONLY). Every controller
+calls only its module's already-authorized facade/read service
+(`LedgerAdministrationService`/`LedgerReadService`,
+`ChargeAdministrationService`/`ChargeReadService`, `PaymentReadService`)
+— never `LedgerService`/`ChargeService`/`PaymentProviderEventService`
+or a raw Eloquent model directly, proven both by review and by a
+static source-grep guard (`FinanceHttpArchitectureGuardTest`). Eleven
+routes total: Ledger Accounts (read), journal entries (read/post/
+reverse), Charges (read/assess/cancel), Payments (read only — no
+`finance.payments.manage` capability exists, no human Payment mutation
+route of any kind). No provider-specific webhook/callback route (no
+provider was selected in this checkpoint's scope, per ADR 0031's own
+deferral); `PaymentProviderEventService` remains unreachable from any
+route. Money is always an exact decimal string over the wire, never a
+float. Zero new migrations, zero new capabilities, zero new
+dependencies. Full as-built detail: `docs/modules/FINANCE.md` ("0G.6
+as-built"). 0G.7 (UI) and 0G.8 (Hardening & Closure) are not yet
+started — Phase 0G remains in progress.
 
 ## Phase 0H — Academic Operations
 

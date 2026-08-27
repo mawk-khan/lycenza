@@ -3425,9 +3425,372 @@ status-blocks-posting, generic assessment idempotency) remain open,
 alongside 0G.5's own deferrals above (Refunds, unapplied cash, provider
 signature verification).
 
+## 0G.6 as-built (HTTP/API Transport)
+
+Thin HTTP controllers over the already-authorized 0G.2-0G.5 Application
+boundary — no new business logic, no new accounting/payment
+architecture decision, no schema change. "HTTP → authorized facade/
+read service → trusted core", never "HTTP → trusted core" (rule 5/70
+of this checkpoint's brief) — enforced both by direct source review and
+by a static test guard (`Tests\Feature\Finance\FinanceHttpArchitectureGuardTest`)
+that greps every new controller for a reference to `LedgerService`,
+`ChargeService`, `PaymentProviderEventService`, or any raw
+Infrastructure model, and fails if one is found.
+
+### Exact endpoint set
+
+Derived from the already-authorized, already-built Application surface
+(FINANCE.md itself never named an exact 0G.6 route list) — the minimum
+coherent administrative API corresponding to what 0G.3-0G.5 already
+authorize, nothing more:
+
+| Method | Path | Controller action | Capability | Facade called |
+|---|---|---|---|---|
+| GET | `/schools/{school}/ledger-accounts` | `LedgerAccountController::index` | `finance.ledger.view` | `LedgerReadService::listAccounts()` |
+| GET | `/schools/{school}/journal-entries` | `JournalEntryController::index` | `finance.ledger.view` | `LedgerReadService::listJournalEntries()` |
+| POST | `/schools/{school}/journal-entries` | `JournalEntryController::store` | `finance.ledger.post` | `LedgerAdministrationService::post()` |
+| GET | `/schools/{school}/journal-entries/{journalEntry}` | `JournalEntryController::show` | `finance.ledger.view` | `LedgerReadService::getJournalEntryDetail()` |
+| POST | `/schools/{school}/journal-entries/{journalEntry}/reverse` | `JournalEntryController::reverse` | `finance.ledger.reverse` | `LedgerAdministrationService::reverse()` |
+| GET | `/schools/{school}/charges` | `ChargeController::index` | `finance.charges.view` | `ChargeReadService::listCharges()` |
+| POST | `/schools/{school}/charges` | `ChargeController::store` | `finance.charges.manage` | `ChargeAdministrationService::assess()` |
+| GET | `/schools/{school}/charges/{charge}` | `ChargeController::show` | `finance.charges.view` | `ChargeReadService::getChargeDetail()` |
+| POST | `/schools/{school}/charges/{charge}/cancel` | `ChargeController::cancel` | `finance.charges.manage` | `ChargeAdministrationService::cancel()` |
+| GET | `/schools/{school}/payments` | `PaymentController::index` | `finance.payments.view` | `PaymentReadService::listPayments()` |
+| GET | `/schools/{school}/payments/{payment}` | `PaymentController::show` | `finance.payments.view` | `PaymentReadService::getPaymentDetail()` |
+
+Deliberately NO other route: no `PATCH`/`DELETE` for any of these
+resources (a recognized `charges`/`payments` row is structurally
+immutable except Charge's own narrow cancellation transition, already
+exposed above); no human Payment mutation route of any kind (no
+`finance.payments.manage` capability exists, and none is introduced
+here); no provider callback/webhook ingestion route (see "Provider
+adapter status" below).
+
+Naming follows this repository's OWN established flat-resource
+convention under `/schools/{school}/...` (`webhook-endpoints`,
+`campuses`, `academic-years`, `employees`, ...) — never a
+domain-name-prefixed `/finance/...` segment, which no other module in
+this API uses.
+
+### Controller/facade dependency boundary
+
+`App\Domain\Finance\Http\Controllers\LedgerAccountController`/
+`JournalEntryController`, `App\Domain\Fees\Http\Controllers\ChargeController`,
+`App\Domain\Payments\Http\Controllers\PaymentController` — each depends
+ONLY on its module's already-authorized facade/read service
+(`LedgerReadService`/`LedgerAdministrationService`,
+`ChargeReadService`/`ChargeAdministrationService`, `PaymentReadService`).
+None imports or references `LedgerService`, `ChargeService`,
+`PaymentProviderEventService`, or any raw `LedgerAccount`/
+`JournalEntry`/`JournalLine`/`Charge`/`Payment`/`PaymentAllocation`/
+`PaymentProviderEvent` Eloquent model — proven both by direct review
+and by `FinanceHttpArchitectureGuardTest`'s source-grep assertions.
+`{journalEntry}`/`{charge}`/`{payment}` route segments are always plain
+string parameters, never implicit Eloquent route-model binding
+(mirroring `WebhookDeliveryController`'s established convention) — the
+authorized facade/read service resolves and authorizes each one fresh,
+under the trusted `$school`'s own `TenantContext`, with the SAME
+uniform not-found response for a nonexistent id and one belonging to a
+different School (no existence oracle). `School $school` itself IS
+resolved via ordinary implicit route-model binding — sanctioned,
+because `school-membership` middleware (`EnsureSchoolMembershipContext`)
+re-validates a real, active membership against it before any
+capability check or Application call runs (rule 19's server-side
+re-verification, never a blind trust of the route/body).
+
+### Authentication / School context
+
+Identical to every other administrative route in this API: `auth:sanctum`
+(Bearer token) + `school-membership` middleware, nested under
+`Route::prefix('schools/{school}')`. No new authentication mechanism.
+No caller-supplied `school_id` is ever accepted inside any Finance/Fees
+mutation request body — `$school` is always the trusted route/
+membership-validated context, and neither `JournalEntryInput`/
+`ChargeInput` schema names a `school_id`/`schoolId` field at all.
+
+### Authorization
+
+`capability:` route middleware (`finance.ledger.view`/`.post`/`.reverse`,
+`finance.charges.view`/`.manage`, `finance.payments.view`) gates every
+route — the SAME harmless double-check convention
+`AcademicYearController` already established, since the underlying
+Application facade/read service checks the identical capability again
+internally before touching any row. No role checks anywhere. No new
+capability was added or renamed; `finance.payments.manage` remains
+deliberately unregistered (rule 10/52) — there is no human-triggered
+Payment mutation for it to gate.
+
+### Money wire format
+
+Every monetary request field (`amount`) is validated as an exact
+decimal STRING (`^\d{1,12}(\.\d{1,2})?$`, matching every Phase 0G
+table's `NUMERIC(14,2)` scale) BEFORE a `Money` value object is ever
+constructed — `1e3`/`NaN`/`Infinity`/a bare float-shaped value with more
+than 2 decimal places is rejected as a 422 `ValidationException`,
+never silently coerced. Every monetary response field is the same
+exact decimal string (`Money::amount()`/the already-`string`-typed DTO
+property), paired with an explicit `currency` — never a JSON number.
+Proven (`JournalEntryApiTest`/`ChargeApiTest`): `1000.00` round-trips
+exactly; `0.00`/negative/`1e3`/`NaN`/3-decimal-place amounts are all
+rejected; non-INR currency is rejected (422) at the Application layer
+(the transport layer validates only 3-letter format, never hardcoding
+INR-only itself — that business rule stays where 0G.1 put it).
+
+### Response DTO / resource shape
+
+Every response is built from an explicit field allowlist (`present*()`
+private methods per controller) over the ALREADY-typed Application DTO
+(`LedgerAccountSummary`, `JournalEntrySummary`/`JournalEntryDetail`/
+`JournalEntryResult`/`JournalLineDetail`, `ChargeSummary`/`ChargeDetail`/
+`ChargeResult`, `PaymentSummary`/`PaymentDetail`) — never
+`$model->toArray()`, never a raw Eloquent model serialized directly.
+`posting_txid`/`creation_txid` cannot appear in any response: neither
+DTO carries either property at all (established at the 0G.2/0G.5
+result-boundary layer, long before this checkpoint), and
+`FinanceHttpArchitectureGuardTest` additionally proves no controller
+source file even references either identifier.
+
+### Pagination / filters
+
+Uses each Read Service's OWN existing bounded pagination
+(`LedgerReadService::MAX_PER_PAGE`/`ChargeReadService::MAX_PER_PAGE`,
+both 100; `PaymentReadService` likewise clamps internally) — the HTTP
+layer never re-implements pagination or filtering in PHP; every filter
+(`posted_from`/`posted_to`/`ledger_account_id`/`reversed_only`/`search`
+for journal entries; `student_id`/`academic_year_id`/`include_cancelled`
+for charges; `provider_payment_reference` for payments) is translated
+1:1 into the SAME typed Query DTO (`JournalEntryQuery`/`ChargeQuery`/
+`PaymentQuery`) each Read Service already accepted before this
+checkpoint — no new filter, no arbitrary query DSL. Response envelope:
+`{"data": [...], "meta": {"page", "perPage", "total"}}`, matching this
+repository's own established convention (`DocumentController`/
+`EmployeeDirectoryController`) exactly.
+
+### Error mapping
+
+No new exception-to-HTTP mapping code was written — every Finance/Fees/
+Payments Application exception already carries its own `httpStatus`/
+`errorCode` (via each module's `FinanceException`/`FeesException`/
+`PaymentsException` base class, all committed in 0G.2-0G.5), and
+`bootstrap/app.php`'s ALREADY-EXISTING generic exception renderer
+(`method_exists($e, 'getStatusCode') => $e->getStatusCode()`) already
+renders any such exception into the standard `{"error": {...}}` envelope
+with the correct status/code — this checkpoint needed zero new
+`app/Exceptions` code. Confirmed mappings actually exercised:
+`JOURNAL_ENTRY_NOT_FOUND`/`LEDGER_ACCOUNT_NOT_FOUND`/`STUDENT_NOT_FOUND`/
+`CHARGE_NOT_FOUND`/`PAYMENT_NOT_FOUND` → 404;
+`JOURNAL_ENTRY_ALREADY_REVERSED`/`CHARGE_ALREADY_CANCELLED`/
+`CHARGE_HAS_PAYMENT_ALLOCATIONS` → 409; `UNBALANCED_JOURNAL_ENTRY`/
+`INVALID_JOURNAL_ENTRY`/`INVALID_CHARGE`/malformed-decimal/non-INR →
+422; a denied capability → 403 (`AuthorizationException`, framework-
+level); a guest → 401. No SQLSTATE, constraint name, or trigger
+function name is ever rendered to a client.
+
+### Cross-School privacy
+
+Uniform not-found (never a distinguishing 403/different message) for a
+nonexistent id and one belonging to a different School alike, for
+every one of `{journalEntry}`/`{charge}`/`{payment}` — inherited
+directly from each Read Service's own already-proven "no existence
+oracle" behavior (0G.3-0G.5), re-confirmed at the HTTP layer
+(`JournalEntryApiTest`/`ChargeApiTest`/`PaymentApiTest`'s
+cross-School tests, each asserting 404, never 403).
+
+### Idempotency (HTTP layer)
+
+Ledger posting HTTP (`POST /journal-entries`): **NOT generically
+idempotent** — 0G.2 explicitly deferred this; a retried request creates
+a second, independent journal entry. Charge assessment HTTP
+(`POST /charges`): **NOT generically idempotent** — 0G.4 explicitly
+deferred this identically. Neither route carries the `idempotent`
+middleware, and neither accepts/requires an `Idempotency-Key`. Ledger
+reversal and Charge cancellation already have their OWN structural
+at-most-once business semantics (`JOURNAL_ENTRY_ALREADY_REVERSED`/
+`CHARGE_ALREADY_CANCELLED`, both 409 on a repeat) — a retried HTTP
+request is safely rejected, never silently replayed as a "success"
+via a generic idempotency-replay mechanism. Provider-event idempotency
+(0G.5's `payment_provider_events` unique-claim mechanism) remains
+entirely inside the trusted `PaymentProviderEventService` boundary,
+unreachable from any route this checkpoint adds.
+
+### Audit / outbox cardinality
+
+Unchanged. No controller calls `AuditRecorder` or raises a domain event
+directly — every audit event (`ledger_account.list_viewed`/
+`journal_entry.list_viewed`/`.detail_viewed`/`.posted`/`.reversed`,
+`charge.list_viewed`/`.detail_viewed`/`.assessed`/`.cancelled`,
+`payment.list_viewed`/`.detail_viewed`) and every outbox event
+(`JournalEntryPosted`/`JournalEntryReversed`, `ChargeAssessed`/
+`ChargeCancelled`) is emitted exactly once per successful call, from
+inside the SAME Application-layer operation transport merely invokes —
+a denied (401/403) request never reaches that code at all, so it is
+never audited, exactly as already established.
+
+### Rate limiting
+
+`throttle:school-api-mutations` (the SAME named limiter every other
+School-scoped mutation route already uses — 60/min, School+actor-keyed)
+on the four mutation routes (`POST /journal-entries`,
+`POST /journal-entries/{id}/reverse`, `POST /charges`,
+`POST /charges/{id}/cancel`). Read routes carry no additional
+Finance-specific limiter, matching this repository's own existing
+convention for comparable read endpoints (`AcademicYearController`/
+`WebhookDeliveryController`'s own GET actions). No new rate limiter was
+introduced.
+
+### Provider adapter status
+
+**Not implemented, and not routed.** No provider was selected in this
+checkpoint's committed scope, so per rule 6 of this checkpoint's brief,
+provider-specific HTTP/signature transport remains entirely deferred —
+no `POST /payments/provider-events`, no `/payments/webhook`, no
+`/provider/callback`, no generic "trust normalized request JSON"
+endpoint of any shape. `PaymentProviderEventService` (the trusted,
+already-verified-input ingestion boundary, 0G.5) remains reachable only
+from internal/test code, never from any registered route —
+`FinanceHttpArchitectureGuardTest` proves both that no controller
+references it and that no route matching a provider/webhook/callback
+URI shape is registered.
+
+### Human Payment mutation status
+
+**Not implemented, and not possible.** No `finance.payments.manage`
+capability exists (0G.5's own deliberate decision, reconfirmed here);
+no route of any HTTP verb exists that could let a School Admin —
+however privileged — fabricate, settle, or allocate a Payment through
+this human-facing API. `PaymentApiTest::no_human_payment_mutation_route_exists`
+proves every non-GET verb against `/payments`/`/payments/{id}` resolves
+to a router-level rejection (405, the route pattern matches but the
+verb does not), never a real endpoint that merely denies authorization.
+
+### OpenAPI / generated types
+
+`packages/contracts/openapi/school-os-api.yaml` gained 11 new paths (the
+exact set above) and 15 new schema components (`Money`, `LedgerAccount`,
+`JournalLine`, `JournalEntrySummary`, `JournalEntryDetail`,
+`JournalEntryResult`, `JournalEntryInput`, `ChargeSummary`,
+`ChargeDetail`, `ChargeResult`, `ChargeInput`, `PaymentAllocationEntry`,
+`PaymentSummary`, `PaymentDetail`) plus 3 new path parameters
+(`JournalEntryId`, `ChargeId`, `PaymentId`) — every Money-shaped field
+is declared `type: string` with an explicit decimal `pattern`, never
+`number`/`float`/`double`; `currency` is documented as INR-only for
+this phase, no multi-currency promise. `packages/shared-types` was
+regenerated (`npm run generate`) as the direct, mechanical consequence
+of this contract change — `src/generated/school-os-api.ts` is the only
+file that changed there, never hand-edited — and `npm run type-check`
+passes with zero errors. No provider-callback path is documented
+(nothing to document — it does not exist).
+
+### Tests
+
+`tests/Feature/Finance/JournalEntryApiTest.php` (14 tests: guest/
+view-only/post-only/non-member denial, exact-decimal post/reverse
+round-trip, unbalanced/single-line/zero/negative/float-shaped/non-INR
+rejection, cross-School account/journal-entry safety, pagination),
+`tests/Feature/Finance/FinanceHttpArchitectureGuardTest.php` (6 tests:
+the static trusted-core/raw-model/internal-field/provider-route/
+Payment-mutation-route guards), `tests/Feature/Fees/ChargeApiTest.php`
+(8 tests: the same matrix applied to Charges, plus the
+Charge-with-allocations cancellation-interlock proof at the HTTP
+layer), `tests/Feature/Payments/PaymentApiTest.php` (7 tests: read-only
+matrix, the no-human-mutation-route proof, internal-field-absence
+assertions).
+
+API-focused selector (adds to, never replaces, the domain selector):
+
+```
+php artisan test \
+  tests/Feature/Finance \
+  tests/Feature/Postgres/FinanceRawIsolationTest.php \
+  tests/Unit/Support/Money \
+  tests/Feature/Fees \
+  tests/Feature/Postgres/FeesRawIsolationTest.php \
+  tests/Feature/Payments \
+  tests/Feature/Postgres/PaymentsRawIsolationTest.php \
+  tests/Feature/Postgres/PaymentAllocationEnforcementTest.php
+```
+
+(Identical command to the existing domain selector — the new HTTP tests
+already live inside `tests/Feature/Finance`/`Fees`/`Payments`, so one
+selector now covers both domain invariants and transport, exactly as
+this checkpoint's own brief anticipated "both are useful" without
+requiring two different directory sets.)
+
+Exact-HEAD (`a89fa53`) pre-code result: 311 tests / 603 assertions / 0
+failures (identical to 0G.5's own closure figure — confirming this
+checkpoint's additions are purely additive at the domain level). Final
+(with 0G.6's HTTP tests): 347 tests / 758 assertions / 0 failures. Full
+repository regression (isolated `finance0g6` infrastructure, fresh
+test-database reset immediately before the run,
+`QUEUE_CONNECTION=sync`/`MAIL_MAILER=array` verified reaching the
+executing PHP process): **2790 tests / 9295 assertions / 0 failures /
+0 errors**. Pint: 1106 files, PASS. PHPStan/Larastan: 582 files, 0
+errors.
+
+Full-suite baseline provenance (reconciled during closure): the 0G.5
+closure report's own **2753 tests / 9130 assertions / 0 failures / 0
+errors** figure was measured BEFORE the 311th domain-selector test
+(section 26's retry-succeeds-once proof) was added during that same
+closure review — it is a product-equivalent historical figure, not the
+exact `a89fa53` tip. A dedicated, isolated exact-`a89fa53` full-suite
+run (detached worktree at `a89fa53`, isolated `finance0g6-baseline`
+infrastructure, fresh test-database reset immediately before the run)
+gives the true committed-parent baseline: **2754 tests / 9136
+assertions / 0 failures / 0 errors** — exactly one test and 6
+assertions more than the pre-311th-test figure, consistent with that
+one additional committed test. Corrected 0G.6 delta against the exact
+committed parent: **+36 tests / +159 assertions** (not +37/+165, which
+compared against the stale pre-311th-test figure instead of the exact
+`a89fa53` tip).
+
+### Security findings (0G.6)
+
+No unresolved P0/P1/P2/P3/P4 — reviewed for: unauthenticated access
+(401, proven), capability bypass (route middleware + facade's own
+internal check, both independently sufficient), role-based shortcuts
+(none — capability-only throughout), cross-School IDOR (uniform 404,
+proven for every resource), route-model-binding oracle (never used for
+`JournalEntry`/`Charge`/`Payment` — always a plain string resolved by
+the authorized service), caller-controlled `school_id` in a request
+body (impossible — no such field is ever read; `$school` is always the
+trusted route/membership context), raw Eloquent serialization (never —
+proven by static guard), `posting_txid`/`creation_txid` exposure
+(never — proven by DTO shape and static guard), float Money (rejected,
+proven), non-INR mutation (rejected, proven), mass assignment (never —
+every DTO is built field-by-field from an explicit allowlist), unbounded
+pagination (impossible — every Read Service clamps `perPage`
+internally, matching this repository's own existing silent-clamp
+convention rather than a 422 rejection), provider ingestion
+accidentally public (impossible — no route references
+`PaymentProviderEventService`, proven), human Payment mutation
+accidentally public (impossible — no such route exists, proven), SQL
+error leakage (never — no controller catches `QueryException`/
+`Throwable` broadly), audit/outbox duplication (impossible — transport
+never calls `AuditRecorder`/raises a domain event itself), and
+non-production stack trace exposure (governed by the pre-existing,
+unmodified global exception renderer's `config('app.debug')` gate).
+
+### What 0G.6 intentionally does not implement
+
+No UI of any kind (Finance/Charge/Payment pages, forms, tables,
+navigation, dashboard widgets — even though generated TypeScript types
+now exist). No Refunds. No provider-specific HTTP/signature adapter —
+`PaymentProviderEventService` remains internal-only. No human
+`finance.payments.manage` capability or mutation route. No new
+migration (schema unchanged), no new capability (catalog unchanged), no
+new Composer/npm runtime dependency, no generic HTTP idempotency for
+ledger posting/Charge assessment (both remain explicitly deferred, per
+0G.2/0G.4).
+
+### Next checkpoint boundary
+
+0G.7 (UI / Finance Workspace, per the committed roadmap) is not yet
+started. 0G.8 (Hardening & Closure) remains after it. Phase 0G is NOT
+closed by this checkpoint.
+
 ## Roadmap relationship
 
 Implements `docs/roadmap/MASTER-ROADMAP.md`'s **Phase 0G — Finance and
-Fees**. Phase 0G is marked **IN PROGRESS** (0G.0 through 0G.5 complete;
-0G.6 onward not started) — see the corresponding `MASTER-ROADMAP.md`
+Fees**. Phase 0G is marked **IN PROGRESS** (0G.0 through 0G.6 complete;
+0G.7 onward not started) — see the corresponding `MASTER-ROADMAP.md`
 edit in this same checkpoint.

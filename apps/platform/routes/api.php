@@ -9,6 +9,9 @@ use App\Domain\AcademicStructure\Http\Controllers\SectionController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
+use App\Domain\Fees\Http\Controllers\ChargeController;
+use App\Domain\Finance\Http\Controllers\JournalEntryController;
+use App\Domain\Finance\Http\Controllers\LedgerAccountController;
 use App\Domain\Guardians\Http\Controllers\GuardianContactController;
 use App\Domain\Guardians\Http\Controllers\GuardianController;
 use App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController;
@@ -16,6 +19,7 @@ use App\Domain\HR\Http\Controllers\EmployeeActivityController;
 use App\Domain\HR\Http\Controllers\EmployeeDirectoryController;
 use App\Domain\HR\Http\Controllers\EmployeeProfileController;
 use App\Domain\HR\Http\Controllers\EmployeeSensitiveDocumentController;
+use App\Domain\Payments\Http\Controllers\PaymentController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
@@ -536,6 +540,63 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/documents/{document}/archive', [DocumentController::class, 'archive'])
                 ->middleware(['throttle:documents-writes', 'private-no-store'])
                 ->name('schools.documents.archive');
+
+            // Phase 0G.6: Finance/Fees/Payments HTTP transport -- thin
+            // controllers over the ALREADY-authorized 0G.2-0G.5
+            // Application boundary (LedgerReadService/
+            // LedgerAdministrationService, ChargeReadService/
+            // ChargeAdministrationService, PaymentReadService), never
+            // the trusted cores (LedgerService/ChargeService) or a raw
+            // Eloquent model. `capability:` middleware here mirrors
+            // AcademicYearController's own established double-check
+            // convention -- the underlying Application service checks
+            // the identical capability again before touching any row.
+            // No `idempotent` middleware on any Finance mutation route
+            // (rule 30/31): 0G.2/0G.4 explicitly deferred generic
+            // ledger-posting/Charge-assessment HTTP idempotency, and
+            // reversal/cancellation already have their own structural
+            // at-most-once business semantics (409 on a repeat). No
+            // Payment mutation route exists at all -- there is no
+            // `finance.payments.manage` capability (0G.5); settlement
+            // remains the trusted `PaymentProviderEventService`
+            // boundary, reached only by a future provider adapter, not
+            // by this human administrative API.
+            Route::get('/ledger-accounts', [LedgerAccountController::class, 'index'])
+                ->middleware('capability:finance.ledger.view')
+                ->name('schools.ledger-accounts.index');
+
+            Route::get('/journal-entries', [JournalEntryController::class, 'index'])
+                ->middleware('capability:finance.ledger.view')
+                ->name('schools.journal-entries.index');
+            Route::post('/journal-entries', [JournalEntryController::class, 'store'])
+                ->middleware(['capability:finance.ledger.post', 'throttle:school-api-mutations'])
+                ->name('schools.journal-entries.store');
+            Route::get('/journal-entries/{journalEntry}', [JournalEntryController::class, 'show'])
+                ->middleware('capability:finance.ledger.view')
+                ->name('schools.journal-entries.show');
+            Route::post('/journal-entries/{journalEntry}/reverse', [JournalEntryController::class, 'reverse'])
+                ->middleware(['capability:finance.ledger.reverse', 'throttle:school-api-mutations'])
+                ->name('schools.journal-entries.reverse');
+
+            Route::get('/charges', [ChargeController::class, 'index'])
+                ->middleware('capability:finance.charges.view')
+                ->name('schools.charges.index');
+            Route::post('/charges', [ChargeController::class, 'store'])
+                ->middleware(['capability:finance.charges.manage', 'throttle:school-api-mutations'])
+                ->name('schools.charges.store');
+            Route::get('/charges/{charge}', [ChargeController::class, 'show'])
+                ->middleware('capability:finance.charges.view')
+                ->name('schools.charges.show');
+            Route::post('/charges/{charge}/cancel', [ChargeController::class, 'cancel'])
+                ->middleware(['capability:finance.charges.manage', 'throttle:school-api-mutations'])
+                ->name('schools.charges.cancel');
+
+            Route::get('/payments', [PaymentController::class, 'index'])
+                ->middleware('capability:finance.payments.view')
+                ->name('schools.payments.index');
+            Route::get('/payments/{payment}', [PaymentController::class, 'show'])
+                ->middleware('capability:finance.payments.view')
+                ->name('schools.payments.show');
         });
 });
 

@@ -2636,6 +2636,392 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # Phase 0G.6: thin HTTP transport over the already-authorized 0G.2-0G.5
+  # Application boundary (LedgerReadService/LedgerAdministrationService,
+  # ChargeReadService/ChargeAdministrationService, PaymentReadService) --
+  # never the trusted cores (LedgerService/ChargeService/
+  # PaymentProviderEventService) or a raw Eloquent model. Money is
+  # always an exact decimal STRING (never a JSON number) -- see the
+  # `Money` schema below. No Payment mutation path exists anywhere (no
+  # `finance.payments.manage` capability, ADR 0031) and no provider
+  # callback/webhook path is documented -- that HTTP adapter remains
+  # explicitly deferred (docs/modules/FINANCE.md "0G.6 as-built").
+  /schools/{schoolId}/ledger-accounts:
+    get:
+      operationId: listLedgerAccounts
+      summary: Lists a School's chart-of-accounts entries. Requires finance.ledger.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LedgerAccount" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.ledger.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/journal-entries:
+    get:
+      operationId: listJournalEntries
+      summary: Lists a School's posted journal history. Requires finance.ledger.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: posted_from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: posted_to, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: ledger_account_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: reversed_only, in: query, required: false, description: "true = only entries that are themselves a reversal; false = only original entries; omitted = no filter.", schema: { type: boolean } }
+        - { name: search, in: query, required: false, description: Substring match on description., schema: { type: string } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/JournalEntrySummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.ledger.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: postJournalEntry
+      summary: >
+        Posts a new, balanced journal entry via LedgerAdministrationService
+        (never a direct journal_entries/journal_lines write). Requires
+        finance.ledger.post. NOT idempotent -- 0G.2 explicitly deferred
+        generic ledger-posting HTTP idempotency; no Idempotency-Key is
+        accepted or required, and a retried request creates a second,
+        independent journal entry.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JournalEntryInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/JournalEntryResult" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.ledger.post in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LEDGER_ACCOUNT_NOT_FOUND -- a line names a nonexistent or cross-School ledger account.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failure (malformed decimal, fewer than 2 lines, unbalanced entry, non-INR currency).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/journal-entries/{journalEntryId}:
+    get:
+      operationId: getJournalEntry
+      summary: Fetch one journal entry with its lines. Requires finance.ledger.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/JournalEntryId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/JournalEntryDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.ledger.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: JOURNAL_ENTRY_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way -- no cross-School oracle).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/journal-entries/{journalEntryId}/reverse:
+    post:
+      operationId: reverseJournalEntry
+      summary: >
+        Reverses a posted journal entry via
+        LedgerAdministrationService::reverse() (a new, inverse journal
+        entry -- the original is never mutated). Requires
+        finance.ledger.reverse (a separate capability from
+        finance.ledger.post). NOT a generic HTTP-idempotent endpoint --
+        reversal has its own structural at-most-once semantics
+        (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/JournalEntryId" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 255, nullable: true }
+      responses:
+        "201":
+          description: Created (the new reversing journal entry).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/JournalEntryResult" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.ledger.reverse in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: JOURNAL_ENTRY_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: JOURNAL_ENTRY_ALREADY_REVERSED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/charges:
+    get:
+      operationId: listCharges
+      summary: Lists a School's Fees Charges. Requires finance.charges.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: student_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: include_cancelled, in: query, required: false, schema: { type: boolean, default: false } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/ChargeSummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: assessCharge
+      summary: >
+        Assesses (recognizes) a new Charge via
+        ChargeAdministrationService::assess() -- immediate ledger
+        recognition, no draft state. Requires finance.charges.manage.
+        NOT idempotent -- 0G.4 explicitly deferred generic
+        Charge-assessment HTTP idempotency; a retried request creates a
+        second, independent Charge.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChargeInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/ChargeResult" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: STUDENT_NOT_FOUND, ACADEMIC_YEAR_NOT_FOUND, or LEDGER_ACCOUNT_NOT_FOUND (nonexistent or cross-School reference).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failure (malformed decimal, non-positive amount, non-INR currency, identical receivable/revenue accounts).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/charges/{chargeId}:
+    get:
+      operationId: getCharge
+      summary: Fetch one Charge's full detail. Requires finance.charges.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/ChargeId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/ChargeDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: CHARGE_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/charges/{chargeId}/cancel:
+    post:
+      operationId: cancelCharge
+      summary: >
+        Cancels an active Charge via ChargeAdministrationService::cancel()
+        (reverses the recognition journal entry -- the original is never
+        mutated). Requires finance.charges.manage. Rejected with
+        CHARGE_HAS_PAYMENT_ALLOCATIONS (409) if any Payment has already
+        been allocated to this Charge (ADR 0031) -- Refund/compensation
+        is a future, separate checkpoint. NOT a generic HTTP-idempotent
+        endpoint -- cancellation has its own at-most-once semantics
+        (CHARGE_ALREADY_CANCELLED, 409, on a repeat).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/ChargeId" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 255, nullable: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/ChargeResult" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: CHARGE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: CHARGE_ALREADY_CANCELLED or CHARGE_HAS_PAYMENT_ALLOCATIONS.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payments:
+    get:
+      operationId: listPayments
+      summary: >
+        Lists a School's recognized Payments (READ ONLY -- there is no
+        finance.payments.manage capability and no human Payment
+        mutation route exists anywhere; settlement recognition belongs
+        exclusively to the trusted, not-yet-HTTP-exposed
+        PaymentProviderEventService boundary). Requires
+        finance.payments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: provider_payment_reference, in: query, required: false, schema: { type: string } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/PaymentSummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.payments.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payments/{paymentId}:
+    get:
+      operationId: getPayment
+      summary: Fetch one Payment's full detail, including its Charge allocations. Requires finance.payments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PaymentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PaymentDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.payments.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: PAYMENT_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2769,6 +3155,24 @@ components:
       required: true
       description: Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy).
       schema: { type: string, format: uuid }
+    JournalEntryId:
+      name: journalEntryId
+      in: path
+      required: true
+      description: Phase 0G.6. Nonexistent or cross-School ids both resolve to JOURNAL_ENTRY_NOT_FOUND -- no existence oracle.
+      schema: { type: string, format: uuid }
+    ChargeId:
+      name: chargeId
+      in: path
+      required: true
+      description: Phase 0G.6. Nonexistent or cross-School ids both resolve to CHARGE_NOT_FOUND -- no existence oracle.
+      schema: { type: string, format: uuid }
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      description: Phase 0G.6. Nonexistent or cross-School ids both resolve to PAYMENT_NOT_FOUND -- no existence oracle.
+      schema: { type: string, format: uuid }
   headers:
     XRequestId:
       description: Correlates this response with server-side logs/audit entries.
@@ -2827,6 +3231,184 @@ components:
               type: object
               nullable: true
               description: Field-level validation errors, present only on 422 responses.
+
+    Money:
+      type: object
+      description: >
+        Phase 0G.6: an exact decimal amount plus its explicit currency --
+        NEVER a JSON number/float (docs/architecture/adr/0030). `amount`
+        is a plain decimal string, at most 12 integer digits and 2
+        fractional digits (matching every Phase 0G table's
+        NUMERIC(14,2) columns); no scientific notation, no locale
+        formatting.
+      required: [amount, currency]
+      properties:
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", example: "1000.00" }
+        currency: { type: string, pattern: "^[A-Z]{3}$", example: INR, description: "INR only in Phase 0G -- no multi-currency support yet." }
+
+    LedgerAccount:
+      type: object
+      required: [id, code, name, type, currency, isSystem, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [asset, liability, equity, income, expense] }
+        currency: { type: string, example: INR }
+        isSystem: { type: boolean }
+        status: { type: string, enum: [active, inactive] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    JournalLine:
+      type: object
+      required: [id, ledgerAccountId, accountCode, accountName, side, amount, currency]
+      properties:
+        id: { type: string, format: uuid }
+        ledgerAccountId: { type: string, format: uuid }
+        accountCode: { type: string }
+        accountName: { type: string }
+        side: { type: string, enum: [debit, credit] }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        currency: { type: string, example: INR }
+
+    JournalEntrySummary:
+      type: object
+      required: [id, currency, description, postedAt, reversalOfJournalEntryId, reversedByJournalEntryId, lineCount]
+      description: Deliberately never includes posting_txid (internal PostgreSQL transaction-identity metadata, never Finance business data).
+      properties:
+        id: { type: string, format: uuid }
+        currency: { type: string, example: INR }
+        description: { type: string }
+        postedAt: { type: string, format: date-time }
+        reversalOfJournalEntryId: { type: string, format: uuid, nullable: true }
+        reversedByJournalEntryId: { type: string, format: uuid, nullable: true }
+        lineCount: { type: integer }
+
+    JournalEntryDetail:
+      allOf:
+        - $ref: "#/components/schemas/JournalEntrySummary"
+        - type: object
+          required: [lines]
+          properties:
+            lines: { type: array, items: { $ref: "#/components/schemas/JournalLine" } }
+
+    JournalEntryResult:
+      type: object
+      required: [id, currency, description, postedAt, reversalOfJournalEntryId, lineCount]
+      description: The result of post()/reverse() -- deliberately minimal, never the full detail's lines.
+      properties:
+        id: { type: string, format: uuid }
+        currency: { type: string, example: INR }
+        description: { type: string }
+        postedAt: { type: string, format: date-time }
+        reversalOfJournalEntryId: { type: string, format: uuid, nullable: true }
+        lineCount: { type: integer }
+
+    JournalEntryInput:
+      type: object
+      required: [currency, description, lines]
+      properties:
+        currency: { type: string, pattern: "^[A-Z]{3}$", example: INR }
+        description: { type: string, maxLength: 255 }
+        lines:
+          type: array
+          minItems: 2
+          maxItems: 50
+          items:
+            type: object
+            required: [ledger_account_id, side, amount]
+            properties:
+              ledger_account_id: { type: string, format: uuid }
+              side: { type: string, enum: [debit, credit] }
+              amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", example: "1000.00" }
+
+    ChargeSummary:
+      type: object
+      required: [id, studentId, academicYearId, description, amount, currency, dueDate, cancelledAt, createdAt]
+      description: No amount_paid/remaining_balance/paid/partially_paid field -- no such settlement status could be justified without a Payment record.
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        description: { type: string }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        currency: { type: string, example: INR }
+        dueDate: { type: string, format: date, nullable: true }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    ChargeDetail:
+      allOf:
+        - $ref: "#/components/schemas/ChargeSummary"
+        - type: object
+          required: [receivableLedgerAccountId, revenueLedgerAccountId, journalEntryId, cancellationJournalEntryId]
+          properties:
+            receivableLedgerAccountId: { type: string, format: uuid }
+            revenueLedgerAccountId: { type: string, format: uuid }
+            journalEntryId: { type: string, format: uuid }
+            cancellationJournalEntryId: { type: string, format: uuid, nullable: true }
+
+    ChargeResult:
+      type: object
+      required: [id, studentId, academicYearId, amount, currency, journalEntryId, cancelledAt, cancellationJournalEntryId]
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        currency: { type: string, example: INR }
+        journalEntryId: { type: string, format: uuid }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+        cancellationJournalEntryId: { type: string, format: uuid, nullable: true }
+
+    ChargeInput:
+      type: object
+      required: [student_id, academic_year_id, description, amount, currency, receivable_ledger_account_id, revenue_ledger_account_id]
+      properties:
+        student_id: { type: string, format: uuid }
+        academic_year_id: { type: string, format: uuid }
+        description: { type: string, maxLength: 255 }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", example: "1000.00" }
+        currency: { type: string, pattern: "^[A-Z]{3}$", example: INR }
+        receivable_ledger_account_id: { type: string, format: uuid }
+        revenue_ledger_account_id: { type: string, format: uuid }
+        due_date: { type: string, format: date, nullable: true }
+
+    PaymentAllocationEntry:
+      type: object
+      required: [chargeId, amount]
+      properties:
+        chargeId: { type: string, format: uuid }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+
+    PaymentSummary:
+      type: object
+      required: [id, provider, amount, currency, settledAt]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        currency: { type: string, example: INR }
+        settledAt: { type: string, format: date-time }
+
+    PaymentDetail:
+      type: object
+      required: [id, provider, providerPaymentReference, amount, currency, settlementLedgerAccountId, journalEntryId, settledAt, allocations]
+      description: >
+        Never includes creation_txid, a raw provider payload, or any
+        provider secret/signature material -- structurally impossible,
+        this projection carries only normalized, safe fields.
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string }
+        providerPaymentReference: { type: string }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        currency: { type: string, example: INR }
+        settlementLedgerAccountId: { type: string, format: uuid }
+        journalEntryId: { type: string, format: uuid }
+        settledAt: { type: string, format: date-time }
+        allocations: { type: array, items: { $ref: "#/components/schemas/PaymentAllocationEntry" } }
 
     WebhookEndpoint:
       type: object
