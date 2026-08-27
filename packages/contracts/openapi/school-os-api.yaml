@@ -2635,6 +2635,299 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
+  # --- Phase 1D.5: Admissions administrative surface
+  # (docs/admissions/PHASE-1D-5-ADMINISTRATIVE-API.md). Exposes the
+  # already-built Admissions domain (Phase 1D.1-1D.4); admissions.manage
+  # gates every write including conversion, mirroring enrollments.manage
+  # covering its whole Enrollment lifecycle as one capability.
+
+  /schools/{schoolId}/applicants:
+    get:
+      operationId: listApplicants
+      summary: List/search a School's Applicants. Requires admissions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: name, in: query, required: false, schema: { type: string }, description: Matches first or last name. }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/ApplicantSummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+    post:
+      operationId: createApplicant
+      summary: Creates an Applicant. Requires admissions.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApplicantInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Applicant" } } }
+
+  /schools/{schoolId}/applicants/{applicantId}:
+    get:
+      operationId: getApplicant
+      summary: Fetch one Applicant. Requires admissions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/ApplicantId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Applicant" } } }
+        "404":
+          description: Not found (including a cross-School id -- indistinguishable from nonexistent).
+
+  /schools/{schoolId}/applicants/{applicantId}/applications:
+    get:
+      operationId: listApplicantApplications
+      summary: >
+        Full reapplication history for one Applicant, newest first --
+        never collapsed (docs/modules/ADMISSIONS.md §3). Requires
+        admissions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/ApplicantId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/AdmissionApplicationSummary" } } } }
+        "404":
+          description: Not found (including a cross-School id -- indistinguishable from nonexistent).
+
+  /schools/{schoolId}/admission-applications:
+    get:
+      operationId: listAdmissionApplications
+      summary: List/filter a School's AdmissionApplications. Requires admissions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [draft, submitted, accepted, rejected, withdrawn, converted] } }
+        - { name: academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: campus_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: grade_level_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: applicant_name, in: query, required: false, schema: { type: string }, description: Matches the Applicant's first or last name. }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AdmissionApplicationSummary" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+    post:
+      operationId: createAdmissionApplication
+      summary: >
+        Creates a draft AdmissionApplication. Always begins as `draft`
+        -- no `status` is ever accepted. Requires admissions.manage.
+        Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdmissionApplicationInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AdmissionApplication" } } }
+        "422":
+          description: Cross-School reference, or an open (draft/submitted/accepted) application already exists for this Applicant/AcademicYear/Campus/GradeLevel.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/admission-applications/{admissionApplicationId}:
+    get:
+      operationId: getAdmissionApplication
+      summary: >
+        Fetch one AdmissionApplication, including decisionNote and
+        conversion provenance. Requires admissions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AdmissionApplicationId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AdmissionApplication" } } }
+        "404":
+          description: Not found (including a cross-School id -- indistinguishable from nonexistent).
+
+  /schools/{schoolId}/admission-applications/{admissionApplicationId}/submit:
+    post:
+      operationId: submitAdmissionApplication
+      summary: draft -> submitted. Requires admissions.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AdmissionApplicationId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AdmissionApplication" } } }
+        "422":
+          description: Not currently draft -- an illegal lifecycle transition.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/admission-applications/{admissionApplicationId}/accept:
+    post:
+      operationId: acceptAdmissionApplication
+      summary: >
+        submitted -> accepted. Never triggers conversion -- accept and
+        convert remain distinct commands. Requires admissions.manage.
+        Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AdmissionApplicationId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdmissionDecisionInput" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AdmissionApplication" } } }
+        "422":
+          description: Not currently submitted -- an illegal lifecycle transition.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/admission-applications/{admissionApplicationId}/reject:
+    post:
+      operationId: rejectAdmissionApplication
+      summary: submitted -> rejected. No hard delete. Requires admissions.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AdmissionApplicationId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdmissionDecisionInput" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AdmissionApplication" } } }
+        "422":
+          description: Not currently submitted -- an illegal lifecycle transition.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/admission-applications/{admissionApplicationId}/withdraw:
+    post:
+      operationId: withdrawAdmissionApplication
+      summary: >
+        submitted -> withdrawn, or accepted -> withdrawn. Never touches
+        decisionNote. Requires admissions.manage. Idempotency-Key
+        required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AdmissionApplicationId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AdmissionApplication" } } }
+        "422":
+          description: Not currently submitted/accepted -- an illegal lifecycle transition.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/admission-applications/{admissionApplicationId}/convert:
+    post:
+      operationId: convertAdmissionApplication
+      summary: >
+        accepted -> converted. Composes StudentService/GuardianService/
+        GuardianContactService/StudentGuardianRelationshipService/
+        StudentEnrollmentService inside one outer transaction
+        (docs/admissions/PHASE-1D-3-ADMISSION-CONVERSION.md). Omitting
+        `guardian`, or sending it as null, is the one canonical "no
+        Guardian" representation. Requires admissions.manage.
+        Idempotency-Key required (defense-in-depth on top of this
+        endpoint's own domain-level conversion idempotency).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AdmissionApplicationId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdmissionConversionInput" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AdmissionConversionResult" } } }
+        "422":
+          description: >
+            Not currently accepted (including already converted --
+            AdmissionApplicationAlreadyConvertedException), an
+            incompatible Section, a duplicate Student Number, a
+            duplicate roll number, or a Guardian create-vs-link
+            candidate conflict (AdmissionGuardianSelectionRequiredException
+            -- never returns candidate ids/names/contact values).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -2759,6 +3052,16 @@ components:
       schema: { type: string, format: uuid }
     RolloverItemId:
       name: item
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ApplicantId:
+      name: applicantId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AdmissionApplicationId:
+      name: admissionApplicationId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -3739,7 +4042,6 @@ components:
         pending: { type: integer }
         planStatus: { type: string, enum: [draft, validated, executing, completed, completed_with_errors, cancelled] }
 
-
     Document:
       type: object
       description: >
@@ -3759,6 +4061,174 @@ components:
         mime_type: { type: string }
         size_bytes: { type: integer }
         uploaded_at: { type: string, format: date-time }
+    # --- Phase 1D.5: Admissions administrative surface
+
+    ApplicantSummary:
+      type: object
+      required: [id, firstName]
+      description: >
+        List-row shape -- deliberately excludes dateOfBirth (Sensitive
+        personal data of a minor), matching StudentSummary's identical
+        precedent. See Applicant for the full single-record shape.
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        middleName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+
+    Applicant:
+      type: object
+      required: [id, firstName, dateOfBirth, createdAt, updatedAt]
+      description: Full single-record shape (show/create responses only -- never the list response, see ApplicantSummary).
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        middleName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        dateOfBirth: { type: string, format: date }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ApplicantInput:
+      type: object
+      required: [first_name, date_of_birth]
+      description: No school_id, no contact fields, no Guardian fields -- Admissions stores no contact data of any kind (docs/modules/ADMISSIONS.md §9).
+      properties:
+        first_name: { type: string, maxLength: 255 }
+        middle_name: { type: string, maxLength: 255, nullable: true }
+        last_name: { type: string, maxLength: 255, nullable: true }
+        date_of_birth: { type: string, format: date }
+
+    AdmissionApplicationSummary:
+      type: object
+      required: [id, status, applicant, academicYear, campus, gradeLevel, createdAt]
+      description: >
+        Shared shape for directory rows AND single-record detail minus
+        decisionNote/conversion provenance (see AdmissionApplication for
+        the full detail-only shape) -- decisionNote is deliberately
+        never hydrated for the list view (docs/admissions/PHASE-1D-4-AUTHORIZATION-READ-SERVICE.md).
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [draft, submitted, accepted, rejected, withdrawn, converted] }
+        applicant: { $ref: "#/components/schemas/ApplicantSummary" }
+        academicYear: { $ref: "#/components/schemas/EnrollmentRef" }
+        campus: { $ref: "#/components/schemas/EnrollmentRef" }
+        gradeLevel: { $ref: "#/components/schemas/EnrollmentRef" }
+        createdAt: { type: string, format: date-time }
+        convertedAt: { type: string, format: date-time, nullable: true }
+
+    AdmissionApplication:
+      allOf:
+        - { $ref: "#/components/schemas/AdmissionApplicationSummary" }
+        - type: object
+          required: [decisionNote, convertedStudentId, convertedStudentEnrollmentId, updatedAt]
+          properties:
+            decisionNote: { type: string, nullable: true, description: Internal, staff-only. Never searched, audited, or logged. }
+            convertedStudentId: { type: string, format: uuid, nullable: true }
+            convertedStudentEnrollmentId: { type: string, format: uuid, nullable: true }
+            updatedAt: { type: string, format: date-time }
+
+    AdmissionApplicationInput:
+      type: object
+      required: [applicant_id, academic_year_id, campus_id, grade_level_id]
+      description: >
+        Always creates in draft status -- no status is ever accepted.
+        No section_id/roll_number/Student Number/Guardian fields --
+        those are conversion-time-only inputs (docs/modules/ADMISSIONS.md
+        §5/§9). Every reference must belong to the same School (422 if
+        not).
+      properties:
+        applicant_id: { type: string, format: uuid }
+        academic_year_id: { type: string, format: uuid }
+        campus_id: { type: string, format: uuid }
+        grade_level_id: { type: string, format: uuid }
+
+    AdmissionDecisionInput:
+      type: object
+      description: Used by both accept and reject -- decision_note is optional and internal (never required to accept or reject).
+      properties:
+        decision_note: { type: string, maxLength: 1000, nullable: true }
+
+    AdmissionGuardianInstructionInput:
+      type: object
+      required: [mode, relationship_type]
+      description: >
+        A small, closed, two-mode shape mirroring
+        GuardianConversionInstruction exactly -- omitted entirely
+        (or the parent `guardian` key sent as null) is the one
+        canonical "no Guardian" representation. `create` mode fields
+        (first_name/middle_name/last_name/contact_type/contact_value)
+        are ignored in `link_existing` mode and vice versa
+        (guardian_id).
+      properties:
+        mode: { type: string, enum: [create, link_existing] }
+        relationship_type: { $ref: "#/components/schemas/RelationshipType" }
+        is_legal_guardian: { type: boolean, default: false }
+        is_emergency_contact: { type: boolean, default: false }
+        is_authorized_pickup: { type: boolean, default: false }
+        first_name: { type: string, maxLength: 255, description: "Required when mode=create." }
+        middle_name: { type: string, maxLength: 255, nullable: true }
+        last_name: { type: string, maxLength: 255, nullable: true }
+        contact_type: { allOf: [{ $ref: "#/components/schemas/ContactType" }], nullable: true, description: "create mode only -- optional; when supplied, an existing contact-matching Guardian candidate is rejected with ADMISSION_GUARDIAN_SELECTION_REQUIRED rather than silently duplicated." }
+        contact_value: { type: string, maxLength: 255, nullable: true, description: "create mode only -- required when contact_type is supplied. Transient request input only, never persisted by Admissions; flows straight into GuardianContactService's canonical encrypted storage." }
+        guardian_id: { type: string, format: uuid, description: "Required when mode=link_existing. Must belong to the same School (422 otherwise)." }
+
+    AdmissionConversionInput:
+      type: object
+      required: [student_number, section_id, roll_number, starts_on]
+      description: >
+        The Section is the sole authoritative placement input for this
+        conversion -- AdmissionConversionService re-verifies it matches
+        the application's own AcademicYear/Campus/GradeLevel (422
+        IncompatibleConversionSectionException otherwise, never a
+        partial conversion).
+      properties:
+        student_number: { type: string, maxLength: 255 }
+        section_id: { type: string, format: uuid }
+        roll_number: { type: string, maxLength: 255 }
+        starts_on: { type: string, format: date }
+        guardian: { allOf: [{ $ref: "#/components/schemas/AdmissionGuardianInstructionInput" }], nullable: true }
+
+    AdmissionConversionEnrollment:
+      type: object
+      required: [id, academicYear, campus, gradeLevel, section, rollNumber, status, startsOn]
+      description: The newly-created StudentEnrollment's summary -- deliberately excludes endsOn (always null immediately after conversion) and student (redundant with the sibling `student` field on AdmissionConversionResult).
+      properties:
+        id: { type: string, format: uuid }
+        academicYear: { $ref: "#/components/schemas/EnrollmentRef" }
+        campus: { $ref: "#/components/schemas/EnrollmentRef" }
+        gradeLevel: { $ref: "#/components/schemas/EnrollmentRef" }
+        section: { $ref: "#/components/schemas/EnrollmentRef" }
+        rollNumber: { type: string }
+        status: { type: string, enum: [active, completed, withdrawn, transferred, cancelled] }
+        startsOn: { type: string, format: date }
+
+    AdmissionConversionRelationship:
+      type: object
+      required: [id, relationshipType, isLegalGuardian, isEmergencyContact, isAuthorizedPickup]
+      properties:
+        id: { type: string, format: uuid }
+        relationshipType: { $ref: "#/components/schemas/RelationshipType" }
+        isLegalGuardian: { type: boolean }
+        isEmergencyContact: { type: boolean }
+        isAuthorizedPickup: { type: boolean }
+
+    AdmissionConversionResult:
+      type: object
+      required: [application, student, enrollment, guardian, relationship]
+      description: >
+        guardian/relationship are both null together when the
+        conversion request carried no `guardian` instruction
+        (docs/modules/ADMISSIONS.md §11's optionality); never returns
+        Guardian contact values (staff already supplied whatever they
+        submitted -- echoing it back is unnecessary).
+      properties:
+        application: { $ref: "#/components/schemas/AdmissionApplication" }
+        student: { $ref: "#/components/schemas/StudentSummary" }
+        enrollment: { $ref: "#/components/schemas/AdmissionConversionEnrollment" }
+        guardian: { allOf: [{ $ref: "#/components/schemas/GuardianSummary" }], nullable: true }
+        relationship: { allOf: [{ $ref: "#/components/schemas/AdmissionConversionRelationship" }], nullable: true }
+
   responses:
     TooManyRequests:
       description: >

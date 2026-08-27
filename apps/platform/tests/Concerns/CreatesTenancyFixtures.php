@@ -10,6 +10,8 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Admissions\Infrastructure\AdmissionApplication;
+use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Infrastructure\ContactType;
@@ -565,6 +567,30 @@ trait CreatesTenancyFixtures
             fn () => Document::factory()->create(array_merge([
                 'school_id' => $guardian->school_id,
                 'guardian_id' => $guardian->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 1D.1: Admissions fixtures --------------------------------
+
+    protected function createApplicant(School $school, array $attributes = []): Applicant
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Applicant::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createAdmissionApplication(Applicant $applicant, AcademicYear $year, Campus $campus, GradeLevel $gradeLevel, array $attributes = []): AdmissionApplication
+    {
+        return app(TenantContext::class)->withSchool(
+            $applicant->school,
+            fn () => AdmissionApplication::factory()->create(array_merge([
+                'school_id' => $applicant->school_id,
+                'applicant_id' => $applicant->id,
+                'academic_year_id' => $year->id,
+                'campus_id' => $campus->id,
+                'grade_level_id' => $gradeLevel->id,
             ], $attributes)),
         );
     }

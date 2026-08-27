@@ -8,6 +8,8 @@ use App\Domain\AcademicStructure\Http\Controllers\RoomController;
 use App\Domain\AcademicStructure\Http\Controllers\SectionController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
+use App\Domain\Admissions\Http\Controllers\AdmissionApplicationController;
+use App\Domain\Admissions\Http\Controllers\ApplicantController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
 use App\Domain\Guardians\Http\Controllers\GuardianContactController;
 use App\Domain\Guardians\Http\Controllers\GuardianController;
@@ -536,6 +538,69 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/documents/{document}/archive', [DocumentController::class, 'archive'])
                 ->middleware(['throttle:documents-writes', 'private-no-store'])
                 ->name('schools.documents.archive');
+
+            // --- Phase 1D.5: Admissions administrative HTTP surface
+            // (docs/admissions/PHASE-1D-5-ADMINISTRATIVE-API.md). Exposes
+            // the already-built Admissions domain (Phase 1D.1-1D.4) --
+            // it does not redesign it. Read actions authorize via
+            // AuthorizesCapability inline (matching every controller
+            // above); every mutation ALSO carries the `capability:`
+            // route middleware (defense in depth). `admissions.manage`
+            // gates every write, including conversion -- no separate
+            // `admissions.convert`/`.accept`/etc. capability, mirroring
+            // `enrollments.manage` covering its whole lifecycle as one
+            // capability. Every consequential create/state-transition
+            // endpoint carries `idempotent`, matching
+            // StudentEnrollmentController/AcademicYearController's
+            // identical treatment of their own lifecycle actions.
+            // Nested for the Applicant's application history (an
+            // Applicant's own reapplication history naturally belongs
+            // to one Applicant, the same "nested for per-parent reads"
+            // shape `/students/{student}/enrollments` already
+            // established); flat for the Application directory/detail/
+            // lifecycle/conversion actions.
+
+            Route::get('/applicants', [ApplicantController::class, 'index'])
+                ->name('schools.applicants.index');
+            Route::post('/applicants', [ApplicantController::class, 'store'])
+                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.applicants.store');
+            Route::get('/applicants/{applicant}', [ApplicantController::class, 'show'])
+                ->name('schools.applicants.show');
+            Route::get('/applicants/{applicant}/applications', [ApplicantController::class, 'applications'])
+                ->name('schools.applicants.applications.index');
+
+            Route::get('/admission-applications', [AdmissionApplicationController::class, 'index'])
+                ->name('schools.admission-applications.index');
+            Route::post('/admission-applications', [AdmissionApplicationController::class, 'store'])
+                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.admission-applications.store');
+            Route::get('/admission-applications/{admissionApplication}', [AdmissionApplicationController::class, 'show'])
+                ->name('schools.admission-applications.show');
+
+            Route::post('/admission-applications/{admissionApplication}/submit', [AdmissionApplicationController::class, 'submit'])
+                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.admission-applications.submit');
+            Route::post('/admission-applications/{admissionApplication}/accept', [AdmissionApplicationController::class, 'accept'])
+                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.admission-applications.accept');
+            Route::post('/admission-applications/{admissionApplication}/reject', [AdmissionApplicationController::class, 'reject'])
+                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.admission-applications.reject');
+            Route::post('/admission-applications/{admissionApplication}/withdraw', [AdmissionApplicationController::class, 'withdraw'])
+                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.admission-applications.withdraw');
+
+            // Highest-stakes Admissions mutation (creates Student +
+            // Enrollment + optional Guardian/relationship in one call)
+            // -- `idempotent` here is genuine defense-in-depth ON TOP
+            // OF AdmissionConversionService's own domain-level
+            // idempotency (locked-row + AdmissionApplicationAlreadyConvertedException),
+            // matching AcademicYearController::activate()'s identical
+            // "both layers" pattern.
+            Route::post('/admission-applications/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])
+                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.admission-applications.convert');
         });
 });
 

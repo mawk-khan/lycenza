@@ -3,15 +3,25 @@
 Status: as of Phase 0D, **Platform**, **Identity & Access**, **Tenancy**,
 **Schools**, **Campuses**, and **Academic Structure** (Layer 0-1) are
 implemented — see `docs/modules/ORGANIZATION.md` and
-`docs/modules/ACADEMIC-STRUCTURE.md`. As of Phase 1A/1A.2/1A.3/1A.4,
-**Students/SIS** and **Guardians** (Layer 2) are partially implemented:
-permanent identity, the Student<->Guardian relationship, Guardian
-contact information (with a searchable-encrypted-PII architecture, ADR
-0028), and `students.*`/`guardians.*` authorization capabilities plus
-their Application-layer mutation services — no addresses, API, or UI
-yet — see
-`docs/modules/STUDENT-GUARDIAN-IDENTITY.md`. Every other module below
-remains unimplemented. This is the ownership and dependency map future
+`docs/modules/ACADEMIC-STRUCTURE.md`. As of Phase 1A-1C (updated at the
+Phase 1D.0 Admissions architecture checkpoint — this paragraph was
+previously stale), **Students/SIS** and **Guardians** (Layer 2) are
+implemented through: permanent identity, the Student<->Guardian
+relationship, Guardian contact information (with a searchable-
+encrypted-PII architecture, ADR 0028), time-varying academic placement
+and rollover (`StudentEnrollment`, complete through API/UI), Student
+Subject Enrollment (`StudentSubjectEnrollment`, required + elective
+placement), `students.*`/`guardians.*`/`enrollments.*`/
+`academics.subjects.*` authorization capabilities, their Application-
+layer mutation services, an authenticated `/api/v1` administrative
+surface, and a session-authenticated Vue/Inertia UI — no Student/
+Guardian addresses yet — see
+`docs/modules/STUDENT-GUARDIAN-IDENTITY.md`,
+`docs/modules/STUDENT-ENROLLMENT.md`, and
+`docs/students/PHASE-1C-STUDENT-SUBJECT-ENROLLMENT-FOUNDATION.md`. As
+of Phase 1D.0, **Admissions** (Layer 2) has an accepted architecture
+(`docs/modules/ADMISSIONS.md`) but no implementation yet. Every other
+module below remains unimplemented. This is the ownership and dependency map future
 implementation must follow — see `apps/platform/app/Domain/README.md`
 for the concrete code-layout convention (Academic Structure is the
 first module to actually use its `Domain/Application/Infrastructure/Http`
@@ -70,7 +80,7 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 
 | Module | Owns | Depends on | Notes |
 |---|---|---|---|
-| **Students/SIS** | Student master record, enrollment status, academic history | Academic Structure, Schools, Campuses | **Partially implemented (Phase 1A/1A.4, Phase 1B.1-1B.7A)**: permanent identity (`App\Domain\Students\Infrastructure\Student`) plus its supported mutation service (`App\Domain\Students\Application\StudentService`) and `students.view`/`students.manage` capabilities (see `docs/modules/STUDENT-GUARDIAN-IDENTITY.md`); time-varying academic placement (`App\Domain\Students\Infrastructure\StudentEnrollment`) referencing Academic Structure (AcademicYear/Campus/GradeLevel/Section) via composite FKs, with `App\Domain\Students\Application\StudentEnrollmentService` as the sole sanctioned write path (creation + terminal lifecycle transitions: complete/withdraw/cancel/same-year transfer), `App\Domain\Students\Application\StudentEnrollmentReadService` as the canonical read layer, `enrollments.view`/`enrollments.manage` capabilities, and both an authenticated `/api/v1` administrative surface and a session-authenticated Vue/Inertia UI (Phase 1B.5/1B.6); cross-Academic-Year rollover/promotion has an accepted architecture and a durable plan/mapping/item schema foundation (`EnrollmentRolloverPlan`/`EnrollmentRolloverMapping`/`EnrollmentRolloverItem`, Phase 1B.7/1B.7A) but no dry-run/execution/API/UI yet — see `docs/modules/STUDENT-ENROLLMENT.md`. The record most other modules eventually reference; does not depend on any module that references it. |
+| **Students/SIS** | Student master record, enrollment status, academic history | Academic Structure, Schools, Campuses | **Implemented through Phase 1C** (updated at the Phase 1D.0 Admissions architecture checkpoint — this row was previously stale): permanent identity (`App\Domain\Students\Infrastructure\Student`) plus its supported mutation service (`App\Domain\Students\Application\StudentService`) and `students.view`/`students.manage` capabilities (see `docs/modules/STUDENT-GUARDIAN-IDENTITY.md`); time-varying academic placement (`App\Domain\Students\Infrastructure\StudentEnrollment`) referencing Academic Structure (AcademicYear/Campus/GradeLevel/Section) via composite FKs, with `App\Domain\Students\Application\StudentEnrollmentService` as the sole sanctioned write path (creation + terminal lifecycle transitions: complete/withdraw/cancel/same-year transfer), `App\Domain\Students\Application\StudentEnrollmentReadService` as the canonical read layer, `enrollments.view`/`enrollments.manage` capabilities, and both an authenticated `/api/v1` administrative surface and a session-authenticated Vue/Inertia UI (Phase 1B.5/1B.6); cross-Academic-Year rollover/promotion is now complete end-to-end (dry-run, execution, bulk/resumable execution, API, and UI — `EnrollmentRolloverPlan`/`EnrollmentRolloverMapping`/`EnrollmentRolloverItem`, Phase 1B.7-1B.7F), with only queue-backed execution still deferred; Student Subject Enrollment (required-derived + explicit-elective placement, `App\Domain\Students\Infrastructure\StudentSubjectEnrollment`, `App\Domain\Students\Application\SubjectOfferingRosterReadService`) is also complete (Phase 1C, plus the 1C.1A inactive-offering correction) — see `docs/modules/STUDENT-ENROLLMENT.md` and `docs/students/PHASE-1C-STUDENT-SUBJECT-ENROLLMENT-FOUNDATION.md`. The record most other modules eventually reference; does not depend on any module that references it. |
 | **Guardians** | Guardian/parent records, guardian-student relationships | Students/SIS | **Partially implemented (Phase 1A/1A.2/1A.3/1A.4)**: identity (`App\Domain\Guardians\Infrastructure\Guardian`), the Student<->Guardian relationship (`StudentGuardianRelationship`) and its mutation service (`StudentGuardianRelationshipService`), Guardian contact information (`GuardianContact`, encrypted at rest with a keyed exact-match lookup digest, ADR 0028), and `guardians.view`/`guardians.manage` capabilities — no addresses yet, see `docs/modules/STUDENT-GUARDIAN-IDENTITY.md`. |
 | **Admissions** | Admission leads, applications, admission workflow → produces a Student record via Students/SIS's Application contract | Academic Structure, Schools, Students/SIS | Admissions calls into SIS to create a student; SIS never calls into Admissions. |
 | **HR** | Employee master record, roles/designations, employment lifecycle | Schools, Identity & Access | Independent of the Students track except where a specific Layer 3 module needs both (e.g. Academics needs teachers). **In progress (Phase 8A, resequenced ahead of `MASTER-ROADMAP.md`'s Phase 0J — see ADR 0028)**: `docs/modules/HR.md`. |

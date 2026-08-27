@@ -9,7 +9,10 @@
 // execution_status vocabularies (ready/excluded/already_enrolled/
 // review/blocked/succeeded/reconciled/skipped/failed) -- still one
 // superset component, never a redesign; no value collides across the
-// four status dimensions this now covers.
+// four status dimensions this now covers. Phase 1D.6 adds the
+// AdmissionApplication lifecycle vocabulary (`draft` already existed
+// above; `submitted`/`accepted`/`rejected`/`converted` are new -- no
+// collision with any prior dimension).
 type Status =
     | 'active'
     | 'inactive'
@@ -29,7 +32,11 @@ type Status =
     | 'succeeded'
     | 'reconciled'
     | 'skipped'
-    | 'failed';
+    | 'failed'
+    | 'submitted'
+    | 'accepted'
+    | 'rejected'
+    | 'converted';
 
 interface Props {
     status: Status;
@@ -76,6 +83,11 @@ const STYLES: Record<Status, { label: string; badge: string; dot: string }> = {
     reconciled: { label: 'Reconciled', badge: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500' },
     skipped: { label: 'Skipped', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
     failed: { label: 'Failed', badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
+    // AdmissionApplication lifecycle.
+    submitted: { label: 'Submitted', badge: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500' },
+    accepted: { label: 'Accepted', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
+    rejected: { label: 'Rejected', badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
+    converted: { label: 'Converted', badge: 'bg-violet-50 text-violet-700', dot: 'bg-violet-500' },
 };
 
 const style = STYLES[props.status];

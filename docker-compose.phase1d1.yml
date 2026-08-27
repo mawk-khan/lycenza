@@ -1,0 +1,49 @@
+# Phase 1D.1 (Admissions Domain & Schema Foundation) isolated dev/test
+# stack. Local development only. NOT the shared `school-os` project
+# (repo-root docker-compose.yml) -- deliberately separate project name,
+# host ports, and volumes so this worktree's destructive migration/test
+# operations can never collide with the shared stack or any other
+# concurrent phase worktree's infrastructure.
+#
+# Usage:
+#   docker compose -f docker-compose.phase1d1.yml up -d postgres redis
+#   docker compose -f docker-compose.phase1d1.yml down          # stop, keep volumes
+#   docker compose -f docker-compose.phase1d1.yml down -v       # stop + delete this phase's data only
+#
+# No `minio` service -- Phase 1D.1 touches no file/object storage.
+
+name: school-os-phase1d1
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: school_os
+      POSTGRES_USER: school_os
+      POSTGRES_PASSWORD: school_os
+    ports:
+      - "60432:5432"
+    volumes:
+      - postgres_phase1d1_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U school_os -d school_os"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "60379:6379"
+    volumes:
+      - redis_phase1d1_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_phase1d1_data:
+  redis_phase1d1_data:

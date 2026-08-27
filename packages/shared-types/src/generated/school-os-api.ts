@@ -1291,6 +1291,178 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/applicants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List/search a School's Applicants. Requires admissions.view. */
+        get: operations["listApplicants"];
+        put?: never;
+        /** Creates an Applicant. Requires admissions.manage. Idempotency-Key required. */
+        post: operations["createApplicant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/applicants/{applicantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Applicant. Requires admissions.view. */
+        get: operations["getApplicant"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/applicants/{applicantId}/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Full reapplication history for one Applicant, newest first -- never collapsed (docs/modules/ADMISSIONS.md §3). Requires admissions.view. */
+        get: operations["listApplicantApplications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/admission-applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List/filter a School's AdmissionApplications. Requires admissions.view. */
+        get: operations["listAdmissionApplications"];
+        put?: never;
+        /** Creates a draft AdmissionApplication. Always begins as `draft` -- no `status` is ever accepted. Requires admissions.manage. Idempotency-Key required. */
+        post: operations["createAdmissionApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/admission-applications/{admissionApplicationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one AdmissionApplication, including decisionNote and conversion provenance. Requires admissions.view. */
+        get: operations["getAdmissionApplication"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/admission-applications/{admissionApplicationId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** draft -> submitted. Requires admissions.manage. Idempotency-Key required. */
+        post: operations["submitAdmissionApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/admission-applications/{admissionApplicationId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** submitted -> accepted. Never triggers conversion -- accept and convert remain distinct commands. Requires admissions.manage. Idempotency-Key required. */
+        post: operations["acceptAdmissionApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/admission-applications/{admissionApplicationId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** submitted -> rejected. No hard delete. Requires admissions.manage. Idempotency-Key required. */
+        post: operations["rejectAdmissionApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/admission-applications/{admissionApplicationId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** submitted -> withdrawn, or accepted -> withdrawn. Never touches decisionNote. Requires admissions.manage. Idempotency-Key required. */
+        post: operations["withdrawAdmissionApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/admission-applications/{admissionApplicationId}/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** accepted -> converted. Composes StudentService/GuardianService/ GuardianContactService/StudentGuardianRelationshipService/ StudentEnrollmentService inside one outer transaction (docs/admissions/PHASE-1D-3-ADMISSION-CONVERSION.md). Omitting `guardian`, or sending it as null, is the one canonical "no Guardian" representation. Requires admissions.manage. Idempotency-Key required (defense-in-depth on top of this endpoint's own domain-level conversion idempotency). */
+        post: operations["convertAdmissionApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2144,6 +2316,141 @@ export interface components {
             /** Format: date-time */
             uploaded_at: string;
         };
+        /** @description List-row shape -- deliberately excludes dateOfBirth (Sensitive personal data of a minor), matching StudentSummary's identical precedent. See Applicant for the full single-record shape. */
+        ApplicantSummary: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            middleName?: string | null;
+            lastName?: string | null;
+        };
+        /** @description Full single-record shape (show/create responses only -- never the list response, see ApplicantSummary). */
+        Applicant: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            middleName?: string | null;
+            lastName?: string | null;
+            /** Format: date */
+            dateOfBirth: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description No school_id, no contact fields, no Guardian fields -- Admissions stores no contact data of any kind (docs/modules/ADMISSIONS.md §9). */
+        ApplicantInput: {
+            first_name: string;
+            middle_name?: string | null;
+            last_name?: string | null;
+            /** Format: date */
+            date_of_birth: string;
+        };
+        /** @description Shared shape for directory rows AND single-record detail minus decisionNote/conversion provenance (see AdmissionApplication for the full detail-only shape) -- decisionNote is deliberately never hydrated for the list view (docs/admissions/PHASE-1D-4-AUTHORIZATION-READ-SERVICE.md). */
+        AdmissionApplicationSummary: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "draft" | "submitted" | "accepted" | "rejected" | "withdrawn" | "converted";
+            applicant: components["schemas"]["ApplicantSummary"];
+            academicYear: components["schemas"]["EnrollmentRef"];
+            campus: components["schemas"]["EnrollmentRef"];
+            gradeLevel: components["schemas"]["EnrollmentRef"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            convertedAt?: string | null;
+        };
+        AdmissionApplication: components["schemas"]["AdmissionApplicationSummary"] & {
+            /** @description Internal */
+            decisionNote: string | null;
+            /** Format: uuid */
+            convertedStudentId: string | null;
+            /** Format: uuid */
+            convertedStudentEnrollmentId: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        /** @description Always creates in draft status -- no status is ever accepted. No section_id/roll_number/Student Number/Guardian fields -- those are conversion-time-only inputs (docs/modules/ADMISSIONS.md §5/§9). Every reference must belong to the same School (422 if not). */
+        AdmissionApplicationInput: {
+            /** Format: uuid */
+            applicant_id: string;
+            /** Format: uuid */
+            academic_year_id: string;
+            /** Format: uuid */
+            campus_id: string;
+            /** Format: uuid */
+            grade_level_id: string;
+        };
+        /** @description Used by both accept and reject -- decision_note is optional and internal (never required to accept or reject). */
+        AdmissionDecisionInput: {
+            decision_note?: string | null;
+        };
+        /** @description A small, closed, two-mode shape mirroring GuardianConversionInstruction exactly -- omitted entirely (or the parent `guardian` key sent as null) is the one canonical "no Guardian" representation. `create` mode fields (first_name/middle_name/last_name/contact_type/contact_value) are ignored in `link_existing` mode and vice versa (guardian_id). */
+        AdmissionGuardianInstructionInput: {
+            /** @enum {string} */
+            mode: "create" | "link_existing";
+            relationship_type: components["schemas"]["RelationshipType"];
+            /** @default false */
+            is_legal_guardian: boolean;
+            /** @default false */
+            is_emergency_contact: boolean;
+            /** @default false */
+            is_authorized_pickup: boolean;
+            /** @description Required when mode=create. */
+            first_name?: string;
+            middle_name?: string | null;
+            last_name?: string | null;
+            /** @description create mode only -- optional; when supplied, an existing contact-matching Guardian candidate is rejected with ADMISSION_GUARDIAN_SELECTION_REQUIRED rather than silently duplicated. */
+            contact_type?: components["schemas"]["ContactType"] | null;
+            /** @description create mode only -- required when contact_type is supplied. Transient request input only, never persisted by Admissions; flows straight into GuardianContactService's canonical encrypted storage. */
+            contact_value?: string | null;
+            /**
+             * Format: uuid
+             * @description Required when mode=link_existing. Must belong to the same School (422 otherwise).
+             */
+            guardian_id?: string;
+        };
+        /** @description The Section is the sole authoritative placement input for this conversion -- AdmissionConversionService re-verifies it matches the application's own AcademicYear/Campus/GradeLevel (422 IncompatibleConversionSectionException otherwise, never a partial conversion). */
+        AdmissionConversionInput: {
+            student_number: string;
+            /** Format: uuid */
+            section_id: string;
+            roll_number: string;
+            /** Format: date */
+            starts_on: string;
+            guardian?: components["schemas"]["AdmissionGuardianInstructionInput"] | null;
+        };
+        /** @description The newly-created StudentEnrollment's summary -- deliberately excludes endsOn (always null immediately after conversion) and student (redundant with the sibling `student` field on AdmissionConversionResult). */
+        AdmissionConversionEnrollment: {
+            /** Format: uuid */
+            id: string;
+            academicYear: components["schemas"]["EnrollmentRef"];
+            campus: components["schemas"]["EnrollmentRef"];
+            gradeLevel: components["schemas"]["EnrollmentRef"];
+            section: components["schemas"]["EnrollmentRef"];
+            rollNumber: string;
+            /** @enum {string} */
+            status: "active" | "completed" | "withdrawn" | "transferred" | "cancelled";
+            /** Format: date */
+            startsOn: string;
+        };
+        AdmissionConversionRelationship: {
+            /** Format: uuid */
+            id: string;
+            relationshipType: components["schemas"]["RelationshipType"];
+            isLegalGuardian: boolean;
+            isEmergencyContact: boolean;
+            isAuthorizedPickup: boolean;
+        };
+        /** @description guardian/relationship are both null together when the conversion request carried no `guardian` instruction (docs/modules/ADMISSIONS.md §11's optionality); never returns Guardian contact values (staff already supplied whatever they submitted -- echoing it back is unnecessary). */
+        AdmissionConversionResult: {
+            application: components["schemas"]["AdmissionApplication"];
+            student: components["schemas"]["StudentSummary"];
+            enrollment: components["schemas"]["AdmissionConversionEnrollment"];
+            guardian: components["schemas"]["GuardianSummary"] | null;
+            relationship: components["schemas"]["AdmissionConversionRelationship"] | null;
+        };
     };
     responses: {
         /** @description Phase 8A.15 -- the caller's School+actor-scoped rate limit (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for the sensitive-documents endpoint) has been exceeded. The same global error envelope as every other `/api/v1` error; never a cross-School/Highly-Sensitive existence signal. */
@@ -2185,6 +2492,8 @@ export interface components {
         RolloverId: string;
         RolloverMappingId: string;
         RolloverItemId: string;
+        ApplicantId: string;
+        AdmissionApplicationId: string;
         /** @description Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy). */
         DocumentId: string;
     };
@@ -5914,6 +6223,441 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listApplicants: {
+        parameters: {
+            query?: {
+                /** @description Matches first or last name. */
+                name?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApplicantSummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+        };
+    };
+    createApplicant: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplicantInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Applicant"];
+                    };
+                };
+            };
+        };
+    };
+    getApplicant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                applicantId: components["parameters"]["ApplicantId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Applicant"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listApplicantApplications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                applicantId: components["parameters"]["ApplicantId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionApplicationSummary"][];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdmissionApplications: {
+        parameters: {
+            query?: {
+                status?: "draft" | "submitted" | "accepted" | "rejected" | "withdrawn" | "converted";
+                academic_year_id?: string;
+                campus_id?: string;
+                grade_level_id?: string;
+                /** @description Matches the Applicant's first or last name. */
+                applicant_name?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionApplicationSummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+        };
+    };
+    createAdmissionApplication: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdmissionApplicationInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionApplication"];
+                    };
+                };
+            };
+            /** @description Cross-School reference, or an open (draft/submitted/accepted) application already exists for this Applicant/AcademicYear/Campus/GradeLevel. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdmissionApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                admissionApplicationId: components["parameters"]["AdmissionApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionApplication"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    submitAdmissionApplication: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                admissionApplicationId: components["parameters"]["AdmissionApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionApplication"];
+                    };
+                };
+            };
+            /** @description Not currently draft -- an illegal lifecycle transition. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    acceptAdmissionApplication: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                admissionApplicationId: components["parameters"]["AdmissionApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AdmissionDecisionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionApplication"];
+                    };
+                };
+            };
+            /** @description Not currently submitted -- an illegal lifecycle transition. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    rejectAdmissionApplication: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                admissionApplicationId: components["parameters"]["AdmissionApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AdmissionDecisionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionApplication"];
+                    };
+                };
+            };
+            /** @description Not currently submitted -- an illegal lifecycle transition. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    withdrawAdmissionApplication: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                admissionApplicationId: components["parameters"]["AdmissionApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionApplication"];
+                    };
+                };
+            };
+            /** @description Not currently submitted/accepted -- an illegal lifecycle transition. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    convertAdmissionApplication: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                admissionApplicationId: components["parameters"]["AdmissionApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdmissionConversionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionConversionResult"];
+                    };
+                };
+            };
+            /** @description Not currently accepted (including already converted -- AdmissionApplicationAlreadyConvertedException), an incompatible Section, a duplicate Student Number, a duplicate roll number, or a Guardian create-vs-link candidate conflict (AdmissionGuardianSelectionRequiredException -- never returns candidate ids/names/contact values). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
 }
