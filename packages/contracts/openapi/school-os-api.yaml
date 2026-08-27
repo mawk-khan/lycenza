@@ -2929,6 +2929,210 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  # --- Phase 10A: Library catalogue (Title/Copy) + circulation (Loan).
+  # See docs/modules/LIBRARY.md for the full domain design.
+  /schools/{schoolId}/library-titles:
+    get:
+      operationId: listLibraryTitles
+      summary: List a School's Library Titles. Requires library.catalogue.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/LibraryTitle" } }
+    post:
+      operationId: createLibraryTitle
+      summary: Registers a Library Title. Requires library.catalogue.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryTitleInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryTitle" } } }
+
+  /schools/{schoolId}/library-titles/{libraryTitleId}:
+    get:
+      operationId: getLibraryTitle
+      summary: Fetch one Library Title. Requires library.catalogue.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/LibraryTitleId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryTitle" } } }
+        "404":
+          description: Not found (including a cross-School id).
+    patch:
+      operationId: updateLibraryTitle
+      summary: Updates or (de)activates a Library Title. Requires library.catalogue.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/LibraryTitleId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryTitleInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryTitle" } } }
+
+  /schools/{schoolId}/library-titles/{libraryTitleId}/copies:
+    get:
+      operationId: listLibraryCopies
+      summary: List a Title's physical Copies. Requires library.catalogue.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/LibraryTitleId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LibraryCopy" } } } }
+    post:
+      operationId: createLibraryCopy
+      summary: Registers a physical Copy of this Title. Requires library.catalogue.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/LibraryTitleId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryCopyInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryCopy" } } }
+        "422":
+          description: Validation failure (e.g. duplicate accession code within this School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/library-copies/{libraryCopyId}:
+    patch:
+      operationId: updateLibraryCopy
+      summary: Updates or (de)activates a physical Copy. Requires library.catalogue.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/LibraryCopyId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryCopyInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryCopy" } } }
+
+  /schools/{schoolId}/library-loans:
+    get:
+      operationId: listLibraryLoans
+      summary: List Library Loans (active by default). Requires library.circulation.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, returned] } }
+        - { $ref: "#/components/parameters/StudentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LibraryLoan" } } } }
+    post:
+      operationId: checkOutLibraryLoan
+      summary: >
+        Checks out an available Copy to an eligible Student. Requires
+        library.circulation.manage. Idempotency-Key required (checkpoint
+        brief section 19/23 -- a network retry must never risk a
+        duplicate checkout attempt).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryLoanInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryLoan" } } }
+        "422":
+          description: Copy not available, or Student not eligible (LIBRARY_COPY_NOT_AVAILABLE / LIBRARY_STUDENT_NOT_ELIGIBLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: A genuinely concurrent checkout attempt lost the race, or an Idempotency-Key conflict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/library-loans/{libraryLoanId}:
+    get:
+      operationId: getLibraryLoan
+      summary: Fetch one Library Loan. Requires library.circulation.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/LibraryLoanId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryLoan" } } }
+
+  /schools/{schoolId}/library-loans/{libraryLoanId}/check-in:
+    post:
+      operationId: checkInLibraryLoan
+      summary: Checks in an active Loan. Requires library.circulation.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/LibraryLoanId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryLoan" } } }
+        "422":
+          description: This Loan was already checked in (LIBRARY_LOAN_ALREADY_RETURNED).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2980,6 +3184,21 @@ components:
       required: false
       description: When true, includes inactive/archived reference rows (default excludes them).
       schema: { type: boolean, default: false }
+    LibraryTitleId:
+      name: libraryTitleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    LibraryCopyId:
+      name: libraryCopyId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    LibraryLoanId:
+      name: libraryLoanId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     StudentId:
       name: studentId
       in: path
@@ -3276,6 +3495,79 @@ components:
         code: { type: string, maxLength: 32 }
         room_type: { type: string, enum: [classroom, laboratory, auditorium, library, sports, other] }
         capacity: { type: integer, nullable: true }
+
+    LibraryTitle:
+      type: object
+      required: [id, title, status]
+      description: A bibliographic/catalogue record (see docs/modules/LIBRARY.md "Catalogue vs. copy modeling decision"). Never carries a copy count or availability -- see LibraryCopy for that.
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        author: { type: string, nullable: true }
+        isbn: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    LibraryTitleInput:
+      type: object
+      properties:
+        title: { type: string, maxLength: 255 }
+        author: { type: string, maxLength: 255, nullable: true }
+        isbn: { type: string, maxLength: 32, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    LibraryCopy:
+      type: object
+      required: [id, libraryTitleId, code, status, available]
+      description: One individually loanable physical object. `available` is DERIVED (status active AND no active Loan), never a stored/mirrored value.
+      properties:
+        id: { type: string, format: uuid }
+        libraryTitleId: { type: string, format: uuid }
+        campusId: { type: string, format: uuid, nullable: true, description: "Optional -- a multi-campus School may track which Campus physically holds this Copy." }
+        code: { type: string, description: "The Copy's own accession identifier, case-insensitively unique within the School." }
+        status: { type: string, enum: [active, inactive] }
+        available: { type: boolean }
+
+    LibraryCopyInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 64 }
+        campus_id: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    LibraryLoan:
+      type: object
+      required: [id, status, checkedOutAt, dueAt, copy, student]
+      description: One circulation/loan record. A Copy may have at most one Loan with status=active at a time (database-enforced, docs/modules/LIBRARY.md "Concurrency/database invariants").
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, returned] }
+        checkedOutAt: { type: string, format: date-time }
+        dueAt: { type: string, format: date-time }
+        checkedInAt: { type: string, format: date-time, nullable: true }
+        isOverdue: { type: boolean }
+        copy:
+          type: object
+          required: [id, code, title]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+            title: { type: string }
+        student:
+          type: object
+          required: [id, studentNumber, firstName]
+          properties:
+            id: { type: string, format: uuid }
+            studentNumber: { type: string }
+            firstName: { type: string }
+            lastName: { type: string, nullable: true }
+
+    LibraryLoanInput:
+      type: object
+      required: [library_copy_id, student_id, due_at]
+      properties:
+        library_copy_id: { type: string, format: uuid }
+        student_id: { type: string, format: uuid }
+        due_at: { type: string, format: date-time }
 
     AcademicYear:
       type: object

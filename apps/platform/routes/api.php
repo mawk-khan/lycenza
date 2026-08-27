@@ -18,6 +18,9 @@ use App\Domain\HR\Http\Controllers\EmployeeActivityController;
 use App\Domain\HR\Http\Controllers\EmployeeDirectoryController;
 use App\Domain\HR\Http\Controllers\EmployeeProfileController;
 use App\Domain\HR\Http\Controllers\EmployeeSensitiveDocumentController;
+use App\Domain\Library\Http\Controllers\LibraryCopyController;
+use App\Domain\Library\Http\Controllers\LibraryLoanController;
+use App\Domain\Library\Http\Controllers\LibraryTitleController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
@@ -601,6 +604,49 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/admission-applications/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])
                 ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.admission-applications.convert');
+
+            // --- Phase 10A: Library catalogue (Title/Copy) and
+            // circulation (Loan). `idempotent` is applied only to
+            // checkout (the one consequential mutation a network retry
+            // could plausibly duplicate as a SECOND loan attempt on the
+            // same copy -- see docs/modules/LIBRARY.md "Idempotency
+            // decision") -- Title/Copy creation rely on their own
+            // unique-code constraint for retry-safety, matching
+            // Subject/Campus's identical precedent; check-in relies on
+            // its own conditional-update rejection
+            // (LoanAlreadyReturnedException) for the same reason
+            // AcademicYear's second-decision case does not need
+            // `idempotent` either.
+            Route::get('/library-titles', [LibraryTitleController::class, 'index'])
+                ->name('schools.library-titles.index');
+            Route::post('/library-titles', [LibraryTitleController::class, 'store'])
+                ->middleware(['capability:library.catalogue.manage', 'throttle:school-api-mutations'])
+                ->name('schools.library-titles.store');
+            Route::get('/library-titles/{libraryTitle}', [LibraryTitleController::class, 'show'])
+                ->name('schools.library-titles.show');
+            Route::patch('/library-titles/{libraryTitle}', [LibraryTitleController::class, 'update'])
+                ->middleware(['capability:library.catalogue.manage', 'throttle:school-api-mutations'])
+                ->name('schools.library-titles.update');
+
+            Route::get('/library-titles/{libraryTitle}/copies', [LibraryCopyController::class, 'index'])
+                ->name('schools.library-titles.copies.index');
+            Route::post('/library-titles/{libraryTitle}/copies', [LibraryCopyController::class, 'store'])
+                ->middleware(['capability:library.catalogue.manage', 'throttle:school-api-mutations'])
+                ->name('schools.library-titles.copies.store');
+            Route::patch('/library-copies/{libraryCopy}', [LibraryCopyController::class, 'update'])
+                ->middleware(['capability:library.catalogue.manage', 'throttle:school-api-mutations'])
+                ->name('schools.library-copies.update');
+
+            Route::get('/library-loans', [LibraryLoanController::class, 'index'])
+                ->name('schools.library-loans.index');
+            Route::post('/library-loans', [LibraryLoanController::class, 'store'])
+                ->middleware(['capability:library.circulation.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.library-loans.store');
+            Route::get('/library-loans/{libraryLoan}', [LibraryLoanController::class, 'show'])
+                ->name('schools.library-loans.show');
+            Route::post('/library-loans/{libraryLoan}/check-in', [LibraryLoanController::class, 'checkIn'])
+                ->middleware(['capability:library.circulation.manage', 'throttle:school-api-mutations'])
+                ->name('schools.library-loans.check-in');
         });
 });
 

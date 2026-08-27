@@ -245,6 +245,19 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'hr.positions.view', 'label' => 'View Positions', 'namespace' => 'school'],
             ['key' => 'hr.positions.manage', 'label' => 'Manage Positions', 'namespace' => 'school'],
 
+            // Phase 10A (docs/modules/LIBRARY.md "Capabilities") --
+            // catalogue (Title/Copy reference data) and circulation
+            // (Loan lifecycle) are independently gateable, mirroring
+            // the `academics.structure.*` vs `academics.subjects.*`
+            // split and `hr.employees.*` vs `hr.departments.*`: a
+            // School may want a Librarian who can check items in/out
+            // without letting them re-catalogue the collection, or vice
+            // versa.
+            ['key' => 'library.catalogue.view', 'label' => 'View the Library catalogue (Titles/Copies)', 'namespace' => 'school'],
+            ['key' => 'library.catalogue.manage', 'label' => 'Manage the Library catalogue (Titles/Copies)', 'namespace' => 'school'],
+            ['key' => 'library.circulation.view', 'label' => 'View Library loans', 'namespace' => 'school'],
+            ['key' => 'library.circulation.manage', 'label' => 'Check Library items out and in', 'namespace' => 'school'],
+
             // Phase 1B.7E (docs/modules/STUDENT-ENROLLMENT.md
             // "Rollover Authorization & Administrative HTTP/API") --
             // three-segment `enrollments.rollovers.*` naming mirrors
@@ -342,6 +355,14 @@ class CapabilityAndRoleSeeder extends Seeder
                     // configuration must explicitly add whichever of
                     // these an actual "HR Staff" role needs.
                     'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
+                    // Phase 10A: same "hands-on, day-to-day operational
+                    // concern" reasoning already justifying full
+                    // view+manage parity for students.*/guardians.*/
+                    // enrollments.* on this role -- checking a book out
+                    // to a Student is routine administrative work, not
+                    // a rare/high-blast-radius action.
+                    'library.catalogue.view', 'library.catalogue.manage',
+                    'library.circulation.view', 'library.circulation.manage',
                     'enrollments.rollovers.view', 'enrollments.rollovers.manage',
                     // Phase 1D.4: same full view+manage parity already
                     // granted for students.*/guardians.*/enrollments.*
@@ -406,6 +427,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // school_admin above -- view/manage/personal.view
                     // only, nothing else by default.
                     'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
+                    // Phase 10A: same day-to-day operational parity
+                    // reasoning as school_admin above.
+                    'library.catalogue.view', 'library.catalogue.manage',
+                    'library.circulation.view', 'library.circulation.manage',
                     // Phase 1B.7E: deliberately VIEW ONLY, breaking from
                     // the "Principal gets full parity with School Admin"
                     // pattern every other pair on this role just

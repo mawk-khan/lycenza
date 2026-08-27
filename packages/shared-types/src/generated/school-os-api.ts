@@ -1463,6 +1463,129 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/library-titles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a School's Library Titles. Requires library.catalogue.view. */
+        get: operations["listLibraryTitles"];
+        put?: never;
+        /** Registers a Library Title. Requires library.catalogue.manage. */
+        post: operations["createLibraryTitle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-titles/{libraryTitleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Library Title. Requires library.catalogue.view. */
+        get: operations["getLibraryTitle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Library Title. Requires library.catalogue.manage. */
+        patch: operations["updateLibraryTitle"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-titles/{libraryTitleId}/copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a Title's physical Copies. Requires library.catalogue.view. */
+        get: operations["listLibraryCopies"];
+        put?: never;
+        /** Registers a physical Copy of this Title. Requires library.catalogue.manage. */
+        post: operations["createLibraryCopy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-copies/{libraryCopyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a physical Copy. Requires library.catalogue.manage. */
+        patch: operations["updateLibraryCopy"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-loans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Library Loans (active by default). Requires library.circulation.view. */
+        get: operations["listLibraryLoans"];
+        put?: never;
+        /** Checks out an available Copy to an eligible Student. Requires library.circulation.manage. Idempotency-Key required (checkpoint brief section 19/23 -- a network retry must never risk a duplicate checkout attempt). */
+        post: operations["checkOutLibraryLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-loans/{libraryLoanId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Library Loan. Requires library.circulation.view. */
+        get: operations["getLibraryLoan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-loans/{libraryLoanId}/check-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checks in an active Loan. Requires library.circulation.manage. */
+        post: operations["checkInLibraryLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1630,6 +1753,82 @@ export interface components {
             /** @enum {string} */
             room_type?: "classroom" | "laboratory" | "auditorium" | "library" | "sports" | "other";
             capacity?: number | null;
+        };
+        /** @description A bibliographic/catalogue record (see docs/modules/LIBRARY.md "Catalogue vs. copy modeling decision"). Never carries a copy count or availability -- see LibraryCopy for that. */
+        LibraryTitle: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            author?: string | null;
+            isbn?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        LibraryTitleInput: {
+            title?: string;
+            author?: string | null;
+            isbn?: string | null;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description One individually loanable physical object. `available` is DERIVED (status active AND no active Loan), never a stored/mirrored value. */
+        LibraryCopy: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            libraryTitleId: string;
+            /**
+             * Format: uuid
+             * @description Optional -- a multi-campus School may track which Campus physically holds this Copy.
+             */
+            campusId?: string | null;
+            /** @description The Copy's own accession identifier, case-insensitively unique within the School. */
+            code: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            available: boolean;
+        };
+        LibraryCopyInput: {
+            code?: string;
+            /** Format: uuid */
+            campus_id?: string | null;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description One circulation/loan record. A Copy may have at most one Loan with status=active at a time (database-enforced, docs/modules/LIBRARY.md "Concurrency/database invariants"). */
+        LibraryLoan: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "active" | "returned";
+            /** Format: date-time */
+            checkedOutAt: string;
+            /** Format: date-time */
+            dueAt: string;
+            /** Format: date-time */
+            checkedInAt?: string | null;
+            isOverdue?: boolean;
+            copy: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                title: string;
+            };
+            student: {
+                /** Format: uuid */
+                id: string;
+                studentNumber: string;
+                firstName: string;
+                lastName?: string | null;
+            };
+        };
+        LibraryLoanInput: {
+            /** Format: uuid */
+            library_copy_id: string;
+            /** Format: uuid */
+            student_id: string;
+            /** Format: date-time */
+            due_at: string;
         };
         /** @description Only one Academic Year per School may be `active` (section 16, database-enforced). */
         AcademicYear: {
@@ -2474,6 +2673,9 @@ export interface components {
         AcademicYearId: string;
         /** @description When true, includes inactive/archived reference rows (default excludes them). */
         IncludeInactive: boolean;
+        LibraryTitleId: string;
+        LibraryCopyId: string;
+        LibraryLoanId: string;
         StudentId: string;
         GuardianId: string;
         RelationshipId: string;
@@ -6650,6 +6852,353 @@ export interface operations {
                 };
             };
             /** @description Not currently accepted (including already converted -- AdmissionApplicationAlreadyConvertedException), an incompatible Section, a duplicate Student Number, a duplicate roll number, or a Guardian create-vs-link candidate conflict (AdmissionGuardianSelectionRequiredException -- never returns candidate ids/names/contact values). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listLibraryTitles: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryTitle"][];
+                    };
+                };
+            };
+        };
+    };
+    createLibraryTitle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryTitleInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryTitle"];
+                    };
+                };
+            };
+        };
+    };
+    getLibraryTitle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryTitleId: components["parameters"]["LibraryTitleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryTitle"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateLibraryTitle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryTitleId: components["parameters"]["LibraryTitleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LibraryTitleInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryTitle"];
+                    };
+                };
+            };
+        };
+    };
+    listLibraryCopies: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryTitleId: components["parameters"]["LibraryTitleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryCopy"][];
+                    };
+                };
+            };
+        };
+    };
+    createLibraryCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryTitleId: components["parameters"]["LibraryTitleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryCopyInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryCopy"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate accession code within this School). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateLibraryCopy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryCopyId: components["parameters"]["LibraryCopyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LibraryCopyInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryCopy"];
+                    };
+                };
+            };
+        };
+    };
+    listLibraryLoans: {
+        parameters: {
+            query?: {
+                status?: "active" | "returned";
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: components["parameters"]["StudentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryLoan"][];
+                    };
+                };
+            };
+        };
+    };
+    checkOutLibraryLoan: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryLoanInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryLoan"];
+                    };
+                };
+            };
+            /** @description A genuinely concurrent checkout attempt lost the race, or an Idempotency-Key conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Copy not available, or Student not eligible (LIBRARY_COPY_NOT_AVAILABLE / LIBRARY_STUDENT_NOT_ELIGIBLE). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getLibraryLoan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryLoanId: components["parameters"]["LibraryLoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryLoan"];
+                    };
+                };
+            };
+        };
+    };
+    checkInLibraryLoan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryLoanId: components["parameters"]["LibraryLoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryLoan"];
+                    };
+                };
+            };
+            /** @description This Loan was already checked in (LIBRARY_LOAN_ALREADY_RETURNED). */
             422: {
                 headers: {
                     [name: string]: unknown;
