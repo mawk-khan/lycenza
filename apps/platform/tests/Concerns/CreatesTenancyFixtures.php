@@ -34,6 +34,7 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverSubjectMapping;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
@@ -410,6 +411,25 @@ trait CreatesTenancyFixtures
                 'plan_id' => $plan->id,
                 'student_id' => $student->id,
                 'source_enrollment_id' => $sourceEnrollment->id,
+            ], $attributes)),
+        );
+    }
+
+    /**
+     * Phase 1G.1: `$targetOffering === null` builds the explicit-omit
+     * fixture state directly -- callers wanting "unconfigured" simply
+     * never call this helper for that source Offering at all (absence
+     * of a row IS the unconfigured state).
+     */
+    protected function createEnrollmentRolloverSubjectMapping(EnrollmentRolloverPlan $plan, SubjectOffering $sourceOffering, ?SubjectOffering $targetOffering, array $attributes = []): EnrollmentRolloverSubjectMapping
+    {
+        return app(TenantContext::class)->withSchool(
+            $plan->school,
+            fn () => EnrollmentRolloverSubjectMapping::factory()->create(array_merge([
+                'school_id' => $plan->school_id,
+                'plan_id' => $plan->id,
+                'source_subject_offering_id' => $sourceOffering->id,
+                'target_subject_offering_id' => $targetOffering?->id,
             ], $attributes)),
         );
     }

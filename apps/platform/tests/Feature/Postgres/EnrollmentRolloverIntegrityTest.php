@@ -4,9 +4,12 @@ namespace Tests\Feature\Postgres;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Models\Campus;
 use App\Models\School;
+use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +71,41 @@ class EnrollmentRolloverIntegrityTest extends TestCase
         return $id;
     }
 
+    /**
+     * @return array{school: School, campus: Campus, sourceYear: AcademicYear, targetYear: AcademicYear, sourceOffering: SubjectOffering, targetOffering: SubjectOffering}
+     */
+    private function buildSubjectMappingContext(): array
+    {
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $sourceYear = $this->createAcademicYear($school, ['code' => 'SRC']);
+        $targetYear = $this->createAcademicYear($school, ['code' => 'TGT']);
+        $grade = $this->createGradeLevel($school);
+        $subject = $this->createSubject($school);
+        $sourceOffering = $this->createSubjectOffering($sourceYear, $campus, $grade, $subject, ['is_required' => false]);
+        $targetOffering = $this->createSubjectOffering($targetYear, $campus, $grade, $subject, ['is_required' => false]);
+
+        return compact('school', 'campus', 'sourceYear', 'targetYear', 'sourceOffering', 'targetOffering');
+    }
+
+    private function insertSubjectMapping(
+        string $schoolId,
+        string $planId,
+        string $sourceOfferingId,
+        ?string $targetOfferingId,
+        ?string $connection = 'pgsql',
+    ): string {
+        $id = (string) Str::orderedUuid();
+        DB::connection($connection)->insert(
+            'insert into enrollment_rollover_subject_mappings '.
+            '(id, school_id, plan_id, source_subject_offering_id, target_subject_offering_id, created_at, updated_at) '.
+            'values (?, ?, ?, ?, ?, now(), now())',
+            [$id, $schoolId, $planId, $sourceOfferingId, $targetOfferingId],
+        );
+
+        return $id;
+    }
+
     private function insertItem(
         string $schoolId,
         string $planId,
@@ -91,9 +129,9 @@ class EnrollmentRolloverIntegrityTest extends TestCase
     // ==================================================================
 
     #[Test]
-    public function all_three_tables_have_rls_enabled_and_forced(): void
+    public function all_four_tables_have_rls_enabled_and_forced(): void
     {
-        foreach (['enrollment_rollover_plans', 'enrollment_rollover_mappings', 'enrollment_rollover_items'] as $table) {
+        foreach (['enrollment_rollover_plans', 'enrollment_rollover_mappings', 'enrollment_rollover_items', 'enrollment_rollover_subject_mappings'] as $table) {
             $row = DB::connection('pgsql_admin')->selectOne(
                 'select relrowsecurity, relforcerowsecurity from pg_class '.
                 'where relname = ? and relnamespace = ?::regnamespace',
@@ -267,5 +305,174 @@ class EnrollmentRolloverIntegrityTest extends TestCase
 
         $rows = DB::connection('pgsql')->select('select id from enrollment_rollover_items where id = ?', [$itemB->id]);
         $this->assertCount(0, $rows, "School A must not see School B's rollover item row");
+    }
+
+    // ==================================================================
+    // Phase 1G.1: enrollment_rollover_subject_mappings -- RLS
+    // ==================================================================
+
+    #[Test]
+    public function no_school_context_sees_zero_subject_mapping_rows(): void
+    {
+        ['school' => $school, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear, 'sourceOffering' => $source, 'targetOffering' => $target] = $this->buildSubjectMappingContext();
+        $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);
+        $this->createEnrollmentRolloverSubjectMapping($plan, $source, $target);
+
+        DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
+
+        $count = DB::connection('pgsql')->selectOne('select count(*) as c from enrollment_rollover_subject_mappings')->c;
+        $this->assertSame(0, (int) $count, 'enrollment_rollover_subject_mappings must be invisible with no TenantContext');
+    }
+
+    #[Test]
+    public function school_a_cannot_read_school_bs_subject_mapping_row(): void
+    {
+        $schoolA = $this->createSchool();
+        ['sourceYear' => $sourceYearB, 'targetYear' => $targetYearB, 'sourceOffering' => $sourceB, 'targetOffering' => $targetB] = $this->buildSubjectMappingContext();
+        $planB = $this->createEnrollmentRolloverPlan($sourceYearB, $targetYearB);
+        $mappingB = $this->createEnrollmentRolloverSubjectMapping($planB, $sourceB, $targetB);
+
+        $this->setSchool($schoolA->id);
+
+        $rows = DB::connection('pgsql')->select('select id from enrollment_rollover_subject_mappings where id = ?', [$mappingB->id]);
+        $this->assertCount(0, $rows, "School A must not see School B's subject mapping row");
+    }
+
+    #[Test]
+    public function cross_school_writes_to_subject_mappings_affect_zero_rows(): void
+    {
+        $schoolA = $this->createSchool();
+        ['sourceYear' => $sourceYearB, 'targetYear' => $targetYearB, 'sourceOffering' => $sourceB, 'targetOffering' => $targetB] = $this->buildSubjectMappingContext();
+        $planB = $this->createEnrollmentRolloverPlan($sourceYearB, $targetYearB);
+        $mappingB = $this->createEnrollmentRolloverSubjectMapping($planB, $sourceB, $targetB);
+
+        $this->setSchool($schoolA->id);
+
+        $this->assertSame(0, DB::connection('pgsql')->update(
+            'update enrollment_rollover_subject_mappings set target_subject_offering_id = null where id = ?',
+            [$mappingB->id],
+        ));
+        $this->assertSame(0, DB::connection('pgsql')->delete(
+            'delete from enrollment_rollover_subject_mappings where id = ?',
+            [$mappingB->id],
+        ));
+    }
+
+    #[Test]
+    public function school_a_cannot_create_a_subject_mapping_assigned_to_school_b(): void
+    {
+        $schoolA = $this->createSchool();
+        ['school' => $schoolB, 'sourceYear' => $sourceYearB, 'targetYear' => $targetYearB, 'sourceOffering' => $sourceB, 'targetOffering' => $targetB] = $this->buildSubjectMappingContext();
+        $planB = $this->createEnrollmentRolloverPlan($sourceYearB, $targetYearB);
+
+        $this->setSchool($schoolA->id);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolB, $planB, $sourceB, $targetB): void {
+            $this->insertSubjectMapping($schoolB->id, $planB->id, $sourceB->id, $targetB->id);
+        });
+    }
+
+    // ==================================================================
+    // Phase 1G.1: cross-School composite-FK integrity
+    // ==================================================================
+
+    #[Test]
+    public function a_subject_mapping_cannot_reference_another_schools_plan(): void
+    {
+        ['school' => $schoolA, 'sourceOffering' => $sourceA, 'targetOffering' => $targetA] = $this->buildSubjectMappingContext();
+        ['sourceYear' => $sourceYearB, 'targetYear' => $targetYearB] = $this->buildSubjectMappingContext();
+        $planB = $this->createEnrollmentRolloverPlan($sourceYearB, $targetYearB);
+
+        $this->expectException(QueryException::class);
+
+        $this->insertSubjectMapping($schoolA->id, $planB->id, $sourceA->id, $targetA->id, 'pgsql_admin');
+    }
+
+    #[Test]
+    public function a_subject_mapping_cannot_reference_another_schools_source_offering(): void
+    {
+        ['school' => $schoolA, 'sourceYear' => $sourceYearA, 'targetYear' => $targetYearA, 'targetOffering' => $targetA] = $this->buildSubjectMappingContext();
+        $planA = $this->createEnrollmentRolloverPlan($sourceYearA, $targetYearA);
+        ['sourceOffering' => $sourceB] = $this->buildSubjectMappingContext();
+
+        $this->expectException(QueryException::class);
+
+        $this->insertSubjectMapping($schoolA->id, $planA->id, $sourceB->id, $targetA->id, 'pgsql_admin');
+    }
+
+    #[Test]
+    public function a_subject_mapping_cannot_reference_another_schools_target_offering(): void
+    {
+        ['school' => $schoolA, 'sourceYear' => $sourceYearA, 'targetYear' => $targetYearA, 'sourceOffering' => $sourceA] = $this->buildSubjectMappingContext();
+        $planA = $this->createEnrollmentRolloverPlan($sourceYearA, $targetYearA);
+        ['targetOffering' => $targetB] = $this->buildSubjectMappingContext();
+
+        $this->expectException(QueryException::class);
+
+        $this->insertSubjectMapping($schoolA->id, $planA->id, $sourceA->id, $targetB->id, 'pgsql_admin');
+    }
+
+    // Note: the (plan_id, source_subject_offering_id) uniqueness
+    // violation is proven at the Eloquent/same-connection level in
+    // EnrollmentRolloverSubjectMappingServiceTest instead of here.
+    // Proving it via a SEPARATE `pgsql_admin` connection against a row
+    // inserted (but not yet committed) on `pgsql` within the SAME test
+    // is not just redundant -- it genuinely deadlocks: a unique-index
+    // insert that finds an in-progress (not yet committed/aborted)
+    // conflicting key must WAIT for that other transaction's outcome
+    // before it can decide whether to raise the violation, and
+    // DatabaseTransactions' per-test wrapping transaction on `pgsql`
+    // never commits or rolls back until teardown -- so the
+    // `pgsql_admin` statement waits forever. The composite-FK tests
+    // below never hit this: an FK check resolves against an uncommitted
+    // row from another session without blocking, whether or not the key
+    // matches.
+
+    // ==================================================================
+    // Phase 1G.1: delete policies
+    // ==================================================================
+
+    #[Test]
+    public function deleting_a_plan_cascades_its_subject_mappings(): void
+    {
+        ['school' => $school, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear, 'sourceOffering' => $source, 'targetOffering' => $target] = $this->buildSubjectMappingContext();
+        $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);
+        $mapping = $this->createEnrollmentRolloverSubjectMapping($plan, $source, $target);
+
+        // Deliberately the SAME `pgsql` connection/session as every
+        // fixture above (via TenantContext::withSchool, exactly how the
+        // real app role deletes) -- `pgsql_admin` is a genuinely
+        // separate PostgreSQL session that DatabaseTransactions never
+        // wraps in a transaction, so it cannot see this test's
+        // still-uncommitted `pgsql` writes at all; asserting through it
+        // would silently "pass" even if cascade never ran.
+        app(TenantContext::class)->withSchool(
+            $school,
+            fn () => DB::connection('pgsql')->delete('delete from enrollment_rollover_plans where id = ?', [$plan->id]),
+        );
+
+        $exists = app(TenantContext::class)->withSchool(
+            $school,
+            fn () => DB::connection('pgsql')->selectOne('select count(*) as c from enrollment_rollover_subject_mappings where id = ?', [$mapping->id])->c,
+        );
+        $this->assertSame(0, (int) $exists, 'a deleted plan must cascade-delete its subject mappings');
+    }
+
+    #[Test]
+    public function deleting_a_referenced_subject_offering_is_restricted(): void
+    {
+        ['school' => $school, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear, 'sourceOffering' => $source, 'targetOffering' => $target] = $this->buildSubjectMappingContext();
+        $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);
+        $this->createEnrollmentRolloverSubjectMapping($plan, $source, $target);
+
+        $this->expectException(QueryException::class);
+
+        // Same-connection rationale as above.
+        app(TenantContext::class)->withSchool(
+            $school,
+            fn () => DB::connection('pgsql')->delete('delete from subject_offerings where id = ?', [$source->id]),
+        );
     }
 }

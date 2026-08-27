@@ -104,4 +104,10 @@ class EnrollmentRolloverPlan extends Model
     {
         return $this->hasMany(EnrollmentRolloverItem::class, 'plan_id');
     }
+
+    /** @return HasMany<EnrollmentRolloverSubjectMapping, $this> */
+    public function subjectMappings(): HasMany
+    {
+        return $this->hasMany(EnrollmentRolloverSubjectMapping::class, 'plan_id');
+    }
 }

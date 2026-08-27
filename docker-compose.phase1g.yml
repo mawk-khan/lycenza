@@ -1,0 +1,68 @@
+# Phase 1G (Subject Enrollment Rollover) isolated dev/test stack.
+# Local development only. NOT the shared `school-os` project (repo-root
+# docker-compose.yml) and NOT any other phase's isolated stack
+# (docker-compose.phase1b.yml, docker-compose.phase1d1.yml,
+# docker-compose.phase1f.yml) -- deliberately separate project name,
+# host ports, and volumes so this worktree's destructive migration/test
+# operations (fresh migrate, rollback, re-migrate, full suite) can
+# never collide with the shared stack or any other concurrent phase
+# worktree's infrastructure.
+#
+# Usage:
+#   docker compose -f docker-compose.phase1g.yml up -d postgres redis minio
+#   docker compose -f docker-compose.phase1g.yml down          # stop, keep volumes
+#   docker compose -f docker-compose.phase1g.yml down -v       # stop + delete this phase's data only
+
+name: school-os-phase1g
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: school_os
+      POSTGRES_USER: school_os
+      POSTGRES_PASSWORD: school_os
+    ports:
+      - "64432:5432"
+    volumes:
+      - postgres_phase1g_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U school_os -d school_os"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "64379:6379"
+    volumes:
+      - redis_phase1g_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: school_os
+      MINIO_ROOT_PASSWORD: school_os_secret
+    ports:
+      - "64900:9000"
+      - "64901:9001"
+    volumes:
+      - minio_phase1g_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_phase1g_data:
+  redis_phase1g_data:
+  minio_phase1g_data:
