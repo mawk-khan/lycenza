@@ -18,6 +18,7 @@ use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
+use App\Http\Controllers\App\GuardianAccountInvitationController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianCommunicationPreferenceController;
 use App\Http\Controllers\App\GuardianController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Identity\InvitationAcceptanceController;
 use App\Http\Controllers\SystemStatusController;
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +42,18 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [LoginController::class, 'store'])
         ->middleware('throttle:login')
         ->name('login.store');
+});
+
+// Phase 5D.3 -- the Guardian account-invitation acceptance page.
+// Deliberately NOT wrapped in 'guest' (an existing User must be able
+// to view/confirm this page while already authenticated -- brief
+// §11-13's existing-account branch) nor 'auth' (a brand-new person has
+// no account yet). See InvitationAcceptanceController's docblock for
+// how tenant context is resolved for an RLS-protected lookup without
+// either.
+Route::middleware('throttle:guardian-invitation-accept')->group(function (): void {
+    Route::get('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'show'])->name('invitations.show');
+    Route::post('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'store'])->name('invitations.store');
 });
 
 Route::middleware('auth')->group(function (): void {
@@ -139,10 +153,29 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{guardian}/status', [GuardianController::class, 'changeStatus'])->name('status');
         Route::post('/{guardian}/contacts', [GuardianController::class, 'storeContact'])->name('contacts.store');
 
-        // Phase 5B.2: the optional School OS account link.
+        // Phase 5B.2: the optional School OS account link (an
+        // ALREADY-existing membership).
         Route::get('/{guardian}/account-link/search', [GuardianAccountLinkController::class, 'search'])->name('account-link.search');
         Route::post('/{guardian}/account-link', [GuardianAccountLinkController::class, 'store'])->name('account-link.store');
         Route::delete('/{guardian}/account-link', [GuardianAccountLinkController::class, 'destroy'])->name('account-link.destroy');
+
+        // Phase 5D.3: invite/resend/revoke -- provisions a NEW
+        // User/SchoolMembership via the acceptance flow, distinct from
+        // account-link above (which only ever links an EXISTING one).
+        // Gated by guardians.manage + school.members.manage, see
+        // GuardianAccountInvitationController's docblock. No throttle
+        // middleware here, matching every other admin Inertia mutation
+        // in this group -- `school-api-mutations` is keyed off a
+        // `{school}` ROUTE parameter (RateLimiterServiceProvider::
+        // tenantKey()), which this `{guardian}`-scoped group does not
+        // have; the public token-acceptance endpoints below are where
+        // brief §41's rate limiting actually applies.
+        Route::post('/{guardian}/account-invitation', [GuardianAccountInvitationController::class, 'store'])
+            ->name('account-invitation.store');
+        Route::post('/{guardian}/account-invitation/resend', [GuardianAccountInvitationController::class, 'resend'])
+            ->name('account-invitation.resend');
+        Route::delete('/{guardian}/account-invitation', [GuardianAccountInvitationController::class, 'destroy'])
+            ->name('account-invitation.destroy');
 
         // Phase 5D.2 §29/§30: administrative recording of the
         // Guardian's own domain communication preference/consent --
