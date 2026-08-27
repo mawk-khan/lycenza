@@ -41,6 +41,12 @@ interface EmailPreferenceState {
     endpointAvailable: boolean;
 }
 
+interface AccountInvitationState {
+    canManage: boolean;
+    hasEmailContact: boolean;
+    pending: { status: string; expiresAt: string } | null;
+}
+
 interface Props {
     guardian: {
         id: string;
@@ -53,6 +59,7 @@ interface Props {
     students: LinkedStudent[];
     canManage: boolean;
     accountLink: AccountLink | null;
+    accountInvitation: AccountInvitationState;
     communicationPreferences: { email: EmailPreferenceState };
     canManageCommunicationPreferences: boolean;
 }
@@ -113,6 +120,38 @@ function unlinkAccount(): void {
     router.delete(`/app/guardians/${props.guardian.id}/account-link`, {
         preserveScroll: true,
         onFinish: () => (unlinking.value = false),
+    });
+}
+
+// --- Phase 5D.3: account invitation ---------------------------------
+
+const invitationBusy = ref(false);
+
+function sendInvitation(): void {
+    invitationBusy.value = true;
+    router.post(
+        `/app/guardians/${props.guardian.id}/account-invitation`,
+        {},
+        { preserveScroll: true, onFinish: () => (invitationBusy.value = false) },
+    );
+}
+
+function resendInvitation(): void {
+    invitationBusy.value = true;
+    router.post(
+        `/app/guardians/${props.guardian.id}/account-invitation/resend`,
+        {},
+        { preserveScroll: true, onFinish: () => (invitationBusy.value = false) },
+    );
+}
+
+function revokeInvitation(): void {
+    const confirmed = window.confirm('Revoke this pending invitation? The link will stop working.');
+    if (!confirmed) return;
+    invitationBusy.value = true;
+    router.delete(`/app/guardians/${props.guardian.id}/account-invitation`, {
+        preserveScroll: true,
+        onFinish: () => (invitationBusy.value = false),
     });
 }
 
@@ -442,6 +481,63 @@ function submitContact(): void {
                 </div>
             </div>
             <p v-else class="mt-3 text-sm text-slate-500">Not linked.</p>
+        </section>
+
+        <!-- Guardian account invitation (Phase 5D.3) -->
+        <section v-if="!accountLink" class="mt-8">
+            <h2 class="text-sm font-medium text-slate-500">Invite a new School OS account</h2>
+            <p class="mt-1 text-xs text-slate-400">
+                Sends this Guardian a one-time link at their email contact to create their own
+                School OS account. Different from linking above, which attaches an account that
+                already exists.
+            </p>
+
+            <div v-if="!accountInvitation.canManage" class="mt-3 text-sm text-slate-500">
+                You do not have permission to invite an account for this Guardian.
+            </div>
+            <div v-else-if="!accountInvitation.hasEmailContact" class="mt-3 text-sm text-slate-500">
+                Add an active email contact before inviting an account.
+            </div>
+            <div
+                v-else-if="accountInvitation.pending"
+                class="mt-3 rounded border border-slate-200 p-4 text-sm"
+            >
+                <p>
+                    Invitation
+                    <span class="font-medium">{{ accountInvitation.pending.status }}</span>
+                    <span v-if="accountInvitation.pending.status === 'pending'">
+                        (expires
+                        {{ new Date(accountInvitation.pending.expiresAt).toLocaleDateString() }})
+                    </span>
+                </p>
+                <div class="mt-2 space-x-4">
+                    <button
+                        type="button"
+                        class="text-sm font-medium underline"
+                        :disabled="invitationBusy"
+                        @click="resendInvitation"
+                    >
+                        Resend
+                    </button>
+                    <button
+                        type="button"
+                        class="text-sm text-red-600 underline"
+                        :disabled="invitationBusy"
+                        @click="revokeInvitation"
+                    >
+                        Revoke
+                    </button>
+                </div>
+            </div>
+            <button
+                v-else
+                type="button"
+                class="mt-3 text-sm font-medium underline"
+                :disabled="invitationBusy"
+                @click="sendInvitation"
+            >
+                Invite account
+            </button>
         </section>
 
         <!-- Domain communication preference / consent (Phase 5D.2) -->

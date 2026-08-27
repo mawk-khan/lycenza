@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Communications\Application\Channels\GuardianEmailAddressResolver;
 use App\Domain\Communications\Application\Policy\DomainCommunicationPreferenceReadModel;
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Application\GuardianService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\GuardianContact;
+use App\Domain\Identity\Application\AccountInvitationService;
 use App\Domain\Identity\Application\AccountLinkService;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
@@ -93,8 +95,15 @@ class GuardianController extends Controller
         return redirect("/app/guardians/{$guardian->id}");
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, DomainCommunicationPreferenceReadModel $preferenceReadModel, string $guardian): Response
-    {
+    public function show(
+        TenantContext $context,
+        CapabilityResolver $capabilities,
+        AccountLinkService $accountLinks,
+        DomainCommunicationPreferenceReadModel $preferenceReadModel,
+        AccountInvitationService $invitations,
+        GuardianEmailAddressResolver $emailResolver,
+        string $guardian,
+    ): Response {
         $school = $context->requireSchool();
         $this->authorizeCapability('guardians.view', $school);
 
@@ -111,6 +120,13 @@ class GuardianController extends Controller
         $emailState = $preferenceReadModel->forGuardianEmail($school, $model);
         $actor = $context->actor();
 
+        // Phase 5D.3 §31: invitation/activation read-model for the
+        // admin UI -- never exposes the token/hash/security data,
+        // only lifecycle status.
+        $pendingInvitation = $link === null ? $invitations->currentPendingInvitation($school, $model) : null;
+        $canManageAccountInvitations = $capabilities->canInSchool($actor, 'guardians.manage', $school)
+            && $capabilities->canInSchool($actor, 'school.members.manage', $school);
+
         return Inertia::render('App/Guardians/Show', [
             'communicationPreferences' => [
                 'email' => [
@@ -125,6 +141,14 @@ class GuardianController extends Controller
                 'schoolMembershipId' => $link->school_membership_id,
                 'memberName' => $link->membership->user->name,
                 'membershipActive' => $link->membership->isActive(),
+            ],
+            'accountInvitation' => [
+                'canManage' => $canManageAccountInvitations,
+                'hasEmailContact' => $emailResolver->resolve($model) !== null,
+                'pending' => $pendingInvitation === null ? null : [
+                    'status' => $pendingInvitation->effectiveStatus(),
+                    'expiresAt' => $pendingInvitation->expires_at->toIso8601String(),
+                ],
             ],
             'guardian' => $this->presentSummary($model),
             'contacts' => $model->contacts->map(fn (GuardianContact $c) => $this->presentContact($c))->all(),

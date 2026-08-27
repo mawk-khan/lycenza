@@ -138,6 +138,16 @@ class RateLimiterServiceProvider extends ServiceProvider
         RateLimiter::for('documents-content', fn (Request $request) => Limit::perMinute(20)->by($this->tenantKey($request)));
         RateLimiter::for('documents-writes', fn (Request $request) => Limit::perMinute(30)->by($this->tenantKey($request)));
 
+        // Phase 5D.3 §41: the public Guardian account-invitation
+        // acceptance routes (token-check GET and accept POST) are
+        // unauthenticated by construction (root CLAUDE.md's RLS/tenant
+        // model requires resolving School before any actor exists) --
+        // IP-keyed, like `login`, since there is no actor/School
+        // identity yet. The token itself (32 bytes, hashed at rest) is
+        // already infeasible to guess; this is defense-in-depth against
+        // sheer request volume, not the primary control.
+        RateLimiter::for('guardian-invitation-accept', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
+
         // Deliberately NO limiter for /health/live or /health/ready
         // (section 32) -- infrastructure must be able to poll them as
         // frequently as its own probe interval requires, and both are

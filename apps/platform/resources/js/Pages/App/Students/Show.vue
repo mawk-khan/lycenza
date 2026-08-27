@@ -561,6 +561,10 @@ function unlink(r: Relationship): void {
                 Optional. Linking an existing School OS account lets this Student receive in-app
                 communications when they sign in. It does not create a new account.
             </p>
+            <p class="mt-1 text-xs text-slate-400">
+                Inviting a brand-new account (as is available for Guardians) is not available for
+                Students yet -- only linking an account that already exists is supported.
+            </p>
 
             <div v-if="accountLink" class="mt-3 rounded border border-slate-200 p-4 text-sm">
                 <p>
