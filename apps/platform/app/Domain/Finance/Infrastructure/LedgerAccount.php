@@ -9,6 +9,7 @@ use Database\Factories\LedgerAccountFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * Phase 0G.1 (ADR 0030, docs/modules/FINANCE.md "Account model"): a
@@ -32,6 +33,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $currency
  * @property bool $is_system
  * @property string $status active|inactive
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 class LedgerAccount extends Model
 {

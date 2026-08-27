@@ -245,6 +245,31 @@ class CapabilityAndRoleSeeder extends Seeder
             // `enrollments.*`'s own docblock above).
             ['key' => 'enrollments.rollovers.view', 'label' => 'View Enrollment Rollover plans, mappings, and results', 'namespace' => 'school'],
             ['key' => 'enrollments.rollovers.manage', 'label' => 'Manage Enrollment Rollover plans (configure, validate, start, resume execution)', 'namespace' => 'school'],
+
+            // Phase 0G.3 (docs/modules/FINANCE.md "Authorization
+            // design") -- Finance ledger authorization. A single
+            // `finance.ledger.view` covers every current administrative
+            // READ surface (ledger account directory, journal history,
+            // journal detail) rather than one capability per DTO
+            // (section 9's guidance, mirroring `hr.employees.view`'s
+            // single Directory-tier read grant). `.post` and `.reverse`
+            // are deliberately SEPARATE from `.view` AND from each
+            // other: reversal creates a new, permanent ledger fact that
+            // corrects a prior one -- a materially higher-risk financial
+            // correction action than an ordinary posting, the same
+            // "distinct authority for a materially higher blast radius
+            // action" reasoning already established by
+            // `communications.emergency` (kept separate from
+            // `.announce`) and `enrollments.rollovers.manage` (kept
+            // separate from `enrollments.manage`). No
+            // `finance.accounts.manage` is registered here -- 0G.3
+            // implements no Ledger Account create/update/deactivate;
+            // that capability is deferred to whichever future
+            // checkpoint actually adds Chart of Accounts administration
+            // (FINANCE.md 0G.3 as-built, "Deferred: account CRUD").
+            ['key' => 'finance.ledger.view', 'label' => 'View Finance ledger accounts and journal entries', 'namespace' => 'school'],
+            ['key' => 'finance.ledger.post', 'label' => 'Post Finance journal entries', 'namespace' => 'school'],
+            ['key' => 'finance.ledger.reverse', 'label' => 'Reverse posted Finance journal entries', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -296,6 +321,23 @@ class CapabilityAndRoleSeeder extends Seeder
                     // these an actual "HR Staff" role needs.
                     'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
                     'enrollments.rollovers.view', 'enrollments.rollovers.manage',
+                    // Phase 0G.3: Finance is a new, money-moving domain
+                    // -- granted in full (view/post/reverse) to School
+                    // Admin, the seeded catalog's top school-scoped
+                    // administrative role, which already holds every
+                    // other domain's most privileged pair (webhooks,
+                    // campuses, academic structure, students/guardians,
+                    // communications, enrollments + rollovers). NOT
+                    // granted to Principal below -- unlike Students/
+                    // Guardians/Enrollments/Academics, which Principal
+                    // already operates day-to-day, this catalog has no
+                    // established precedent of Principal handling
+                    // ledger postings or reversals. A School wanting a
+                    // dedicated Accountant-style role can configure one
+                    // itself without this checkpoint inventing it now
+                    // (section 44's "no surprising broad default
+                    // assignment").
+                    'finance.ledger.view', 'finance.ledger.post', 'finance.ledger.reverse',
                 ],
             ],
             'principal' => [

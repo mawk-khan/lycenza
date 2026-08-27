@@ -41,6 +41,10 @@ use Illuminate\Support\Carbon;
  *                                value, and never application-set. Backs the post-commit line-set
  *                                immutability trigger on journal_lines. Deliberately excluded from
  *                                $fillable and from any future Finance DTO/API contract.
+ * @property-read string|null $reversed_by_journal_entry_id NOT a persisted column -- only
+ *                                populated when a query explicitly projects it (Phase 0G.3's
+ *                                `App\Domain\Finance\Application\LedgerReadService`'s correlated
+ *                                scalar subquery). Absent/undefined on a plain `JournalEntry::find()`.
  */
 class JournalEntry extends Model
 {

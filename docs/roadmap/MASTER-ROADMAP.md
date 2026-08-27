@@ -248,8 +248,25 @@ operation. Application-layer balance/currency/account validation sits
 in front of, and never replaces, every 0G.1 database defense. Not an
 authorization boundary — no capabilities, no HTTP, no UI. Zero new
 migrations. Full as-built detail: `docs/modules/FINANCE.md` ("0G.2
-as-built"). 0G.3 onward (authorization, receivables, payments, API,
-UI, closure) is not yet started.
+as-built").
+
+**0G.3 — Finance Authorization & Administrative Read Model
+(implemented):** real `finance.ledger.view`/`.post`/`.reverse`
+capabilities (`database/seeders/CapabilityAndRoleSeeder.php`, no data
+migration — the existing sole capability/role catalog), granted by
+default to `school_admin` only (not `principal`).
+`App\Domain\Finance\Application\LedgerAdministrationService` is the
+authorized administrative facade wrapping the still-unmodified,
+still-unauthorized `LedgerService` trusted core; `App\Domain\Finance
+\Application\LedgerReadService` is the sole authorized read path for
+Ledger Accounts, journal history, and journal detail, returning only
+typed DTOs (never a raw Eloquent model, never `posting_txid`). Every
+successful read is audited (Highly Sensitive tier, unchanged from
+`docs/modules/FINANCE.md`'s already-committed classification). Zero
+new migrations, zero composer changes, no HTTP/API/UI, no Ledger
+Account CRUD. Full as-built detail: `docs/modules/FINANCE.md` ("0G.3
+as-built"). 0G.4 onward (receivables, payments, API, UI, closure) is
+not yet started.
 
 ## Phase 0H — Academic Operations
 

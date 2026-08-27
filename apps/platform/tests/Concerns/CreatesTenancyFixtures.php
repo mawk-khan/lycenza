@@ -179,6 +179,22 @@ trait CreatesTenancyFixtures
         ]);
     }
 
+    /**
+     * Phase 0G.3 fixture convenience: an actor holding EVERY Finance
+     * ledger capability at $school, mirroring `fullHrActor()` above.
+     * Used by tests that are not themselves testing authorization, so
+     * they can exercise `LedgerReadService`/`LedgerAdministrationService`
+     * using an actor that is never the thing under test. 0G.3's OWN
+     * authorization tests use `createUserWithCapabilities()` directly
+     * with a narrow, deliberate capability list instead.
+     */
+    protected function fullFinanceActor(School $school): User
+    {
+        return $this->createUserWithCapabilities($school, [
+            'finance.ledger.view', 'finance.ledger.post', 'finance.ledger.reverse',
+        ]);
+    }
+
     // --- Phase 0D: Academic Structure fixtures -----------------------
 
     protected function createAcademicYear(School $school, array $attributes = []): AcademicYear

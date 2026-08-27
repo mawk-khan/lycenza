@@ -807,6 +807,15 @@ any listing surface), access audited (ADR 0017), never logged/included
 in error messages (`LogSanitizer`, existing repo-wide backstop, plus
 Finance-specific caller discipline).
 
+**Reconfirmed, not narrowed, by 0G.3**: when 0G.3 built the first real
+listing surface (`App\Domain\Finance\Application\LedgerReadService`),
+this classification was deliberately left exactly as committed here —
+see 0G.3's own "Data classification and read audit" subsection below
+for why a narrower reading (e.g. treating the current no-Fees/Payroll/
+Payment-linkage ledger kernel as merely Confidential) was considered
+and rejected as an undocumented architecture change this checkpoint
+was not scoped to make. Every 0G.3 read is audited accordingly.
+
 ## Deferred / out of scope (this checkpoint and near-term)
 
 Everything in "Non-goals" above, plus: Phase 5C Communications closure
@@ -2105,6 +2114,351 @@ authorization LAYER in front of the existing service, not a rewrite of
 it), an administrative read model for browsing the ledger/chart of
 accounts, and the account-status-blocks-posting decision this document
 deliberately deferred above.
+
+## 0G.3 as-built (Finance Authorization & Administrative Read Model)
+
+Establishes the first authorized administrative boundary around
+Finance, on top of 0G.1's unchanged schema and 0G.2's unchanged
+`LedgerService`. Zero migrations, zero schema changes, zero
+composer changes, no HTTP/API/UI. `LedgerService`'s posting/reversal
+semantics, Money arithmetic, audit architecture, domain-event/outbox
+architecture, reversal-of-reversal policy, and generic-post
+idempotency boundary are all unchanged.
+
+### Capabilities
+
+Exact registered strings (`database/seeders/CapabilityAndRoleSeeder.php`,
+the existing sole capability/role catalog -- no data migration, no
+parallel registration mechanism):
+
+- `finance.ledger.view` -- view Ledger Accounts, journal history, and
+  journal detail. One capability for every current read surface
+  (section 9's "avoid one capability per DTO" guidance), mirroring
+  `hr.employees.view`'s single Directory-tier read grant.
+- `finance.ledger.post` -- post journal entries.
+- `finance.ledger.reverse` -- reverse posted journal entries.
+
+`finance.accounts.manage` is deliberately **not registered**: 0G.3
+implements no Ledger Account create/update/deactivate. Registering an
+unused capability now would be exactly the "speculative capability
+catalog bloat" the brief warns against; that capability is reserved
+for whichever future checkpoint actually adds Chart of Accounts
+administration.
+
+**Post vs. reverse are separate capabilities, and both are separate
+from `.view`.** Reversal creates a new, permanent ledger fact
+correcting a prior one -- a materially higher-risk financial
+correction action than an ordinary posting. This mirrors two existing
+precedents in the same catalog: `communications.emergency` kept
+separate from `.announce`, and `enrollments.rollovers.manage` kept
+separate from `enrollments.manage` (a bulk, higher-blast-radius
+action earning its own grant). A caller holding only `.post` cannot
+reverse; a caller holding only `.view` cannot post or reverse.
+
+**Default role assignment**: `school_admin` receives all three
+(`view`/`post`/`reverse`) -- the seeded catalog's top school-scoped
+administrative role, which already holds every other domain's most
+privileged pair. `principal` receives **none** of the three: unlike
+Students/Guardians/Enrollments/Academics (which Principal already
+operates day-to-day in this catalog), there is no established
+precedent of Principal handling ledger postings or reversals, and
+inventing one now would be exactly the "surprising broad default
+assignment" the brief warns against. A School wanting a dedicated
+Accountant-style role can configure one itself later without this
+checkpoint inventing it. No role name is ever checked in code --
+every check is `Gate::authorize('capability', [...])` via
+`AuthorizesCapability` (the same mechanism every other module uses).
+
+### Authorization architecture: trusted core vs. authorized administrative facade
+
+`LedgerService` (0G.2) remains the TRUSTED CORE mutation kernel --
+unmodified, and still performing no capability/permission check of
+its own (`$actor` is provenance only, never authorization). 0G.3 adds
+`App\Domain\Finance\Application\LedgerAdministrationService`, the
+authorized ADMINISTRATIVE entry point a future HTTP/UI layer will
+call:
+
+- `post(School $school, PostJournalEntryData $data, User $actor): JournalEntryResult`
+  -- authorizes `finance.ledger.post`, then delegates unchanged to
+  `LedgerService::post()`.
+- `reverse(School $school, string $journalEntryId, User $actor, ?string $reason = null): JournalEntryResult`
+  -- authorizes `finance.ledger.reverse`, resolves the original entry
+  fresh via a School-scoped query
+  (`where('school_id', $school->id)->find($journalEntryId)`, never a
+  caller-supplied model), throws `JournalEntryNotFoundException` if
+  absent, then delegates unchanged to `LedgerService::reverse()`.
+
+Neither method duplicates any validation, account lookup, Money
+arithmetic, posting, reversal, audit, or outbox logic -- there remains
+exactly one production posting/reversal implementation
+(`LedgerService`) in this codebase; `LedgerAdministrationService` only
+authorizes and delegates.
+
+**Why the split, not embedding authorization directly in
+`LedgerService`** (the shape most other modules use, e.g.
+`App\Domain\HR\Application\EmployeeService`): a future TRUSTED internal
+domain caller (Payroll settlement, a payment-provider reconciliation
+job, or any other system-to-system Finance integration -- **none of
+which exist yet, and none of which are implemented in this
+checkpoint**) needs to call `LedgerService` directly through its own
+explicit, reviewed integration boundary later, without being forced to
+hold or impersonate a human staff member's Finance capability grant. A
+human administrator (and, later, an HTTP controller acting on one's
+behalf) always goes through `LedgerAdministrationService` instead --
+never `LedgerService` directly. No transport may ever expose
+`LedgerService` directly; a future controller depends on
+`LedgerAdministrationService`.
+
+### Administrative read service
+
+`App\Domain\Finance\Application\LedgerReadService` -- the sole
+authorized read path, mirroring
+`App\Domain\HR\Application\EmployeeDirectoryService`'s disclosure-
+boundary shape exactly. Three operations, all gated by
+`finance.ledger.view`, checked BEFORE any query runs:
+
+- `listAccounts(School $school, User $actor): Collection<LedgerAccountSummary>`
+  -- the Ledger Account directory. Deliberately **unpaginated**,
+  matching this repository's established convention for small, bounded
+  reference data (GradeLevel/Subject are returned via a plain
+  `->get()`, never a paginator) -- a School's chart of accounts is
+  reference data of the same shape and size class, not a growing
+  history. Ordered by normalized account code (`code` is already
+  uppercased at write time by `NormalizesCode`, so a plain
+  `orderBy('code')` is deterministic), `id` as a defensive tie-break.
+- `listJournalEntries(School $school, JournalEntryQuery $query, User $actor): LengthAwarePaginator<JournalEntrySummary>`
+  -- the journal history. Paginated, `perPage` clamped to
+  `[1, LedgerReadService::MAX_PER_PAGE]` (100) both in the query DTO's
+  constructor and again in the service. Stable-ordered
+  `posted_at DESC, id DESC` (`id` is UUIDv7 -- time-ordered -- so this
+  is a deterministic tie-break for entries sharing an identical
+  `posted_at` second-precision timestamp).
+- `getJournalEntryDetail(School $school, string $journalEntryId, User $actor): JournalEntryDetail`
+  -- one journal entry's full detail, including every line.
+
+All three run entirely under the caller's own `TenantContext`/RLS --
+no privileged/admin database connection, no `pgsql_admin`.
+
+### Read DTOs -- never a raw Eloquent model
+
+Every result is a typed, immutable, `final` DTO (`LedgerAccountSummary`,
+`JournalEntrySummary`, `JournalEntryDetail`, `JournalLineDetail`) --
+never `LedgerAccount`/`JournalEntry`/`JournalLine` returned directly.
+`posting_txid` remains structurally unreachable through the read side
+too, the same result-boundary discipline 0G.2's `JournalEntryResult`
+established for the write side (proven directly by
+`LedgerReadServiceTest::listing_accounts_and_journal_entries_never_return_a_raw_eloquent_model()`).
+
+- `LedgerAccountSummary`: `ledgerAccountId`, `code`, `name`, `type`,
+  `currency`, `isSystem`, `status`, `createdAt`, `updatedAt`.
+- `JournalEntrySummary`: `journalEntryId`, `currency`, `description`,
+  `postedAt`, `reversalOfJournalEntryId`, `reversedByJournalEntryId`,
+  `lineCount`. No `totalDebit`/`totalCredit` -- see "Balance / totals"
+  below.
+- `JournalEntryDetail`: the same entry-level fields plus
+  `lines: list<JournalLineDetail>`.
+- `JournalLineDetail`: `journalLineId`, `ledgerAccountId`,
+  `accountCode`, `accountName`, `side` (`JournalSide`), `amount`
+  (`Money`, exact NUMERIC-backed decimal, never a PHP float),
+  `currency`. Exposes `side` + `amount`, never the raw
+  `debit_amount`/`credit_amount` pair -- the same boundary
+  `JournalLineData` already established on the write side, applied
+  here to the read side.
+
+`reversedByJournalEntryId` is derived read-only from immutable journal
+history, never a persisted/mutable column: `listJournalEntries()`
+computes it in the SAME single query as the page of entries via a
+correlated scalar subquery (`addSelect` against a `journal_entries as
+reverser` self-alias -- an unaliased self-referencing subquery here is
+a real bug this checkpoint found and fixed: without the alias, the
+subquery's `journal_entries.id` reference resolves to the SUBQUERY's
+own FROM, not the outer row, silently returning null for every row);
+`getJournalEntryDetail()` computes it via one bounded lookup query. No
+schema change, no mutable `reversed`/`is_reversed` column anywhere.
+
+### Balance / totals -- deliberately not implemented
+
+No field named `balance`, `current_balance`, or `running_balance`
+anywhere in 0G.3, and no `totalDebit`/`totalCredit` aggregate either,
+even though the latter would have been a safe, non-"balance" exact
+aggregate. ADR 0030/FINANCE.md have not yet settled normal-balance
+sign conventions per account type (debit-normal vs. credit-normal),
+and inventing that now would be exactly the kind of undocumented
+accounting-semantics decision the brief prohibits. This is a named,
+deliberate deferral, not an oversight -- a future checkpoint that
+settles normal-balance semantics can add it without any 0G.3 rework,
+since no DTO field name or query shape here assumes one.
+
+### Pagination and filters
+
+`JournalEntryQuery` (explicit, allow-listed input, mirroring
+`EmployeeDirectoryQuery`'s shape): `postedFrom`/`postedTo` (filter on
+`journal_entries.posted_at`, the real posting timestamp -- never
+`created_at`; plain `>=`/`<=`, no accounting-period/end-of-day-
+inclusive adjustment invented), `ledgerAccountId` (SQL-level
+`whereExists` against `journal_lines`, scoped to the trusted School --
+a cross-School id simply matches zero lines, never an error or an
+oracle), `reversedOnly` (`true`/`false`/`null`), `search` (ILIKE
+against `description`, mirroring `EmployeeDirectoryQuery`'s existing
+search-filter convention), `page`, `perPage` (clamped to
+`[1, 100]`). Every filter applies at the SQL level, before pagination
+-- never loaded into PHP and filtered there. No arbitrary query DSL,
+no user-selectable sort field (ordering is the one fixed
+`posted_at DESC, id DESC`).
+
+### Cross-School privacy
+
+A nonexistent journal entry id and one belonging to a different School
+produce the IDENTICAL `JournalEntryNotFoundException` (same message
+shape, differing only by the id itself) -- both `LedgerReadService::
+getJournalEntryDetail()` and `LedgerAdministrationService::reverse()`
+resolve via a School-scoped query under the trusted School's own
+TenantContext, never "found, but forbidden." A `ledgerAccountId`
+filter for another School's account returns an empty result set, not
+an error. Authorization is always checked BEFORE any Finance query
+runs (never "query first, then decide") -- a caller lacking
+`finance.ledger.view` learns nothing about the target School's Finance
+data, not even a row count
+(`LedgerReadServiceTest::missing_view_capability_denies_listing_journal_entries_and_reveals_no_count()`
+asserts the denial message never contains a count that was present in
+the fixture).
+
+### Data classification and read audit
+
+FINANCE.md's already-committed "Data classification" section (above)
+classifies every Finance table as Highly Sensitive by default. This
+checkpoint does **not** reopen or narrow that classification for the
+current no-Fees/Payroll/Payment-linkage ledger kernel -- doing so
+would itself be an undocumented architecture change, not a refinement
+this checkpoint is scoped to make. Highly Sensitive's own documented
+engineering control ("access to Sensitive/Highly Sensitive data is
+itself auditable, not just changes to it") therefore applies exactly
+as written: every successful read is audited, once per call, never
+once per row -- mirroring
+`App\Domain\Documents\Application\DocumentListingService`'s
+`document.sensitive_list_viewed` (a list call, one event) and
+`App\Domain\Documents\Application\DocumentReadService`'s
+`document.sensitive_metadata_viewed` (a single-record call, one event)
+precedents exactly:
+
+- `ledger_account.list_viewed` -- metadata: `resultCount` only.
+- `journal_entry.list_viewed` -- metadata: `resultCount` only (the
+  page's item count, not the paginator's grand total).
+- `journal_entry.detail_viewed` -- metadata: `journalEntryId`,
+  `lineCount`; `subject` is the viewed `JournalEntry`.
+
+No full row/line dump, no `posting_txid`, no SQL/filter internals, no
+another School's id, ever appears in audit metadata (section 42's
+audit-privacy rule). Nothing is audited on denial --
+`AuditRecorder` is never reached before `authorizeCapabilityFor()` has
+already succeeded (proven by
+`LedgerReadServiceTest::a_denied_read_creates_no_audit_event()`).
+
+### Authorization test matrix
+
+`tests/Feature/Finance/LedgerAdministrationServiceTest.php` and
+`tests/Feature/Finance/LedgerReadServiceTest.php` prove, for
+post/reverse/view independently: the correct capability succeeds; a
+wrong capability (view-only for post/reverse; post-only for reverse)
+is denied; a non-member is denied; a capability granted only in a
+DIFFERENT School never authorizes the current one; a denied
+post/reverse creates zero new journal entries, zero journal lines,
+zero audit events, and zero outbox events; a denied read creates zero
+audit events. `tests/Feature/Finance/FinanceCapabilityRegistryTest.php`
+proves the three capabilities are registered exactly once, school-
+scoped (not platform), idempotent across repeated seeder runs, and
+that `school_admin`/`principal` receive exactly the documented default
+grants (mirroring `Tests\Feature\HR\HrCapabilityRegistryTest`'s shape).
+
+### Query behavior
+
+`listJournalEntries()`: one query for the page of entries (line count
+via `withCount('lines')`, reversed-by id via a correlated subquery --
+both in the SAME query, never a per-row query), plus the paginator's
+own total-count query -- constant regardless of page size, proven for
+10 vs. 50 entries
+(`LedgerReadServiceTest::journal_listing_query_count_does_not_grow_per_row()`).
+`getJournalEntryDetail()`: one query to resolve the entry, one for its
+lines, one batched `whereIn` eager load for every referenced
+`LedgerAccount` (never one lookup per line), one for the reversed-by
+lookup -- constant regardless of line count, proven for 2 vs. 20 lines
+with a warmed capability cache isolating the per-line signal from the
+first-call capability-cache-miss cost
+(`LedgerReadServiceTest::journal_detail_query_count_does_not_grow_per_line()`).
+No index was added -- no query in this checkpoint exhibited a real,
+observed performance problem against the existing `(school_id,
+posted_at)`/primary-key indexes 0G.1 already created.
+
+### Tests
+
+Authoritative Finance suite (unchanged path): baseline **144 / 247 /
+0** (0G.2 close). Added 53 new tests across three new files
+(`FinanceCapabilityRegistryTest.php`: 7,
+`LedgerAdministrationServiceTest.php`: 13,
+`LedgerReadServiceTest.php`: 33). Final: **197 tests / 371 assertions
+/ 0 failures**. Full suite: **2640 tests / 8896 assertions / 0
+failures** -- the 0G.2-close baseline (2587/8772/0) plus exactly these
+53 new tests, no regressions elsewhere. (The same pre-existing,
+unrelated `tests/Feature/HR/HrEmployeeImportConcurrencyTest.php`
+real-OS-process concurrency timing flake documented in the 0G.2
+as-built section above was observed once under full-suite load in
+this checkpoint too, and again confirmed flaky -- 3/3 passes in
+isolation, and a clean full-suite rerun afterward passed completely;
+this checkpoint did not touch HR code.)
+
+### Security findings (0G.3)
+
+No unresolved P0/P1/P2. Reviewed explicitly against the checkpoint
+brief's full authorization/read-model checklist (role-based
+authorization, capability in the wrong School, non-member with
+capability-like state, cross-School journal/account id oracle,
+authorization-after-data-access, denied operation causing a ledger
+write, denied operation causing audit/outbox, posting capability able
+to reverse, view capability able to post, reverse capability
+overreach, a broad `finance.manage` god capability, raw Eloquent
+return, `posting_txid` exposure, float conversion in the read model,
+unbounded journal listing, pagination-total leakage, N+1 journal/
+account reads, a mutable balance column, a mutable reversal-status
+column, accidental Student/Guardian access, a system caller forced to
+impersonate human staff, a shared-authorization-layer bypass,
+read-audit overcollection):
+
+- Every item above is resolved by the design decisions documented in
+  this section -- no role-name check exists anywhere in this
+  checkpoint's diff; every authorization check is a capability check
+  via the existing `Gate::define('capability', ...)` mechanism; no new
+  authorization primitive, permission cache, or capability-resolution
+  path was introduced.
+- Two real implementation bugs were found and fixed during this
+  checkpoint's own validation (not merely inferred): (1) the
+  unaliased self-referencing `reversed_by_journal_entry_id` correlated
+  subquery silently returned null for every row -- fixed with an
+  explicit `reverser` alias; (2) a query-count test comparing a
+  cold-cache first authorization check against a warm-cache second one
+  produced a misleading "query count grows" signal -- fixed by
+  explicitly warming the capability cache before both measurements, so
+  the test isolates line count alone.
+
+### What 0G.3 intentionally does not implement
+
+No Finance HTTP/API routes, controllers, OpenAPI, or frontend/UI (a
+later transport checkpoint); no Ledger Account create/update/
+deactivate (no `finance.accounts.manage` registered); no balance/
+normal-side semantics or any `totalDebit`/`totalCredit` aggregate
+(deferred, named above); no `fees`/`charges`/`invoices`/`payments`/
+`refunds`/provider callbacks; no Payroll, Admissions, or Student
+Enrollment integration; no multi-currency; no generic posting
+idempotency (unchanged from 0G.2); no reporting/analytics subsystem;
+no trusted internal Payroll/payment-settlement integration (documented
+as a future, separate boundary -- not built here).
+
+### Next checkpoint boundary
+
+0G.4 onward (Fees/Receivables foundation, or whichever checkpoint the
+committed roadmap defines next) is not yet started. The
+account-status-blocks-posting decision (0G.2's deferred item, restated
+in 0G.2's "Next checkpoint boundary" above) remains deferred; 0G.3 did
+not revisit it.
 
 ## Roadmap relationship
 
