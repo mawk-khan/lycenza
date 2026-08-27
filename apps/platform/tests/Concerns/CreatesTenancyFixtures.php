@@ -39,6 +39,11 @@ use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
+use App\Domain\Transport\Infrastructure\TransportRoute;
+use App\Domain\Transport\Infrastructure\TransportRouteAssignment;
+use App\Domain\Transport\Infrastructure\TransportStop;
+use App\Domain\Transport\Infrastructure\TransportStudentAssignment;
+use App\Domain\Transport\Infrastructure\TransportVehicle;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -627,6 +632,60 @@ trait CreatesTenancyFixtures
                 'school_id' => $copy->school_id,
                 'library_copy_id' => $copy->id,
                 'student_id' => $student->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 10B: Transport fixtures -----------------------------------
+
+    protected function createTransportRoute(School $school, array $attributes = []): TransportRoute
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => TransportRoute::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createTransportStop(TransportRoute $route, array $attributes = []): TransportStop
+    {
+        return app(TenantContext::class)->withSchool(
+            $route->school,
+            fn () => TransportStop::factory()->create(array_merge([
+                'school_id' => $route->school_id,
+                'route_id' => $route->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createTransportVehicle(School $school, array $attributes = []): TransportVehicle
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => TransportVehicle::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createTransportRouteAssignment(TransportRoute $route, TransportVehicle $vehicle, Employee $driver, array $attributes = []): TransportRouteAssignment
+    {
+        return app(TenantContext::class)->withSchool(
+            $route->school,
+            fn () => TransportRouteAssignment::factory()->create(array_merge([
+                'school_id' => $route->school_id,
+                'route_id' => $route->id,
+                'vehicle_id' => $vehicle->id,
+                'driver_employee_id' => $driver->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createTransportStudentAssignment(Student $student, TransportRoute $route, array $attributes = []): TransportStudentAssignment
+    {
+        return app(TenantContext::class)->withSchool(
+            $route->school,
+            fn () => TransportStudentAssignment::factory()->create(array_merge([
+                'school_id' => $route->school_id,
+                'student_id' => $student->id,
+                'route_id' => $route->id,
             ], $attributes)),
         );
     }

@@ -266,12 +266,31 @@ Inertia UI. Full design and closure record: `docs/modules/LIBRARY.md`.
 Deliberately excludes fines/Finance integration (Finance/Phase 0G is
 not on `main`), reservations/holds/renewals, Documents-module
 integration, and any Guardian/Student-facing surface — all explicitly
-deferred, not gaps in this checkpoint's own closure. The remaining
-Phase 0K modules (Transport, Inventory, Canteen, Hostel, Health,
-Visitor/Safety) are **not started**; Inventory/Canteen/Hostel
-additionally remain blocked on Finance/Fees reaching `main`, and Health
-remains blocked on the `docs/security/DATA-CLASSIFICATION.md`
-[LEGAL REVIEW REQUIRED] gate. Phase 0K as a whole is **not** complete.
+deferred, not gaps in this checkpoint's own closure.
+
+**Phase 10B — Transport (complete):** the second Phase 0K checkpoint —
+Routes + ordered Stops, Vehicles, the historical Route↔Vehicle↔Driver
+operational assignment (auto-replace semantics, driver = existing HR
+Employee referenced by id, never duplicated), and Student Transport
+assignment (explicit-end-required semantics, a database-enforced
+Stop-belongs-to-Route composite FK, and a one-active-assignment-per-
+Student invariant proven under real concurrency),
+`transport.routes.*`/`transport.vehicles.*`/`transport.assignments.*`
+capabilities, `/api/v1` administrative API, and a session-authenticated
+Inertia UI. Full design and closure record: `docs/modules/TRANSPORT.md`.
+Deliberately excludes GPS/live-tracking (Student Transport location is
+Sensitive data — a dedicated privacy/architecture review is required
+before any future checkpoint attempts it), bus boarding/attendance,
+Transport fees/Finance integration (Finance/Phase 0G is not on `main`),
+Documents-module integration for vehicle/driver documents, and any
+Guardian/Student-facing surface — all explicitly deferred, not gaps in
+this checkpoint's own closure.
+
+The remaining Phase 0K modules (Inventory, Canteen, Hostel, Health,
+Visitor/Safety) are **not started**; Inventory/Canteen/Hostel remain
+blocked on Finance/Fees reaching `main`, and Health remains blocked on
+the `docs/security/DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED]
+gate. Phase 0K as a whole is **not** complete.
 
 ## Phase 0L — Oversight
 
