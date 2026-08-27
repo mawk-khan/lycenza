@@ -17,8 +17,8 @@ it.
 0G.0  Finance Architecture & Module Plan          (this document + ADR 0030)               [implemented]
 0G.1  Ledger Schema Foundation                    (ledger_accounts, journal_entries, journal_lines)   [implemented]
 0G.2  Posting & Reversal Application Services      (LedgerService, balance/derivation reads)           [implemented]
-0G.3  Finance Authorization & Administrative Read Model   (finance.* capabilities, allow/deny tests)   [not started]
-0G.4  Fees / Receivables Foundation                (charges, invoices — post through the ledger)       [not started]
+0G.3  Finance Authorization & Administrative Read Model   (finance.* capabilities, allow/deny tests)   [implemented]
+0G.4  Fees / Receivables Foundation                (charges — post through the ledger)                 [implemented]
 0G.5  Payments & Idempotent Callback Integration   (payment records, gateway adapter, inbound webhook idempotency)   [not started]
 0G.6  HTTP/API Transport                           (thin controllers over 0G.2-0G.5 services)          [not started]
 0G.7  UI / Finance Workspace                       (Inertia pages: chart of accounts, ledger, receivables)   [not started]
@@ -2454,15 +2454,468 @@ as a future, separate boundary -- not built here).
 
 ### Next checkpoint boundary
 
-0G.4 onward (Fees/Receivables foundation, or whichever checkpoint the
-committed roadmap defines next) is not yet started. The
-account-status-blocks-posting decision (0G.2's deferred item, restated
-in 0G.2's "Next checkpoint boundary" above) remains deferred; 0G.3 did
-not revisit it.
+0G.4 (Fees/Receivables Foundation) is implemented -- see "0G.4 as-built"
+below. The account-status-blocks-posting decision (0G.2's deferred
+item, restated in 0G.2's "Next checkpoint boundary" above) remains
+deferred; 0G.3/0G.4 did not revisit it.
+
+## 0G.4 as-built (Fees / Receivables Foundation)
+
+Everything above this section is the ledger kernel (0G.1/0G.2) and its
+authorization/read model (0G.3), all unmodified except one small
+addition to `LedgerService` noted below. 0G.4 adds the first
+receivables entity, `charges`, in a **new module**,
+`App\Domain\Fees`, not `App\Domain\Finance` -- see "Module boundary"
+immediately below for why.
+
+### Scope resolution (this checkpoint's own design decisions)
+
+FINANCE.md (0G.0) deliberately left several 0G.4 shape questions open
+("an 0G.4 design question, to be answered once 0G.4 is scoped..." --
+see "Invoice decision" and "Financial subject vs. payer" above). 0G.4
+resolves them as follows, recorded here since no earlier checkpoint
+settled them:
+
+- **No `invoices`/`invoice_lines` entity.** `charges` alone is the
+  receivables unit for 0G.4 -- the narrower, foundation-first shape
+  (mirrors 0G.1's own "prove the narrow ledger core first" sequencing
+  logic). A receivables-document grouping concept remains a real,
+  undecided future extension, not rejected forever.
+- **No fee-definition/template catalog.** Every `charges` row carries
+  its own `description`/`amount`/currency/account mapping directly at
+  assessment time -- no reusable "Tuition Fee Term 1"-style template
+  entity exists. FINANCE.md's own Core Entities table never named a
+  template concept for 0G.4; inventing one would have been undocumented
+  scope.
+- **Financial subject: Student only.** `charges.student_id` is a
+  single, plain, NOT NULL composite foreign key -- not FINANCE.md's
+  described exclusive-arc multi-column shape (`student_id`/
+  `employee_id`/`applicant_id`, exactly one non-null). With exactly one
+  activated subject type, an exclusive-arc encoding would be
+  unreachable extra shape for a case that cannot occur yet. A future
+  checkpoint activating Employee/Applicant subjects adds those columns
+  (and the exclusive-arc CHECK) at that point, per FINANCE.md's own
+  "only when 0G.4 actually needs them" framing -- not pre-added
+  speculatively here.
+- **Recognition point: immediate, no draft state.** Creating a charge
+  (`ChargeService::assess()`) both persists the `charges` row and posts
+  its `journal_entries` entry inside ONE database transaction. There is
+  no draft/pending charge state, no separate "approve" step. This
+  mirrors ADR 0030's "once it exists, it is a posted fact" philosophy
+  applied one layer up, and keeps 0G.4 from inventing an approval
+  workflow FINANCE.md never specifies.
+
+### Module boundary: `App\Domain\Fees`, not `App\Domain\Finance`
+
+`docs/architecture/DOMAIN-MAP.md`'s Layer 3 table lists **Finance** and
+**Fees** as two separate rows with two separate dependency lists:
+Finance depends on Schools + Identity & Access only ("no dependency on
+... Students/SIS ... those modules depend on it, never the reverse" --
+this document's own "Dependency position" section, above); Fees
+depends on Students/SIS, Academic Structure, and Finance. Since
+`charges` requires a Student reference and an AcademicYear reference,
+implementing it inside `App\Domain\Finance` would have made Finance
+depend on Students/SIS -- directly contradicting the committed
+dependency table and CLAUDE.md rule 4's no-bidirectional-coupling
+check. `App\Domain\Fees` is therefore a genuinely new module
+(`apps/platform/app/Domain/Fees/{Application,Infrastructure,Events}`),
+matching DOMAIN-MAP.md's existing "Fees" row exactly -- no DOMAIN-MAP
+edit was needed for the dependency direction itself, only to record
+that Fees now has real code (see the corresponding DOMAIN-MAP.md edit
+in this same checkpoint).
+
+`App\Domain\Fees` never reads `App\Domain\Students`'s `Student`,
+`App\Domain\AcademicStructure`'s `AcademicYear`, or
+`App\Domain\Finance`'s `LedgerAccount`/`JournalEntry` Eloquent models
+directly (CLAUDE.md rule 4). Same-School subject/period membership is
+proved structurally by `charges`' own composite foreign keys
+(`charges_student_fk` against `students(id, school_id)`,
+`charges_academic_year_fk` against `academic_years(id, school_id)`) --
+`ChargeService::assess()` catches the resulting constraint violation
+and translates it into `App\Domain\Fees\Application\Exceptions\StudentNotFoundException`/
+`AcademicYearNotFoundException`, never a pre-check query against
+either module's table. Ledger account existence/ownership/currency is
+never re-checked by Fees either -- `LedgerService::post()` already
+proves it (`LedgerAccountNotFoundException`) before a `Charge` row is
+ever attempted.
+
+### Entity: `charges`
+
+One table, one migration
+(`database/migrations/2026_09_02_090000_create_charges_table.php`):
+`id` (UUIDv7), `school_id`, `student_id`, `academic_year_id`,
+`description`, `amount` (`NUMERIC(14,2)`), `currency` (`CHAR(3)`,
+CHECK `= 'INR'`), `due_date` (nullable date), `receivable_ledger_account_id`,
+`revenue_ledger_account_id`, `journal_entry_id` (NOT NULL -- a charge
+without a posting can never exist), `cancelled_at`/
+`cancellation_journal_entry_id` (both nullable, a paired CHECK requires
+both-null or both-set), `created_at`/`updated_at`.
+
+Composite foreign keys prove same-School (and, for the three ledger-
+related columns, same-currency) membership structurally, exactly like
+`journal_lines`' own established pattern: `charges_student_fk`,
+`charges_academic_year_fk` (both `(x, school_id)` against `students`/
+`academic_years`, each of which already carried a `unique(['id',
+'school_id'])` from their own checkpoints), `charges_receivable_account_fk`,
+`charges_revenue_account_fk`, `charges_journal_entry_fk`,
+`charges_cancellation_journal_entry_fk` (all `(x, school_id, currency)`
+against `ledger_accounts`/`journal_entries`). `charges_distinct_accounts_check`
+rejects naming the same ledger account as both receivable and revenue
+side (a structurally nonsensical two-line entry `LedgerService` itself
+has no opinion on). `unique(['id', 'school_id'])` is added now, unused
+by any child table yet, following `students`'/`academic_years`' own
+precedent for a future `payment_allocations` (0G.5) reference.
+
+`charges` uses `TenantRls::enable()` but is **NOT**
+`TenantRls::makeAppendOnly()`'d, unlike `journal_entries`/`journal_lines`
+-- exactly one legitimate UPDATE path exists (`cancelled_at`/
+`cancellation_journal_entry_id`, written together, exactly once); every
+other column is written once, at insert, and never again by any
+Application-layer code (enforced by `ChargeService`'s own method
+surface -- `assess()`/`cancel()` only -- not a database trigger).
+
+Reference entity/no-delete precedent (rule 73) is followed by
+implication: `charges` has no delete path at all, recognized or not --
+`ChargeService` exposes no `delete()`/`remove()` method.
+
+### Ledger integration
+
+`ChargeService::assess()` (the ONLY sanctioned write path for
+`charges`) builds a two-line `PostJournalEntryData` (Debit
+`receivableLedgerAccountId`, Credit `revenueLedgerAccountId`, both for
+the exact same `Money` amount) and calls
+`App\Domain\Finance\Application\LedgerService::post()` directly --
+never `LedgerAdministrationService` (see "Authorization" below for
+why), never a hand-written `journal_entries`/`journal_lines` INSERT.
+Cancellation (`ChargeService::cancel()`) calls a new
+`LedgerService::reverseById(School $school, string $journalEntryId, ...)`
+method (the one addition to Finance's own trusted core this checkpoint
+made) -- added specifically so Fees never needs to read `JournalEntry`
+(Finance's Eloquent model) directly to obtain the instance
+`LedgerService::reverse()` requires; it resolves the id under a School-
+scoped query entirely inside Finance's own module boundary and
+delegates to the existing `reverse()`, duplicating no reversal
+invariant.
+
+**Account-type semantic validation is explicitly NOT implemented.**
+Whether a "receivable" account must be `asset`-typed and a "revenue"
+account must be `income`-typed is never checked by `ChargeService` or
+`LedgerService` -- FINANCE.md does not settle this rule for 0G.4
+(rule 13 of this checkpoint's brief: "do not invent accounting
+restrictions silently"), and it would require Fees to read Finance's
+`LedgerAccount` model directly (its `type` field is not exposed by any
+Finance Application-layer read method in a form usable pre-posting)
+to enforce. This mirrors 0G.2/0G.3's own explicitly-deferred "account-
+status-blocks-posting" decision -- both remain open for a future
+checkpoint.
+
+### Atomicity
+
+`ChargeService::assess()` wraps `TenantContext::withSchool()` +
+`DB::transaction()` around BOTH the `LedgerService::post()` call and
+the subsequent `Charge::create()` -- Laravel's automatic nested-
+transaction behavior turns `LedgerService::post()`'s own
+`DB::transaction()` into a PostgreSQL SAVEPOINT, so a failure at either
+step rolls back both. Proven directly (not merely inferred from code
+inspection): `ChargeServiceTest::a_cross_school_student_is_rejected_and_the_ledger_posting_is_rolled_back`/
+`a_cross_school_academic_year_is_rejected_and_the_ledger_posting_is_rolled_back`
+assert the journal entry `LedgerService::post()` already wrote is
+absent from the database after the subsequent `Charge` insert fails on
+its own composite foreign key -- a real rollback of already-"succeeded"
+work, not a simulation. `cancel()` uses the identical outer-transaction
+shape around `LedgerService::reverseById()` + the `charges` UPDATE.
+
+### Correction: cancellation
+
+`ChargeService::cancel()` calls `LedgerService::reverseById()` (never
+mutates the original `journal_entries` row, never hand-writes a
+reversal) then marks the charge cancelled via ONE conditional
+`UPDATE charges SET cancelled_at = now(), cancellation_journal_entry_id = ? WHERE id = ? AND cancelled_at IS NULL`,
+checking the affected-row count. The REAL concurrency guarantee remains
+`journal_entries_reversal_of_unique` (ADR 0030) -- two racing
+cancellations of the same charge both pass the sequential
+`isCancelled()` pre-check, both call `reverseById()`, exactly one wins
+the database's partial unique index, and the loser's
+`JournalEntryAlreadyReversedException` is caught and translated to
+Fees' own `ChargeAlreadyCancelledException` (a caller of `ChargeService`
+never needs to know about Finance's exception types). The `charges`
+UPDATE's own `WHERE cancelled_at IS NULL` guard is defense in depth on
+top of that, not the primary mechanism. Proven under REAL two-process
+concurrency, not a sequential simulation:
+`Tests\Feature\Fees\ChargeConcurrencyTest` (mirrors
+`JournalReversalConcurrencyTest`'s exact pattern) -- exactly one
+subprocess ends cancelled, the other receives the typed exception, and
+the database contains exactly one reversal.
+
+The original `charges` row's `amount`/`student_id`/`academic_year_id`/
+`currency`/account mapping/`journal_entry_id` are never rewritten by
+cancellation or by anything else -- `ChargeServiceTest::changing_the_charged_amount_or_accounts_after_assessment_has_no_write_path`
+asserts `ChargeService`'s entire public surface is exactly
+`assess()`/`cancel()`, structurally, not merely by convention.
+
+### Closure correction: database-authoritative recognized-charge integrity
+
+The initial 0G.4 implementation relied on `ChargeService` simply having
+no `update()`/`delete()` method as its only protection for a recognized
+charge's financial facts -- judged insufficient on review, because a
+raw or future caller (a hand-written script, a later refactor, direct
+SQL) could still mutate/delete a recognized charge without touching the
+ledger at all. Three database-authoritative mechanisms now make
+`ChargeService`'s own restraint a backstop, not the primary guarantee:
+
+1. **Recognized-field immutability trigger.** `charges_immutability_trigger`
+   (`BEFORE UPDATE ... FOR EACH ROW`, calling
+   `fees_reject_recognized_charge_mutation()`) rejects any `UPDATE`
+   that changes `id`, `school_id`, `student_id`, `academic_year_id`,
+   `description`, `amount`, `currency`, `due_date`,
+   `receivable_ledger_account_id`, `revenue_ledger_account_id`,
+   `journal_entry_id`, or `created_at` (compared `OLD` vs. `NEW` via
+   `IS DISTINCT FROM`). The only fields the trigger ever allows to
+   change are `cancelled_at`/`cancellation_journal_entry_id` (together,
+   exactly once -- see below) and the ordinary `updated_at` timestamp
+   Eloquent's query-builder `update()` always touches.
+2. **Cancellation-pair finality and semantic validation, same trigger.**
+   Once `cancelled_at` is non-null, ANY further change to
+   `cancelled_at`/`cancellation_journal_entry_id` is rejected -- no
+   "uncancel," no repointing to a different reversal. The FIRST
+   cancellation transition is additionally validated semantically: the
+   trigger requires `cancellation_journal_entry_id` to name a
+   `journal_entries` row whose `reversal_of_journal_entry_id` actually
+   equals THIS charge's own `journal_entry_id` -- not merely a
+   same-School/same-currency journal entry, which the composite foreign
+   key alone would accept. This is a genuine cross-row invariant no
+   `CHECK` constraint can express, so a trigger is the correct
+   mechanism (the same reasoning ADR 0030's own deferred balance-check
+   trigger already established precedent for). The function is
+   `LANGUAGE plpgsql SECURITY INVOKER` (PostgreSQL's default; declared
+   explicitly) -- its `journal_entries` subquery runs under the calling
+   role's own RLS visibility, never elevated privilege;
+   `ChargeService::cancel()` already wraps its transaction in
+   `TenantContext::withSchool()`, so the RLS session GUC is correctly
+   set at UPDATE time.
+3. **No hard delete.** `App\Support\Tenancy\TenantRls::revokeDelete()`
+   (a new, narrower sibling of `makeAppendOnly()` -- revokes ONLY
+   `DELETE` from `school_os_app`, not `UPDATE`, since `charges` has one
+   legitimate narrow `UPDATE` path `makeAppendOnly()` would also have
+   revoked) makes a recognized charge structurally undeletable while
+   its journal posting exists. A cascade delete via `schools.id`'s own
+   `ON DELETE CASCADE` is unaffected -- PostgreSQL enforces referential-
+   action cascades independently of the invoking session's table-level
+   privileges, exactly as it already does for `journal_entries`/
+   `journal_lines`.
+
+**Journal-link uniqueness.** `unique(['school_id', 'journal_entry_id'])`
+and `unique(['school_id', 'cancellation_journal_entry_id'])` (the
+latter a plain, non-partial unique index -- PostgreSQL's ordinary
+unique-constraint semantics already treat multiple `NULL`s as
+non-conflicting) enforce structurally what 0G.4's actual behavior
+already guarantees: one assessed charge creates one dedicated ledger
+posting, and one cancellation reversal belongs to one charge.
+`ChargeService::assess()`/`cancel()` always call `LedgerService::post()`/
+`reverseById()` fresh, once, per charge -- no committed architecture
+permits sharing a posting across multiple `charges` rows.
+
+Proven against real PostgreSQL under the unprivileged `school_os_app`
+runtime role (`Tests\Feature\Postgres\FeesRawIsolationTest`, 24 tests):
+every recognized field (amount, student, academic year, currency,
+description, due date, both ledger-account links, the recognition
+journal link) rejects a raw `UPDATE`; a raw `DELETE` is rejected with
+"permission denied" and the charge/journal remain intact; an unrelated
+same-School journal cannot be used as a fake cancellation (rejected by
+the semantic check) while the TRUE reversal of the recognition journal
+IS accepted; a cancelled charge cannot be uncancelled or repointed; the
+same recognition/cancellation journal cannot back two different
+charges (rejected by the uniqueness constraints). A dedicated atomicity
+test (`Tests\Feature\Fees\ChargeCancellationAtomicityTest`, mirroring
+`LedgerServiceAtomicityTest`'s real-failure-injection technique)
+additionally proves that a forced `charges` UPDATE failure occurring
+AFTER `LedgerService::reverseById()` has already written its reversal
+journal/lines/audit/outbox rolls back ALL of it -- the reversal is
+absent, the original charge remains active, and zero reversal-related
+audit/outbox rows remain.
+
+### Generic assessment idempotency: DEFERRED
+
+No uniqueness constraint (e.g. `unique(student_id, academic_year_id)`)
+exists on `charges` -- legitimate repeated charges for the same Student
+in the same year are a real case (multiple terms' tuition, multiple
+distinct fee types), so inventing an arbitrary business key would be
+wrong, not merely premature. Bulk/enrollment-triggered assessment (and
+whatever idempotency key that would need) is DEFERRED to whichever
+future checkpoint actually builds it -- 0G.4 implements no "assess to
+all students"/class-wide/enrollment-listener behavior at all, per
+FINANCE.md's own "Student/enrollment boundary" section (unmodified by
+this checkpoint: "no event listener, no service call, no code of any
+kind is added").
+
+### Authorization
+
+Two capabilities (`database/seeders/CapabilityAndRoleSeeder.php`, the
+existing sole capability/role catalog -- no new migration),
+matching FINANCE.md's own already-committed conceptual family exactly:
+`finance.charges.view` (read) and `finance.charges.manage` (both
+`assess()` and `cancel()` -- FINANCE.md names one `view`/`manage` pair
+for charges, not Ledger's finer `post`/`reverse` split, and 0G.4 does
+not invent an equivalent split it was never asked for). Granted by
+default to `school_admin` only, exactly like `finance.ledger.*` --
+NOT `principal`, and not any of teacher/staff/guardian/student.
+
+`App\Domain\Fees\Application\ChargeAdministrationService` is the
+authorized administrative facade (mirrors `LedgerAdministrationService`
+exactly) wrapping the still-unauthorized `ChargeService` trusted core.
+Deliberately calls `LedgerService`/`LedgerService::reverseById()`
+directly rather than `LedgerAdministrationService`'s `post()`/
+`reverse()` -- going through the ledger administrative facade would
+require the acting user to ALSO hold `finance.ledger.post`/`.reverse`,
+conflating two genuinely separate administrative responsibilities
+(assessing a fee vs. administering the raw ledger) FINANCE.md's own
+authorization architecture already keeps distinct. This split exists
+for the identical reason `LedgerAdministrationService` is split from
+`LedgerService`: a future trusted internal caller (e.g. an eventual
+enrollment-triggered billing command -- not implemented here) can call
+`ChargeService` directly without impersonating a human staff
+capability grant.
+
+### Read model
+
+`App\Domain\Fees\Application\ChargeReadService` (`finance.charges.view`,
+checked before any query) -- `listCharges()` (bounded pagination,
+default 25/max 100, `created_at DESC, id DESC`, filters: `studentId`,
+`academicYearId`, `includeCancelled`) and `getChargeDetail()`. Every
+result is a typed DTO (`ChargeSummary`/`ChargeDetail`), never the raw
+`Charge` Eloquent model. A charge belonging to a different School
+raises the identical `ChargeNotFoundException` a genuinely nonexistent
+id would (no cross-School existence oracle) -- proven by
+`ChargeReadServiceTest`. No `amount_paid`/`remaining_balance`/`paid`/
+`partially_paid` field exists anywhere in the read model -- Payments/
+allocation do not exist yet (0G.5), and 0G.4 does not fabricate a
+settlement status no payment record could yet justify.
+
+### Data classification and audit
+
+`charges` inherits Finance's existing Highly Sensitive classification
+(reconfirmed, not narrowed, by 0G.3; 0G.4 does not reopen it either).
+`ChargeReadService` audits `charge.list_viewed`/`charge.detail_viewed`
+(one event per call, never per row); `ChargeService` audits
+`charge.assessed`/`charge.cancelled`. Denied reads/writes are never
+audited (the capability check runs before any query/mutation). Audit
+metadata stays minimal (ids, currency, counts) -- never a full charge
+dump, never another School's id.
+
+### Domain events / outbox
+
+`App\Domain\Fees\Events\ChargeAssessed`/`ChargeCancelled`
+(`ShouldBeOutboxed`, the existing transactional outbox, ADR 0025) --
+raised exactly once per successful operation, from inside the same
+transaction as the financial write. Neither is registered in
+`App\Support\Webhooks\WebhookEventRegistry` -- not externally
+webhook-subscribable merely by existing in the outbox (rule 45), a
+deliberate, separate, future decision.
+
+### Tenancy / RLS
+
+`charges` uses `App\Support\Tenancy\BelongsToSchool` (Eloquent layer)
+and `App\Support\Tenancy\TenantRls::enable()` (database layer),
+exactly like every other tenant-owned table. Proven against real
+PostgreSQL under the unprivileged `school_os_app` runtime role
+(`Tests\Feature\Postgres\FeesRawIsolationTest`, mirroring
+`FinanceRawIsolationTest`'s exact shape): RLS enabled and forced; no
+context sees zero rows; School A cannot read/update School B's charge;
+a raw insert naming a different School than the active context is
+rejected; every CHECK constraint (`amount_positive`, `distinct_accounts`,
+`cancellation_pair`) enforces under the real runtime role; the runtime
+role holds `INSERT`/`SELECT`/`UPDATE` but never `DELETE`; the
+recognized-field immutability trigger and the semantic cancellation-
+link validation both enforce under the real runtime role too, not
+merely inside the Application layer (see "Closure correction" above).
+
+### Tests
+
+64 new tests across `tests/Feature/Fees/*`
+(`FeesCapabilityRegistryTest`, `ChargeServiceTest`,
+`ChargeAdministrationServiceTest`, `ChargeReadServiceTest`,
+`ChargeConcurrencyTest`, `ChargeCancellationAtomicityTest`) and
+`tests/Feature/Postgres/FeesRawIsolationTest.php` (24 tests, including
+the closure correction's recognized-field-immutability/no-hard-delete/
+semantic-cancellation-link/journal-link-uniqueness proofs). Combined
+Fees+Finance selector: 261 tests / 496 assertions / 0 failures. Full
+regression: 2704 tests / 9021 assertions / 0 failures (baseline
+2640/8896/0). Pint: 1054 files, PASS. PHPStan/Larastan: 552 files, 0
+errors.
+
+### Security register (0G.4)
+
+No unresolved P0/P1/P2/P3/P4 -- reviewed for: cross-School subject/
+academic year/ledger account (all structurally rejected, proven);
+implicit currency (explicit column, INR-only CHECK); float money (none
+-- `Money`/`NUMERIC(14,2)` only); mutable recognized amount (no write
+path, now DATABASE-enforced by the immutability trigger, not merely a
+missing service method -- proven by raw runtime-role UPDATE attempts);
+Student/Academic Year reassignment after recognition (rejected by the
+same trigger, proven); ledger-account remapping after recognition
+(rejected, proven); recognition-journal repointing (rejected, proven);
+mutable accounting balance (none introduced); duplicate financial
+recognition (no idempotency key exists YET, but no double-recognition
+path exists either -- each `assess()` call is one independent,
+intentional obligation, matching FINANCE.md's own "legitimate repeated
+charges" framing, not a defect); hard-delete of a recognized obligation
+(DATABASE-rejected -- `DELETE` privilege revoked from the runtime role,
+proven with the real role, not merely absent from `ChargeService`); a
+fake/unrelated cancellation journal (rejected by the semantic
+reversal-link validation trigger, proven); an "uncancel" operation
+(rejected -- the cancellation pair is immutable once set, proven);
+cancellation repointing to a different reversal (rejected, proven);
+duplicate charge-to-journal relationship (rejected by the
+`(school_id, journal_entry_id)` unique constraint, proven); duplicate
+cancellation-journal relationship (rejected by the
+`(school_id, cancellation_journal_entry_id)` unique constraint,
+proven); concurrent cancellation (proven safe under real two-process
+concurrency, including with the new trigger installed -- no deadlock
+regression); cancellation rollback after a ledger reversal already
+committed mid-transaction (proven via real failure injection --
+`ChargeCancellationAtomicityTest` -- the reversal itself rolls back
+too); RLS/trigger interaction (the trigger's semantic-validation
+subquery is `SECURITY INVOKER`, running under the calling role's own
+RLS visibility -- confirmed `prosecdef = false` in the real catalog;
+no `SECURITY DEFINER` anywhere in this checkpoint); charge persisted
+without a ledger posting (impossible -- `journal_entry_id` is NOT
+NULL, and it's set from `LedgerService::post()`'s own result inside
+the same transaction); ledger posting without a charge (rolled back
+atomically, proven); template mutation rewriting history (no template
+exists, so moot -- recorded as N/A, not silently skipped); polymorphic
+subject (rejected, single `student_id` column); payer/Student
+conflation (no payer concept introduced -- 0G.5's concern); payment
+fields added too early (none added); paid-status fiction (none
+fabricated); authorization overreach (narrowest capability pair,
+mirrors Ledger's own precedent); role checks (none -- capability-only
+throughout); raw Eloquent leak (typed DTOs only, proven); audit/outbox
+failure partial state (both run inside the same outer transaction as
+the financial write); TenantContext cleared before commit (never --
+`withSchool()` wraps the outer transaction in both `assess()` and
+`cancel()`); IDOR/oracle behavior (uniform not-found errors, proven).
+
+### What 0G.4 intentionally does not implement
+
+No `invoices`/`invoice_lines`, no fee-definition/template catalog, no
+Employee/Applicant financial subject, no bulk/enrollment-triggered
+assessment, no human-facing charge/invoice numbering, no payments,
+payment allocations, refunds, or provider callbacks, no HTTP/API/
+OpenAPI/UI, no Payroll/Admissions/Student-Enrollment integration
+beyond the structural FK, no multi-currency, no accounting periods, no
+mutable/cached balance, no generic assessment idempotency key, no
+account-type semantic validation.
+
+### Next checkpoint boundary
+
+0G.5 (Payments / Allocation / Idempotent Provider Integration, or
+whichever checkpoint the committed roadmap defines next) is not yet
+started. The deferred account-status-blocks-posting decision (0G.2)
+and the deferred generic-assessment-idempotency decision (0G.4, above)
+both remain open.
 
 ## Roadmap relationship
 
-Implements the start of `docs/roadmap/MASTER-ROADMAP.md`'s **Phase
-0G — Finance and Fees**. Phase 0G is marked **IN PROGRESS** as of this
-checkpoint (0G.0, 0G.1, and 0G.2 complete; 0G.3 onward not started) —
-see the corresponding `MASTER-ROADMAP.md` edit in this same checkpoint.
+Implements `docs/roadmap/MASTER-ROADMAP.md`'s **Phase 0G — Finance and
+Fees**. Phase 0G is marked **IN PROGRESS** as of this checkpoint (0G.0
+through 0G.4 complete; 0G.5 onward not started) — see the
+corresponding `MASTER-ROADMAP.md` edit in this same checkpoint.

@@ -5,6 +5,7 @@ namespace App\Domain\Finance\Application;
 use App\Domain\Finance\Application\Exceptions\InvalidJournalCurrencyException;
 use App\Domain\Finance\Application\Exceptions\InvalidJournalEntryException;
 use App\Domain\Finance\Application\Exceptions\JournalEntryAlreadyReversedException;
+use App\Domain\Finance\Application\Exceptions\JournalEntryNotFoundException;
 use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Application\Exceptions\UnbalancedJournalEntryException;
 use App\Domain\Finance\Domain\JournalSide;
@@ -206,6 +207,41 @@ class LedgerService
                 throw new JournalEntryAlreadyReversedException($original->id);
             }
         });
+    }
+
+    /**
+     * Phase 0G.4: resolves a trusted internal caller's plain journal
+     * entry id to the model `reverse()` requires, entirely inside
+     * Finance's own module boundary -- added specifically so a trusted
+     * internal domain caller from a DIFFERENT module (e.g.
+     * `App\Domain\Fees\Application\ChargeService::cancel()`, the first
+     * such caller) never needs to read `JournalEntry` (Finance's own
+     * Eloquent model) directly to obtain one (CLAUDE.md rule 4 -- "a
+     * module calls another module's Application-layer service ...
+     * never reads another module's Eloquent models or tables
+     * directly"). Mirrors `App\Domain\Finance\Application\LedgerAdministrationService::reverse()`'s
+     * exact resolution shape (School-scoped `find()`, uniform
+     * not-found error for both "does not exist" and "exists in another
+     * School"), but WITHOUT that class's `finance.ledger.reverse`
+     * capability check -- this method is for the SAME kind of trusted,
+     * no-human-capability-impersonation internal caller `LedgerService::post()`/
+     * `reverse()` themselves already serve; the calling module owns
+     * its OWN authorization (e.g. `finance.charges.manage`) before
+     * ever reaching here. Delegates to `reverse()` for every actual
+     * reversal invariant -- no duplicated logic.
+     */
+    public function reverseById(School $school, string $journalEntryId, ?User $actor = null, ?string $reason = null): JournalEntryResult
+    {
+        $original = $this->context->withSchool(
+            $school,
+            fn () => JournalEntry::query()->where('school_id', $school->id)->find($journalEntryId),
+        );
+
+        if ($original === null) {
+            throw new JournalEntryNotFoundException($journalEntryId);
+        }
+
+        return $this->reverse($original, $actor, $reason);
     }
 
     /**

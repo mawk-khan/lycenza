@@ -265,8 +265,25 @@ successful read is audited (Highly Sensitive tier, unchanged from
 `docs/modules/FINANCE.md`'s already-committed classification). Zero
 new migrations, zero composer changes, no HTTP/API/UI, no Ledger
 Account CRUD. Full as-built detail: `docs/modules/FINANCE.md` ("0G.3
-as-built"). 0G.4 onward (receivables, payments, API, UI, closure) is
-not yet started.
+as-built").
+
+**0G.4 — Fees / Receivables Foundation (implemented):** a new module,
+`App\Domain\Fees` (not `App\Domain\Finance` — DOMAIN-MAP.md's separate
+Finance/Fees dependency rows required it, see `docs/modules/FINANCE.md`
+"0G.4 as-built", "Module boundary"), adds `charges` (one migration,
+`NUMERIC(14,2)`, INR-only, same-School/same-currency composite foreign
+keys against `students`/`academic_years`/`ledger_accounts`/
+`journal_entries`) — the receivable obligation entity; no `invoices`/
+fee-definition entity in this checkpoint. `App\Domain\Fees\Application\ChargeService`
+(`assess()`/`cancel()`) posts through Finance's existing `LedgerService`
+(one small addition, `reverseById()`, so Fees never reads Finance's
+`JournalEntry` model directly) inside one atomic transaction — never a
+direct `journal_entries`/`journal_lines` write. `finance.charges.view`/
+`.manage` capabilities, granted to `school_admin` only, gate
+`ChargeAdministrationService`/`ChargeReadService`. No payments,
+payment allocations, refunds, API, or UI. Full as-built detail:
+`docs/modules/FINANCE.md` ("0G.4 as-built"). 0G.5 onward (payments,
+API, UI, closure) is not yet started.
 
 ## Phase 0H — Academic Operations
 

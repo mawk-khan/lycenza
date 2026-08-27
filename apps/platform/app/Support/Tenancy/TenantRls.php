@@ -77,6 +77,27 @@ class TenantRls
         DB::statement("REVOKE UPDATE, DELETE ON {$table} FROM {$runtimeRole}");
     }
 
+    /**
+     * Phase 0G.4: revokes ONLY DELETE from the runtime app role --
+     * narrower than makeAppendOnly() for a table that has exactly one
+     * legitimate, narrow UPDATE path (e.g. `charges`' cancellation
+     * transition) but must never be hard-deleted while a recognized
+     * financial fact may still reference it. A cascade delete
+     * triggered by a PARENT row's own `ON DELETE CASCADE` (e.g.
+     * deleting a School) is unaffected -- PostgreSQL enforces
+     * referential-action cascades independently of the invoking
+     * session's table-level privileges, exactly as it already does for
+     * `makeAppendOnly()`'d tables (`journal_entries`/`journal_lines`
+     * still cascade-delete when their owning School is deleted).
+     */
+    public static function revokeDelete(string $table, string $runtimeRole = 'school_os_app'): void
+    {
+        self::assertSafeIdentifier($table);
+        self::assertSafeIdentifier($runtimeRole);
+
+        DB::statement("REVOKE DELETE ON {$table} FROM {$runtimeRole}");
+    }
+
     private static function policyName(string $table): string
     {
         return "tenant_isolation_{$table}";

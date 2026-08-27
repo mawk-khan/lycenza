@@ -270,6 +270,25 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'finance.ledger.view', 'label' => 'View Finance ledger accounts and journal entries', 'namespace' => 'school'],
             ['key' => 'finance.ledger.post', 'label' => 'Post Finance journal entries', 'namespace' => 'school'],
             ['key' => 'finance.ledger.reverse', 'label' => 'Reverse posted Finance journal entries', 'namespace' => 'school'],
+
+            // Phase 0G.4 (docs/modules/FINANCE.md "Authorization
+            // architecture", already named this exact conceptual pair
+            // in 0G.0/0G.3): Fees/Receivables authorization, deliberately
+            // SEPARATE from `finance.ledger.*` -- assessing/cancelling a
+            // Student's charge is a distinct administrative
+            // responsibility from raw ledger administration
+            // (App\Domain\Fees\Application\ChargeAdministrationService
+            // never requires `finance.ledger.post`/`.reverse`, and vice
+            // versa). A single `finance.charges.manage` covers BOTH
+            // assessment and cancellation -- FINANCE.md's own
+            // conceptual family lists one `view`/`manage` pair for
+            // charges, not a finer split like Ledger's `post`/`reverse`
+            // (0G.3 judged posting vs. reversal separately blast-radius-
+            // worthy for the raw ledger; 0G.4 does not invent an
+            // equivalent split for charges that FINANCE.md never asked
+            // for).
+            ['key' => 'finance.charges.view', 'label' => 'View Fees charges', 'namespace' => 'school'],
+            ['key' => 'finance.charges.manage', 'label' => 'Assess and cancel Fees charges', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -338,6 +357,14 @@ class CapabilityAndRoleSeeder extends Seeder
                     // (section 44's "no surprising broad default
                     // assignment").
                     'finance.ledger.view', 'finance.ledger.post', 'finance.ledger.reverse',
+                    // Phase 0G.4: same "School Admin holds this
+                    // catalog's most privileged pair by default" logic
+                    // as Ledger above, extended to Fees/Receivables.
+                    // NOT granted to Principal below, for the identical
+                    // reason ledger.* is not: no established precedent
+                    // of Principal assessing/cancelling Student fees in
+                    // this product.
+                    'finance.charges.view', 'finance.charges.manage',
                 ],
             ],
             'principal' => [
