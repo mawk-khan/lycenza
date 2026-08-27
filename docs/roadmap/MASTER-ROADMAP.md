@@ -282,8 +282,51 @@ direct `journal_entries`/`journal_lines` write. `finance.charges.view`/
 `.manage` capabilities, granted to `school_admin` only, gate
 `ChargeAdministrationService`/`ChargeReadService`. No payments,
 payment allocations, refunds, API, or UI. Full as-built detail:
-`docs/modules/FINANCE.md` ("0G.4 as-built"). 0G.5 onward (payments,
-API, UI, closure) is not yet started.
+`docs/modules/FINANCE.md` ("0G.4 as-built").
+
+**0G.5 — Payments / Allocation / Idempotent Provider Integration
+(implemented):** a new module, `App\Domain\Payments`
+(`docs/architecture/adr/0031-payments-settlement-allocation-and-idempotency-architecture.md`,
+DOMAIN-MAP.md's own row: depends on Fees and Finance, neither depends
+on it — no cycle), adds three tables — `payment_provider_events` (pure
+immutable provider-callback ingress identity, `(school_id, provider,
+provider_event_id)` unique, the durable idempotency claim),
+`payments` (the School's immutable settlement fact, created ONLY at
+settlement — no pending/failed rows, a deliberate refinement of this
+document's own earlier conceptual sketch toward 0G.4's immediate-
+recognition precedent), and `payment_allocations` (immutable payment-
+to-charge join, `charges(id, school_id)` composite FK). Settlement is
+mandatory-fully-allocated (sum of allocations must equal the settled
+amount, both application-checked and database-enforced via a deferred
+constraint trigger mirroring `journal_entries_balanced_check`'s
+precedent) — true overpayment/unapplied-cash accounting remains
+explicitly deferred, alongside Refunds. A Payment's allocation set is
+additionally frozen the instant its own transaction commits
+(`payments.creation_txid`, mirroring `journal_entries.posting_txid`) —
+a later, separate transaction can never insert an additional
+allocation row, regardless of remaining Charge capacity — and Charge
+over-allocation is prevented by an IMMEDIATE `BEFORE INSERT` trigger
+that takes a `SELECT ... FOR UPDATE` lock on the Charge row before
+validating capacity, closing a genuine concurrent-transaction race a
+deferred-only check could not (both proven under real two-process
+concurrency, including a raw path that bypasses the Application
+service entirely). `App\Domain\Payments\Application\PaymentProviderEventService::recordSettlement()`
+posts through Finance's existing `LedgerService::post()` (one debit
+line for the settlement account, one credit line per charge
+allocation) and through Fees' new `ChargeService::lockChargeForAllocation()`
+(a `SELECT ... FOR UPDATE` lock, never a direct `charges` table read)
+— all inside one atomic transaction. A Charge with any recognized
+allocation can never be cancelled (`charges_payment_allocation_guard_trigger`,
+a Payments-owned trigger physically attached to Fees' `charges` table,
+sharing the SAME Charge-row lock protocol as allocation insertion so
+the two paths genuinely serialize against each other;
+`App\Domain\Fees\Application\ChargeService::cancel()` translates its
+rejection to a typed exception). `finance.payments.view` only (no
+`.manage` — provider ingestion is a trusted system boundary, never a
+human capability). No signature verification, HTTP/provider adapter,
+refunds, or UI. Full as-built detail: `docs/modules/FINANCE.md` ("0G.5
+as-built"). 0G.6 onward (HTTP/API transport, closure) is not yet
+started.
 
 ## Phase 0H — Academic Operations
 

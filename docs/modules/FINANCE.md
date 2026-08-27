@@ -19,7 +19,7 @@ it.
 0G.2  Posting & Reversal Application Services      (LedgerService, balance/derivation reads)           [implemented]
 0G.3  Finance Authorization & Administrative Read Model   (finance.* capabilities, allow/deny tests)   [implemented]
 0G.4  Fees / Receivables Foundation                (charges — post through the ledger)                 [implemented]
-0G.5  Payments & Idempotent Callback Integration   (payment records, gateway adapter, inbound webhook idempotency)   [not started]
+0G.5  Payments / Allocation / Idempotent Provider Integration   (payment records, provider-event idempotency, allocation)   [implemented]
 0G.6  HTTP/API Transport                           (thin controllers over 0G.2-0G.5 services)          [not started]
 0G.7  UI / Finance Workspace                       (Inertia pages: chart of accounts, ledger, receivables)   [not started]
 0G.8  Hardening & Closure                          (cross-tenant tests, full regression, closure report)   [not started]
@@ -2913,9 +2913,521 @@ started. The deferred account-status-blocks-posting decision (0G.2)
 and the deferred generic-assessment-idempotency decision (0G.4, above)
 both remain open.
 
+## 0G.5 as-built (Payments / Allocation / Idempotent Provider Integration)
+
+Governed by `docs/architecture/adr/0031-payments-settlement-allocation-and-idempotency-architecture.md`
+("ADR 0031") — read it first for the full rationale behind every
+durable decision below; this section records the as-built detail on
+top of it, the same relationship this document's own opening section
+has with ADR 0030. Process note, disclosed rather than hidden: the
+first implementation pass of 0G.5 preceded ADR 0031's own ratification
+— every decision below was reached and documented inline (migration
+docblocks, this section) before the ADR was written up as its own
+durable record, but no commit occurred at any point before that
+architectural review, and the correction pass below (allocation-set
+freeze, Charge-row locking protocol) was completed and re-validated,
+on genuinely isolated infrastructure, before ADR 0031 or this section
+were finalized.
+
+### Scope resolution (this checkpoint's own design decisions)
+
+0G.0's "Payment model" sketch (above) was explicitly conceptual --
+"nothing here is built in this checkpoint." 0G.5 resolves every open
+question that sketch and the 0G.4 "Next checkpoint boundary" left open,
+recorded here (and, durably, in ADR 0031) rather than guessed silently:
+
+- **Entity set**: `Payment` (yes), `PaymentAllocation` (yes),
+  `PaymentProviderEvent` (yes), `Refund` (DEFERRED -- FINANCE.md's own
+  checkpoint-index description of 0G.5 never named refunds as this
+  checkpoint's scope; the "Core entities"/capability tables' 0G.0-era
+  placeholder mention of `refunds`/`finance.refunds.manage` remains
+  exactly that, a placeholder, until a future checkpoint implements
+  it).
+- **Domain ownership**: `App\Domain\Payments`, a NEW module (not
+  `App\Domain\Finance` or `App\Domain\Fees`) -- DOMAIN-MAP.md already
+  named this module (`Payments | ... | Fees, Finance`) before 0G.5
+  existed; this checkpoint is simply the first to build it. Payments
+  depends on Fees and Finance; neither depends on it. No cycle.
+- **Payment recognition point**: a `payments` row is created ONLY at
+  settlement, atomically with its ledger posting -- there is no
+  `pending`/`failed` Payment row. This is a deliberate DEVIATION from
+  0G.0's conceptual sketch (which floated a mutable pending/settled/
+  failed status column), documented here per the "don't silently drift"
+  discipline: the sketch was written before 0G.4 established charges'
+  own "immediate recognition, no draft" precedent, and before this
+  checkpoint's own brief warned explicitly against "a vague mutable
+  payment-status machine." 0G.5 follows the LATER, more specific
+  precedent. Non-settlement provider callback types (pending/
+  authorized/failed) are not modeled at all -- see "Provider event"
+  below.
+- **Partial/full allocation**: a Payment may allocate across multiple
+  Charges; a Charge may receive allocations from multiple Payments over
+  time (partial payment against one Charge is explicitly supported, per
+  0G.0's own "a partial payment against one charge" framing). A
+  Payment's OWN allocation set must sum to EXACTLY its settled amount
+  (mandatory full allocation of the payment) -- see "Allocation model."
+- **Overpayment/unallocated money**: NOT modeled. Mandatory full
+  allocation (above) means a settlement whose allocations cannot
+  consume the full amount without over-allocating a named Charge is
+  REJECTED outright (`AllocationDoesNotSumToPaymentAmountException`/
+  `ChargeAllocationExceedsChargeAmountException`) -- no unapplied-cash/
+  customer-credit account is invented, and no money is ever silently
+  credited to Accounts Receivable without a proven allocation. True
+  overpayment handling is explicitly deferred, alongside Refunds.
+- **Settlement account source**: an EXPLICIT input to
+  `RecordSettlementData`/`PaymentProviderEventService::recordSettlement()`
+  -- the same "no magic lookup" pattern `charges.receivable_ledger_account_id`/
+  `revenue_ledger_account_id` already established for 0G.4. No School
+  Finance configuration entity is introduced.
+- **Charge cancellation after payment**: a Charge with ANY recognized
+  `payment_allocations` row can never be cancelled -- see "Charge
+  cancellation interlock."
+
+### Module boundary: `App\Domain\Payments`
+
+`Payment`/`PaymentAllocation`/`PaymentProviderEvent` (Infrastructure)
+and `PaymentProviderEventService`/`PaymentReadService` (Application)
+live under `App\Domain\Payments`. Depends on Fees
+(`ChargeService::lockChargeForAllocation()`) and Finance
+(`LedgerService::post()`) — never reads either module's Eloquent models
+directly (CLAUDE.md rule 4); Fees and Finance gain no new dependency on
+Payments (DOMAIN-MAP.md's dependency direction stays exactly as
+committed before 0G.5).
+
+### Entities
+
+- **`payment_provider_events`**: pure immutable ingress-identity record
+  — `provider`, `provider_event_id`, `event_type`, `provider_payment_reference`,
+  `amount`/`currency` (`NUMERIC(14,2)`, INR-only), `occurred_at`,
+  `received_at`. `unique(school_id, provider, provider_event_id)` is the
+  durable idempotency claim key — the inbound analog of
+  `webhook_deliveries`' `(webhook_endpoint_id, event_id)` uniqueness,
+  deliberately a SEPARATE table (rule 35). No `payment_id`/`processed_at`/
+  `failure_reason` column exists — the relationship to the `Payment` it
+  produced is represented entirely by `payments.provider_event_id`,
+  because event + Payment are always created together in ONE atomic
+  transaction (see "Atomicity"). `TenantRls::makeAppendOnly()` — no
+  legitimate UPDATE path exists at all.
+- **`payments`**: the School's immutable settlement fact —
+  `provider`/`provider_payment_reference`, `amount`/`currency`,
+  `settlement_ledger_account_id`, `journal_entry_id`, `provider_event_id`,
+  `settled_at`. `unique(school_id, provider, provider_payment_reference)`
+  keeps "provider event identity" separate from "provider transaction
+  identity" (rule 23) — a second settlement event for the same
+  transaction, even under a different `provider_event_id`, is rejected
+  (`DuplicateProviderPaymentReferenceException`). `unique(school_id,
+  journal_entry_id)` — one Payment, one settlement JournalEntry,
+  structurally. `TenantRls::makeAppendOnly()` — no Refund/void model
+  exists yet, so there is no legitimate mutation path at all.
+- **`payment_allocations`**: immutable join — `payment_id`, `charge_id`
+  (composite FK against `charges(id, school_id)`, the 0G.4 migration's
+  own anticipated hook), `amount`/`currency`. `TenantRls::makeAppendOnly()`.
+
+### Provider event idempotency
+
+**IdempotencyGuard class: NOT USED. Atomic-claim pattern: REUSED.**
+`App\Support\Idempotency\IdempotencyGuard`'s public contract
+(`claim()`/`complete()`/`completeWithin()`/`failDeterministically()`) is
+built entirely around storing and replaying an HTTP
+`response_status`/`response_body`/`response_headers` against
+`ApiIdempotencyKey` — none of which exists for a trusted internal
+provider-event ingestion call with no HTTP request or response of its
+own, so the class itself is genuinely unsuitable and is not forced into
+this module. What IS reused is the underlying ATOMIC-CLAIM PATTERN that
+class's own `claim()` method established (a plain INSERT relying on a
+unique index, catching `UniqueConstraintViolationException`, never a
+check-then-insert race — rule 30) applied to a dedicated table
+(`payment_provider_events`) with a dedicated key shape
+(`school_id, provider, provider_event_id`). This is NOT a second
+generic idempotency framework — it is the identical proven pattern,
+never the class, applied to a differently-scoped durable key. Durable
+DB uniqueness: YES (`payment_provider_events_event_unique`).
+`PaymentProviderEventService::recordSettlement()` inserts the
+`payment_provider_events` row as the FIRST write of one outer
+transaction that also creates the `Payment`, its allocations, and the
+ledger posting — a mid-transaction failure at ANY step (including the
+final allocation insert) rolls back the provider-event claim too, so
+the SAME `provider_event_id` remains genuinely retryable after a failed
+first attempt with NO separate release/recovery mechanism (proven,
+`PaymentAtomicityTest`).
+
+- **Same event, same content, redelivered** (concurrently or
+  sequentially): the second `INSERT` hits the unique constraint; the
+  service re-reads the already-committed row, confirms the content
+  matches, and returns `PaymentProviderEventOutcome::DuplicateReplay`
+  with the ORIGINAL Payment id — no second Payment/allocation/ledger
+  effect (proven under real two-process concurrency,
+  `PaymentProviderEventConcurrencyTest`).
+- **Same event id, conflicting content**: rejected
+  (`ProviderEventContentConflictException`) — the persisted original is
+  never mutated, no second Payment is created.
+- **Different event id, same provider transaction** (a second
+  settlement event for a payment already recognized): rejected
+  (`DuplicateProviderPaymentReferenceException`) via `payments`' own
+  `(school_id, provider, provider_payment_reference)` uniqueness.
+
+Exactly-once EXTERNAL delivery is never claimed (rule 19) — the goal is
+idempotent BUSINESS EFFECT under at-least-once delivery, exactly as
+`RELIABILITY.md`'s existing outbound-webhook language already commits
+to for the opposite direction.
+
+0G.5 scope decision: only ONE normalized `event_type` (a fixed
+settlement/success value) is accepted by `recordSettlement()` — any
+other value is rejected (`UnsupportedProviderEventTypeException`)
+before any row is written. Non-settlement events (pending/authorized/
+failed) are NOT modeled or recorded in 0G.5 at all — inventing a
+multi-type ingress lifecycle now, with no concrete business need for it
+yet, would be exactly the speculative framework CLAUDE.md rule 2 warns
+against.
+
+### Allocation model
+
+- Payment → multiple Charges: YES. Charge ← multiple Payments (partial
+  payment completed over time): YES.
+- A Payment's allocation set MUST sum to EXACTLY its settled amount
+  (mandatory full allocation) — enforced at the Application layer
+  (`PaymentProviderEventService::assertValidSettlementShape()`) AND at
+  the database layer via a `CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY
+  DEFERRED` on `payments` (`payments_fully_allocated_check`), the exact
+  precedent `journal_entries_balanced_check` (ADR 0030) already
+  established for cross-row SUM invariants no plain CHECK can express.
+  A DEFERRED check is correct here specifically because the allocation-
+  set-freeze mechanism below guarantees every allocation belonging to
+  one Payment is inserted inside the SAME transaction that creates it —
+  there is no other transaction that could race this particular SUM.
+- A Charge's cumulative allocations may never exceed its own `amount` —
+  enforced at the database layer via an IMMEDIATE (non-deferred)
+  `BEFORE INSERT` trigger on `payment_allocations`
+  (`payments_lock_and_validate_charge_allocation()`) that takes a
+  `SELECT ... FOR UPDATE` lock on the target Charge row BEFORE computing
+  the sum. This is DATABASE-PREVENTED, not merely Application-checked: a
+  purely deferred, unlocked check (the closure-correction's original
+  design) could not close a genuine race between two concurrent
+  transactions each computing the Charge's remaining capacity without
+  seeing the other's still-uncommitted insert; the shared row lock
+  closes it. `ChargeService::lockChargeForAllocation()`'s own
+  `SELECT ... FOR UPDATE` (ascending `chargeId` order, rule 33) gives a
+  clean, deterministic Application-layer error in the ordinary case, but
+  the TRIGGER is what makes the guarantee hold for every caller,
+  including one that bypasses `PaymentProviderEventService` entirely
+  (proven, `RawChargeOverAllocationConcurrencyTest` — two raw,
+  Application-service-bypassing processes, each individually valid,
+  cannot combine to over-allocate the same Charge).
+- The SAME Charge-row lock this trigger takes is also what serializes a
+  concurrent allocation insert against a concurrent Charge cancellation
+  (`UPDATE charges SET cancelled_at = ...`, which takes an equivalent
+  row lock as part of the `UPDATE` itself) — see "Charge cancellation
+  interlock" below.
+
+### Allocation-set immutability (ADR 0031, closure correction)
+
+An append-only table (`TenantRls::makeAppendOnly()`) forbids UPDATE/
+DELETE but does NOT by itself forbid a LATER, otherwise-legitimate
+INSERT — the closure-correction review identified this gap directly: a
+raw or future Application path could, after a Payment's own transaction
+had already committed fully allocated, still INSERT one more
+`payment_allocations` row for it (individually within the Charge's
+remaining capacity), silently pushing the Payment's own total past its
+`amount`. `payments.creation_txid xid8 NOT NULL`, assigned
+unconditionally by an unconditional `BEFORE INSERT` trigger
+(`payments_set_creation_txid`/`finance_payments_set_creation_txid()`),
+is the direct analog of `journal_entries.posting_txid` (ADR 0030) — a
+caller-supplied value is always overwritten, never spoofable. A second
+`BEFORE INSERT` trigger on `payment_allocations`
+(`payment_allocations_reject_post_commit_insert`/
+`payments_reject_post_commit_allocation_insert()`) compares the target
+Payment's `creation_txid` against `pg_current_xact_id()` — a mismatch
+means a genuinely later transaction is attempting to extend an already-
+committed Payment's allocation set, rejected regardless of amount. This
+is the direct analog of `journal_lines_reject_post_commit_insert()`,
+one layer up. `creation_txid` is never exposed through any DTO
+(`PaymentResult`/`PaymentSummary`/`PaymentDetail`), audit record, or
+outbox payload — purely an internal database freeze mechanism. Proven
+(`PaymentAllocationFreezeTest`): a post-commit insert that would exceed
+the Charge's capacity is rejected; a post-commit insert that would
+individually still FIT within the Charge's remaining capacity is
+STILL rejected (disambiguating this invariant from the over-allocation
+one above); a Payment committed with zero allocations is rejected at
+commit (`PaymentAllocationEnforcementTest`), as is one under- or over-
+allocated relative to its own amount, while an exactly, fully allocated
+multi-Charge Payment passes.
+
+### Settlement ledger accounting
+
+`LedgerService::post()` is reused exactly as-is — no direct
+`journal_entries`/`journal_lines` write anywhere in
+`App\Domain\Payments`. One journal entry per settlement: a single debit
+line against the caller-supplied `settlementLedgerAccountId`, for the
+full settled amount, and one credit line PER allocation, against that
+allocation's own Charge's `receivable_ledger_account_id` — correctly
+handling a settlement spanning Charges on different receivable accounts
+without assuming one global Accounts Receivable account. Balanced by
+construction (sum of credits == the one debit == the settled amount).
+`payments.journal_entry_id` is the structural one-to-one link (never
+description/audit/outbox-only linkage, rule 26).
+
+### Charge cancellation interlock
+
+A Charge with ANY recognized `payment_allocations` row can never be
+cancelled — no partial-cancellation carve-out (compensating a
+cancellation against already-settled money needs Refund modeling,
+explicitly deferred). Mechanism: `charges_payment_allocation_guard_trigger`,
+a trigger OWNED BY `App\Domain\Payments`' own migration
+(`create_payment_allocations_table`) but physically attached to Fees'
+`charges` table — the same "structural DB constraint crossing a module
+boundary" pattern `payment_allocations.charge_id`'s composite FK already
+uses, just expressed as a trigger because "does at least one allocation
+row exist" is not FK-expressible. `App\Domain\Fees\Application\ChargeService::cancel()`
+was extended (this checkpoint) to (a) take a `SELECT ... FOR UPDATE`
+lock on the Charge row at the START of its transaction — the SAME lock
+`lockChargeForAllocation()` takes — so a concurrent cancel-vs-allocate
+race genuinely serializes, and (b) catch this trigger's rejection and
+translate it to `ChargeHasPaymentAllocationsException`, a Fees-owned
+typed exception — Fees' PHP code never reads `payment_allocations`
+directly. Proven: sequential cancel-with-allocation (rejected),
+sequential cancel-without-allocation (unchanged 0G.4 behavior), and a
+REAL two-process race between an allocation and a cancellation on the
+same Charge (`ChargeCancellationInterlockTest`) — exactly one of the
+two wins, never both.
+
+### Authorization
+
+`finance.payments.view` only — `PaymentReadService` (mirrors
+`ChargeReadService`'s exact discipline: capability checked before any
+query, typed DTOs only, audited once per call). Deliberately NO
+`finance.payments.manage` (rule 53) — 0G.5 has no human-triggered
+"record a payment" action to gate; the sole write path
+(`PaymentProviderEventService::recordSettlement()`) is a trusted SYSTEM
+boundary (rule 54) reached by a future provider/HTTP adapter, never by
+a human capability check. Granted to `school_admin` only, same
+precedent as `finance.ledger.*`/`finance.charges.*`.
+
+### Read model
+
+`PaymentSummary`/`PaymentDetail` — never the raw `Payment` Eloquent
+model, never a provider payload/secret. `PaymentDetail.allocations` is
+a minimal `{chargeId, amount}` array (rule 55's "allocation summary").
+Uniform not-found error for both nonexistent and cross-School payment
+ids (`PaymentNotFoundException`, no existence oracle).
+
+### Data classification and audit
+
+`payments`/`payment_allocations`/`payment_provider_events` inherit
+Finance's existing Highly Sensitive classification. `payment.settled`
+audited once per successful `recordSettlement()` call (never on a
+duplicate-replay outcome); `payment.list_viewed`/`payment.detail_viewed`
+audited once per `PaymentReadService` call. No provider payload, no
+provider secret, ever logged/audited.
+
+### Domain events / outbox
+
+`App\Domain\Payments\Events\PaymentSettled` (`ShouldBeOutboxed`) —
+raised exactly once per successful `recordSettlement()` call, from
+inside the same transaction as the financial write; never raised again
+on a duplicate-replay call. NOT registered in
+`App\Support\Webhooks\WebhookEventRegistry` (rules 45/58) — provider
+ingress and School outbound webhooks are different directions, and this
+event is not externally webhook-subscribable merely by existing in the
+outbox.
+
+### Tenancy / RLS
+
+All three new tables use `BelongsToSchool`/`TenantRls::enable()`,
+proven against real PostgreSQL under the unprivileged `school_os_app`
+runtime role (`Tests\Feature\Postgres\PaymentsRawIsolationTest`,
+mirroring `FeesRawIsolationTest`'s exact shape): RLS enabled and forced;
+no context sees zero rows; School A cannot read School B's payment; the
+runtime role holds no UPDATE/DELETE on any of the three tables; the
+provider-event uniqueness constraint and the cross-module
+`charges_payment_allocation_guard_trigger` both enforce under the real
+runtime role.
+
+### Atomicity
+
+`recordSettlement()`'s entire effect (provider event claim, Charge
+lock(s), ledger posting, Payment, allocations, audit, outbox) commits
+inside ONE `DB::transaction()`. Proven with real failure injection
+(`PaymentAtomicityTest`: a forced failure at the LAST write step, the
+`payment_allocations` insert) — zero Payment, zero allocation, zero NEW
+journal entry, zero provider event, zero audit/outbox rows persist.
+The companion half of this proof (commit-closure review, section 26):
+a SECOND `PaymentAtomicityTest` case retries the SAME `provider_event_id`
+immediately after that exact failed first attempt (no failing trigger
+installed the second time) and confirms it succeeds exactly once —
+one Payment, one PaymentProviderEvent, one `payment.settled` audit
+event, one outbox row — proving the provider event id is not merely
+"asserted retryable" but genuinely IS retried successfully, with no
+separate release/recovery mechanism needed (rule 42).
+
+### Tests
+
+Closure-correction final count: 50 tests across `tests/Feature/Payments/*`
+(`PaymentProviderEventServiceTest`, `PaymentAllocationConcurrencyTest`,
+`ChargeCancellationInterlockTest`, `PaymentProviderEventConcurrencyTest`,
+`PaymentAtomicityTest`, `PaymentAllocationFreezeTest`,
+`RawChargeOverAllocationConcurrencyTest`, `PaymentReadServiceTest`,
+`PaymentsCapabilityRegistryTest`) and
+`tests/Feature/Postgres/PaymentsRawIsolationTest.php` (9 tests) +
+`tests/Feature/Postgres/PaymentAllocationEnforcementTest.php` (5 tests).
+Three real two-process concurrency proofs (over-allocation prevention
+through the Application service; over-allocation prevention through a
+RAW, Application-service-bypassing path; duplicate-event-delivery) plus
+a real allocate-vs-cancel race, plus the allocation-set-freeze proofs
+(post-commit insert rejected regardless of remaining Charge capacity)
+and the deferred-constraint-trigger proofs (under/over/zero/exact
+allocation totals, raw Eloquent, never through the Application service).
+
+Authoritative Finance+Fees+Payments selector:
+
+```
+php artisan test \
+  tests/Feature/Finance \
+  tests/Feature/Postgres/FinanceRawIsolationTest.php \
+  tests/Unit/Support/Money \
+  tests/Feature/Fees \
+  tests/Feature/Postgres/FeesRawIsolationTest.php \
+  tests/Feature/Payments \
+  tests/Feature/Postgres/PaymentsRawIsolationTest.php \
+  tests/Feature/Postgres/PaymentAllocationEnforcementTest.php
+```
+
+Baseline (0G.4, this exact selector minus the Payments lines): 261
+tests / 496 assertions / 0 failures — resolves the closure-correction's
+own previously-unreconciled 221/442 measurement, which had omitted
+`tests/Unit/Support/Money`. Final (with Payments): 311 tests / 603
+assertions / 0 failures (the 311th test, added during commit-closure
+review of section 26's failure-atomicity requirement, proves a retry
+with the SAME `provider_event_id` after a failed first attempt
+succeeds exactly once -- the previously-untested other half of the
+existing zero-footprint-on-failure proof).
+
+Full repository regression, run on genuinely isolated infrastructure
+(`finance0g5-correction` — dedicated PostgreSQL/Redis/MinIO, no
+`school-os_*` volumes/containers reused) with `QUEUE_CONNECTION=sync`/
+`MAIL_MAILER=array` verified reaching the executing PHP process
+directly (not merely assumed from `phpunit.xml`), against a freshly
+reset test database immediately before the run:
+**`2753 tests / 9130 assertions / 0 failures / 0 errors`.** An earlier
+attempt in this same closure correction observed 16 errors + 1 failure,
+all confined to `Tests\Feature\Events`/`Tests\Feature\Webhooks`, and a
+separate single flaked concurrency test
+(`AcademicYearActivationConcurrencyTest`, in `AcademicStructure`, a
+module this checkpoint never touches — passed cleanly on 3/3 isolated
+reruns, a known-shape subprocess-timing flake) — both fully explained
+and resolved without any production-code change; see "Prior full-suite
+investigation" below for the Events/Webhooks root cause specifically.
+Pint: 1098 files, PASS. PHPStan/Larastan: 578 files, 0 errors (`app/`
+only — new files this checkpoint added are all under `tests/`, which
+PHPStan's configured `paths` does not scan).
+
+### Prior full-suite investigation (Events/Webhooks) — RESOLVED
+
+An earlier pass of this closure correction observed 16 errors + 1
+failure, all in `Tests\Feature\Events`/`Tests\Feature\Webhooks`
+(`ModelNotFoundException: No query results for model
+[App\Models\WebhookDelivery]`, and one `'dispatched'` vs. `'pending'`
+assertion) — root-caused to `App\Console\Commands\DispatchOutboxEvents`'
+fixed `--batch=100` claim window being starved by an accumulated
+`domain_event_outbox` backlog (`journal_entry.posted.v1`,
+`charge.assessed.v1`, `payment.settled.v1`, `employee.created.v1`,
+`academic_year.activated.v1` — 300+ pending rows observed). Initial
+comparison against an unmodified `2c48efb` baseline (a separate
+detached worktree, same isolated infrastructure) came back fully
+green, which at first read as a regression this checkpoint had
+introduced.
+
+**Further investigation traced the actual cause to this validation
+process itself, not to any code change**: the isolated
+`finance0g5-correction` test database had been reused across MULTIPLE
+successive full-suite invocations during this closure correction
+without an intervening reset — every non-transactional test in this
+repository (in Fees, Finance, AcademicStructure, HR, and this
+checkpoint's own new Payments tests alike) already leaves its real,
+committed `domain_event_outbox` rows behind, by established
+repository-wide convention (`domain_event_outbox.school_id` carries no
+FK/cascade to `schools`, per ADR 0025 — this is uniform across every
+non-transactional test class in the codebase, not specific to this
+checkpoint). Repeatedly re-running the full suite against the SAME
+never-reset database compounds that backlog run over run; the
+baseline comparison, by contrast, used a freshly reset database exactly
+once. Once `school_os_test` was properly reset via the canonical
+`platform:test-db-reset` path immediately before the authoritative run
+(exactly the discipline CLAUDE.md rule 51 already mandates, that this
+validation process itself had not followed strictly enough across
+repeated attempts), the full suite passed cleanly:
+**`2753 tests, 9130 assertions, 0 failures, 0 errors`.** No
+Events/Webhooks (or any other) production code was ever modified.
+
+The `DomainEventOutbox` cleanup added to this checkpoint's own six
+non-transactional Payments test classes' `tearDown()` methods (during
+the investigation, before the true cause was isolated) is retained —
+confirmed harmless, and a strictly more disciplined starting point for
+this checkpoint's own tests than the repository's prior uniform
+convention, even though it was not what actually resolved the
+observed failures.
+
+### Security register (0G.5)
+
+No unresolved P0/P1/P2/P3/P4 — reviewed for: duplicate provider
+callback (rejected/safely replayed, proven); conflicting callback
+replay under the same event id (rejected, original unchanged, proven);
+provider event vs. Payment conflation (structurally distinct tables,
+event has no ledger/allocation meaning of its own); provider-payment-
+reference collision (rejected, proven); cross-School provider
+reference/Payment/Charge allocation (structurally rejected via
+composite FKs + RLS, proven); float money (none — `Money`/`NUMERIC(14,2)`
+only); non-INR currency (rejected, proven); over-allocation of a Charge
+(rejected, application pre-check + database deferred-constraint
+backstop, proven under real concurrency); Payment over-allocation
+(structurally impossible — mandatory full allocation is enforced at
+Payment-creation time, no later append path exists); race between
+allocation and cancellation (proven coherent under real two-process
+concurrency); payment against a cancelled Charge (rejected, proven);
+mutable Payment/PaymentAllocation (none — `TenantRls::makeAppendOnly()`,
+proven under the real runtime role); hard-delete of Payment/allocation/
+provider-event history (rejected, proven); mutable Charge balance or
+mutable Payment remainder (none introduced); raw provider payload
+retention (none — only normalized, minimal fields are ever accepted or
+stored); PAN/CVV/bank-credential/provider-secret storage (none — no
+such column exists anywhere in this checkpoint's schema); caller-
+controlled School (never — `School` is always the trusted parameter,
+never request/payload-derived); provider callback treated as
+authenticated merely because it carries an event id (rejected by
+design — rule 18: `NormalizedProviderEvent` is documented as an
+ALREADY-VERIFIED input; signature verification is explicitly deferred
+to a future provider/HTTP adapter, never claimed here); fake human
+authorization on trusted system provider processing (none — no
+`Gate::authorize()` call exists in `PaymentProviderEventService`);
+duplicate audit/outbox on replay (none — proven, replay returns before
+either is written); partial state on failure (none, proven via real
+failure injection); cache-only idempotency (none — the durable
+`payment_provider_events` unique constraint is the sole authoritative
+claim, never Redis/in-memory); SQL exception leakage to the caller
+(none — every constraint violation is translated to a typed
+`App\Domain\Payments\Application\Exceptions\*` exception); RLS/trigger
+privilege (the cross-module trigger is `SECURITY INVOKER`, confirmed
+`prosecdef = false`, running under the calling role's own RLS
+visibility, matching every other trigger in this checkpoint's lineage).
+
+### What 0G.5 intentionally does not implement
+
+No `refunds`, no provider signature verification/HTTP adapter, no
+manual/internal payment recording, no unapplied-cash/customer-credit
+accounting, no HTTP/API/OpenAPI/UI, no provider SDK dependency, no
+`finance.payments.manage` capability, no non-settlement provider event
+history, no Payroll/Admissions/Student-Enrollment integration.
+
+### Next checkpoint boundary
+
+0G.6 (HTTP/API Transport, or whichever checkpoint the committed roadmap
+defines next) is not yet started. Deferred from 0G.2/0G.4 (account-
+status-blocks-posting, generic assessment idempotency) remain open,
+alongside 0G.5's own deferrals above (Refunds, unapplied cash, provider
+signature verification).
+
 ## Roadmap relationship
 
 Implements `docs/roadmap/MASTER-ROADMAP.md`'s **Phase 0G — Finance and
-Fees**. Phase 0G is marked **IN PROGRESS** as of this checkpoint (0G.0
-through 0G.4 complete; 0G.5 onward not started) — see the
-corresponding `MASTER-ROADMAP.md` edit in this same checkpoint.
+Fees**. Phase 0G is marked **IN PROGRESS** (0G.0 through 0G.5 complete;
+0G.6 onward not started) — see the corresponding `MASTER-ROADMAP.md`
+edit in this same checkpoint.

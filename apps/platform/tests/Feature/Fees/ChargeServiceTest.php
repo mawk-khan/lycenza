@@ -215,11 +215,16 @@ class ChargeServiceTest extends TestCase
 
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue, '1000.00');
 
-        // ChargeService exposes exactly assess()/cancel() -- there is
-        // no update()/amend() method whatsoever a caller could use to
-        // rewrite a recognized charge's amount/subject/accounts.
+        // ChargeService exposes exactly assess()/cancel()/
+        // lockChargeForAllocation() -- there is no update()/amend()
+        // method whatsoever a caller could use to rewrite a recognized
+        // charge's amount/subject/accounts. lockChargeForAllocation()
+        // (Phase 0G.5) is a read+lock accessor for the sanctioned
+        // cross-module Payments caller (App\Domain\Payments\Application\PaymentProviderEventService)
+        // -- it returns a typed ChargeAllocationSnapshot, never a write
+        // path, so it does not weaken this invariant.
         $this->assertFalse(method_exists(ChargeService::class, 'update'));
-        $this->assertSame(['assess', 'cancel'], array_values(array_filter(
+        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation'], array_values(array_filter(
             array_map(fn ($m) => $m->name, (new \ReflectionClass(ChargeService::class))->getMethods(\ReflectionMethod::IS_PUBLIC)),
             fn ($name) => $name !== '__construct',
         )));

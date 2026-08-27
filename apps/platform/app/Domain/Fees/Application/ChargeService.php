@@ -4,6 +4,7 @@ namespace App\Domain\Fees\Application;
 
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
+use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\InvalidChargeException;
 use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
@@ -18,6 +19,7 @@ use App\Domain\Finance\Domain\JournalSide;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -175,34 +177,60 @@ class ChargeService
      * validation" principle) -- 0 affected rows raises the SAME
      * exception too, never a distinction between "someone already knew
      * that" and "someone found out just now."
+     *
+     * Phase 0G.5 (rule 46): the initial lookup now takes a row-level
+     * `SELECT ... FOR UPDATE` lock (`lockForUpdate()`), held for the
+     * remainder of this method's outer transaction -- the SAME lock
+     * `lockChargeForAllocation()` (below) takes from
+     * `App\Domain\Payments\Application\PaymentProviderEventService`.
+     * Whichever of a concurrent cancel-vs-allocate pair reaches this
+     * charge row first genuinely blocks the other until it commits or
+     * rolls back, giving the two operations one coherent ordering rather
+     * than a race (rule 48). The database's own
+     * `charges_payment_allocation_guard_trigger`
+     * (`App\Domain\Payments`' `create_payment_allocations_table`
+     * migration) is the AUTHORITATIVE rejection mechanism for "this
+     * charge already has recognized allocations" -- caught below and
+     * translated to `ChargeHasPaymentAllocationsException`, this class's
+     * own typed error; Fees' PHP code never reads `payment_allocations`
+     * directly (CLAUDE.md rule 4).
      */
     public function cancel(School $school, string $chargeId, ?User $actor = null, ?string $reason = null): ChargeResult
     {
         return $this->context->withSchool($school, function () use ($school, $chargeId, $actor, $reason) {
-            $charge = Charge::query()->where('school_id', $school->id)->find($chargeId);
+            return DB::transaction(function () use ($school, $chargeId, $actor, $reason) {
+                $charge = Charge::query()->where('school_id', $school->id)->lockForUpdate()->find($chargeId);
 
-            if ($charge === null) {
-                throw new ChargeNotFoundException($chargeId);
-            }
+                if ($charge === null) {
+                    throw new ChargeNotFoundException($chargeId);
+                }
 
-            if ($charge->isCancelled()) {
-                throw new ChargeAlreadyCancelledException($chargeId);
-            }
+                if ($charge->isCancelled()) {
+                    throw new ChargeAlreadyCancelledException($chargeId);
+                }
 
-            return DB::transaction(function () use ($school, $charge, $actor, $reason) {
                 try {
                     $reversal = $this->ledger->reverseById($school, $charge->journal_entry_id, $actor, $reason);
                 } catch (JournalEntryAlreadyReversedException) {
                     throw new ChargeAlreadyCancelledException($charge->id);
                 }
 
-                $affected = Charge::query()
-                    ->where('id', $charge->id)
-                    ->whereNull('cancelled_at')
-                    ->update([
-                        'cancelled_at' => now(),
-                        'cancellation_journal_entry_id' => $reversal->journalEntryId,
-                    ]);
+                try {
+                    $affected = Charge::query()
+                        ->where('id', $charge->id)
+                        ->whereNull('cancelled_at')
+                        ->update([
+                            'cancelled_at' => now(),
+                            'cancellation_journal_entry_id' => $reversal->journalEntryId,
+                        ]);
+                } catch (QueryException $e) {
+                    if ($this->violatesConstraint($e, 'charges_payment_allocation_guard_trigger')
+                        || str_contains($e->getMessage(), 'recognized payment allocations exist')) {
+                        throw new ChargeHasPaymentAllocationsException($charge->id);
+                    }
+
+                    throw $e;
+                }
 
                 if ($affected !== 1) {
                     throw new ChargeAlreadyCancelledException($charge->id);
@@ -218,6 +246,37 @@ class ChargeService
 
                 return ChargeResult::fromModel($charge);
             });
+        });
+    }
+
+    /**
+     * Phase 0G.5: the ONE sanctioned way
+     * `App\Domain\Payments\Application\PaymentProviderEventService` (a
+     * DIFFERENT module, which DOES depend on Fees per DOMAIN-MAP.md) may
+     * observe or lock a Charge -- never a direct read of the `Charge`
+     * Eloquent model/`charges` table (CLAUDE.md rule 4). Takes the SAME
+     * `SELECT ... FOR UPDATE` row lock `cancel()` takes, so a concurrent
+     * allocation-vs-cancellation race genuinely serializes (rule 48);
+     * the caller is responsible for locking multiple Charges in
+     * ascending id order within one operation (rule 33) to avoid
+     * deadlock -- this method itself only ever locks the one row named.
+     * Returns a typed, safe snapshot -- never the raw model.
+     */
+    public function lockChargeForAllocation(School $school, string $chargeId): ChargeAllocationSnapshot
+    {
+        return $this->context->withSchool($school, function () use ($school, $chargeId) {
+            $charge = Charge::query()->where('school_id', $school->id)->lockForUpdate()->find($chargeId);
+
+            if ($charge === null) {
+                throw new ChargeNotFoundException($chargeId);
+            }
+
+            return new ChargeAllocationSnapshot(
+                chargeId: $charge->id,
+                amount: Money::of($charge->amount, $charge->currency),
+                receivableLedgerAccountId: $charge->receivable_ledger_account_id,
+                isCancelled: $charge->isCancelled(),
+            );
         });
     }
 

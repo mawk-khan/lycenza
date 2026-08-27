@@ -289,6 +289,20 @@ class CapabilityAndRoleSeeder extends Seeder
             // for).
             ['key' => 'finance.charges.view', 'label' => 'View Fees charges', 'namespace' => 'school'],
             ['key' => 'finance.charges.manage', 'label' => 'Assess and cancel Fees charges', 'namespace' => 'school'],
+
+            // Phase 0G.5: `finance.payments.view` gates
+            // `App\Domain\Payments\Application\PaymentReadService` only.
+            // Deliberately NO `finance.payments.manage` -- 0G.5 has no
+            // human-triggered "record a payment" action to gate; the
+            // only write path (`PaymentProviderEventService::recordSettlement()`)
+            // is a trusted SYSTEM boundary (a future provider/HTTP
+            // adapter), never reached through a human capability check
+            // (rule 54 of the 0G.5 brief). Registering an unused
+            // `.manage` capability now would be exactly the speculative
+            // capability registration rule 53 warns against -- add it
+            // only once a real human-facing "record a manual payment"
+            // or similar action actually exists.
+            ['key' => 'finance.payments.view', 'label' => 'View Payments', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -365,6 +379,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // of Principal assessing/cancelling Student fees in
                     // this product.
                     'finance.charges.view', 'finance.charges.manage',
+                    // Phase 0G.5: same default-grant logic as Ledger/
+                    // Charges above. NOT granted to Principal below, for
+                    // the identical reason.
+                    'finance.payments.view',
                 ],
             ],
             'principal' => [
