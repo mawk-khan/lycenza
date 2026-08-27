@@ -15,17 +15,19 @@ use JsonSerializable;
  * satisfies both halves with zero new Composer dependencies (bcmath
  * is a PHP core extension already compiled into the platform image).
  *
- * Scope boundary (0G.1 vs 0G.2): this class is deliberately limited to
- * SAFE REPRESENTATION AND VALIDATION -- an exact decimal-string amount
- * paired with an explicit currency, immutable, never backed by float.
- * It does not implement add()/subtract()/multiply(). PostgreSQL's
- * `NUMERIC` columns and the deferred balance-check constraint trigger
- * (see the journal_lines/journal_entries migrations) are the
- * authoritative arithmetic for ledger balancing in 0G.1 -- real
- * Application-layer Money arithmetic (e.g. summing a set of postings)
- * is 0G.2's Posting & Reversal Application Services concern, to be
- * added deliberately with bcmath once a real caller needs it, not
- * guessed at here.
+ * Scope boundary (0G.1 vs 0G.2): 0G.1 deliberately limited this class
+ * to SAFE REPRESENTATION AND VALIDATION -- exact decimal-string
+ * amount, explicit currency, immutable, never backed by float, no
+ * arithmetic. 0G.2 adds exactly the one operation
+ * App\Domain\Finance\Application\LedgerService actually needs --
+ * add(), for summing a proposed posting's debit/credit lines to prove
+ * they balance before ever reaching PostgreSQL. No subtract()/
+ * multiply()/divide() exist -- LedgerService's reversal logic needs
+ * only negated() (0G.1) to build inverse lines from an original's
+ * amounts, never real subtraction. PostgreSQL's `NUMERIC` columns and
+ * the deferred balance-check constraint trigger remain the
+ * authoritative arithmetic regardless of this Application-layer
+ * pre-check.
  */
 final class Money implements JsonSerializable
 {
@@ -149,6 +151,38 @@ final class Money implements JsonSerializable
             str_starts_with($this->amount, '-') ? substr($this->amount, 1) : '-'.$this->amount,
             $this->currency,
         );
+    }
+
+    /**
+     * Exact addition (bcmath, never float). Requires matching
+     * currencies -- Money never silently adds across currencies, even
+     * though Phase 0G is INR-only today; that database-level scope
+     * restriction (docs/modules/FINANCE.md "Currency scope") is a
+     * separate defense from this Application-layer value object's own
+     * semantic safety, and this class must stay correct independent of
+     * it. Uses the larger of the two operands' own natural decimal
+     * scale (never a fixed scale like 2 or a lossy fixed scale like
+     * 50) so the result is exact and canonical -- no rounding, no
+     * trailing-zero padding beyond what the inputs actually justify.
+     */
+    public function add(self $other): self
+    {
+        if ($this->currency !== $other->currency) {
+            throw new InvalidMoneyException(
+                "Cannot add Money in different currencies ('{$this->currency}' and '{$other->currency}')."
+            );
+        }
+
+        $scale = max($this->decimalPlaces(), $other->decimalPlaces());
+
+        return new self(bcadd($this->amount, $other->amount, $scale), $this->currency);
+    }
+
+    private function decimalPlaces(): int
+    {
+        $pos = strpos($this->amount, '.');
+
+        return $pos === false ? 0 : strlen($this->amount) - $pos - 1;
     }
 
     /**

@@ -12,14 +12,22 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * REQUIRED real-concurrency proof (section 24/50 of the 0G.1 brief,
- * mirroring AcademicYearActivationConcurrencyTest's established
- * pattern): two GENUINELY separate OS processes -- not two sequential
- * calls in one PHP process -- both attempt to reverse the SAME
- * original journal_entry for the SAME School at the same time. ADR
- * 0030's partial unique index on `reversal_of_journal_entry_id` is
- * what makes this safe; this test proves the FINAL DATABASE STATE, not
- * just that the application code "looks" correct.
+ * REQUIRED real-concurrency proof (section 24/50 of the 0G.1 brief;
+ * updated in 0G.2, section 51, to exercise the real
+ * App\Domain\Finance\Application\LedgerService::reverse() rather than
+ * a raw-SQL subprocess helper -- mirroring
+ * AcademicYearActivationConcurrencyTest's established pattern): two
+ * GENUINELY separate OS processes -- not two sequential calls in one
+ * PHP process -- both attempt to reverse the SAME original
+ * journal_entry for the SAME School at the same time. ADR 0030's
+ * partial unique index on `reversal_of_journal_entry_id` is what makes
+ * this safe; this test proves the FINAL DATABASE STATE, not just that
+ * the application code "looks" correct. The losing process now
+ * receives `LedgerService::reverse()`'s own typed
+ * JournalEntryAlreadyReversedException (mapped from the database's
+ * UniqueConstraintViolationException), not a raw database exception
+ * directly -- proving the service's race-mapping itself is safe under
+ * real concurrency, not merely under a sequential test.
  *
  * Deliberately does NOT use DatabaseTransactions for the fixtures this
  * test creates ($connectionsToTransact = []) -- the two subprocesses
@@ -59,7 +67,7 @@ class JournalReversalConcurrencyTest extends TestCase
         $original = $this->postBalancedJournalEntry($this->school, $cash, $income, '100.00');
 
         $script = __DIR__.'/../../Support/reverse-journal-entry.php';
-        $args = [$this->school->id, $original->id, $cash->id, $income->id, '100.00'];
+        $args = [$this->school->id, $original->id];
         $processA = new Process(['php', $script, ...$args]);
         $processB = new Process(['php', $script, ...$args]);
         $processA->start();
@@ -72,8 +80,8 @@ class JournalReversalConcurrencyTest extends TestCase
 
         $this->assertSame(1, $reversedCount, 'Exactly one of the two concurrent reversal attempts must succeed.');
         $this->assertTrue(
-            collect($outputs)->contains(fn ($o) => str_starts_with((string) $o, 'rejected:')),
-            'The losing attempt must fail with a real database exception, not silently no-op.'
+            collect($outputs)->contains(fn ($o) => $o === 'rejected:App\Domain\Finance\Application\Exceptions\JournalEntryAlreadyReversedException'),
+            'The losing attempt must fail with LedgerService::reverse()\'s typed already-reversed exception, not silently no-op. Got: '.implode(', ', $outputs)
         );
 
         $reversalCount = $context->withSchool(

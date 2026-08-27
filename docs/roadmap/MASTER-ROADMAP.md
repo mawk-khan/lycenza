@@ -235,11 +235,21 @@ kernel only — `ledger_accounts`, `journal_entries`, `journal_lines`
 constraint-trigger enforcing "debits equal credits" per entry, the
 structural (partial-unique-index-backed) reversal relationship proven
 safe under real two-process concurrency, and the first-party
-`App\Support\Money\Money` value object. No Application posting
-service, no capabilities, no API, no UI, no audit events yet — full
-as-built detail: `docs/modules/FINANCE.md` ("0G.1 as-built"). 0G.2
-onward (posting/reversal services, authorization, receivables,
-payments, API, UI, closure) is not yet started.
+`App\Support\Money\Money` value object. Full as-built detail:
+`docs/modules/FINANCE.md` ("0G.1 as-built").
+
+**0G.2 — Ledger Posting & Reversal Application Services
+(implemented):** `App\Domain\Finance\Application\LedgerService` — the
+one sanctioned write path for posting and reversing journal entries
+(`post()`/`reverse()`), inside one PostgreSQL transaction each,
+audited (`App\Support\Audit\AuditRecorder`) and emitted through the
+existing transactional outbox (ADR 0025) exactly once per successful
+operation. Application-layer balance/currency/account validation sits
+in front of, and never replaces, every 0G.1 database defense. Not an
+authorization boundary — no capabilities, no HTTP, no UI. Zero new
+migrations. Full as-built detail: `docs/modules/FINANCE.md` ("0G.2
+as-built"). 0G.3 onward (authorization, receivables, payments, API,
+UI, closure) is not yet started.
 
 ## Phase 0H — Academic Operations
 

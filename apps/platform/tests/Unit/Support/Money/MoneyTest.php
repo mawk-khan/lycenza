@@ -9,10 +9,12 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * 0G.1: unit tests for the first-party Money value object committed by
- * ADR 0030 / docs/modules/FINANCE.md. No database involved -- pure
- * representation/validation, per Money's own documented 0G.1 scope
- * boundary (arithmetic is 0G.2's concern).
+ * 0G.1/0G.2: unit tests for the first-party Money value object
+ * committed by ADR 0030 / docs/modules/FINANCE.md. No database
+ * involved -- pure representation/validation/arithmetic. 0G.1 covers
+ * representation/validation; 0G.2 adds add() (see Money's own class
+ * docblock for the exact scope boundary -- still no subtract()/
+ * multiply()/divide()).
  */
 class MoneyTest extends TestCase
 {
@@ -177,5 +179,74 @@ class MoneyTest extends TestCase
     public function string_conversion_is_human_readable(): void
     {
         $this->assertSame('1.10 INR', (string) Money::of('1.10', 'INR'));
+    }
+
+    // 0G.2: add() -- the one arithmetic operation LedgerService needs
+    // (see Money's own class docblock for the scope boundary).
+
+    #[Test]
+    public function addition_is_exact_for_the_classic_float_unsafe_case(): void
+    {
+        $sum = Money::of('0.10', 'INR')->add(Money::of('0.20', 'INR'));
+
+        $this->assertSame('0.30', $sum->amount());
+        $this->assertTrue($sum->equals(Money::of('0.30', 'INR')));
+    }
+
+    #[Test]
+    public function addition_uses_the_larger_operands_natural_scale(): void
+    {
+        $this->assertSame('3', Money::of('1', 'INR')->add(Money::of('2', 'INR'))->amount());
+        $this->assertSame('3.5', Money::of('1', 'INR')->add(Money::of('2.5', 'INR'))->amount());
+        $this->assertSame('3.75', Money::of('1.5', 'INR')->add(Money::of('2.25', 'INR'))->amount());
+    }
+
+    #[Test]
+    public function addition_across_currencies_is_rejected(): void
+    {
+        $this->expectException(InvalidMoneyException::class);
+
+        Money::of('1.00', 'INR')->add(Money::of('1.00', 'USD'));
+    }
+
+    #[Test]
+    public function addition_handles_a_large_amount_exactly(): void
+    {
+        $sum = Money::of('999999999999.98', 'INR')->add(Money::of('0.01', 'INR'));
+
+        $this->assertSame('999999999999.99', $sum->amount());
+    }
+
+    #[Test]
+    public function addition_with_a_negative_operand_behaves_as_subtraction(): void
+    {
+        $sum = Money::of('10.00', 'INR')->add(Money::of('-3.00', 'INR'));
+
+        $this->assertSame('7.00', $sum->amount());
+    }
+
+    #[Test]
+    public function addition_returns_a_new_immutable_instance(): void
+    {
+        $a = Money::of('1.00', 'INR');
+        $b = Money::of('2.00', 'INR');
+
+        $sum = $a->add($b);
+
+        $this->assertSame('1.00', $a->amount());
+        $this->assertSame('2.00', $b->amount());
+        $this->assertSame('3.00', $sum->amount());
+    }
+
+    #[Test]
+    public function repeated_addition_of_many_small_amounts_stays_exact(): void
+    {
+        $total = Money::of('0', 'INR');
+
+        for ($i = 0; $i < 10; $i++) {
+            $total = $total->add(Money::of('0.10', 'INR'));
+        }
+
+        $this->assertTrue($total->equals(Money::of('1.00', 'INR')), "Expected 1.00, got {$total->amount()}");
     }
 }

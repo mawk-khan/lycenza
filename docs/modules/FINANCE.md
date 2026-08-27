@@ -16,7 +16,7 @@ it.
 ```
 0G.0  Finance Architecture & Module Plan          (this document + ADR 0030)               [implemented]
 0G.1  Ledger Schema Foundation                    (ledger_accounts, journal_entries, journal_lines)   [implemented]
-0G.2  Posting & Reversal Application Services      (LedgerService, balance/derivation reads)           [not started]
+0G.2  Posting & Reversal Application Services      (LedgerService, balance/derivation reads)           [implemented]
 0G.3  Finance Authorization & Administrative Read Model   (finance.* capabilities, allow/deny tests)   [not started]
 0G.4  Fees / Receivables Foundation                (charges, invoices — post through the ledger)       [not started]
 0G.5  Payments & Idempotent Callback Integration   (payment records, gateway adapter, inbound webhook idempotency)   [not started]
@@ -1434,9 +1434,681 @@ transactional outbox (ADR 0025); `school_audit_events` entries for
 posting/reversal operations once a real Application service exists to
 raise them.
 
+## 0G.2 as-built (Ledger Posting & Reversal Application Services)
+
+Everything above this section (through "0G.1 as-built") is the
+persistence kernel 0G.1 built and the closure/hardening corrections
+applied to it. This section records what 0G.2 built on top of it: the
+one sanctioned Application-layer write path for posting and reversing
+journal entries. Zero migrations, zero schema changes — every
+invariant 0G.1 established (RLS, append-only, `posting_txid`
+hardening, line-set immutability, deferred balance trigger,
+INR-only CHECKs, case-insensitive account-code uniqueness) is
+preserved exactly; 0G.2 adds Application-layer pre-checks in front of
+those defenses, it never replaces or weakens any of them.
+
+### LedgerService
+
+`App\Domain\Finance\Application\LedgerService`
+(`apps/platform/app/Domain/Finance/Application/LedgerService.php`) —
+the only sanctioned write path for `journal_entries`/`journal_lines`,
+mirroring `App\Domain\AcademicStructure\Application\AcademicYearService`'s
+established shape exactly (validate → write state → audit → emit
+domain event, inside one transaction, ADR 0025). Two public methods:
+
+- `post(School $school, PostJournalEntryData $data, ?User $actor = null): JournalEntryResult`
+- `reverse(JournalEntry $original, ?User $actor = null, ?string $reason = null): JournalEntryResult`
+
+(Closure-review correction: both originally returned the raw
+`JournalEntry` Eloquent model; see "Application result boundary" below
+for why and how this changed. `reverse()`'s input parameter is still
+the real `JournalEntry` model — only the *return* type changed.)
+
+**Not an authorization boundary.** `$actor` is passed through to
+`AuditRecorder` purely for WHO-did-this provenance in the audit trail —
+`LedgerService` performs no capability/permission check of any kind.
+Actor provenance is not authorization; whether a caller is allowed to
+invoke `post()`/`reverse()` at all remains entirely the calling layer's
+responsibility until 0G.3 (Finance Authorization & Administrative Read
+Model) exists. This distinction is stated explicitly in the class's own
+docblock, not left implicit.
+
+### Trusted School boundary
+
+`post()` takes an explicit, trusted `School $school` parameter — no
+line or the `PostJournalEntryData`/`JournalLineData` DTOs carry a
+`school_id` field at all, so a caller cannot make one line claim a
+different School than the posting School. `reverse()` takes an
+already-resolved `JournalEntry $original` (the caller's own
+responsibility to load correctly, e.g. via `JournalEntry::findOrFail()`
+under the correct `TenantContext`) — since `JournalEntry` uses
+`BelongsToSchool`'s `SchoolScope`, a cross-School id is simply "not
+found" at that point, before `LedgerService` is ever reached; no
+special-case code exists inside `LedgerService` for this, the framework
+already makes it impossible. Both methods wrap their entire
+validate-through-commit sequence in `TenantContext::withSchool()` —
+see "TenantContext-through-commit" below.
+
+### Typed posting input
+
+`App\Domain\Finance\Application\PostJournalEntryData` (`currency`,
+`description`, `list<JournalLineData> $lines`) and
+`App\Domain\Finance\Application\JournalLineData` (`ledgerAccountId`,
+`App\Domain\Finance\Domain\JournalSide $side`, `Money $amount`) —
+matching `App\Domain\Documents\Application\CreateDocumentData`'s
+established "typed input class, not an unbounded array" precedent.
+`JournalSide` (`app/Domain/Finance/Domain/JournalSide.php`) is a native
+PHP backed enum (`Debit`/`Credit`), matching the repository's existing
+enum convention (`App\Domain\Communications\Domain\CommunicationPriority`
+and siblings) — the side is always stated explicitly by the caller,
+never inferred from a positive/negative amount sign (`Money` amounts
+passed to `JournalLineData` are always the same-signed magnitude;
+`LedgerService` maps `side` onto `debit_amount`/`credit_amount`
+directly). Neither DTO carries `posted_at` — 0G.2 does not support
+caller-specified backdating; `posted_at` is always the real database
+`now()` at insert time (the column's existing `useCurrent()` default),
+a deliberate, documented decision, not an oversight (FINANCE.md's
+"Semantic date vocabulary" `effective_date` row remains unimplemented).
+
+### Money arithmetic added
+
+`App\Support\Money\Money::add()` — the one arithmetic operation
+`LedgerService` actually needs (summing a proposed posting's lines to
+prove they balance before ever reaching PostgreSQL). Exact (bcmath,
+never float), requires matching currencies (throws
+`InvalidMoneyException` otherwise — Money's own semantic safety is
+independent of and additional to the database's INR-only scope
+restriction), uses the larger of its two operands' own natural decimal
+scale so results are exact and canonical (no fixed padding, no
+rounding). No `subtract()`/`multiply()`/`divide()` were added —
+`negated()` (0G.1) is sufficient for reversal's line-inversion needs,
+which is a sign flip, never real subtraction. 41 assertions across 7
+new `MoneyTest` cases, including the classic float-unsafe `0.10 + 0.20
+== 0.30` combination, a `NUMERIC(14,2)`-boundary large amount, currency
+mismatch rejection, and immutability.
+
+### Account validation and lookup
+
+`LedgerService::resolveAccounts()` issues exactly ONE query against
+`ledger_accounts` (a single `whereIn('id', $ids)`) regardless of how
+many lines reference how many distinct accounts — proven directly by
+counting logged queries for 2-line, 20-line, and 100-line posts, all
+exactly 1 (section 38/62's N+1 concern). `SchoolScope` (via the already
+-active `TenantContext`) already restricts the result to the trusted
+School's own accounts, so a missing id and a cross-School id are
+indistinguishable — both raise the identical `LedgerAccountNotFoundException`
+with the identical message shape (no oracle). **Account status
+(`active`/`inactive`) is deliberately NOT checked by `post()`** —
+FINANCE.md's "Account model" section defines `status` purely as a
+lifecycle/no-delete-once-referenced field (rule 73's reference-entity
+pattern); it never states whether an inactive account may still receive
+new postings. Enforcing "inactive blocks new postings" would be
+inventing a business rule 0G.0/0G.1 never committed to, which the 0G.2
+brief explicitly warned against ("if status semantics do NOT yet
+establish this: do not invent it"). This is recorded here as a
+DEFERRED, NAMED decision for a future checkpoint (0G.3 or a dedicated
+FINANCE.md amendment) to settle deliberately — not a silent gap.
+Duplicate account ids across lines of the same posting are explicitly
+ALLOWED (a real, valid accounting shape — balance is based on line
+amounts/sides, never distinct-account count).
+
+### Posting validation (Application layer, before any database write)
+
+`LedgerService::assertValidShape()`/`assertLineAmountFitsLedgerSchema()`/
+`assertBalanced()` run entirely BEFORE `DB::transaction()` even opens
+(shape/currency/amount-format/balance checks) or as the very first
+statement inside it (account resolution) — so an invalid posting
+attempt writes nothing at all, not merely "rolls back nothing." Checked,
+each with its own `InvalidJournalEntryException`/
+`InvalidJournalCurrencyException`/`UnbalancedJournalEntryException`/
+`LedgerAccountNotFoundException`:
+
+| Check | Exception |
+|---|---|
+| Fewer than 2 lines | `InvalidJournalEntryException` |
+| Empty or >255-character description | `InvalidJournalEntryException` |
+| Zero-amount line | `InvalidJournalEntryException` |
+| Negative-amount line | `InvalidJournalEntryException` |
+| More than 2 decimal places (would be silently ROUNDED by `NUMERIC(14,2)`, not rejected, if let through) | `InvalidJournalEntryException` |
+| More than 12 integer digits (`NUMERIC(14,2)` overflow) | `InvalidJournalEntryException` |
+| Entry currency other than `INR` | `InvalidJournalCurrencyException` |
+| A line's Money currency ≠ the entry's declared currency | `InvalidJournalCurrencyException` |
+| Missing/cross-School ledger account | `LedgerAccountNotFoundException` |
+| Total debits ≠ total credits (exact Money arithmetic) | `UnbalancedJournalEntryException` |
+
+"Total > 0" (the 0G.2 brief's own phrasing) is NOT a separate check —
+it is structurally implied by "≥2 lines" + "every line amount strictly
+positive" + "debits == credits": if both totals are equal and at least
+one line contributes a positive amount to one side, neither total can
+be zero. Adding an explicit `isZero()` check after the other three
+would be unreachable dead code, so it was deliberately omitted (with
+this reasoning recorded in the service's own docblock, not just here).
+
+**PostgreSQL's own defenses remain the mandatory, authoritative
+enforcement regardless of whether this Application-layer pre-check ever
+ran correctly** — the `..._exactly_one_side_check` CHECK, the
+`..._currency_inr_only_check` CHECKs, the composite foreign keys, and
+the deferred balance-check constraint trigger are all still in place,
+unmodified, and still independently tested by 0G.1's raw-SQL suites.
+
+### Database transaction boundary
+
+Every `post()`/`reverse()` call is exactly one PostgreSQL transaction:
+header insert, every line insert, the audit event, and the outbox event
+all commit together or none of them do. Actual write order inside that
+transaction: header → lines → audit → domain event/outbox — recorded
+here because it IS observable (e.g. which write a failure-injection
+trigger catches), but the order itself provides no atomicity guarantee
+on its own; the enclosing `DB::transaction()` is the sole consistency
+boundary regardless of order (`LedgerService::post()`'s own docblock
+states this explicitly).
+
+**Proven two ways, at two different strengths (closure-review
+correction — the first proof alone was judged insufficient):**
+
+1. **Outer-transaction-wrap proof** (weaker — proves transaction
+   PARTICIPATION): mirroring
+   `AcademicYearLifecycleTest::a_rolled_back_activation_leaves_neither_the_state_change_nor_the_event()`'s
+   established pattern, wrapping a `post()`/`reverse()` call in an
+   OUTER `DB::transaction()` that throws immediately afterward forces
+   Laravel's savepoint nesting to roll back everything the service
+   did. `LedgerServicePostTest::a_rolled_back_posting_leaves_no_entry_no_lines_and_no_event()`
+   and `LedgerServiceReverseTest::a_rolled_back_reversal_leaves_the_original_intact_and_no_reversal_or_event()`
+   still exist and still pass, but this alone does not prove that a
+   failure INSIDE one specific write step rolls back the steps that
+   already "succeeded" earlier in the SAME transaction.
+2. **Real failure-injection proof** (stronger — proves the actual
+   claim): `tests/Feature/Finance/LedgerServiceAtomicityTest.php`
+   injects a GENUINE PostgreSQL failure at each specific step, using a
+   temporary, uniquely-named `BEFORE INSERT` trigger (created via the
+   `pgsql_admin` connection, guaranteed removed in a `finally` block —
+   pure test-only DDL, no production schema/migration touched) that
+   unconditionally `RAISE EXCEPTION`s on the target table:
+   - `a_journal_line_insert_failure_rolls_back_the_header_and_every_other_line()`:
+     the trigger targets `journal_lines`; the header insert succeeds
+     first (within the still-open transaction), the first line insert
+     then fails; asserts zero `journal_entries`, zero `journal_lines`,
+     zero audit events, zero outbox events afterward.
+   - `an_audit_recording_failure_rolls_back_the_entire_posting()`: the
+     trigger targets `school_audit_events`; the header and every line
+     insert succeed first; `AuditRecorder`'s own INSERT then fails;
+     asserts the already-inserted entry and lines are rolled back too,
+     not merely that the audit row is missing.
+   - `an_outbox_recording_failure_rolls_back_the_entire_posting_including_the_already_written_audit_event()`:
+     the trigger targets `domain_event_outbox`; header, lines, AND the
+     audit event succeed first; `RecordDomainEventToOutbox`'s own
+     INSERT then fails; asserts the entry, lines, AND the audit event
+     that had already "succeeded" earlier in the same transaction are
+     ALL rolled back — this is the specific claim ("financial truth
+     must not commit if required outbox recording fails") the weaker
+     proof could not establish.
+   - `a_journal_line_insert_failure_during_reversal_leaves_the_original_untouched_and_no_reversal_artifacts()`:
+     the same `journal_lines` trigger, applied to `reverse()` instead
+     — captures the original entry's full row + line state before the
+     attempt, asserts it is byte-identical afterward, and asserts zero
+     reversal entry/audit/outbox rows exist.
+   - `audit_and_outbox_models_use_the_same_default_connection_as_the_ledger_writes()`:
+     confirms directly (`getConnectionName()`) that `SchoolAuditEvent`/
+     `DomainEventOutbox`/`JournalEntry` all use the same default
+     connection — the structural precondition that makes the four
+     tests above meaningful at all (a different connection, an
+     `afterCommit` hook, or a queued/asynchronous write would make
+     none of this atomicity claim true, regardless of what the tests
+     appeared to show).
+
+   A real, non-obvious implementation pitfall was found and fixed
+   while building this file: these tests deliberately do NOT use
+   `Tests\TestCase`'s normal `DatabaseTransactions` wrapping
+   (`$connectionsToTransact = []`, matching the existing real-
+   concurrency tests' established pattern) — `CREATE TRIGGER` requires
+   a `SHARE ROW EXCLUSIVE` lock, which conflicts with the `ROW
+   EXCLUSIVE` lock any earlier INSERT into the same table already
+   holds for the remainder of an open transaction. Under the ordinary
+   wrapper, a test that first creates a real journal entry (inserting
+   into `journal_lines`) and THEN tries to install a failing trigger ON
+   `journal_lines` via the separate `pgsql_admin` connection would
+   self-deadlock: the same single PHP process can never release that
+   lock (by committing) while it is itself blocked waiting on the
+   `pgsql_admin` statement to complete. Disabling the wrapper (so every
+   statement genuinely commits immediately) removes this deadlock
+   class entirely; manual cleanup (deleting the created School, which
+   cascades) replaces the automatic rollback, exactly like
+   `JournalReversalConcurrencyTest`/`JournalEntryLineSetImmutabilityConcurrencyTest`
+   already do for the same underlying reason (real, separate
+   committed state to reason about).
+
+   A second, smaller bug was found and fixed in the same pass: these
+   tests' own `domain_event_outbox` count queries initially forgot to
+   filter by `school_id` (unlike `journal_entries`/`journal_lines`/
+   `school_audit_events`, `DomainEventOutbox` carries no `SchoolScope`/
+   RLS at all), so an unscoped count picked up OTHER tests' genuinely-
+   committed outbox rows (real rows, correctly persisting per ADR
+   0025's durability guarantee, not a rollback failure) and produced a
+   false failure. Fixed by scoping every `DomainEventOutbox` query in
+   this file to the specific School each test created.
+
+**A note on what could not be independently exercised**: because
+`assertBalanced()` makes it structurally impossible to submit an
+unbalanced posting through `LedgerService::post()` itself (rejected
+before any database write), the DEFERRED-TRIGGER-rejects-at-commit
+scenario cannot be triggered through the service — it remains proven
+exhaustively at the raw-SQL level by 0G.1's (unchanged, still
+authoritative) `JournalEntryBalanceEnforcementTest`. This is the
+correct, expected consequence of the Application-layer check being
+airtight, not a gap in coverage.
+
+### TenantContext-through-commit requirement
+
+0G.1 discovered that Finance's `SECURITY INVOKER` triggers (the
+balance check, the post-commit line-set-immutability check, the
+`posting_txid` assignment) perform RLS-scoped queries, so
+`TenantContext` must remain active through the actual PostgreSQL
+`COMMIT`. `LedgerService` never clears/switches/restores
+`TenantContext` before `DB::transaction()`'s closure returns — both
+`post()` and `reverse()` wrap their ENTIRE validate-through-commit
+sequence in one `TenantContext::withSchool()` call, with
+`DB::transaction()` nested directly inside it (identical to
+`AcademicYearService`'s own established shape). Every test in
+`LedgerServicePostTest`/`LedgerServiceReverseTest` runs under
+`Tests\TestCase`'s NORMAL `DatabaseTransactions` + the real `pgsql`
+connection (`school_os_app` runtime role) — there is no special test
+harness or superuser shortcut anywhere in these two files. Every
+passing assertion in both files is therefore itself the proof that the
+real, ordinary `TenantContext` lifecycle keeps working end-to-end
+through a production service call, not merely through 0G.1's own
+purpose-built raw-SQL scaffolding.
+
+### Posting_txid: internal only, never caller-controlled, and now structurally unreachable from the return value too
+
+`journal_entries.posting_txid` is never set, read for business logic,
+or exposed by `LedgerService` at all — `PostJournalEntryData`/
+`JournalLineData` have no `posting_txid` field at all (structurally
+impossible to supply one), and the database's own unconditional
+`BEFORE INSERT` trigger (`finance_set_journal_entry_posting_txid()`,
+0G.1's posting-txid hardening pass) would overwrite it even if
+something tried.
+
+**Closure-review correction**: 0G.2's original implementation returned
+the raw `JournalEntry` Eloquent model from `post()`/`reverse()` — safe
+in practice (no caller ever read `posting_txid` off it), but not safe
+*by construction*: any future caller could trivially reach
+`$entry->posting_txid` because the model attribute was simply there.
+`post()`/`reverse()` now return `App\Domain\Finance\Application\JournalEntryResult`,
+an immutable, explicit-field DTO (`journalEntryId`, `schoolId`,
+`currency`, `description`, `postedAt`, `reversalOfJournalEntryId`,
+`lineCount`) built via `JournalEntryResult::fromModel()` — `xid8`
+posting-transaction identity is not one of those fields, so it is not
+merely undocumented, it does not exist on the type at all.
+`LedgerServicePostTest::posting_txid_is_structurally_absent_from_the_result_but_still_database_correct()`
+proves both halves: a `ReflectionClass(JournalEntryResult::class)` scan
+confirms no `posting_txid`/`postingTxid` property exists on the result
+type, while a separate direct query against the real `JournalEntry`
+model in the same test confirms the column itself is still database-
+correct (still overwritten by the trigger, still non-null) — the
+guarantee is about the Application-layer return boundary, not about
+weakening 0G.1's underlying database enforcement.
+`LedgerServicePostTest::post_returns_a_typed_result_never_the_raw_eloquent_model()`
+and the equivalent `LedgerServiceReverseTest` test additionally assert
+`assertNotInstanceOf(JournalEntry::class, $result)` directly. `xid8`
+remains pure internal PostgreSQL transaction-identity metadata — it is
+not Finance business terminology, and no DTO, exception, audit
+payload, or outbox payload in 0G.2 ever names it.
+
+### Application result boundary: `JournalEntryResult`
+
+`LedgerService::post()` and `LedgerService::reverse()` both return
+`JournalEntryResult`, not `App\Domain\Finance\Infrastructure\JournalEntry`.
+This is deliberately the *mutation operation's own result boundary*
+only — it is not a read model, not a listing/detail query service, and
+does not gain any new authorization/API/UI surface; nothing else in
+0G.2's scope changed. Callers needing the persisted line rows (e.g.
+tests) query `JournalLine` directly via the returned `journalEntryId`,
+exactly as any other module's caller would query on an id it was
+handed back rather than an eagerly-loaded relation. `JournalEntryResult`
+carries: `journalEntryId`, `schoolId`, `currency`, `description`,
+`postedAt` (a `Carbon` instance), `reversalOfJournalEntryId` (nullable
+— null for an original posting, the original's id for a reversal), and
+`lineCount` (an `int`, computed from the caller-supplied line count for
+`post()` and from the original entry's line count for `reverse()` —
+never re-queried from the database after the fact, since the result is
+built from data already known within the same transaction).
+
+### Semantic reversal
+
+`LedgerService::reverse()` creates a NEW `journal_entries` row
+(`reversal_of_journal_entry_id` pointing at the original) whose lines
+exactly invert the original's: for every original line, the reversal
+has a line against the SAME `ledger_account_id`, the SAME `currency`,
+the SAME exact decimal amount, with debit and credit swapped — line
+count matches exactly (no aggregation, no combining). Proven with
+amounts chosen specifically to expose float-unsafe behavior (`0.10`/
+`0.20`/`0.25`/`0.05` across 4 lines) — `LedgerServiceReverseTest::reversal_lines_exactly_invert_the_original()`
+asserts `debit_amount`/`credit_amount` swap exactly, as raw stored
+decimal strings, no float artifact. The original entry's own row and
+every one of its lines are proven byte-for-byte unchanged after
+reversal (`the_original_entry_and_its_lines_are_never_mutated_by_reversal()`).
+
+**Reversal description**: `journal_entries.description` is `NOT NULL`
+with no dedicated reversal-reason column (FINANCE.md does not require
+one, and 0G.2 does not add one). `reverse()` accepts an optional
+`?string $reason` — if given, it becomes the reversal's description
+(validated non-empty, ≤255 characters, the same bound as posting); if
+omitted, a description is derived automatically
+(`"Reversal of journal entry {original id}."`).
+
+### Reversing a reversal: resolved, not guessed
+
+The 0G.2 brief explicitly required this to be settled from committed
+architecture, not assumed. Neither ADR 0030 nor FINANCE.md states a
+restriction either way. The 0G.1 schema itself applies its ONE
+structural rule — at most one reversal per entry
+(`journal_entries_reversal_of_unique`) — uniformly to every
+`journal_entries` row, without distinguishing "is this row itself
+already a reversal." Adding a NEW restriction here that neither the
+schema nor the prose requires would itself be inventing policy (exactly
+what the brief warned against), and reversing a reversal is ordinary,
+legitimate double-entry practice (e.g. correcting an erroneous
+reversal). `LedgerService::reverse()` therefore does not check
+`$original->isReversal()` at all — this is recorded explicitly in the
+service's own docblock, with the full reasoning, and directly proven by
+`LedgerServiceReverseTest::a_reversal_entry_may_itself_be_reversed()`.
+
+### Double reversal: deterministic service behavior
+
+A duplicate reversal request **throws `JournalEntryAlreadyReversedException`**
+— it does NOT return the existing reversal. This is a deliberate,
+stated choice (0G.2 brief section 30): returning the existing reversal
+would imply an idempotent-retry-returns-same-result CONTRACT this
+service does not actually provide (see "Posting idempotency boundary"
+below) — throwing is the honest behavior. Two paths raise the identical
+exception: a sequential pre-check (`$original->reversedBy()->exists()`,
+a clean domain error before ever attempting the insert, the common
+case) and a caught `UniqueConstraintViolationException` (the genuine
+concurrent-race case, mirroring
+`ConcurrentActivationConflictException`'s identical established
+pattern) — both produce the SAME typed exception, since from the
+caller's perspective the outcome is identical either way.
+
+**Real concurrent proof**: `tests/Support/reverse-journal-entry.php`
+(the subprocess helper `JournalReversalConcurrencyTest` drives) was
+updated in 0G.2 to call `LedgerService::reverse()` directly (0G.2 brief
+section 51 — "prefer exercising `LedgerService::reverse()` rather than
+only raw insert helpers") rather than issuing raw SQL. Two genuinely
+separate OS processes racing to reverse the SAME committed original
+through the real service: exactly one succeeds; the loser receives
+`LedgerService::reverse()`'s own `JournalEntryAlreadyReversedException`
+(not a raw database exception) — proving the service's race-mapping
+itself is safe under real concurrency, not merely under a sequential
+test. The database contains exactly one reversal afterward.
+
+### Posting idempotency boundary — not overclaimed
+
+`journal_entries` does not expose a generic Application idempotency
+key (0G.0 deliberately reserved that architecture for later payment-
+provider callbacks — ADR 0018/`RELIABILITY.md`, unchanged). Therefore:
+
+- **Generic posting atomicity: YES** (one transaction, proven above).
+- **Generic posting idempotency: DEFERRED.** A duplicate manual/
+  internal call to `LedgerService::post()` with the same logical intent
+  currently produces TWO distinct, independently valid journal entries
+  — `post()` has no way to recognize "this is a retry of an earlier
+  request," because 0G.1's schema gives it no key to recognize one by.
+  This is not a bug to fix in 0G.2; it is an accurately documented
+  scope boundary. A future caller (e.g. a 0G.6 HTTP endpoint) that
+  needs retry-safety must use the existing, unrelated
+  `App\Support\Idempotency\IdempotencyGuard`/`EnsureIdempotent`
+  client-API-key mechanism at ITS layer — `LedgerService` itself
+  remains deliberately unaware of it, exactly like every other
+  Application service in this repository.
+- **Reversal has stronger, structural at-most-once semantics** — not
+  because of a generic idempotency key, but because of ADR 0030's own
+  partial unique index. This is real, database-enforced, and does not
+  need to borrow the payment-callback idempotency architecture at all.
+- **Payment callback idempotency remains entirely deferred** to a
+  future Payments checkpoint (0G.5), which will need its OWN
+  provider-event-id-keyed mechanism (`payment_provider_events`,
+  already named as a LATER entity in "Core entities" above) — 0G.2 adds
+  no idempotency migration, and does not pretend `LedgerService::post()`
+  is a substitute for that future mechanism.
+
+### Audit events
+
+Reuses `App\Support\Audit\AuditRecorder` exactly as committed — no
+Finance-specific audit table, no per-line audit metadata. Event names
+derived directly from the exact existing repository convention
+(`AcademicYearService`'s own audit calls use `'academic_year.activated'`,
+no version suffix, no module prefix) — Finance's are `'journal_entry.posted'`
+and `'journal_entry.reversed'`. Metadata is minimal and safe: currency,
+line count, and (for reversal) the original entry's id — never a full
+line dump, never `posting_txid`, never a trigger/function name, never
+raw SQL exception content. Cardinality is explicit and tested: a
+successful `post()` produces exactly ONE `'journal_entry.posted'` audit
+event; a successful `reverse()` produces exactly ONE
+`'journal_entry.reversed'` audit event and explicitly NOT an
+additional `'journal_entry.posted'` one — `reverse()` shares private
+helper logic with nothing in `post()`'s own public entry point, so
+there is no code path by which reversing could accidentally also emit
+a posting audit event.
+`LedgerServiceReverseTest::reversal_is_transactional_and_produces_exactly_one_outbox_event_and_one_audit_event()`
+asserts the posting-audit count stays at exactly 1 (from the original
+post, via `postBalancedJournalEntry()`) after a reversal, proving this
+directly. A failed `post()`/`reverse()` produces zero audit events
+(proven by the same rollback/atomicity tests above).
+
+### Domain events / outbox
+
+Reuses the existing platform transactional outbox (ADR 0025) exactly
+as committed — `App\Support\Events\ShouldBeOutboxed` +
+`App\Listeners\RecordDomainEventToOutbox` (auto-discovered against the
+interface, no new listener registration needed, confirmed directly from
+`AppServiceProvider::boot()`'s own docblock warning against double-
+registration). No second Finance-specific outbox was created; outbound
+webhook-delivery tables were not repurposed as an internal event
+mechanism (the 0G.2 brief explicitly warned against both).
+
+Two new event classes, both under `App\Domain\Finance\Events`:
+
+- `JournalEntryPosted` — `journal_entry.posted.v1`, payload
+  `{journalEntryId, currency, lineCount}`.
+- `JournalEntryReversed` — `journal_entry.reversed.v1`, payload
+  `{reversalJournalEntryId, originalJournalEntryId}`.
+
+Event-type naming (`snake_case_noun.past_tense_verb.vN`) matches the
+exact existing convention (`AcademicYearActivated::eventType()` returns
+`'academic_year.activated.v1'`) — note this is a DIFFERENT vocabulary
+from audit event names (no version suffix there), matched precisely to
+each's own existing precedent rather than invented fresh. Both events
+are recorded from inside the same `DB::transaction()` as the ledger
+writes (`event()` called before the transaction closure returns) — the
+outbox row is written in the SAME database transaction automatically,
+by the existing mechanism, with no extra plumbing. **Deliberately
+internal-only**: neither event is registered in
+`App\Support\Webhooks\WebhookEventRegistry`, so neither is externally
+webhook-subscribable merely by existing in `domain_event_outbox` (rule
+45) — that remains a separate, future, reviewed decision, not a side
+effect of this checkpoint. Cardinality proven exactly like audit events
+above: exactly one outbox row per successful operation, zero on
+failure/rollback, and `reverse()` never additionally emits a
+`JournalEntryPosted`.
+
+### Atomicity — summary
+
+| Scenario | Result |
+|---|---|
+| Invalid shape (e.g. 1 line) | Nothing created — rejected before any DB write |
+| Missing/cross-School account | Nothing created — rejected as the transaction's first statement, before any INSERT |
+| Unbalanced input | Nothing created — rejected before any DB write (Application-layer check) |
+| Simulated failure immediately after a successful `post()`/`reverse()` (outer-transaction rollback technique) | Nothing persists — entry, lines, audit event, and outbox event all roll back together |
+| Real injected failure on the `journal_lines` INSERT during `post()` | Header AND every other line roll back together — proven via `LedgerServiceAtomicityTest::a_journal_line_insert_failure_rolls_back_the_header_and_every_other_line()` |
+| Real injected failure on the `school_audit_events` INSERT during `post()` | Header and lines already inserted earlier in the SAME transaction roll back too — proven via `an_audit_recording_failure_rolls_back_the_entire_posting()` |
+| Real injected failure on the `domain_event_outbox` INSERT during `post()` | Header, lines, AND the audit event already inserted earlier in the SAME transaction all roll back too — proven via `an_outbox_recording_failure_rolls_back_the_entire_posting_including_the_already_written_audit_event()` |
+| Real injected failure on the `journal_lines` INSERT during `reverse()` | The original entry and its lines are byte-identical afterward; zero reversal entry/audit/outbox rows exist — proven via `a_journal_line_insert_failure_during_reversal_leaves_the_original_untouched_and_no_reversal_artifacts()` |
+| Deferred balance-trigger rejection at commit | Cannot be reached through `LedgerService::post()` itself (Application check is airtight) — proven exhaustively at the raw-SQL level by unchanged 0G.1 tests instead |
+
+### Concurrency
+
+- Reversal race: `JournalReversalConcurrencyTest` (updated to exercise
+  the real service, see above) — exactly one of two real concurrent
+  processes succeeds.
+- Post-commit line-set extension race:
+  `JournalEntryLineSetImmutabilityConcurrencyTest` (unchanged, still
+  exercises raw SQL directly against an already-committed entry) — both
+  of two real concurrent processes are rejected. Not re-pointed at
+  `LedgerService` because its subject is specifically "a caller
+  bypassing the service/ORM entirely," which the raw-SQL shape
+  correctly continues to represent.
+- No new concurrency architecture was introduced — `reverse()`'s
+  at-most-once guarantee is entirely ADR 0030's own partial unique
+  index; `post()` needs no concurrency guarantee beyond ordinary
+  transaction isolation, since every posting creates independent new
+  rows with no shared mutable state to race on.
+
+### Performance / query behavior
+
+Account resolution is exactly one query regardless of line count
+(proven for 2, 20, and 100 lines — see "Account validation and lookup"
+above). Line inserts remain one `INSERT` per `journal_lines` row (there
+is no batch-insert path for tenant-scoped Eloquent creates anywhere in
+this repository's existing conventions, so this is not a new N+1, it
+matches how every other module in this codebase writes child rows). No
+speculative maximum line-count limit was added — FINANCE.md does not
+specify one, and the 0G.2 brief explicitly warned against inventing one
+("no speculative limit" — any real-world bound belongs to a future
+API-layer validation decision, not this Application service).
+
+### Tests
+
+Authoritative Finance test selector (unchanged path, expanded
+contents):
+
+```
+php artisan test \
+  tests/Feature/Finance \
+  tests/Feature/Postgres/FinanceRawIsolationTest.php \
+  tests/Unit/Support/Money
+```
+
+0G.1 baseline: 97 tests / 129 assertions / 0 failures. 0G.2 added 39
+new tests across three files
+(`LedgerServicePostTest.php`: 22, `LedgerServiceReverseTest.php`: 10,
+`MoneyTest.php` `add()` cases: 7) plus updated two existing files in
+place (`CreatesFinanceFixtures::postBalancedJournalEntry()` now
+delegates to `LedgerService::post()` instead of hand-rolled
+DB::transaction() logic — section 46's "no two competing
+implementations of posting semantics" — and
+`JournalReversalConcurrencyTest`/`reverse-journal-entry.php` now
+exercise `LedgerService::reverse()`). Final (before closure
+correction): **136 tests / 220 assertions / 0 failures**. Full suite:
+**2579 tests / 8745 assertions / 0 failures** — the 0G.1-close
+baseline (2540/8654/0) plus exactly these 39 new tests, no regressions
+elsewhere. (One pre-existing, unrelated
+`tests/Feature/HR/HrEmployeeImportConcurrencyTest.php` failure was
+observed once under full-suite load and confirmed flaky — it passed
+3/3 times when rerun in isolation, and a clean full-suite rerun
+afterward passed completely; it is real-OS-process concurrency test
+timing sensitivity under system load, not a regression from this
+checkpoint's changes, and this checkpoint did not touch HR code.)
+
+**Closure correction pass** added 8 further tests: a new
+`tests/Feature/Finance/LedgerServiceAtomicityTest.php` (5 real
+failure-injection tests, see "Database transaction boundary" above)
+plus 3 result-boundary tests split across `LedgerServicePostTest.php`
+(`posting_txid_is_structurally_absent_from_the_result_but_still_database_correct()`,
+`post_returns_a_typed_result_never_the_raw_eloquent_model()`,
+`the_result_exposes_the_expected_safe_business_fields()`) and one
+equivalent typed-result test in `LedgerServiceReverseTest.php`. Final,
+current: **144 tests / 247 assertions / 0 failures**. Full suite:
+**2587 tests / 8772 assertions / 0 failures** — exactly the prior
+2579/8745 baseline plus these 8 new tests/27 new assertions, no
+regressions elsewhere.
+
+All raw 0G.1 invariant suites (RLS/FORCE RLS, account-code uniqueness,
+INR-only CHECKs, append-only UPDATE/DELETE, posting_txid hardening,
+post-commit line-set immutability, deferred balance checking,
+double-reversal uniqueness) were rerun unchanged and remain fully
+passing — 0G.2 added Application-layer checks in front of them, it
+never modified or weakened any of them.
+
+### Security findings (0G.2)
+
+No unresolved P0/P1/P2. Reviewed explicitly against the 0G.2 brief's
+full checklist (cross-School account posting/reversal, missing-account
+oracle, inactive-account bypass, currency mismatch, non-INR Money,
+float arithmetic, unbalanced service posting, database-balance bypass,
+`posting_txid` exposure/control, post-commit line append, journal row
+mutation, partial posting, missing audit/outbox on success, duplicate
+audit/outbox, double reversal, concurrent double reversal, generic-post
+retry duplication, `QueryException` leakage, mass assignment of
+internal columns, `TenantContext` cleared before deferred commit,
+unauthorized capability claims, accidental HTTP surface, payment/
+idempotency-framework creep):
+
+- Every item above is resolved by the design decisions documented in
+  this section (cross-School: SchoolScope + no-oracle exception; float:
+  Money/bcmath throughout, no float anywhere; database defenses:
+  entirely retained and re-tested unchanged; `posting_txid`: 0G.1's
+  hardening trigger remains sole authority, LedgerService never touches
+  it; mass assignment: neither DTO nor the database column allows it;
+  `TenantContext`: proven active through commit by every passing test
+  running under the ordinary role/lifecycle).
+- **Inactive-account posting is explicitly NOT blocked** — recorded
+  above as a deliberate, named, deferred decision (not invented, not
+  silently ignored) rather than a security gap: FINANCE.md never
+  committed to this restriction, so 0G.2 does not invent it.
+- **Generic posting retry duplication is a real, accurately documented
+  boundary, not a defect**: `post()` has no idempotency key to detect a
+  duplicate logical request, and this document says so explicitly
+  above rather than overclaiming safety 0G.1's schema does not actually
+  provide.
+- No HTTP surface, no capability seeding, no policy checks exist
+  anywhere in this checkpoint's diff — confirmed by inspection alongside
+  the git diff review below.
+
+**Closure-review correction findings** (this pass):
+
+- **Atomicity proof gap (resolved)**: the original report's audit/
+  outbox/line-write atomicity claims rested only on an outer-
+  transaction-wrap simulation, which proves transaction participation
+  but not that a genuine mid-transaction failure at a specific write
+  step rolls back the writes that already "succeeded" earlier in that
+  same transaction. Resolved with real PostgreSQL failure-injection
+  tests (temporary, uniquely-named triggers, guaranteed removed) — see
+  "Database transaction boundary" above. No production schema or
+  migration was touched to build these tests.
+- **Result-boundary hardening (resolved)**: the original `post()`/
+  `reverse()` return type (`JournalEntry`, the raw Eloquent model) made
+  `posting_txid` reachable by any future caller even though nothing
+  used it. Resolved by introducing `JournalEntryResult`, an explicit-
+  field DTO with no `posting_txid` property — see "Application result
+  boundary" above. This is a mutation-result-boundary hardening only;
+  it does not introduce a read model, query service, or any new
+  authorization/API/UI surface.
+
+### What 0G.2 intentionally does not implement
+
+No `finance.*` capabilities/policies/authorization of any kind (0G.3);
+no HTTP/API/OpenAPI/generated types (0G.6); no UI (0G.7); no `charges`/
+`invoices`/`payments`/`payment_provider_events`/`refunds` (0G.4/0G.5);
+no inactive-account posting restriction (deferred, named above); no
+generic posting idempotency key (deferred, named above); no accounting-
+period/backdating support; no multi-currency; no Payroll, Admissions,
+or Student Enrollment integration.
+
+### Next checkpoint boundary
+
+0G.3 — Finance Authorization & Administrative Read Model: real
+`finance.*` capability strings (0G.0's proposed families —
+`finance.ledger.view`/`finance.ledger.post`/`finance.accounts.manage`
+— finalized against current capability-naming convention, not assumed),
+capability-gated wrapping around `LedgerService`'s existing methods (an
+authorization LAYER in front of the existing service, not a rewrite of
+it), an administrative read model for browsing the ledger/chart of
+accounts, and the account-status-blocks-posting decision this document
+deliberately deferred above.
+
 ## Roadmap relationship
 
 Implements the start of `docs/roadmap/MASTER-ROADMAP.md`'s **Phase
 0G — Finance and Fees**. Phase 0G is marked **IN PROGRESS** as of this
-checkpoint (0G.0 and 0G.1 complete; 0G.2 onward not started) — see the
-corresponding `MASTER-ROADMAP.md` edit in this same checkpoint.
+checkpoint (0G.0, 0G.1, and 0G.2 complete; 0G.3 onward not started) —
+see the corresponding `MASTER-ROADMAP.md` edit in this same checkpoint.
