@@ -351,7 +351,10 @@ correct with zero coupling to any account-link/reachability code).
   prevents a duplicate active row in the SAME offering, not membership
   across two related offerings. A future checkpoint introducing an
   elective-group concept on `Subject`/`SubjectOffering` would need to
-  add its own exclusivity enforcement.
+  add its own exclusivity enforcement. **Architecture defined in
+  `docs/students/PHASE-1F-0-ELECTIVE-MUTUAL-EXCLUSIVITY-ARCHITECTURE.md`
+  (Phase 1F.0, informal module-local checkpoint label) — not yet
+  implemented as of this writing.**
 - Teacher/staff assignment to a SubjectOffering, and any
   teacher-scoped authorization restriction on the roster endpoints —
   not built; current authorization is School-wide
