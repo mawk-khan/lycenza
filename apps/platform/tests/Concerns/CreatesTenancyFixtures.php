@@ -30,6 +30,9 @@ use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
 use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
+use App\Domain\Library\Infrastructure\LibraryCopy;
+use App\Domain\Library\Infrastructure\LibraryLoan;
+use App\Domain\Library\Infrastructure\LibraryTitle;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
@@ -591,6 +594,39 @@ trait CreatesTenancyFixtures
                 'academic_year_id' => $year->id,
                 'campus_id' => $campus->id,
                 'grade_level_id' => $gradeLevel->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 10A: Library fixtures ------------------------------------
+
+    protected function createLibraryTitle(School $school, array $attributes = []): LibraryTitle
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => LibraryTitle::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createLibraryCopy(LibraryTitle $title, array $attributes = []): LibraryCopy
+    {
+        return app(TenantContext::class)->withSchool(
+            $title->school,
+            fn () => LibraryCopy::factory()->create(array_merge([
+                'school_id' => $title->school_id,
+                'library_title_id' => $title->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createLibraryLoan(LibraryCopy $copy, Student $student, array $attributes = []): LibraryLoan
+    {
+        return app(TenantContext::class)->withSchool(
+            $copy->school,
+            fn () => LibraryLoan::factory()->create(array_merge([
+                'school_id' => $copy->school_id,
+                'library_copy_id' => $copy->id,
+                'student_id' => $student->id,
             ], $attributes)),
         );
     }

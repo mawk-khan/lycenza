@@ -257,6 +257,22 @@ Transport, Library, Inventory, Canteen, Hostel, Health, Visitor/Safety
 — roughly independent of each other, sequenced by product priority once
 reached, not strict dependency order.
 
+**Phase 10A — Library (complete):** the first Phase 0K checkpoint —
+catalogue (Title/Copy) + physical circulation (checkout/check-in), a
+database-enforced single-active-loan-per-Copy invariant proven under
+real concurrency, `library.catalogue.*`/`library.circulation.*`
+capabilities, `/api/v1` administrative API, and a session-authenticated
+Inertia UI. Full design and closure record: `docs/modules/LIBRARY.md`.
+Deliberately excludes fines/Finance integration (Finance/Phase 0G is
+not on `main`), reservations/holds/renewals, Documents-module
+integration, and any Guardian/Student-facing surface — all explicitly
+deferred, not gaps in this checkpoint's own closure. The remaining
+Phase 0K modules (Transport, Inventory, Canteen, Hostel, Health,
+Visitor/Safety) are **not started**; Inventory/Canteen/Hostel
+additionally remain blocked on Finance/Fees reaching `main`, and Health
+remains blocked on the `docs/security/DATA-CLASSIFICATION.md`
+[LEGAL REVIEW REQUIRED] gate. Phase 0K as a whole is **not** complete.
+
 ## Phase 0L — Oversight
 
 Compliance, Analytics, Automation (Layer 5) — read-mostly consumers of

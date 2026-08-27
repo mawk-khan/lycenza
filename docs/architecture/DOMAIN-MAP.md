@@ -98,7 +98,7 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 | **Examinations** | Exam scheduling, grading, report cards | Academic Structure, Students/SIS, Academics | |
 | **LMS** | Learning content, assignments, submissions | Academic Structure, Students/SIS, HR | |
 | **Transport** | Routes, vehicles, driver assignment, student transport mapping | Students/SIS, HR | |
-| **Library** | Catalogue, circulation | Students/SIS, HR | |
+| **Library** | Catalogue, circulation | Students/SIS, HR | **Implemented (Phase 10A)**: bibliographic Titles + physical Copies (`App\Domain\Library\Infrastructure\{LibraryTitle,LibraryCopy}`), circulation/Loan lifecycle with a database-enforced single-active-loan-per-Copy invariant (`App\Domain\Library\Application\LibraryLoanService`), `library.catalogue.*`/`library.circulation.*` capabilities, `/api/v1` administrative surface, and a session-authenticated Inertia UI. See `docs/modules/LIBRARY.md`. Fines/reservations/renewals, Documents integration, and Guardian/Student-facing views remain deliberately deferred — not part of this closure. |
 | **Inventory** | Stock, procurement, costing | Finance, HR | |
 | **Canteen** | Menus, orders, billing | Students/SIS, Fees, Inventory | |
 | **Hostel** | Room allocation, hostel fee linkage | Students/SIS, Fees | |
