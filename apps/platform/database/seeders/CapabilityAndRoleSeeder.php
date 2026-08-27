@@ -297,6 +297,27 @@ class CapabilityAndRoleSeeder extends Seeder
             // explicitly below.
             ['key' => 'admissions.view', 'label' => 'View Admission Applicants and Applications', 'namespace' => 'school'],
             ['key' => 'admissions.manage', 'label' => 'Manage Admission Applicants and Applications (create, update, decide, convert)', 'namespace' => 'school'],
+
+            // Phase 10B (docs/modules/TRANSPORT.md "Capabilities") --
+            // three independently gateable areas, mirroring Library's
+            // catalogue/circulation split: a School may want Transport
+            // office staff who can manage Routes/Stops/Vehicles
+            // without letting them touch individual Student
+            // assignments, or vice versa. `.routes.*` covers Routes and
+            // Stops together (a Stop has no independent meaning outside
+            // its Route, so it does not earn its own capability pair,
+            // matching Library's Copy-under-Title precedent).
+            // `.vehicles.*` covers the Vehicle fleet AND the Route
+            // Vehicle/Driver operational assignment (assigning a
+            // Vehicle/Driver to a Route is fleet-operations work, not
+            // Student-facing work). `.assignments.*` covers Student
+            // Transport assignment only.
+            ['key' => 'transport.routes.view', 'label' => 'View Transport Routes and Stops', 'namespace' => 'school'],
+            ['key' => 'transport.routes.manage', 'label' => 'Manage Transport Routes and Stops', 'namespace' => 'school'],
+            ['key' => 'transport.vehicles.view', 'label' => 'View Transport Vehicles and Route operational (Vehicle/Driver) assignments', 'namespace' => 'school'],
+            ['key' => 'transport.vehicles.manage', 'label' => 'Manage Transport Vehicles and Route operational (Vehicle/Driver) assignments', 'namespace' => 'school'],
+            ['key' => 'transport.assignments.view', 'label' => 'View Student Transport assignments', 'namespace' => 'school'],
+            ['key' => 'transport.assignments.manage', 'label' => 'Manage Student Transport assignments', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -378,6 +399,16 @@ class CapabilityAndRoleSeeder extends Seeder
                     // scope, never enrollments.rollovers.manage's
                     // hundreds-of-records-at-once scope).
                     'admissions.view', 'admissions.manage',
+                    // Phase 10B: same "hands-on, day-to-day operational
+                    // concern" reasoning already justifying full
+                    // view+manage parity for library.*/students.*/
+                    // guardians.*/enrollments.* on this role -- running
+                    // Transport (routes, vehicles, driver assignment,
+                    // Student assignment) is routine administrative
+                    // work, not a rare/high-blast-radius action.
+                    'transport.routes.view', 'transport.routes.manage',
+                    'transport.vehicles.view', 'transport.vehicles.manage',
+                    'transport.assignments.view', 'transport.assignments.manage',
                 ],
             ],
             'principal' => [
@@ -455,6 +486,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // keeps Principal at view-only for School profile/
                     // Campus/enrollments.rollovers.
                     'admissions.view', 'admissions.manage',
+                    // Phase 10B: same day-to-day operational parity
+                    // reasoning as school_admin above.
+                    'transport.routes.view', 'transport.routes.manage',
+                    'transport.vehicles.view', 'transport.vehicles.manage',
+                    'transport.assignments.view', 'transport.assignments.manage',
                 ],
             ],
         ];

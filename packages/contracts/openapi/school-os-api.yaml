@@ -3133,6 +3133,343 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /schools/{schoolId}/transport-routes:
+    get:
+      operationId: listTransportRoutes
+      summary: List a School's Transport Routes. Requires transport.routes.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/TransportRoute" } } } }
+    post:
+      operationId: createTransportRoute
+      summary: Registers a Transport Route. Requires transport.routes.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportRouteInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportRoute" } } }
+
+  /schools/{schoolId}/transport-routes/{transportRouteId}:
+    get:
+      operationId: getTransportRoute
+      summary: Fetch one Transport Route. Requires transport.routes.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportRoute" } } }
+        "404":
+          description: Not found (including a cross-School id).
+    patch:
+      operationId: updateTransportRoute
+      summary: Updates or (de)activates a Transport Route. Requires transport.routes.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportRouteInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportRoute" } } }
+
+  /schools/{schoolId}/transport-routes/{transportRouteId}/stops:
+    get:
+      operationId: listTransportStops
+      summary: List a Route's ordered Stops. Requires transport.routes.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/TransportStop" } } } }
+    post:
+      operationId: createTransportStop
+      summary: Adds an ordered Stop to this Route. Requires transport.routes.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportStopInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportStop" } } }
+        "422":
+          description: Validation failure (e.g. duplicate sequence on this Route).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/transport-stops/{transportStopId}:
+    patch:
+      operationId: updateTransportStop
+      summary: Updates or (de)activates a Stop. Requires transport.routes.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportStopId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportStopInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportStop" } } }
+
+  /schools/{schoolId}/transport-vehicles:
+    get:
+      operationId: listTransportVehicles
+      summary: List a School's Transport Vehicles. Requires transport.vehicles.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/TransportVehicle" } } } }
+    post:
+      operationId: createTransportVehicle
+      summary: Registers a Transport Vehicle. Requires transport.vehicles.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportVehicleInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportVehicle" } } }
+        "422":
+          description: Validation failure (e.g. duplicate code or registration number within this School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/transport-vehicles/{transportVehicleId}:
+    get:
+      operationId: getTransportVehicle
+      summary: Fetch one Transport Vehicle. Requires transport.vehicles.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportVehicleId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportVehicle" } } }
+        "404":
+          description: Not found (including a cross-School id).
+    patch:
+      operationId: updateTransportVehicle
+      summary: Updates or (de)activates a Transport Vehicle. Requires transport.vehicles.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportVehicleId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportVehicleInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportVehicle" } } }
+
+  /schools/{schoolId}/transport-routes/{transportRouteId}/assignments:
+    get:
+      operationId: listTransportRouteAssignments
+      summary: List a Route's operational (Vehicle/Driver) assignment history, newest first. Requires transport.vehicles.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/TransportRouteAssignment" } } } }
+    post:
+      operationId: assignTransportRouteVehicleDriver
+      summary: >
+        Assigns a Vehicle and driver Employee to this Route, auto-
+        replacing (ending) whatever was previously active. Requires
+        transport.vehicles.manage. Idempotency-Key required -- a
+        network retry must never risk silently ending-and-recreating
+        the same assignment.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportRouteAssignmentInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportRouteAssignment" } } }
+        "422":
+          description: Vehicle/driver not eligible, or Route inactive (TRANSPORT_VEHICLE_NOT_ELIGIBLE / TRANSPORT_DRIVER_NOT_ELIGIBLE / TRANSPORT_ROUTE_NOT_AVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: A genuinely concurrent assignment attempt lost the race, or an Idempotency-Key conflict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/transport-route-assignments/{transportRouteAssignmentId}/end:
+    post:
+      operationId: endTransportRouteAssignment
+      summary: Ends an active Route operational assignment. Requires transport.vehicles.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportRouteAssignment" } } }
+        "422":
+          description: This assignment already ended (TRANSPORT_ROUTE_ASSIGNMENT_ALREADY_ENDED).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/transport-student-assignments:
+    get:
+      operationId: listTransportStudentAssignments
+      summary: List Student Transport assignments (active by default). Requires transport.assignments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, ended] } }
+        - { $ref: "#/components/parameters/StudentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/TransportStudentAssignment" } } } }
+    post:
+      operationId: assignTransportStudent
+      summary: >
+        Assigns a Student to a Route (and optional pickup/drop-off
+        Stops on that Route). Requires transport.assignments.manage.
+        Idempotency-Key required -- a network retry must never risk a
+        duplicate assignment attempt.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportStudentAssignmentInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportStudentAssignment" } } }
+        "422":
+          description: >
+            Student not eligible/already assigned, Route not available,
+            or the pickup/drop-off Stop does not belong to this Route
+            (TRANSPORT_STUDENT_NOT_ELIGIBLE / TRANSPORT_STUDENT_ALREADY_ASSIGNED
+            / TRANSPORT_ROUTE_NOT_AVAILABLE / TRANSPORT_STOP_NOT_ON_ROUTE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: A genuinely concurrent assignment attempt lost the race, or an Idempotency-Key conflict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/transport-student-assignments/{transportStudentAssignmentId}:
+    get:
+      operationId: getTransportStudentAssignment
+      summary: Fetch one Student Transport assignment. Requires transport.assignments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportStudentAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportStudentAssignment" } } }
+
+  /schools/{schoolId}/transport-student-assignments/{transportStudentAssignmentId}/end:
+    post:
+      operationId: endTransportStudentAssignment
+      summary: Ends an active Student Transport assignment. Requires transport.assignments.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportStudentAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportStudentAssignment" } } }
+        "422":
+          description: This assignment already ended (TRANSPORT_STUDENT_ASSIGNMENT_ALREADY_ENDED).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3290,6 +3627,31 @@ components:
       in: path
       required: true
       description: Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy).
+      schema: { type: string, format: uuid }
+    TransportRouteId:
+      name: transportRouteId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TransportStopId:
+      name: transportStopId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TransportVehicleId:
+      name: transportVehicleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TransportRouteAssignmentId:
+      name: transportRouteAssignmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TransportStudentAssignmentId:
+      name: transportStudentAssignmentId
+      in: path
+      required: true
       schema: { type: string, format: uuid }
   headers:
     XRequestId:
@@ -3568,6 +3930,148 @@ components:
         library_copy_id: { type: string, format: uuid }
         student_id: { type: string, format: uuid }
         due_at: { type: string, format: date-time }
+
+    TransportRoute:
+      type: object
+      required: [id, code, name, status]
+      description: A Transport route (docs/modules/TRANSPORT.md "Campus ownership decision"). `campusId` null means School-wide shared Transport, not an error.
+      properties:
+        id: { type: string, format: uuid }
+        campusId: { type: string, format: uuid, nullable: true }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    TransportRouteInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        description: { type: string, nullable: true }
+        campus_id: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    TransportStop:
+      type: object
+      required: [id, routeId, name, sequence, status]
+      description: An ordered pickup/drop-off point belonging to exactly one Route (docs/modules/TRANSPORT.md "Stop integrity").
+      properties:
+        id: { type: string, format: uuid }
+        routeId: { type: string, format: uuid }
+        name: { type: string }
+        sequence: { type: integer, minimum: 1 }
+        address: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    TransportStopInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 255 }
+        sequence: { type: integer, minimum: 1 }
+        address: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    TransportVehicle:
+      type: object
+      required: [id, code, registrationNumber, status]
+      description: A School Transport vehicle. `capacity` is informational-only in this checkpoint (docs/modules/TRANSPORT.md "Vehicle capacity invariant") -- no seat-count enforcement.
+      properties:
+        id: { type: string, format: uuid }
+        campusId: { type: string, format: uuid, nullable: true }
+        code: { type: string }
+        registrationNumber: { type: string }
+        capacity: { type: integer, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    TransportVehicleInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 64 }
+        registration_number: { type: string, maxLength: 64 }
+        capacity: { type: integer, minimum: 1, nullable: true }
+        campus_id: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    TransportRouteAssignment:
+      type: object
+      required: [id, routeId, status, startsOn, vehicle, driver]
+      description: The historical Route <-> Vehicle <-> Driver operational configuration. At most one assignment per Route has status=active at a time (database-enforced, docs/modules/TRANSPORT.md "Route operational assignment decision").
+      properties:
+        id: { type: string, format: uuid }
+        routeId: { type: string, format: uuid }
+        status: { type: string, enum: [active, ended] }
+        startsOn: { type: string, format: date-time }
+        endsOn: { type: string, format: date-time, nullable: true }
+        vehicle:
+          type: object
+          required: [id, code, registrationNumber]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+            registrationNumber: { type: string }
+        driver:
+          type: object
+          required: [id, employeeNumber, fullName]
+          properties:
+            id: { type: string, format: uuid }
+            employeeNumber: { type: string }
+            fullName: { type: string }
+
+    TransportRouteAssignmentInput:
+      type: object
+      required: [vehicle_id, driver_employee_id]
+      properties:
+        vehicle_id: { type: string, format: uuid }
+        driver_employee_id: { type: string, format: uuid }
+
+    TransportStudentAssignment:
+      type: object
+      required: [id, status, startsOn, student, route]
+      description: One Student's Transport assignment. At most one assignment per Student has status=active at a time (database-enforced, docs/modules/TRANSPORT.md "Student assignment model").
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, ended] }
+        startsOn: { type: string, format: date-time }
+        endsOn: { type: string, format: date-time, nullable: true }
+        student:
+          type: object
+          required: [id, studentNumber, firstName]
+          properties:
+            id: { type: string, format: uuid }
+            studentNumber: { type: string }
+            firstName: { type: string }
+            lastName: { type: string, nullable: true }
+        route:
+          type: object
+          required: [id, code, name]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+        pickupStop:
+          type: object
+          nullable: true
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        dropoffStop:
+          type: object
+          nullable: true
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+
+    TransportStudentAssignmentInput:
+      type: object
+      required: [student_id, route_id]
+      properties:
+        student_id: { type: string, format: uuid }
+        route_id: { type: string, format: uuid }
+        pickup_stop_id: { type: string, format: uuid, nullable: true }
+        dropoff_stop_id: { type: string, format: uuid, nullable: true }
 
     AcademicYear:
       type: object

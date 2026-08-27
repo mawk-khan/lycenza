@@ -1586,6 +1586,200 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/transport-routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a School's Transport Routes. Requires transport.routes.view. */
+        get: operations["listTransportRoutes"];
+        put?: never;
+        /** Registers a Transport Route. Requires transport.routes.manage. */
+        post: operations["createTransportRoute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-routes/{transportRouteId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Transport Route. Requires transport.routes.view. */
+        get: operations["getTransportRoute"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Transport Route. Requires transport.routes.manage. */
+        patch: operations["updateTransportRoute"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-routes/{transportRouteId}/stops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a Route's ordered Stops. Requires transport.routes.view. */
+        get: operations["listTransportStops"];
+        put?: never;
+        /** Adds an ordered Stop to this Route. Requires transport.routes.manage. */
+        post: operations["createTransportStop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-stops/{transportStopId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Stop. Requires transport.routes.manage. */
+        patch: operations["updateTransportStop"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a School's Transport Vehicles. Requires transport.vehicles.view. */
+        get: operations["listTransportVehicles"];
+        put?: never;
+        /** Registers a Transport Vehicle. Requires transport.vehicles.manage. */
+        post: operations["createTransportVehicle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-vehicles/{transportVehicleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Transport Vehicle. Requires transport.vehicles.view. */
+        get: operations["getTransportVehicle"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Transport Vehicle. Requires transport.vehicles.manage. */
+        patch: operations["updateTransportVehicle"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-routes/{transportRouteId}/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a Route's operational (Vehicle/Driver) assignment history, newest first. Requires transport.vehicles.view. */
+        get: operations["listTransportRouteAssignments"];
+        put?: never;
+        /** Assigns a Vehicle and driver Employee to this Route, auto- replacing (ending) whatever was previously active. Requires transport.vehicles.manage. Idempotency-Key required -- a network retry must never risk silently ending-and-recreating the same assignment. */
+        post: operations["assignTransportRouteVehicleDriver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-route-assignments/{transportRouteAssignmentId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ends an active Route operational assignment. Requires transport.vehicles.manage. */
+        post: operations["endTransportRouteAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-student-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Student Transport assignments (active by default). Requires transport.assignments.view. */
+        get: operations["listTransportStudentAssignments"];
+        put?: never;
+        /** Assigns a Student to a Route (and optional pickup/drop-off Stops on that Route). Requires transport.assignments.manage. Idempotency-Key required -- a network retry must never risk a duplicate assignment attempt. */
+        post: operations["assignTransportStudent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-student-assignments/{transportStudentAssignmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Student Transport assignment. Requires transport.assignments.view. */
+        get: operations["getTransportStudentAssignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-student-assignments/{transportStudentAssignmentId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ends an active Student Transport assignment. Requires transport.assignments.manage. */
+        post: operations["endTransportStudentAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1829,6 +2023,142 @@ export interface components {
             student_id: string;
             /** Format: date-time */
             due_at: string;
+        };
+        /** @description A Transport route (docs/modules/TRANSPORT.md "Campus ownership decision"). `campusId` null means School-wide shared Transport, not an error. */
+        TransportRoute: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            campusId?: string | null;
+            code: string;
+            name: string;
+            description?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        TransportRouteInput: {
+            code?: string;
+            name?: string;
+            description?: string | null;
+            /** Format: uuid */
+            campus_id?: string | null;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description An ordered pickup/drop-off point belonging to exactly one Route (docs/modules/TRANSPORT.md "Stop integrity"). */
+        TransportStop: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            routeId: string;
+            name: string;
+            sequence: number;
+            address?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        TransportStopInput: {
+            name?: string;
+            sequence?: number;
+            address?: string | null;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description A School Transport vehicle. `capacity` is informational-only in this checkpoint (docs/modules/TRANSPORT.md "Vehicle capacity invariant") -- no seat-count enforcement. */
+        TransportVehicle: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            campusId?: string | null;
+            code: string;
+            registrationNumber: string;
+            capacity?: number | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        TransportVehicleInput: {
+            code?: string;
+            registration_number?: string;
+            capacity?: number | null;
+            /** Format: uuid */
+            campus_id?: string | null;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description The historical Route <-> Vehicle <-> Driver operational configuration. At most one assignment per Route has status=active at a time (database-enforced, docs/modules/TRANSPORT.md "Route operational assignment decision"). */
+        TransportRouteAssignment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            routeId: string;
+            /** @enum {string} */
+            status: "active" | "ended";
+            /** Format: date-time */
+            startsOn: string;
+            /** Format: date-time */
+            endsOn?: string | null;
+            vehicle: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                registrationNumber: string;
+            };
+            driver: {
+                /** Format: uuid */
+                id: string;
+                employeeNumber: string;
+                fullName: string;
+            };
+        };
+        TransportRouteAssignmentInput: {
+            /** Format: uuid */
+            vehicle_id: string;
+            /** Format: uuid */
+            driver_employee_id: string;
+        };
+        /** @description One Student's Transport assignment. At most one assignment per Student has status=active at a time (database-enforced, docs/modules/TRANSPORT.md "Student assignment model"). */
+        TransportStudentAssignment: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "active" | "ended";
+            /** Format: date-time */
+            startsOn: string;
+            /** Format: date-time */
+            endsOn?: string | null;
+            student: {
+                /** Format: uuid */
+                id: string;
+                studentNumber: string;
+                firstName: string;
+                lastName?: string | null;
+            };
+            route: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                name: string;
+            };
+            pickupStop?: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            dropoffStop?: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+        };
+        TransportStudentAssignmentInput: {
+            /** Format: uuid */
+            student_id: string;
+            /** Format: uuid */
+            route_id: string;
+            /** Format: uuid */
+            pickup_stop_id?: string | null;
+            /** Format: uuid */
+            dropoff_stop_id?: string | null;
         };
         /** @description Only one Academic Year per School may be `active` (section 16, database-enforced). */
         AcademicYear: {
@@ -2698,6 +3028,11 @@ export interface components {
         AdmissionApplicationId: string;
         /** @description Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy). */
         DocumentId: string;
+        TransportRouteId: string;
+        TransportStopId: string;
+        TransportVehicleId: string;
+        TransportRouteAssignmentId: string;
+        TransportStudentAssignmentId: string;
     };
     requestBodies: never;
     headers: {
@@ -7199,6 +7534,588 @@ export interface operations {
                 };
             };
             /** @description This Loan was already checked in (LIBRARY_LOAN_ALREADY_RETURNED). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listTransportRoutes: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRoute"][];
+                    };
+                };
+            };
+        };
+    };
+    createTransportRoute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransportRouteInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRoute"];
+                    };
+                };
+            };
+        };
+    };
+    getTransportRoute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteId: components["parameters"]["TransportRouteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRoute"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateTransportRoute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteId: components["parameters"]["TransportRouteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TransportRouteInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRoute"];
+                    };
+                };
+            };
+        };
+    };
+    listTransportStops: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteId: components["parameters"]["TransportRouteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportStop"][];
+                    };
+                };
+            };
+        };
+    };
+    createTransportStop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteId: components["parameters"]["TransportRouteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransportStopInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportStop"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate sequence on this Route). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateTransportStop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportStopId: components["parameters"]["TransportStopId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TransportStopInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportStop"];
+                    };
+                };
+            };
+        };
+    };
+    listTransportVehicles: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportVehicle"][];
+                    };
+                };
+            };
+        };
+    };
+    createTransportVehicle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransportVehicleInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportVehicle"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate code or registration number within this School). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTransportVehicle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportVehicleId: components["parameters"]["TransportVehicleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportVehicle"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateTransportVehicle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportVehicleId: components["parameters"]["TransportVehicleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TransportVehicleInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportVehicle"];
+                    };
+                };
+            };
+        };
+    };
+    listTransportRouteAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteId: components["parameters"]["TransportRouteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRouteAssignment"][];
+                    };
+                };
+            };
+        };
+    };
+    assignTransportRouteVehicleDriver: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteId: components["parameters"]["TransportRouteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransportRouteAssignmentInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRouteAssignment"];
+                    };
+                };
+            };
+            /** @description A genuinely concurrent assignment attempt lost the race, or an Idempotency-Key conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Vehicle/driver not eligible, or Route inactive (TRANSPORT_VEHICLE_NOT_ELIGIBLE / TRANSPORT_DRIVER_NOT_ELIGIBLE / TRANSPORT_ROUTE_NOT_AVAILABLE). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    endTransportRouteAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteAssignmentId: components["parameters"]["TransportRouteAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRouteAssignment"];
+                    };
+                };
+            };
+            /** @description This assignment already ended (TRANSPORT_ROUTE_ASSIGNMENT_ALREADY_ENDED). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listTransportStudentAssignments: {
+        parameters: {
+            query?: {
+                status?: "active" | "ended";
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: components["parameters"]["StudentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportStudentAssignment"][];
+                    };
+                };
+            };
+        };
+    };
+    assignTransportStudent: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransportStudentAssignmentInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportStudentAssignment"];
+                    };
+                };
+            };
+            /** @description A genuinely concurrent assignment attempt lost the race, or an Idempotency-Key conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Student not eligible/already assigned, Route not available, or the pickup/drop-off Stop does not belong to this Route (TRANSPORT_STUDENT_NOT_ELIGIBLE / TRANSPORT_STUDENT_ALREADY_ASSIGNED / TRANSPORT_ROUTE_NOT_AVAILABLE / TRANSPORT_STOP_NOT_ON_ROUTE). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTransportStudentAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportStudentAssignmentId: components["parameters"]["TransportStudentAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportStudentAssignment"];
+                    };
+                };
+            };
+        };
+    };
+    endTransportStudentAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportStudentAssignmentId: components["parameters"]["TransportStudentAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportStudentAssignment"];
+                    };
+                };
+            };
+            /** @description This assignment already ended (TRANSPORT_STUDENT_ASSIGNMENT_ALREADY_ENDED). */
             422: {
                 headers: {
                     [name: string]: unknown;

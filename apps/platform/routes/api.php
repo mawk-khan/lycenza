@@ -27,6 +27,11 @@ use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
+use App\Domain\Transport\Http\Controllers\TransportRouteAssignmentController;
+use App\Domain\Transport\Http\Controllers\TransportRouteController;
+use App\Domain\Transport\Http\Controllers\TransportStopController;
+use App\Domain\Transport\Http\Controllers\TransportStudentAssignmentController;
+use App\Domain\Transport\Http\Controllers\TransportVehicleController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
 use App\Http\Controllers\Api\Internal\AiToolController;
 use App\Http\Controllers\Api\Internal\HealthController;
@@ -647,6 +652,72 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/library-loans/{libraryLoan}/check-in', [LibraryLoanController::class, 'checkIn'])
                 ->middleware(['capability:library.circulation.manage', 'throttle:school-api-mutations'])
                 ->name('schools.library-loans.check-in');
+
+            // --- Phase 10B: Transport (Routes/Stops, Vehicles, Route
+            // operational Vehicle/Driver assignment, Student Transport
+            // assignment). `idempotent` is applied only to the two
+            // "assign" mutations (Route operational assignment,
+            // Student assignment) -- a network retry of either could
+            // otherwise either silently duplicate an operational
+            // reassignment (auto-replace: ending the just-created
+            // record and creating a second one) or return a confusing
+            // rejection for what the client experienced as a lost
+            // response to an already-successful assignment -- the
+            // exact reasoning LibraryLoanController::store() already
+            // established for checkout. Route/Stop/Vehicle creation
+            // and both end() actions rely on their own unique-
+            // constraint/conditional-update retry-safety, matching
+            // Library's Title/Copy creation and checkIn() precedent.
+            Route::get('/transport-routes', [TransportRouteController::class, 'index'])
+                ->name('schools.transport-routes.index');
+            Route::post('/transport-routes', [TransportRouteController::class, 'store'])
+                ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-routes.store');
+            Route::get('/transport-routes/{transportRoute}', [TransportRouteController::class, 'show'])
+                ->name('schools.transport-routes.show');
+            Route::patch('/transport-routes/{transportRoute}', [TransportRouteController::class, 'update'])
+                ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-routes.update');
+
+            Route::get('/transport-routes/{transportRoute}/stops', [TransportStopController::class, 'index'])
+                ->name('schools.transport-routes.stops.index');
+            Route::post('/transport-routes/{transportRoute}/stops', [TransportStopController::class, 'store'])
+                ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-routes.stops.store');
+            Route::patch('/transport-stops/{transportStop}', [TransportStopController::class, 'update'])
+                ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-stops.update');
+
+            Route::get('/transport-vehicles', [TransportVehicleController::class, 'index'])
+                ->name('schools.transport-vehicles.index');
+            Route::post('/transport-vehicles', [TransportVehicleController::class, 'store'])
+                ->middleware(['capability:transport.vehicles.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-vehicles.store');
+            Route::get('/transport-vehicles/{transportVehicle}', [TransportVehicleController::class, 'show'])
+                ->name('schools.transport-vehicles.show');
+            Route::patch('/transport-vehicles/{transportVehicle}', [TransportVehicleController::class, 'update'])
+                ->middleware(['capability:transport.vehicles.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-vehicles.update');
+
+            Route::get('/transport-routes/{transportRoute}/assignments', [TransportRouteAssignmentController::class, 'index'])
+                ->name('schools.transport-routes.assignments.index');
+            Route::post('/transport-routes/{transportRoute}/assignments', [TransportRouteAssignmentController::class, 'store'])
+                ->middleware(['capability:transport.vehicles.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.transport-routes.assignments.store');
+            Route::post('/transport-route-assignments/{transportRouteAssignment}/end', [TransportRouteAssignmentController::class, 'end'])
+                ->middleware(['capability:transport.vehicles.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-route-assignments.end');
+
+            Route::get('/transport-student-assignments', [TransportStudentAssignmentController::class, 'index'])
+                ->name('schools.transport-student-assignments.index');
+            Route::post('/transport-student-assignments', [TransportStudentAssignmentController::class, 'store'])
+                ->middleware(['capability:transport.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.transport-student-assignments.store');
+            Route::get('/transport-student-assignments/{transportStudentAssignment}', [TransportStudentAssignmentController::class, 'show'])
+                ->name('schools.transport-student-assignments.show');
+            Route::post('/transport-student-assignments/{transportStudentAssignment}/end', [TransportStudentAssignmentController::class, 'end'])
+                ->middleware(['capability:transport.assignments.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-student-assignments.end');
         });
 });
 
