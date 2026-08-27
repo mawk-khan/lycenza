@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
+         bootstrap="tests/bootstrap.php"
          colors="true"
 >
     <testsuites>
@@ -18,11 +18,42 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
-        <env name="CACHE_STORE" value="array"/>
+        <!--
+            force="true" on every entry below is deliberate, not
+            decorative. Without it, PHPUnit's own documented behavior
+            (see vendor/phpunit/phpunit/src/TextUI/Configuration/
+            PhpHandler.php: `if ($force || getenv($name) === false)`)
+            is to define a variable ONLY if it is not already present
+            in the process environment: it never overrides one that
+            is already set. This project's docker-compose.yml loads
+            apps/platform/.env into the platform container via
+            `env_file:`, which makes every value in that .env (dev
+            defaults such as CACHE_STORE=redis, QUEUE_CONNECTION=redis,
+            MAIL_MAILER=log, DB_DATABASE=school_os, APP_ENV=local)
+            a real ambient process environment variable inside the
+            container, so without force="true", every one of THESE
+            entries was being silently ignored whenever tests ran via
+            `docker exec` into that container, and the ambient
+            development value won instead. This is not hypothetical:
+            it is the exact confirmed root cause documented in
+            docs/architecture/TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md,
+            found when QUEUE_CONNECTION=redis and MAIL_MAILER=log
+            silently shadowed this block during Phase 5 closure
+            verification and produced 44 unrelated-looking test
+            failures. force="true" makes this block authoritative for
+            any invocation that goes through PHPUnit itself
+            (`vendor/bin/phpunit`, `php artisan test`) regardless of
+            ambient shell/container state. TestDatabaseGuard remains
+            the fail-closed backstop for the one case force="true"
+            cannot cover: a raw `php artisan` command that never
+            parses this file at all (see that class's docblock and
+            platform:test-db-reset).
+        -->
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
         <!--
             Real PostgreSQL, not SQLite. See ADR 0024
             (docs/architecture/adr/0024-real-postgresql-test-infrastructure.md).
@@ -32,27 +63,46 @@
             unprivileged school_os_app role (ADR 0021) so every test
             implicitly re-verifies RLS/role separation, not just the
             dedicated Postgres isolation suite.
+
+            DB_HOST is deliberately the Docker Compose SERVICE alias
+            (`postgres`), not `127.0.0.1`. The only realistic PHPUnit
+            invocation path in this repository is inside the
+            `platform` container (the host toolchain has no
+            `pdo_pgsql`, see
+            docs/architecture/TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md)
+            so `postgres` is the value that is actually correct for
+            every real invocation. Before force="true" existed on this
+            block, the literal value here was `127.0.0.1` and it
+            "worked" only by accident: it was always shadowed by the
+            container's own already-correct ambient DB_HOST=postgres
+            (set by docker-compose.yml's `environment:` block for the
+            `platform` service, which is *also* ambient and would
+            otherwise silently win the exact same way CACHE_STORE,
+            QUEUE_CONNECTION and MAIL_MAILER did, see the block comment
+            above). Two wrongs were cancelling out. force="true" makes
+            this block authoritative again, so the value written here
+            must now be the genuinely correct one.
         -->
-        <env name="DB_CONNECTION" value="pgsql"/>
-        <env name="DB_HOST" value="127.0.0.1"/>
-        <env name="DB_PORT" value="5432"/>
-        <env name="DB_DATABASE" value="school_os_test"/>
-        <env name="DB_USERNAME" value="school_os_app"/>
-        <env name="DB_PASSWORD" value="school_os_app_local_only_password"/>
-        <env name="DB_ADMIN_USERNAME" value="school_os"/>
-        <env name="DB_ADMIN_PASSWORD" value="school_os"/>
-        <env name="DB_URL" value=""/>
-        <env name="INERTIA_SSR_ENABLED" value="false"/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="PULSE_ENABLED" value="false"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-        <env name="NIGHTWATCH_ENABLED" value="false"/>
-        <env name="TENANCY_ALLOW_DEV_HEADER_OVERRIDE" value="true"/>
-        <env name="AI_GATEWAY_SERVICE_TOKEN" value="dev-local-only-token"/>
-        <env name="AI_GATEWAY_CONTEXT_SIGNING_KEY" value="test-only-context-signing-key"/>
-        <env name="CONTACT_LOOKUP_HMAC_KEY" value="test-only-contact-lookup-hmac-key"/>
-        <env name="CONTACT_LOOKUP_HMAC_KEY_VERSION" value="1"/>
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_HOST" value="postgres" force="true"/>
+        <env name="DB_PORT" value="5432" force="true"/>
+        <env name="DB_DATABASE" value="school_os_test" force="true"/>
+        <env name="DB_USERNAME" value="school_os_app" force="true"/>
+        <env name="DB_PASSWORD" value="school_os_app_local_only_password" force="true"/>
+        <env name="DB_ADMIN_USERNAME" value="school_os" force="true"/>
+        <env name="DB_ADMIN_PASSWORD" value="school_os" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
+        <env name="INERTIA_SSR_ENABLED" value="false" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
+        <env name="TENANCY_ALLOW_DEV_HEADER_OVERRIDE" value="true" force="true"/>
+        <env name="AI_GATEWAY_SERVICE_TOKEN" value="dev-local-only-token" force="true"/>
+        <env name="AI_GATEWAY_CONTEXT_SIGNING_KEY" value="test-only-context-signing-key" force="true"/>
+        <env name="CONTACT_LOOKUP_HMAC_KEY" value="test-only-contact-lookup-hmac-key" force="true"/>
+        <env name="CONTACT_LOOKUP_HMAC_KEY_VERSION" value="1" force="true"/>
     </php>
 </phpunit>
