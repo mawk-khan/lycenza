@@ -5,6 +5,7 @@ namespace Tests\Concerns;
 use App\Domain\AcademicStructure\Infrastructure\AcademicDepartment;
 use App\Domain\AcademicStructure\Infrastructure\AcademicTerm;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\AcademicStructure\Infrastructure\ElectiveGroup;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
@@ -260,6 +261,26 @@ trait CreatesTenancyFixtures
                 'campus_id' => $campus->id,
                 'grade_level_id' => $gradeLevel->id,
                 'subject_id' => $subject->id,
+            ], $attributes)),
+        );
+    }
+
+    /**
+     * Phase 1F.1: same reasoning as createSubjectOffering() -- three
+     * independent parents that must share one School are supplied
+     * explicitly by the caller, never defaulted, so a fixture can never
+     * accidentally construct a cross-context ElectiveGroup a real
+     * service could not produce.
+     */
+    protected function createElectiveGroup(AcademicYear $year, Campus $campus, GradeLevel $gradeLevel, array $attributes = []): ElectiveGroup
+    {
+        return app(TenantContext::class)->withSchool(
+            $year->school,
+            fn () => ElectiveGroup::factory()->create(array_merge([
+                'school_id' => $year->school_id,
+                'academic_year_id' => $year->id,
+                'campus_id' => $campus->id,
+                'grade_level_id' => $gradeLevel->id,
             ], $attributes)),
         );
     }
