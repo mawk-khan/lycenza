@@ -33,6 +33,10 @@ use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
+use App\Http\Controllers\App\TransportOperationsController;
+use App\Http\Controllers\App\TransportRouteController;
+use App\Http\Controllers\App\TransportStudentAssignmentController;
+use App\Http\Controllers\App\TransportVehicleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Identity\InvitationAcceptanceController;
 use App\Http\Controllers\SystemStatusController;
@@ -450,5 +454,50 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/search/students', [LibraryCirculationController::class, 'searchStudents'])->name('search-students');
         Route::post('/', [LibraryCirculationController::class, 'store'])->name('store');
         Route::post('/{libraryLoan}/check-in', [LibraryCirculationController::class, 'checkIn'])->name('check-in');
+    });
+
+    // Phase 10B: Transport (Routes/Stops, Vehicles, Route operational
+    // Vehicle/Driver assignment, Student Transport assignment)
+    // administrative UI. Capability checks live inside each controller
+    // (AuthorizesCapability trait), matching every other module's
+    // Inertia controller in this file.
+    Route::prefix('app/transport/routes')->name('app.transport.routes.')->group(function (): void {
+        Route::get('/', [TransportRouteController::class, 'index'])->name('index');
+        Route::get('/create', [TransportRouteController::class, 'create'])->name('create');
+        Route::post('/', [TransportRouteController::class, 'store'])->name('store');
+        Route::get('/{transportRoute}', [TransportRouteController::class, 'show'])->name('show');
+        Route::patch('/{transportRoute}', [TransportRouteController::class, 'update'])->name('update');
+        Route::post('/{transportRoute}/stops', [TransportRouteController::class, 'storeStop'])->name('stops.store');
+    });
+
+    Route::patch('app/transport/stops/{transportStop}', [TransportRouteController::class, 'updateStop'])
+        ->name('app.transport.stops.update');
+
+    Route::prefix('app/transport/vehicles')->name('app.transport.vehicles.')->group(function (): void {
+        Route::get('/', [TransportVehicleController::class, 'index'])->name('index');
+        Route::get('/create', [TransportVehicleController::class, 'create'])->name('create');
+        Route::post('/', [TransportVehicleController::class, 'store'])->name('store');
+        Route::patch('/{transportVehicle}', [TransportVehicleController::class, 'update'])->name('update');
+    });
+
+    Route::prefix('app/transport/operations')->name('app.transport.operations.')->group(function (): void {
+        Route::get('/', [TransportOperationsController::class, 'index'])->name('index');
+        Route::get('/search/vehicles', [TransportOperationsController::class, 'searchVehicles'])->name('search-vehicles');
+        Route::get('/search/drivers', [TransportOperationsController::class, 'searchDrivers'])->name('search-drivers');
+        Route::get('/{transportRoute}', [TransportOperationsController::class, 'show'])->name('show');
+        Route::post('/{transportRoute}', [TransportOperationsController::class, 'store'])->name('store');
+    });
+
+    Route::post('app/transport/route-assignments/{transportRouteAssignment}/end', [TransportOperationsController::class, 'end'])
+        ->name('app.transport.route-assignments.end');
+
+    Route::prefix('app/transport/assignments')->name('app.transport.assignments.')->group(function (): void {
+        Route::get('/', [TransportStudentAssignmentController::class, 'index'])->name('index');
+        Route::get('/create', [TransportStudentAssignmentController::class, 'create'])->name('create');
+        Route::get('/search/students', [TransportStudentAssignmentController::class, 'searchStudents'])->name('search-students');
+        Route::get('/search/routes', [TransportStudentAssignmentController::class, 'searchRoutes'])->name('search-routes');
+        Route::get('/routes/{transportRoute}/stops', [TransportStudentAssignmentController::class, 'routeStops'])->name('route-stops');
+        Route::post('/', [TransportStudentAssignmentController::class, 'store'])->name('store');
+        Route::post('/{transportStudentAssignment}/end', [TransportStudentAssignmentController::class, 'end'])->name('end');
     });
 });
