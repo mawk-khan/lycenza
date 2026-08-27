@@ -24,6 +24,8 @@ use App\Http\Controllers\App\GuardianAccountInvitationController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianCommunicationPreferenceController;
 use App\Http\Controllers\App\GuardianController;
+use App\Http\Controllers\App\LibraryCatalogueController;
+use App\Http\Controllers\App\LibraryCirculationController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
@@ -427,5 +429,26 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{admissionApplication}/reject', [AdmissionApplicationController::class, 'reject'])->name('reject');
         Route::post('/{admissionApplication}/withdraw', [AdmissionApplicationController::class, 'withdraw'])->name('withdraw');
         Route::post('/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])->name('convert');
+    });
+
+    // Phase 10A: Library catalogue + circulation administrative UI.
+    // Capability checks live inside each controller
+    // (AuthorizesCapability trait), matching every other module's
+    // Inertia controller in this file.
+    Route::prefix('app/library/titles')->name('app.library.titles.')->group(function (): void {
+        Route::get('/', [LibraryCatalogueController::class, 'index'])->name('index');
+        Route::get('/create', [LibraryCatalogueController::class, 'create'])->name('create');
+        Route::post('/', [LibraryCatalogueController::class, 'store'])->name('store');
+        Route::get('/{libraryTitle}', [LibraryCatalogueController::class, 'show'])->name('show');
+        Route::post('/{libraryTitle}/copies', [LibraryCatalogueController::class, 'storeCopy'])->name('copies.store');
+    });
+
+    Route::prefix('app/library/circulation')->name('app.library.circulation.')->group(function (): void {
+        Route::get('/', [LibraryCirculationController::class, 'index'])->name('index');
+        Route::get('/create', [LibraryCirculationController::class, 'create'])->name('create');
+        Route::get('/search/copies', [LibraryCirculationController::class, 'searchAvailableCopies'])->name('search-copies');
+        Route::get('/search/students', [LibraryCirculationController::class, 'searchStudents'])->name('search-students');
+        Route::post('/', [LibraryCirculationController::class, 'store'])->name('store');
+        Route::post('/{libraryLoan}/check-in', [LibraryCirculationController::class, 'checkIn'])->name('check-in');
     });
 });
