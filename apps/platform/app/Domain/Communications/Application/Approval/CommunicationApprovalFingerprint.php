@@ -34,8 +34,9 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
  * brief §44's documented choice), and never hashes a decrypted
  * contact value (brief §22/§32).
  *
- * Phase 5B.3 §31/§32: `academicCohort` hashes the cohort DEFINITION
- * only -- cohortType, academicYearId, gradeLevelId/sectionId,
+ * Phase 5B.3 §31/§32, extended by Phase 5C.1 closure-blocker fix:
+ * `academicCohort` hashes the cohort DEFINITION only -- cohortType,
+ * academicYearId, gradeLevelId/sectionId/subjectOfferingId,
  * recipientKind -- the same fields
  * App\Domain\Communications\Application\AnnouncementService::syncAcademicCohort()
  * validates and persists. It deliberately NEVER includes any resolved
@@ -44,10 +45,21 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
  * above) and never includes an account-link/reachability state.
  * Consequence (brief §32, mirroring §44's "enrollment changes never
  * invalidate approval"): a Student transferring into or out of the
- * approved Grade/Section AFTER approval does not change this
- * fingerprint and therefore never invalidates the approval -- only
- * changing WHICH Grade/Section/AcademicYear/recipient-kind was
- * approved does.
+ * approved Grade/Section/SubjectOffering AFTER approval does not
+ * change this fingerprint and therefore never invalidates the
+ * approval -- only changing WHICH Grade/Section/SubjectOffering/
+ * AcademicYear/recipient-kind was approved does.
+ *
+ * Phase 5 closure-blocker fix: `$isAcademicCohortAudience` originally
+ * checked only `grade`/`section`, omitting `subject_offering` (Phase
+ * 5C.1) -- so a SubjectOffering-audience announcement's fingerprint
+ * always computed `academicCohort => null`, and switching the
+ * targeted SubjectOffering after approval never invalidated it. Fixed
+ * to include `subject_offering`, and `subjectOfferingId` was added to
+ * the captured field set (it was never present even for the
+ * gradeLevelId/sectionId-shaped payload) -- omitting it would have
+ * left two different SubjectOfferings of the same recipient kind
+ * producing an identical fingerprint despite the type-check fix.
  */
 class CommunicationApprovalFingerprint
 {
@@ -67,7 +79,7 @@ class CommunicationApprovalFingerprint
         $announcement = $announcement->fresh(['requestedChannels', 'audienceMembers', 'domainAudienceMembers', 'attachments', 'academicCohort']);
 
         $isDomainAudience = in_array($announcement->audience_type, ['student', 'guardian', 'guardians_of_students'], true);
-        $isAcademicCohortAudience = in_array($announcement->audience_type, ['grade', 'section'], true);
+        $isAcademicCohortAudience = in_array($announcement->audience_type, ['grade', 'section', 'subject_offering'], true);
 
         return [
             'title' => trim($announcement->title),
@@ -88,15 +100,17 @@ class CommunicationApprovalFingerprint
                     ->pluck($announcement->audience_type === 'guardian' ? 'guardian_id' : 'student_id')
                     ->all())
                 : [],
-            // Phase 5B.3 §31/§32: cohort DEFINITION only -- see class
-            // docblock. Deliberately not canonicalized/sorted like the
-            // id lists above: this is a single scalar tuple, not a set.
+            // Phase 5B.3 §31/§32, extended by Phase 5C.1 closure-blocker
+            // fix: cohort DEFINITION only -- see class docblock.
+            // Deliberately not canonicalized/sorted like the id lists
+            // above: this is a single scalar tuple, not a set.
             'academicCohort' => $isAcademicCohortAudience && $announcement->academicCohort !== null
                 ? [
                     'cohortType' => $announcement->academicCohort->cohort_type,
                     'academicYearId' => $announcement->academicCohort->academic_year_id,
                     'gradeLevelId' => $announcement->academicCohort->grade_level_id,
                     'sectionId' => $announcement->academicCohort->section_id,
+                    'subjectOfferingId' => $announcement->academicCohort->subject_offering_id,
                     'recipientKind' => $announcement->academicCohort->recipient_kind,
                 ]
                 : null,
