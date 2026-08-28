@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown when App\Domain\HR\Application\EmployeeAssignmentService::create()
  * is asked to create a NEW Assignment against a Department whose
@@ -13,10 +11,10 @@ use RuntimeException;
  * rule 73's reference-entity deactivation pattern: archive is not
  * delete, and archiving must never retroactively invalidate history).
  */
-class AssignmentInactiveDepartmentException extends RuntimeException
+class AssignmentInactiveDepartmentException extends HrException
 {
     public function __construct(public readonly string $departmentId)
     {
-        parent::__construct("Department {$departmentId} is not active and cannot be used for a new Assignment.");
+        parent::__construct(422, 'HR_ASSIGNMENT_INACTIVE_DEPARTMENT', "Department {$departmentId} is not active and cannot be used for a new Assignment.");
     }
 }

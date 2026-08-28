@@ -2,16 +2,20 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Exceptions\EmployeeCategoryNotFoundException;
 use App\Domain\HR\Application\Exceptions\EmploymentAlreadyEndedException;
 use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentEffectiveDateException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentStatusTransitionException;
+use App\Domain\HR\Events\EmploymentEnded;
+use App\Domain\HR\Events\EmploymentStarted;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -57,7 +61,7 @@ class EmploymentService
     ) {}
 
     /**
-     * @param  array{employment_type: string, starts_on: string, ends_on?: string|null, status?: string, probation_ends_on?: string|null}  $attributes
+     * @param  array{employment_type: string, starts_on: string, ends_on?: string|null, status?: string, probation_ends_on?: string|null, employee_category_id?: string|null}  $attributes
      */
     public function create(Employee $employee, array $attributes, User $actor): EmploymentRecord
     {
@@ -66,9 +70,10 @@ class EmploymentService
 
         $startsOn = $attributes['starts_on'];
         $endsOn = $attributes['ends_on'] ?? null;
+        $categoryId = $attributes['employee_category_id'] ?? null;
 
-        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $startsOn, $endsOn, $actor) {
-            return DB::transaction(function () use ($school, $employee, $attributes, $startsOn, $endsOn, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $startsOn, $endsOn, $categoryId, $actor) {
+            return DB::transaction(function () use ($school, $employee, $attributes, $startsOn, $endsOn, $categoryId, $actor) {
                 // Lock the Employee row itself (not just existing EmploymentRecord
                 // rows) so two concurrent create() calls for the SAME employee --
                 // including the very first hire, where no EmploymentRecord rows
@@ -79,15 +84,24 @@ class EmploymentService
 
                 $this->assertNoOverlap($employee, $startsOn, $endsOn);
 
-                $employment = EmploymentRecord::query()->create([
-                    'school_id' => $school->id,
-                    'employee_id' => $employee->id,
-                    'employment_type' => $attributes['employment_type'],
-                    'starts_on' => $startsOn,
-                    'ends_on' => $endsOn,
-                    'probation_ends_on' => $attributes['probation_ends_on'] ?? null,
-                    'status' => $attributes['status'] ?? 'active',
-                ]);
+                try {
+                    $employment = EmploymentRecord::query()->create([
+                        'school_id' => $school->id,
+                        'employee_id' => $employee->id,
+                        'employment_type' => $attributes['employment_type'],
+                        'employee_category_id' => $categoryId,
+                        'starts_on' => $startsOn,
+                        'ends_on' => $endsOn,
+                        'probation_ends_on' => $attributes['probation_ends_on'] ?? null,
+                        'status' => $attributes['status'] ?? 'active',
+                    ]);
+                } catch (QueryException $e) {
+                    if ($categoryId !== null && $this->violatesEmployeeCategoryForeignKey($e)) {
+                        throw new EmployeeCategoryNotFoundException($categoryId);
+                    }
+
+                    throw $e;
+                }
 
                 $this->audit->school($school, 'hr.employment.created', actor: $actor, subject: $employment, metadata: [
                     'employeeId' => $employee->id,
@@ -95,18 +109,21 @@ class EmploymentService
                     'startsOn' => $startsOn,
                 ]);
 
+                event(new EmploymentStarted($school->id, $employee->id, $employment->id));
+
                 return $employment;
             });
         });
     }
 
     /**
-     * Simple-field update only (employment_type/probation_ends_on) --
-     * starts_on/ends_on/status changes each have their own reasoning:
-     * ends_on+status transition through end() (see below); starts_on
-     * is immutable once assignments may already depend on it falling
-     * within the Employment's interval, and no dedicated correction
-     * workflow is required by this checkpoint.
+     * Simple-field update only (employment_type/probation_ends_on/
+     * employee_category_id) -- starts_on/ends_on/status changes each
+     * have their own reasoning: ends_on+status transition through
+     * end() (see below); starts_on is immutable once assignments may
+     * already depend on it falling within the Employment's interval,
+     * and no dedicated correction workflow is required by this
+     * checkpoint.
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -119,7 +136,16 @@ class EmploymentService
 
         return $this->context->withSchool($school, function () use ($school, $employment, $attributes, $actor) {
             return DB::transaction(function () use ($school, $employment, $attributes, $actor) {
-                $employment->update($attributes);
+                try {
+                    $employment->update($attributes);
+                } catch (QueryException $e) {
+                    $categoryId = $attributes['employee_category_id'] ?? null;
+                    if ($categoryId !== null && $this->violatesEmployeeCategoryForeignKey($e)) {
+                        throw new EmployeeCategoryNotFoundException($categoryId);
+                    }
+
+                    throw $e;
+                }
 
                 $this->audit->school($school, 'hr.employment.updated', actor: $actor, subject: $employment, metadata: [
                     // Phase 8A.11: added so the Employee Activity Timeline
@@ -200,6 +226,8 @@ class EmploymentService
                     'closedAssignmentIds' => $closedAssignmentIds->all(),
                 ]);
 
+                event(new EmploymentEnded($school->id, $locked->employee_id, $locked->id, $status));
+
                 return $locked->fresh();
             });
         });
@@ -226,5 +254,10 @@ class EmploymentService
                 throw new EmploymentOverlapException($employee->id, $record->id);
             }
         }
+    }
+
+    private function violatesEmployeeCategoryForeignKey(QueryException $e): bool
+    {
+        return str_contains($e->getMessage(), 'employment_records_employee_category_id_school_id_foreign');
     }
 }

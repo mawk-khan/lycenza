@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown by App\Domain\HR\Application\EmploymentService::end() when
  * asked to transition an EmploymentRecord to a `$status` outside the
@@ -14,12 +12,12 @@ use RuntimeException;
  * `pre_joining`, `notice_period`) or an unrecognized one is never a
  * valid target for "ending" an Employment.
  */
-class InvalidEmploymentStatusTransitionException extends RuntimeException
+class InvalidEmploymentStatusTransitionException extends HrException
 {
     public function __construct(
         public readonly string $employmentRecordId,
         public readonly string $attemptedStatus,
     ) {
-        parent::__construct("'{$attemptedStatus}' is not a valid terminal status for ending EmploymentRecord {$employmentRecordId}.");
+        parent::__construct(422, 'HR_INVALID_EMPLOYMENT_STATUS_TRANSITION', "'{$attemptedStatus}' is not a valid terminal status for ending EmploymentRecord {$employmentRecordId}.");
     }
 }

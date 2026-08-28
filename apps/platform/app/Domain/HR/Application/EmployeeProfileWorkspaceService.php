@@ -10,6 +10,7 @@ use App\Domain\HR\Infrastructure\EmployeeCertification;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Domain\HR\Infrastructure\EmployeeExperience;
+use App\Domain\HR\Infrastructure\EmployeeNote;
 use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
 use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
@@ -114,6 +115,10 @@ class EmployeeProfileWorkspaceService
         $canViewAssignments = $this->capabilities->canInSchool($actor, 'hr.employees.assignments.view', $school);
         $canViewQualifications = $this->capabilities->canInSchool($actor, 'hr.employees.qualifications.view', $school);
         $canViewDocuments = $this->capabilities->canInSchool($actor, 'hr.employees.documents.view', $school);
+        // Phase 8A closure correction: same "absent, not fetched"
+        // section-gating shape as every other optional section above --
+        // hr.employees.notes.view, finally attached to a real feature.
+        $canViewNotes = $this->capabilities->canInSchool($actor, 'hr.employees.notes.view', $school);
 
         return $this->context->withSchool($school, fn () => $this->buildWithinContext(
             $school,
@@ -121,6 +126,7 @@ class EmployeeProfileWorkspaceService
             $canViewAssignments,
             $canViewQualifications,
             $canViewDocuments,
+            $canViewNotes,
         ));
     }
 
@@ -130,6 +136,7 @@ class EmployeeProfileWorkspaceService
         bool $canViewAssignments,
         bool $canViewQualifications,
         bool $canViewDocuments,
+        bool $canViewNotes,
     ): ?EmployeeProfileWorkspace {
         $employee = Employee::query()->where('school_id', $school->id)->find($employeeId);
 
@@ -231,6 +238,18 @@ class EmployeeProfileWorkspaceService
             ->orderByDesc('uploaded_at')
             ->orderBy('id')
             ->get();
+
+        // Phase 8A closure correction: not queried at all without
+        // hr.employees.notes.view, same "absent, not fetched" shape as
+        // qualifications/documents above.
+        $notes = ! $canViewNotes ? collect() : EmployeeNote::query()
+            ->where('school_id', $school->id)
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $authorsById = $notes->isEmpty() ? collect() : User::query()->whereIn('id', $notes->pluck('author_user_id')->unique())->get()->keyBy('id');
 
         return new EmployeeProfileWorkspace(
             summary: new EmployeeProfileSummary(
@@ -356,6 +375,13 @@ class EmployeeProfileWorkspaceService
                 issuedOn: $d->issued_on?->toDateString(),
                 expiresOn: $d->expires_on?->toDateString(),
                 status: $d->status,
+            ))->all(),
+            notes: $notes->map(fn (EmployeeNote $n) => new EmployeeProfileNoteEntry(
+                id: $n->id,
+                body: $n->body,
+                classificationTier: $n->classification_tier,
+                authorDisplayName: $authorsById->get($n->author_user_id)?->name,
+                createdAt: $n->created_at->toIso8601String(),
             ))->all(),
         );
     }

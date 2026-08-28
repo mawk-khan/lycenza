@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown when App\Domain\HR\Application\DepartmentService::reparent()
  * is asked to set a parent that would create a cycle in the Department
@@ -16,12 +14,12 @@ use RuntimeException;
  * (no recursion in a plain CHECK), so it is walked and rejected here,
  * at the application layer, before the write.
  */
-class DepartmentHierarchyCycleException extends RuntimeException
+class DepartmentHierarchyCycleException extends HrException
 {
     public function __construct(
         public readonly string $departmentId,
         public readonly string $proposedParentId,
     ) {
-        parent::__construct("Setting Department {$departmentId}'s parent to {$proposedParentId} would create a cycle in the Department hierarchy.");
+        parent::__construct(422, 'HR_DEPARTMENT_HIERARCHY_CYCLE', "Setting Department {$departmentId}'s parent to {$proposedParentId} would create a cycle in the Department hierarchy.");
     }
 }

@@ -454,6 +454,36 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
         $this->assertCount(2, $workspace->documents, 'Document history is not silently hidden in the internal HR Profile Workspace.');
     }
 
+    // --- Notes (Phase 8A closure correction) -----------------------------
+
+    #[Test]
+    public function notes_are_projected_with_only_the_approved_safe_shape_and_a_resolved_author_name(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+        $author = $this->createUser(['name' => 'Priya Nair']);
+        $this->createEmployeeNote($employee, ['body' => 'Discussed probation review.', 'author_user_id' => $author->id]);
+
+        $workspace = $this->build($school, $employee->id);
+
+        $this->assertCount(1, $workspace->notes);
+        $this->assertSame(['id', 'body', 'classification_tier', 'author_display_name', 'created_at'], array_keys($workspace->notes[0]->toArray()));
+        $this->assertSame('Priya Nair', $workspace->notes[0]->authorDisplayName);
+    }
+
+    #[Test]
+    public function notes_are_absent_without_notes_view_capability(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+        $this->createEmployeeNote($employee);
+        $actor = $this->createUserWithCapabilities($school, ['hr.employees.personal.view']);
+
+        $workspace = app(EmployeeProfileWorkspaceService::class)->build($school, $employee->id, $actor);
+
+        $this->assertSame([], $workspace->notes, 'Notes must be entirely absent, not merely empty-looking, without hr.employees.notes.view.');
+    }
+
     // --- Tenant isolation -----------------------------------------------
 
     #[Test]

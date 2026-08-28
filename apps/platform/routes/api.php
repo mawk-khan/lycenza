@@ -21,10 +21,26 @@ use App\Domain\Hostel\Http\Controllers\HostelBedController;
 use App\Domain\Hostel\Http\Controllers\HostelController;
 use App\Domain\Hostel\Http\Controllers\HostelResidencyAssignmentController;
 use App\Domain\Hostel\Http\Controllers\HostelRoomController;
+use App\Domain\HR\Http\Controllers\DepartmentController;
 use App\Domain\HR\Http\Controllers\EmployeeActivityController;
+use App\Domain\HR\Http\Controllers\EmployeeAddressController;
+use App\Domain\HR\Http\Controllers\EmployeeAssignmentController;
+use App\Domain\HR\Http\Controllers\EmployeeCategoryController;
+use App\Domain\HR\Http\Controllers\EmployeeCertificationController;
+use App\Domain\HR\Http\Controllers\EmployeeController;
 use App\Domain\HR\Http\Controllers\EmployeeDirectoryController;
+use App\Domain\HR\Http\Controllers\EmployeeDocumentController;
+use App\Domain\HR\Http\Controllers\EmployeeEmergencyContactController;
+use App\Domain\HR\Http\Controllers\EmployeeExperienceController;
+use App\Domain\HR\Http\Controllers\EmployeeImportController;
+use App\Domain\HR\Http\Controllers\EmployeeLifecycleController;
+use App\Domain\HR\Http\Controllers\EmployeeNoteController;
+use App\Domain\HR\Http\Controllers\EmployeePersonalDetailController;
 use App\Domain\HR\Http\Controllers\EmployeeProfileController;
+use App\Domain\HR\Http\Controllers\EmployeeQualificationController;
 use App\Domain\HR\Http\Controllers\EmployeeSensitiveDocumentController;
+use App\Domain\HR\Http\Controllers\EmploymentController;
+use App\Domain\HR\Http\Controllers\PositionController;
 use App\Domain\Inventory\Http\Controllers\InventoryItemController;
 use App\Domain\Inventory\Http\Controllers\InventoryLocationController;
 use App\Domain\Inventory\Http\Controllers\InventoryStockController;
@@ -424,20 +440,34 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.students.enrollments.store');
 
-            // Phase 8A.14: read-only HR transport. Deliberately NO
-            // `capability:` route middleware anywhere in this block --
-            // every one of these controllers calls straight through to
-            // an already-authoritative 8A.8/8A.9/8A.10/8A.11 Application
-            // service (EmployeeDirectoryService/EmployeeProfileWorkspaceService/
-            // EmployeeActivityTimelineService/EmployeeSensitiveDocumentReadService)
-            // that performs its OWN `hr.employees.*` capability check
-            // against the real authenticated actor before running any
-            // query -- adding a second, route-level capability check
-            // here would either exactly duplicate that check or risk
-            // silently drifting from it (docs/modules/HR.md 8A.14 "no
-            // divergent capability matrix"). `{employee}` is always a
-            // raw route-parameter string, never implicit Eloquent
-            // route-model binding -- see each controller's own docblock.
+            // Phase 8A.14 as-built deliberately carried NO `capability:`
+            // route middleware here, reasoning that each Application
+            // service's own unconditional capability check made a route-
+            // level check redundant or risk-of-drift. The Phase 8A
+            // closure correction (item 9) revisits that call: every
+            // OTHER module in this codebase (school settings, webhooks,
+            // campuses, academic structure/years/subjects, enrollments,
+            // enrollment-rollovers) uses defense-in-depth -- BOTH a
+            // route-level `capability:` check AND the Application-layer
+            // one -- and HR was the sole documented exception. Each of
+            // these four services already enforces exactly ONE hard,
+            // unconditional capability before doing anything else
+            // (EmployeeDirectoryService::search() -> `hr.employees.view`;
+            // EmployeeProfileWorkspaceService::build() and
+            // EmployeeActivityTimelineService::forEmployee() ->
+            // `hr.employees.personal.view`, with assignments/
+            // qualifications/documents visibility separately tiered
+            // WITHIN that floor, never below it;
+            // EmployeeSensitiveDocumentReadService::forEmployee() ->
+            // `hr.employees.sensitive.view`) -- so mirroring that exact
+            // capability as route middleware is safe by construction: it
+            // can never reject a request the Application layer would
+            // have allowed, only fail the SAME check slightly earlier.
+            // The Application-layer checks are kept exactly as they were
+            // (never removed -- defense-in-depth, not a replacement).
+            // `{employee}` remains a raw route-parameter string, never
+            // implicit Eloquent route-model binding -- see each
+            // controller's own docblock.
             //
             // Phase 8A.15: `throttle:hr-api-reads` (School+actor-keyed,
             // 120/min) and `private-no-store` (Cache-Control: private,
@@ -445,18 +475,268 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // added to all four; the sensitive-document endpoint uses
             // the stricter `throttle:hr-api-sensitive-reads` (20/min)
             // instead. See docs/modules/HR.md 8A.15 as-built.
+            //
+            // Phase 8A closure correction (item 9): `private-no-store` is
+            // listed FIRST, not last -- middleware order is onion order
+            // (the first entry is OUTERMOST), and `EnsurePrivateNoStoreResponse`
+            // only sets its header on the response returned by `$next()`.
+            // With the new `capability:` entry able to reject the request
+            // and short-circuit BEFORE the controller ever runs, it must
+            // be the INNER layer so `private-no-store` still wraps it and
+            // still gets a response to attach its header to -- confirmed
+            // empirically: `capability:` before `private-no-store` broke
+            // `HrEmployeeApiCacheControlTest`'s "forbidden response still
+            // carries the policy" case (the 403 arrived with Laravel's
+            // ordinary default `Cache-Control`, not this middleware's).
+            // The Application-layer 403 path (a service's own
+            // `authorizeCapabilityFor()` throwing, reached only when the
+            // route-level check passes) already worked correctly under
+            // either order, since that exception originates from INSIDE
+            // the controller, already nested under every route
+            // middleware regardless of array position.
             Route::get('/employees', [EmployeeDirectoryController::class, 'index'])
-                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
+                ->middleware(['private-no-store', 'capability:hr.employees.view', 'throttle:hr-api-reads'])
                 ->name('schools.employees.index');
             Route::get('/employees/{employee}', [EmployeeProfileController::class, 'show'])
-                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
+                ->middleware(['private-no-store', 'capability:hr.employees.personal.view', 'throttle:hr-api-reads'])
                 ->name('schools.employees.show');
             Route::get('/employees/{employee}/activity', [EmployeeActivityController::class, 'index'])
-                ->middleware(['throttle:hr-api-reads', 'private-no-store'])
+                ->middleware(['private-no-store', 'capability:hr.employees.personal.view', 'throttle:hr-api-reads'])
                 ->name('schools.employees.activity.index');
             Route::get('/employees/{employee}/sensitive-documents', [EmployeeSensitiveDocumentController::class, 'index'])
-                ->middleware(['throttle:hr-api-sensitive-reads', 'private-no-store'])
+                ->middleware(['private-no-store', 'capability:hr.employees.sensitive.view', 'throttle:hr-api-sensitive-reads'])
                 ->name('schools.employees.sensitive-documents.index');
+
+            // --- Phase 8A closure correction (item 3): HR mutation
+            // transport. Every route below carries `capability:` route
+            // middleware mirroring the SINGLE unconditional capability
+            // floor its Application-layer service already enforces
+            // (item 9 -- defense-in-depth, matching Finance/Academic
+            // Structure/Enrollments, never a replacement for the
+            // service's own check). `store`-shaped creates and one-time
+            // lifecycle-transition verbs (archive/reactivate/end/
+            // separate/rehire/verify/reject/setPrimary/setManager/
+            // reparent) carry `idempotent` -- a retried request must
+            // replay the original result, never silently create a
+            // second row or race a second transition. Plain field
+            // `update` PATCHes do not (matches
+            // AcademicYearController/DepartmentController-shape
+            // precedent: re-submitting the same body is naturally
+            // idempotent at the HTTP-semantic level already). `destroy`
+            // actions do not either -- ordinary DELETE semantics already
+            // tolerate a duplicate call safely. `{employee}`/nested ids
+            // are always raw route-parameter strings resolved via a
+            // tenant-scoped `findOrFail()`, never implicit Eloquent
+            // route-model binding, matching every other HR controller.
+            Route::post('/employees', [EmployeeController::class, 'store'])
+                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.store');
+            Route::patch('/employees/{employee}', [EmployeeController::class, 'update'])
+                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.update');
+            Route::post('/employees/{employee}/archive', [EmployeeController::class, 'archive'])
+                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.archive');
+            Route::post('/employees/{employee}/restore', [EmployeeController::class, 'restore'])
+                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.restore');
+
+            Route::put('/employees/{employee}/personal-detail', [EmployeePersonalDetailController::class, 'update'])
+                ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.personal-detail.update');
+
+            Route::post('/employees/{employee}/addresses', [EmployeeAddressController::class, 'store'])
+                ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.addresses.store');
+            Route::patch('/employees/{employee}/addresses/{address}', [EmployeeAddressController::class, 'update'])
+                ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.addresses.update');
+            Route::delete('/employees/{employee}/addresses/{address}', [EmployeeAddressController::class, 'destroy'])
+                ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.addresses.destroy');
+
+            Route::post('/employees/{employee}/emergency-contacts', [EmployeeEmergencyContactController::class, 'store'])
+                ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.emergency-contacts.store');
+            Route::patch('/employees/{employee}/emergency-contacts/{contact}', [EmployeeEmergencyContactController::class, 'update'])
+                ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.emergency-contacts.update');
+            Route::delete('/employees/{employee}/emergency-contacts/{contact}', [EmployeeEmergencyContactController::class, 'destroy'])
+                ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.emergency-contacts.destroy');
+            Route::post('/employees/{employee}/emergency-contacts/{contact}/primary', [EmployeeEmergencyContactController::class, 'setPrimary'])
+                ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.emergency-contacts.set-primary');
+
+            // Phase 8A closure correction (item 5): EmployeeNote mutation
+            // transport, gated by the `hr.employees.notes.*` pair
+            // pre-registered at 8A.10 and finally attached to a real
+            // feature by this correction.
+            Route::post('/employees/{employee}/notes', [EmployeeNoteController::class, 'store'])
+                ->middleware(['capability:hr.employees.notes.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.notes.store');
+            Route::patch('/employees/{employee}/notes/{note}', [EmployeeNoteController::class, 'update'])
+                ->middleware(['capability:hr.employees.notes.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.notes.update');
+            Route::delete('/employees/{employee}/notes/{note}', [EmployeeNoteController::class, 'destroy'])
+                ->middleware(['capability:hr.employees.notes.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.notes.destroy');
+
+            Route::post('/employees/{employee}/employment-records', [EmploymentController::class, 'store'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.employment-records.store');
+            Route::patch('/employees/{employee}/employment-records/{employment}', [EmploymentController::class, 'update'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.employment-records.update');
+            Route::post('/employees/{employee}/employment-records/{employment}/end', [EmploymentController::class, 'end'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.employment-records.end');
+            Route::post('/employees/{employee}/employment-records/{employment}/separate', [EmployeeLifecycleController::class, 'separate'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.employment-records.separate');
+
+            Route::post('/employees/{employee}/employment-records/{employment}/assignments', [EmployeeAssignmentController::class, 'store'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.assignments.store');
+            Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/end', [EmployeeAssignmentController::class, 'end'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.assignments.end');
+            Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/primary', [EmployeeAssignmentController::class, 'setPrimary'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.assignments.set-primary');
+            Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/manager', [EmployeeAssignmentController::class, 'setManager'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.assignments.set-manager');
+
+            Route::post('/employees/{employee}/rehire', [EmployeeLifecycleController::class, 'rehire'])
+                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.rehire');
+
+            Route::post('/employees/{employee}/qualifications', [EmployeeQualificationController::class, 'store'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.qualifications.store');
+            Route::patch('/employees/{employee}/qualifications/{qualification}', [EmployeeQualificationController::class, 'update'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.qualifications.update');
+            Route::delete('/employees/{employee}/qualifications/{qualification}', [EmployeeQualificationController::class, 'destroy'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.qualifications.destroy');
+            Route::post('/employees/{employee}/qualifications/{qualification}/verify', [EmployeeQualificationController::class, 'verify'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.qualifications.verify');
+            Route::post('/employees/{employee}/qualifications/{qualification}/reject', [EmployeeQualificationController::class, 'reject'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.qualifications.reject');
+
+            Route::post('/employees/{employee}/experience', [EmployeeExperienceController::class, 'store'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.experience.store');
+            Route::patch('/employees/{employee}/experience/{experience}', [EmployeeExperienceController::class, 'update'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.experience.update');
+            Route::delete('/employees/{employee}/experience/{experience}', [EmployeeExperienceController::class, 'destroy'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.experience.destroy');
+
+            Route::post('/employees/{employee}/certifications', [EmployeeCertificationController::class, 'store'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.certifications.store');
+            Route::patch('/employees/{employee}/certifications/{certification}', [EmployeeCertificationController::class, 'update'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.certifications.update');
+            Route::delete('/employees/{employee}/certifications/{certification}', [EmployeeCertificationController::class, 'destroy'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employees.certifications.destroy');
+            Route::post('/employees/{employee}/certifications/{certification}/verify', [EmployeeCertificationController::class, 'verify'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.certifications.verify');
+            Route::post('/employees/{employee}/certifications/{certification}/reject', [EmployeeCertificationController::class, 'reject'])
+                ->middleware(['capability:hr.employees.qualifications.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.certifications.reject');
+
+            // `hr-document-records` (NOT `documents`) -- deliberately
+            // distinct from the Documents module's own
+            // `/employees/{employee}/documents` routes immediately below
+            // in this file (0E.5, a separate generic file-metadata
+            // system). No blanket `capability:` route middleware here --
+            // unlike every other block above, EmployeeDocumentService's
+            // required capability is tier-dependent
+            // (`hr.employees.documents.manage` vs
+            // `hr.employees.sensitive.manage`, decided per-call by
+            // `assertClassificationCapability()`), so no single
+            // unconditional floor exists that could be safely enforced
+            // at the route layer without risking a false rejection for
+            // an actor who legitimately holds only the sensitive-tier
+            // capability. The Application-layer check remains the sole
+            // authority here, exactly like the Employee Profile
+            // Workspace's own per-section tiered capabilities.
+            Route::post('/employees/{employee}/hr-document-records', [EmployeeDocumentController::class, 'store'])
+                ->middleware(['throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.hr-document-records.store');
+            Route::patch('/employees/{employee}/hr-document-records/{document}', [EmployeeDocumentController::class, 'update'])
+                ->middleware(['throttle:school-api-mutations'])
+                ->name('schools.employees.hr-document-records.update');
+            Route::post('/employees/{employee}/hr-document-records/{document}/archive', [EmployeeDocumentController::class, 'archive'])
+                ->middleware(['throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.hr-document-records.archive');
+
+            Route::post('/employee-imports', [EmployeeImportController::class, 'store'])
+                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employee-imports.store');
+
+            // Department/Position/EmployeeCategory: top-level School-
+            // scoped HR reference data, not Employee-nested -- see
+            // DepartmentController's own docblock for why these three
+            // controllers authorize inline (in addition to this route
+            // middleware) rather than relying on the service check
+            // alone.
+            Route::get('/hr-departments', [DepartmentController::class, 'index'])
+                ->name('schools.hr-departments.index');
+            Route::post('/hr-departments', [DepartmentController::class, 'store'])
+                ->middleware(['capability:hr.departments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.hr-departments.store');
+            Route::patch('/hr-departments/{department}', [DepartmentController::class, 'update'])
+                ->middleware(['capability:hr.departments.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hr-departments.update');
+            Route::post('/hr-departments/{department}/archive', [DepartmentController::class, 'archive'])
+                ->middleware(['capability:hr.departments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.hr-departments.archive');
+            Route::post('/hr-departments/{department}/reactivate', [DepartmentController::class, 'reactivate'])
+                ->middleware(['capability:hr.departments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.hr-departments.reactivate');
+            Route::post('/hr-departments/{department}/reparent', [DepartmentController::class, 'reparent'])
+                ->middleware(['capability:hr.departments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.hr-departments.reparent');
+
+            Route::get('/positions', [PositionController::class, 'index'])
+                ->name('schools.positions.index');
+            Route::post('/positions', [PositionController::class, 'store'])
+                ->middleware(['capability:hr.positions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.positions.store');
+            Route::patch('/positions/{position}', [PositionController::class, 'update'])
+                ->middleware(['capability:hr.positions.manage', 'throttle:school-api-mutations'])
+                ->name('schools.positions.update');
+            Route::post('/positions/{position}/archive', [PositionController::class, 'archive'])
+                ->middleware(['capability:hr.positions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.positions.archive');
+            Route::post('/positions/{position}/reactivate', [PositionController::class, 'reactivate'])
+                ->middleware(['capability:hr.positions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.positions.reactivate');
+
+            Route::get('/employee-categories', [EmployeeCategoryController::class, 'index'])
+                ->name('schools.employee-categories.index');
+            Route::post('/employee-categories', [EmployeeCategoryController::class, 'store'])
+                ->middleware(['capability:hr.categories.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employee-categories.store');
+            Route::patch('/employee-categories/{category}', [EmployeeCategoryController::class, 'update'])
+                ->middleware(['capability:hr.categories.manage', 'throttle:school-api-mutations'])
+                ->name('schools.employee-categories.update');
+            Route::post('/employee-categories/{category}/archive', [EmployeeCategoryController::class, 'archive'])
+                ->middleware(['capability:hr.categories.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employee-categories.archive');
+            Route::post('/employee-categories/{category}/reactivate', [EmployeeCategoryController::class, 'reactivate'])
+                ->middleware(['capability:hr.categories.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employee-categories.reactivate');
 
             // --- Phase 1B.7E: Enrollment Rollover administrative HTTP
             // surface (docs/modules/STUDENT-ENROLLMENT.md, "Rollover

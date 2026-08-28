@@ -6,6 +6,7 @@ use App\Domain\HR\Application\Exceptions\AssignmentManagerMismatchException;
 use App\Domain\HR\Application\Exceptions\ReportingHierarchyCycleException;
 use App\Domain\HR\Application\Exceptions\SameEmployeeReportingException;
 use App\Domain\HR\Application\Exceptions\SelfReportingException;
+use App\Domain\HR\Events\EmployeeManagerChanged;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -94,16 +95,20 @@ class ReportingHierarchyService
                 $previousManagerId = $subordinate->manager_assignment_id;
                 $subordinate->update(['manager_assignment_id' => $manager?->id]);
 
+                $employeeId = $subordinate->employmentRecord->employee_id;
+
                 $this->audit->school($school, 'hr.assignment.manager_changed', actor: $actor, subject: $subordinate, metadata: [
                     // Phase 8A.11: employeeId added, purely additive -- this
                     // event belongs to the SUBORDINATE's Employee Activity
                     // Timeline (whose reporting line changed), not the
                     // manager's.
-                    'employeeId' => $subordinate->employmentRecord->employee_id,
+                    'employeeId' => $employeeId,
                     'subordinateAssignmentId' => $subordinate->id,
                     'previousManagerAssignmentId' => $previousManagerId,
                     'newManagerAssignmentId' => $manager?->id,
                 ]);
+
+                event(new EmployeeManagerChanged($school->id, $employeeId, $subordinate->id, $previousManagerId, $manager?->id));
 
                 return $subordinate->fresh();
             });

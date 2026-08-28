@@ -1,0 +1,86 @@
+# Phase 8A Closure Correction isolated dev/test stack. Local
+# development only. NOT the shared `school-os` project (repo-root
+# docker-compose.yml) -- deliberately separate project name, host
+# ports, and volumes so this worktree's migration/test operations can
+# never collide with the shared stack or any other concurrent phase
+# worktree's infrastructure.
+#
+# Usage:
+#   docker compose -f docker-compose.phase8a-closure.yml up -d postgres redis
+#   docker compose -f docker-compose.phase8a-closure.yml down          # stop, keep volumes
+#   docker compose -f docker-compose.phase8a-closure.yml down -v       # stop + delete this phase's data only
+#
+# No `minio` service -- this correction explicitly does not touch file
+# upload/object storage (excluded scope, per the correction mandate).
+
+name: school-os-phase8a-closure
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: school_os
+      POSTGRES_USER: school_os
+      POSTGRES_PASSWORD: school_os
+    ports:
+      - "62432:5432"
+    volumes:
+      - postgres_phase8a_closure_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U school_os -d school_os"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "62379:6379"
+    volumes:
+      - redis_phase8a_closure_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-off/artisan runner -- the host's PHP CLI has no pdo_pgsql
+  # driver, so migrations/tests/tinker run inside this container
+  # instead (`docker compose -f docker-compose.phase8a-closure.yml run
+  # --rm platform php artisan ...`), matching the shared stack's own
+  # platform.Dockerfile. Talks to postgres/redis via their in-network
+  # service names, NOT the host-mapped ports above (those are only for
+  # host-side tools).
+  platform:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/platform.Dockerfile
+    working_dir: /var/www/app
+    volumes:
+      - ./apps/platform:/var/www/app
+    env_file:
+      - ./apps/platform/.env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # One-off Node runner for frontend quality gates (npm run
+  # format:check/lint/type-check/build) -- the `platform` image has no
+  # Node, matching the shared stack's own `vite` service's base image.
+  node:
+    image: node:22-alpine
+    working_dir: /var/www/app
+    volumes:
+      - ./apps/platform:/var/www/app
+
+volumes:
+  postgres_phase8a_closure_data:
+  redis_phase8a_closure_data:

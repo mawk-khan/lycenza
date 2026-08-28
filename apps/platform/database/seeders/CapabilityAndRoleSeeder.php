@@ -216,16 +216,19 @@ class CapabilityAndRoleSeeder extends Seeder
             // `classification_tier = highly_sensitive` metadata and
             // for any classification transition into/out of that tier
             // -- never satisfied by `.documents.manage` alone. `.notes.*`
-            // is registered now (no `employee_notes` table exists yet,
-            // matching the same "capability exists, data does not yet"
-            // precedent `.sensitive.*` itself already established in
-            // 8A.0) so a future checkpoint has a landing spot without a
-            // mid-flight capability-family change. `hr.departments.*`/
-            // `hr.positions.*` gate HR organizational reference-data
-            // administration, structurally unrelated to the
-            // `academics.*` capabilities above (HR Department/Position
-            // are a different domain than Academic Structure, see
-            // HR.md's terminology table).
+            // was originally registered in 8A.0 ahead of the
+            // `employee_notes` table it was meant to gate; the Phase 8A
+            // closure correction built that table
+            // (App\Domain\HR\Infrastructure\EmployeeNote) and this pair
+            // now gates it for real -- labels updated accordingly.
+            // `hr.departments.*`/`hr.positions.*` gate HR organizational
+            // reference-data administration, structurally unrelated to
+            // the `academics.*` capabilities above (HR Department/
+            // Position are a different domain than Academic Structure,
+            // see HR.md's terminology table). `hr.categories.*` (added
+            // in the same closure correction) gates EmployeeCategory
+            // reference data on the identical view/manage shape as
+            // `hr.positions.*`.
             ['key' => 'hr.employees.view', 'label' => 'View Employee Directory (Internal-tier fields)', 'namespace' => 'school'],
             ['key' => 'hr.employees.manage', 'label' => 'Create and manage Employee core records', 'namespace' => 'school'],
             ['key' => 'hr.employees.personal.view', 'label' => 'View Employee personal details, contacts and addresses (Restricted)', 'namespace' => 'school'],
@@ -236,14 +239,16 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'hr.employees.qualifications.manage', 'label' => 'Manage Employee qualifications, experience and certifications, including verification', 'namespace' => 'school'],
             ['key' => 'hr.employees.documents.view', 'label' => 'View Employee document metadata (Restricted tier only)', 'namespace' => 'school'],
             ['key' => 'hr.employees.documents.manage', 'label' => 'Manage Employee document metadata (Restricted tier only)', 'namespace' => 'school'],
-            ['key' => 'hr.employees.notes.view', 'label' => 'View Employee HR notes (reserved; not yet modeled)', 'namespace' => 'school'],
-            ['key' => 'hr.employees.notes.manage', 'label' => 'Manage Employee HR notes (reserved; not yet modeled)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.notes.view', 'label' => 'View Employee HR notes (Restricted/Confidential, HR-authored)', 'namespace' => 'school'],
+            ['key' => 'hr.employees.notes.manage', 'label' => 'Manage Employee HR notes (Restricted/Confidential, HR-authored)', 'namespace' => 'school'],
             ['key' => 'hr.employees.sensitive.view', 'label' => 'View Highly Sensitive Employee data (e.g. highly_sensitive documents)', 'namespace' => 'school'],
             ['key' => 'hr.employees.sensitive.manage', 'label' => 'Manage Highly Sensitive Employee data and classification transitions', 'namespace' => 'school'],
             ['key' => 'hr.departments.view', 'label' => 'View HR Departments', 'namespace' => 'school'],
             ['key' => 'hr.departments.manage', 'label' => 'Manage HR Departments', 'namespace' => 'school'],
             ['key' => 'hr.positions.view', 'label' => 'View Positions', 'namespace' => 'school'],
             ['key' => 'hr.positions.manage', 'label' => 'Manage Positions', 'namespace' => 'school'],
+            ['key' => 'hr.categories.view', 'label' => 'View Employee Categories', 'namespace' => 'school'],
+            ['key' => 'hr.categories.manage', 'label' => 'Manage Employee Categories', 'namespace' => 'school'],
 
             // Phase 10A (docs/modules/LIBRARY.md "Capabilities") --
             // catalogue (Title/Copy reference data) and circulation
@@ -468,12 +473,16 @@ class CapabilityAndRoleSeeder extends Seeder
                     // `.personal.manage`, `.assignments.*`,
                     // `.qualifications.*`, `.documents.*`,
                     // `.sensitive.*`, `.notes.*`, `hr.departments.*`,
-                    // `hr.positions.*`. See the security register's
-                    // explicit P1 finding this closes: default HR
-                    // capability grants must not silently broaden to
-                    // every School Admin -- a School's own role
-                    // configuration must explicitly add whichever of
-                    // these an actual "HR Staff" role needs.
+                    // `hr.positions.*`, `hr.categories.*` (added in the
+                    // Phase 8A closure correction, same reference-data
+                    // shape as `hr.positions.*` -- deliberately excluded
+                    // from this default grant for the identical reason).
+                    // See the security register's explicit P1 finding
+                    // this closes: default HR capability grants must not
+                    // silently broaden to every School Admin -- a
+                    // School's own role configuration must explicitly
+                    // add whichever of these an actual "HR Staff" role
+                    // needs.
                     'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
                     // Phase 10A: same "hands-on, day-to-day operational
                     // concern" reasoning already justifying full

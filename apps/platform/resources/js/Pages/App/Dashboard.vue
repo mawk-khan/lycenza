@@ -22,6 +22,7 @@ interface Props {
         canViewAdmissions: boolean;
         canViewFinance: boolean;
         canViewSubjectOfferings: boolean;
+        canViewHr: boolean;
     };
 }
 
@@ -88,6 +89,9 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewSubjectOfferings">
                     <a class="underline" href="/app/subject-offerings">Subject Offerings</a>
+                </li>
+                <li v-if="nav.canViewHr">
+                    <a class="underline" href="/app/hr">HR</a>
                 </li>
             </ul>
         </nav>

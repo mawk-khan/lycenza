@@ -3360,6 +3360,111 @@ now for HR alone would be premature; 8A.8 writes straightforward
 query-builder filtering matching the one-flag precedent in
 `CampusController::index()`, extended to several flags.
 
+### Closure correction: pg_trgm search index built, proven unusable under RLS, and removed
+
+The `pg_trgm` GIN index this section originally specified
+(`employees_full_name_trgm_idx`, `employees_employee_number_trgm_idx`,
+`gin_trgm_ops`, targeting `EmployeeDirectoryService::search()`'s actual
+`employee_number ILIKE 'needle%' OR full_name ILIKE '%needle%'` query
+shape) was implemented and tested during the Phase 8A closure
+correction, then deliberately **removed** rather than shipped. This is
+a resolved architecture decision, not a deferred requirement — the
+regression test protecting it is
+`Tests\Feature\HR\EmployeeSearchIndexTest`
+(`apps/platform/tests/Feature/HR/EmployeeSearchIndexTest.php`).
+
+**Root cause, reproduced live against this repository's own isolated
+Postgres 16 instance** (50,000-row `employees` table, one School,
+`ANALYZE`d, indexes actually present) — `EXPLAIN (ANALYZE, BUFFERS)` on
+the exact production query shape, first as the migration/table-owner
+role (`school_os`, RLS-bypassing by virtue of ownership), then as the
+real runtime role `school_os_app` with `employees`' actual FORCE RLS
+policy active (`app.current_school_id` session GUC set, matching
+`App\Support\Tenancy\TenantRls::SESSION_VAR`):
+
+```
+=== AS TABLE OWNER (school_os, bypasses RLS) ===
+ Bitmap Heap Scan on employees  (cost=143.63..946.60 rows=5026 width=1126) (actual time=5.125..8.619 rows=5097 loops=1)
+   Recheck Cond: (((employee_number)::text ~~* 'EMP-0012%'::text) OR ((full_name)::text ~~* '%Sharma%'::text))
+   Rows Removed by Index Recheck: 12
+   Filter: (school_id = '00000000-0000-0000-0000-0000000000aa'::uuid)
+   Heap Blocks: exact=715
+   Buffers: shared hit=820
+   ->  BitmapOr  (cost=143.63..143.63 rows=5027 width=0) (actual time=5.064..5.064 rows=0 loops=1)
+         Buffers: shared hit=105
+         ->  Bitmap Index Scan on employees_employee_number_trgm_idx_experiment  (cost=0.00..73.61 rows=5 width=0) (actual time=4.150..4.150 rows=112 loops=1)
+               Index Cond: ((employee_number)::text ~~* 'EMP-0012%'::text)
+               Buffers: shared hit=91
+         ->  Bitmap Index Scan on employees_full_name_trgm_idx_experiment  (cost=0.00..67.51 rows=5022 width=0) (actual time=0.914..0.914 rows=5004 loops=1)
+               Index Cond: ((full_name)::text ~~* '%Sharma%'::text)
+               Buffers: shared hit=14
+ Planning Time: 1.230 ms
+ Execution Time: 8.894 ms
+
+=== AS school_os_app UNDER FORCE RLS (same data, same query) ===
+ Result  (cost=0.01..1590.01 rows=21 width=1126) (actual time=0.008..30.437 rows=5097 loops=1)
+   One-Time Filter: ((NULLIF(current_setting('app.current_school_id'::text, true), ''::text))::uuid = '00000000-0000-0000-0000-0000000000aa'::uuid)
+   Buffers: shared hit=715
+   ->  Seq Scan on employees  (cost=0.01..1590.01 rows=21 width=1126) (actual time=0.006..30.026 rows=5097 loops=1)
+         Filter: ((school_id = '00000000-0000-0000-0000-0000000000aa'::uuid) AND (((employee_number)::text ~~* 'EMP-0012%'::text) OR ((full_name)::text ~~* '%Sharma%'::text)))
+         Rows Removed by Filter: 44903
+         Buffers: shared hit=715
+ Planning Time: 0.137 ms
+ Execution Time: 30.586 ms
+```
+
+As table owner, the planner unprompted chose both trigram GIN indexes
+(cost ~144, ~8.9ms). As `school_os_app` — the only role any real
+request/queue connection in this codebase ever uses (rule 26) — under
+the SAME FORCE RLS policy that protects every other row of this table,
+the planner discarded both indexes entirely and fell back to a full
+`Seq Scan` (cost ~1590, ~30.6ms, 3.4x slower on this dataset), despite
+`ANALYZE` statistics and `enable_indexscan` being unchanged between the
+two runs. This is PostgreSQL's row-security implementation refusing to
+build an index access path through any operator/function not marked
+`LEAKPROOF`, confirmed directly against this installation's own
+`pg_proc` catalog (not merely cited from documentation):
+
+| Function | `proleakproof` |
+|---|---|
+| `texticlike` (backs `ILIKE`) | `f` |
+| `gin_trgm_consistent` | `f` |
+| `gin_extract_value_trgm` | `f` |
+| `gin_extract_query_trgm` | `f` |
+| `similarity` | `f` |
+
+`employees.relrowsecurity = t`, `employees.relforcerowsecurity = t`
+(confirmed live) — this is a genuinely FORCE-RLS-protected table, not
+an oversight. A non-leakproof function's behavior (timing, partial
+results) could otherwise leak information about rows the policy hides,
+which is exactly why PostgreSQL refuses the index path here but
+continues to route ordinary leakproof equality predicates
+(`school_id = ?`) through indexes under the identical RLS policy — this
+is specific to pattern-matching/similarity access paths, not a blanket
+"RLS defeats every index on this table" finding.
+
+**Consequence**: this index could never accelerate any real query this
+application issues — `EmployeeDirectoryService::search()` always runs
+as `school_os_app` under RLS; no code path in this repository runs
+Employee search as the RLS-bypassing migration role. Shipping it would
+add permanent GIN write/storage amplification to every
+`employees.full_name`/`employee_number` write for a read benefit that
+structurally can never materialize — the "add infrastructure for a
+need that doesn't exist" root CLAUDE.md rule 2 exists to prevent. The
+migration that created the extension and both indexes was therefore
+deleted from this branch rather than kept as caveated dead weight.
+
+**No workaround of the underlying protection was introduced**: no
+`SECURITY DEFINER` function, no RLS policy relaxation, no unsafe
+`LEAKPROOF` wrapper around a non-leakproof operator (which would defeat
+the exact information-hiding guarantee `LEAKPROOF` exists to enforce).
+`EmployeeSearchIndexTest` is a permanent regression guard — it asserts
+`pg_trgm` and both trigram indexes are absent, and separately proves
+(`ordinary_equality_predicates_remain_index_usable_under_forced_row_level_security`)
+that ordinary leakproof equality predicates remain index-routable under
+the identical FORCE RLS policy, so a future author does not
+mis-generalize this finding into "no index can ever help this table."
+
 ## Domain events (Phase 8A, internal-only unless later registered)
 
 ```

@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown when App\Domain\HR\Application\ReportingHierarchyService::setManager()
  * is asked to set a manager that would create a cycle in the
@@ -15,12 +13,12 @@ use RuntimeException;
  * layer, after both involved Assignment rows are locked in
  * deterministic order (see ReportingHierarchyService's own docblock).
  */
-class ReportingHierarchyCycleException extends RuntimeException
+class ReportingHierarchyCycleException extends HrException
 {
     public function __construct(
         public readonly string $subordinateAssignmentId,
         public readonly string $proposedManagerAssignmentId,
     ) {
-        parent::__construct("Setting Assignment {$subordinateAssignmentId}'s manager to {$proposedManagerAssignmentId} would create a cycle in the reporting hierarchy.");
+        parent::__construct(422, 'HR_REPORTING_HIERARCHY_CYCLE', "Setting Assignment {$subordinateAssignmentId}'s manager to {$proposedManagerAssignmentId} would create a cycle in the reporting hierarchy.");
     }
 }

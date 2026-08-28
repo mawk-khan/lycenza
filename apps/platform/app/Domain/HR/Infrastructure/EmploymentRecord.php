@@ -34,6 +34,8 @@ use Illuminate\Support\Carbon;
  * @property string $school_id
  * @property string $employee_id
  * @property string $employment_type permanent|probationary|fixed_term|part_time|temporary|contract|consultant
+ * @property string|null $employee_category_id Phase 8A closure correction -- nullable FK to
+ *                                             `employee_categories(id, school_id)`.
  * @property Carbon $starts_on
  * @property Carbon|null $ends_on
  * @property Carbon|null $probation_ends_on
@@ -49,6 +51,7 @@ class EmploymentRecord extends Model
         'school_id',
         'employee_id',
         'employment_type',
+        'employee_category_id',
         'starts_on',
         'ends_on',
         'probation_ends_on',
@@ -73,6 +76,12 @@ class EmploymentRecord extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /** @return BelongsTo<EmployeeCategory, $this> */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(EmployeeCategory::class, 'employee_category_id');
     }
 
     /** @return HasMany<EmployeeAssignment, $this> */

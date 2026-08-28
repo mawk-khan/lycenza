@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown by App\Domain\HR\Application\EmployeeLifecycleService::rehire()
  * when the target Employee has no prior EmploymentRecord at all
@@ -14,10 +12,10 @@ use RuntimeException;
  * to go through `EmploymentService::create()` directly, unchanged from
  * 8A.4.
  */
-class RehireRequiresEmploymentHistoryException extends RuntimeException
+class RehireRequiresEmploymentHistoryException extends HrException
 {
     public function __construct(public readonly string $employeeId)
     {
-        parent::__construct("Employee {$employeeId} has no prior EmploymentRecord -- use EmploymentService::create() directly for a first hire, not rehire().");
+        parent::__construct(422, 'HR_REHIRE_REQUIRES_EMPLOYMENT_HISTORY', "Employee {$employeeId} has no prior EmploymentRecord -- use EmploymentService::create() directly for a first hire, not rehire().");
     }
 }

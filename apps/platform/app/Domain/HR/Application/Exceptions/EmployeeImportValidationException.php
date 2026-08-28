@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Phase 8A.12 -- thrown by `EmployeeImportRow::fromArray()` for a
  * structurally-recognized but invalid row (a required field missing/
@@ -12,11 +10,14 @@ use RuntimeException;
  * distinct from `EmployeeImportUnknownFieldException` (an unrecognized
  * key) so `EmployeeImportService` can report a precise, safe
  * `field`/`message` pair without ever echoing the row's actual values.
+ * Also thrown directly by `EmployeeImportService::import()` for a
+ * batch exceeding `MAX_ROWS_PER_BATCH` -- that one path is NOT caught
+ * internally and does reach the HTTP layer as a 422.
  */
-class EmployeeImportValidationException extends RuntimeException
+class EmployeeImportValidationException extends HrException
 {
     public function __construct(public readonly ?string $field, string $message)
     {
-        parent::__construct($message);
+        parent::__construct(422, 'HR_IMPORT_VALIDATION', $message);
     }
 }

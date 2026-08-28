@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown for either of two distinct effective-date violations sharing
  * one safe error category (checkpoint 8A.13 section 57's taxonomy:
@@ -25,13 +23,13 @@ use RuntimeException;
  *   more permissive primitive for any future correction workflow that
  *   may legitimately need to backdate/end a historical record).
  */
-class InvalidEmploymentEffectiveDateException extends RuntimeException
+class InvalidEmploymentEffectiveDateException extends HrException
 {
     public function __construct(
         public readonly string $employmentRecordId,
         public readonly string $attemptedEndsOn,
         public readonly string $reason,
     ) {
-        parent::__construct("EmploymentRecord {$employmentRecordId}'s effective date {$attemptedEndsOn} is invalid ({$reason}).");
+        parent::__construct(422, 'HR_INVALID_EMPLOYMENT_EFFECTIVE_DATE', "EmploymentRecord {$employmentRecordId}'s effective date {$attemptedEndsOn} is invalid ({$reason}).");
     }
 }

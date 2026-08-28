@@ -4,6 +4,7 @@ namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentEffectiveDateException;
 use App\Domain\HR\Application\Exceptions\RehireRequiresEmploymentHistoryException;
+use App\Domain\HR\Events\EmployeeRehired;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
@@ -150,6 +151,8 @@ class EmployeeLifecycleService
 
                     app(EmployeeAssignmentService::class)->setPrimary($assignment, $actor);
                 }
+
+                event(new EmployeeRehired($school->id, $employee->id, $employment->id));
 
                 return $employment;
             });
