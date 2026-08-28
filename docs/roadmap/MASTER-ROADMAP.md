@@ -501,19 +501,49 @@ Documents/Communications integration, and any Guardian/Student-facing
 surface — all explicitly deferred, not gaps in this checkpoint's own
 closure.
 
-The remaining Phase 0K modules (Inventory, Canteen, Health, Safety) are
-**not started**. Finance/Fees/Payments (Phase 0G) reached `main`
-alongside Phase 10D's own integration, so Inventory/Canteen are no
-longer blocked on Finance reaching `main` — but neither has begun; each
-still requires its own deliberate design/readiness gate before
-implementation, same as Hostel required one before Phase 10D. Health
-remains blocked on the `docs/security/
-DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED] gate; and Safety is
-blocked pending its own legal/security readiness decision, since
-"incident records" may fall under that same unresolved Health gate
-(`docs/modules/VISITOR.md` §18, §24) — ideally resolved alongside
-Health's own review rather than separately. Phase 0K as a whole is
-**not** complete.
+**Phase 10E — Inventory (complete):** the fifth Phase 0K checkpoint —
+an Item catalogue and Location directory (Location's Campus optional,
+mirroring Library Copy/Transport Route's precedent, not Hostel's
+required-Campus special case), a quantity stock lifecycle (receive/
+issue/transfer) backed by a stored, authoritative
+`InventoryStockBalance` (one row per Item x Location) reconciled by
+construction against an immutable, append-only `StockMovement` ledger
+— proven never to drift by a dedicated reconciliation test. A
+database-enforced non-negative-stock invariant, a concurrency-safe
+missing-balance-row creation primitive (`INSERT ... ON CONFLICT DO
+NOTHING` then re-read, never a naive `firstOrCreate()`+
+`lockForUpdate()`), and a deterministic ascending-balance-id transfer
+lock order (never a fixed source-then-destination role order, which
+would deadlock opposing concurrent transfers) are each proven under
+real two-process concurrency — three required scenarios: over-issue,
+concurrent first-ever receipts, and opposing concurrent transfers, all
+passing with no deadlock. `inventory.directory.*`/`inventory.stock.*`
+capabilities, `/api/v1` administrative API (command-style receive/
+issue/transfer only, never a generic movement-creation endpoint), and
+a session-authenticated Inertia UI. Full design and closure record:
+`docs/modules/INVENTORY.md`. Deliberately scoped to quantity/
+consumable stock only — individually tracked assets, custody
+(Employee/Student), procurement/suppliers/purchase orders, costing/
+valuation/Finance journal posting, Fees/Payments, Canteen consumption
+integration, barcode/RFID/mobile scanning, reorder automation, and any
+Guardian/Student-facing surface all remain deliberately deferred, not
+gaps in this checkpoint's own closure — see `docs/modules/INVENTORY.md`
+§25 for the full list.
+
+The remaining Phase 0K modules (Canteen, Health, Safety) are **not
+started**. Completing Inventory's quantity-stock foundation removes
+Canteen's structural Inventory dependency (a future Canteen checkpoint
+can call `InventoryStockService::issue()` directly to consume stock),
+but Canteen still requires its own Fees/payment integration (billing a
+Guardian/Student for an order — a new Fees consumer, not yet designed)
+and its own product/menu/ordering architecture before it can begin —
+neither is addressed by Inventory's foundation. Health remains blocked
+on the `docs/security/DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED]
+gate; and Safety is blocked pending its own legal/security readiness
+decision, since "incident records" may fall under that same unresolved
+Health gate (`docs/modules/VISITOR.md` §18, §24) — ideally resolved
+alongside Health's own review rather than separately. Phase 0K as a
+whole is **not** complete.
 
 ## Phase 0L — Oversight
 

@@ -34,6 +34,9 @@ use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
 use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
+use App\Domain\Inventory\Infrastructure\InventoryItem;
+use App\Domain\Inventory\Infrastructure\InventoryLocation;
+use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Domain\Library\Infrastructure\LibraryTitle;
@@ -777,6 +780,38 @@ trait CreatesTenancyFixtures
                 'school_id' => $bed->school_id,
                 'student_id' => $student->id,
                 'hostel_bed_id' => $bed->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createInventoryItem(School $school, array $attributes = []): InventoryItem
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => InventoryItem::factory()->create(array_merge([
+                'school_id' => $school->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createInventoryLocation(School $school, array $attributes = []): InventoryLocation
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => InventoryLocation::factory()->create(array_merge([
+                'school_id' => $school->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createInventoryStockBalance(InventoryItem $item, InventoryLocation $location, array $attributes = []): InventoryStockBalance
+    {
+        return app(TenantContext::class)->withSchool(
+            $item->school,
+            fn () => InventoryStockBalance::factory()->create(array_merge([
+                'school_id' => $item->school_id,
+                'inventory_item_id' => $item->id,
+                'inventory_location_id' => $location->id,
             ], $attributes)),
         );
     }
