@@ -374,18 +374,37 @@ RLS/SchoolScope alone):
 | `visitor_visits` | `(host_employee_id, school_id)` | `employees(id, school_id)` |
 
 Every one of these is proven rejected at the raw-SQL level (a real
-`pgsql_admin` privileged INSERT bypassing RLS entirely) in
-`tests/Feature/Postgres/Visitor*RlsIsolationTest.php` — 13 tests, 18
+`pgsql_admin`/`pgsql` privileged INSERT or DELETE bypassing the
+application layer entirely) in
+`tests/Feature/Postgres/Visitor*RlsIsolationTest.php` — 14 tests, 21
 assertions, covering RLS-enabled-and-forced, no-context-zero-rows,
 cross-School SELECT/UPDATE rejection, every composite-FK cross-School
-rejection above, and the one-active-per-Visitor partial unique index.
+rejection above, the one-active-per-Visitor partial unique index, and
+the historical-integrity deletion proof below.
 
-`visitor_id` cascades on delete (a Visit has no meaning independent of
-its Visitor, mirroring `transport_student_assignments.student_id`);
-`campus_id`/`host_employee_id` restrict (neither Campus nor Employee
-exposes a delete endpoint, so this is defensive-only, matching every
-other composite FK in this codebase without a true ownership
-relationship).
+**All three FKs `RESTRICT` on delete** — `visitor_id`, `campus_id`,
+and `host_employee_id` alike. This is a deliberate, corrected decision:
+an earlier revision of this migration used `cascadeOnDelete()` for
+`visitor_id`, reasoning by analogy to
+`transport_student_assignments.student_id`'s cascade — but that
+analogy does not actually hold for Visitor. Transport's Student
+assignment and Visitor's Visit are not the same shape with respect to
+deletion risk: this checkpoint's own explicit requirement is that a
+completed Visit remains "permanently queryable," and Visitor rows are
+never intended to be hard-deleted at all (§5 — the only lifecycle
+transition is active/inactive). A CASCADE FK would silently destroy
+that history the moment *anything* — a future maintenance script, a
+raw SQL admin session, or a later refactor adding a `Visitor::destroy()`
+call — deleted the Visitor row; "there is no delete endpoint today" is
+not a database-level guarantee against any of those. RESTRICT makes
+Visitor deletion structurally impossible while any Visit references it,
+regardless of the application layer, matching Campus's and Employee's
+already-correct posture (neither exposes a delete endpoint either, and
+both already used RESTRICT from the start). Proven directly:
+`VisitorsRlsIsolationTest::a_visitor_referenced_by_a_historical_visit_cannot_be_deleted`
+— even a privileged same-session raw DELETE against a Visitor
+referenced by a historical Visit is rejected by PostgreSQL itself, and
+both the Visitor and the Visit survive the attempt.
 
 ## 20. Capabilities
 
@@ -485,16 +504,21 @@ required:
   collection: no such fields exist anywhere in the schema, models, or
   UI (§18).
 - Accidental hard deletion: no delete endpoint exists on either
-  Visitor table; reference entities never hard-delete.
+  Visitor table; reference entities never hard-delete; the database
+  itself now structurally rejects a Visitor deletion attempt while any
+  Visit references it (§19 — corrected from an initial `CASCADE` to
+  `RESTRICT` on `visitor_id` during post-closure review, before this
+  checkpoint's integration to `main`).
 
-No P0/P1/P2 findings remain open. One P3 test-infrastructure finding is
-recorded in §10 (the concurrency-test transaction-wrapping pitfall) —
-fixed during this checkpoint, kept documented as a lesson for future
-concurrency tests in this codebase.
+No P0/P1/P2 findings remain open. Two P3 test-infrastructure findings
+are recorded: the concurrency-test transaction-wrapping pitfall (§10),
+and the same-connection-visibility pitfall in the historical-integrity
+deletion test (§19) — both fixed during this checkpoint, kept
+documented as lessons for future tests in this codebase.
 
 ## 25. Test evidence
 
-- Postgres/RLS: 13 tests, 18 assertions
+- Postgres/RLS: 14 tests, 21 assertions
   (`tests/Feature/Postgres/Visitor*RlsIsolationTest.php`, 2 files).
 - Authorization: 12 tests, 33 assertions
   (`tests/Feature/Authorization/VisitorCapabilityTest.php`).
@@ -509,4 +533,4 @@ concurrency tests in this codebase.
 - Admin Inertia UI + anti-P1 search-endpoint regressions: 10 tests
   (`tests/Feature/App/VisitorAdminUiTest.php`).
 
-Total: 67 tests, 175 assertions, all passing, zero skipped.
+Total: 68 tests, 178 assertions, all passing, zero skipped.

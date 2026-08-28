@@ -105,4 +105,55 @@ class VisitorsRlsIsolationTest extends TestCase
 
         $this->assertSame(0, $updated);
     }
+
+    /**
+     * THE historical-integrity proof: `visitor_visits.visitor_id`
+     * RESTRICTs on delete (docs/modules/VISITOR.md "Historical
+     * integrity") -- a Visitor referenced by any historical Visit,
+     * checked-in or checked-out, cannot be physically deleted, by
+     * ANY means. The delete attempt uses the SAME `pgsql` connection/
+     * session as the fixture writes above (never `pgsql_admin`) --
+     * mirrors
+     * VisitorVisitsRlsIsolationTest::the_database_rejects_a_second_active_visit_for_the_same_visitor's
+     * exact pattern (itself mirroring
+     * TransportStudentAssignmentsRlsIsolationTest's precedent): a
+     * separate `pgsql_admin` connection cannot see this test's still-
+     * uncommitted (`DatabaseTransactions`-wrapped) fixture rows at
+     * all, which would make the delete silently "succeed" against a
+     * row `pgsql_admin` never actually saw a reference to -- not a
+     * genuine proof of anything. Using the raw `pgsql` connection
+     * directly (rather than an Eloquent `delete()`) still proves the
+     * database constraint itself, independent of any application-
+     * layer safeguard, and is what a future maintenance script, a raw
+     * SQL admin path, or a later refactor reaching for
+     * `Visitor::destroy()` would actually hit.
+     */
+    #[Test]
+    public function a_visitor_referenced_by_a_historical_visit_cannot_be_deleted(): void
+    {
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $visitor = $this->createVisitor($school);
+        $visit = $this->createVisitorVisit($visitor, $campus, ['status' => 'checked_out', 'checked_out_at' => now()]);
+
+        $this->setSchool($school->id);
+
+        $rejected = false;
+
+        try {
+            DB::connection('pgsql')->transaction(function () use ($visitor): void {
+                DB::connection('pgsql')->table('visitors')->where('id', $visitor->id)->delete();
+            });
+        } catch (QueryException) {
+            $rejected = true;
+        }
+
+        $this->assertTrue($rejected, 'visitor_visits_visitor_id_school_id_foreign must RESTRICT deletion of a Visitor referenced by a historical Visit.');
+
+        $visitorStillExists = DB::connection('pgsql')->table('visitors')->where('id', $visitor->id)->exists();
+        $this->assertTrue($visitorStillExists, 'The Visitor row must survive the rejected deletion attempt.');
+
+        $visitStillExists = DB::connection('pgsql')->table('visitor_visits')->where('id', $visit->id)->exists();
+        $this->assertTrue($visitStillExists, 'The historical Visit row must survive the rejected deletion attempt.');
+    }
 }

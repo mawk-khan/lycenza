@@ -10,11 +10,25 @@ return new class extends Migration
 {
     /**
      * Phase 10C -- a Visitor's check-in/check-out visit to a Campus
-     * (docs/modules/VISITOR.md "Visit lifecycle"). `visitor_id`
-     * cascades on delete -- a Visit has no meaning independent of its
-     * Visitor, the exact `transport_student_assignments.student_id`
-     * precedent. `campus_id`/`host_employee_id` restrict (neither
-     * Campus nor Employee exposes a delete endpoint).
+     * (docs/modules/VISITOR.md "Visit lifecycle"). `visitor_id`,
+     * `campus_id`, and `host_employee_id` all RESTRICT on delete --
+     * VisitorVisit is a historical business record and Visitor is
+     * deactivated (active/inactive), never hard-deleted (checkpoint
+     * brief section 20: "Do not use cascading deletion if it would
+     * erase audit/history"). This is a deliberate correction: an
+     * earlier revision of this migration used `cascadeOnDelete()` for
+     * `visitor_id`, reasoning by analogy to
+     * `transport_student_assignments.student_id`'s cascade -- but that
+     * analogy does not hold here, because this checkpoint's own
+     * explicit requirement is that completed Visits remain
+     * "permanently queryable," and "there is no delete endpoint" does
+     * not protect against raw SQL, a future maintenance script, or a
+     * later refactor reaching for `Visitor::destroy()`. RESTRICT makes
+     * that structurally impossible regardless of the application
+     * layer -- see
+     * tests/Feature/Postgres/VisitorsRlsIsolationTest::a_visitor_referenced_by_a_historical_visit_cannot_be_deleted.
+     * Neither Campus nor Employee exposes a delete endpoint either,
+     * and both already RESTRICT for the same reason.
      *
      * `host_employee_id` is OPTIONAL -- a Visitor may visit an office
      * or the School generally without naming a specific host
@@ -71,7 +85,7 @@ return new class extends Migration
 
             $table->foreign(['visitor_id', 'school_id'])
                 ->references(['id', 'school_id'])->on('visitors')
-                ->cascadeOnDelete();
+                ->restrictOnDelete();
 
             $table->foreign(['campus_id', 'school_id'])
                 ->references(['id', 'school_id'])->on('campuses')
