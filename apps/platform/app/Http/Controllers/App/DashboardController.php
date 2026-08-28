@@ -70,6 +70,11 @@ class DashboardController extends Controller
                     && ($capabilities->canInSchool($user, 'finance.ledger.view', $school)
                         || $capabilities->canInSchool($user, 'finance.charges.view', $school)
                         || $capabilities->canInSchool($user, 'finance.payments.view', $school)),
+                // Phase 10F: Canteen (Outlet/Item directory, billing
+                // settings, Order lifecycle) administrative UI.
+                'canViewCanteenDirectory' => $school !== null && $capabilities->canInSchool($user, 'canteen.directory.view', $school),
+                'canViewCanteenOrders' => $school !== null && $capabilities->canInSchool($user, 'canteen.orders.view', $school),
+                'canViewCanteenSettings' => $school !== null && $capabilities->canInSchool($user, 'canteen.settings.view', $school),
             ],
         ]);
     }

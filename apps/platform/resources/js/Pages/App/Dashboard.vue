@@ -21,6 +21,9 @@ interface Props {
         canViewEnrollmentRollovers: boolean;
         canViewAdmissions: boolean;
         canViewFinance: boolean;
+        canViewCanteenDirectory: boolean;
+        canViewCanteenOrders: boolean;
+        canViewCanteenSettings: boolean;
     };
 }
 
@@ -84,6 +87,18 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewFinance">
                     <a class="underline" href="/app/finance">Finance</a>
+                </li>
+                <li v-if="nav.canViewCanteenDirectory">
+                    <a class="underline" href="/app/canteen-outlets">Canteen Outlets</a>
+                </li>
+                <li v-if="nav.canViewCanteenDirectory">
+                    <a class="underline" href="/app/canteen-items">Canteen Items</a>
+                </li>
+                <li v-if="nav.canViewCanteenOrders">
+                    <a class="underline" href="/app/canteen-orders">Canteen Orders</a>
+                </li>
+                <li v-if="nav.canViewCanteenSettings">
+                    <a class="underline" href="/app/canteen-settings">Canteen Settings</a>
                 </li>
             </ul>
         </nav>
