@@ -417,6 +417,35 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'inventory.directory.manage', 'label' => 'Manage the Inventory Item/Location directory', 'namespace' => 'school'],
             ['key' => 'inventory.stock.view', 'label' => 'View Inventory stock balances and movement history', 'namespace' => 'school'],
             ['key' => 'inventory.stock.manage', 'label' => 'Receive, issue, and transfer Inventory stock', 'namespace' => 'school'],
+
+            // Phase 10F (Canteen foundation) -- mirrors Inventory's
+            // directory/stock split, extended with a THIRD pair for
+            // financial configuration. `.directory.*` covers the
+            // Outlet/Item/recipe catalogue (reference/structural
+            // entities, the same "no capability per sub-entity"
+            // reasoning as Inventory's combined Item/Location pair).
+            // `.orders.*` covers the Order lifecycle (place/fulfill/
+            // cancel) -- deliberately a SEPARATE pair from
+            // `.directory.*`, since running the front counter is a
+            // distinct day-to-day concern from curating the menu/
+            // recipe. `canteen.orders.manage` ALONE is sufficient to
+            // place/fulfill/cancel orders -- `CanteenOrderService::fulfill()`
+            // calls `InventoryStockService::issueMany()`/
+            // `ChargeService::assess()` directly with no internal
+            // capability re-check, matching the established Fees->
+            // Finance/Payments->Fees orchestration-boundary precedent.
+            // `.settings.*` covers the billing configuration (which two
+            // ledger_accounts fulfillment posts against) -- deliberately
+            // NOT granted to Principal below, mirroring
+            // `finance.charges.*`'s own precedent exactly: financial
+            // account configuration is School-Admin-only by default,
+            // unlike the day-to-day directory/orders pairs.
+            ['key' => 'canteen.directory.view', 'label' => 'View the Canteen Outlet/Item/recipe directory', 'namespace' => 'school'],
+            ['key' => 'canteen.directory.manage', 'label' => 'Manage the Canteen Outlet/Item/recipe directory', 'namespace' => 'school'],
+            ['key' => 'canteen.orders.view', 'label' => 'View Canteen orders', 'namespace' => 'school'],
+            ['key' => 'canteen.orders.manage', 'label' => 'Place, fulfill, and cancel Canteen orders', 'namespace' => 'school'],
+            ['key' => 'canteen.settings.view', 'label' => 'View Canteen billing configuration', 'namespace' => 'school'],
+            ['key' => 'canteen.settings.manage', 'label' => 'Manage Canteen billing configuration', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -556,6 +585,20 @@ class CapabilityAndRoleSeeder extends Seeder
                     // administrative work.
                     'inventory.directory.view', 'inventory.directory.manage',
                     'inventory.stock.view', 'inventory.stock.manage',
+                    // Phase 10F: same day-to-day operational parity
+                    // reasoning as Hostel/Inventory/Visitor/Transport/
+                    // Library above for the directory/orders pairs --
+                    // running the canteen catalogue and front counter
+                    // is routine administrative work. `.settings.*`
+                    // (billing account configuration) is granted here
+                    // too -- School Admin already holds this catalog's
+                    // most privileged Finance/Fees pair
+                    // (`finance.charges.*` above), and Canteen billing
+                    // configuration is the identical kind of financial
+                    // account-mapping decision.
+                    'canteen.directory.view', 'canteen.directory.manage',
+                    'canteen.orders.view', 'canteen.orders.manage',
+                    'canteen.settings.view', 'canteen.settings.manage',
                 ],
             ],
             'principal' => [
@@ -650,6 +693,16 @@ class CapabilityAndRoleSeeder extends Seeder
                     // reasoning as school_admin above.
                     'inventory.directory.view', 'inventory.directory.manage',
                     'inventory.stock.view', 'inventory.stock.manage',
+                    // Phase 10F: same day-to-day operational parity
+                    // reasoning as school_admin above for the directory/
+                    // orders pairs ONLY -- deliberately breaking parity
+                    // for `canteen.settings.*` (billing account
+                    // configuration), the same "financial account
+                    // configuration is School-Admin-only" boundary this
+                    // role already respects for `finance.charges.*`
+                    // (never granted to Principal above).
+                    'canteen.directory.view', 'canteen.directory.manage',
+                    'canteen.orders.view', 'canteen.orders.manage',
                 ],
             ],
         ];
