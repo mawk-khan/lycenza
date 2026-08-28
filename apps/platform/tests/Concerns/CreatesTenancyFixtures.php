@@ -18,6 +18,10 @@ use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\GuardianContact;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
+use App\Domain\Hostel\Infrastructure\Hostel;
+use App\Domain\Hostel\Infrastructure\HostelBed;
+use App\Domain\Hostel\Infrastructure\HostelResidencyAssignment;
+use App\Domain\Hostel\Infrastructure\HostelRoom;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
@@ -726,6 +730,53 @@ trait CreatesTenancyFixtures
                 'school_id' => $visitor->school_id,
                 'visitor_id' => $visitor->id,
                 'campus_id' => $campus->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 10D: Hostel fixtures -----------------------------------------
+
+    protected function createHostel(School $school, Campus $campus, array $attributes = []): Hostel
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Hostel::factory()->create(array_merge([
+                'school_id' => $school->id,
+                'campus_id' => $campus->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createHostelRoom(Hostel $hostel, array $attributes = []): HostelRoom
+    {
+        return app(TenantContext::class)->withSchool(
+            $hostel->school,
+            fn () => HostelRoom::factory()->create(array_merge([
+                'school_id' => $hostel->school_id,
+                'hostel_id' => $hostel->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createHostelBed(HostelRoom $room, array $attributes = []): HostelBed
+    {
+        return app(TenantContext::class)->withSchool(
+            $room->school,
+            fn () => HostelBed::factory()->create(array_merge([
+                'school_id' => $room->school_id,
+                'hostel_room_id' => $room->id,
+            ], $attributes)),
+        );
+    }
+
+    protected function createHostelResidencyAssignment(Student $student, HostelBed $bed, array $attributes = []): HostelResidencyAssignment
+    {
+        return app(TenantContext::class)->withSchool(
+            $bed->school,
+            fn () => HostelResidencyAssignment::factory()->create(array_merge([
+                'school_id' => $bed->school_id,
+                'student_id' => $student->id,
+                'hostel_bed_id' => $bed->id,
             ], $attributes)),
         );
     }

@@ -4006,6 +4006,268 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/hostels:
+    get:
+      operationId: listHostels
+      summary: List a School's Hostels (active by default). Requires hostel.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/Hostel" } } } }
+    post:
+      operationId: createHostel
+      summary: Registers a Hostel. Requires hostel.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostelInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Hostel" } } }
+        "422":
+          description: Validation failure (e.g. duplicate code within this School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/hostels/{hostelId}:
+    get:
+      operationId: getHostel
+      summary: Fetch one Hostel. Requires hostel.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Hostel" } } }
+        "404":
+          description: Not found (including a cross-School id).
+    patch:
+      operationId: updateHostel
+      summary: Updates or (de)activates a Hostel. Requires hostel.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostelInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Hostel" } } }
+
+  /schools/{schoolId}/hostels/{hostelId}/hostel-rooms:
+    get:
+      operationId: listHostelRooms
+      summary: List a Hostel's Rooms (active by default). Requires hostel.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/HostelRoom" } } } }
+    post:
+      operationId: createHostelRoom
+      summary: Registers a Room within a Hostel. Requires hostel.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostelRoomInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/HostelRoom" } } }
+        "422":
+          description: Validation failure (e.g. duplicate code within this Hostel).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/hostel-rooms/{hostelRoomId}:
+    patch:
+      operationId: updateHostelRoom
+      summary: Updates or (de)activates a Room. Requires hostel.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelRoomId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostelRoomInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/HostelRoom" } } }
+
+  /schools/{schoolId}/hostel-rooms/{hostelRoomId}/hostel-beds:
+    get:
+      operationId: listHostelBeds
+      summary: List a Room's Beds (active by default). Requires hostel.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelRoomId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/HostelBed" } } } }
+    post:
+      operationId: createHostelBed
+      summary: Registers a Bed within a Room. Requires hostel.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelRoomId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostelBedInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/HostelBed" } } }
+        "422":
+          description: Validation failure (e.g. duplicate code within this Room).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/hostel-beds/{hostelBedId}:
+    patch:
+      operationId: updateHostelBed
+      summary: Updates or (de)activates a Bed. Requires hostel.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelBedId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostelBedInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/HostelBed" } } }
+
+  /schools/{schoolId}/hostel-residency-assignments:
+    get:
+      operationId: listHostelResidencyAssignments
+      summary: List Student Hostel residency assignments (active by default). Requires hostel.residency.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, ended] } }
+        - { $ref: "#/components/parameters/StudentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/HostelResidencyAssignment" } } } }
+    post:
+      operationId: assignHostelResidency
+      summary: >
+        Assigns a Student to a Hostel Bed. Requires hostel.residency.manage.
+        Idempotency-Key required -- a network retry must never risk a
+        duplicate assignment attempt.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostelResidencyAssignmentInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/HostelResidencyAssignment" } } }
+        "422":
+          description: >
+            Student not eligible/already resident, or the Bed is not
+            available/already occupied (HOSTEL_STUDENT_NOT_ELIGIBLE /
+            HOSTEL_STUDENT_ALREADY_RESIDENT / HOSTEL_BED_NOT_AVAILABLE /
+            HOSTEL_BED_ALREADY_OCCUPIED).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: A genuinely concurrent assignment attempt lost the race, or an Idempotency-Key conflict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/hostel-residency-assignments/{hostelResidencyAssignmentId}:
+    get:
+      operationId: getHostelResidencyAssignment
+      summary: Fetch one Hostel residency assignment. Requires hostel.residency.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelResidencyAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/HostelResidencyAssignment" } } }
+
+  /schools/{schoolId}/hostel-residency-assignments/{hostelResidencyAssignmentId}/end:
+    post:
+      operationId: endHostelResidencyAssignment
+      summary: Ends an active Hostel residency assignment. Requires hostel.residency.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelResidencyAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/HostelResidencyAssignment" } } }
+        "422":
+          description: This residency assignment already ended (HOSTEL_RESIDENCY_ALREADY_ENDED).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4216,6 +4478,26 @@ components:
       in: path
       required: true
       description: Phase 0G.6. Nonexistent or cross-School ids both resolve to PAYMENT_NOT_FOUND -- no existence oracle.
+      schema: { type: string, format: uuid }
+    HostelId:
+      name: hostelId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    HostelRoomId:
+      name: hostelRoomId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    HostelBedId:
+      name: hostelBedId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    HostelResidencyAssignmentId:
+      name: hostelResidencyAssignmentId
+      in: path
+      required: true
       schema: { type: string, format: uuid }
   headers:
     XRequestId:
@@ -4873,6 +5155,103 @@ components:
         host_employee_id: { type: string, format: uuid, nullable: true }
         purpose: { type: string, maxLength: 500 }
         gate_pass_number: { type: string, maxLength: 64, nullable: true }
+
+    Hostel:
+      type: object
+      required: [id, campusId, code, name, status]
+      description: A School's Hostel (docs/modules/HOSTEL.md "Hostel model"). Belongs to exactly one Campus.
+      properties:
+        id: { type: string, format: uuid }
+        campusId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [active, inactive] }
+
+    HostelInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        campus_id: { type: string, format: uuid }
+        status: { type: string, enum: [active, inactive] }
+
+    HostelRoom:
+      type: object
+      required: [id, hostelId, code, status]
+      description: A Room belonging to exactly one Hostel (docs/modules/HOSTEL.md "HostelRoom model"). No stored capacity -- derive it from active HostelBed rows.
+      properties:
+        id: { type: string, format: uuid }
+        hostelId: { type: string, format: uuid }
+        code: { type: string }
+        floorOrBlock: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    HostelRoomInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 64 }
+        floor_or_block: { type: string, maxLength: 64, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    HostelBed:
+      type: object
+      required: [id, hostelRoomId, code, status]
+      description: One independently assignable physical Bed belonging to exactly one Room (docs/modules/HOSTEL.md "HostelBed model"). No stored occupant -- current occupancy is derived from the active HostelResidencyAssignment referencing this Bed.
+      properties:
+        id: { type: string, format: uuid }
+        hostelRoomId: { type: string, format: uuid }
+        code: { type: string }
+        status: { type: string, enum: [active, inactive] }
+
+    HostelBedInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 64 }
+        status: { type: string, enum: [active, inactive] }
+
+    HostelResidencyAssignment:
+      type: object
+      required: [id, status, startsOn, student, bed]
+      description: A Student's Hostel residency assignment to a Bed. At most one assignment per Bed AND one per Student has status=active at a time (database-enforced, docs/modules/HOSTEL.md "ResidencyAssignment lifecycle").
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, ended] }
+        startsOn: { type: string, format: date-time }
+        endsOn: { type: string, format: date-time, nullable: true }
+        student:
+          type: object
+          required: [id, studentNumber, firstName]
+          properties:
+            id: { type: string, format: uuid }
+            studentNumber: { type: string }
+            firstName: { type: string }
+            lastName: { type: string, nullable: true }
+        bed:
+          type: object
+          required: [id, code, room]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+            room:
+              type: object
+              required: [id, code, hostel]
+              properties:
+                id: { type: string, format: uuid }
+                code: { type: string }
+                hostel:
+                  type: object
+                  required: [id, code, name]
+                  properties:
+                    id: { type: string, format: uuid }
+                    code: { type: string }
+                    name: { type: string }
+
+    HostelResidencyAssignmentInput:
+      type: object
+      required: [student_id, hostel_bed_id]
+      properties:
+        student_id: { type: string, format: uuid }
+        hostel_bed_id: { type: string, format: uuid }
 
     AcademicYear:
       type: object

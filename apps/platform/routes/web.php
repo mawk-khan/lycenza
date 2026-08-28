@@ -29,6 +29,9 @@ use App\Http\Controllers\App\GuardianAccountInvitationController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianCommunicationPreferenceController;
 use App\Http\Controllers\App\GuardianController;
+use App\Http\Controllers\App\HostelController;
+use App\Http\Controllers\App\HostelResidencyController;
+use App\Http\Controllers\App\HostelRoomController;
 use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -565,5 +568,36 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/payments', [FinancePaymentController::class, 'index'])->name('payments.index');
         Route::get('/payments/{payment}', [FinancePaymentController::class, 'show'])->name('payments.show');
+    });
+
+    // Phase 10D: Hostel (Hostel/Room/Bed directory, Student residency
+    // lifecycle) administrative UI. Capability checks live inside each
+    // controller (AuthorizesCapability trait), matching every other
+    // module's Inertia controller in this file.
+    Route::prefix('app/hostels')->name('app.hostels.')->group(function (): void {
+        Route::get('/', [HostelController::class, 'index'])->name('index');
+        Route::get('/create', [HostelController::class, 'create'])->name('create');
+        Route::post('/', [HostelController::class, 'store'])->name('store');
+        Route::get('/{hostel}', [HostelController::class, 'show'])->name('show');
+        Route::patch('/{hostel}', [HostelController::class, 'update'])->name('update');
+        Route::post('/{hostel}/rooms', [HostelController::class, 'storeRoom'])->name('rooms.store');
+    });
+
+    Route::prefix('app/hostel-rooms')->name('app.hostel-rooms.')->group(function (): void {
+        Route::get('/{hostelRoom}', [HostelRoomController::class, 'show'])->name('show');
+        Route::patch('/{hostelRoom}', [HostelRoomController::class, 'update'])->name('update');
+        Route::post('/{hostelRoom}/beds', [HostelRoomController::class, 'storeBed'])->name('beds.store');
+    });
+
+    Route::patch('app/hostel-beds/{hostelBed}', [HostelRoomController::class, 'updateBed'])
+        ->name('app.hostel-beds.update');
+
+    Route::prefix('app/hostel-residency')->name('app.hostel-residency.')->group(function (): void {
+        Route::get('/', [HostelResidencyController::class, 'index'])->name('index');
+        Route::get('/create', [HostelResidencyController::class, 'create'])->name('create');
+        Route::get('/search/students', [HostelResidencyController::class, 'searchStudents'])->name('search-students');
+        Route::get('/search/beds', [HostelResidencyController::class, 'searchBeds'])->name('search-beds');
+        Route::post('/', [HostelResidencyController::class, 'store'])->name('store');
+        Route::post('/{hostelResidencyAssignment}/end', [HostelResidencyController::class, 'end'])->name('end');
     });
 });
