@@ -81,31 +81,6 @@ class EnrollmentRolloverDryRunService
     private const RESULT_BLOCKED = 'blocked';
 
     /**
-     * Phase 1G.2 (docs/students/PHASE-1G-0-SUBJECT-ENROLLMENT-ROLLOVER-ARCHITECTURE.md
-     * §8, plus one addition -- `elective_target_duplicate_mapping`, not
-     * foreseen by that table, see this checkpoint's own documentation
-     * for why): the fixed deterministic priority a Item's several
-     * elective participations are resolved to ONE winning
-     * `validation_reason` by, when more than one subject-level issue is
-     * found across the Item's elective set. Never "first one found in
-     * query order" -- always this fixed rank. `legacy_source_anchor_ambiguous`
-     * is deliberately LAST -- it is the least specific signal ("we
-     * could not prove which source Enrollment a legacy row belongs
-     * to"), so a concrete, actionable blocking problem elsewhere in the
-     * same Item's elective set always wins the single reason slot.
-     */
-    private const SUBJECT_REASON_PRECEDENCE = [
-        'elective_target_duplicate_mapping',
-        'elective_target_group_conflict',
-        'elective_target_existing_conflict',
-        'missing_subject_mapping',
-        'elective_target_required',
-        'elective_target_inactive',
-        'elective_target_context_mismatch',
-        'legacy_source_anchor_ambiguous',
-    ];
-
-    /**
      * Every code above except `legacy_source_anchor_ambiguous` blocks
      * outright; that one is `review` (mirrors `multiple_source_candidates`'s
      * own review classification for the analogous placement-side
@@ -600,141 +575,27 @@ class EnrollmentRolloverDryRunService
             $itemId = $ctx['itemId'];
             $item = $itemsById->get($itemId);
 
-            $participations = collect();
-            $itemReasons = [];
+            $resolution = SubjectRolloverResolution::resolve(
+                $item->source_enrollment_id,
+                $item->student_id,
+                $anchoredByEnrollment->get($item->source_enrollment_id, collect()),
+                $legacyByStudent->get($item->student_id, collect()),
+                $allSourceYearEnrollmentsByStudent->get($item->student_id, collect()),
+                $mappingsBySource,
+                $targetOfferingsById,
+                $ctx['targetAcademicYearId'],
+                $ctx['targetCampusId'],
+                $ctx['targetGradeLevelId'],
+                $ctx['targetEnrollmentId'] !== null
+                    ? $existingTargetParticipationsByEnrollment->get($ctx['targetEnrollmentId'], collect())
+                    : collect(),
+            );
 
-            foreach ($anchoredByEnrollment->get($item->source_enrollment_id, collect()) as $row) {
-                $participations->push($row);
-            }
-
-            foreach ($legacyByStudent->get($item->student_id, collect()) as $row) {
-                $yearCandidates = $allSourceYearEnrollmentsByStudent->get($item->student_id, collect());
-                $offering = $row->subjectOffering;
-
-                if ($yearCandidates->count() !== 1 || $offering === null) {
-                    $itemReasons[] = 'legacy_source_anchor_ambiguous';
-
-                    continue;
-                }
-
-                $onlyCandidate = $yearCandidates->first();
-                $compatible = $onlyCandidate->academic_year_id === $offering->academic_year_id
-                    && $onlyCandidate->campus_id === $offering->campus_id
-                    && $onlyCandidate->grade_level_id === $offering->grade_level_id;
-
-                if (! $compatible || $onlyCandidate->id !== $item->source_enrollment_id) {
-                    $itemReasons[] = 'legacy_source_anchor_ambiguous';
-
-                    continue;
-                }
-
-                $participations->push($row);
-            }
-
-            $resolvedTargets = [];
-            foreach ($participations as $row) {
-                $offering = $row->subjectOffering;
-
-                if ($offering === null || $offering->is_required) {
-                    // Phase 1G.2 section 61 defense: a required-offering
-                    // participation is never a valid elective rollover
-                    // candidate, even if malformed/raw data made one
-                    // exist -- silently excluded, no conflict raised.
-                    continue;
-                }
-
-                $mapping = $mappingsBySource->get($offering->id);
-
-                if ($mapping === null) {
-                    $itemReasons[] = 'missing_subject_mapping';
-
-                    continue;
-                }
-
-                if ($mapping->isExplicitOmit()) {
-                    continue;
-                }
-
-                $target = $targetOfferingsById->get($mapping->target_subject_offering_id);
-
-                if ($target === null) {
-                    // Defensive only -- the composite same-School FK
-                    // guarantees a mapped target Offering exists; this
-                    // is never reachable through the sanctioned mutation
-                    // service.
-                    $itemReasons[] = 'elective_target_context_mismatch';
-
-                    continue;
-                }
-
-                if ($target->is_required) {
-                    $itemReasons[] = 'elective_target_required';
-
-                    continue;
-                }
-
-                if (! $target->isActive()) {
-                    $itemReasons[] = 'elective_target_inactive';
-
-                    continue;
-                }
-
-                if ($target->academic_year_id !== $ctx['targetAcademicYearId']
-                    || $target->campus_id !== $ctx['targetCampusId']
-                    || $target->grade_level_id !== $ctx['targetGradeLevelId']) {
-                    $itemReasons[] = 'elective_target_context_mismatch';
-
-                    continue;
-                }
-
-                $resolvedTargets[$offering->id] = $target;
-            }
-
-            $targetIdCounts = [];
-            foreach ($resolvedTargets as $target) {
-                $targetIdCounts[$target->id] = ($targetIdCounts[$target->id] ?? 0) + 1;
-            }
-            if (collect($targetIdCounts)->contains(fn ($count) => $count > 1)) {
-                $itemReasons[] = 'elective_target_duplicate_mapping';
-            }
-
-            $byGroup = [];
-            foreach ($resolvedTargets as $target) {
-                if ($target->elective_group_id !== null) {
-                    $byGroup[$target->elective_group_id][$target->id] = true;
-                }
-            }
-            foreach ($byGroup as $groupTargetIds) {
-                if (count($groupTargetIds) > 1) {
-                    $itemReasons[] = 'elective_target_group_conflict';
-
-                    break;
-                }
-            }
-
-            if ($ctx['targetEnrollmentId'] !== null) {
-                $existingActive = $existingTargetParticipationsByEnrollment->get($ctx['targetEnrollmentId'], collect());
-                $existingByOffering = $existingActive->keyBy('subject_offering_id');
-                $existingGroups = $existingActive->whereNotNull('elective_group_id')->groupBy('elective_group_id');
-
-                foreach ($resolvedTargets as $target) {
-                    if ($existingByOffering->has($target->id)) {
-                        // elective_already_enrolled_match -- non-blocking,
-                        // idempotent no-op (this checkpoint's §20).
-                        continue;
-                    }
-
-                    if ($target->elective_group_id !== null && $existingGroups->has($target->elective_group_id)) {
-                        $itemReasons[] = 'elective_target_existing_conflict';
-                    }
-                }
-            }
-
-            if ($itemReasons === []) {
+            if ($resolution['reasons'] === []) {
                 continue;
             }
 
-            $winner = collect(self::SUBJECT_REASON_PRECEDENCE)->first(fn ($reason) => in_array($reason, $itemReasons, true));
+            $winner = collect(SubjectRolloverResolution::REASON_PRECEDENCE)->first(fn ($reason) => in_array($reason, $resolution['reasons'], true));
 
             $results[$itemId] = array_diff_key($results[$itemId], ['result' => true, 'reason' => true]) + [
                 'result' => self::SUBJECT_REASON_RESULT[$winner],

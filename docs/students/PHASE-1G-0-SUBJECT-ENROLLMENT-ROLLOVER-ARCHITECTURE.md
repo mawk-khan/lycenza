@@ -100,6 +100,24 @@ checkpoint's dry-run flags a `legacy_source_anchor_ambiguous` conflict
 Phase 1B.7B's own `multiple_source_candidates` precedent exactly for
 the analogous placement-side ambiguity.
 
+> **Supersession note (Phase 1G.1/1G.2, corrected rule):** the
+> count-only rule above was refined before implementation — a bare
+> `COUNT(*) === 1` alone does not prove the sole candidate is actually
+> the RIGHT one. The final accepted rule, actually implemented starting
+> in Phase 1G.2 (see
+> `docs/students/PHASE-1G-1-SUBJECT-ROLLOVER-MAPPING-FOUNDATION.md` §12
+> and `docs/students/PHASE-1G-2-SUBJECT-ROLLOVER-DRY-RUN.md` §3), adds
+> two further conditions: the sole candidate must be academically
+> compatible with the source `SubjectOffering` (same School/AcademicYear/
+> Campus/GradeLevel, Section ignored), AND its `id` must equal
+> `item.source_enrollment_id` exactly. Any failure of any of the three
+> conditions — ambiguous count, an incompatible sole candidate, or a
+> compatible-but-wrong sole candidate — resolves to the SAME
+> `legacy_source_anchor_ambiguous` code, never a guess. This is the rule
+> Phase 1G.2 (dry-run) and Phase 1G.3 (execution) both actually
+> implement; the paragraph above is preserved as the original decision
+> record, not rewritten, per this codebase's documentation discipline.
+
 ## 5. Target mapping — data model (DECIDED: Option B, offering-level only)
 
 Four options compared:
