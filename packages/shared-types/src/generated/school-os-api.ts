@@ -1868,6 +1868,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/ledger-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's chart-of-accounts entries. Requires finance.ledger.view. */
+        get: operations["listLedgerAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/journal-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's posted journal history. Requires finance.ledger.view. */
+        get: operations["listJournalEntries"];
+        put?: never;
+        /** Posts a new, balanced journal entry via LedgerAdministrationService (never a direct journal_entries/journal_lines write). Requires finance.ledger.post. NOT idempotent -- 0G.2 explicitly deferred generic ledger-posting HTTP idempotency; no Idempotency-Key is accepted or required, and a retried request creates a second, independent journal entry. */
+        post: operations["postJournalEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/journal-entries/{journalEntryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one journal entry with its lines. Requires finance.ledger.view. */
+        get: operations["getJournalEntry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/journal-entries/{journalEntryId}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverses a posted journal entry via LedgerAdministrationService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires finance.ledger.reverse (a separate capability from finance.ledger.post). NOT a generic HTTP-idempotent endpoint -- reversal has its own structural at-most-once semantics (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat). */
+        post: operations["reverseJournalEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's Fees Charges. Requires finance.charges.view. */
+        get: operations["listCharges"];
+        put?: never;
+        /** Assesses (recognizes) a new Charge via ChargeAdministrationService::assess() -- immediate ledger recognition, no draft state. Requires finance.charges.manage. NOT idempotent -- 0G.4 explicitly deferred generic Charge-assessment HTTP idempotency; a retried request creates a second, independent Charge. */
+        post: operations["assessCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/charges/{chargeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Charge's full detail. Requires finance.charges.view. */
+        get: operations["getCharge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/charges/{chargeId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancels an active Charge via ChargeAdministrationService::cancel() (reverses the recognition journal entry -- the original is never mutated). Requires finance.charges.manage. Rejected with CHARGE_HAS_PAYMENT_ALLOCATIONS (409) if any Payment has already been allocated to this Charge (ADR 0031) -- Refund/compensation is a future, separate checkpoint. NOT a generic HTTP-idempotent endpoint -- cancellation has its own at-most-once semantics (CHARGE_ALREADY_CANCELLED, 409, on a repeat). */
+        post: operations["cancelCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's recognized Payments (READ ONLY -- there is no finance.payments.manage capability and no human Payment mutation route exists anywhere; settlement recognition belongs exclusively to the trusted, not-yet-HTTP-exposed PaymentProviderEventService boundary). Requires finance.payments.view. */
+        get: operations["listPayments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payments/{paymentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Payment's full detail, including its Charge allocations. Requires finance.payments.view. */
+        get: operations["getPayment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1894,6 +2049,185 @@ export interface components {
                 /** @description Field-level validation errors, present only on 422 responses. */
                 errors?: Record<string, never> | null;
             };
+        };
+        /** @description Phase 0G.6: an exact decimal amount plus its explicit currency -- NEVER a JSON number/float (docs/architecture/adr/0030). `amount` is a plain decimal string, at most 12 integer digits and 2 fractional digits (matching every Phase 0G table's NUMERIC(14,2) columns); no scientific notation, no locale formatting. */
+        Money: {
+            /** @example 1000.00 */
+            amount: string;
+            /**
+             * @description INR only in Phase 0G -- no multi-currency support yet.
+             * @example INR
+             */
+            currency: string;
+        };
+        LedgerAccount: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            type: "asset" | "liability" | "equity" | "income" | "expense";
+            /** @example INR */
+            currency: string;
+            isSystem: boolean;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        JournalLine: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            ledgerAccountId: string;
+            accountCode: string;
+            accountName: string;
+            /** @enum {string} */
+            side: "debit" | "credit";
+            amount: string;
+            /** @example INR */
+            currency: string;
+        };
+        /** @description Deliberately never includes posting_txid (internal PostgreSQL transaction-identity metadata, never Finance business data). */
+        JournalEntrySummary: {
+            /** Format: uuid */
+            id: string;
+            /** @example INR */
+            currency: string;
+            description: string;
+            /** Format: date-time */
+            postedAt: string;
+            /** Format: uuid */
+            reversalOfJournalEntryId: string | null;
+            /** Format: uuid */
+            reversedByJournalEntryId: string | null;
+            lineCount: number;
+        };
+        JournalEntryDetail: components["schemas"]["JournalEntrySummary"] & {
+            lines: components["schemas"]["JournalLine"][];
+        };
+        /** @description The result of post()/reverse() -- deliberately minimal, never the full detail's lines. */
+        JournalEntryResult: {
+            /** Format: uuid */
+            id: string;
+            /** @example INR */
+            currency: string;
+            description: string;
+            /** Format: date-time */
+            postedAt: string;
+            /** Format: uuid */
+            reversalOfJournalEntryId: string | null;
+            lineCount: number;
+        };
+        JournalEntryInput: {
+            /** @example INR */
+            currency: string;
+            description: string;
+            lines: {
+                /** Format: uuid */
+                ledger_account_id: string;
+                /** @enum {string} */
+                side: "debit" | "credit";
+                /** @example 1000.00 */
+                amount: string;
+            }[];
+        };
+        /** @description No amount_paid/remaining_balance/paid/partially_paid field -- no such settlement status could be justified without a Payment record. */
+        ChargeSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            description: string;
+            amount: string;
+            /** @example INR */
+            currency: string;
+            /** Format: date */
+            dueDate: string | null;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ChargeDetail: components["schemas"]["ChargeSummary"] & {
+            /** Format: uuid */
+            receivableLedgerAccountId: string;
+            /** Format: uuid */
+            revenueLedgerAccountId: string;
+            /** Format: uuid */
+            journalEntryId: string;
+            /** Format: uuid */
+            cancellationJournalEntryId: string | null;
+        };
+        ChargeResult: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            amount: string;
+            /** @example INR */
+            currency: string;
+            /** Format: uuid */
+            journalEntryId: string;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            /** Format: uuid */
+            cancellationJournalEntryId: string | null;
+        };
+        ChargeInput: {
+            /** Format: uuid */
+            student_id: string;
+            /** Format: uuid */
+            academic_year_id: string;
+            description: string;
+            /** @example 1000.00 */
+            amount: string;
+            /** @example INR */
+            currency: string;
+            /** Format: uuid */
+            receivable_ledger_account_id: string;
+            /** Format: uuid */
+            revenue_ledger_account_id: string;
+            /** Format: date */
+            due_date?: string | null;
+        };
+        PaymentAllocationEntry: {
+            /** Format: uuid */
+            chargeId: string;
+            amount: string;
+        };
+        PaymentSummary: {
+            /** Format: uuid */
+            id: string;
+            provider: string;
+            amount: string;
+            /** @example INR */
+            currency: string;
+            /** Format: date-time */
+            settledAt: string;
+        };
+        /** @description Never includes creation_txid, a raw provider payload, or any provider secret/signature material -- structurally impossible, this projection carries only normalized, safe fields. */
+        PaymentDetail: {
+            /** Format: uuid */
+            id: string;
+            provider: string;
+            providerPaymentReference: string;
+            amount: string;
+            /** @example INR */
+            currency: string;
+            /** Format: uuid */
+            settlementLedgerAccountId: string;
+            /** Format: uuid */
+            journalEntryId: string;
+            /** Format: date-time */
+            settledAt: string;
+            allocations: components["schemas"]["PaymentAllocationEntry"][];
         };
         /** @description Never includes the signing secret (see the create/rotate-secret responses for the one-time exception). */
         WebhookEndpoint: {
@@ -3177,6 +3511,12 @@ export interface components {
         TransportStudentAssignmentId: string;
         VisitorId: string;
         VisitorVisitId: string;
+        /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to JOURNAL_ENTRY_NOT_FOUND -- no existence oracle. */
+        JournalEntryId: string;
+        /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to CHARGE_NOT_FOUND -- no existence oracle. */
+        ChargeId: string;
+        /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to PAYMENT_NOT_FOUND -- no existence oracle. */
+        PaymentId: string;
     };
     requestBodies: never;
     headers: {
@@ -8529,6 +8869,609 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listLedgerAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LedgerAccount"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.ledger.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listJournalEntries: {
+        parameters: {
+            query?: {
+                posted_from?: string;
+                posted_to?: string;
+                ledger_account_id?: string;
+                /** @description true = only entries that are themselves a reversal; false = only original entries; omitted = no filter. */
+                reversed_only?: boolean;
+                /** @description Substring match on description. */
+                search?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["JournalEntrySummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.ledger.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    postJournalEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JournalEntryInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["JournalEntryResult"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.ledger.post in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEDGER_ACCOUNT_NOT_FOUND -- a line names a nonexistent or cross-School ledger account. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure (malformed decimal, fewer than 2 lines, unbalanced entry, non-INR currency). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getJournalEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to JOURNAL_ENTRY_NOT_FOUND -- no existence oracle. */
+                journalEntryId: components["parameters"]["JournalEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["JournalEntryDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.ledger.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description JOURNAL_ENTRY_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way -- no cross-School oracle). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reverseJournalEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to JOURNAL_ENTRY_NOT_FOUND -- no existence oracle. */
+                journalEntryId: components["parameters"]["JournalEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Created (the new reversing journal entry). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["JournalEntryResult"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.ledger.reverse in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description JOURNAL_ENTRY_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description JOURNAL_ENTRY_ALREADY_REVERSED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listCharges: {
+        parameters: {
+            query?: {
+                student_id?: string;
+                academic_year_id?: string;
+                include_cancelled?: boolean;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargeSummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    assessCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargeResult"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description STUDENT_NOT_FOUND, ACADEMIC_YEAR_NOT_FOUND, or LEDGER_ACCOUNT_NOT_FOUND (nonexistent or cross-School reference). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure (malformed decimal, non-positive amount, non-INR currency, identical receivable/revenue accounts). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to CHARGE_NOT_FOUND -- no existence oracle. */
+                chargeId: components["parameters"]["ChargeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargeDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CHARGE_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cancelCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to CHARGE_NOT_FOUND -- no existence oracle. */
+                chargeId: components["parameters"]["ChargeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChargeResult"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CHARGE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CHARGE_ALREADY_CANCELLED or CHARGE_HAS_PAYMENT_ALLOCATIONS. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listPayments: {
+        parameters: {
+            query?: {
+                provider_payment_reference?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PaymentSummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.payments.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to PAYMENT_NOT_FOUND -- no existence oracle. */
+                paymentId: components["parameters"]["PaymentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PaymentDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.payments.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description PAYMENT_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
         };
     };
 }

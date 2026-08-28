@@ -62,6 +62,14 @@ class DashboardController extends Controller
                     && $capabilities->canInSchool($user, 'enrollments.rollovers.view', $school),
                 // Phase 1D.6: Admissions administrative UI.
                 'canViewAdmissions' => $school !== null && $capabilities->canInSchool($user, 'admissions.view', $school),
+                // Phase 0G.7: Finance workspace -- any one of its three
+                // view capabilities is enough to show the entry point;
+                // the Finance hub page itself hides the sub-areas the
+                // user cannot see (FinanceController::index()).
+                'canViewFinance' => $school !== null
+                    && ($capabilities->canInSchool($user, 'finance.ledger.view', $school)
+                        || $capabilities->canInSchool($user, 'finance.charges.view', $school)
+                        || $capabilities->canInSchool($user, 'finance.payments.view', $school)),
             ],
         ]);
     }

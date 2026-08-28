@@ -209,7 +209,7 @@ Students/SIS, Guardians, Admissions. First real domain events
 `docs/architecture/EVENTS.md`) get real producers here, flowing through
 the Phase 0C outbox/consumer substrate rather than a bespoke mechanism.
 
-## Phase 0G — Finance and Fees
+## Phase 0G — Finance and Fees (in progress)
 
 Finance (core ledger), Fees, Payments — including the first real
 payment-gateway integration and inbound-webhook idempotency (ADR 0018,
@@ -219,6 +219,181 @@ and payment-provider/webhook idempotency), built against the
 financial-correctness rules in `docs/architecture/ARCHITECTURE.md` §10
 from day one. This is a security- and correctness-critical phase;
 expect the heaviest testing and review bar of any phase so far.
+
+**0G.0 — Finance Architecture & Module Plan (implemented):**
+architecture/domain-contract checkpoint, no code. Settled the one
+decision `ARCHITECTURE.md` §10 left open — Finance is a true
+double-entry ledger with a chart of accounts, not a subledger or a
+mutable-balance charge/payment tracker (ADR 0030). Full domain
+contract, checkpoint sequence (0G.1-0G.8), and security register:
+`docs/modules/FINANCE.md`.
+
+**0G.1 — Ledger Schema Foundation (implemented):** the persistence
+kernel only — `ledger_accounts`, `journal_entries`, `journal_lines`
+(RLS-protected, same-School+same-currency composite foreign keys,
+`NUMERIC(14,2)` money, no float anywhere), the deferred
+constraint-trigger enforcing "debits equal credits" per entry, the
+structural (partial-unique-index-backed) reversal relationship proven
+safe under real two-process concurrency, and the first-party
+`App\Support\Money\Money` value object. Full as-built detail:
+`docs/modules/FINANCE.md` ("0G.1 as-built").
+
+**0G.2 — Ledger Posting & Reversal Application Services
+(implemented):** `App\Domain\Finance\Application\LedgerService` — the
+one sanctioned write path for posting and reversing journal entries
+(`post()`/`reverse()`), inside one PostgreSQL transaction each,
+audited (`App\Support\Audit\AuditRecorder`) and emitted through the
+existing transactional outbox (ADR 0025) exactly once per successful
+operation. Application-layer balance/currency/account validation sits
+in front of, and never replaces, every 0G.1 database defense. Not an
+authorization boundary — no capabilities, no HTTP, no UI. Zero new
+migrations. Full as-built detail: `docs/modules/FINANCE.md` ("0G.2
+as-built").
+
+**0G.3 — Finance Authorization & Administrative Read Model
+(implemented):** real `finance.ledger.view`/`.post`/`.reverse`
+capabilities (`database/seeders/CapabilityAndRoleSeeder.php`, no data
+migration — the existing sole capability/role catalog), granted by
+default to `school_admin` only (not `principal`).
+`App\Domain\Finance\Application\LedgerAdministrationService` is the
+authorized administrative facade wrapping the still-unmodified,
+still-unauthorized `LedgerService` trusted core; `App\Domain\Finance
+\Application\LedgerReadService` is the sole authorized read path for
+Ledger Accounts, journal history, and journal detail, returning only
+typed DTOs (never a raw Eloquent model, never `posting_txid`). Every
+successful read is audited (Highly Sensitive tier, unchanged from
+`docs/modules/FINANCE.md`'s already-committed classification). Zero
+new migrations, zero composer changes, no HTTP/API/UI, no Ledger
+Account CRUD. Full as-built detail: `docs/modules/FINANCE.md` ("0G.3
+as-built").
+
+**0G.4 — Fees / Receivables Foundation (implemented):** a new module,
+`App\Domain\Fees` (not `App\Domain\Finance` — DOMAIN-MAP.md's separate
+Finance/Fees dependency rows required it, see `docs/modules/FINANCE.md`
+"0G.4 as-built", "Module boundary"), adds `charges` (one migration,
+`NUMERIC(14,2)`, INR-only, same-School/same-currency composite foreign
+keys against `students`/`academic_years`/`ledger_accounts`/
+`journal_entries`) — the receivable obligation entity; no `invoices`/
+fee-definition entity in this checkpoint. `App\Domain\Fees\Application\ChargeService`
+(`assess()`/`cancel()`) posts through Finance's existing `LedgerService`
+(one small addition, `reverseById()`, so Fees never reads Finance's
+`JournalEntry` model directly) inside one atomic transaction — never a
+direct `journal_entries`/`journal_lines` write. `finance.charges.view`/
+`.manage` capabilities, granted to `school_admin` only, gate
+`ChargeAdministrationService`/`ChargeReadService`. No payments,
+payment allocations, refunds, API, or UI. Full as-built detail:
+`docs/modules/FINANCE.md` ("0G.4 as-built").
+
+**0G.5 — Payments / Allocation / Idempotent Provider Integration
+(implemented):** a new module, `App\Domain\Payments`
+(`docs/architecture/adr/0031-payments-settlement-allocation-and-idempotency-architecture.md`,
+DOMAIN-MAP.md's own row: depends on Fees and Finance, neither depends
+on it — no cycle), adds three tables — `payment_provider_events` (pure
+immutable provider-callback ingress identity, `(school_id, provider,
+provider_event_id)` unique, the durable idempotency claim),
+`payments` (the School's immutable settlement fact, created ONLY at
+settlement — no pending/failed rows, a deliberate refinement of this
+document's own earlier conceptual sketch toward 0G.4's immediate-
+recognition precedent), and `payment_allocations` (immutable payment-
+to-charge join, `charges(id, school_id)` composite FK). Settlement is
+mandatory-fully-allocated (sum of allocations must equal the settled
+amount, both application-checked and database-enforced via a deferred
+constraint trigger mirroring `journal_entries_balanced_check`'s
+precedent) — true overpayment/unapplied-cash accounting remains
+explicitly deferred, alongside Refunds. A Payment's allocation set is
+additionally frozen the instant its own transaction commits
+(`payments.creation_txid`, mirroring `journal_entries.posting_txid`) —
+a later, separate transaction can never insert an additional
+allocation row, regardless of remaining Charge capacity — and Charge
+over-allocation is prevented by an IMMEDIATE `BEFORE INSERT` trigger
+that takes a `SELECT ... FOR UPDATE` lock on the Charge row before
+validating capacity, closing a genuine concurrent-transaction race a
+deferred-only check could not (both proven under real two-process
+concurrency, including a raw path that bypasses the Application
+service entirely). `App\Domain\Payments\Application\PaymentProviderEventService::recordSettlement()`
+posts through Finance's existing `LedgerService::post()` (one debit
+line for the settlement account, one credit line per charge
+allocation) and through Fees' new `ChargeService::lockChargeForAllocation()`
+(a `SELECT ... FOR UPDATE` lock, never a direct `charges` table read)
+— all inside one atomic transaction. A Charge with any recognized
+allocation can never be cancelled (`charges_payment_allocation_guard_trigger`,
+a Payments-owned trigger physically attached to Fees' `charges` table,
+sharing the SAME Charge-row lock protocol as allocation insertion so
+the two paths genuinely serialize against each other;
+`App\Domain\Fees\Application\ChargeService::cancel()` translates its
+rejection to a typed exception). `finance.payments.view` only (no
+`.manage` — provider ingestion is a trusted system boundary, never a
+human capability). No signature verification, HTTP/provider adapter,
+refunds, or UI. Full as-built detail: `docs/modules/FINANCE.md` ("0G.5
+as-built").
+
+**0G.6 — Finance / Fees / Payments HTTP & API Transport (implemented):**
+thin HTTP controllers exposing the already-authorized 0G.2-0G.5
+Application boundary over this repo's canonical `/api/v1` transport —
+`LedgerAccountController`/`JournalEntryController`
+(`App\Domain\Finance\Http\Controllers`), `ChargeController`
+(`App\Domain\Fees\Http\Controllers`), `PaymentController`
+(`App\Domain\Payments\Http\Controllers`, READ-ONLY). Every controller
+calls only its module's already-authorized facade/read service
+(`LedgerAdministrationService`/`LedgerReadService`,
+`ChargeAdministrationService`/`ChargeReadService`, `PaymentReadService`)
+— never `LedgerService`/`ChargeService`/`PaymentProviderEventService`
+or a raw Eloquent model directly, proven both by review and by a
+static source-grep guard (`FinanceHttpArchitectureGuardTest`). Eleven
+routes total: Ledger Accounts (read), journal entries (read/post/
+reverse), Charges (read/assess/cancel), Payments (read only — no
+`finance.payments.manage` capability exists, no human Payment mutation
+route of any kind). No provider-specific webhook/callback route (no
+provider was selected in this checkpoint's scope, per ADR 0031's own
+deferral); `PaymentProviderEventService` remains unreachable from any
+route. Money is always an exact decimal string over the wire, never a
+float. Zero new migrations, zero new capabilities, zero new
+dependencies. Full as-built detail: `docs/modules/FINANCE.md` ("0G.6
+as-built").
+
+**0G.7 — Finance / Fees / Payments UI (implemented):** the
+administrative Inertia UI over 0G.6's boundary — Ledger account
+directory, journal history/detail/post/reverse, Charge list/detail/
+assess/cancel, read-only Payment list/detail. New session-authenticated
+Inertia controllers (`App\Http\Controllers\App\Finance\*`), calling the
+SAME already-authorized Application-layer services 0G.6's `/api/v1`
+controllers call — never a raw Eloquent model, never `LedgerService`/
+`ChargeService`/`PaymentProviderEventService` directly — mirroring the
+established Students/Guardians/Communications pattern, NOT the 0G.6
+Bearer-token JSON API (which the browser cannot authenticate against
+without new Sanctum stateful-SPA infrastructure this checkpoint
+deliberately did not introduce; see FINANCE.md "0G.7 as-built" for the
+full contract-gap writeup). No new capability, no new migration, no
+OpenAPI/generated-type change; the 0G.6 `/api/v1` surface is
+unmodified. Money stays an exact decimal string end to end (no
+JavaScript `Number`/float, including the client-side journal-balance
+preview, which uses exact `BigInt`-cents arithmetic). No Refund UI, no
+Payment mutation UI, no provider configuration UI, no reporting
+dashboard. Full as-built detail: `docs/modules/FINANCE.md` ("0G.7
+as-built").
+
+**0G.8 — Phase 0G Closure / Integration Readiness (feature work
+complete; publication pending):** `origin/main` advanced 32 commits
+(Admissions, Library, Transport, Visitor, and other unrelated work)
+while Finance was under construction, producing seven textual merge
+conflicts (`DashboardController.php`, `Dashboard.vue`,
+`CapabilityAndRoleSeeder.php`, `routes/api.php`, `routes/web.php`, the
+OpenAPI contract, and its generated TypeScript) — all additive-only on
+both sides, none a real naming/semantic collision. Resolved on a
+dedicated `integration/phase-0g-finance-resolution` branch (never the
+Finance feature branch, never `main`) by keeping both sides everywhere
+except the generated TypeScript file, which was discarded and
+regenerated from the merged OpenAPI source rather than hand-merged.
+Validated against the merged candidate: clean-install AND upgrade-path
+migration proof (133 migrations = 125 from `origin/main` + Finance's 8,
+zero collisions either way), RLS/trigger/SECURITY-DEFINER catalog
+spot-check, zero duplicate routes/capabilities, full application
+regression (3429 tests / 11305 assertions / 0 failures / 0 errors),
+and all frontend/static quality gates green. Full as-built detail:
+`docs/modules/FINANCE.md` ("0G.8 as-built"). Phase 0G's feature work
+(0G.0–0G.8) is complete; **publication** (pushing the feature branch
+and integrating into `main`) remains a separate, explicitly authorized
+gate — not yet performed.
 
 ## Phase 0H — Academic Operations
 

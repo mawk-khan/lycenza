@@ -331,6 +331,64 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'visitor.directory.manage', 'label' => 'Manage the Visitor directory', 'namespace' => 'school'],
             ['key' => 'visitor.visits.view', 'label' => 'View Visitor check-in/check-out Visits', 'namespace' => 'school'],
             ['key' => 'visitor.visits.manage', 'label' => 'Manage Visitor check-in/check-out Visits', 'namespace' => 'school'],
+
+            // Phase 0G.3 (docs/modules/FINANCE.md "Authorization
+            // design") -- Finance ledger authorization. A single
+            // `finance.ledger.view` covers every current administrative
+            // READ surface (ledger account directory, journal history,
+            // journal detail) rather than one capability per DTO
+            // (section 9's guidance, mirroring `hr.employees.view`'s
+            // single Directory-tier read grant). `.post` and `.reverse`
+            // are deliberately SEPARATE from `.view` AND from each
+            // other: reversal creates a new, permanent ledger fact that
+            // corrects a prior one -- a materially higher-risk financial
+            // correction action than an ordinary posting, the same
+            // "distinct authority for a materially higher blast radius
+            // action" reasoning already established by
+            // `communications.emergency` (kept separate from
+            // `.announce`) and `enrollments.rollovers.manage` (kept
+            // separate from `enrollments.manage`). No
+            // `finance.accounts.manage` is registered here -- 0G.3
+            // implements no Ledger Account create/update/deactivate;
+            // that capability is deferred to whichever future
+            // checkpoint actually adds Chart of Accounts administration
+            // (FINANCE.md 0G.3 as-built, "Deferred: account CRUD").
+            ['key' => 'finance.ledger.view', 'label' => 'View Finance ledger accounts and journal entries', 'namespace' => 'school'],
+            ['key' => 'finance.ledger.post', 'label' => 'Post Finance journal entries', 'namespace' => 'school'],
+            ['key' => 'finance.ledger.reverse', 'label' => 'Reverse posted Finance journal entries', 'namespace' => 'school'],
+
+            // Phase 0G.4 (docs/modules/FINANCE.md "Authorization
+            // architecture", already named this exact conceptual pair
+            // in 0G.0/0G.3): Fees/Receivables authorization, deliberately
+            // SEPARATE from `finance.ledger.*` -- assessing/cancelling a
+            // Student's charge is a distinct administrative
+            // responsibility from raw ledger administration
+            // (App\Domain\Fees\Application\ChargeAdministrationService
+            // never requires `finance.ledger.post`/`.reverse`, and vice
+            // versa). A single `finance.charges.manage` covers BOTH
+            // assessment and cancellation -- FINANCE.md's own
+            // conceptual family lists one `view`/`manage` pair for
+            // charges, not a finer split like Ledger's `post`/`reverse`
+            // (0G.3 judged posting vs. reversal separately blast-radius-
+            // worthy for the raw ledger; 0G.4 does not invent an
+            // equivalent split for charges that FINANCE.md never asked
+            // for).
+            ['key' => 'finance.charges.view', 'label' => 'View Fees charges', 'namespace' => 'school'],
+            ['key' => 'finance.charges.manage', 'label' => 'Assess and cancel Fees charges', 'namespace' => 'school'],
+
+            // Phase 0G.5: `finance.payments.view` gates
+            // `App\Domain\Payments\Application\PaymentReadService` only.
+            // Deliberately NO `finance.payments.manage` -- 0G.5 has no
+            // human-triggered "record a payment" action to gate; the
+            // only write path (`PaymentProviderEventService::recordSettlement()`)
+            // is a trusted SYSTEM boundary (a future provider/HTTP
+            // adapter), never reached through a human capability check
+            // (rule 54 of the 0G.5 brief). Registering an unused
+            // `.manage` capability now would be exactly the speculative
+            // capability registration rule 53 warns against -- add it
+            // only once a real human-facing "record a manual payment"
+            // or similar action actually exists.
+            ['key' => 'finance.payments.view', 'label' => 'View Payments', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -428,6 +486,35 @@ class CapabilityAndRoleSeeder extends Seeder
                     // administrative work.
                     'visitor.directory.view', 'visitor.directory.manage',
                     'visitor.visits.view', 'visitor.visits.manage',
+                    // Phase 0G.3: Finance is a new, money-moving domain
+                    // -- granted in full (view/post/reverse) to School
+                    // Admin, the seeded catalog's top school-scoped
+                    // administrative role, which already holds every
+                    // other domain's most privileged pair (webhooks,
+                    // campuses, academic structure, students/guardians,
+                    // communications, enrollments + rollovers). NOT
+                    // granted to Principal below -- unlike Students/
+                    // Guardians/Enrollments/Academics, which Principal
+                    // already operates day-to-day, this catalog has no
+                    // established precedent of Principal handling
+                    // ledger postings or reversals. A School wanting a
+                    // dedicated Accountant-style role can configure one
+                    // itself without this checkpoint inventing it now
+                    // (section 44's "no surprising broad default
+                    // assignment").
+                    'finance.ledger.view', 'finance.ledger.post', 'finance.ledger.reverse',
+                    // Phase 0G.4: same "School Admin holds this
+                    // catalog's most privileged pair by default" logic
+                    // as Ledger above, extended to Fees/Receivables.
+                    // NOT granted to Principal below, for the identical
+                    // reason ledger.* is not: no established precedent
+                    // of Principal assessing/cancelling Student fees in
+                    // this product.
+                    'finance.charges.view', 'finance.charges.manage',
+                    // Phase 0G.5: same default-grant logic as Ledger/
+                    // Charges above. NOT granted to Principal below, for
+                    // the identical reason.
+                    'finance.payments.view',
                 ],
             ],
             'principal' => [
