@@ -32,6 +32,9 @@ use App\Http\Controllers\App\GuardianController;
 use App\Http\Controllers\App\HostelController;
 use App\Http\Controllers\App\HostelResidencyController;
 use App\Http\Controllers\App\HostelRoomController;
+use App\Http\Controllers\App\InventoryItemController;
+use App\Http\Controllers\App\InventoryLocationController;
+use App\Http\Controllers\App\InventoryStockController;
 use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -599,5 +602,35 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/search/beds', [HostelResidencyController::class, 'searchBeds'])->name('search-beds');
         Route::post('/', [HostelResidencyController::class, 'store'])->name('store');
         Route::post('/{hostelResidencyAssignment}/end', [HostelResidencyController::class, 'end'])->name('end');
+    });
+
+    // Phase 10E: Inventory (Item/Location directory, quantity stock
+    // lifecycle) administrative UI. Capability checks live inside each
+    // controller (AuthorizesCapability trait), matching every other
+    // module's Inertia controller in this file.
+    Route::prefix('app/inventory-items')->name('app.inventory-items.')->group(function (): void {
+        Route::get('/', [InventoryItemController::class, 'index'])->name('index');
+        Route::get('/create', [InventoryItemController::class, 'create'])->name('create');
+        Route::post('/', [InventoryItemController::class, 'store'])->name('store');
+        Route::patch('/{inventoryItem}', [InventoryItemController::class, 'update'])->name('update');
+    });
+
+    Route::prefix('app/inventory-locations')->name('app.inventory-locations.')->group(function (): void {
+        Route::get('/', [InventoryLocationController::class, 'index'])->name('index');
+        Route::get('/create', [InventoryLocationController::class, 'create'])->name('create');
+        Route::post('/', [InventoryLocationController::class, 'store'])->name('store');
+        Route::patch('/{inventoryLocation}', [InventoryLocationController::class, 'update'])->name('update');
+    });
+
+    Route::prefix('app/inventory-stock')->name('app.inventory-stock.')->group(function (): void {
+        Route::get('/', [InventoryStockController::class, 'index'])->name('index');
+        Route::get('/receive', [InventoryStockController::class, 'createReceive'])->name('receive.create');
+        Route::post('/receive', [InventoryStockController::class, 'storeReceive'])->name('receive.store');
+        Route::get('/issue', [InventoryStockController::class, 'createIssue'])->name('issue.create');
+        Route::post('/issue', [InventoryStockController::class, 'storeIssue'])->name('issue.store');
+        Route::get('/transfer', [InventoryStockController::class, 'createTransfer'])->name('transfer.create');
+        Route::post('/transfer', [InventoryStockController::class, 'storeTransfer'])->name('transfer.store');
+        Route::get('/search/items', [InventoryStockController::class, 'searchItems'])->name('search-items');
+        Route::get('/search/locations', [InventoryStockController::class, 'searchLocations'])->name('search-locations');
     });
 });
