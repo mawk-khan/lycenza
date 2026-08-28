@@ -32,6 +32,22 @@ use App\Http\Controllers\App\GuardianController;
 use App\Http\Controllers\App\HostelController;
 use App\Http\Controllers\App\HostelResidencyController;
 use App\Http\Controllers\App\HostelRoomController;
+use App\Http\Controllers\App\HR\HrController;
+use App\Http\Controllers\App\HR\HrDepartmentController;
+use App\Http\Controllers\App\HR\HrEmployeeAddressController;
+use App\Http\Controllers\App\HR\HrEmployeeAssignmentController;
+use App\Http\Controllers\App\HR\HrEmployeeCategoryController;
+use App\Http\Controllers\App\HR\HrEmployeeCertificationController;
+use App\Http\Controllers\App\HR\HrEmployeeController;
+use App\Http\Controllers\App\HR\HrEmployeeDocumentController;
+use App\Http\Controllers\App\HR\HrEmployeeEmergencyContactController;
+use App\Http\Controllers\App\HR\HrEmployeeExperienceController;
+use App\Http\Controllers\App\HR\HrEmployeeImportController;
+use App\Http\Controllers\App\HR\HrEmployeeNoteController;
+use App\Http\Controllers\App\HR\HrEmployeePersonalDetailController;
+use App\Http\Controllers\App\HR\HrEmployeeQualificationController;
+use App\Http\Controllers\App\HR\HrEmploymentController;
+use App\Http\Controllers\App\HR\HrPositionController;
 use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -568,6 +584,87 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/payments', [FinancePaymentController::class, 'index'])->name('payments.index');
         Route::get('/payments/{payment}', [FinancePaymentController::class, 'show'])->name('payments.show');
+    });
+
+    // Phase 8A closure correction (item 2) -- the HR administrative UI
+    // the original roadmap promised. Capability checks live inside each
+    // controller (AuthorizesCapability trait), matching every other
+    // module's Inertia controller in this file -- no route-level
+    // `capability:` middleware for these session-authenticated pages
+    // (that pattern is reserved for the Bearer-token /api/v1 JSON API,
+    // see item 9's own reasoning there). Every mutation delegates to
+    // the SAME Application-layer services the JSON API controllers use.
+    Route::prefix('app/hr')->name('app.hr.')->group(function (): void {
+        Route::get('/', [HrController::class, 'index'])->name('index');
+
+        // 'employees/create' and 'employees/import' registered BEFORE
+        // the '/{employee}' wildcard below, matching this file's own
+        // established convention.
+        Route::get('/employees/create', [HrEmployeeController::class, 'create'])->name('employees.create');
+        Route::get('/employees', [HrEmployeeController::class, 'index'])->name('employees.index');
+        Route::post('/employees', [HrEmployeeController::class, 'store'])->name('employees.store');
+
+        Route::get('/employees/import', [HrEmployeeImportController::class, 'create'])->name('employees.import.create');
+        Route::post('/employees/import', [HrEmployeeImportController::class, 'store'])->name('employees.import.store');
+
+        Route::get('/employees/{employee}', [HrEmployeeController::class, 'show'])->name('employees.show');
+        Route::get('/employees/{employee}/edit', [HrEmployeeController::class, 'edit'])->name('employees.edit');
+        Route::put('/employees/{employee}', [HrEmployeeController::class, 'update'])->name('employees.update');
+        Route::post('/employees/{employee}/archive', [HrEmployeeController::class, 'archive'])->name('employees.archive');
+        Route::post('/employees/{employee}/restore', [HrEmployeeController::class, 'restore'])->name('employees.restore');
+
+        Route::put('/employees/{employee}/personal-detail', [HrEmployeePersonalDetailController::class, 'update'])->name('employees.personal-detail.update');
+
+        Route::post('/employees/{employee}/addresses', [HrEmployeeAddressController::class, 'store'])->name('employees.addresses.store');
+        Route::delete('/employees/{employee}/addresses/{address}', [HrEmployeeAddressController::class, 'destroy'])->name('employees.addresses.destroy');
+
+        Route::post('/employees/{employee}/emergency-contacts', [HrEmployeeEmergencyContactController::class, 'store'])->name('employees.emergency-contacts.store');
+        Route::delete('/employees/{employee}/emergency-contacts/{contact}', [HrEmployeeEmergencyContactController::class, 'destroy'])->name('employees.emergency-contacts.destroy');
+        Route::post('/employees/{employee}/emergency-contacts/{contact}/primary', [HrEmployeeEmergencyContactController::class, 'setPrimary'])->name('employees.emergency-contacts.set-primary');
+
+        Route::post('/employees/{employee}/notes', [HrEmployeeNoteController::class, 'store'])->name('employees.notes.store');
+        Route::delete('/employees/{employee}/notes/{note}', [HrEmployeeNoteController::class, 'destroy'])->name('employees.notes.destroy');
+
+        Route::post('/employees/{employee}/employment-records', [HrEmploymentController::class, 'store'])->name('employees.employment-records.store');
+        Route::post('/employees/{employee}/employment-records/{employment}/end', [HrEmploymentController::class, 'end'])->name('employees.employment-records.end');
+        Route::post('/employees/{employee}/employment-records/{employment}/separate', [HrEmploymentController::class, 'separate'])->name('employees.employment-records.separate');
+        Route::post('/employees/{employee}/rehire', [HrEmploymentController::class, 'rehire'])->name('employees.rehire');
+
+        Route::post('/employees/{employee}/employment-records/{employment}/assignments', [HrEmployeeAssignmentController::class, 'store'])->name('employees.assignments.store');
+        Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/end', [HrEmployeeAssignmentController::class, 'end'])->name('employees.assignments.end');
+        Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/primary', [HrEmployeeAssignmentController::class, 'setPrimary'])->name('employees.assignments.set-primary');
+        Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/manager', [HrEmployeeAssignmentController::class, 'setManager'])->name('employees.assignments.set-manager');
+
+        Route::post('/employees/{employee}/qualifications', [HrEmployeeQualificationController::class, 'store'])->name('employees.qualifications.store');
+        Route::delete('/employees/{employee}/qualifications/{qualification}', [HrEmployeeQualificationController::class, 'destroy'])->name('employees.qualifications.destroy');
+        Route::post('/employees/{employee}/qualifications/{qualification}/verify', [HrEmployeeQualificationController::class, 'verify'])->name('employees.qualifications.verify');
+        Route::post('/employees/{employee}/qualifications/{qualification}/reject', [HrEmployeeQualificationController::class, 'reject'])->name('employees.qualifications.reject');
+
+        Route::post('/employees/{employee}/experience', [HrEmployeeExperienceController::class, 'store'])->name('employees.experience.store');
+        Route::delete('/employees/{employee}/experience/{experience}', [HrEmployeeExperienceController::class, 'destroy'])->name('employees.experience.destroy');
+
+        Route::post('/employees/{employee}/certifications', [HrEmployeeCertificationController::class, 'store'])->name('employees.certifications.store');
+        Route::delete('/employees/{employee}/certifications/{certification}', [HrEmployeeCertificationController::class, 'destroy'])->name('employees.certifications.destroy');
+        Route::post('/employees/{employee}/certifications/{certification}/verify', [HrEmployeeCertificationController::class, 'verify'])->name('employees.certifications.verify');
+        Route::post('/employees/{employee}/certifications/{certification}/reject', [HrEmployeeCertificationController::class, 'reject'])->name('employees.certifications.reject');
+
+        Route::post('/employees/{employee}/hr-document-records', [HrEmployeeDocumentController::class, 'store'])->name('employees.hr-document-records.store');
+        Route::post('/employees/{employee}/hr-document-records/{document}/archive', [HrEmployeeDocumentController::class, 'archive'])->name('employees.hr-document-records.archive');
+
+        Route::get('/departments', [HrDepartmentController::class, 'index'])->name('departments.index');
+        Route::post('/departments', [HrDepartmentController::class, 'store'])->name('departments.store');
+        Route::post('/departments/{department}/archive', [HrDepartmentController::class, 'archive'])->name('departments.archive');
+        Route::post('/departments/{department}/reactivate', [HrDepartmentController::class, 'reactivate'])->name('departments.reactivate');
+
+        Route::get('/positions', [HrPositionController::class, 'index'])->name('positions.index');
+        Route::post('/positions', [HrPositionController::class, 'store'])->name('positions.store');
+        Route::post('/positions/{position}/archive', [HrPositionController::class, 'archive'])->name('positions.archive');
+        Route::post('/positions/{position}/reactivate', [HrPositionController::class, 'reactivate'])->name('positions.reactivate');
+
+        Route::get('/categories', [HrEmployeeCategoryController::class, 'index'])->name('categories.index');
+        Route::post('/categories', [HrEmployeeCategoryController::class, 'store'])->name('categories.store');
+        Route::post('/categories/{category}/archive', [HrEmployeeCategoryController::class, 'archive'])->name('categories.archive');
+        Route::post('/categories/{category}/reactivate', [HrEmployeeCategoryController::class, 'reactivate'])->name('categories.reactivate');
     });
 
     // Phase 10D: Hostel (Hostel/Room/Bed directory, Student residency

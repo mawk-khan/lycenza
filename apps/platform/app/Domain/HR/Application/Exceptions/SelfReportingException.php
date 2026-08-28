@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown when App\Domain\HR\Application\ReportingHierarchyService::setManager()
  * is asked to make an Assignment report to itself. Also rejected by
@@ -12,10 +10,10 @@ use RuntimeException;
  * this gives the caller a clean domain exception before that raw
  * QueryException would otherwise fire.
  */
-class SelfReportingException extends RuntimeException
+class SelfReportingException extends HrException
 {
     public function __construct(public readonly string $assignmentId)
     {
-        parent::__construct("Assignment {$assignmentId} cannot report to itself.");
+        parent::__construct(422, 'HR_SELF_REPORTING', "Assignment {$assignmentId} cannot report to itself.");
     }
 }

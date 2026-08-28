@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown by App\Domain\HR\Infrastructure\Employee::booted()'s
  * `updating` guard when any code path attempts to change an already-
@@ -14,10 +12,10 @@ use RuntimeException;
  * its own explicit, audited action in a later checkpoint, not silent
  * mass-assignment.
  */
-class EmployeeNumberIsImmutableException extends RuntimeException
+class EmployeeNumberIsImmutableException extends HrException
 {
     public function __construct(public readonly string $original, public readonly string $attempted)
     {
-        parent::__construct("Employee number '{$original}' is immutable and cannot be changed to '{$attempted}'.");
+        parent::__construct(422, 'HR_EMPLOYEE_NUMBER_IMMUTABLE', "Employee number '{$original}' is immutable and cannot be changed to '{$attempted}'.");
     }
 }

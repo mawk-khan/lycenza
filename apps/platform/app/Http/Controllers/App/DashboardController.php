@@ -70,6 +70,16 @@ class DashboardController extends Controller
                     && ($capabilities->canInSchool($user, 'finance.ledger.view', $school)
                         || $capabilities->canInSchool($user, 'finance.charges.view', $school)
                         || $capabilities->canInSchool($user, 'finance.payments.view', $school)),
+                // Phase 8A closure correction (item 2): HR workspace --
+                // any one of its three top-level view capabilities is
+                // enough to show the entry point, mirroring Finance's
+                // identical "any one view capability" nav-gate above;
+                // the HR hub page itself hides sub-areas the actor
+                // cannot see (HrController::index()).
+                'canViewHr' => $school !== null
+                    && ($capabilities->canInSchool($user, 'hr.employees.view', $school)
+                        || $capabilities->canInSchool($user, 'hr.departments.view', $school)
+                        || $capabilities->canInSchool($user, 'hr.positions.view', $school)),
             ],
         ]);
     }

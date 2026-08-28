@@ -37,6 +37,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string|null $user_id
  * @property string $employee_number
  * @property string $full_name
+ * @property string|null $work_email Directory-tier work contact (Phase 8A closure
+ *                                   correction) -- unique per School where not null
+ *                                   (`employees_work_email_unique`); never substituted
+ *                                   with `EmployeePersonalDetail.personal_email`.
+ * @property string|null $work_phone Directory-tier work contact, no uniqueness required.
  * @property string $record_status active|archived -- this Employee
  *                                 row's own existence state, NOT employment/account status
  *                                 (docs/modules/HR.md's state responsibility matrix)
@@ -47,7 +52,7 @@ class Employee extends Model
 
     protected $table = 'employees';
 
-    protected $fillable = ['school_id', 'user_id', 'employee_number', 'full_name', 'record_status'];
+    protected $fillable = ['school_id', 'user_id', 'employee_number', 'full_name', 'work_email', 'work_phone', 'record_status'];
 
     protected static function newFactory(): EmployeeFactory
     {
@@ -125,6 +130,12 @@ class Employee extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(EmployeeDocument::class);
+    }
+
+    /** @return HasMany<EmployeeNote, $this> */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(EmployeeNote::class);
     }
 
     public function isActive(): bool

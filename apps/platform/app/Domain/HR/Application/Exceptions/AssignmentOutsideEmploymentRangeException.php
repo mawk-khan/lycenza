@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown when App\Domain\HR\Application\EmployeeAssignmentService::create()
  * is asked to create an Assignment whose `[starts_on, ends_on-or-open]`
@@ -12,7 +10,7 @@ use RuntimeException;
  * falls within owning Employment's date range" -- application-level,
  * not database-constrained).
  */
-class AssignmentOutsideEmploymentRangeException extends RuntimeException
+class AssignmentOutsideEmploymentRangeException extends HrException
 {
     public function __construct(
         public readonly string $employmentRecordId,
@@ -20,6 +18,6 @@ class AssignmentOutsideEmploymentRangeException extends RuntimeException
         public readonly ?string $assignmentEndsOn,
     ) {
         $range = $assignmentEndsOn === null ? "{$assignmentStartsOn} onward" : "{$assignmentStartsOn} to {$assignmentEndsOn}";
-        parent::__construct("Assignment interval ({$range}) is not contained within EmploymentRecord {$employmentRecordId}'s own interval.");
+        parent::__construct(422, 'HR_ASSIGNMENT_OUTSIDE_EMPLOYMENT_RANGE', "Assignment interval ({$range}) is not contained within EmploymentRecord {$employmentRecordId}'s own interval.");
     }
 }

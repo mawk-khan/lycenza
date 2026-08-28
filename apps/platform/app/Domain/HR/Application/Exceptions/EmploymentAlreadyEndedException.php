@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown by App\Domain\HR\Application\EmploymentService::end() when the
  * target EmploymentRecord already has a non-null `ends_on` (checkpoint
@@ -15,13 +13,17 @@ use RuntimeException;
  * calls for the same EmploymentRecord always serialize: the second
  * transaction blocks until the first commits, then re-reads the
  * now-ended row and throws this instead of racing to overwrite it.
+ *
+ * Maps to 409 Conflict, not 422 -- this is a state-conflict (the
+ * resource has already transitioned), the same category
+ * `ConcurrentActivationConflictException` uses in Academic Structure.
  */
-class EmploymentAlreadyEndedException extends RuntimeException
+class EmploymentAlreadyEndedException extends HrException
 {
     public function __construct(
         public readonly string $employmentRecordId,
         public readonly string $existingEndsOn,
     ) {
-        parent::__construct("EmploymentRecord {$employmentRecordId} was already ended on {$existingEndsOn}.");
+        parent::__construct(409, 'HR_EMPLOYMENT_ALREADY_ENDED', "EmploymentRecord {$employmentRecordId} was already ended on {$existingEndsOn}.");
     }
 }

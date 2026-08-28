@@ -1297,4 +1297,197 @@ class HrRawIsolationTest extends TestCase
 
         $this->assertSame(0, $affected);
     }
+
+    // --- Phase 8A closure correction: employee_categories ------------------
+
+    #[Test]
+    public function employee_categories_table_has_rls_enabled_and_forced(): void
+    {
+        $row = DB::connection('pgsql_admin')->selectOne(
+            'select relrowsecurity, relforcerowsecurity from pg_class '.
+            "where relname = 'employee_categories' and relnamespace = 'public'::regnamespace",
+        );
+
+        $this->assertTrue($row->relrowsecurity);
+        $this->assertTrue($row->relforcerowsecurity);
+    }
+
+    #[Test]
+    public function raw_select_on_employee_categories_with_no_school_context_returns_zero_rows(): void
+    {
+        $school = $this->createSchool();
+        $this->createEmployeeCategory($school);
+
+        DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
+
+        $count = DB::connection('pgsql')->selectOne('select count(*) as c from employee_categories')->c;
+
+        $this->assertSame(0, (int) $count);
+    }
+
+    #[Test]
+    public function raw_select_with_school_a_context_sees_only_school_as_categories(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $categoryA = $this->createEmployeeCategory($schoolA);
+        $this->createEmployeeCategory($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $rows = DB::connection('pgsql')->select('select id from employee_categories');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame($categoryA->id, $rows[0]->id);
+    }
+
+    #[Test]
+    public function raw_insert_of_a_category_for_a_different_school_than_the_active_context_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolB): void {
+            DB::connection('pgsql')->insert(
+                'insert into employee_categories (id, school_id, name, code, status, created_at, updated_at) '.
+                'values (?, ?, ?, ?, ?, now(), now())',
+                [(string) Str::orderedUuid(), $schoolB->id, 'Rogue Category', 'ROGUE', 'active'],
+            );
+        });
+    }
+
+    #[Test]
+    public function raw_update_of_a_category_across_schools_affects_zero_rows_not_an_error(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $categoryB = $this->createEmployeeCategory($schoolB, ['name' => 'Original Name']);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->update(
+            'update employee_categories set name = ? where id = ?',
+            ['Hacked Name', $categoryB->id],
+        );
+
+        $this->assertSame(0, $affected);
+    }
+
+    #[Test]
+    public function raw_delete_of_a_category_across_schools_affects_zero_rows(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $categoryB = $this->createEmployeeCategory($schoolB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->delete('delete from employee_categories where id = ?', [$categoryB->id]);
+
+        $this->assertSame(0, $affected);
+    }
+
+    // --- Phase 8A closure correction: employee_notes ------------------------
+
+    #[Test]
+    public function employee_notes_table_has_rls_enabled_and_forced(): void
+    {
+        $row = DB::connection('pgsql_admin')->selectOne(
+            'select relrowsecurity, relforcerowsecurity from pg_class '.
+            "where relname = 'employee_notes' and relnamespace = 'public'::regnamespace",
+        );
+
+        $this->assertTrue($row->relrowsecurity);
+        $this->assertTrue($row->relforcerowsecurity);
+    }
+
+    #[Test]
+    public function raw_select_on_employee_notes_with_no_school_context_returns_zero_rows(): void
+    {
+        $school = $this->createSchool();
+        $employee = $this->createEmployee($school);
+        $this->createEmployeeNote($employee);
+
+        DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
+
+        $count = DB::connection('pgsql')->selectOne('select count(*) as c from employee_notes')->c;
+
+        $this->assertSame(0, (int) $count);
+    }
+
+    #[Test]
+    public function raw_select_with_school_a_context_sees_only_school_as_notes(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeA = $this->createEmployee($schoolA);
+        $employeeB = $this->createEmployee($schoolB);
+        $noteA = $this->createEmployeeNote($employeeA);
+        $this->createEmployeeNote($employeeB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $rows = DB::connection('pgsql')->select('select id from employee_notes');
+
+        $this->assertCount(1, $rows);
+        $this->assertSame($noteA->id, $rows[0]->id);
+    }
+
+    #[Test]
+    public function raw_insert_of_a_note_for_a_different_school_than_the_active_context_is_rejected(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $author = $this->createUser();
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $this->expectException(QueryException::class);
+
+        DB::connection('pgsql')->transaction(function () use ($schoolB, $employeeB, $author): void {
+            DB::connection('pgsql')->insert(
+                'insert into employee_notes (id, school_id, employee_id, author_user_id, body, created_at, updated_at) '.
+                'values (?, ?, ?, ?, ?, now(), now())',
+                [(string) Str::orderedUuid(), $schoolB->id, $employeeB->id, $author->id, 'Rogue note'],
+            );
+        });
+    }
+
+    #[Test]
+    public function raw_update_of_a_note_across_schools_affects_zero_rows_not_an_error(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $noteB = $this->createEmployeeNote($employeeB, ['body' => 'Original body']);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->update(
+            'update employee_notes set body = ? where id = ?',
+            ['Hacked body', $noteB->id],
+        );
+
+        $this->assertSame(0, $affected);
+    }
+
+    #[Test]
+    public function raw_delete_of_a_note_across_schools_affects_zero_rows(): void
+    {
+        $schoolA = $this->createSchool();
+        $schoolB = $this->createSchool();
+        $employeeB = $this->createEmployee($schoolB);
+        $noteB = $this->createEmployeeNote($employeeB);
+
+        DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
+
+        $affected = DB::connection('pgsql')->delete('delete from employee_notes where id = ?', [$noteB->id]);
+
+        $this->assertSame(0, $affected);
+    }
 }

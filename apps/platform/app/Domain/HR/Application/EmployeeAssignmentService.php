@@ -9,6 +9,10 @@ use App\Domain\HR\Application\Exceptions\AssignmentInactiveDepartmentException;
 use App\Domain\HR\Application\Exceptions\AssignmentInactivePositionException;
 use App\Domain\HR\Application\Exceptions\AssignmentOutsideEmploymentRangeException;
 use App\Domain\HR\Application\Exceptions\AssignmentPositionMismatchException;
+use App\Domain\HR\Application\Exceptions\ConcurrentPrimaryAssignmentConflictException;
+use App\Domain\HR\Events\AssignmentEnded;
+use App\Domain\HR\Events\AssignmentStarted;
+use App\Domain\HR\Events\PrimaryAssignmentChanged;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
@@ -18,6 +22,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -102,6 +107,8 @@ class EmployeeAssignmentService
                     'campusId' => $campus?->id,
                 ]);
 
+                event(new AssignmentStarted($school->id, $employment->employee_id, $employment->id, $assignment->id));
+
                 return $assignment;
             });
         });
@@ -118,12 +125,16 @@ class EmployeeAssignmentService
 
                 $this->closureCascade->clearDanglingManagerReferences([$assignment->id]);
 
+                $employeeId = $assignment->employmentRecord->employee_id;
+
                 $this->audit->school($school, 'hr.assignment.ended', actor: $actor, subject: $assignment, metadata: [
                     // Phase 8A.11: employeeId added, purely additive (see create()).
-                    'employeeId' => $assignment->employmentRecord->employee_id,
+                    'employeeId' => $employeeId,
                     'employmentRecordId' => $assignment->employment_record_id,
                     'endsOn' => $endsOn,
                 ]);
+
+                event(new AssignmentEnded($school->id, $employeeId, $assignment->id));
 
                 return $assignment->fresh();
             });
@@ -143,6 +154,21 @@ class EmployeeAssignmentService
      * primary Assignment is left untouched, since it never conflicts
      * with a new open primary (docs/modules/HR.md's partial index is
      * scoped the same way).
+     *
+     * Phase 8A closure correction (item 10, closure hardening): two
+     * concurrent `setPrimary()` calls for two DIFFERENT Assignments
+     * under the SAME EmploymentRecord can both pass the demote step
+     * (each sees no open primary yet, or demotes the same one) and
+     * then both attempt to promote themselves -- the partial unique
+     * index lets exactly one commit; the loser's raw
+     * `UniqueConstraintViolationException` is caught here and
+     * translated into `ConcurrentPrimaryAssignmentConflictException`
+     * (409, retry-safe), mirroring
+     * `AcademicYearService::activate()`'s identical pattern -- never
+     * left as an unhandled raw QueryException that would otherwise
+     * surface as an opaque 500 through `EmployeeAssignmentController`.
+     * Proven with two real separate OS processes, not a sequential
+     * simulation -- see `PrimaryAssignmentConcurrencyTest`.
      */
     public function setPrimary(EmployeeAssignment $assignment, User $actor): EmployeeAssignment
     {
@@ -158,13 +184,21 @@ class EmployeeAssignmentService
                     ->where('id', '!=', $assignment->id)
                     ->update(['is_primary' => false]);
 
-                $assignment->update(['is_primary' => true]);
+                try {
+                    $assignment->update(['is_primary' => true]);
+                } catch (UniqueConstraintViolationException) {
+                    throw new ConcurrentPrimaryAssignmentConflictException($assignment->employment_record_id);
+                }
+
+                $employeeId = $assignment->employmentRecord->employee_id;
 
                 $this->audit->school($school, 'hr.assignment.primary_changed', actor: $actor, subject: $assignment, metadata: [
                     // Phase 8A.11: employeeId added, purely additive (see create()).
-                    'employeeId' => $assignment->employmentRecord->employee_id,
+                    'employeeId' => $employeeId,
                     'employmentRecordId' => $assignment->employment_record_id,
                 ]);
+
+                event(new PrimaryAssignmentChanged($school->id, $employeeId, $assignment->employment_record_id, $assignment->id));
 
                 return $assignment->fresh();
             });

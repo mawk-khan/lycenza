@@ -33,6 +33,7 @@ final class EmployeeProfileWorkspace
      * @param  array<int, EmployeeProfileExperienceEntry>  $experience
      * @param  array<int, EmployeeProfileCertificationEntry>  $certifications
      * @param  array<int, EmployeeProfileDocumentEntry>  $documents
+     * @param  array<int, EmployeeProfileNoteEntry>  $notes
      */
     public function __construct(
         public readonly EmployeeProfileSummary $summary,
@@ -46,6 +47,7 @@ final class EmployeeProfileWorkspace
         public readonly array $experience,
         public readonly array $certifications,
         public readonly array $documents,
+        public readonly array $notes,
     ) {}
 
     /** @return array<string, mixed> */
@@ -63,6 +65,7 @@ final class EmployeeProfileWorkspace
             'experience' => array_map(fn (EmployeeProfileExperienceEntry $e) => $e->toArray(), $this->experience),
             'certifications' => array_map(fn (EmployeeProfileCertificationEntry $e) => $e->toArray(), $this->certifications),
             'documents' => array_map(fn (EmployeeProfileDocumentEntry $e) => $e->toArray(), $this->documents),
+            'notes' => array_map(fn (EmployeeProfileNoteEntry $e) => $e->toArray(), $this->notes),
         ];
     }
 }

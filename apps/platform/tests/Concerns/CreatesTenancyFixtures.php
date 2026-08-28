@@ -26,10 +26,12 @@ use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
+use App\Domain\HR\Infrastructure\EmployeeCategory;
 use App\Domain\HR\Infrastructure\EmployeeCertification;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Domain\HR\Infrastructure\EmployeeExperience;
+use App\Domain\HR\Infrastructure\EmployeeNote;
 use App\Domain\HR\Infrastructure\EmployeePersonalDetail;
 use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
@@ -192,6 +194,7 @@ trait CreatesTenancyFixtures
             'hr.employees.notes.view', 'hr.employees.notes.manage',
             'hr.departments.view', 'hr.departments.manage',
             'hr.positions.view', 'hr.positions.manage',
+            'hr.categories.view', 'hr.categories.manage',
         ]);
     }
 
@@ -490,6 +493,28 @@ trait CreatesTenancyFixtures
         return app(TenantContext::class)->withSchool(
             $school,
             fn () => Position::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    // --- Phase 8A closure correction: EmployeeCategory & EmployeeNote --
+
+    protected function createEmployeeCategory(School $school, array $attributes = []): EmployeeCategory
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => EmployeeCategory::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createEmployeeNote(Employee $employee, array $attributes = []): EmployeeNote
+    {
+        return app(TenantContext::class)->withSchool(
+            $employee->school,
+            fn () => EmployeeNote::factory()->create(array_merge([
+                'school_id' => $employee->school_id,
+                'employee_id' => $employee->id,
+                'author_user_id' => $this->createUser()->id,
+            ], $attributes)),
         );
     }
 

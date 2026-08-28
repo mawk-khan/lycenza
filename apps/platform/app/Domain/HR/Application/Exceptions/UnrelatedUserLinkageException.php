@@ -2,8 +2,6 @@
 
 namespace App\Domain\HR\Application\Exceptions;
 
-use RuntimeException;
-
 /**
  * Thrown when App\Domain\HR\Application\EmployeeService::create() is
  * asked to link an Employee to a User who has no SchoolMembership at
@@ -21,10 +19,10 @@ use RuntimeException;
  * unrelated table's business rule" as a static constraint without a
  * trigger that would need to re-fire indefinitely.
  */
-class UnrelatedUserLinkageException extends RuntimeException
+class UnrelatedUserLinkageException extends HrException
 {
     public function __construct(public readonly string $userId, public readonly string $schoolId)
     {
-        parent::__construct("User {$userId} has no membership at School {$schoolId} and cannot be linked as an Employee.");
+        parent::__construct(422, 'HR_UNRELATED_USER_LINKAGE', "User {$userId} has no membership at School {$schoolId} and cannot be linked as an Employee.");
     }
 }

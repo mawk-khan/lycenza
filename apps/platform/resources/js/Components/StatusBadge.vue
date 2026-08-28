@@ -16,6 +16,10 @@
 type Status =
     | 'active'
     | 'inactive'
+    // Phase 8A closure correction -- Employee.record_status's second
+    // value (not 'inactive'; archival is a distinct concept from a
+    // simple active/inactive toggle elsewhere in this union).
+    | 'archived'
     | 'completed'
     | 'withdrawn'
     | 'transferred'
@@ -47,6 +51,7 @@ const props = defineProps<Props>();
 const STYLES: Record<Status, { label: string; badge: string; dot: string }> = {
     active: { label: 'Active', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
     inactive: { label: 'Inactive', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+    archived: { label: 'Archived', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
     completed: { label: 'Completed', badge: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500' },
     withdrawn: { label: 'Withdrawn', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
     transferred: {

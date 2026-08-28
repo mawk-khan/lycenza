@@ -92,6 +92,9 @@ class HrEmployeeProfileApiTest extends TestCase
         $this->assertSame([
             'summary', 'personal_details', 'contact', 'addresses', 'emergency_contacts',
             'employment_history', 'assignments', 'qualifications', 'experience', 'certifications', 'documents',
+            // Phase 8A closure correction: `notes` added as the profile
+            // workspace's twelfth section, gated by hr.employees.notes.view.
+            'notes',
         ], array_keys($response->json('data')));
     }
 
