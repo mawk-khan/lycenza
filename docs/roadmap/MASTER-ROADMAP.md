@@ -494,14 +494,20 @@ administrative API, and a session-authenticated Inertia UI. Full
 design and closure record: `docs/modules/HOSTEL.md`. `HostelRoom` is a
 deliberately independent model, not a reuse of Academic Structure's
 teaching-space `Room`. Deliberately excludes Hostel fees/billing/
-deposits (Finance/Phase 0G is not on `main`), warden/staff management,
-meal plans/Canteen integration, Health/Safety data, Documents/
-Communications integration, and any Guardian/Student-facing surface —
-all explicitly deferred, not gaps in this checkpoint's own closure.
+deposits (no Hostel↔Fees integration was built in this checkpoint,
+regardless of Finance/Fees now being on `main` — see below), warden/
+staff management, meal plans/Canteen integration, Health/Safety data,
+Documents/Communications integration, and any Guardian/Student-facing
+surface — all explicitly deferred, not gaps in this checkpoint's own
+closure.
 
 The remaining Phase 0K modules (Inventory, Canteen, Health, Safety) are
-**not started**; Inventory/Canteen remain blocked on Finance/Fees
-reaching `main`; Health remains blocked on the `docs/security/
+**not started**. Finance/Fees/Payments (Phase 0G) reached `main`
+alongside Phase 10D's own integration, so Inventory/Canteen are no
+longer blocked on Finance reaching `main` — but neither has begun; each
+still requires its own deliberate design/readiness gate before
+implementation, same as Hostel required one before Phase 10D. Health
+remains blocked on the `docs/security/
 DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED] gate; and Safety is
 blocked pending its own legal/security readiness decision, since
 "incident records" may fall under that same unresolved Health gate
