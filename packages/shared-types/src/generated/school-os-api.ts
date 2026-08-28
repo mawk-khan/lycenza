@@ -2338,6 +2338,201 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/canteen-outlets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's Canteen Outlets (active by default). Requires canteen.directory.view. */
+        get: operations["listCanteenOutlets"];
+        put?: never;
+        /** Registers a new Canteen Outlet, backed by exactly one InventoryLocation it issues stock from at fulfillment time. If campus_id is set, the named InventoryLocation must belong to the SAME Campus (database-enforced composite foreign key, docs/modules/CANTEEN.md "Outlet model"). Requires canteen.directory.manage. */
+        post: operations["createCanteenOutlet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-outlets/{canteenOutletId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Canteen Outlet. Requires canteen.directory.view. */
+        get: operations["getCanteenOutlet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Canteen Outlet -- name/status only. inventory_location_id/campus_id are immutable after creation (no field for either is accepted here); CanteenOrder snapshots inventory_location_id at placement time regardless. Requires canteen.directory.manage. */
+        patch: operations["updateCanteenOutlet"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's Canteen menu Item catalogue (active by default). Requires canteen.directory.view. */
+        get: operations["listCanteenItems"];
+        put?: never;
+        /** Registers a new Canteen menu Item. price is the current sellable price -- an Order line snapshots it at placement time. Requires canteen.directory.manage. */
+        post: operations["createCanteenItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-items/{canteenItemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Canteen Item, including its current recipe. Requires canteen.directory.view. */
+        get: operations["getCanteenItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Canteen Item, or changes its price. A price change never rewrites an already-placed Order's snapshotted unit_price/line_total. Requires canteen.directory.manage. */
+        patch: operations["updateCanteenItem"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-items/{canteenItemId}/recipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a Canteen Item's recipe (CanteenItemInventoryRequirement rows) -- how much of each InventoryItem one unit consumes. Requires canteen.directory.view. */
+        get: operations["listCanteenItemRecipe"];
+        put?: never;
+        /** Adds (or replaces, if one already exists for this ingredient) a recipe requirement. Evaluated AT FULFILLMENT time, never snapshotted at Order placement -- a recipe edit after an Order is placed but before it is fulfilled changes what that fulfillment consumes (docs/modules/CANTEEN.md "Recipe model"). Requires canteen.directory.manage. */
+        post: operations["setCanteenItemRecipeRequirement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-items/{canteenItemId}/recipe/{requirement}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a recipe requirement -- the Item no longer consumes this ingredient at fulfillment. Requires canteen.directory.manage. */
+        delete: operations["deleteCanteenItemRecipeRequirement"];
+        options?: never;
+        head?: never;
+        /** Updates one recipe requirement's quantity_required. Requires canteen.directory.manage. */
+        patch: operations["updateCanteenItemRecipeRequirement"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-billing-configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch this School's Canteen billing configuration (the two LedgerAccounts fulfillment posts against). data is null when not yet configured. Requires canteen.settings.view. */
+        get: operations["getCanteenBillingConfiguration"];
+        /** Creates or replaces this School's Canteen billing configuration (a singleton row). Both accounts must exist for this School, be active, differ from each other, and match the required type (receivable = asset, revenue = income) -- the SAME validation CanteenOrderService::fulfill() re-runs authoritatively at every fulfillment (docs/modules/CANTEEN.md "Billing configuration"). Requires canteen.settings.manage. */
+        put: operations["updateCanteenBillingConfiguration"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists Canteen Orders (Highly Sensitive summary projection -- NEVER includes unit_price/line_total/total_amount/currency/lines, docs/modules/CANTEEN.md "Highly Sensitive data handling"; use the detail endpoint for money fields). Requires canteen.orders.view. */
+        get: operations["listCanteenOrders"];
+        put?: never;
+        /** Places a new Canteen Order for one Student at one Outlet. Snapshots each line's unit_price/line_total from the Item's CURRENT price and the Outlet's CURRENT inventory_location_id at this moment -- neither is re-derived later (docs/modules/CANTEEN.md "Price/location snapshot semantics"). Touches neither Inventory nor Fees -- those only happen at fulfill. Idempotent (Idempotency-Key required). Requires canteen.orders.manage. */
+        post: operations["placeCanteenOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-orders/{canteenOrderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Canteen Order's full detail, including every money field and every line. Requires canteen.orders.view. */
+        get: operations["getCanteenOrder"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-orders/{canteenOrderId}/fulfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fulfills a pending Order: evaluates the recipe of every line's Item AT THIS MOMENT (never at placement time), issues the aggregated Inventory requirement via InventoryStockService::issueMany() against the Order's snapshotted inventory_location_id, then assesses a Charge via ChargeService::assess() against the billing configuration's two LedgerAccounts -- all inside ONE outer transaction (docs/modules/CANTEEN.md "Fulfillment transaction sequence"). Idempotent (Idempotency-Key required): a retried request never double-issues stock or double-assesses a Charge. Requires canteen.orders.manage. */
+        post: operations["fulfillCanteenOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/canteen-orders/{canteenOrderId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancels a pending Order. Never available once fulfilled -- no financial reversal semantics exist for Canteen (a fulfilled Order's Charge follows Fees' own cancellation/adjustment rules, not this endpoint). Requires canteen.orders.manage. */
+        post: operations["cancelCanteenOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3146,6 +3341,171 @@ export interface components {
             to_location_id: string;
             /** @description Exact decimal string, at most 3 decimal places. from_location_id and to_location_id must differ. */
             quantity: string;
+        };
+        /** @description A physical/logical canteen counter, backed by exactly one InventoryLocation it issues stock from at fulfillment time (docs/modules/CANTEEN.md "Outlet model"). */
+        CanteenOutlet: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** Format: uuid */
+            campusId?: string | null;
+            /** Format: uuid */
+            inventoryLocationId: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        CanteenOutletInput: {
+            code: string;
+            name: string;
+            /**
+             * Format: uuid
+             * @description Optional -- a canteen may be School-wide. If set, inventory_location_id must belong to this SAME Campus.
+             */
+            campus_id?: string | null;
+            /** Format: uuid */
+            inventory_location_id: string;
+        };
+        /** @description name/status only -- inventory_location_id/campus_id are immutable after creation. */
+        CanteenOutletUpdateInput: {
+            name?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description A School-wide canteen menu Item. price is the CURRENT sellable price -- an Order line snapshots it at placement time (docs/modules/CANTEEN.md "Price/location snapshot semantics"). */
+        CanteenItem: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @description Exact decimal string, NUMERIC(14,2) -- never a float. */
+            price: string;
+            /** @example INR */
+            currency: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        /** @description CanteenItem plus its current recipe. */
+        CanteenItemDetail: components["schemas"]["CanteenItem"] & {
+            recipe: components["schemas"]["CanteenItemInventoryRequirement"][];
+        };
+        CanteenItemInput: {
+            code: string;
+            name: string;
+            /** @description Exact decimal string, at most 2 decimal places, non-negative. */
+            price: string;
+        };
+        CanteenItemUpdateInput: {
+            name?: string;
+            /** @description Exact decimal string, at most 2 decimal places, non-negative. */
+            price?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description The recipe -- how much of one InventoryItem one unit of a CanteenItem consumes. Evaluated AT FULFILLMENT time, never snapshotted at placement (docs/modules/CANTEEN.md "Recipe model"). */
+        CanteenItemInventoryRequirement: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            inventoryItemId: string;
+            inventoryItemCode: string;
+            inventoryItemName: string;
+            /** @description Exact decimal string, NUMERIC(14,3) -- never a float. */
+            quantityRequired: string;
+        };
+        CanteenItemInventoryRequirementInput: {
+            /** Format: uuid */
+            inventory_item_id: string;
+            /** @description Exact decimal string, at most 3 decimal places, positive. */
+            quantity_required: string;
+        };
+        CanteenItemInventoryRequirementUpdateInput: {
+            /** @description Exact decimal string, at most 3 decimal places, positive. */
+            quantity_required: string;
+        };
+        /** @description A School-wide singleton naming the two LedgerAccounts (asset receivable, income revenue) Canteen order fulfillment posts a Charge against (docs/modules/CANTEEN.md "Billing configuration"). */
+        CanteenBillingConfiguration: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            receivableLedgerAccountId: string;
+            /** Format: uuid */
+            revenueLedgerAccountId: string;
+            /** @example INR */
+            currency: string;
+        };
+        CanteenBillingConfigurationInput: {
+            /**
+             * Format: uuid
+             * @description Must be an active LedgerAccount of type asset, owned by this School.
+             */
+            receivable_ledger_account_id: string;
+            /**
+             * Format: uuid
+             * @description Must be an active LedgerAccount of type income, owned by this School. Must differ from receivable_ledger_account_id.
+             */
+            revenue_ledger_account_id: string;
+        };
+        /** @description Highly Sensitive list/summary projection -- deliberately excludes every money field and the line array (docs/modules/CANTEEN.md "Highly Sensitive data handling"). Use the detail endpoint for money. */
+        CanteenOrderSummary: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "pending" | "fulfilled" | "cancelled";
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            outletId: string;
+            /** Format: date-time */
+            placedAt: string;
+            /** Format: date-time */
+            fulfilledAt?: string | null;
+            /** Format: date-time */
+            cancelledAt?: string | null;
+        };
+        /** @description unit_price/line_total are SNAPSHOTS taken at placement time -- immutable afterward (no update/delete endpoint exists for this resource, docs/modules/CANTEEN.md "Order money authority"). */
+        CanteenOrderLine: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            canteenItemId: string;
+            quantity: number;
+            /** @description Exact decimal string, NUMERIC(14,2) -- never a float. */
+            unitPrice: string;
+            /** @description Exact decimal string; database CHECK proves lineTotal = unitPrice * quantity. */
+            lineTotal: string;
+            /** @example INR */
+            currency: string;
+        };
+        /** @description Full Order detail (Highly Sensitive) -- CanteenOrderSummary plus every money field and every line. */
+        CanteenOrder: components["schemas"]["CanteenOrderSummary"] & {
+            /** @description Exact decimal string; equals the sum of every line's lineTotal (defensively re-checked at placement time). */
+            totalAmount: string;
+            /** @example INR */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description Set only once, at fulfillment (canteen_orders_charge_id_unique partial index proves one Charge belongs to at most one Order).
+             */
+            chargeId?: string | null;
+            /**
+             * Format: uuid
+             * @description Snapshotted from the Outlet at placement time -- never re-derived at fulfillment.
+             */
+            inventoryLocationId: string;
+            lines: components["schemas"]["CanteenOrderLine"][];
+        };
+        PlaceCanteenOrderInput: {
+            /** Format: uuid */
+            student_id: string;
+            /** Format: uuid */
+            outlet_id: string;
+            /** @description No two lines may repeat the same canteen_item_id -- combine quantities into a single line instead (CANTEEN_DUPLICATE_ITEM_LINE). */
+            lines: {
+                /** Format: uuid */
+                canteen_item_id: string;
+                quantity: number;
+            }[];
         };
         /** @description Only one Academic Year per School may be `active` (section 16, database-enforced). */
         AcademicYear: {
@@ -4034,6 +4394,11 @@ export interface components {
         HostelResidencyAssignmentId: string;
         InventoryItemId: string;
         InventoryLocationId: string;
+        CanteenOutletId: string;
+        CanteenItemId: string;
+        /** @description CanteenItemInventoryRequirement id. */
+        CanteenRecipeRequirementId: string;
+        CanteenOrderId: string;
     };
     requestBodies: never;
     headers: {
@@ -10887,6 +11252,666 @@ export interface operations {
             };
             /** @description INVENTORY_SAME_LOCATION_TRANSFER, INVENTORY_INSUFFICIENT_STOCK, or the same not-available/invalid-quantity codes as receive. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listCanteenOutlets: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+                search?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOutlet"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createCanteenOutlet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanteenOutletInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOutlet"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate code within this School, inventory_location_id from a different School or Campus). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getCanteenOutlet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenOutletId: components["parameters"]["CanteenOutletId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOutlet"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateCanteenOutlet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenOutletId: components["parameters"]["CanteenOutletId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CanteenOutletUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOutlet"];
+                    };
+                };
+            };
+        };
+    };
+    listCanteenItems: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+                search?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenItem"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createCanteenItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanteenItemInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenItem"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate code within this School). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getCanteenItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenItemId: components["parameters"]["CanteenItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenItemDetail"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateCanteenItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenItemId: components["parameters"]["CanteenItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CanteenItemUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenItem"];
+                    };
+                };
+            };
+        };
+    };
+    listCanteenItemRecipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenItemId: components["parameters"]["CanteenItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenItemInventoryRequirement"][];
+                    };
+                };
+            };
+        };
+    };
+    setCanteenItemRecipeRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenItemId: components["parameters"]["CanteenItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanteenItemInventoryRequirementInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenItemInventoryRequirement"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. inventory_item_id from a different School, non-positive quantity_required). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deleteCanteenItemRecipeRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenItemId: components["parameters"]["CanteenItemId"];
+                /** @description CanteenItemInventoryRequirement id. */
+                requirement: components["parameters"]["CanteenRecipeRequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    updateCanteenItemRecipeRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenItemId: components["parameters"]["CanteenItemId"];
+                /** @description CanteenItemInventoryRequirement id. */
+                requirement: components["parameters"]["CanteenRecipeRequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanteenItemInventoryRequirementUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenItemInventoryRequirement"];
+                    };
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getCanteenBillingConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenBillingConfiguration"] | null;
+                    };
+                };
+            };
+        };
+    };
+    updateCanteenBillingConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanteenBillingConfigurationInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenBillingConfiguration"];
+                    };
+                };
+            };
+            /** @description CANTEEN_BILLING_ACCOUNT_INVALID (wrong type, inactive, cross-School, or identical accounts). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listCanteenOrders: {
+        parameters: {
+            query?: {
+                status?: "pending" | "fulfilled" | "cancelled";
+                student_id?: string;
+                outlet_id?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOrderSummary"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    placeCanteenOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaceCanteenOrderInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOrder"];
+                    };
+                };
+            };
+            /** @description CANTEEN_STUDENT_NOT_FOUND, CANTEEN_OUTLET_NOT_FOUND, or CANTEEN_ITEM_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CANTEEN_STUDENT_NOT_ELIGIBLE, CANTEEN_OUTLET_NOT_AVAILABLE, CANTEEN_ITEM_NOT_AVAILABLE, CANTEEN_EMPTY_ORDER, or CANTEEN_DUPLICATE_ITEM_LINE. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getCanteenOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenOrderId: components["parameters"]["CanteenOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOrder"];
+                    };
+                };
+            };
+            /** @description CANTEEN_ORDER_NOT_FOUND (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    fulfillCanteenOrder: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenOrderId: components["parameters"]["CanteenOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOrder"];
+                    };
+                };
+            };
+            /** @description CANTEEN_ORDER_NOT_FOUND (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CANTEEN_ORDER_ALREADY_FULFILLED or CANTEEN_ORDER_CANCELLED_CANNOT_BE_FULFILLED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CANTEEN_BILLING_NOT_CONFIGURED, CANTEEN_BILLING_ACCOUNT_INVALID, CANTEEN_NO_ACTIVE_ACADEMIC_YEAR, or an Inventory insufficient-stock/not-available error surfaced from issueMany(). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cancelCanteenOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                canteenOrderId: components["parameters"]["CanteenOrderId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CanteenOrder"];
+                    };
+                };
+            };
+            /** @description CANTEEN_ORDER_NOT_FOUND (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CANTEEN_ORDER_ALREADY_CANCELLED or CANTEEN_ORDER_FULFILLED_CANNOT_BE_CANCELLED. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

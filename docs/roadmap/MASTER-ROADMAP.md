@@ -530,20 +530,50 @@ Guardian/Student-facing surface all remain deliberately deferred, not
 gaps in this checkpoint's own closure — see `docs/modules/INVENTORY.md`
 §25 for the full list.
 
-The remaining Phase 0K modules (Canteen, Health, Safety) are **not
-started**. Completing Inventory's quantity-stock foundation removes
-Canteen's structural Inventory dependency (a future Canteen checkpoint
-can call `InventoryStockService::issue()` directly to consume stock),
-but Canteen still requires its own Fees/payment integration (billing a
-Guardian/Student for an order — a new Fees consumer, not yet designed)
-and its own product/menu/ordering architecture before it can begin —
-neither is addressed by Inventory's foundation. Health remains blocked
-on the `docs/security/DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED]
-gate; and Safety is blocked pending its own legal/security readiness
-decision, since "incident records" may fall under that same unresolved
-Health gate (`docs/modules/VISITOR.md` §18, §24) — ideally resolved
-alongside Health's own review rather than separately. Phase 0K as a
-whole is **not** complete.
+**Phase 10F — Canteen (complete):** the sixth Phase 0K checkpoint — an
+Outlet directory (each backed by exactly one InventoryLocation,
+structurally immutable after creation, with a database-enforced
+Campus-consistency composite FK), a menu Item catalogue with a
+per-Item recipe evaluated AT FULFILLMENT time (never snapshotted at
+placement — a deliberate, documented asymmetry with the price/location
+snapshot Order placement DOES take), and a Student order lifecycle
+(place → fulfill → cancel) where fulfillment is the cross-domain
+orchestration boundary: `CanteenOrderService::fulfill()` calls a new,
+additive `InventoryStockService::issueMany()` method (issuing multiple
+Items' stock against one Location atomically, deterministic
+ascending-balance-id lock order, proven deadlock-free under real
+concurrency — `docs/modules/INVENTORY.md` §5.1) and Fees'
+`ChargeService::assess()`, inside one outer transaction, with no
+internal capability re-check. A database-enforced one-Charge-per-Order
+partial unique index, a one-Movement-claimed-by-one-Order consumption
+link, and four concurrency scenarios (double fulfillment, scarce-stock
+racing, cancel/fulfill race, recipe-mutation-vs-fulfillment torn read)
+are each proven under real two-process concurrency.
+`canteen.directory.*`/`canteen.orders.*`/`canteen.settings.*`
+capabilities (the settings pair deliberately School-Admin-only by
+default, mirroring `finance.charges.*`), `/api/v1` administrative API,
+and a session-authenticated Inertia UI. During closure, a
+capability-boundary bug the UI-building checkpoint had honestly
+flagged (two picker endpoints reusing Inventory's own
+`inventory.stock.manage`-gated search routes rather than a
+Canteen-scoped one) was fixed with regression tests, and a full
+security-review pass against the checkpoint's own checklist found no
+other real issues. Full design and closure record:
+`docs/modules/CANTEEN.md`. Deliberately excludes wallets/prepaid
+balances, dietary/allergen/medical data, refunds/financial reversal of
+a fulfilled Order, recipe versioning, and any Guardian/Student-facing
+ordering surface — all explicitly deferred, not gaps in this
+checkpoint's own closure — see `docs/modules/CANTEEN.md` §16 for the
+full list.
+
+The remaining Phase 0K modules (Health, Safety) are **not started**.
+Health remains blocked on the `docs/security/DATA-CLASSIFICATION.md`
+[LEGAL REVIEW REQUIRED] gate; and Safety is blocked pending its own
+legal/security readiness decision, since "incident records" may fall
+under that same unresolved Health gate (`docs/modules/VISITOR.md` §18,
+§24) — ideally resolved alongside Health's own review rather than
+separately. Neither Health/Safety legal blocker is resolved by
+Canteen's closure. Phase 0K as a whole is **not** complete.
 
 ## Phase 0L — Oversight
 
