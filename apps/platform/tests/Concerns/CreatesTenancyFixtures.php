@@ -44,6 +44,8 @@ use App\Domain\Transport\Infrastructure\TransportRouteAssignment;
 use App\Domain\Transport\Infrastructure\TransportStop;
 use App\Domain\Transport\Infrastructure\TransportStudentAssignment;
 use App\Domain\Transport\Infrastructure\TransportVehicle;
+use App\Domain\Visitor\Infrastructure\Visitor;
+use App\Domain\Visitor\Infrastructure\VisitorVisit;
 use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -686,6 +688,28 @@ trait CreatesTenancyFixtures
                 'school_id' => $route->school_id,
                 'student_id' => $student->id,
                 'route_id' => $route->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 10C: Visitor fixtures ---------------------------------------
+
+    protected function createVisitor(School $school, array $attributes = []): Visitor
+    {
+        return app(TenantContext::class)->withSchool(
+            $school,
+            fn () => Visitor::factory()->for($school, 'school')->create($attributes),
+        );
+    }
+
+    protected function createVisitorVisit(Visitor $visitor, Campus $campus, array $attributes = []): VisitorVisit
+    {
+        return app(TenantContext::class)->withSchool(
+            $visitor->school,
+            fn () => VisitorVisit::factory()->create(array_merge([
+                'school_id' => $visitor->school_id,
+                'visitor_id' => $visitor->id,
+                'campus_id' => $campus->id,
             ], $attributes)),
         );
     }
