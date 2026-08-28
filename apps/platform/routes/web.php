@@ -37,6 +37,8 @@ use App\Http\Controllers\App\TransportOperationsController;
 use App\Http\Controllers\App\TransportRouteController;
 use App\Http\Controllers\App\TransportStudentAssignmentController;
 use App\Http\Controllers\App\TransportVehicleController;
+use App\Http\Controllers\App\VisitorController;
+use App\Http\Controllers\App\VisitorVisitController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Identity\InvitationAcceptanceController;
 use App\Http\Controllers\SystemStatusController;
@@ -499,5 +501,25 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/routes/{transportRoute}/stops', [TransportStudentAssignmentController::class, 'routeStops'])->name('route-stops');
         Route::post('/', [TransportStudentAssignmentController::class, 'store'])->name('store');
         Route::post('/{transportStudentAssignment}/end', [TransportStudentAssignmentController::class, 'end'])->name('end');
+    });
+
+    // Phase 10C: Visitor (directory, check-in/check-out Visit
+    // lifecycle) administrative UI. Capability checks live inside each
+    // controller (AuthorizesCapability trait), matching every other
+    // module's Inertia controller in this file.
+    Route::prefix('app/visitor/directory')->name('app.visitor.directory.')->group(function (): void {
+        Route::get('/', [VisitorController::class, 'index'])->name('index');
+        Route::get('/create', [VisitorController::class, 'create'])->name('create');
+        Route::post('/', [VisitorController::class, 'store'])->name('store');
+        Route::patch('/{visitor}', [VisitorController::class, 'update'])->name('update');
+    });
+
+    Route::prefix('app/visitor/visits')->name('app.visitor.visits.')->group(function (): void {
+        Route::get('/', [VisitorVisitController::class, 'index'])->name('index');
+        Route::get('/create', [VisitorVisitController::class, 'create'])->name('create');
+        Route::get('/search/visitors', [VisitorVisitController::class, 'searchVisitors'])->name('search-visitors');
+        Route::get('/search/hosts', [VisitorVisitController::class, 'searchHosts'])->name('search-hosts');
+        Route::post('/', [VisitorVisitController::class, 'store'])->name('store');
+        Route::post('/{visitorVisit}/end', [VisitorVisitController::class, 'end'])->name('end');
     });
 });
