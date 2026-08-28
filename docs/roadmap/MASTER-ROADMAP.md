@@ -349,8 +349,29 @@ deferral); `PaymentProviderEventService` remains unreachable from any
 route. Money is always an exact decimal string over the wire, never a
 float. Zero new migrations, zero new capabilities, zero new
 dependencies. Full as-built detail: `docs/modules/FINANCE.md` ("0G.6
-as-built"). 0G.7 (UI) and 0G.8 (Hardening & Closure) are not yet
-started — Phase 0G remains in progress.
+as-built").
+
+**0G.7 — Finance / Fees / Payments UI (implemented):** the
+administrative Inertia UI over 0G.6's boundary — Ledger account
+directory, journal history/detail/post/reverse, Charge list/detail/
+assess/cancel, read-only Payment list/detail. New session-authenticated
+Inertia controllers (`App\Http\Controllers\App\Finance\*`), calling the
+SAME already-authorized Application-layer services 0G.6's `/api/v1`
+controllers call — never a raw Eloquent model, never `LedgerService`/
+`ChargeService`/`PaymentProviderEventService` directly — mirroring the
+established Students/Guardians/Communications pattern, NOT the 0G.6
+Bearer-token JSON API (which the browser cannot authenticate against
+without new Sanctum stateful-SPA infrastructure this checkpoint
+deliberately did not introduce; see FINANCE.md "0G.7 as-built" for the
+full contract-gap writeup). No new capability, no new migration, no
+OpenAPI/generated-type change; the 0G.6 `/api/v1` surface is
+unmodified. Money stays an exact decimal string end to end (no
+JavaScript `Number`/float, including the client-side journal-balance
+preview, which uses exact `BigInt`-cents arithmetic). No Refund UI, no
+Payment mutation UI, no provider configuration UI, no reporting
+dashboard. Full as-built detail: `docs/modules/FINANCE.md` ("0G.7
+as-built"). 0G.8 (Hardening & Closure) is not yet started — Phase 0G
+remains in progress.
 
 ## Phase 0H — Academic Operations
 

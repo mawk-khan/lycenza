@@ -20,8 +20,8 @@ it.
 0G.3  Finance Authorization & Administrative Read Model   (finance.* capabilities, allow/deny tests)   [implemented]
 0G.4  Fees / Receivables Foundation                (charges — post through the ledger)                 [implemented]
 0G.5  Payments / Allocation / Idempotent Provider Integration   (payment records, provider-event idempotency, allocation)   [implemented]
-0G.6  HTTP/API Transport                           (thin controllers over 0G.2-0G.5 services)          [not started]
-0G.7  UI / Finance Workspace                       (Inertia pages: chart of accounts, ledger, receivables)   [not started]
+0G.6  HTTP/API Transport                           (thin controllers over 0G.2-0G.5 services)          [implemented]
+0G.7  UI / Finance Workspace                       (Inertia pages: chart of accounts, ledger, receivables)   [implemented]
 0G.8  Hardening & Closure                          (cross-tenant tests, full regression, closure report)   [not started]
 ```
 
@@ -3784,13 +3784,416 @@ ledger posting/Charge assessment (both remain explicitly deferred, per
 
 ### Next checkpoint boundary
 
-0G.7 (UI / Finance Workspace, per the committed roadmap) is not yet
-started. 0G.8 (Hardening & Closure) remains after it. Phase 0G is NOT
-closed by this checkpoint.
+0G.7 (UI / Finance Workspace) is implemented below. 0G.8 (Hardening &
+Closure) remains after it. Phase 0G is NOT closed by this checkpoint.
+
+## 0G.7 as-built (Finance / Fees / Payments UI)
+
+### A genuine contract gap, resolved before any UI code was written
+
+The committed checkpoint brief for 0G.7 assumed the web UI would
+consume the 0G.6 Bearer-token JSON API (`/api/v1/schools/{school}/...`)
+via a client-side fetch layer and the generated
+`packages/shared-types` bindings. Investigation before writing any code
+found this assumption does not match the repository's actual state:
+
+- `apps/platform/package.json` has no dependency on
+  `packages/shared-types`, no `axios`, and no import of
+  `school-os-api.ts` exists anywhere in `resources/js`.
+- The `/api/v1/...` surface requires `auth:sanctum` (Bearer token); no
+  Sanctum stateful-SPA middleware (`statefulApi()`) is configured
+  anywhere in `bootstrap/app.php`, and the frontend has no token
+  issuance/storage mechanism. A browser session literally cannot
+  authenticate against that surface today.
+- Every existing module (Students, Guardians, Communications, School
+  Setup) instead uses dedicated, session-authenticated Inertia
+  controllers under `App\Http\Controllers\App\*` (`/app/...` routes),
+  calling the SAME Application-layer services their own `/api/v1`
+  sibling controller calls — e.g.
+  `App\Http\Controllers\App\StudentController` alongside
+  `App\Domain\Students\Http\Controllers\StudentController`. The only
+  client-side `fetch()` calls anywhere in the codebase hit small JSON
+  sub-endpoints also registered in `web.php` under that same
+  session-authenticated prefix (e.g.
+  `StudentGuardianRelationshipController::searchGuardians()`) — never
+  the Sanctum API.
+
+To state this precisely, since it is easy to misread: the 0G.6 JSON API
+(`/api/v1/schools/{school}/...`) EXISTS and remains the canonical
+transport for Flutter/external/AI-Gateway consumers, and its generated
+TypeScript contract (`packages/shared-types/src/generated/school-os-api.ts`)
+EXISTS and is untouched by this checkpoint. Neither was deleted,
+modified, or judged unnecessary. What 0G.7 established is narrower:
+the *browser* UI does not consume that generated Bearer-API contract
+*directly*, because this repository's web application has no Sanctum
+stateful-SPA/browser-API-client architecture at all — every existing
+module renders through session-authenticated Inertia controllers
+instead, and 0G.7 follows that same established transport rather than
+introducing a new one. This is an alternate HTTP transport for browser
+rendering/actions, not a bypass of business authorization — every
+0G.7 controller still runs through the identical capability-gated
+Application-layer facade the 0G.6 API controllers call.
+
+Building the UI to literally consume `/api/v1` would have required
+adding new, first-of-its-kind Sanctum stateful-SPA authentication
+infrastructure affecting the ENTIRE `/api/v1` surface — new
+architecture CLAUDE.md rule 2 and this checkpoint's own brief (section
+3) both prohibit introducing for one UI checkpoint's convenience. This
+was raised for a decision rather than resolved silently; the chosen,
+approved path is **Option A**: new session-authenticated Inertia
+controllers under `App\Http\Controllers\App\Finance\*`, following the
+established Students/Guardians/Communications precedent exactly —
+calling the SAME already-authorized 0G.2-0G.5 Application-layer
+services the 0G.6 JSON API controllers call, never `LedgerService`/
+`ChargeService`/`PaymentProviderEventService` directly, and never a raw
+Eloquent model. The 0G.6 `/api/v1` surface is unchanged and remains the
+transport for Flutter/external/AI-Gateway consumers.
+
+### Frontend architecture
+
+`UI → HTTP API`: yes — every read/write is an ordinary session-
+authenticated HTTP request to a capability-gated Laravel route.
+`UI → backend trusted core`: no — every new controller depends only on
+`LedgerReadService`/`LedgerAdministrationService`,
+`ChargeReadService`/`ChargeAdministrationService`, `PaymentReadService`
+(the exact same facades `App\Domain\Finance\Http\Controllers\*`/
+`App\Domain\Fees\Http\Controllers\ChargeController`/
+`App\Domain\Payments\Http\Controllers\PaymentController` already
+depend on). No Finance-specific frontend architecture was invented:
+Inertia pages, `useForm`/`router.post`, native `fetch()` for one
+read-only search sub-endpoint, plain Tailwind markup, `Pagination.vue`/
+`StatusBadge.vue`/`EmptyState.vue` reused as-is — identical to every
+other module's existing pages. No axios, no generated-types import, no
+new npm dependency.
+
+### Controllers / routes
+
+New files, all under `App\Http\Controllers\App\Finance`:
+`FinanceController` (hub), `LedgerAccountController`,
+`JournalEntryController`, `ChargeController`, `PaymentController` —
+distinguished from their `App\Domain\*\Http\Controllers` 0G.6
+namesakes by aliasing in `routes/web.php` exactly like
+`App\Http\Controllers\App\StudentController` already coexists with
+`App\Domain\Students\Http\Controllers\StudentController`.
+
+Routes (session-authenticated, `Route::prefix('app/finance')`, nested
+inside the existing `auth` + `ResolveSchoolContext` web middleware
+group — no new middleware):
+
+| Method | Path | Capability |
+|---|---|---|
+| GET | `/app/finance` | any of the three `.view` capabilities (hub hides the rest) |
+| GET | `/app/finance/ledger-accounts` | `finance.ledger.view` |
+| GET | `/app/finance/journal-entries` | `finance.ledger.view` |
+| GET | `/app/finance/journal-entries/create` | `finance.ledger.post` |
+| POST | `/app/finance/journal-entries` | `finance.ledger.post` |
+| GET | `/app/finance/journal-entries/{id}` | `finance.ledger.view` |
+| POST | `/app/finance/journal-entries/{id}/reverse` | `finance.ledger.reverse` |
+| GET | `/app/finance/charges/create` | `finance.charges.manage` |
+| GET | `/app/finance/charges/students/search` (JSON) | `finance.charges.manage` |
+| GET | `/app/finance/charges` | `finance.charges.view` |
+| POST | `/app/finance/charges` | `finance.charges.manage` |
+| GET | `/app/finance/charges/{id}` | `finance.charges.view` |
+| POST | `/app/finance/charges/{id}/cancel` | `finance.charges.manage` |
+| GET | `/app/finance/payments` | `finance.payments.view` |
+| GET | `/app/finance/payments/{id}` | `finance.payments.view` |
+
+`create`/`students/search` are registered before their `{id}`
+wildcards, matching this file's own established convention elsewhere
+in `web.php`. No `PATCH`/`DELETE`/`PUT` route exists for any Finance
+resource; no route of any verb exists for human Payment mutation
+(proven by `FinanceUiTest::no_human_payment_mutation_route_exists()`,
+mirroring `PaymentApiTest`'s identical proof at the API layer).
+
+### One new, narrow supporting endpoint: Student search
+
+`ChargeController::searchStudents()` — a same-School Student name/
+number search for the Assess Charge form's Student picker, mirroring
+`App\Http\Controllers\App\StudentGuardianRelationshipController::searchGuardians()`'s
+exact established pattern (debounced `fetch()`, `min:2` query length,
+plain JSON, gated by `finance.charges.manage` — the SAME capability
+already required to assess a Charge, not a new capability). This is
+the one small, bounded backend transport addition beyond the 0G.6 API
+surface, added because no Finance-appropriate Student selector existed
+(the Communications module's own `audience/students/search` is gated
+by a Communications capability and would have been the wrong
+cross-module coupling to reuse). Academic Year and Ledger Account
+selectors use a plain full list (both are small, bounded reference
+sets), matching `SchoolSetupController::academicYears()`'s existing
+precedent — no new selector endpoint needed for either.
+
+### Ledger UI
+
+Account directory (`App/Finance/Ledger/Accounts.vue`): read-only table
+of code/name/type/currency/system-indicator/status. No account CRUD,
+no balance column, no client-computed "current balance."
+
+Journal list (`App/Finance/Ledger/Journals/Index.vue`): server-paginated
+(Laravel's own paginator shape, `Pagination.vue` reused unmodified),
+server-backed filters (`posted_from`/`posted_to`/`ledger_account_id`/
+`reversed_only`/`search`, 1:1 with `JournalEntryQuery`). Journal detail
+(`.../Journals/Show.vue`): full typed line list, exact decimal `amount`
+strings rendered via `formatMoney()` (string-only, §"Money" below).
+
+Post Journal (`.../Journals/Create.vue`, `finance.ledger.post` only):
+dynamic add/remove lines (min 2 enforced client-side for UX, 2-50
+server-side per the existing 0G.2 validation), account picker backed by
+the authorized account directory (no hardcoded ids), explicit
+Debit/Credit `<select>` per line (never inferred from a signed amount).
+A client-side balance PREVIEW (`sumAmounts()` in `resources/js/money.ts`)
+uses exact `BigInt`-cents arithmetic — never a float — and is
+explicitly labeled "preview only"; the server remains the sole
+authority (`LedgerService::assertBalanced()`, backed by a PostgreSQL
+deferred constraint trigger, unchanged).
+
+Reversal (`finance.ledger.reverse` only): `window.confirm()` with copy
+explaining a NEW journal entry is created and the original is
+preserved (never "Delete"/"Undo"), matching the one confirmation
+pattern already used everywhere else in this app (`AcademicYears.vue`,
+`Students/Show.vue`, ...) — no new modal/dialog component was
+introduced (none exists in this design system yet). An already-reversed
+retry surfaces `JournalEntryAlreadyReversedException`'s message via
+Inertia's `onError` callback, not a generic error page.
+
+### Charges UI
+
+List/detail/assess/cancel, structurally identical shape to the Ledger
+UI above. `ChargeSummary`/`ChargeDetail` carry only `studentId`/
+`academicYearId` (0G.4's own disclosure boundary) — the controller
+resolves a display name by reading `Student`/`AcademicYear` directly,
+read-only, for presentation only. This is the SAME established
+cross-module read-for-display pattern
+`CommunicationAudienceSearchController` already uses (not a new Fees→
+Students/Academic-Structure Application-layer dependency — DOMAIN-MAP.md
+is unchanged; Fees' own Application layer still never reads those
+models, only this HTTP-layer controller does, exactly like
+Communications' controller already does for the same reason).
+
+Assess Charge form: Student (search-select, debounced `fetch()`),
+Academic Year (full-list select), description, amount (string-backed,
+INR), due date (optional), Receivable/Revenue Ledger Account selects
+(from the authorized account directory, explicitly labeled, no magic
+code matching). No Guardian payer selector, no fee-template selector,
+no invoice fields, no payment-status field (0G.7 rules 22/54).
+
+Cancellation (`finance.charges.manage` only): `window.confirm()`
+explaining a reversing journal entry is recorded and the Charge is
+preserved, marked cancelled. `ChargeHasPaymentAllocationsException`'s
+message ("cannot be cancelled because it has recognized payment
+allocations") surfaces via the same `onError` pattern — proven by
+`FinanceUiTest::a_charge_with_a_payment_allocation_cannot_be_cancelled()`.
+
+### Payments UI (read-only)
+
+List/detail only. No create/settle/allocate/edit/delete/refund control
+of any kind exists in the Vue source (verified by direct source review
+— no such action, no such route name, no such `router.post`/`useForm`
+target appears anywhere under `Pages/App/Finance/Payments`). Allocation
+rows are rendered as plain immutable facts (Charge link + exact
+allocated amount) with no edit/delete affordance.
+
+### Money handling
+
+Every form (`Post Journal`, `Assess Charge`) keeps amount fields as
+plain `useForm()` string state — never `Number(...)`/`parseFloat(...)`.
+`resources/js/money.ts` provides `formatMoney()` (pure string
+manipulation: sign, thousands-grouping regex on the integer part,
+decimal part untouched) and `sumAmounts()` (exact `BigInt`-cents
+arithmetic for the Post Journal balance PREVIEW only) — neither
+function ever constructs a JavaScript `Number` from a monetary value.
+Request payloads send the exact string the user typed; server-side
+`parseAmount()` (duplicated per new controller, mirroring the 0G.6 API
+controllers' own established per-controller duplication) validates
+`^\d{1,12}(\.\d{1,2})?$` before a `Money` value object is ever
+constructed — `1e3`/`NaN`/3-decimal values are rejected as field-level
+`ValidationException`s, never silently coerced.
+`FinanceUiTest::finance_ledger_post_can_post_a_balanced_entry_with_exact_decimal_amounts()`
+proves `"1000.00"` round-trips exactly through post → redirect → detail
+page.
+
+### Capability UX
+
+`finance.ledger.view`/`.post`/`.reverse`, `finance.charges.view`/
+`.manage`, `finance.payments.view` — the same six capabilities 0G.3-0G.5
+already registered; zero new capabilities. Every controller computes
+`can*`/`canManage`/`canPost`/`canReverse` booleans server-side via
+`CapabilityResolver::canInSchool()` (matching `SchoolSetupController`'s
+established pattern) and passes them as plain Inertia props — there is
+no client-side capability composable in this codebase (none exists for
+any other module either), so none was invented for Finance. Every
+hidden button is proven non-authoritative: each mutation
+route/page independently denies an unauthorized actor server-side,
+proven by direct `assertForbidden()` calls against the page AND the
+action for every capability pairing (`FinanceUiTest`).
+
+### Navigation
+
+`DashboardController::index()` gained one `nav.canViewFinance` boolean
+(true if any of the three `.view` capabilities is held) and
+`Dashboard.vue` gained one conditional "Finance" link, exactly matching
+every other module's existing entry. `App/Finance/Index.vue` is the hub
+page (mirrors `SchoolSetup/Index.vue`'s pattern) — its own `can.*` props
+hide Ledger/Charges/Payments sub-links the current user cannot view.
+
+### Error handling
+
+401/403: the framework's existing default handling (unauthenticated
+redirect / `AuthorizationException` → 403), unchanged, matching every
+other module. 404: `JournalEntryNotFoundException`/
+`ChargeNotFoundException`/`PaymentNotFoundException` are caught and
+re-thrown as `Symfony\Component\HttpKernel\Exception\NotFoundHttpException`
+— the SAME uniform "no oracle" not-found behavior 0G.3-0G.6 already
+proved at the Application/API layers, now proved again at this
+transport layer for a cross-School id
+(`journal_entry_detail_is_a_uniform_404_for_a_cross_school_id()`/
+`charge_detail_is_a_uniform_404_for_a_cross_school_id()`/
+`payment_detail_is_a_uniform_404_for_a_cross_school_id()`). 409:
+`JournalEntryAlreadyReversedException`/`ChargeAlreadyCancelledException`/
+`ChargeHasPaymentAllocationsException` are caught and redirected back
+with a field-scoped `withErrors([...])` message, displayed inline via
+Inertia's `onError` callback — never a generic 500 page, never the raw
+exception class name. 422: business-validation exceptions
+(`UnbalancedJournalEntryException`/`InvalidJournalEntryException`/
+`InvalidJournalCurrencyException`/`InvalidChargeException`/
+`StudentNotFoundException`/`AcademicYearNotFoundException`/
+`LedgerAccountNotFoundException`) are translated to
+`ValidationException::withMessages([...])`, associated with the
+relevant form field where the exception names one, or a general
+`lines`/`amount` key otherwise — rendered through the SAME
+`form.errors.*` mechanism every existing form in this app already
+uses.
+
+### Server pagination / filters
+
+Every list reuses each Read Service's OWN existing bounded pagination
+(`LengthAwarePaginator::through()` for presentation +
+`->appends()`/`->withQueryString()`-equivalent to preserve filters in
+generated page links) — no client-side pagination, no re-implemented
+filtering. `Pagination.vue` (existing, unmodified) renders the standard
+Laravel paginator `links` array.
+
+### School context
+
+Every Finance page/action resolves the active School via
+`TenantContext::requireSchool()` — the same session-based convention
+every other `App\Http\Controllers\App\*` controller uses (CLAUDE.md
+rule 68). No route/form ever accepts a client-supplied `school_id`.
+Switching the active School re-navigates through
+`SchoolSwitchController`, which re-renders every page fresh (Inertia's
+normal full visit on that action) — no client-side cache of
+School-scoped Finance data persists across a switch (no `localStorage`/
+`sessionStorage` use anywhere in the new pages).
+
+### Accessibility
+
+Every form control has an explicit `<label for>`; every error message
+is rendered adjacent to its field (`form.errors.*`) with
+`aria-invalid` set where the field can fail server validation; the
+Journal/Payment line tables use real `<th scope="col">` headers (with
+one `sr-only` caption on the Journal detail table); destructive actions
+use `window.confirm()`, the same pattern used app-wide, keeping
+keyboard/focus handling identical to what already exists elsewhere
+(no new custom widget was introduced that could regress this); status
+is never conveyed by color alone (text labels accompany every colored
+badge, reusing the existing `StatusBadge`-style convention).
+
+### Test strategy
+
+No frontend component test framework exists in this repository
+(`package.json`'s only scripts are `type-check`/`lint`/`format`/`build`
+— no Vitest/Vue Test Utils/Playwright) and none was introduced for this
+checkpoint (0G.7 rule 48: "do not add a large new framework solely for
+one checkpoint"). Coverage instead comes from:
+`tests/Feature/App/FinanceUiTest.php` (26 tests / 149 assertions) —
+capability-based visibility and allow/deny for every capability pairing
+across Ledger/Charges/Payments, exact Money-string round-tripping,
+cross-School 404 uniformity, 409 conflict-message display, the
+Student-search endpoint's own capability gate and School-scoping, the
+no-human-Payment-mutation-route proof, and Dashboard/hub navigation
+visibility — plus `npm run type-check` (0 errors) and `npm run build`
+(passes) as the static frontend gates. `npm run lint` could not be run
+in this environment: a pre-existing root-owned directory
+(`storage/framework/testing/disks`, `EACCES`, unrelated to any 0G.7
+change — reproduced identically against a pre-existing, untouched file)
+crashes ESLint's file-discovery walk; this is an environment limitation
+reported honestly per this repository's own rule 14, not a skipped
+check.
+
+### Full regression
+
+Isolated `finance0g7` infrastructure (dedicated PostgreSQL/Redis/MinIO
+containers + network, never `school-os`/`quorfix-*`), fresh
+`platform:test-db-reset --force`. Targeted Finance/Fees/Payments API/
+domain selector: **347 tests / 758 assertions / 0 failures** — byte-
+identical to the exact 0G.6 closure figure, confirming zero regression
+at the domain/API layer. Full application suite: **2816 tests / 9444
+assertions / 0 failures / 0 errors** — exactly the 2790/9295 0G.6
+baseline plus this checkpoint's own +26 tests / +149 assertions, and
+nothing else. Pint (whole repository): PASS. PHPStan/Larastan (whole
+`app`, level 5): 0 errors.
+
+### Security findings (0G.7)
+
+No unresolved P0/P1/P2. Reviewed for: hidden-button-as-authorization
+(disproven — every mutation independently denies server-side, proven
+per capability pairing), School-switch stale data (no client cache
+exists to go stale), body `school_id` leakage (impossible — no request
+body ever names `school_id`; `TenantContext::requireSchool()` is
+always the source), cross-School URL manipulation (uniform 404,
+proven for every `{id}` resource), Payment mutation controls (none
+exist, proven both by source review and a router-level test),
+provider-ingestion controls (none added), raw internal fields
+(`posting_txid`/`creation_txid` — absent from every DTO already, and
+this checkpoint's controllers never reference either identifier),
+Money parsed into a JS `Number` (never — `money.ts` is exhaustively
+string/`BigInt`-based), client-derived outstanding balance or ledger
+balance (never computed — every displayed figure is a server-returned
+field), unsafe HTML rendering (no `v-html` for any Finance/user-
+supplied text — descriptions/names render as ordinary Vue text
+interpolation), mass request-object spreading (every controller
+builds an explicit `$request->validate([...])` allowlist, never a raw
+`$request->all()`), generic raw-object rendering (every Inertia prop
+is built field-by-field from an explicit `present*()`/inline array,
+never `$model->toArray()`), server error leakage (no controller
+catches `QueryException`/`Throwable` broadly; the existing global
+handler's `config('app.debug')` gate is unchanged), double-submit
+mutation (`form.processing`/local `ref` booleans disable buttons
+during an in-flight request on every mutation form — UX only, not a
+substitute for the server's own idempotency posture, which is
+unchanged and still explicitly NOT idempotent for posting/assessment
+per 0G.2/0G.4), destructive action without confirmation (Reversal and
+Cancellation both require `window.confirm()`), capability state
+cached unsafely (none cached — computed fresh per request), Student
+selector cross-School leakage (the search query is always scoped
+implicitly via `Student::query()` under the active School's RLS
+session context; proven by
+`student_search_is_school_scoped()`), hardcoded account ids (none —
+every account selector is populated from the authorized directory),
+provider secrets (none referenced), sensitive `localStorage`
+persistence (none — grep confirms no `localStorage`/`sessionStorage`
+call exists in any new file).
+
+### What 0G.7 intentionally does not implement
+
+Refund UI, Payment creation/settlement/allocation-mutation UI, provider
+callback configuration/event-ingestion UI, multi-currency, mutable
+ledger account administration (no create/edit/deactivate), invoice UI,
+fee-template UI, bulk/CSV assessment, a reporting/analytics dashboard
+(A/R aging, trial balance, revenue charts, ...), export (CSV/PDF), a
+"Receipt" label or print view, a client-owned accounting/balance engine
+of any kind. No backend production code changed outside the new thin
+`App\Http\Controllers\App\Finance\*` transport files themselves
+(0 migrations, 0 new capabilities, 0 OpenAPI/generated-type changes,
+the 0G.6 `/api/v1` controllers/routes are byte-for-byte unmodified).
+
+### Next checkpoint boundary
+
+0G.8 (Hardening & Closure — cross-tenant tests, full regression,
+closure report) remains. Phase 0G is NOT closed by this checkpoint.
 
 ## Roadmap relationship
 
 Implements `docs/roadmap/MASTER-ROADMAP.md`'s **Phase 0G — Finance and
-Fees**. Phase 0G is marked **IN PROGRESS** (0G.0 through 0G.6 complete;
-0G.7 onward not started) — see the corresponding `MASTER-ROADMAP.md`
+Fees**. Phase 0G is marked **IN PROGRESS** (0G.0 through 0G.7 complete;
+0G.8 not started) — see the corresponding `MASTER-ROADMAP.md`
 edit in this same checkpoint.

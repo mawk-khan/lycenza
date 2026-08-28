@@ -17,6 +17,11 @@ use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
+use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
+use App\Http\Controllers\App\Finance\FinanceController;
+use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
+use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
+use App\Http\Controllers\App\Finance\PaymentController as FinancePaymentController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -333,5 +338,44 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/{rollover}/mappings/{mapping}', [EnrollmentRolloverMappingController::class, 'update'])->name('mappings.update');
 
         Route::patch('/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])->name('items.update');
+    });
+
+    // Phase 0G.7: Finance/Fees/Payments administrative UI
+    // (docs/modules/FINANCE.md, "0G.7 as-built"). Session-authenticated
+    // Inertia pages against the ambient active School -- the same
+    // convention every other App/ controller in this file follows, NOT
+    // the Bearer-token JSON API under /api/v1 that 0G.6 built (that
+    // surface exists for Flutter/external consumers). Capability checks
+    // live inside each controller (AuthorizesCapability trait), same as
+    // every other module. Payments is read-only throughout -- no
+    // `finance.payments.manage` capability exists and no mutation route
+    // is registered for it.
+    Route::prefix('app/finance')->name('app.finance.')->group(function (): void {
+        Route::get('/', [FinanceController::class, 'index'])->name('index');
+
+        Route::get('/ledger-accounts', [FinanceLedgerAccountController::class, 'index'])->name('ledger-accounts.index');
+
+        // 'create' registered BEFORE the '/{journalEntry}' wildcard
+        // below, matching this file's own established convention
+        // (e.g. 'announcements'/'templates' inside the Communications
+        // group above).
+        Route::get('/journal-entries/create', [FinanceJournalEntryController::class, 'create'])->name('journal-entries.create');
+        Route::get('/journal-entries', [FinanceJournalEntryController::class, 'index'])->name('journal-entries.index');
+        Route::post('/journal-entries', [FinanceJournalEntryController::class, 'store'])->name('journal-entries.store');
+        Route::get('/journal-entries/{journalEntry}', [FinanceJournalEntryController::class, 'show'])->name('journal-entries.show');
+        Route::post('/journal-entries/{journalEntry}/reverse', [FinanceJournalEntryController::class, 'reverse'])->name('journal-entries.reverse');
+
+        // 'create' and 'students/search' registered BEFORE the
+        // '/{charge}' wildcard below, same reasoning as
+        // 'journal-entries/create' above.
+        Route::get('/charges/create', [FinanceChargeController::class, 'create'])->name('charges.create');
+        Route::get('/charges/students/search', [FinanceChargeController::class, 'searchStudents'])->name('charges.students.search');
+        Route::get('/charges', [FinanceChargeController::class, 'index'])->name('charges.index');
+        Route::post('/charges', [FinanceChargeController::class, 'store'])->name('charges.store');
+        Route::get('/charges/{charge}', [FinanceChargeController::class, 'show'])->name('charges.show');
+        Route::post('/charges/{charge}/cancel', [FinanceChargeController::class, 'cancel'])->name('charges.cancel');
+
+        Route::get('/payments', [FinancePaymentController::class, 'index'])->name('payments.index');
+        Route::get('/payments/{payment}', [FinancePaymentController::class, 'show'])->name('payments.show');
     });
 });
