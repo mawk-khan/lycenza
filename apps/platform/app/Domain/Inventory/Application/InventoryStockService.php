@@ -3,8 +3,11 @@
 namespace App\Domain\Inventory\Application;
 
 use App\Domain\Inventory\Application\Exceptions\ConcurrentStockConflictException;
+use App\Domain\Inventory\Application\Exceptions\DuplicateInventoryItemRequirementException;
+use App\Domain\Inventory\Application\Exceptions\EmptyIssueRequirementsException;
 use App\Domain\Inventory\Application\Exceptions\InsufficientStockException;
 use App\Domain\Inventory\Application\Exceptions\InvalidQuantityException;
+use App\Domain\Inventory\Application\Exceptions\InventoryItemNotFoundException;
 use App\Domain\Inventory\Application\Exceptions\ItemNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\LocationNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\SameLocationTransferException;
@@ -152,13 +155,7 @@ class InventoryStockService
                 $sourceBalanceId = $this->ensureBalanceRow($item, $from);
                 $destBalanceId = $this->ensureBalanceRow($item, $to);
 
-                $orderedIds = [$sourceBalanceId, $destBalanceId];
-                sort($orderedIds, SORT_STRING);
-
-                $locked = [];
-                foreach ($orderedIds as $id) {
-                    $locked[$id] = $this->lockBalance($id);
-                }
+                $locked = $this->lockBalancesInDeterministicOrder([$sourceBalanceId, $destBalanceId]);
 
                 $sourceBalance = $locked[$sourceBalanceId];
                 $destBalance = $locked[$destBalanceId];
@@ -187,6 +184,133 @@ class InventoryStockService
                 ]);
 
                 return $movement;
+            });
+        });
+    }
+
+    /**
+     * Atomically issue several DIFFERENT Items from ONE Location in a
+     * single caller-facing operation (docs/modules/INVENTORY.md
+     * "Multi-item issue" -- Phase 10F's Canteen foundation: a recipe
+     * consuming several Items, e.g. rice+chicken+oil, must never be
+     * expressed as N separate `issue()` calls from outside this
+     * service -- that would risk two concurrent multi-item consumers
+     * locking overlapping balance rows in different orders and
+     * deadlocking each other). Generalizes `transfer()`'s exact
+     * "resolve every needed balance row BEFORE locking, then lock in
+     * deterministic ascending-id order" pattern from 2 rows to N via
+     * the shared `lockBalancesInDeterministicOrder()` helper.
+     *
+     * Validation order, matching the checkpoint brief exactly:
+     *  1. Reject a duplicate `inventoryItemId` across `$requirements`
+     *     -- BEFORE any database work.
+     *  2. Reject an empty `$requirements` array.
+     *  3. Resolve every Item within the Location's School; an id that
+     *     does not resolve to a real row throws
+     *     `InventoryItemNotFoundException`, an inactive Item throws
+     *     the existing `ItemNotAvailableException`.
+     *  4. Reject an inactive Location.
+     *  5. Validate every requirement's quantity via the existing
+     *     `assertValidQuantity()` (per-Item unit policy, unchanged).
+     *
+     * All of the above happens BEFORE the transaction opens -- nothing
+     * is mutated yet. Inside the transaction: every (Item, Location)
+     * balance row is resolved via the existing `ensureBalanceRow()`,
+     * every resolved balance id is locked in deterministic ascending
+     * order, and ONLY AFTER every lock is held is sufficiency
+     * re-validated for every Item (exactly like `issue()`'s own
+     * post-lock check). A single insufficient Item ANYWHERE in the
+     * set -- first, middle, or last -- throws `InsufficientStockException`
+     * before any balance has been mutated, leaving the whole
+     * transaction to roll back with zero effect (including any
+     * zero-balance row `ensureBalanceRow()` may have just inserted for
+     * a previously-unseen Item x Location pair, exactly like
+     * `transfer()`'s own destination-row rollback precedent).
+     *
+     * @param  array<int, IssueRequirement>  $requirements
+     * @return array<int, StockMovement> exactly one StockMovement per requirement, in the same order as $requirements, each of type 'issue'
+     */
+    public function issueMany(InventoryLocation $location, array $requirements, ?User $actor = null): array
+    {
+        $seenItemIds = [];
+        foreach ($requirements as $requirement) {
+            if (isset($seenItemIds[$requirement->inventoryItemId])) {
+                throw new DuplicateInventoryItemRequirementException($requirement->inventoryItemId);
+            }
+
+            $seenItemIds[$requirement->inventoryItemId] = true;
+        }
+
+        if ($requirements === []) {
+            throw new EmptyIssueRequirementsException;
+        }
+
+        $items = InventoryItem::query()
+            ->where('school_id', $location->school_id)
+            ->whereIn('id', array_keys($seenItemIds))
+            ->get()
+            ->keyBy('id');
+
+        foreach (array_keys($seenItemIds) as $itemId) {
+            $item = $items->get($itemId);
+
+            if ($item === null) {
+                throw new InventoryItemNotFoundException($itemId);
+            }
+
+            if (! $item->isActive()) {
+                throw new ItemNotAvailableException;
+            }
+        }
+
+        if (! $location->isActive()) {
+            throw new LocationNotAvailableException;
+        }
+
+        foreach ($requirements as $requirement) {
+            $this->assertValidQuantity($items->get($requirement->inventoryItemId), $requirement->quantity);
+        }
+
+        return $this->guardedMany(function () use ($location, $requirements, $items, $actor) {
+            return DB::transaction(function () use ($location, $requirements, $items, $actor) {
+                $balanceIdsByItemId = [];
+                foreach ($requirements as $requirement) {
+                    $item = $items->get($requirement->inventoryItemId);
+                    $balanceIdsByItemId[$requirement->inventoryItemId] = $this->ensureBalanceRow($item, $location);
+                }
+
+                $locked = $this->lockBalancesInDeterministicOrder(array_values($balanceIdsByItemId));
+
+                foreach ($requirements as $requirement) {
+                    $balance = $locked[$balanceIdsByItemId[$requirement->inventoryItemId]];
+
+                    if (bccomp($balance->quantity_on_hand, $requirement->quantity, 3) < 0) {
+                        throw new InsufficientStockException;
+                    }
+                }
+
+                $movements = [];
+                foreach ($requirements as $requirement) {
+                    $item = $items->get($requirement->inventoryItemId);
+                    $balance = $locked[$balanceIdsByItemId[$requirement->inventoryItemId]];
+
+                    $balance->quantity_on_hand = bcsub($balance->quantity_on_hand, $requirement->quantity, 3);
+                    $balance->save();
+
+                    $movement = $this->recordMovement($item, 'issue', $location, null, $requirement->quantity);
+                    $movements[] = $movement;
+
+                    $this->audit->school($item->school, 'inventory.stock.issued', actor: $actor, subject: $movement, metadata: [
+                        'movementId' => $movement->id,
+                        'itemId' => $item->id,
+                        'itemCode' => $item->code,
+                        'fromLocationId' => $location->id,
+                        'fromLocationCode' => $location->code,
+                        'quantity' => $requirement->quantity,
+                    ]);
+                }
+
+                return $movements;
             });
         });
     }
@@ -241,6 +365,40 @@ class InventoryStockService
     private function lockBalance(string $balanceId): InventoryStockBalance
     {
         return InventoryStockBalance::query()->where('id', $balanceId)->lockForUpdate()->firstOrFail();
+    }
+
+    /**
+     * Locks 2-or-more already-resolved balance ids in deterministic
+     * ASCENDING id order -- never a fixed role order (e.g.
+     * "source-then-destination" or "first-requirement-then-rest"),
+     * since every locked resource here is the SAME entity type (a
+     * stock balance row): a role-based order deadlocks two opposing
+     * concurrent callers that each lock their own "first" resource
+     * first (`transfer()`'s A->B vs. B->A precedent, generalized).
+     * Ascending-id ordering is caller-order-independent and provably
+     * deadlock-free -- proven under real two-process concurrency for
+     * `transfer()`'s 2-row case
+     * (InventoryStockConcurrencyTest::opposing_concurrent_transfers...)
+     * and for `issueMany()`'s N-row case
+     * (InventoryStockConcurrencyTest::opposing_concurrent_issue_many...).
+     * The ids passed in MUST already be resolved (via
+     * `ensureBalanceRow()`) -- a row that does not yet exist cannot be
+     * locked.
+     *
+     * @param  array<int, string>  $balanceIds
+     * @return array<string, InventoryStockBalance> keyed by balance id
+     */
+    private function lockBalancesInDeterministicOrder(array $balanceIds): array
+    {
+        $orderedIds = $balanceIds;
+        sort($orderedIds, SORT_STRING);
+
+        $locked = [];
+        foreach ($orderedIds as $id) {
+            $locked[$id] = $this->lockBalance($id);
+        }
+
+        return $locked;
     }
 
     private function recordMovement(InventoryItem $item, string $type, ?InventoryLocation $from, ?InventoryLocation $to, string $quantity): StockMovement
@@ -299,6 +457,31 @@ class InventoryStockService
      * section 19).
      */
     private function guarded(callable $callback): StockMovement
+    {
+        try {
+            return $callback();
+        } catch (QueryException $e) {
+            if ($this->isCheckViolation($e)) {
+                throw new ConcurrentStockConflictException;
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * `issueMany()`'s array-returning twin of `guarded()` -- kept as a
+     * small parallel wrapper rather than widening `guarded()`'s own
+     * return type, so `receive()`/`issue()`/`transfer()`'s existing
+     * `StockMovement`-typed callers and their declared return type are
+     * completely unchanged. Identical CHECK-violation translation
+     * logic; do not let this drift from `guarded()` if that logic ever
+     * changes.
+     *
+     * @param  callable(): array<int, StockMovement>  $callback
+     * @return array<int, StockMovement>
+     */
+    private function guardedMany(callable $callback): array
     {
         try {
             return $callback();
