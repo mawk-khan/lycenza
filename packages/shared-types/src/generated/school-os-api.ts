@@ -1868,6 +1868,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/hostels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a School's Hostels (active by default). Requires hostel.directory.view. */
+        get: operations["listHostels"];
+        put?: never;
+        /** Registers a Hostel. Requires hostel.directory.manage. */
+        post: operations["createHostel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostels/{hostelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Hostel. Requires hostel.directory.view. */
+        get: operations["getHostel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Hostel. Requires hostel.directory.manage. */
+        patch: operations["updateHostel"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostels/{hostelId}/hostel-rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a Hostel's Rooms (active by default). Requires hostel.directory.view. */
+        get: operations["listHostelRooms"];
+        put?: never;
+        /** Registers a Room within a Hostel. Requires hostel.directory.manage. */
+        post: operations["createHostelRoom"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-rooms/{hostelRoomId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Room. Requires hostel.directory.manage. */
+        patch: operations["updateHostelRoom"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-rooms/{hostelRoomId}/hostel-beds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a Room's Beds (active by default). Requires hostel.directory.view. */
+        get: operations["listHostelBeds"];
+        put?: never;
+        /** Registers a Bed within a Room. Requires hostel.directory.manage. */
+        post: operations["createHostelBed"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-beds/{hostelBedId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Bed. Requires hostel.directory.manage. */
+        patch: operations["updateHostelBed"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-residency-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Student Hostel residency assignments (active by default). Requires hostel.residency.view. */
+        get: operations["listHostelResidencyAssignments"];
+        put?: never;
+        /** Assigns a Student to a Hostel Bed. Requires hostel.residency.manage. Idempotency-Key required -- a network retry must never risk a duplicate assignment attempt. */
+        post: operations["assignHostelResidency"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-residency-assignments/{hostelResidencyAssignmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Hostel residency assignment. Requires hostel.residency.view. */
+        get: operations["getHostelResidencyAssignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-residency-assignments/{hostelResidencyAssignmentId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ends an active Hostel residency assignment. Requires hostel.residency.manage. */
+        post: operations["endHostelResidencyAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2301,6 +2459,97 @@ export interface components {
             host_employee_id?: string | null;
             purpose: string;
             gate_pass_number?: string | null;
+        };
+        /** @description A School's Hostel (docs/modules/HOSTEL.md "Hostel model"). Belongs to exactly one Campus. */
+        Hostel: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            campusId: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        HostelInput: {
+            code?: string;
+            name?: string;
+            /** Format: uuid */
+            campus_id?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description A Room belonging to exactly one Hostel (docs/modules/HOSTEL.md "HostelRoom model"). No stored capacity -- derive it from active HostelBed rows. */
+        HostelRoom: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            hostelId: string;
+            code: string;
+            floorOrBlock?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        HostelRoomInput: {
+            code?: string;
+            floor_or_block?: string | null;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description One independently assignable physical Bed belonging to exactly one Room (docs/modules/HOSTEL.md "HostelBed model"). No stored occupant -- current occupancy is derived from the active HostelResidencyAssignment referencing this Bed. */
+        HostelBed: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            hostelRoomId: string;
+            code: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        HostelBedInput: {
+            code?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description A Student's Hostel residency assignment to a Bed. At most one assignment per Bed AND one per Student has status=active at a time (database-enforced, docs/modules/HOSTEL.md "ResidencyAssignment lifecycle"). */
+        HostelResidencyAssignment: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "active" | "ended";
+            /** Format: date-time */
+            startsOn: string;
+            /** Format: date-time */
+            endsOn?: string | null;
+            student: {
+                /** Format: uuid */
+                id: string;
+                studentNumber: string;
+                firstName: string;
+                lastName?: string | null;
+            };
+            bed: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                room: {
+                    /** Format: uuid */
+                    id: string;
+                    code: string;
+                    hostel: {
+                        /** Format: uuid */
+                        id: string;
+                        code: string;
+                        name: string;
+                    };
+                };
+            };
+        };
+        HostelResidencyAssignmentInput: {
+            /** Format: uuid */
+            student_id: string;
+            /** Format: uuid */
+            hostel_bed_id: string;
         };
         /** @description Only one Academic Year per School may be `active` (section 16, database-enforced). */
         AcademicYear: {
@@ -3177,6 +3426,10 @@ export interface components {
         TransportStudentAssignmentId: string;
         VisitorId: string;
         VisitorVisitId: string;
+        HostelId: string;
+        HostelRoomId: string;
+        HostelBedId: string;
+        HostelResidencyAssignmentId: string;
     };
     requestBodies: never;
     headers: {
@@ -8521,6 +8774,457 @@ export interface operations {
                 };
             };
             /** @description This Visit was already checked out (VISITOR_VISIT_ALREADY_CHECKED_OUT). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listHostels: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Hostel"][];
+                    };
+                };
+            };
+        };
+    };
+    createHostel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostelInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Hostel"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate code within this School). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getHostel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelId: components["parameters"]["HostelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Hostel"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateHostel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelId: components["parameters"]["HostelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HostelInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Hostel"];
+                    };
+                };
+            };
+        };
+    };
+    listHostelRooms: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelId: components["parameters"]["HostelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelRoom"][];
+                    };
+                };
+            };
+        };
+    };
+    createHostelRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelId: components["parameters"]["HostelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostelRoomInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelRoom"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate code within this Hostel). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateHostelRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelRoomId: components["parameters"]["HostelRoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HostelRoomInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelRoom"];
+                    };
+                };
+            };
+        };
+    };
+    listHostelBeds: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelRoomId: components["parameters"]["HostelRoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelBed"][];
+                    };
+                };
+            };
+        };
+    };
+    createHostelBed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelRoomId: components["parameters"]["HostelRoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostelBedInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelBed"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate code within this Room). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateHostelBed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelBedId: components["parameters"]["HostelBedId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HostelBedInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelBed"];
+                    };
+                };
+            };
+        };
+    };
+    listHostelResidencyAssignments: {
+        parameters: {
+            query?: {
+                status?: "active" | "ended";
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: components["parameters"]["StudentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelResidencyAssignment"][];
+                    };
+                };
+            };
+        };
+    };
+    assignHostelResidency: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HostelResidencyAssignmentInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelResidencyAssignment"];
+                    };
+                };
+            };
+            /** @description A genuinely concurrent assignment attempt lost the race, or an Idempotency-Key conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Student not eligible/already resident, or the Bed is not available/already occupied (HOSTEL_STUDENT_NOT_ELIGIBLE / HOSTEL_STUDENT_ALREADY_RESIDENT / HOSTEL_BED_NOT_AVAILABLE / HOSTEL_BED_ALREADY_OCCUPIED). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getHostelResidencyAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelResidencyAssignmentId: components["parameters"]["HostelResidencyAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelResidencyAssignment"];
+                    };
+                };
+            };
+        };
+    };
+    endHostelResidencyAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelResidencyAssignmentId: components["parameters"]["HostelResidencyAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelResidencyAssignment"];
+                    };
+                };
+            };
+            /** @description This residency assignment already ended (HOSTEL_RESIDENCY_ALREADY_ENDED). */
             422: {
                 headers: {
                     [name: string]: unknown;

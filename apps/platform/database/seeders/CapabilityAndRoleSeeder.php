@@ -331,6 +331,19 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'visitor.directory.manage', 'label' => 'Manage the Visitor directory', 'namespace' => 'school'],
             ['key' => 'visitor.visits.view', 'label' => 'View Visitor check-in/check-out Visits', 'namespace' => 'school'],
             ['key' => 'visitor.visits.manage', 'label' => 'Manage Visitor check-in/check-out Visits', 'namespace' => 'school'],
+
+            // Phase 10D (docs/modules/HOSTEL.md "Capabilities") --
+            // mirrors Visitor's directory/visits split exactly:
+            // `.directory.*` covers Hostel/Room/Bed reference records
+            // together (a Room/Bed has no independent meaning outside
+            // its Hostel, matching Library's Copy-under-Title
+            // precedent -- no separate `hostel.rooms.*`/`hostel.beds.*`
+            // pairs); `.residency.*` covers the Student residency
+            // assignment lifecycle only.
+            ['key' => 'hostel.directory.view', 'label' => 'View the Hostel/Room/Bed directory', 'namespace' => 'school'],
+            ['key' => 'hostel.directory.manage', 'label' => 'Manage the Hostel/Room/Bed directory', 'namespace' => 'school'],
+            ['key' => 'hostel.residency.view', 'label' => 'View Student Hostel residency assignments', 'namespace' => 'school'],
+            ['key' => 'hostel.residency.manage', 'label' => 'Manage Student Hostel residency assignments', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -428,6 +441,12 @@ class CapabilityAndRoleSeeder extends Seeder
                     // administrative work.
                     'visitor.directory.view', 'visitor.directory.manage',
                     'visitor.visits.view', 'visitor.visits.manage',
+                    // Phase 10D: same day-to-day operational parity
+                    // reasoning as Visitor/Transport/Library above --
+                    // managing Hostel structure and Student residency
+                    // is routine administrative work.
+                    'hostel.directory.view', 'hostel.directory.manage',
+                    'hostel.residency.view', 'hostel.residency.manage',
                 ],
             ],
             'principal' => [
@@ -514,6 +533,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // reasoning as school_admin above.
                     'visitor.directory.view', 'visitor.directory.manage',
                     'visitor.visits.view', 'visitor.visits.manage',
+                    // Phase 10D: same day-to-day operational parity
+                    // reasoning as school_admin above.
+                    'hostel.directory.view', 'hostel.directory.manage',
+                    'hostel.residency.view', 'hostel.residency.manage',
                 ],
             ],
         ];

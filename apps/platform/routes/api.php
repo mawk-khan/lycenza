@@ -14,6 +14,10 @@ use App\Domain\Documents\Http\Controllers\DocumentController;
 use App\Domain\Guardians\Http\Controllers\GuardianContactController;
 use App\Domain\Guardians\Http\Controllers\GuardianController;
 use App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController;
+use App\Domain\Hostel\Http\Controllers\HostelBedController;
+use App\Domain\Hostel\Http\Controllers\HostelController;
+use App\Domain\Hostel\Http\Controllers\HostelResidencyAssignmentController;
+use App\Domain\Hostel\Http\Controllers\HostelRoomController;
 use App\Domain\HR\Http\Controllers\EmployeeActivityController;
 use App\Domain\HR\Http\Controllers\EmployeeDirectoryController;
 use App\Domain\HR\Http\Controllers\EmployeeProfileController;
@@ -753,6 +757,56 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/visitor-visits/{visitorVisit}/end', [VisitorVisitController::class, 'end'])
                 ->middleware(['capability:visitor.visits.manage', 'throttle:school-api-mutations'])
                 ->name('schools.visitor-visits.end');
+
+            // --- Phase 10D: Hostel (Hostel/Room/Bed directory, Student
+            // Hostel residency lifecycle). `idempotent` is applied only
+            // to the residency-assign mutation -- a network retry could
+            // otherwise silently create a second residency row for the
+            // same physical move-in, the exact reasoning already
+            // established for Library checkout, Transport's two
+            // "assign" mutations, and Visitor check-in. `end()`
+            // deliberately does NOT carry idempotency: its own
+            // conditional `UPDATE ... WHERE status = 'active'` already
+            // makes a repeated/retried request safe by construction.
+            Route::get('/hostels', [HostelController::class, 'index'])
+                ->name('schools.hostels.index');
+            Route::post('/hostels', [HostelController::class, 'store'])
+                ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostels.store');
+            Route::get('/hostels/{hostel}', [HostelController::class, 'show'])
+                ->name('schools.hostels.show');
+            Route::patch('/hostels/{hostel}', [HostelController::class, 'update'])
+                ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostels.update');
+
+            Route::get('/hostels/{hostel}/hostel-rooms', [HostelRoomController::class, 'index'])
+                ->name('schools.hostels.hostel-rooms.index');
+            Route::post('/hostels/{hostel}/hostel-rooms', [HostelRoomController::class, 'store'])
+                ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostels.hostel-rooms.store');
+            Route::patch('/hostel-rooms/{hostelRoom}', [HostelRoomController::class, 'update'])
+                ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostel-rooms.update');
+
+            Route::get('/hostel-rooms/{hostelRoom}/hostel-beds', [HostelBedController::class, 'index'])
+                ->name('schools.hostel-rooms.hostel-beds.index');
+            Route::post('/hostel-rooms/{hostelRoom}/hostel-beds', [HostelBedController::class, 'store'])
+                ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostel-rooms.hostel-beds.store');
+            Route::patch('/hostel-beds/{hostelBed}', [HostelBedController::class, 'update'])
+                ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostel-beds.update');
+
+            Route::get('/hostel-residency-assignments', [HostelResidencyAssignmentController::class, 'index'])
+                ->name('schools.hostel-residency-assignments.index');
+            Route::post('/hostel-residency-assignments', [HostelResidencyAssignmentController::class, 'store'])
+                ->middleware(['capability:hostel.residency.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.hostel-residency-assignments.store');
+            Route::get('/hostel-residency-assignments/{hostelResidencyAssignment}', [HostelResidencyAssignmentController::class, 'show'])
+                ->name('schools.hostel-residency-assignments.show');
+            Route::post('/hostel-residency-assignments/{hostelResidencyAssignment}/end', [HostelResidencyAssignmentController::class, 'end'])
+                ->middleware(['capability:hostel.residency.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostel-residency-assignments.end');
         });
 });
 
