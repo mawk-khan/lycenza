@@ -303,15 +303,36 @@ Guardian/Student-facing surface — all explicitly deferred, not gaps in
 this checkpoint's own closure. Safety/incident management was
 deliberately NOT built as part of this checkpoint — see below.
 
-The remaining Phase 0K modules (Inventory, Canteen, Hostel, Health,
-Safety) are **not started**; Inventory/Canteen/Hostel remain blocked on
-Finance/Fees reaching `main`; Health remains blocked on the
-`docs/security/DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED] gate;
-and Safety is blocked pending its own legal/security readiness
-decision, since "incident records" may fall under that same unresolved
-Health gate (`docs/modules/VISITOR.md` §18, §24) — ideally resolved
-alongside Health's own review rather than separately. Phase 0K as a
-whole is **not** complete.
+**Phase 10D — Hostel (complete):** the fourth Phase 0K checkpoint —
+a Hostel directory belonging to exactly one Campus, HostelRoom and
+HostelBed (capacity/occupancy always derived from active Bed/
+residency-assignment rows, never a stored counter), and Student
+residency assignment (explicit-end-required semantics, database-
+enforced composite FKs at every level of the Campus → Hostel →
+HostelRoom → HostelBed → HostelResidencyAssignment hierarchy — all
+RESTRICT on delete, never CASCADE, per the Phase 10C Visitor
+historical-integrity correction), two database-enforced invariants
+(one active residency per Bed AND per Student) proven under real
+concurrency with a documented deterministic lock order,
+`hostel.directory.*`/`hostel.residency.*` capabilities, `/api/v1`
+administrative API, and a session-authenticated Inertia UI. Full
+design and closure record: `docs/modules/HOSTEL.md`. `HostelRoom` is a
+deliberately independent model, not a reuse of Academic Structure's
+teaching-space `Room`. Deliberately excludes Hostel fees/billing/
+deposits (Finance/Phase 0G is not on `main`), warden/staff management,
+meal plans/Canteen integration, Health/Safety data, Documents/
+Communications integration, and any Guardian/Student-facing surface —
+all explicitly deferred, not gaps in this checkpoint's own closure.
+
+The remaining Phase 0K modules (Inventory, Canteen, Health, Safety) are
+**not started**; Inventory/Canteen remain blocked on Finance/Fees
+reaching `main`; Health remains blocked on the `docs/security/
+DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED] gate; and Safety is
+blocked pending its own legal/security readiness decision, since
+"incident records" may fall under that same unresolved Health gate
+(`docs/modules/VISITOR.md` §18, §24) — ideally resolved alongside
+Health's own review rather than separately. Phase 0K as a whole is
+**not** complete.
 
 ## Phase 0L — Oversight
 
