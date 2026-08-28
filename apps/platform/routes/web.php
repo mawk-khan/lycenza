@@ -31,6 +31,8 @@ use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
+use App\Http\Controllers\App\StudentSubjectEnrollmentController;
+use App\Http\Controllers\App\SubjectOfferingController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\SystemStatusController;
 use Illuminate\Support\Facades\Route;
@@ -368,6 +370,33 @@ Route::middleware('auth')->group(function (): void {
         Route::delete('/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'destroy'])->name('subject-mappings.destroy');
 
         Route::patch('/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])->name('items.update');
+    });
+
+    // Phase 1H.1: SubjectOffering roster / elective administration
+    // (docs/students/PHASE-1H-1-ELECTIVE-ADMINISTRATION-UI.md).
+    // Capability checks live inside each controller
+    // (AuthorizesCapability trait), matching every other App/
+    // controller's pattern -- every action re-derives the active
+    // School from TenantContext, never a client-supplied id. Gated
+    // entirely by `academics.subjects.view`/`.manage` -- never
+    // `students.view`/`students.manage` (the 1D Guardian-picker
+    // lesson: `eligible-students`/{enrollment}/transfer-targets are
+    // narrow workflow-specific adapters, not the generic Student
+    // picker). Mutation/adapter actions live on
+    // StudentSubjectEnrollmentController (App), mirroring the exact
+    // domain-level split the Bearer-token JSON API already uses.
+    Route::prefix('app/subject-offerings')->name('app.subject-offerings.')->group(function (): void {
+        Route::get('/', [SubjectOfferingController::class, 'index'])->name('index');
+        Route::get('/{subjectOffering}', [SubjectOfferingController::class, 'show'])->name('show');
+        Route::get('/{subjectOffering}/eligible-students', [StudentSubjectEnrollmentController::class, 'eligibleStudents'])->name('eligible-students');
+        Route::post('/{subjectOffering}/enrollments', [StudentSubjectEnrollmentController::class, 'enroll'])->name('enrollments.store');
+    });
+
+    Route::prefix('app/subject-enrollments')->name('app.subject-enrollments.')->group(function (): void {
+        Route::post('/{enrollment}/withdraw', [StudentSubjectEnrollmentController::class, 'withdraw'])->name('withdraw');
+        Route::post('/{enrollment}/cancel', [StudentSubjectEnrollmentController::class, 'cancel'])->name('cancel');
+        Route::post('/{enrollment}/transfer', [StudentSubjectEnrollmentController::class, 'transfer'])->name('transfer');
+        Route::get('/{enrollment}/transfer-targets', [StudentSubjectEnrollmentController::class, 'transferTargets'])->name('transfer-targets');
     });
 
     // Phase 1D.6: Admissions administrative UI

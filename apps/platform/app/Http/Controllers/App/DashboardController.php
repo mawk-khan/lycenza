@@ -62,6 +62,8 @@ class DashboardController extends Controller
                     && $capabilities->canInSchool($user, 'enrollments.rollovers.view', $school),
                 // Phase 1D.6: Admissions administrative UI.
                 'canViewAdmissions' => $school !== null && $capabilities->canInSchool($user, 'admissions.view', $school),
+                // Phase 1H.1: SubjectOffering roster / elective administration.
+                'canViewSubjectOfferings' => $school !== null && $capabilities->canInSchool($user, 'academics.subjects.view', $school),
             ],
         ]);
     }
