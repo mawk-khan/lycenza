@@ -371,7 +371,10 @@ correct with zero coupling to any account-link/reachability code).
   shipping a tested API ahead of its UI page (`docs/roadmap/MASTER-ROADMAP.md`
   Phase 0D's "Deliberately deferred" note). A future checkpoint can add
   the page following the same pattern `StudentEnrollmentController`'s
-  existing Inertia pages already establish.
+  existing Inertia pages already establish. **Architecture defined in
+  `docs/students/PHASE-1H-0-ELECTIVE-ADMINISTRATION-UI-ARCHITECTURE.md`
+  (Phase 1H.0, informal module-local checkpoint label) — not yet
+  implemented as of this writing.**
 - Year-rollover integration (section 22, architecture now defined in
   Phase 1G.0 — see section 22 above).
 
