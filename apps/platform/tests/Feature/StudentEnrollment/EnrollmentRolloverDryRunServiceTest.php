@@ -5,6 +5,8 @@ namespace Tests\Feature\StudentEnrollment;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\Subject;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\EnrollmentRolloverDryRunService;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
 use App\Domain\Students\Application\Exceptions\CrossSchoolRolloverPlanException;
@@ -13,10 +15,12 @@ use App\Domain\Students\Application\Exceptions\InvalidRolloverItemDecisionExcept
 use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
 use App\Domain\Students\Application\StudentEnrollmentService;
+use App\Domain\Students\Application\StudentSubjectEnrollmentService;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Models\Campus;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
@@ -52,6 +56,11 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
         return app(StudentEnrollmentService::class);
     }
 
+    private function subjectEnrollmentService(): StudentSubjectEnrollmentService
+    {
+        return app(StudentSubjectEnrollmentService::class);
+    }
+
     /**
      * @return array{school: School, campus: Campus, sourceYear: AcademicYear, targetYear: AcademicYear, sourceGrade: GradeLevel, targetGrade: GradeLevel, sourceSection: Section, targetSection: Section, plan: EnrollmentRolloverPlan}
      */
@@ -68,6 +77,39 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
         $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);
 
         return compact('school', 'campus', 'sourceYear', 'targetYear', 'sourceGrade', 'targetGrade', 'sourceSection', 'targetSection', 'plan');
+    }
+
+    /**
+     * Phase 1G.2: extends buildContext() with one elective Subject and
+     * a matched, mutually compatible source/target SubjectOffering pair
+     * (source: sourceYear/campus/sourceGrade; target: targetYear/
+     * campus/targetGrade -- the SAME campus, exactly the placement
+     * side's own default target context) -- the minimal fixture every
+     * subject-mapping dry-run test builds on.
+     *
+     * @return array{school: School, campus: Campus, sourceYear: AcademicYear, targetYear: AcademicYear, sourceGrade: GradeLevel, targetGrade: GradeLevel, sourceSection: Section, targetSection: Section, plan: EnrollmentRolloverPlan, subject: Subject, sourceOffering: SubjectOffering, targetOffering: SubjectOffering}
+     */
+    private function buildSubjectContext(): array
+    {
+        $base = $this->buildContext();
+        $subject = $this->createSubject($base['school']);
+        $sourceOffering = $this->createSubjectOffering($base['sourceYear'], $base['campus'], $base['sourceGrade'], $subject, ['is_required' => false]);
+        $targetOffering = $this->createSubjectOffering($base['targetYear'], $base['campus'], $base['targetGrade'], $subject, ['is_required' => false]);
+
+        return $base + compact('subject', 'sourceOffering', 'targetOffering');
+    }
+
+    /**
+     * Wires up the placement side (Grade mapping + promote decision +
+     * explicit Roll Number) so a test can focus purely on the subject
+     * layer -- every subject test needs an otherwise-unremarkable READY
+     * (or, via a caller-supplied override, ALREADY_ENROLLED) placement.
+     */
+    private function promoteWithDefaultPlacement(EnrollmentRolloverPlan $plan, School $school, GradeLevel $sourceGrade, GradeLevel $targetGrade, Section $targetSection, Student $student, string $rollNumber = '007'): void
+    {
+        $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
+        $item = $this->itemFor($plan, $student);
+        app(TenantContext::class)->withSchool($school, fn () => $item->update(['decision' => 'promote', 'roll_number_strategy' => 'explicit', 'target_roll_number' => $rollNumber]));
     }
 
     /**
@@ -914,5 +956,513 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
 
         $this->expectException(CrossSchoolRolloverPlanException::class);
         $this->planService()->upsertMapping($plan, $foreignGrade, null, $foreignGrade, null);
+    }
+
+    // ==================================================================
+    // Phase 1G.2 -- subject rollover mapping dry-run integration
+    // ==================================================================
+
+    #[Test]
+    public function subject_mapping_basic_map_is_ready_with_zero_target_subject_writes(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertSame(1, $summary['ready']);
+        $this->assertTrue($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('ready', $fresh->validation_result);
+        $this->assertNull($fresh->validation_reason);
+
+        $count = app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::query()->where('student_id', $student->id)->count());
+        $this->assertSame(1, $count, 'dry-run must not create a target subject enrollment -- only the pre-existing source row may exist');
+    }
+
+    #[Test]
+    public function subject_mapping_explicit_omit_is_non_blocking(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, null); // explicit omit
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertTrue($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('ready', $fresh->validation_result);
+        $this->assertNull($fresh->validation_reason);
+    }
+
+    #[Test]
+    public function subject_mapping_missing_row_is_blocked(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        // no subject mapping created at all
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('blocked', $fresh->validation_result);
+        $this->assertSame('missing_subject_mapping', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function subject_mapping_inactive_target_is_blocked(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+        app(TenantContext::class)->withSchool($school, fn () => $targetOffering->update(['status' => 'inactive']));
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('blocked', $fresh->validation_result);
+        $this->assertSame('elective_target_inactive', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function subject_mapping_target_that_became_required_is_blocked(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+        // Mutated directly -- the mapping service itself already rejects
+        // a required target at configuration time (Phase 1G.1); this
+        // proves dry-run independently re-validates CURRENT state rather
+        // than trusting that a once-valid mapping stays valid forever.
+        app(TenantContext::class)->withSchool($school, fn () => $targetOffering->update(['is_required' => true]));
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('blocked', $fresh->validation_result);
+        $this->assertSame('elective_target_required', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function subject_mapping_target_in_a_different_campus_than_the_resolved_placement_is_blocked(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'targetYear' => $targetYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'subject' => $subject, 'sourceOffering' => $sourceOffering] = $this->buildSubjectContext();
+        $otherCampus = $this->createCampus($school);
+        $wrongCampusTarget = $this->createSubjectOffering($targetYear, $otherCampus, $targetGrade, $subject, ['is_required' => false]);
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $wrongCampusTarget);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('blocked', $fresh->validation_result);
+        $this->assertSame('elective_target_context_mismatch', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function subject_mapping_target_section_difference_alone_never_conflicts(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'targetYear' => $targetYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $otherTargetSection = $this->createSection($targetYear, $campus, $targetGrade, ['name' => '6Z', 'code' => '6Z']);
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $otherTargetSection);
+        $item = $this->itemFor($plan, $student);
+        $this->planService()->setItemDecision($this->freshPlan($plan), $item, 'promote', null, 'explicit', '007');
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('ready', $fresh->validation_result, 'target Section differing from campus/grade must never conflict on its own');
+    }
+
+    #[Test]
+    public function subject_mapping_exact_target_already_active_is_reconcilable_non_blocking(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->enrollmentService()->enroll($student, $targetSection, '007', '2027-06-01'); // already placed in target year
+        $this->subjectEnrollmentService()->enroll($student, $targetOffering, '2027-06-01'); // already holds the exact mapped elective
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
+        $item = $this->itemFor($plan, $student);
+        $this->planService()->setItemDecision($this->freshPlan($plan), $item, 'promote', null, 'explicit', '007');
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertTrue($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('already_enrolled', $fresh->validation_result);
+        $this->assertSame('already_enrolled_match', $fresh->validation_reason);
+
+        $count = app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::query()->where('student_id', $student->id)->where('status', 'active')->count());
+        $this->assertSame(2, $count, 'no duplicate target subject enrollment created');
+    }
+
+    #[Test]
+    public function subject_mapping_existing_different_offering_in_the_same_target_group_is_blocked(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'targetYear' => $targetYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'subject' => $subject, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $groupX = $this->createElectiveGroup($targetYear, $campus, $targetGrade);
+        app(TenantContext::class)->withSchool($school, fn () => $targetOffering->update(['elective_group_id' => $groupX->id]));
+        $otherSubject = $this->createSubject($school);
+        $alreadyActiveOffering = $this->createSubjectOffering($targetYear, $campus, $targetGrade, $otherSubject, ['is_required' => false, 'elective_group_id' => $groupX->id]);
+
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->enrollmentService()->enroll($student, $targetSection, '007', '2027-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $alreadyActiveOffering, '2027-06-01'); // already in Group X via a DIFFERENT offering
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
+        $item = $this->itemFor($plan, $student);
+        $this->planService()->setItemDecision($this->freshPlan($plan), $item, 'promote', null, 'explicit', '007');
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('blocked', $fresh->validation_result);
+        $this->assertSame('elective_target_existing_conflict', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function two_source_electives_mapping_into_the_same_target_group_is_blocked_before_execution(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'subject' => $subjectA, 'sourceOffering' => $sourceOfferingA, 'targetOffering' => $targetOfferingA] = $this->buildSubjectContext();
+        $groupY = $this->createElectiveGroup($targetYear, $campus, $targetGrade);
+        app(TenantContext::class)->withSchool($school, fn () => $targetOfferingA->update(['elective_group_id' => $groupY->id]));
+        $subjectB = $this->createSubject($school);
+        $sourceOfferingB = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subjectB, ['is_required' => false]);
+        $targetOfferingB = $this->createSubjectOffering($targetYear, $campus, $targetGrade, $subjectB, ['is_required' => false, 'elective_group_id' => $groupY->id]);
+
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOfferingA, '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOfferingB, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOfferingA, $targetOfferingA);
+        $this->planService()->upsertSubjectMapping($plan, $sourceOfferingB, $targetOfferingB);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertFalse($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('blocked', $fresh->validation_result);
+        $this->assertSame('elective_target_group_conflict', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function two_mapped_targets_in_different_groups_both_pass(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOfferingA, 'targetOffering' => $targetOfferingA] = $this->buildSubjectContext();
+        $groupX = $this->createElectiveGroup($targetYear, $campus, $targetGrade);
+        $groupY = $this->createElectiveGroup($targetYear, $campus, $targetGrade);
+        app(TenantContext::class)->withSchool($school, fn () => $targetOfferingA->update(['elective_group_id' => $groupX->id]));
+        $subjectB = $this->createSubject($school);
+        $sourceOfferingB = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subjectB, ['is_required' => false]);
+        $targetOfferingB = $this->createSubjectOffering($targetYear, $campus, $targetGrade, $subjectB, ['is_required' => false, 'elective_group_id' => $groupY->id]);
+
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOfferingA, '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOfferingB, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOfferingA, $targetOfferingA);
+        $this->planService()->upsertSubjectMapping($plan, $sourceOfferingB, $targetOfferingB);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertTrue($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('ready', $fresh->validation_result);
+    }
+
+    #[Test]
+    public function two_mapped_ungrouped_targets_both_pass(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOfferingA, 'targetOffering' => $targetOfferingA] = $this->buildSubjectContext();
+        $subjectB = $this->createSubject($school);
+        $sourceOfferingB = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subjectB, ['is_required' => false]);
+        $targetOfferingB = $this->createSubjectOffering($targetYear, $campus, $targetGrade, $subjectB, ['is_required' => false]);
+
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOfferingA, '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOfferingB, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOfferingA, $targetOfferingA);
+        $this->planService()->upsertSubjectMapping($plan, $sourceOfferingB, $targetOfferingB);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertTrue($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('ready', $fresh->validation_result);
+    }
+
+    #[Test]
+    public function two_source_electives_mapped_to_the_identical_target_offering_is_blocked(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'sourceYear' => $sourceYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOfferingA, 'targetOffering' => $sharedTarget] = $this->buildSubjectContext();
+        $subjectB = $this->createSubject($school);
+        $sourceOfferingB = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subjectB, ['is_required' => false]);
+
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOfferingA, '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOfferingB, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOfferingA, $sharedTarget);
+        $this->planService()->upsertSubjectMapping($plan, $sourceOfferingB, $sharedTarget); // two sources -> one target
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertFalse($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('blocked', $fresh->validation_result);
+        $this->assertSame('elective_target_duplicate_mapping', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function legacy_null_anchor_row_with_exactly_one_compatible_matching_candidate_resolves_normally(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $sourceEnrollment = $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::factory()->create([
+            'school_id' => $school->id,
+            'student_id' => $student->id,
+            'student_enrollment_id' => null,
+            'subject_offering_id' => $sourceOffering->id,
+            'academic_year_id' => $sourceOffering->academic_year_id,
+            'status' => 'active',
+            'starts_on' => '2026-06-01',
+        ]));
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertTrue($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('ready', $fresh->validation_result);
+        $this->assertSame($sourceEnrollment->id, $fresh->source_enrollment_id);
+    }
+
+    #[Test]
+    public function legacy_null_anchor_row_with_multiple_source_year_candidates_is_ambiguous(): void
+    {
+        ['school' => $school, 'sourceYear' => $sourceYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        // A second, non-active StudentEnrollment for the SAME source year --
+        // excluded from placement's own active/completed candidacy check,
+        // but it still counts toward the legacy rule's "exactly one
+        // candidate, of any status" proof.
+        $this->createStudentEnrollment($student, $sourceSection, ['roll_number' => '02', 'status' => 'withdrawn']);
+        app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::factory()->create([
+            'school_id' => $school->id,
+            'student_id' => $student->id,
+            'student_enrollment_id' => null,
+            'subject_offering_id' => $sourceOffering->id,
+            'academic_year_id' => $sourceOffering->academic_year_id,
+            'status' => 'active',
+            'starts_on' => '2026-06-01',
+        ]));
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('review', $fresh->validation_result);
+        $this->assertSame('legacy_source_anchor_ambiguous', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function legacy_null_anchor_row_whose_only_candidate_is_not_the_items_source_enrollment_is_ambiguous(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $b = $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01'); // the true, sole source-year candidate
+        // A distractor Enrollment for the student in an UNRELATED year,
+        // reusing sourceGrade (a School-scoped reference entity, shared
+        // across years) so the Item's own placement pipeline resolves
+        // normally against it -- this is what the Item is (incorrectly)
+        // anchored to instead of the real candidate B.
+        $distractorYear = $this->createAcademicYear($school, ['code' => 'DISTRACT', 'starts_on' => '2020-06-01', 'ends_on' => '2021-04-30']);
+        $distractorSection = $this->createSection($distractorYear, $campus, $sourceGrade, ['name' => 'DZ', 'code' => 'DZ']);
+        $d = $this->createStudentEnrollment($student, $distractorSection, ['roll_number' => '99', 'status' => 'active']);
+        app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::factory()->create([
+            'school_id' => $school->id,
+            'student_id' => $student->id,
+            'student_enrollment_id' => null,
+            'subject_offering_id' => $sourceOffering->id,
+            'academic_year_id' => $sourceOffering->academic_year_id,
+            'status' => 'active',
+            'starts_on' => '2026-06-01',
+        ]));
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
+        $this->createEnrollmentRolloverItem($plan, $student, $d, [
+            'decision' => 'promote', 'target_section_id' => $targetSection->id,
+            'roll_number_strategy' => 'explicit', 'target_roll_number' => '007',
+        ]);
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('review', $fresh->validation_result);
+        $this->assertSame('legacy_source_anchor_ambiguous', $fresh->validation_reason);
+        $this->assertNotSame($b->id, $d->id);
+    }
+
+    #[Test]
+    public function legacy_null_anchor_row_incompatible_with_the_sole_candidate_is_ambiguous(): void
+    {
+        ['school' => $school, 'campus' => $campus, 'sourceYear' => $sourceYear, 'targetGrade' => $targetGrade, 'sourceGrade' => $sourceGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'subject' => $subject, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $otherCampus = $this->createCampus($school);
+        $incompatibleSourceOffering = $this->createSubjectOffering($sourceYear, $otherCampus, $sourceGrade, $subject, ['is_required' => false]);
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01'); // sole candidate is in $campus, not $otherCampus
+        app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::factory()->create([
+            'school_id' => $school->id,
+            'student_id' => $student->id,
+            'student_enrollment_id' => null,
+            'subject_offering_id' => $incompatibleSourceOffering->id,
+            'academic_year_id' => $incompatibleSourceOffering->academic_year_id,
+            'status' => 'active',
+            'starts_on' => '2026-06-01',
+        ]));
+        $this->planService()->upsertSubjectMapping($plan, $incompatibleSourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $this->dryRun()->run($this->freshPlan($plan));
+
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('review', $fresh->validation_result);
+        $this->assertSame('legacy_source_anchor_ambiguous', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function a_malformed_required_offering_participation_is_never_treated_as_a_valid_elective_candidate(): void
+    {
+        ['school' => $school, 'sourceYear' => $sourceYear, 'campus' => $campus, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan] = $this->buildSubjectContext();
+        $subject = $this->createSubject($school);
+        $requiredSourceOffering = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subject, ['is_required' => true]);
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $sourceEnrollment = $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        // StudentSubjectEnrollmentService::enroll() would reject a
+        // required Offering outright -- this raw row simulates malformed/
+        // pre-1C.1 legacy data no service path can produce today.
+        app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::factory()->create([
+            'school_id' => $school->id,
+            'student_id' => $student->id,
+            'student_enrollment_id' => $sourceEnrollment->id,
+            'subject_offering_id' => $requiredSourceOffering->id,
+            'academic_year_id' => $requiredSourceOffering->academic_year_id,
+            'status' => 'active',
+            'starts_on' => '2026-06-01',
+        ]));
+        // no subject mapping exists for the required offering -- and none should ever be required
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $summary = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertTrue($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('ready', $fresh->validation_result);
+        $this->assertNull($fresh->validation_reason);
+    }
+
+    #[Test]
+    public function a_real_subject_mapping_change_after_validation_invalidates_it(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+        $this->dryRun()->run($this->freshPlan($plan));
+        $this->assertSame('validated', $this->freshPlan($plan)->status);
+
+        $versionBefore = $this->freshPlan($plan)->configuration_version;
+        $this->planService()->removeSubjectMapping($this->freshPlan($plan), $sourceOffering); // real change: mapped -> unconfigured
+        $afterEdit = $this->freshPlan($plan);
+
+        $this->assertGreaterThan($versionBefore, $afterEdit->configuration_version);
+        $this->assertFalse($afterEdit->isValidatedForCurrentConfiguration());
+
+        $summary = $this->dryRun()->run($afterEdit);
+        $this->assertFalse($summary['validated']);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('blocked', $fresh->validation_result);
+        $this->assertSame('missing_subject_mapping', $fresh->validation_reason);
+    }
+
+    #[Test]
+    public function a_true_no_op_subject_mapping_upsert_preserves_validation(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+        $this->dryRun()->run($this->freshPlan($plan));
+        $freshPlan = $this->freshPlan($plan);
+        $this->assertTrue($freshPlan->isValidatedForCurrentConfiguration());
+        $versionBefore = $freshPlan->configuration_version;
+
+        $this->planService()->upsertSubjectMapping($freshPlan, $sourceOffering, $targetOffering); // identical target -- true no-op
+
+        $afterNoOp = $this->freshPlan($plan);
+        $this->assertSame($versionBefore, $afterNoOp->configuration_version, 'a true no-op must never bump configuration_version');
+        $this->assertTrue($afterNoOp->isValidatedForCurrentConfiguration(), 'a no-op must never invalidate an existing validation');
+    }
+
+    #[Test]
+    public function subject_mapping_dry_run_is_deterministic_and_repeatable_when_unchanged(): void
+    {
+        ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
+        $student = $this->createStudent($school, ['student_number' => 'S-1001']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
+        $this->subjectEnrollmentService()->enroll($student, $sourceOffering, '2026-06-01');
+        $this->planService()->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
+
+        $first = $this->dryRun()->run($this->freshPlan($plan));
+        $second = $this->dryRun()->run($this->freshPlan($plan));
+
+        $this->assertEquals($first, $second);
+        $fresh = $this->itemFor($plan, $student);
+        $this->assertSame('ready', $fresh->validation_result);
+
+        $count = app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::query()->where('student_id', $student->id)->count());
+        $this->assertSame(1, $count, 'no duplicate subject rows from re-running dry-run');
     }
 }
