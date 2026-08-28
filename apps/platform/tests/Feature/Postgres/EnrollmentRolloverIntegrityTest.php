@@ -91,7 +91,7 @@ class EnrollmentRolloverIntegrityTest extends TestCase
     private function insertSubjectMapping(
         string $schoolId,
         string $planId,
-        string $sourceOfferingId,
+        ?string $sourceOfferingId,
         ?string $targetOfferingId,
         ?string $connection = 'pgsql',
     ): string {
@@ -412,6 +412,26 @@ class EnrollmentRolloverIntegrityTest extends TestCase
         $this->expectException(QueryException::class);
 
         $this->insertSubjectMapping($schoolA->id, $planA->id, $sourceA->id, $targetB->id, 'pgsql_admin');
+    }
+
+    #[Test]
+    public function the_database_rejects_a_subject_mapping_with_a_null_source_offering(): void
+    {
+        // Phase 1G.1A: `source_subject_offering_id` carries the "every
+        // mapping row means something" invariant via its NOT NULL
+        // constraint, not via the (plan_id, source_subject_offering_id)
+        // unique index -- PostgreSQL treats NULL values in a unique
+        // index as pairwise distinct, so multiple NULL-source rows for
+        // the same plan would otherwise collect silently. Proven at
+        // valid school/plan (only the source is null) so the NOT NULL
+        // violation -- not a composite-FK or RLS failure -- is what's
+        // actually being exercised.
+        ['school' => $school, 'sourceYear' => $sourceYear, 'targetYear' => $targetYear] = $this->buildSubjectMappingContext();
+        $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);
+
+        $this->expectException(QueryException::class);
+
+        $this->insertSubjectMapping($school->id, $plan->id, null, null, 'pgsql_admin');
     }
 
     // Note: the (plan_id, source_subject_offering_id) uniqueness
