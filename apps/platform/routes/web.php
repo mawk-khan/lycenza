@@ -16,6 +16,10 @@ use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\ApplicantController;
+use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
+use App\Http\Controllers\App\Canteen\CanteenItemController;
+use App\Http\Controllers\App\Canteen\CanteenOrderController;
+use App\Http\Controllers\App\Canteen\CanteenOutletController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
@@ -769,5 +773,52 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/transfer', [InventoryStockController::class, 'storeTransfer'])->name('transfer.store');
         Route::get('/search/items', [InventoryStockController::class, 'searchItems'])->name('search-items');
         Route::get('/search/locations', [InventoryStockController::class, 'searchLocations'])->name('search-locations');
+    });
+
+    // Phase 10F: Canteen (Outlet/Item/recipe directory, billing
+    // configuration, Order lifecycle) administrative UI. Capability
+    // checks live inside each controller (AuthorizesCapability trait),
+    // matching every other module's Inertia controller in this file.
+    Route::prefix('app/canteen-outlets')->name('app.canteen-outlets.')->group(function (): void {
+        Route::get('/', [CanteenOutletController::class, 'index'])->name('index');
+        Route::get('/create', [CanteenOutletController::class, 'create'])->name('create');
+        // Phase 10F fix: narrow, read-only InventoryLocation lookup
+        // gated by `canteen.directory.manage` -- replaces the prior
+        // reuse of Inventory's own `inventory.stock.manage`-gated
+        // search endpoint (see CanteenOutletController's docblock).
+        Route::get('/search/inventory-locations', [CanteenOutletController::class, 'searchInventoryLocations'])->name('search-inventory-locations');
+        Route::post('/', [CanteenOutletController::class, 'store'])->name('store');
+        Route::patch('/{canteenOutlet}', [CanteenOutletController::class, 'update'])->name('update');
+    });
+
+    Route::prefix('app/canteen-items')->name('app.canteen-items.')->group(function (): void {
+        Route::get('/', [CanteenItemController::class, 'index'])->name('index');
+        Route::get('/create', [CanteenItemController::class, 'create'])->name('create');
+        // Phase 10F fix: narrow, read-only InventoryItem lookup gated
+        // by `canteen.directory.manage` -- replaces the prior reuse of
+        // Inventory's own `inventory.stock.manage`-gated search
+        // endpoint (see CanteenItemController's docblock).
+        Route::get('/search/inventory-items', [CanteenItemController::class, 'searchInventoryItems'])->name('search-inventory-items');
+        Route::post('/', [CanteenItemController::class, 'store'])->name('store');
+        Route::get('/{canteenItem}', [CanteenItemController::class, 'show'])->name('show');
+        Route::patch('/{canteenItem}', [CanteenItemController::class, 'update'])->name('update');
+        Route::post('/{canteenItem}/recipe', [CanteenItemController::class, 'storeRequirement'])->name('recipe.store');
+        Route::delete('/{canteenItem}/recipe/{requirement}', [CanteenItemController::class, 'destroyRequirement'])->name('recipe.destroy');
+    });
+
+    Route::prefix('app/canteen-settings')->name('app.canteen-settings.')->group(function (): void {
+        Route::get('/', [CanteenBillingConfigurationController::class, 'edit'])->name('edit');
+        Route::put('/', [CanteenBillingConfigurationController::class, 'update'])->name('update');
+    });
+
+    Route::prefix('app/canteen-orders')->name('app.canteen-orders.')->group(function (): void {
+        Route::get('/', [CanteenOrderController::class, 'index'])->name('index');
+        Route::get('/create', [CanteenOrderController::class, 'create'])->name('create');
+        Route::get('/search/students', [CanteenOrderController::class, 'searchStudents'])->name('search-students');
+        Route::get('/search/items', [CanteenOrderController::class, 'searchItems'])->name('search-items');
+        Route::post('/', [CanteenOrderController::class, 'store'])->name('store');
+        Route::get('/{canteenOrder}', [CanteenOrderController::class, 'show'])->name('show');
+        Route::post('/{canteenOrder}/fulfill', [CanteenOrderController::class, 'fulfill'])->name('fulfill');
+        Route::post('/{canteenOrder}/cancel', [CanteenOrderController::class, 'cancel'])->name('cancel');
     });
 });

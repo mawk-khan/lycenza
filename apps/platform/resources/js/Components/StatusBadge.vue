@@ -40,7 +40,12 @@ type Status =
     | 'submitted'
     | 'accepted'
     | 'rejected'
-    | 'converted';
+    | 'converted'
+    // Phase 10F: CanteenOrder lifecycle (`cancelled` already existed
+    // above; `pending`/`fulfilled` are new -- no collision with any
+    // prior dimension).
+    | 'pending'
+    | 'fulfilled';
 
 interface Props {
     status: Status;
@@ -93,6 +98,13 @@ const STYLES: Record<Status, { label: string; badge: string; dot: string }> = {
     accepted: { label: 'Accepted', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
     rejected: { label: 'Rejected', badge: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
     converted: { label: 'Converted', badge: 'bg-violet-50 text-violet-700', dot: 'bg-violet-500' },
+    // CanteenOrder lifecycle.
+    pending: { label: 'Pending', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+    fulfilled: {
+        label: 'Fulfilled',
+        badge: 'bg-emerald-50 text-emerald-700',
+        dot: 'bg-emerald-500',
+    },
 };
 
 const style = STYLES[props.status];

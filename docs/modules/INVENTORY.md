@@ -189,6 +189,35 @@ to a rarely-real-time-gated ledger query. Event-sourcing/projection
 machinery (Model C) was not introduced — already rejected at the
 platform level for the repository's current stage (ADR 0002 §3).
 
+## 5.1. `issueMany()` — Phase 10F's additive extension
+
+Phase 10F (Canteen, `docs/modules/CANTEEN.md` §5) added a fourth
+public method to `InventoryStockService`: `issueMany(InventoryLocation
+$location, array $requirements, ?User $actor = null): array`, issuing
+stock for **multiple** Items against **one** Location as a single
+atomic operation — needed because one Canteen Order fulfillment can
+require several distinct ingredients at once. `receive()`/`issue()`/
+`transfer()` are entirely unchanged by this addition.
+
+Contract summary (full detail in `docs/modules/CANTEEN.md` §5): all
+Items must be active and same-School, the Location must be active;
+every involved balance row is resolved via the SAME `ensureBalanceRow()`
+primitive §8 already describes, then ALL of them are locked together
+in deterministic ascending-balance-id order (generalizing §11's
+two-balance transfer lock order to N balances) — never the caller's
+requirement-array order, which would deadlock two concurrent
+`issueMany()` calls naming the same Items in opposite order; proven
+under real two-process concurrency in `InventoryStockConcurrencyTest::
+opposing_concurrent_issue_many_calls_for_the_same_two_items_in_opposite_order_do_not_deadlock`.
+Sufficiency is re-checked for every item after every lock is held; if
+any one item is insufficient, the entire call mutates nothing. On
+success, one `issue`-type `StockMovement` is inserted per item, all
+inside one `DB::transaction()`.
+
+Canteen is currently `issueMany()`'s only caller. Inventory itself
+gained no dependency on Canteen from this addition — the method is a
+generic N-item primitive with no Canteen-specific knowledge.
+
 ## 6. Schema / database integrity
 
 Four tables, all `school_id` + `App\Support\Tenancy\BelongsToSchool` +

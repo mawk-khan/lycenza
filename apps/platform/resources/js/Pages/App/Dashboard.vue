@@ -23,6 +23,9 @@ interface Props {
         canViewFinance: boolean;
         canViewSubjectOfferings: boolean;
         canViewHr: boolean;
+        canViewCanteenDirectory: boolean;
+        canViewCanteenOrders: boolean;
+        canViewCanteenSettings: boolean;
     };
 }
 
@@ -92,6 +95,18 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewHr">
                     <a class="underline" href="/app/hr">HR</a>
+                </li>
+                <li v-if="nav.canViewCanteenDirectory">
+                    <a class="underline" href="/app/canteen-outlets">Canteen Outlets</a>
+                </li>
+                <li v-if="nav.canViewCanteenDirectory">
+                    <a class="underline" href="/app/canteen-items">Canteen Items</a>
+                </li>
+                <li v-if="nav.canViewCanteenOrders">
+                    <a class="underline" href="/app/canteen-orders">Canteen Orders</a>
+                </li>
+                <li v-if="nav.canViewCanteenSettings">
+                    <a class="underline" href="/app/canteen-settings">Canteen Settings</a>
                 </li>
             </ul>
         </nav>

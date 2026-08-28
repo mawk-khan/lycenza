@@ -10,6 +10,11 @@ use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
 use App\Domain\Admissions\Http\Controllers\AdmissionApplicationController;
 use App\Domain\Admissions\Http\Controllers\ApplicantController;
+use App\Domain\Canteen\Http\Controllers\CanteenBillingConfigurationController;
+use App\Domain\Canteen\Http\Controllers\CanteenItemController;
+use App\Domain\Canteen\Http\Controllers\CanteenOrderController;
+use App\Domain\Canteen\Http\Controllers\CanteenOutletController;
+use App\Domain\Canteen\Http\Controllers\CanteenRecipeController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
 use App\Domain\Finance\Http\Controllers\JournalEntryController;
@@ -1222,6 +1227,86 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/inventory-stock/transfer', [InventoryStockController::class, 'transfer'])
                 ->middleware(['capability:inventory.stock.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.inventory-stock.transfer');
+
+            // Phase 10F: Canteen (Outlet/Item/recipe directory, billing
+            // configuration, Order lifecycle). `place`/`fulfill` carry
+            // `idempotent` -- each creates/mutates a Charge and, for
+            // `fulfill`, Inventory stock; a network retry could
+            // otherwise duplicate either effect, the same reasoning
+            // already established for every other consequential
+            // mutation in this file. `cancel` does NOT carry
+            // idempotency -- its own conditional lifecycle transition
+            // (only a pending Order may transition) already makes a
+            // repeated/retried request safe by construction, exactly
+            // like Hostel residency `end()`'s own precedent. Helper
+            // search endpoints (`search/students`, `search/items`,
+            // `ledger-accounts`) are gated by capability BEFORE any
+            // query executes.
+            Route::get('/canteen-outlets', [CanteenOutletController::class, 'index'])
+                ->name('schools.canteen-outlets.index');
+            Route::post('/canteen-outlets', [CanteenOutletController::class, 'store'])
+                ->middleware(['capability:canteen.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-outlets.store');
+            Route::get('/canteen-outlets/{canteenOutlet}', [CanteenOutletController::class, 'show'])
+                ->name('schools.canteen-outlets.show');
+            Route::patch('/canteen-outlets/{canteenOutlet}', [CanteenOutletController::class, 'update'])
+                ->middleware(['capability:canteen.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-outlets.update');
+
+            Route::get('/canteen-items', [CanteenItemController::class, 'index'])
+                ->name('schools.canteen-items.index');
+            Route::post('/canteen-items', [CanteenItemController::class, 'store'])
+                ->middleware(['capability:canteen.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-items.store');
+            Route::get('/canteen-items/{canteenItem}', [CanteenItemController::class, 'show'])
+                ->name('schools.canteen-items.show');
+            Route::patch('/canteen-items/{canteenItem}', [CanteenItemController::class, 'update'])
+                ->middleware(['capability:canteen.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-items.update');
+
+            Route::get('/canteen-items/{canteenItem}/recipe', [CanteenRecipeController::class, 'index'])
+                ->name('schools.canteen-items.recipe.index');
+            Route::post('/canteen-items/{canteenItem}/recipe', [CanteenRecipeController::class, 'store'])
+                ->middleware(['capability:canteen.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-items.recipe.store');
+            Route::patch('/canteen-items/{canteenItem}/recipe/{requirement}', [CanteenRecipeController::class, 'update'])
+                ->middleware(['capability:canteen.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-items.recipe.update');
+            Route::delete('/canteen-items/{canteenItem}/recipe/{requirement}', [CanteenRecipeController::class, 'destroy'])
+                ->middleware(['capability:canteen.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-items.recipe.destroy');
+
+            Route::get('/canteen-billing-configuration', [CanteenBillingConfigurationController::class, 'show'])
+                ->middleware('capability:canteen.settings.view')
+                ->name('schools.canteen-billing-configuration.show');
+            Route::put('/canteen-billing-configuration', [CanteenBillingConfigurationController::class, 'update'])
+                ->middleware(['capability:canteen.settings.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-billing-configuration.update');
+            Route::get('/canteen-billing-configuration/ledger-accounts', [CanteenBillingConfigurationController::class, 'ledgerAccounts'])
+                ->middleware('capability:canteen.settings.manage')
+                ->name('schools.canteen-billing-configuration.ledger-accounts');
+
+            Route::get('/canteen-orders', [CanteenOrderController::class, 'index'])
+                ->middleware('capability:canteen.orders.view')
+                ->name('schools.canteen-orders.index');
+            Route::post('/canteen-orders', [CanteenOrderController::class, 'store'])
+                ->middleware(['capability:canteen.orders.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.canteen-orders.store');
+            Route::get('/canteen-orders/search/students', [CanteenOrderController::class, 'searchStudents'])
+                ->middleware('capability:canteen.orders.view')
+                ->name('schools.canteen-orders.search-students');
+            Route::get('/canteen-orders/search/items', [CanteenOrderController::class, 'searchItems'])
+                ->middleware('capability:canteen.orders.view')
+                ->name('schools.canteen-orders.search-items');
+            Route::get('/canteen-orders/{canteenOrder}', [CanteenOrderController::class, 'show'])
+                ->middleware('capability:canteen.orders.view')
+                ->name('schools.canteen-orders.show');
+            Route::post('/canteen-orders/{canteenOrder}/fulfill', [CanteenOrderController::class, 'fulfill'])
+                ->middleware(['capability:canteen.orders.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.canteen-orders.fulfill');
+            Route::post('/canteen-orders/{canteenOrder}/cancel', [CanteenOrderController::class, 'cancel'])
+                ->middleware(['capability:canteen.orders.manage', 'throttle:school-api-mutations'])
+                ->name('schools.canteen-orders.cancel');
         });
 });
 

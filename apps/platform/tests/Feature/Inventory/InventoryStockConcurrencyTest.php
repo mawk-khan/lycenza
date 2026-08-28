@@ -208,4 +208,79 @@ class InventoryStockConcurrencyTest extends TestCase
         );
         $this->assertSame(2, $transferMovements, 'Both transfer StockMovements must exist.');
     }
+
+    /**
+     * D. Opposing concurrent issueMany() calls: two DIFFERENT Items
+     * (X, Y) both held at sufficient quantity in ONE Location. Process
+     * 1 calls `issueMany($location, [X, Y])`; process 2 concurrently
+     * calls `issueMany($location, [Y, X])` -- the exact SAME two
+     * balance rows, requested in OPPOSITE array order. A fixed
+     * "requirement array order" lock order WOULD deadlock this
+     * (process 1 holds X's lock waiting for Y while process 2 holds
+     * Y's lock waiting for X); `lockBalancesInDeterministicOrder()`'s
+     * ascending-balance-id order is what makes both calls complete
+     * without deadlock -- generalizing `transfer()`'s own opposing-
+     * transfers proof above from 2 rows to N. A bounded subprocess
+     * timeout makes a genuine deadlock fail the test deterministically
+     * rather than hang the suite.
+     */
+    #[Test]
+    public function opposing_concurrent_issue_many_calls_for_the_same_two_items_in_opposite_order_do_not_deadlock(): void
+    {
+        $this->school = $this->createSchool();
+        $context = app(TenantContext::class);
+
+        $itemX = $this->createInventoryItem($this->school);
+        $itemY = $this->createInventoryItem($this->school);
+        $location = $this->createInventoryLocation($this->school);
+
+        $context->withSchool($this->school, function () use ($itemX, $itemY, $location) {
+            InventoryStockBalance::factory()->create([
+                'school_id' => $this->school->id,
+                'inventory_item_id' => $itemX->id,
+                'inventory_location_id' => $location->id,
+                'quantity_on_hand' => '20.000',
+            ]);
+            InventoryStockBalance::factory()->create([
+                'school_id' => $this->school->id,
+                'inventory_item_id' => $itemY->id,
+                'inventory_location_id' => $location->id,
+                'quantity_on_hand' => '20.000',
+            ]);
+        });
+
+        $script = __DIR__.'/../../Support/issue-many-inventory-stock.php';
+        // Process A: issueMany([X, Y]). Process B: issueMany([Y, X]) --
+        // the same two balance rows, opposite requested order.
+        $processA = new Process(['php', $script, $this->school->id, $location->id, $itemX->id, '5', $itemY->id, '3']);
+        $processB = new Process(['php', $script, $this->school->id, $location->id, $itemY->id, '4', $itemX->id, '2']);
+        $processA->setTimeout(15);
+        $processB->setTimeout(15);
+        $processA->start();
+        $processB->start();
+        $processA->wait();
+        $processB->wait();
+
+        $outputs = [$processA->getOutput(), $processB->getOutput()];
+        $this->assertCount(2, array_filter($outputs, fn ($o) => str_starts_with($o, 'issued:')), 'Both opposing concurrent issueMany() calls must succeed -- no deadlock. Outputs: '.implode(' | ', $outputs));
+
+        $balanceX = $context->withSchool(
+            $this->school,
+            fn () => InventoryStockBalance::query()->where('inventory_item_id', $itemX->id)->where('inventory_location_id', $location->id)->first(),
+        );
+        $balanceY = $context->withSchool(
+            $this->school,
+            fn () => InventoryStockBalance::query()->where('inventory_item_id', $itemY->id)->where('inventory_location_id', $location->id)->first(),
+        );
+
+        // X: 20 - 5 (A) - 2 (B) = 13. Y: 20 - 3 (A) - 4 (B) = 13.
+        $this->assertSame('13.000', $balanceX->quantity_on_hand);
+        $this->assertSame('13.000', $balanceY->quantity_on_hand);
+
+        $issueMovements = $context->withSchool(
+            $this->school,
+            fn () => StockMovement::query()->whereIn('inventory_item_id', [$itemX->id, $itemY->id])->where('movement_type', 'issue')->count(),
+        );
+        $this->assertSame(4, $issueMovements, 'Both issueMany() calls together must have created exactly 4 issue StockMovements (2 items x 2 calls).');
+    }
 }
