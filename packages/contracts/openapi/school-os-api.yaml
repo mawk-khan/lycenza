@@ -3470,6 +3470,156 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /schools/{schoolId}/visitors:
+    get:
+      operationId: listVisitors
+      summary: List a School's Visitor directory (active by default). Requires visitor.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/Visitor" } } } }
+    post:
+      operationId: createVisitor
+      summary: Registers a Visitor directory record. Requires visitor.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VisitorInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Visitor" } } }
+        "422":
+          description: Validation failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/visitors/{visitorId}:
+    get:
+      operationId: getVisitor
+      summary: Fetch one Visitor directory record. Requires visitor.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/VisitorId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Visitor" } } }
+        "404":
+          description: Not found (including a cross-School id).
+    patch:
+      operationId: updateVisitor
+      summary: Updates or (de)activates a Visitor directory record. Requires visitor.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/VisitorId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VisitorInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Visitor" } } }
+
+  /schools/{schoolId}/visitor-visits:
+    get:
+      operationId: listVisitorVisits
+      summary: List Visitor Visits (checked_in by default). Requires visitor.visits.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [checked_in, checked_out] } }
+        - { name: visitor_id, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/VisitorVisit" } } } }
+    post:
+      operationId: checkInVisitor
+      summary: >
+        Checks a Visitor into a Campus, with an optional Employee host.
+        Requires visitor.visits.manage. Idempotency-Key required -- a
+        network retry must never risk a duplicate check-in.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VisitorVisitInput" }
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/VisitorVisit" } } }
+        "422":
+          description: >
+            Visitor not eligible/already checked in, or the host
+            Employee is not eligible (VISITOR_NOT_ELIGIBLE /
+            VISITOR_ALREADY_CHECKED_IN / VISITOR_HOST_EMPLOYEE_NOT_ELIGIBLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: A genuinely concurrent check-in attempt lost the race, or an Idempotency-Key conflict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/visitor-visits/{visitorVisitId}:
+    get:
+      operationId: getVisitorVisit
+      summary: Fetch one Visitor Visit. Requires visitor.visits.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/VisitorVisitId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/VisitorVisit" } } }
+
+  /schools/{schoolId}/visitor-visits/{visitorVisitId}/end:
+    post:
+      operationId: endVisitorVisit
+      summary: Checks a Visitor out of an active Visit. Requires visitor.visits.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/VisitorVisitId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/VisitorVisit" } } }
+        "422":
+          description: This Visit was already checked out (VISITOR_VISIT_ALREADY_CHECKED_OUT).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3650,6 +3800,16 @@ components:
       schema: { type: string, format: uuid }
     TransportStudentAssignmentId:
       name: transportStudentAssignmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    VisitorId:
+      name: visitorId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    VisitorVisitId:
+      name: visitorVisitId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -4072,6 +4232,65 @@ components:
         route_id: { type: string, format: uuid }
         pickup_stop_id: { type: string, format: uuid, nullable: true }
         dropoff_stop_id: { type: string, format: uuid, nullable: true }
+
+    Visitor:
+      type: object
+      required: [id, fullName, status]
+      description: A School's Visitor directory record (docs/modules/VISITOR.md "Visitor directory model"). School-scoped, not Campus-scoped.
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        phone: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    VisitorInput:
+      type: object
+      properties:
+        full_name: { type: string, maxLength: 255 }
+        phone: { type: string, maxLength: 32, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    VisitorVisit:
+      type: object
+      required: [id, status, purpose, checkedInAt, visitor, campus]
+      description: A Visitor's check-in/check-out visit to a Campus. At most one Visit per Visitor has status=checked_in at a time (database-enforced, docs/modules/VISITOR.md "One-active-visit invariant").
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [checked_in, checked_out] }
+        purpose: { type: string }
+        gatePassNumber: { type: string, nullable: true }
+        checkedInAt: { type: string, format: date-time }
+        checkedOutAt: { type: string, format: date-time, nullable: true }
+        visitor:
+          type: object
+          required: [id, fullName]
+          properties:
+            id: { type: string, format: uuid }
+            fullName: { type: string }
+            phone: { type: string, nullable: true }
+        campus:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        hostEmployee:
+          type: object
+          nullable: true
+          required: [id, fullName]
+          properties:
+            id: { type: string, format: uuid }
+            fullName: { type: string }
+
+    VisitorVisitInput:
+      type: object
+      required: [visitor_id, campus_id, purpose]
+      properties:
+        visitor_id: { type: string, format: uuid }
+        campus_id: { type: string, format: uuid }
+        host_employee_id: { type: string, format: uuid, nullable: true }
+        purpose: { type: string, maxLength: 500 }
+        gate_pass_number: { type: string, maxLength: 64, nullable: true }
 
     AcademicYear:
       type: object

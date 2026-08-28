@@ -1780,6 +1780,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/visitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a School's Visitor directory (active by default). Requires visitor.directory.view. */
+        get: operations["listVisitors"];
+        put?: never;
+        /** Registers a Visitor directory record. Requires visitor.directory.manage. */
+        post: operations["createVisitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/visitors/{visitorId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Visitor directory record. Requires visitor.directory.view. */
+        get: operations["getVisitor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates a Visitor directory record. Requires visitor.directory.manage. */
+        patch: operations["updateVisitor"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/visitor-visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Visitor Visits (checked_in by default). Requires visitor.visits.view. */
+        get: operations["listVisitorVisits"];
+        put?: never;
+        /** Checks a Visitor into a Campus, with an optional Employee host. Requires visitor.visits.manage. Idempotency-Key required -- a network retry must never risk a duplicate check-in. */
+        post: operations["checkInVisitor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/visitor-visits/{visitorVisitId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Visitor Visit. Requires visitor.visits.view. */
+        get: operations["getVisitorVisit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/visitor-visits/{visitorVisitId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checks a Visitor out of an active Visit. Requires visitor.visits.manage. */
+        post: operations["endVisitorVisit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2159,6 +2247,60 @@ export interface components {
             pickup_stop_id?: string | null;
             /** Format: uuid */
             dropoff_stop_id?: string | null;
+        };
+        /** @description A School's Visitor directory record (docs/modules/VISITOR.md "Visitor directory model"). School-scoped, not Campus-scoped. */
+        Visitor: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            phone?: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        VisitorInput: {
+            full_name?: string;
+            phone?: string | null;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description A Visitor's check-in/check-out visit to a Campus. At most one Visit per Visitor has status=checked_in at a time (database-enforced, docs/modules/VISITOR.md "One-active-visit invariant"). */
+        VisitorVisit: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "checked_in" | "checked_out";
+            purpose: string;
+            gatePassNumber?: string | null;
+            /** Format: date-time */
+            checkedInAt: string;
+            /** Format: date-time */
+            checkedOutAt?: string | null;
+            visitor: {
+                /** Format: uuid */
+                id: string;
+                fullName: string;
+                phone?: string | null;
+            };
+            campus: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            };
+            hostEmployee?: {
+                /** Format: uuid */
+                id: string;
+                fullName: string;
+            } | null;
+        };
+        VisitorVisitInput: {
+            /** Format: uuid */
+            visitor_id: string;
+            /** Format: uuid */
+            campus_id: string;
+            /** Format: uuid */
+            host_employee_id?: string | null;
+            purpose: string;
+            gate_pass_number?: string | null;
         };
         /** @description Only one Academic Year per School may be `active` (section 16, database-enforced). */
         AcademicYear: {
@@ -3033,6 +3175,8 @@ export interface components {
         TransportVehicleId: string;
         TransportRouteAssignmentId: string;
         TransportStudentAssignmentId: string;
+        VisitorId: string;
+        VisitorVisitId: string;
     };
     requestBodies: never;
     headers: {
@@ -8116,6 +8260,267 @@ export interface operations {
                 };
             };
             /** @description This assignment already ended (TRANSPORT_STUDENT_ASSIGNMENT_ALREADY_ENDED). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listVisitors: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Visitor"][];
+                    };
+                };
+            };
+        };
+    };
+    createVisitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitorInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Visitor"];
+                    };
+                };
+            };
+            /** @description Validation failure. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getVisitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                visitorId: components["parameters"]["VisitorId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Visitor"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateVisitor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                visitorId: components["parameters"]["VisitorId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["VisitorInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Visitor"];
+                    };
+                };
+            };
+        };
+    };
+    listVisitorVisits: {
+        parameters: {
+            query?: {
+                status?: "checked_in" | "checked_out";
+                visitor_id?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["VisitorVisit"][];
+                    };
+                };
+            };
+        };
+    };
+    checkInVisitor: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitorVisitInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["VisitorVisit"];
+                    };
+                };
+            };
+            /** @description A genuinely concurrent check-in attempt lost the race, or an Idempotency-Key conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Visitor not eligible/already checked in, or the host Employee is not eligible (VISITOR_NOT_ELIGIBLE / VISITOR_ALREADY_CHECKED_IN / VISITOR_HOST_EMPLOYEE_NOT_ELIGIBLE). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getVisitorVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                visitorVisitId: components["parameters"]["VisitorVisitId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["VisitorVisit"];
+                    };
+                };
+            };
+        };
+    };
+    endVisitorVisit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                visitorVisitId: components["parameters"]["VisitorVisitId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["VisitorVisit"];
+                    };
+                };
+            };
+            /** @description This Visit was already checked out (VISITOR_VISIT_ALREADY_CHECKED_OUT). */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -318,6 +318,19 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'transport.vehicles.manage', 'label' => 'Manage Transport Vehicles and Route operational (Vehicle/Driver) assignments', 'namespace' => 'school'],
             ['key' => 'transport.assignments.view', 'label' => 'View Student Transport assignments', 'namespace' => 'school'],
             ['key' => 'transport.assignments.manage', 'label' => 'Manage Student Transport assignments', 'namespace' => 'school'],
+
+            // Phase 10C (docs/modules/VISITOR.md "Capabilities") --
+            // mirrors Library's catalogue/circulation split and
+            // Transport's routes/vehicles/assignments split: a School
+            // may want front-desk staff who can run check-in/check-out
+            // without letting them edit the Visitor directory itself
+            // (or vice versa). `.directory.*` covers Visitor reference
+            // records; `.visits.*` covers the check-in/check-out Visit
+            // lifecycle only.
+            ['key' => 'visitor.directory.view', 'label' => 'View the Visitor directory', 'namespace' => 'school'],
+            ['key' => 'visitor.directory.manage', 'label' => 'Manage the Visitor directory', 'namespace' => 'school'],
+            ['key' => 'visitor.visits.view', 'label' => 'View Visitor check-in/check-out Visits', 'namespace' => 'school'],
+            ['key' => 'visitor.visits.manage', 'label' => 'Manage Visitor check-in/check-out Visits', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -409,6 +422,12 @@ class CapabilityAndRoleSeeder extends Seeder
                     'transport.routes.view', 'transport.routes.manage',
                     'transport.vehicles.view', 'transport.vehicles.manage',
                     'transport.assignments.view', 'transport.assignments.manage',
+                    // Phase 10C: same day-to-day operational parity
+                    // reasoning as Transport/Library above -- running
+                    // front-desk Visitor check-in/check-out is routine
+                    // administrative work.
+                    'visitor.directory.view', 'visitor.directory.manage',
+                    'visitor.visits.view', 'visitor.visits.manage',
                 ],
             ],
             'principal' => [
@@ -491,6 +510,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     'transport.routes.view', 'transport.routes.manage',
                     'transport.vehicles.view', 'transport.vehicles.manage',
                     'transport.assignments.view', 'transport.assignments.manage',
+                    // Phase 10C: same day-to-day operational parity
+                    // reasoning as school_admin above.
+                    'visitor.directory.view', 'visitor.directory.manage',
+                    'visitor.visits.view', 'visitor.visits.manage',
                 ],
             ],
         ];

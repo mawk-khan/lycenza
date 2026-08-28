@@ -32,6 +32,8 @@ use App\Domain\Transport\Http\Controllers\TransportRouteController;
 use App\Domain\Transport\Http\Controllers\TransportStopController;
 use App\Domain\Transport\Http\Controllers\TransportStudentAssignmentController;
 use App\Domain\Transport\Http\Controllers\TransportVehicleController;
+use App\Domain\Visitor\Http\Controllers\VisitorController;
+use App\Domain\Visitor\Http\Controllers\VisitorVisitController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
 use App\Http\Controllers\Api\Internal\AiToolController;
 use App\Http\Controllers\Api\Internal\HealthController;
@@ -718,6 +720,39 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/transport-student-assignments/{transportStudentAssignment}/end', [TransportStudentAssignmentController::class, 'end'])
                 ->middleware(['capability:transport.assignments.manage', 'throttle:school-api-mutations'])
                 ->name('schools.transport-student-assignments.end');
+
+            // --- Phase 10C: Visitor (directory, check-in/check-out
+            // Visit lifecycle). `idempotent` is applied only to the
+            // check-in mutation -- a network retry could otherwise
+            // silently create a second Visit row for the same physical
+            // arrival -- the exact reasoning already established for
+            // Library checkout and Transport's two "assign" mutations.
+            // check-out deliberately does NOT carry idempotency: its
+            // own conditional `UPDATE ... WHERE status = 'checked_in'`
+            // already makes a repeated/retried request safe by
+            // construction (docs/modules/VISITOR.md "Check-out
+            // idempotency decision").
+            Route::get('/visitors', [VisitorController::class, 'index'])
+                ->name('schools.visitors.index');
+            Route::post('/visitors', [VisitorController::class, 'store'])
+                ->middleware(['capability:visitor.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.visitors.store');
+            Route::get('/visitors/{visitor}', [VisitorController::class, 'show'])
+                ->name('schools.visitors.show');
+            Route::patch('/visitors/{visitor}', [VisitorController::class, 'update'])
+                ->middleware(['capability:visitor.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.visitors.update');
+
+            Route::get('/visitor-visits', [VisitorVisitController::class, 'index'])
+                ->name('schools.visitor-visits.index');
+            Route::post('/visitor-visits', [VisitorVisitController::class, 'store'])
+                ->middleware(['capability:visitor.visits.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.visitor-visits.store');
+            Route::get('/visitor-visits/{visitorVisit}', [VisitorVisitController::class, 'show'])
+                ->name('schools.visitor-visits.show');
+            Route::post('/visitor-visits/{visitorVisit}/end', [VisitorVisitController::class, 'end'])
+                ->middleware(['capability:visitor.visits.manage', 'throttle:school-api-mutations'])
+                ->name('schools.visitor-visits.end');
         });
 });
 
