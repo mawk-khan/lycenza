@@ -21,6 +21,7 @@ use App\Domain\HR\Http\Controllers\EmployeeSensitiveDocumentController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
+use App\Domain\Students\Http\Controllers\EnrollmentRolloverSubjectMappingController;
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
@@ -472,6 +473,29 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/enrollment-rollovers/{rollover}/mappings/{mapping}', [EnrollmentRolloverMappingController::class, 'update'])
                 ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.enrollment-rollovers.mappings.update');
+
+            // Phase 1G.4: subject-mapping configuration -- addressed by
+            // the SOURCE SubjectOffering id directly (the natural
+            // operator identity, matching `enrollment_rollover_subject_mappings`'
+            // own (plan_id, source_subject_offering_id) uniqueness) --
+            // never an internal mapping row UUID. PUT with
+            // `target_subject_offering_id: null` means EXPLICIT OMIT;
+            // DELETE means UNCONFIGURED (no row at all) -- the two are
+            // never conflated. Read access to the mapping list/discovery
+            // remains embedded in the Plan detail response above (no
+            // separate list endpoint), matching the existing Grade/
+            // Section mappings' identical embedding.
+            Route::put('/enrollment-rollovers/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'upsert'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.enrollment-rollovers.subject-mappings.upsert');
+            // No `idempotent` middleware -- EnrollmentRolloverPlanService::removeSubjectMapping()
+            // is ITSELF a true no-op against an already-unconfigured
+            // source Offering (Phase 1G.1), the same natural-idempotency
+            // rationale StudentGuardianRelationshipController::destroy()'s
+            // route already documents above.
+            Route::delete('/enrollment-rollovers/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'destroy'])
+                ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations'])
+                ->name('schools.enrollment-rollovers.subject-mappings.destroy');
 
             // Explicit lifecycle actions only -- never a generic PATCH
             // accepting `status`/`configuration_version`/execution

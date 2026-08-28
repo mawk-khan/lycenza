@@ -20,6 +20,7 @@ use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
+use App\Http\Controllers\App\EnrollmentRolloverSubjectMappingController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianCommunicationPreferenceController;
 use App\Http\Controllers\App\GuardianController;
@@ -342,8 +343,12 @@ Route::middleware('auth')->group(function (): void {
     // (AuthorizesCapability trait), matching every other App/
     // controller's pattern -- every action re-derives the active
     // School from TenantContext, never a client-supplied id. No
-    // Mapping delete / Plan cancellation routes exist -- neither has a
-    // sanctioned Application-service operation (Phase 1B.7E).
+    // Grade/Section Mapping delete / Plan cancellation routes exist --
+    // neither has a sanctioned Application-service operation (Phase
+    // 1B.7E). Subject mappings (Phase 1G.4, below) DO have a delete
+    // route -- `removeSubjectMapping()` is a real, sanctioned Phase
+    // 1G.1 operation returning a source Offering to UNCONFIGURED,
+    // distinct from the Grade/Section mapping model's own semantics.
     Route::prefix('app/enrollment-rollovers')->name('app.enrollment-rollovers.')->group(function (): void {
         Route::get('/', [EnrollmentRolloverController::class, 'index'])->name('index');
         Route::get('/create', [EnrollmentRolloverController::class, 'create'])->name('create');
@@ -355,6 +360,12 @@ Route::middleware('auth')->group(function (): void {
 
         Route::post('/{rollover}/mappings', [EnrollmentRolloverMappingController::class, 'store'])->name('mappings.store');
         Route::patch('/{rollover}/mappings/{mapping}', [EnrollmentRolloverMappingController::class, 'update'])->name('mappings.update');
+
+        // Phase 1G.4: subject-mapping configuration, addressed by the
+        // SOURCE SubjectOffering id -- same shape/rationale as the JSON
+        // API's identical routes (routes/api.php).
+        Route::put('/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'upsert'])->name('subject-mappings.upsert');
+        Route::delete('/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'destroy'])->name('subject-mappings.destroy');
 
         Route::patch('/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])->name('items.update');
     });

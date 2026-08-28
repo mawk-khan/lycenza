@@ -1154,6 +1154,24 @@ export interface paths {
         patch: operations["updateEnrollmentRolloverMapping"];
         trace?: never;
     };
+    "/schools/{schoolId}/enrollment-rollovers/{rollover}/subject-mappings/{subjectOffering}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Phase 1G.4. Creates/updates the explicit elective carry-forward mapping for one SOURCE SubjectOffering -- addressed by the source Offering's own id (the natural (Plan, source Offering) identity, Phase 1G.1's own uniqueness), never an internal mapping row UUID. `target_subject_offering_id: null` is a valid, DISTINCT state (EXPLICIT OMIT) from DELETING this resource (UNCONFIGURED) -- the two are never conflated. Delegates entirely to EnrollmentRolloverPlanService::upsertSubjectMapping(). Requires enrollments.manage AND enrollments.rollovers.manage. Idempotency-Key required. */
+        put: operations["upsertEnrollmentRolloverSubjectMapping"];
+        post?: never;
+        /** Phase 1G.4. Returns one SOURCE SubjectOffering's mapping to UNCONFIGURED (deletes the mapping row entirely) -- distinct from PUTting `target_subject_offering_id: null` (EXPLICIT OMIT). Delegates entirely to EnrollmentRolloverPlanService::removeSubjectMapping(), which is ITSELF idempotent against an already-unconfigured source Offering (no Idempotency-Key required for that reason -- same rationale as DELETE /student-guardian-relationships/{relationship}). Requires enrollments.manage AND enrollments.rollovers.manage. */
+        delete: operations["removeEnrollmentRolloverSubjectMapping"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/enrollment-rollovers/{rollover}/validate": {
         parameters: {
             query?: never;
@@ -2211,9 +2229,61 @@ export interface components {
             targetSection?: components["schemas"]["EnrollmentRef"] | null;
             isRepeat: boolean;
         };
+        /** @description Phase 1G.4. A minimal, PII-free SubjectOffering reference for the subject-mapping workspace -- Subject name/code and academic dimensions (GradeLevel/Campus/ElectiveGroup) are non-PII School reference/configuration data. `status` is always present so a durable mapping's target can be displayed (with an inactive warning) even after the Offering itself later became inactive (docs/students/PHASE-1G-4-SUBJECT-ROLLOVER-API-UI.md). */
+        RolloverSubjectOfferingRef: {
+            /** Format: uuid */
+            id: string;
+            subject?: components["schemas"]["EnrollmentRef"] | null;
+            gradeLevel?: {
+                /** Format: uuid */
+                id?: string;
+                name?: string;
+            } | null;
+            campus?: {
+                /** Format: uuid */
+                id?: string;
+                name?: string;
+            } | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            electiveGroup?: {
+                /** Format: uuid */
+                id?: string;
+                name?: string;
+            } | null;
+        };
+        /** @description Phase 1G.4/1G.1. `state` is the three-state model surfaced for display: this schema only ever represents a row that EXISTS (`mapped` or `omit`) -- the UNCONFIGURED state is the ABSENCE of a row, represented separately by `RolloverPlan.unmappedSourceSubjectOfferings`, never collapsed into this list. */
+        RolloverSubjectMapping: {
+            /** Format: uuid */
+            id: string;
+            sourceSubjectOffering: components["schemas"]["RolloverSubjectOfferingRef"];
+            /** @enum {string} */
+            state: "mapped" | "omit";
+            targetSubjectOffering?: components["schemas"]["RolloverSubjectOfferingRef"] | null;
+        };
+        /** @description `target_subject_offering_id: null` means EXPLICIT OMIT (a durable row recording the operator's deliberate choice not to carry this elective forward) -- the key must always be present (even when null), distinct from DELETing this resource (UNCONFIGURED, Phase 1G.1's three-state model). */
+        RolloverSubjectMappingUpsertInput: {
+            /** Format: uuid */
+            target_subject_offering_id: string | null;
+        };
+        /** @description Returned by both the PUT and DELETE subject-mapping endpoints -- enough authoritative state (including the Plan's own versioning/validation-staleness fields) for the UI to update in place without a full reload (this checkpoint's brief, section 38). */
+        RolloverSubjectMappingMutationResult: {
+            sourceSubjectOffering: components["schemas"]["RolloverSubjectOfferingRef"];
+            /** @enum {string} */
+            state: "unconfigured" | "omit" | "mapped";
+            targetSubjectOffering?: components["schemas"]["RolloverSubjectOfferingRef"] | null;
+            plan: {
+                configurationVersion: number;
+                validatedConfigurationVersion: number | null;
+                isValidatedForCurrentConfiguration: boolean;
+            };
+        };
         RolloverPlan: components["schemas"]["RolloverPlanSummary"] & {
             isValidatedForCurrentConfiguration: boolean;
             mappings: components["schemas"]["RolloverMapping"][];
+            subjectMappings: components["schemas"]["RolloverSubjectMapping"][];
+            /** @description Phase 1G.4. Bounded discovery list of elective source SubjectOfferings with current eligible participation in this Plan but NO mapping row yet -- what would trigger `missing_subject_mapping` in dry-run. Never implies a mapping row was created; purely a read-only projection (EnrollmentRolloverReadService::unmappedSourceSubjectOfferings()). */
+            unmappedSourceSubjectOfferings: components["schemas"]["RolloverSubjectOfferingRef"][];
             executionSummary: components["schemas"]["RolloverExecutionSummary"];
         };
         /** @description school_id/status/configuration_version/validated_configuration_version/created_by_user_id/execution timestamps are never accepted -- School derives from the route, actor from the authenticated User, every other field is EnrollmentRolloverPlanService::createDraft()'s own invariant. */
@@ -2492,6 +2562,7 @@ export interface components {
         RolloverId: string;
         RolloverMappingId: string;
         RolloverItemId: string;
+        SubjectOfferingId: string;
         ApplicantId: string;
         AdmissionApplicationId: string;
         /** @description Document UUID -- Phase 0E.5. Never sufficient by itself to access metadata/content (see the direct Document endpoints' own 404 policy). */
@@ -5739,6 +5810,98 @@ export interface operations {
                 };
             };
             /** @description Not found (including a Mapping belonging to a DIFFERENT Plan than the route's -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Non-configurable Plan (executing/terminal). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    upsertEnrollmentRolloverSubjectMapping: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+                subjectOffering: components["parameters"]["SubjectOfferingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RolloverSubjectMappingUpsertInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Idempotency-Replayed": components["headers"]["IdempotencyReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverSubjectMappingMutationResult"];
+                    };
+                };
+            };
+            /** @description Not found (including a source SubjectOffering belonging to a DIFFERENT School than the route's -- indistinguishable from nonexistent). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Non-configurable Plan, cross-School reference, wrong source/target Academic Year, or a required SubjectOffering used as source/target. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    removeEnrollmentRolloverSubjectMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                rollover: components["parameters"]["RolloverId"];
+                subjectOffering: components["parameters"]["SubjectOfferingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RolloverSubjectMappingMutationResult"];
+                    };
+                };
+            };
+            /** @description Not found (including a source SubjectOffering belonging to a DIFFERENT School than the route's -- indistinguishable from nonexistent). */
             404: {
                 headers: {
                     [name: string]: unknown;

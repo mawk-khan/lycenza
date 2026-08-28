@@ -3,6 +3,7 @@ import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
 import MappingsPanel from './MappingsPanel.vue';
+import SubjectMappingsPanel from './SubjectMappingsPanel.vue';
 import ItemsPanel from './ItemsPanel.vue';
 import type {
     RolloverDecision,
@@ -30,6 +31,22 @@ interface Mapping {
     targetGradeLevel: Ref;
     targetSection: Ref | null;
     isRepeat: boolean;
+}
+
+interface SubjectOfferingRef {
+    id: string;
+    subject: { id: string; name: string; code: string } | null;
+    gradeLevel: Ref | null;
+    campus: Ref | null;
+    status: 'active' | 'inactive';
+    electiveGroup: Ref | null;
+}
+
+interface SubjectMapping {
+    id: string;
+    sourceSubjectOffering: SubjectOfferingRef;
+    state: 'mapped' | 'omit';
+    targetSubjectOffering: SubjectOfferingRef | null;
 }
 
 interface ValidationSummary {
@@ -64,6 +81,8 @@ interface Plan {
     completedAt: string | null;
     isValidatedForCurrentConfiguration: boolean;
     mappings: Mapping[];
+    subjectMappings: SubjectMapping[];
+    unmappedSourceSubjectOfferings: SubjectOfferingRef[];
     executionSummary: ExecutionSummary;
     validationSummary: ValidationSummary;
 }
@@ -103,6 +122,8 @@ interface Props {
     gradeLevels: Ref[];
     sourceSections: Array<Ref & { label: string; gradeLevelId: string }>;
     targetSections: Array<Ref & { label: string; gradeLevelId: string }>;
+    sourceSubjectOfferings: SubjectOfferingRef[];
+    targetSubjectOfferings: SubjectOfferingRef[];
 }
 
 const props = defineProps<Props>();
@@ -306,6 +327,16 @@ function reload(): void {
             :grade-levels="gradeLevels"
             :source-sections="sourceSections"
             :target-sections="targetSections"
+        />
+
+        <SubjectMappingsPanel
+            :rollover-id="plan.id"
+            :subject-mappings="plan.subjectMappings"
+            :unmapped-source-subject-offerings="plan.unmappedSourceSubjectOfferings"
+            :source-subject-offerings="sourceSubjectOfferings"
+            :target-subject-offerings="targetSubjectOfferings"
+            :configurable="configurable"
+            :can-manage="canManage"
         />
 
         <ItemsPanel

@@ -2303,6 +2303,77 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /schools/{schoolId}/enrollment-rollovers/{rollover}/subject-mappings/{subjectOffering}:
+    put:
+      operationId: upsertEnrollmentRolloverSubjectMapping
+      summary: >
+        Phase 1G.4. Creates/updates the explicit elective carry-forward
+        mapping for one SOURCE SubjectOffering -- addressed by the
+        source Offering's own id (the natural (Plan, source Offering)
+        identity, Phase 1G.1's own uniqueness), never an internal
+        mapping row UUID. `target_subject_offering_id: null` is a
+        valid, DISTINCT state (EXPLICIT OMIT) from DELETING this
+        resource (UNCONFIGURED) -- the two are never conflated.
+        Delegates entirely to
+        EnrollmentRolloverPlanService::upsertSubjectMapping(). Requires
+        enrollments.manage AND enrollments.rollovers.manage.
+        Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { $ref: "#/components/parameters/SubjectOfferingId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RolloverSubjectMappingUpsertInput" }
+      responses:
+        "200":
+          description: OK
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverSubjectMappingMutationResult" } } }
+        "404":
+          description: Not found (including a source SubjectOffering belonging to a DIFFERENT School than the route's -- indistinguishable from nonexistent).
+        "422":
+          description: Non-configurable Plan, cross-School reference, wrong source/target Academic Year, or a required SubjectOffering used as source/target.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      operationId: removeEnrollmentRolloverSubjectMapping
+      summary: >
+        Phase 1G.4. Returns one SOURCE SubjectOffering's mapping to
+        UNCONFIGURED (deletes the mapping row entirely) -- distinct
+        from PUTting `target_subject_offering_id: null` (EXPLICIT
+        OMIT). Delegates entirely to
+        EnrollmentRolloverPlanService::removeSubjectMapping(), which is
+        ITSELF idempotent against an already-unconfigured source
+        Offering (no Idempotency-Key required for that reason -- same
+        rationale as
+        DELETE /student-guardian-relationships/{relationship}). Requires
+        enrollments.manage AND enrollments.rollovers.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/RolloverId" }
+        - { $ref: "#/components/parameters/SubjectOfferingId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/RolloverSubjectMappingMutationResult" } } }
+        "404":
+          description: Not found (including a source SubjectOffering belonging to a DIFFERENT School than the route's -- indistinguishable from nonexistent).
+        "422":
+          description: Non-configurable Plan (executing/terminal).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /schools/{schoolId}/enrollment-rollovers/{rollover}/validate:
     post:
       operationId: validateEnrollmentRollover
@@ -3052,6 +3123,11 @@ components:
       schema: { type: string, format: uuid }
     RolloverItemId:
       name: item
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SubjectOfferingId:
+      name: subjectOffering
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -3928,14 +4004,93 @@ components:
         targetSection: { allOf: [{ $ref: "#/components/schemas/EnrollmentRef" }], nullable: true }
         isRepeat: { type: boolean }
 
+    RolloverSubjectOfferingRef:
+      type: object
+      required: [id, status]
+      description: >
+        Phase 1G.4. A minimal, PII-free SubjectOffering reference for
+        the subject-mapping workspace -- Subject name/code and academic
+        dimensions (GradeLevel/Campus/ElectiveGroup) are non-PII School
+        reference/configuration data. `status` is always present so a
+        durable mapping's target can be displayed (with an inactive
+        warning) even after the Offering itself later became inactive
+        (docs/students/PHASE-1G-4-SUBJECT-ROLLOVER-API-UI.md).
+      properties:
+        id: { type: string, format: uuid }
+        subject: { allOf: [{ $ref: "#/components/schemas/EnrollmentRef" }], nullable: true }
+        gradeLevel: { type: object, nullable: true, properties: { id: { type: string, format: uuid }, name: { type: string } } }
+        campus: { type: object, nullable: true, properties: { id: { type: string, format: uuid }, name: { type: string } } }
+        status: { type: string, enum: [active, inactive] }
+        electiveGroup: { type: object, nullable: true, properties: { id: { type: string, format: uuid }, name: { type: string } } }
+
+    RolloverSubjectMapping:
+      type: object
+      required: [id, sourceSubjectOffering, state]
+      description: >
+        Phase 1G.4/1G.1. `state` is the three-state model surfaced for
+        display: this schema only ever represents a row that EXISTS
+        (`mapped` or `omit`) -- the UNCONFIGURED state is the ABSENCE
+        of a row, represented separately by
+        `RolloverPlan.unmappedSourceSubjectOfferings`, never collapsed
+        into this list.
+      properties:
+        id: { type: string, format: uuid }
+        sourceSubjectOffering: { $ref: "#/components/schemas/RolloverSubjectOfferingRef" }
+        state: { type: string, enum: [mapped, omit] }
+        targetSubjectOffering: { allOf: [{ $ref: "#/components/schemas/RolloverSubjectOfferingRef" }], nullable: true }
+
+    RolloverSubjectMappingUpsertInput:
+      type: object
+      required: [target_subject_offering_id]
+      description: >
+        `target_subject_offering_id: null` means EXPLICIT OMIT (a
+        durable row recording the operator's deliberate choice not to
+        carry this elective forward) -- the key must always be present
+        (even when null), distinct from DELETing this resource
+        (UNCONFIGURED, Phase 1G.1's three-state model).
+      properties:
+        target_subject_offering_id: { type: string, format: uuid, nullable: true }
+
+    RolloverSubjectMappingMutationResult:
+      type: object
+      required: [sourceSubjectOffering, state, plan]
+      description: >
+        Returned by both the PUT and DELETE subject-mapping endpoints
+        -- enough authoritative state (including the Plan's own
+        versioning/validation-staleness fields) for the UI to update in
+        place without a full reload (this checkpoint's brief, section
+        38).
+      properties:
+        sourceSubjectOffering: { $ref: "#/components/schemas/RolloverSubjectOfferingRef" }
+        state: { type: string, enum: [unconfigured, omit, mapped] }
+        targetSubjectOffering: { allOf: [{ $ref: "#/components/schemas/RolloverSubjectOfferingRef" }], nullable: true }
+        plan:
+          type: object
+          required: [configurationVersion, validatedConfigurationVersion, isValidatedForCurrentConfiguration]
+          properties:
+            configurationVersion: { type: integer }
+            validatedConfigurationVersion: { type: integer, nullable: true }
+            isValidatedForCurrentConfiguration: { type: boolean }
+
     RolloverPlan:
       allOf:
         - { $ref: "#/components/schemas/RolloverPlanSummary" }
         - type: object
-          required: [isValidatedForCurrentConfiguration, mappings, executionSummary]
+          required: [isValidatedForCurrentConfiguration, mappings, subjectMappings, unmappedSourceSubjectOfferings, executionSummary]
           properties:
             isValidatedForCurrentConfiguration: { type: boolean }
             mappings: { type: array, items: { $ref: "#/components/schemas/RolloverMapping" } }
+            subjectMappings: { type: array, items: { $ref: "#/components/schemas/RolloverSubjectMapping" } }
+            unmappedSourceSubjectOfferings:
+              type: array
+              description: >
+                Phase 1G.4. Bounded discovery list of elective source
+                SubjectOfferings with current eligible participation in
+                this Plan but NO mapping row yet -- what would trigger
+                `missing_subject_mapping` in dry-run. Never implies a
+                mapping row was created; purely a read-only projection
+                (EnrollmentRolloverReadService::unmappedSourceSubjectOfferings()).
+              items: { $ref: "#/components/schemas/RolloverSubjectOfferingRef" }
             executionSummary: { $ref: "#/components/schemas/RolloverExecutionSummary" }
 
     RolloverPlanInput:
