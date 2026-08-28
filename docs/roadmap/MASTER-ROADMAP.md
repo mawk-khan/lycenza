@@ -253,7 +253,7 @@ Phase 0J entry) remains not started.
 
 ## Phase 0K — Operational Modules
 
-Transport, Library, Inventory, Canteen, Hostel, Health, Visitor/Safety
+Transport, Library, Inventory, Canteen, Hostel, Health, Visitor, Safety
 — roughly independent of each other, sequenced by product priority once
 reached, not strict dependency order.
 
@@ -286,11 +286,32 @@ Documents-module integration for vehicle/driver documents, and any
 Guardian/Student-facing surface — all explicitly deferred, not gaps in
 this checkpoint's own closure.
 
+**Phase 10C — Visitor (complete):** the third Phase 0K checkpoint — a
+Visitor directory (reference records) and check-in/check-out Visit
+lifecycle against a Campus with an optional HR Employee host
+(referenced by id, never duplicated), a database-enforced one-active-
+Visit-per-Visitor invariant proven under real concurrency,
+`visitor.directory.*`/`visitor.visits.*` capabilities, `/api/v1`
+administrative API, and a session-authenticated Inertia UI. Full design
+and closure record: `docs/modules/VISITOR.md`. Deliberately excludes
+government-ID numbers/scans, biometrics/facial recognition, retained
+photographs, blocklist/watchlist/risk-scoring (`status=inactive` is an
+ordinary reference-lifecycle flag, not a security blocklist —
+`docs/modules/VISITOR.md` §5), billing, public kiosk/self-registration/
+pre-registration flows, Documents/Communications integration, and any
+Guardian/Student-facing surface — all explicitly deferred, not gaps in
+this checkpoint's own closure. Safety/incident management was
+deliberately NOT built as part of this checkpoint — see below.
+
 The remaining Phase 0K modules (Inventory, Canteen, Hostel, Health,
-Visitor/Safety) are **not started**; Inventory/Canteen/Hostel remain
-blocked on Finance/Fees reaching `main`, and Health remains blocked on
-the `docs/security/DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED]
-gate. Phase 0K as a whole is **not** complete.
+Safety) are **not started**; Inventory/Canteen/Hostel remain blocked on
+Finance/Fees reaching `main`; Health remains blocked on the
+`docs/security/DATA-CLASSIFICATION.md` [LEGAL REVIEW REQUIRED] gate;
+and Safety is blocked pending its own legal/security readiness
+decision, since "incident records" may fall under that same unresolved
+Health gate (`docs/modules/VISITOR.md` §18, §24) — ideally resolved
+alongside Health's own review rather than separately. Phase 0K as a
+whole is **not** complete.
 
 ## Phase 0L — Oversight
 

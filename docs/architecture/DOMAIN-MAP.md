@@ -53,7 +53,7 @@ Layer 2  People             Students/SIS · Guardians · Admissions · HR
 Layer 3  Core operations    Finance · Fees · Payments · Academics ·
                             Attendance · Timetable · Examinations · LMS ·
                             Transport · Library · Inventory · Canteen ·
-                            Hostel · Health · Visitor/Safety · Payroll
+                            Hostel · Health · Visitor · Safety · Payroll
 Layer 4  Cross-cutting      Documents · Communications
 Layer 5  Oversight          Compliance · Analytics · Automation
 Layer 6  External-facing    Integrations · AI Platform · Multi-School
@@ -103,7 +103,8 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 | **Canteen** | Menus, orders, billing | Students/SIS, Fees, Inventory | |
 | **Hostel** | Room allocation, hostel fee linkage | Students/SIS, Fees | |
 | **Health** | Health records, incident logs | Students/SIS, Guardians | One of the highest-sensitivity data owners — see `docs/security/DATA-CLASSIFICATION.md`. |
-| **Visitor/Safety** | Visitor logs, gate passes, safety incidents | Schools, Campuses, HR, Students/SIS | |
+| **Visitor** | Visitor directory, check-in/check-out Visit lifecycle | Schools, Campuses, HR | **Implemented (Phase 10C)**: Visitor directory reference records (`App\Domain\Visitor\Infrastructure\Visitor`), check-in/check-out Visit lifecycle (`VisitorVisit`, `App\Domain\Visitor\Application\VisitorVisitService`, explicit-checkout-required semantics) against a Campus with an optional HR `Employee` host (referenced by id, never duplicated), a database-enforced one-active-Visit-per-Visitor invariant proven under real concurrency, `visitor.directory.*`/`visitor.visits.*` capabilities, `/api/v1` administrative surface, and a session-authenticated Inertia UI. See `docs/modules/VISITOR.md`. Government-ID/biometric/photo capture, blocklist/watchlist/risk-scoring, public kiosk/self-registration, billing, and Guardian/Student-facing views remain deliberately deferred — not part of this closure. |
+| **Safety** | Safety/incident reports, gate passes | Schools, Campuses, HR, Students/SIS | **Not started.** Deliberately kept separate from Visitor (Phase 10C) rather than combined as originally sketched — "incident records" may fall under Health's own unresolved `[LEGAL REVIEW REQUIRED]` gate (`docs/security/DATA-CLASSIFICATION.md`), so Safety requires its own legal/security readiness decision before implementation, ideally alongside Health's. |
 | **Payroll** | Salary structures, payroll runs, statutory deductions | HR, Finance | India-specific statutory compliance (PF/ESI/TDS, etc.) is a Layer 5 (Compliance) concern layered on top, not owned here — see the legal-review flag in `docs/security/DATA-CLASSIFICATION.md`. |
 
 ## Layer 4 — Cross-cutting
