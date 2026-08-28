@@ -402,6 +402,21 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'hostel.directory.manage', 'label' => 'Manage the Hostel/Room/Bed directory', 'namespace' => 'school'],
             ['key' => 'hostel.residency.view', 'label' => 'View Student Hostel residency assignments', 'namespace' => 'school'],
             ['key' => 'hostel.residency.manage', 'label' => 'Manage Student Hostel residency assignments', 'namespace' => 'school'],
+
+            // Phase 10E (docs/modules/INVENTORY.md "Capabilities") --
+            // mirrors Hostel's directory/residency split exactly:
+            // `.directory.*` covers the Item catalogue AND the
+            // Location directory together (both are reference/
+            // structural entities with no independent meaning worth
+            // their own capability -- no separate
+            // `inventory.items.*`/`inventory.locations.*` pairs);
+            // `.stock.*` covers the transactional stock lifecycle
+            // (balances, movement history, receive/issue/transfer).
+            // No capability per movement type.
+            ['key' => 'inventory.directory.view', 'label' => 'View the Inventory Item/Location directory', 'namespace' => 'school'],
+            ['key' => 'inventory.directory.manage', 'label' => 'Manage the Inventory Item/Location directory', 'namespace' => 'school'],
+            ['key' => 'inventory.stock.view', 'label' => 'View Inventory stock balances and movement history', 'namespace' => 'school'],
+            ['key' => 'inventory.stock.manage', 'label' => 'Receive, issue, and transfer Inventory stock', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -534,6 +549,13 @@ class CapabilityAndRoleSeeder extends Seeder
                     // is routine administrative work.
                     'hostel.directory.view', 'hostel.directory.manage',
                     'hostel.residency.view', 'hostel.residency.manage',
+                    // Phase 10E: same day-to-day operational parity
+                    // reasoning as Hostel/Visitor/Transport/Library
+                    // above -- managing the Inventory catalogue and
+                    // day-to-day stock movements is routine
+                    // administrative work.
+                    'inventory.directory.view', 'inventory.directory.manage',
+                    'inventory.stock.view', 'inventory.stock.manage',
                 ],
             ],
             'principal' => [
@@ -624,6 +646,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // reasoning as school_admin above.
                     'hostel.directory.view', 'hostel.directory.manage',
                     'hostel.residency.view', 'hostel.residency.manage',
+                    // Phase 10E: same day-to-day operational parity
+                    // reasoning as school_admin above.
+                    'inventory.directory.view', 'inventory.directory.manage',
+                    'inventory.stock.view', 'inventory.stock.manage',
                 ],
             ],
         ];

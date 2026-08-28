@@ -2181,6 +2181,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/inventory-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's Inventory Item catalogue (active by default). Requires inventory.directory.view. */
+        get: operations["listInventoryItems"];
+        put?: never;
+        /** Registers a new Inventory Item. Requires inventory.directory.manage. */
+        post: operations["createInventoryItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/inventory-items/{inventoryItemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Inventory Item. Requires inventory.directory.view. */
+        get: operations["getInventoryItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates an Inventory Item. Requires inventory.directory.manage. */
+        patch: operations["updateInventoryItem"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/inventory-locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's Inventory Locations (active by default). Requires inventory.directory.view. */
+        get: operations["listInventoryLocations"];
+        put?: never;
+        /** Registers a new Inventory Location. campus_id is optional -- a Location may be School-wide. Requires inventory.directory.manage. */
+        post: operations["createInventoryLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/inventory-locations/{inventoryLocationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one Inventory Location. Requires inventory.directory.view. */
+        get: operations["getInventoryLocation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates or (de)activates an Inventory Location. Requires inventory.directory.manage. */
+        patch: operations["updateInventoryLocation"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/inventory-stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists current stock balances (Item x Location), the AUTHORITATIVE current-quantity resource. Requires inventory.stock.view. */
+        get: operations["listInventoryStockBalances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/inventory-stock/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists the immutable historical StockMovement ledger. Requires inventory.stock.view. */
+        get: operations["listStockMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/inventory-stock/receive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receives stock into a Location via InventoryStockService::receive() -- the sole authoritative stock writer. Idempotent (Idempotency-Key required): a retried request never double-applies its stock effect. Requires inventory.stock.manage. */
+        post: operations["receiveInventoryStock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/inventory-stock/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issues stock from a Location via InventoryStockService::issue(). quantity_on_hand can never go negative (database-enforced CHECK constraint backstops the service's own row-locked check). Idempotent (Idempotency-Key required). Requires inventory.stock.manage. */
+        post: operations["issueInventoryStock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/inventory-stock/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transfers stock between two Locations for one Item, as ONE atomic transaction via InventoryStockService::transfer() -- never an issue+receipt pair. Locks both balance rows in deterministic ascending-id order (never a fixed source-then-destination role order) to remain deadlock-safe against opposing concurrent transfers. Idempotent (Idempotency-Key required). Requires inventory.stock.manage. */
+        post: operations["transferInventoryStock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2884,6 +3041,111 @@ export interface components {
             student_id: string;
             /** Format: uuid */
             hostel_bed_id: string;
+        };
+        /** @description A School-wide catalogue definition of what is stocked (docs/modules/INVENTORY.md "InventoryItem model"). Carries no quantity/cost of its own. */
+        InventoryItem: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            unitOfMeasure: "each" | "box" | "packet" | "kg" | "litre";
+            /** @description Derived from unitOfMeasure, never a separately stored flag. */
+            allowsFractionalQuantity: boolean;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        InventoryItemInput: {
+            code?: string;
+            name?: string;
+            /** @enum {string} */
+            unit_of_measure?: "each" | "box" | "packet" | "kg" | "litre";
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description A physical stock-holding location (docs/modules/INVENTORY.md "InventoryLocation model"). School-owned; campusId is optional -- a Location may be School-wide. */
+        InventoryLocation: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            campusId?: string | null;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        InventoryLocationInput: {
+            code?: string;
+            name?: string;
+            /** Format: uuid */
+            campus_id?: string | null;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @description The AUTHORITATIVE current quantity for one (Item, Location) pair (docs/modules/INVENTORY.md "Stock truth architecture"). Mathematically reconstructible from StockMovement history at any time. */
+        InventoryStockBalance: {
+            /** Format: uuid */
+            id: string;
+            /** @description Exact decimal string, NUMERIC(14,3) -- never a float. */
+            quantityOnHand: string;
+            item: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                name: string;
+                unitOfMeasure: string;
+            };
+            location: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                name: string;
+            };
+        };
+        /** @description An immutable, append-only historical stock transaction (docs/modules/INVENTORY.md "Movement history role"). No update/delete endpoint exists. */
+        StockMovement: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            movementType: "receipt" | "issue" | "transfer";
+            /** @description Exact decimal string, NUMERIC(14,3) -- never a float. */
+            quantity: string;
+            /** Format: date-time */
+            occurredAt: string;
+            item: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                name: string;
+            };
+            fromLocation?: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+            } | null;
+            toLocation?: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+            } | null;
+        };
+        StockMutationInput: {
+            /** Format: uuid */
+            inventory_item_id: string;
+            /** Format: uuid */
+            inventory_location_id: string;
+            /** @description Exact decimal string, at most 3 decimal places (e.g. "10" or "1.250"). Whole-unit Items (each/box/packet) reject a fractional value. */
+            quantity: string;
+        };
+        TransferStockInput: {
+            /** Format: uuid */
+            inventory_item_id: string;
+            /** Format: uuid */
+            from_location_id: string;
+            /** Format: uuid */
+            to_location_id: string;
+            /** @description Exact decimal string, at most 3 decimal places. from_location_id and to_location_id must differ. */
+            quantity: string;
         };
         /** @description Only one Academic Year per School may be `active` (section 16, database-enforced). */
         AcademicYear: {
@@ -3770,6 +4032,8 @@ export interface components {
         HostelRoomId: string;
         HostelBedId: string;
         HostelResidencyAssignmentId: string;
+        InventoryItemId: string;
+        InventoryLocationId: string;
     };
     requestBodies: never;
     headers: {
@@ -10176,6 +10440,461 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listInventoryItems: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+                search?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryItem"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking inventory.directory.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createInventoryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryItemInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryItem"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate code within this School, unrecognized unit_of_measure). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getInventoryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                inventoryItemId: components["parameters"]["InventoryItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryItem"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateInventoryItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                inventoryItemId: components["parameters"]["InventoryItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InventoryItemInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryItem"];
+                    };
+                };
+            };
+        };
+    };
+    listInventoryLocations: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+                search?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryLocation"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createInventoryLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryLocationInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryLocation"];
+                    };
+                };
+            };
+            /** @description Validation failure (e.g. duplicate code within this School, campus_id from a different School). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getInventoryLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                inventoryLocationId: components["parameters"]["InventoryLocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryLocation"];
+                    };
+                };
+            };
+            /** @description Not found (including a cross-School id). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateInventoryLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                inventoryLocationId: components["parameters"]["InventoryLocationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InventoryLocationInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryLocation"];
+                    };
+                };
+            };
+        };
+    };
+    listInventoryStockBalances: {
+        parameters: {
+            query?: {
+                inventory_item_id?: string;
+                inventory_location_id?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["InventoryStockBalance"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listStockMovements: {
+        parameters: {
+            query?: {
+                inventory_item_id?: string;
+                inventory_location_id?: string;
+                movement_type?: "receipt" | "issue" | "transfer";
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StockMovement"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    receiveInventoryStock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockMutationInput"];
+            };
+        };
+        responses: {
+            /** @description Created (the new receipt StockMovement). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StockMovement"];
+                    };
+                };
+            };
+            /** @description INVENTORY_ITEM_NOT_AVAILABLE, INVENTORY_LOCATION_NOT_AVAILABLE, or INVENTORY_INVALID_QUANTITY. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    issueInventoryStock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockMutationInput"];
+            };
+        };
+        responses: {
+            /** @description Created (the new issue StockMovement). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StockMovement"];
+                    };
+                };
+            };
+            /** @description INVENTORY_INSUFFICIENT_STOCK (or the same not-available/invalid-quantity codes as receive). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferInventoryStock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferStockInput"];
+            };
+        };
+        responses: {
+            /** @description Created (the new transfer StockMovement). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StockMovement"];
+                    };
+                };
+            };
+            /** @description INVENTORY_SAME_LOCATION_TRANSFER, INVENTORY_INSUFFICIENT_STOCK, or the same not-available/invalid-quantity codes as receive. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
         };
     };
 }

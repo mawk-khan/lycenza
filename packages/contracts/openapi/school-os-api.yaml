@@ -4267,6 +4267,302 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /schools/{schoolId}/inventory-items:
+    get:
+      operationId: listInventoryItems
+      summary: Lists a School's Inventory Item catalogue (active by default). Requires inventory.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/InventoryItem" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking inventory.directory.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createInventoryItem
+      summary: Registers a new Inventory Item. Requires inventory.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryItemInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/InventoryItem" } } }
+        "422":
+          description: Validation failure (e.g. duplicate code within this School, unrecognized unit_of_measure).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/inventory-items/{inventoryItemId}:
+    get:
+      operationId: getInventoryItem
+      summary: Fetch one Inventory Item. Requires inventory.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/InventoryItemId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/InventoryItem" } } }
+        "404":
+          description: Not found (including a cross-School id).
+    patch:
+      operationId: updateInventoryItem
+      summary: Updates or (de)activates an Inventory Item. Requires inventory.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/InventoryItemId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryItemInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/InventoryItem" } } }
+
+  /schools/{schoolId}/inventory-locations:
+    get:
+      operationId: listInventoryLocations
+      summary: Lists a School's Inventory Locations (active by default). Requires inventory.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/InventoryLocation" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createInventoryLocation
+      summary: Registers a new Inventory Location. campus_id is optional -- a Location may be School-wide. Requires inventory.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryLocationInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/InventoryLocation" } } }
+        "422":
+          description: Validation failure (e.g. duplicate code within this School, campus_id from a different School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/inventory-locations/{inventoryLocationId}:
+    get:
+      operationId: getInventoryLocation
+      summary: Fetch one Inventory Location. Requires inventory.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/InventoryLocationId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/InventoryLocation" } } }
+        "404":
+          description: Not found (including a cross-School id).
+    patch:
+      operationId: updateInventoryLocation
+      summary: Updates or (de)activates an Inventory Location. Requires inventory.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/InventoryLocationId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryLocationInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/InventoryLocation" } } }
+
+  /schools/{schoolId}/inventory-stock:
+    get:
+      operationId: listInventoryStockBalances
+      summary: Lists current stock balances (Item x Location), the AUTHORITATIVE current-quantity resource. Requires inventory.stock.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: inventory_item_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: inventory_location_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/InventoryStockBalance" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/inventory-stock/movements:
+    get:
+      operationId: listStockMovements
+      summary: Lists the immutable historical StockMovement ledger. Requires inventory.stock.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: inventory_item_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: inventory_location_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: movement_type, in: query, required: false, schema: { type: string, enum: [receipt, issue, transfer] } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/StockMovement" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/inventory-stock/receive:
+    post:
+      operationId: receiveInventoryStock
+      summary: >
+        Receives stock into a Location via InventoryStockService::receive()
+        -- the sole authoritative stock writer. Idempotent (Idempotency-Key
+        required): a retried request never double-applies its stock
+        effect. Requires inventory.stock.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockMutationInput" }
+      responses:
+        "201":
+          description: Created (the new receipt StockMovement).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StockMovement" } } }
+        "422":
+          description: INVENTORY_ITEM_NOT_AVAILABLE, INVENTORY_LOCATION_NOT_AVAILABLE, or INVENTORY_INVALID_QUANTITY.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/inventory-stock/issue:
+    post:
+      operationId: issueInventoryStock
+      summary: >
+        Issues stock from a Location via InventoryStockService::issue().
+        quantity_on_hand can never go negative (database-enforced CHECK
+        constraint backstops the service's own row-locked check).
+        Idempotent (Idempotency-Key required). Requires
+        inventory.stock.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockMutationInput" }
+      responses:
+        "201":
+          description: Created (the new issue StockMovement).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StockMovement" } } }
+        "422":
+          description: INVENTORY_INSUFFICIENT_STOCK (or the same not-available/invalid-quantity codes as receive).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/inventory-stock/transfer:
+    post:
+      operationId: transferInventoryStock
+      summary: >
+        Transfers stock between two Locations for one Item, as ONE atomic
+        transaction via InventoryStockService::transfer() -- never an
+        issue+receipt pair. Locks both balance rows in deterministic
+        ascending-id order (never a fixed source-then-destination role
+        order) to remain deadlock-safe against opposing concurrent
+        transfers. Idempotent (Idempotency-Key required). Requires
+        inventory.stock.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferStockInput" }
+      responses:
+        "201":
+          description: Created (the new transfer StockMovement).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StockMovement" } } }
+        "422":
+          description: INVENTORY_SAME_LOCATION_TRANSFER, INVENTORY_INSUFFICIENT_STOCK, or the same not-available/invalid-quantity codes as receive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
 
 components:
   securitySchemes:
@@ -4496,6 +4792,16 @@ components:
       schema: { type: string, format: uuid }
     HostelResidencyAssignmentId:
       name: hostelResidencyAssignmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InventoryItemId:
+      name: inventoryItemId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InventoryLocationId:
+      name: inventoryLocationId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -5252,6 +5558,116 @@ components:
       properties:
         student_id: { type: string, format: uuid }
         hostel_bed_id: { type: string, format: uuid }
+
+    InventoryItem:
+      type: object
+      required: [id, code, name, unitOfMeasure, allowsFractionalQuantity, status]
+      description: A School-wide catalogue definition of what is stocked (docs/modules/INVENTORY.md "InventoryItem model"). Carries no quantity/cost of its own.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        unitOfMeasure: { type: string, enum: [each, box, packet, kg, litre] }
+        allowsFractionalQuantity: { type: boolean, description: "Derived from unitOfMeasure, never a separately stored flag." }
+        status: { type: string, enum: [active, inactive] }
+
+    InventoryItemInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        unit_of_measure: { type: string, enum: [each, box, packet, kg, litre] }
+        status: { type: string, enum: [active, inactive] }
+
+    InventoryLocation:
+      type: object
+      required: [id, code, name, status]
+      description: A physical stock-holding location (docs/modules/INVENTORY.md "InventoryLocation model"). School-owned; campusId is optional -- a Location may be School-wide.
+      properties:
+        id: { type: string, format: uuid }
+        campusId: { type: string, format: uuid, nullable: true }
+        code: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [active, inactive] }
+
+    InventoryLocationInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        campus_id: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    InventoryStockBalance:
+      type: object
+      required: [id, quantityOnHand, item, location]
+      description: The AUTHORITATIVE current quantity for one (Item, Location) pair (docs/modules/INVENTORY.md "Stock truth architecture"). Mathematically reconstructible from StockMovement history at any time.
+      properties:
+        id: { type: string, format: uuid }
+        quantityOnHand: { type: string, description: "Exact decimal string, NUMERIC(14,3) -- never a float." }
+        item:
+          type: object
+          required: [id, code, name, unitOfMeasure]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+            unitOfMeasure: { type: string }
+        location:
+          type: object
+          required: [id, code, name]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+
+    StockMovement:
+      type: object
+      required: [id, movementType, quantity, occurredAt, item]
+      description: An immutable, append-only historical stock transaction (docs/modules/INVENTORY.md "Movement history role"). No update/delete endpoint exists.
+      properties:
+        id: { type: string, format: uuid }
+        movementType: { type: string, enum: [receipt, issue, transfer] }
+        quantity: { type: string, description: "Exact decimal string, NUMERIC(14,3) -- never a float." }
+        occurredAt: { type: string, format: date-time }
+        item:
+          type: object
+          required: [id, code, name]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+            name: { type: string }
+        fromLocation:
+          type: object
+          nullable: true
+          required: [id, code]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+        toLocation:
+          type: object
+          nullable: true
+          required: [id, code]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string }
+
+    StockMutationInput:
+      type: object
+      required: [inventory_item_id, inventory_location_id, quantity]
+      properties:
+        inventory_item_id: { type: string, format: uuid }
+        inventory_location_id: { type: string, format: uuid }
+        quantity: { type: string, description: "Exact decimal string, at most 3 decimal places (e.g. \"10\" or \"1.250\"). Whole-unit Items (each/box/packet) reject a fractional value." }
+
+    TransferStockInput:
+      type: object
+      required: [inventory_item_id, from_location_id, to_location_id, quantity]
+      properties:
+        inventory_item_id: { type: string, format: uuid }
+        from_location_id: { type: string, format: uuid }
+        to_location_id: { type: string, format: uuid }
+        quantity: { type: string, description: "Exact decimal string, at most 3 decimal places. from_location_id and to_location_id must differ." }
 
     AcademicYear:
       type: object

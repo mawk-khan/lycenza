@@ -25,6 +25,9 @@ use App\Domain\HR\Http\Controllers\EmployeeActivityController;
 use App\Domain\HR\Http\Controllers\EmployeeDirectoryController;
 use App\Domain\HR\Http\Controllers\EmployeeProfileController;
 use App\Domain\HR\Http\Controllers\EmployeeSensitiveDocumentController;
+use App\Domain\Inventory\Http\Controllers\InventoryItemController;
+use App\Domain\Inventory\Http\Controllers\InventoryLocationController;
+use App\Domain\Inventory\Http\Controllers\InventoryStockController;
 use App\Domain\Library\Http\Controllers\LibraryCopyController;
 use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
@@ -868,6 +871,53 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/hostel-residency-assignments/{hostelResidencyAssignment}/end', [HostelResidencyAssignmentController::class, 'end'])
                 ->middleware(['capability:hostel.residency.manage', 'throttle:school-api-mutations'])
                 ->name('schools.hostel-residency-assignments.end');
+
+            // --- Phase 10E: Inventory (Item/Location directory,
+            // quantity stock lifecycle). `receive`/`issue`/`transfer`
+            // carry `idempotent` -- each creates a new immutable
+            // StockMovement and mutates a StockBalance; a network
+            // retry could otherwise duplicate the stock effect, the
+            // same reasoning already established for Library checkout,
+            // Transport's assign mutations, Visitor check-in, and
+            // Hostel residency assignment. No generic
+            // `POST /stock-movements` exists -- only these three
+            // explicit-intent commands, each backed by
+            // InventoryStockService.
+            Route::get('/inventory-items', [InventoryItemController::class, 'index'])
+                ->name('schools.inventory-items.index');
+            Route::post('/inventory-items', [InventoryItemController::class, 'store'])
+                ->middleware(['capability:inventory.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.inventory-items.store');
+            Route::get('/inventory-items/{inventoryItem}', [InventoryItemController::class, 'show'])
+                ->name('schools.inventory-items.show');
+            Route::patch('/inventory-items/{inventoryItem}', [InventoryItemController::class, 'update'])
+                ->middleware(['capability:inventory.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.inventory-items.update');
+
+            Route::get('/inventory-locations', [InventoryLocationController::class, 'index'])
+                ->name('schools.inventory-locations.index');
+            Route::post('/inventory-locations', [InventoryLocationController::class, 'store'])
+                ->middleware(['capability:inventory.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.inventory-locations.store');
+            Route::get('/inventory-locations/{inventoryLocation}', [InventoryLocationController::class, 'show'])
+                ->name('schools.inventory-locations.show');
+            Route::patch('/inventory-locations/{inventoryLocation}', [InventoryLocationController::class, 'update'])
+                ->middleware(['capability:inventory.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.inventory-locations.update');
+
+            Route::get('/inventory-stock', [InventoryStockController::class, 'index'])
+                ->name('schools.inventory-stock.index');
+            Route::get('/inventory-stock/movements', [InventoryStockController::class, 'movements'])
+                ->name('schools.inventory-stock.movements');
+            Route::post('/inventory-stock/receive', [InventoryStockController::class, 'receive'])
+                ->middleware(['capability:inventory.stock.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.inventory-stock.receive');
+            Route::post('/inventory-stock/issue', [InventoryStockController::class, 'issue'])
+                ->middleware(['capability:inventory.stock.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.inventory-stock.issue');
+            Route::post('/inventory-stock/transfer', [InventoryStockController::class, 'transfer'])
+                ->middleware(['capability:inventory.stock.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.inventory-stock.transfer');
         });
 });
 
