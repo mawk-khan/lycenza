@@ -65,7 +65,9 @@ const addableSourceOfferings = computed(() =>
 
 // --- Inline configure/edit forms, keyed per source Offering id --------
 
-const rowForms = reactive<Record<string, ReturnType<typeof useForm<{ target_subject_offering_id: string | null }>>>>({});
+const rowForms = reactive<
+    Record<string, ReturnType<typeof useForm<{ target_subject_offering_id: string | null }>>>
+>({});
 const editingSourceId = ref<string | null>(null);
 
 function rowForm(sourceId: string, initialTargetId: string | null | typeof OMIT_VALUE) {
@@ -93,7 +95,8 @@ function setSelectValue(sourceId: string, value: string): void {
 function startEdit(mapping: SubjectMapping): void {
     editingSourceId.value = mapping.sourceSubjectOffering.id;
     rowForms[mapping.sourceSubjectOffering.id] = useForm({
-        target_subject_offering_id: mapping.state === 'omit' ? null : mapping.targetSubjectOffering!.id,
+        target_subject_offering_id:
+            mapping.state === 'omit' ? null : mapping.targetSubjectOffering!.id,
     });
     if (mapping.state === 'omit') {
         // Force the <select> to the OMIT sentinel rather than an empty
@@ -108,7 +111,8 @@ function cancelEdit(): void {
 
 function submitConfigure(sourceId: string, selectValueChosen: string): void {
     const form = rowForm(sourceId, null);
-    form.target_subject_offering_id = selectValueChosen === OMIT_VALUE || selectValueChosen === '' ? null : selectValueChosen;
+    form.target_subject_offering_id =
+        selectValueChosen === OMIT_VALUE || selectValueChosen === '' ? null : selectValueChosen;
     form.put(`/app/enrollment-rollovers/${props.rolloverId}/subject-mappings/${sourceId}`, {
         onSuccess: () => {
             editingSourceId.value = null;
@@ -119,20 +123,25 @@ function submitConfigure(sourceId: string, selectValueChosen: string): void {
 const removingSourceId = ref<string | null>(null);
 function resetToUnconfigured(sourceId: string): void {
     removingSourceId.value = sourceId;
-    useForm({}).delete(`/app/enrollment-rollovers/${props.rolloverId}/subject-mappings/${sourceId}`, {
-        onFinish: () => {
-            removingSourceId.value = null;
+    useForm({}).delete(
+        `/app/enrollment-rollovers/${props.rolloverId}/subject-mappings/${sourceId}`,
+        {
+            onFinish: () => {
+                removingSourceId.value = null;
+            },
         },
-    });
+    );
 }
 
 // --- Add mapping (manual) form -----------------------------------------
 
 const showAddForm = ref(false);
-const addForm = useForm<{ source_subject_offering_id: string; target_subject_offering_id: string }>({
-    source_subject_offering_id: '',
-    target_subject_offering_id: '',
-});
+const addForm = useForm<{ source_subject_offering_id: string; target_subject_offering_id: string }>(
+    {
+        source_subject_offering_id: '',
+        target_subject_offering_id: '',
+    },
+);
 
 function submitAdd(): void {
     if (!addForm.source_subject_offering_id) return;
@@ -140,15 +149,15 @@ function submitAdd(): void {
     const sourceId = addForm.source_subject_offering_id;
     const targetValue = addForm.target_subject_offering_id;
 
-    useForm({ target_subject_offering_id: targetValue === OMIT_VALUE || targetValue === '' ? null : targetValue }).put(
-        `/app/enrollment-rollovers/${props.rolloverId}/subject-mappings/${sourceId}`,
-        {
-            onSuccess: () => {
-                addForm.reset();
-                showAddForm.value = false;
-            },
+    useForm({
+        target_subject_offering_id:
+            targetValue === OMIT_VALUE || targetValue === '' ? null : targetValue,
+    }).put(`/app/enrollment-rollovers/${props.rolloverId}/subject-mappings/${sourceId}`, {
+        onSuccess: () => {
+            addForm.reset();
+            showAddForm.value = false;
         },
-    );
+    });
 }
 </script>
 
@@ -167,9 +176,8 @@ function submitAdd(): void {
         </div>
         <p class="mt-1 text-sm text-slate-500">
             Only EXPLICIT electives need a mapping -- required subjects are always derived
-            automatically and never listed here. A source elective with no decision (Not
-            configured) blocks validation until you either map it forward or explicitly mark it
-            Omit next year.
+            automatically and never listed here. A source elective with no decision (Not configured)
+            blocks validation until you either map it forward or explicitly mark it Omit next year.
         </p>
 
         <p v-if="!configurable" class="mt-2 text-sm text-amber-700">
@@ -192,7 +200,9 @@ function submitAdd(): void {
                 <template v-if="editingSourceId !== m.sourceSubjectOffering.id">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <span class="font-medium">{{ offeringLabel(m.sourceSubjectOffering) }}</span>
+                            <span class="font-medium">{{
+                                offeringLabel(m.sourceSubjectOffering)
+                            }}</span>
                             <span class="mx-2 text-slate-400">→</span>
                             <span v-if="m.state === 'omit'" class="italic text-slate-500"
                                 >Omit next year</span
@@ -220,7 +230,12 @@ function submitAdd(): void {
                 <form
                     v-else
                     class="space-y-3"
-                    @submit.prevent="submitConfigure(m.sourceSubjectOffering.id, selectValue(m.sourceSubjectOffering.id))"
+                    @submit.prevent="
+                        submitConfigure(
+                            m.sourceSubjectOffering.id,
+                            selectValue(m.sourceSubjectOffering.id),
+                        )
+                    "
                 >
                     <p class="text-slate-600">
                         Source: <strong>{{ offeringLabel(m.sourceSubjectOffering) }}</strong>
@@ -236,16 +251,25 @@ function submitAdd(): void {
                             :value="selectValue(m.sourceSubjectOffering.id)"
                             required
                             class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
-                            @change="setSelectValue(m.sourceSubjectOffering.id, ($event.target as HTMLSelectElement).value)"
+                            @change="
+                                setSelectValue(
+                                    m.sourceSubjectOffering.id,
+                                    ($event.target as HTMLSelectElement).value,
+                                )
+                            "
                         >
-                            <option :value="OMIT_VALUE">Omit next year (do not carry forward)</option>
+                            <option :value="OMIT_VALUE">
+                                Omit next year (do not carry forward)
+                            </option>
                             <option v-for="t in targetSubjectOfferings" :key="t.id" :value="t.id">
                                 Map to {{ offeringLabel(t) }}
                             </option>
                         </select>
                     </div>
                     <p
-                        v-if="rowForms[m.sourceSubjectOffering.id]?.errors.target_subject_offering_id"
+                        v-if="
+                            rowForms[m.sourceSubjectOffering.id]?.errors.target_subject_offering_id
+                        "
                         class="text-sm text-red-600"
                     >
                         {{ rowForms[m.sourceSubjectOffering.id].errors.target_subject_offering_id }}
@@ -272,8 +296,8 @@ function submitAdd(): void {
                 Needs configuration
             </h3>
             <p class="mt-1 text-xs text-slate-500">
-                These electives have active Students in this Plan but no mapping yet -- dry-run
-                will block them as "missing subject mapping" until you decide.
+                These electives have active Students in this Plan but no mapping yet -- dry-run will
+                block them as "missing subject mapping" until you decide.
             </p>
             <ul class="mt-2 space-y-2">
                 <li
@@ -288,7 +312,10 @@ function submitAdd(): void {
                                 v-if="canManage && configurable"
                                 type="button"
                                 class="text-sm underline"
-                                @click="editingSourceId = o.id; rowForm(o.id, OMIT_VALUE)"
+                                @click="
+                                    editingSourceId = o.id;
+                                    rowForm(o.id, OMIT_VALUE);
+                                "
                             >
                                 Configure
                             </button>
@@ -306,14 +333,21 @@ function submitAdd(): void {
                             :value="selectValue(o.id)"
                             required
                             class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
-                            @change="setSelectValue(o.id, ($event.target as HTMLSelectElement).value)"
+                            @change="
+                                setSelectValue(o.id, ($event.target as HTMLSelectElement).value)
+                            "
                         >
-                            <option :value="OMIT_VALUE">Omit next year (do not carry forward)</option>
+                            <option :value="OMIT_VALUE">
+                                Omit next year (do not carry forward)
+                            </option>
                             <option v-for="t in targetSubjectOfferings" :key="t.id" :value="t.id">
                                 Map to {{ offeringLabel(t) }}
                             </option>
                         </select>
-                        <p v-if="rowForms[o.id]?.errors.target_subject_offering_id" class="text-sm text-red-600">
+                        <p
+                            v-if="rowForms[o.id]?.errors.target_subject_offering_id"
+                            class="text-sm text-red-600"
+                        >
                             {{ rowForms[o.id].errors.target_subject_offering_id }}
                         </p>
                         <div class="flex items-center gap-3">
@@ -342,7 +376,9 @@ function submitAdd(): void {
             <h3 class="text-sm font-medium text-slate-700">Add mapping</h3>
             <div class="grid gap-3 sm:grid-cols-2">
                 <div>
-                    <label class="block text-xs font-medium text-slate-700" for="source_subject_offering_id"
+                    <label
+                        class="block text-xs font-medium text-slate-700"
+                        for="source_subject_offering_id"
                         >Source elective</label
                     >
                     <select
@@ -359,7 +395,9 @@ function submitAdd(): void {
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-slate-700" for="target_subject_offering_id"
+                    <label
+                        class="block text-xs font-medium text-slate-700"
+                        for="target_subject_offering_id"
                         >Decision</label
                     >
                     <select

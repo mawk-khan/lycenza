@@ -106,17 +106,25 @@ function applyFilters(): void {
                     <tbody class="divide-y divide-slate-100">
                         <tr v-for="o in offerings.data" :key="o.id">
                             <td class="py-3">
-                                <a class="font-medium underline" :href="`/app/subject-offerings/${o.id}`">{{
-                                    o.subject?.name ?? 'Unknown Subject'
-                                }}</a>
+                                <a
+                                    class="font-medium underline"
+                                    :href="`/app/subject-offerings/${o.id}`"
+                                    >{{ o.subject?.name ?? 'Unknown Subject' }}</a
+                                >
                             </td>
                             <td class="py-3 text-slate-600">{{ o.gradeLevel?.name }}</td>
                             <td class="py-3 text-slate-600">{{ o.campus?.name }}</td>
-                            <td class="py-3 text-slate-600">{{ o.isRequired ? 'Required' : 'Elective' }}</td>
-                            <td class="py-3 text-slate-600">{{ o.electiveGroup?.name ?? 'Ungrouped' }}</td>
+                            <td class="py-3 text-slate-600">
+                                {{ o.isRequired ? 'Required' : 'Elective' }}
+                            </td>
+                            <td class="py-3 text-slate-600">
+                                {{ o.electiveGroup?.name ?? 'Ungrouped' }}
+                            </td>
                             <td class="py-3"><StatusBadge :status="o.status" /></td>
                             <td class="py-3 text-right">
-                                <a class="text-sm underline" :href="`/app/subject-offerings/${o.id}`"
+                                <a
+                                    class="text-sm underline"
+                                    :href="`/app/subject-offerings/${o.id}`"
                                     >View roster</a
                                 >
                             </td>

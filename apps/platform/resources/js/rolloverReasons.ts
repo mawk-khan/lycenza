@@ -40,21 +40,22 @@ const ROLLOVER_REASON_LABELS: Record<string, string> = {
     missing_subject_mapping:
         'This Student has an active elective with no subject mapping configured -- add one below.',
     legacy_source_anchor_ambiguous:
-        'This elective cannot be confidently attributed to this Student\'s source Enrollment -- resolve manually.',
+        "This elective cannot be confidently attributed to this Student's source Enrollment -- resolve manually.",
     elective_target_inactive: 'The mapped target elective is currently inactive.',
     elective_target_required:
         'The mapped target Offering is now a required subject -- it cannot be used as an elective target.',
     elective_target_context_mismatch:
-        'The mapped target elective does not match this Student\'s target School/Year/Campus/Grade.',
+        "The mapped target elective does not match this Student's target School/Year/Campus/Grade.",
     elective_target_group_conflict:
         'Two mapped target electives in this Plan belong to the same elective group -- resolve the mapping.',
     elective_target_existing_conflict:
-        'The Student already has a different active elective in the mapped target\'s elective group.',
+        "The Student already has a different active elective in the mapped target's elective group.",
     elective_target_duplicate_mapping:
         'Two different source electives map to the same target elective -- resolve the mapping.',
     elective_already_enrolled_match:
         'The Student is already enrolled in the mapped target elective -- no action needed.',
-    elective_explicitly_omitted: 'This elective was explicitly marked Omit -- it will not be carried forward.',
+    elective_explicitly_omitted:
+        'This elective was explicitly marked Omit -- it will not be carried forward.',
 };
 
 export function rolloverReasonLabel(reason: string | null): string | null {
