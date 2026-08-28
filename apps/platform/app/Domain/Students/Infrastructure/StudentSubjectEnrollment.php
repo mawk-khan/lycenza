@@ -3,6 +3,7 @@
 namespace App\Domain\Students\Infrastructure;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\AcademicStructure\Infrastructure\ElectiveGroup;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Support\Identifiers\GeneratesUuidV7;
 use App\Support\Tenancy\BelongsToSchool;
@@ -23,10 +24,19 @@ use Illuminate\Support\Carbon;
  * never a database constraint (identical rationale to StudentEnrollment's
  * own denormalization).
  *
+ * `student_enrollment_id` and `elective_group_id` are Phase 1F.1
+ * additions (schema/model only -- StudentSubjectEnrollmentService does
+ * not yet populate them, Phase 1F.2). Both nullable -- see
+ * docs/students/PHASE-1F-0-ELECTIVE-MUTUAL-EXCLUSIVITY-ARCHITECTURE.md
+ * §10/§11A/§11B/§18B for the exact invariants a PostgreSQL trigger and
+ * two composite FKs enforce on these columns.
+ *
  * @property string $id UUIDv7 (ADR 0019).
  * @property string $school_id
  * @property string $student_id
+ * @property string|null $student_enrollment_id
  * @property string $subject_offering_id
+ * @property string|null $elective_group_id
  * @property string $academic_year_id
  * @property string $status active|withdrawn|cancelled|transferred
  * @property Carbon $starts_on
@@ -39,8 +49,8 @@ class StudentSubjectEnrollment extends Model
     protected $table = 'student_subject_enrollments';
 
     protected $fillable = [
-        'school_id', 'student_id', 'subject_offering_id', 'academic_year_id',
-        'status', 'starts_on', 'ends_on',
+        'school_id', 'student_id', 'student_enrollment_id', 'subject_offering_id', 'elective_group_id',
+        'academic_year_id', 'status', 'starts_on', 'ends_on',
     ];
 
     protected function casts(): array
@@ -77,5 +87,17 @@ class StudentSubjectEnrollment extends Model
     public function academicYear(): BelongsTo
     {
         return $this->belongsTo(AcademicYear::class);
+    }
+
+    /** @return BelongsTo<StudentEnrollment, $this> */
+    public function studentEnrollment(): BelongsTo
+    {
+        return $this->belongsTo(StudentEnrollment::class);
+    }
+
+    /** @return BelongsTo<ElectiveGroup, $this> */
+    public function electiveGroup(): BelongsTo
+    {
+        return $this->belongsTo(ElectiveGroup::class);
     }
 }

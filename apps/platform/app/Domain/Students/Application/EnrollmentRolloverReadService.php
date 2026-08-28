@@ -2,9 +2,12 @@
 
 namespace App\Domain\Students\Application;
 
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -54,8 +57,68 @@ class EnrollmentRolloverReadService
             ->with([
                 'sourceAcademicYear', 'targetAcademicYear', 'createdBy:id,name',
                 'mappings.sourceGradeLevel', 'mappings.sourceSection', 'mappings.targetGradeLevel', 'mappings.targetSection',
+                'subjectMappings.sourceSubjectOffering.subject', 'subjectMappings.sourceSubjectOffering.gradeLevel', 'subjectMappings.sourceSubjectOffering.campus',
+                'subjectMappings.targetSubjectOffering.subject', 'subjectMappings.targetSubjectOffering.gradeLevel', 'subjectMappings.targetSubjectOffering.campus', 'subjectMappings.targetSubjectOffering.electiveGroup',
             ])
             ->find($planId);
+    }
+
+    /**
+     * Phase 1G.4: the bounded, read-only discovery adapter behind the
+     * Plan workspace's "needs configuration" list -- without this, an
+     * operator has no way to discover WHICH source elective
+     * SubjectOfferings are missing a mapping row before running dry-run
+     * (this checkpoint's brief, section 18/19). Bounded by the number
+     * of DISTINCT elective SubjectOfferings this Plan's Students
+     * actually participate in (School reference-data cardinality, never
+     * Student-row cardinality) -- never writes a mapping row, never
+     * infers a desired target. Deliberately inclusive of legacy
+     * NULL-anchor participation regardless of anchor ambiguity -- this
+     * is a "what needs a decision" list, not a re-implementation of
+     * SubjectRolloverResolution's strict per-Item candidate proof; an
+     * ambiguous legacy row still surfaces its source Offering here (and
+     * still gets a proper `legacy_source_anchor_ambiguous` dry-run
+     * reason once validated).
+     *
+     * @return Collection<int, SubjectOffering>
+     */
+    public function unmappedSourceSubjectOfferings(EnrollmentRolloverPlan $plan): Collection
+    {
+        $items = EnrollmentRolloverItem::query()->where('plan_id', $plan->id)->get(['id', 'student_id', 'source_enrollment_id']);
+
+        if ($items->isEmpty()) {
+            return collect();
+        }
+
+        $sourceEnrollmentIds = $items->pluck('source_enrollment_id')->unique()->all();
+        $studentIds = $items->pluck('student_id')->unique()->all();
+
+        $offeringIds = StudentSubjectEnrollment::query()
+            ->where('status', 'active')
+            ->where(function ($query) use ($sourceEnrollmentIds, $studentIds, $plan) {
+                $query->whereIn('student_enrollment_id', $sourceEnrollmentIds)
+                    ->orWhere(function ($query) use ($studentIds, $plan) {
+                        $query->whereNull('student_enrollment_id')
+                            ->whereIn('student_id', $studentIds)
+                            ->where('academic_year_id', $plan->source_academic_year_id);
+                    });
+            })
+            ->pluck('subject_offering_id')
+            ->unique();
+
+        $mappedIds = $plan->subjectMappings()->pluck('source_subject_offering_id');
+        $unmappedIds = $offeringIds->diff($mappedIds)->values();
+
+        if ($unmappedIds->isEmpty()) {
+            return collect();
+        }
+
+        return SubjectOffering::query()
+            ->whereIn('id', $unmappedIds)
+            ->where('is_required', false)
+            ->with(['subject', 'gradeLevel', 'campus'])
+            ->orderBy('sequence')
+            ->get();
     }
 
     /**

@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $campus_id
  * @property string $grade_level_id
  * @property string $subject_id
+ * @property string|null $elective_group_id
  * @property bool $is_required
  * @property int|null $sequence
  * @property int|null $weekly_periods_target
@@ -36,7 +37,7 @@ class SubjectOffering extends Model
 
     protected $fillable = [
         'school_id', 'academic_year_id', 'campus_id', 'grade_level_id', 'subject_id',
-        'is_required', 'sequence', 'weekly_periods_target', 'status',
+        'elective_group_id', 'is_required', 'sequence', 'weekly_periods_target', 'status',
     ];
 
     protected static function newFactory(): SubjectOfferingFactory
@@ -76,5 +77,11 @@ class SubjectOffering extends Model
     public function subject(): BelongsTo
     {
         return $this->belongsTo(Subject::class);
+    }
+
+    /** @return BelongsTo<ElectiveGroup, $this> */
+    public function electiveGroup(): BelongsTo
+    {
+        return $this->belongsTo(ElectiveGroup::class);
     }
 }

@@ -5,8 +5,10 @@ namespace Tests\Feature\StudentEnrollment;
 use App\Domain\Students\Application\EnrollmentRolloverDryRunService;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
 use App\Domain\Students\Application\StudentEnrollmentService;
+use App\Domain\Students\Application\StudentSubjectEnrollmentService;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use PHPUnit\Framework\Attributes\Test;
@@ -100,5 +102,81 @@ class EnrollmentRolloverItemExecutionConcurrencyTest extends TestCase
                 ->count(),
         );
         $this->assertSame(1, $activeTargetCount, 'the database must contain exactly one active target-year Enrollment for this Student');
+    }
+
+    /**
+     * Phase 1G.3 (checkpoint brief section 33): extends the exact same
+     * real-two-process pattern above with a mapped elective attached to
+     * the Item -- proving subject-elective application, now composed
+     * inside the same per-Item transaction, is exactly as
+     * race-safe/idempotent as placement already was. Never a second
+     * concurrency-test harness.
+     */
+    #[Test]
+    public function two_real_concurrent_processes_executing_the_same_item_with_an_elective_produce_exactly_one_target_enrollment_and_one_target_elective(): void
+    {
+        $this->school = $school = $this->createSchool();
+        $context = app(TenantContext::class);
+        $campus = $this->createCampus($school);
+        $sourceYear = $this->createAcademicYear($school, ['code' => 'SRC', 'starts_on' => '2026-06-01', 'ends_on' => '2027-04-30']);
+        $targetYear = $this->createAcademicYear($school, ['code' => 'TGT', 'starts_on' => '2027-06-01', 'ends_on' => '2028-04-30']);
+        $sourceGrade = $this->createGradeLevel($school, ['name' => 'Grade 5', 'code' => 'G5', 'sequence' => 5]);
+        $targetGrade = $this->createGradeLevel($school, ['name' => 'Grade 6', 'code' => 'G6', 'sequence' => 6]);
+        $sourceSection = $this->createSection($sourceYear, $campus, $sourceGrade, ['name' => '5A', 'code' => '5A']);
+        $targetSection = $this->createSection($targetYear, $campus, $targetGrade, ['name' => '6B', 'code' => '6B']);
+        $subject = $this->createSubject($school);
+        $sourceOffering = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subject, ['is_required' => false]);
+        $targetOffering = $this->createSubjectOffering($targetYear, $campus, $targetGrade, $subject, ['is_required' => false]);
+
+        $student = $this->createStudent($school, ['student_number' => 'S-CONC-2']);
+        app(StudentEnrollmentService::class)->enroll($student, $sourceSection, '008', '2026-06-01');
+        app(StudentSubjectEnrollmentService::class)->enroll($student, $sourceOffering, '2026-06-01');
+
+        $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);
+        app(EnrollmentRolloverPlanService::class)->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
+        app(EnrollmentRolloverPlanService::class)->upsertSubjectMapping($plan, $sourceOffering, $targetOffering);
+        $context->withSchool($school, fn () => app(EnrollmentRolloverDryRunService::class)->run($plan->fresh()));
+        $item = $context->withSchool($school, fn () => EnrollmentRolloverItem::query()
+            ->where('plan_id', $plan->id)->where('student_id', $student->id)->firstOrFail());
+        app(EnrollmentRolloverPlanService::class)->setItemDecision($context->withSchool($school, fn () => $plan->fresh()), $item, 'promote', null, 'explicit', '012');
+        $summary = $context->withSchool($school, fn () => app(EnrollmentRolloverDryRunService::class)->run($plan->fresh()));
+        $this->assertTrue($summary['validated'], 'fixture setup must produce a validated plan');
+        $item = $context->withSchool($school, fn () => $item->fresh());
+        $this->assertSame('ready', $item->validation_result);
+
+        $script = __DIR__.'/../../Support/execute-rollover-item.php';
+        $processA = new Process(['php', $script, $school->id, $item->id]);
+        $processB = new Process(['php', $script, $school->id, $item->id]);
+        $processA->start();
+        $processB->start();
+        $processA->wait();
+        $processB->wait();
+
+        $outputs = [$processA->getOutput(), $processB->getOutput()];
+        $coherent = array_filter($outputs, fn ($o) => str_starts_with($o, 'succeeded:') || str_starts_with($o, 'reconciled:'));
+        $this->assertCount(2, $coherent, 'both concurrent executions must resolve to a coherent outcome: '.implode(' | ', $outputs));
+
+        $targetIds = array_unique(array_map(fn ($o) => explode(':', $o)[1], $outputs));
+        $this->assertCount(1, $targetIds, 'both processes must agree on exactly the SAME target Enrollment id: '.implode(' | ', $outputs));
+
+        $activeTargetCount = $context->withSchool(
+            $school,
+            fn () => StudentEnrollment::query()
+                ->where('student_id', $student->id)
+                ->where('academic_year_id', $targetYear->id)
+                ->where('status', 'active')
+                ->count(),
+        );
+        $this->assertSame(1, $activeTargetCount, 'exactly one active target-year Enrollment');
+
+        $activeElectiveCount = $context->withSchool(
+            $school,
+            fn () => StudentSubjectEnrollment::query()
+                ->where('student_enrollment_id', $targetIds[array_key_first($targetIds)])
+                ->where('subject_offering_id', $targetOffering->id)
+                ->where('status', 'active')
+                ->count(),
+        );
+        $this->assertSame(1, $activeElectiveCount, 'exactly one active target elective -- no duplicate from the race');
     }
 }

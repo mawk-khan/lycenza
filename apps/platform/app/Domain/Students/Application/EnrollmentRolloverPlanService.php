@@ -5,16 +5,21 @@ namespace App\Domain\Students\Application;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\Exceptions\CrossSchoolRolloverPlanException;
+use App\Domain\Students\Application\Exceptions\CrossSchoolSubjectMappingException;
 use App\Domain\Students\Application\Exceptions\InvalidRollNumberStrategyException;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverItemDecisionException;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanYearsException;
+use App\Domain\Students\Application\Exceptions\InvalidSubjectMappingYearException;
 use App\Domain\Students\Application\Exceptions\OpenRolloverPlanConflictException;
+use App\Domain\Students\Application\Exceptions\RequiredSubjectOfferingRolloverMappingException;
 use App\Domain\Students\Application\Exceptions\RolloverItemAlreadyExecutedException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverSubjectMapping;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -212,6 +217,147 @@ class EnrollmentRolloverPlanService
                 return $item->refresh();
             });
         });
+    }
+
+    /**
+     * Phase 1G.1: creates (or updates) an explicit source SubjectOffering
+     * -> target SubjectOffering elective carry-forward mapping.
+     * `$target === null` is a valid, DISTINCT state from "no mapping
+     * row at all" -- it means the operator explicitly chose NOT to
+     * carry this elective forward (explicit omit), never "unconfigured"
+     * (see this table's migration for the full three-state rationale).
+     *
+     * Idempotent by design (deliberately stronger than
+     * `upsertMapping()`'s own always-bump precedent, because this
+     * checkpoint's brief explicitly calls for a true no-op here): a
+     * call that would leave the mapping's target unchanged (including
+     * omit -> omit) makes no write, bumps no `configuration_version`,
+     * and records no audit event.
+     */
+    public function upsertSubjectMapping(
+        EnrollmentRolloverPlan $plan,
+        SubjectOffering $source,
+        ?SubjectOffering $target,
+        ?User $actor = null,
+    ): EnrollmentRolloverSubjectMapping {
+        $this->assertConfigurable($plan);
+
+        $this->assertSubjectMappingSchoolAndYear($plan, $source, $target);
+
+        if ($source->is_required || $target?->is_required) {
+            throw new RequiredSubjectOfferingRolloverMappingException;
+        }
+
+        return $this->context->withSchool($plan->school, function () use ($plan, $source, $target, $actor) {
+            return DB::transaction(function () use ($plan, $source, $target, $actor) {
+                $lockedPlan = EnrollmentRolloverPlan::query()->whereKey($plan->id)->lockForUpdate()->firstOrFail();
+
+                $existing = EnrollmentRolloverSubjectMapping::query()
+                    ->where('plan_id', $plan->id)
+                    ->where('source_subject_offering_id', $source->id)
+                    ->first();
+
+                if ($existing !== null && $existing->target_subject_offering_id === $target?->id) {
+                    return $existing;
+                }
+
+                $mapping = EnrollmentRolloverSubjectMapping::query()->updateOrCreate(
+                    [
+                        'plan_id' => $plan->id,
+                        'source_subject_offering_id' => $source->id,
+                    ],
+                    [
+                        'school_id' => $plan->school_id,
+                        'target_subject_offering_id' => $target?->id,
+                    ],
+                );
+
+                $lockedPlan->increment('configuration_version');
+
+                $this->audit->school($plan->school, 'enrollment_rollover_plan.configuration_changed', actor: $actor, subject: $lockedPlan, metadata: [
+                    'change' => 'subject_mapping',
+                    'subjectMappingId' => $mapping->id,
+                    'sourceSubjectOfferingId' => $source->id,
+                    'targetSubjectOfferingId' => $target?->id,
+                ]);
+
+                return $mapping;
+            });
+        });
+    }
+
+    /**
+     * Phase 1G.1: returns a source SubjectOffering to UNCONFIGURED --
+     * distinct from `upsertSubjectMapping($plan, $source, null, ...)`,
+     * which records an explicit OMIT row. This requires deleting the
+     * mapping row entirely; without it the three-state model would have
+     * no way back to its first state. Idempotent: removing an
+     * already-unconfigured source Offering is a no-op (no version bump,
+     * no audit), mirroring `upsertSubjectMapping()`'s own no-op
+     * precedent.
+     */
+    public function removeSubjectMapping(
+        EnrollmentRolloverPlan $plan,
+        SubjectOffering $source,
+        ?User $actor = null,
+    ): void {
+        $this->assertConfigurable($plan);
+
+        if ($source->school_id !== $plan->school_id) {
+            throw new CrossSchoolSubjectMappingException;
+        }
+
+        $this->context->withSchool($plan->school, function () use ($plan, $source, $actor) {
+            DB::transaction(function () use ($plan, $source, $actor) {
+                $lockedPlan = EnrollmentRolloverPlan::query()->whereKey($plan->id)->lockForUpdate()->firstOrFail();
+
+                $mapping = EnrollmentRolloverSubjectMapping::query()
+                    ->where('plan_id', $plan->id)
+                    ->where('source_subject_offering_id', $source->id)
+                    ->first();
+
+                if ($mapping === null) {
+                    return;
+                }
+
+                $mappingId = $mapping->id;
+                $mapping->delete();
+
+                $lockedPlan->increment('configuration_version');
+
+                $this->audit->school($plan->school, 'enrollment_rollover_plan.configuration_changed', actor: $actor, subject: $lockedPlan, metadata: [
+                    'change' => 'subject_mapping_removed',
+                    'subjectMappingId' => $mappingId,
+                    'sourceSubjectOfferingId' => $source->id,
+                ]);
+            });
+        });
+    }
+
+    /**
+     * Shared same-School / source-year / target-year validation for
+     * `upsertSubjectMapping()`, checked BEFORE any write is attempted
+     * (defense-in-depth ahead of the composite FKs -- see this table's
+     * migration for exactly why year membership is application-,
+     * rather than database-, validated).
+     */
+    private function assertSubjectMappingSchoolAndYear(EnrollmentRolloverPlan $plan, SubjectOffering $source, ?SubjectOffering $target): void
+    {
+        if ($source->school_id !== $plan->school_id) {
+            throw new CrossSchoolSubjectMappingException;
+        }
+
+        if ($target !== null && $target->school_id !== $plan->school_id) {
+            throw new CrossSchoolSubjectMappingException;
+        }
+
+        if ($source->academic_year_id !== $plan->source_academic_year_id) {
+            throw new InvalidSubjectMappingYearException('source');
+        }
+
+        if ($target !== null && $target->academic_year_id !== $plan->target_academic_year_id) {
+            throw new InvalidSubjectMappingYearException('target');
+        }
     }
 
     /**

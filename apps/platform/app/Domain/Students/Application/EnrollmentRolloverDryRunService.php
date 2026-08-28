@@ -3,11 +3,13 @@
 namespace App\Domain\Students\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanChronologyException;
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
@@ -78,6 +80,23 @@ class EnrollmentRolloverDryRunService
 
     private const RESULT_BLOCKED = 'blocked';
 
+    /**
+     * Every code above except `legacy_source_anchor_ambiguous` blocks
+     * outright; that one is `review` (mirrors `multiple_source_candidates`'s
+     * own review classification for the analogous placement-side
+     * ambiguity -- architecture doc §8's "Yes (review)" annotation).
+     */
+    private const SUBJECT_REASON_RESULT = [
+        'elective_target_duplicate_mapping' => self::RESULT_BLOCKED,
+        'elective_target_group_conflict' => self::RESULT_BLOCKED,
+        'elective_target_existing_conflict' => self::RESULT_BLOCKED,
+        'missing_subject_mapping' => self::RESULT_BLOCKED,
+        'elective_target_required' => self::RESULT_BLOCKED,
+        'elective_target_inactive' => self::RESULT_BLOCKED,
+        'elective_target_context_mismatch' => self::RESULT_BLOCKED,
+        'legacy_source_anchor_ambiguous' => self::RESULT_REVIEW,
+    ];
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -136,6 +155,8 @@ class EnrollmentRolloverDryRunService
             $results += $newResults;
 
             $results += $this->evaluatePersistedConflicts($plan, $readyCandidates);
+
+            $results = $this->evaluateSubjectParticipation($plan, $items, $results, $readyCandidates);
 
             if ($beforePersist !== null) {
                 $beforePersist();
@@ -481,6 +502,175 @@ class EnrollmentRolloverDryRunService
         }
 
         return $results;
+    }
+
+    /**
+     * Phase 1G.2 (architecture doc §8) -- the additional per-Item
+     * elective-rollover evaluation stage, composed AFTER every existing
+     * placement pass so that "existing Phase 1B placement failure
+     * precedence first" (this checkpoint's brief, section 30) falls out
+     * for free: only an Item that is currently `ready` (a fresh
+     * promotion about to happen) or `already_enrolled` (its target
+     * placement already exists) is even considered here -- any Item
+     * still `blocked`/`review`/`excluded` from placement alone keeps
+     * its OWN reason untouched, because this method only ever WRITES an
+     * override into `$results` for an item id it actually evaluates.
+     *
+     * Reads ONLY `StudentSubjectEnrollment`/`SubjectOffering`/this
+     * checkpoint's own `EnrollmentRolloverSubjectMapping` table (plus
+     * the already-batched `StudentEnrollment` rows) -- zero academic
+     * writes, unchanged invariant.
+     *
+     * @param  array<string, array<string, mixed>>  $results
+     * @param  array<string, array<string, mixed>>  $readyCandidates  Pre-persisted-conflict-check candidates (targetSectionId/mapping still attached) -- used only to recover context for whichever of them $results now marks READY.
+     * @return array<string, array<string, mixed>>
+     */
+    private function evaluateSubjectParticipation(EnrollmentRolloverPlan $plan, Collection $items, array $results, array $readyCandidates): array
+    {
+        $subjectCandidates = $this->buildSubjectCandidateContexts($plan, $items, $results, $readyCandidates);
+
+        if ($subjectCandidates === []) {
+            return $results;
+        }
+
+        $itemsById = $items->keyBy('id');
+        $sourceEnrollmentIds = collect($subjectCandidates)->map(fn ($c) => $itemsById->get($c['itemId'])->source_enrollment_id)->unique()->all();
+        $studentIds = collect($subjectCandidates)->map(fn ($c) => $itemsById->get($c['itemId'])->student_id)->unique()->all();
+
+        $anchoredByEnrollment = StudentSubjectEnrollment::query()
+            ->where('status', 'active')
+            ->whereIn('student_enrollment_id', $sourceEnrollmentIds)
+            ->with('subjectOffering')
+            ->get()
+            ->groupBy('student_enrollment_id');
+
+        $legacyByStudent = StudentSubjectEnrollment::query()
+            ->where('status', 'active')
+            ->whereNull('student_enrollment_id')
+            ->whereIn('student_id', $studentIds)
+            ->where('academic_year_id', $plan->source_academic_year_id)
+            ->with('subjectOffering')
+            ->get()
+            ->groupBy('student_id');
+
+        $allSourceYearEnrollmentsByStudent = StudentEnrollment::query()
+            ->where('academic_year_id', $plan->source_academic_year_id)
+            ->whereIn('student_id', $studentIds)
+            ->get()
+            ->groupBy('student_id');
+
+        $mappingsBySource = $plan->subjectMappings()->get()->keyBy('source_subject_offering_id');
+
+        $targetOfferingIds = $mappingsBySource->pluck('target_subject_offering_id')->filter()->unique()->all();
+        $targetOfferingsById = SubjectOffering::query()->whereIn('id', $targetOfferingIds)->get()->keyBy('id');
+
+        $targetEnrollmentIds = collect($subjectCandidates)->pluck('targetEnrollmentId')->filter()->unique()->all();
+        $existingTargetParticipationsByEnrollment = StudentSubjectEnrollment::query()
+            ->where('status', 'active')
+            ->whereIn('student_enrollment_id', $targetEnrollmentIds)
+            ->get()
+            ->groupBy('student_enrollment_id');
+
+        foreach ($subjectCandidates as $ctx) {
+            $itemId = $ctx['itemId'];
+            $item = $itemsById->get($itemId);
+
+            $resolution = SubjectRolloverResolution::resolve(
+                $item->source_enrollment_id,
+                $item->student_id,
+                $anchoredByEnrollment->get($item->source_enrollment_id, collect()),
+                $legacyByStudent->get($item->student_id, collect()),
+                $allSourceYearEnrollmentsByStudent->get($item->student_id, collect()),
+                $mappingsBySource,
+                $targetOfferingsById,
+                $ctx['targetAcademicYearId'],
+                $ctx['targetCampusId'],
+                $ctx['targetGradeLevelId'],
+                $ctx['targetEnrollmentId'] !== null
+                    ? $existingTargetParticipationsByEnrollment->get($ctx['targetEnrollmentId'], collect())
+                    : collect(),
+            );
+
+            if ($resolution['reasons'] === []) {
+                continue;
+            }
+
+            $winner = collect(SubjectRolloverResolution::REASON_PRECEDENCE)->first(fn ($reason) => in_array($reason, $resolution['reasons'], true));
+
+            $results[$itemId] = array_diff_key($results[$itemId], ['result' => true, 'reason' => true]) + [
+                'result' => self::SUBJECT_REASON_RESULT[$winner],
+                'reason' => $winner,
+            ];
+        }
+
+        return $results;
+    }
+
+    /**
+     * Builds the per-Item target-placement context (resolved target
+     * AcademicYear/Campus/GradeLevel, plus the target StudentEnrollment
+     * id when one already exists) for every Item `$results` currently
+     * marks `ready` or `already_enrolled` -- the only two states for
+     * which a target StudentEnrollment either will be, or already is,
+     * real. Every other Item (`excluded`/`review`/`blocked`) is never
+     * included -- its own placement reason already wins (section 30).
+     *
+     * @param  array<string, array<string, mixed>>  $results
+     * @param  array<string, array<string, mixed>>  $readyCandidates
+     * @return list<array{itemId: string, targetAcademicYearId: string, targetCampusId: string, targetGradeLevelId: string, targetEnrollmentId: ?string}>
+     */
+    private function buildSubjectCandidateContexts(EnrollmentRolloverPlan $plan, Collection $items, array $results, array $readyCandidates): array
+    {
+        $contexts = [];
+        $itemsById = $items->keyBy('id');
+
+        $readyItemIds = collect($results)->filter(fn ($r) => $r['result'] === self::RESULT_READY)->keys();
+        $readySectionIds = $readyItemIds->map(fn ($id) => $readyCandidates[$id]['targetSectionId'])->unique()->all();
+        $sectionsById = Section::query()->whereIn('id', $readySectionIds)->get()->keyBy('id');
+
+        foreach ($readyItemIds as $itemId) {
+            $section = $sectionsById->get($readyCandidates[$itemId]['targetSectionId']);
+
+            if ($section === null) {
+                continue;
+            }
+
+            $contexts[] = [
+                'itemId' => $itemId,
+                'targetAcademicYearId' => $plan->target_academic_year_id,
+                'targetCampusId' => $section->campus_id,
+                'targetGradeLevelId' => $section->grade_level_id,
+                'targetEnrollmentId' => null,
+            ];
+        }
+
+        $alreadyEnrolledItemIds = collect($results)->filter(fn ($r) => $r['result'] === self::RESULT_ALREADY_ENROLLED)->keys();
+        $alreadyEnrolledStudentIds = $alreadyEnrolledItemIds->map(fn ($id) => $itemsById->get($id)->student_id)->unique()->all();
+        $targetEnrollmentsByStudent = StudentEnrollment::query()
+            ->where('status', 'active')
+            ->where('academic_year_id', $plan->target_academic_year_id)
+            ->whereIn('student_id', $alreadyEnrolledStudentIds)
+            ->get()
+            ->keyBy('student_id');
+
+        foreach ($alreadyEnrolledItemIds as $itemId) {
+            $item = $itemsById->get($itemId);
+            $targetEnrollment = $targetEnrollmentsByStudent->get($item->student_id);
+
+            if ($targetEnrollment === null) {
+                continue;
+            }
+
+            $contexts[] = [
+                'itemId' => $itemId,
+                'targetAcademicYearId' => $targetEnrollment->academic_year_id,
+                'targetCampusId' => $targetEnrollment->campus_id,
+                'targetGradeLevelId' => $targetEnrollment->grade_level_id,
+                'targetEnrollmentId' => $targetEnrollment->id,
+            ];
+        }
+
+        return $contexts;
     }
 
     private function resolveRollNumber(EnrollmentRolloverItem $item, StudentEnrollment $freshSource): ?string

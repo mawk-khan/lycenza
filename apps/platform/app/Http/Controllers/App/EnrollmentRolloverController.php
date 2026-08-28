@@ -5,6 +5,7 @@ namespace App\Http\Controllers\App;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\EnrollmentRolloverDryRunService;
 use App\Domain\Students\Application\EnrollmentRolloverExecutionService;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
@@ -21,6 +22,7 @@ use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationExcepti
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverSubjectMapping;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\User;
@@ -163,6 +165,8 @@ class EnrollmentRolloverController extends Controller
             'gradeLevels' => $this->gradeLevelOptions(),
             'sourceSections' => $this->sectionOptionsForYear($plan->source_academic_year_id),
             'targetSections' => $this->sectionOptionsForYear($plan->target_academic_year_id),
+            'sourceSubjectOfferings' => $this->subjectOfferingOptionsForYear($plan->source_academic_year_id),
+            'targetSubjectOfferings' => $this->subjectOfferingOptionsForYear($plan->target_academic_year_id),
         ]);
     }
 
@@ -264,6 +268,36 @@ class EnrollmentRolloverController extends Controller
     }
 
     /**
+     * Bounded reference-data option list for the subject-mapping
+     * picker -- mirrors `sectionOptionsForYear()`'s identical shape
+     * (whole-year, not search-as-you-type, matching the existing
+     * Grade/Section mapping picker's own established convention rather
+     * than inventing a live-search endpoint). Elective-only
+     * (`is_required = false`, this checkpoint's brief, section 14/15)
+     * -- required Offerings are never a valid mapping source or target.
+     * Deliberately includes INACTIVE Offerings (no `status` filter,
+     * exactly like `sectionOptionsForYear()` already does for
+     * Sections) -- the `status` field lets the Vue picker render an
+     * inactive warning without hiding an existing stale mapping's
+     * target from view (section 16).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function subjectOfferingOptionsForYear(string $academicYearId): array
+    {
+        return SubjectOffering::query()
+            ->where('academic_year_id', $academicYearId)
+            ->where('is_required', false)
+            ->with(['subject', 'gradeLevel', 'campus', 'electiveGroup'])
+            ->orderBy('sequence')
+            ->limit(100)
+            ->get()
+            ->map(fn (SubjectOffering $o) => $this->presentOffering($o))
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array<int, array<string, string>>
      */
     private function gradeLevelOptions(): array
@@ -313,8 +347,43 @@ class EnrollmentRolloverController extends Controller
             ...$this->presentSummary($plan),
             'isValidatedForCurrentConfiguration' => $plan->isValidatedForCurrentConfiguration(),
             'mappings' => $plan->mappings->map(fn (EnrollmentRolloverMapping $m) => $this->presentMapping($m))->all(),
+            'subjectMappings' => $plan->subjectMappings->map(fn (EnrollmentRolloverSubjectMapping $m) => $this->presentSubjectMapping($m))->all(),
+            'unmappedSourceSubjectOfferings' => $reads->unmappedSourceSubjectOfferings($plan)->map(fn (SubjectOffering $o) => $this->presentOffering($o))->all(),
             'executionSummary' => $reads->executionSummary($plan),
             'validationSummary' => $reads->validationSummary($plan),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function presentSubjectMapping(EnrollmentRolloverSubjectMapping $mapping): array
+    {
+        return [
+            'id' => $mapping->id,
+            'sourceSubjectOffering' => $this->presentOffering($mapping->sourceSubjectOffering),
+            'state' => $mapping->isExplicitOmit() ? 'omit' : 'mapped',
+            'targetSubjectOffering' => $mapping->isExplicitOmit() ? null : $this->presentOffering($mapping->targetSubjectOffering),
+        ];
+    }
+
+    /**
+     * Deliberately excludes Student PII -- Subject name/code and
+     * academic dimensions (GradeLevel/Campus/ElectiveGroup) are
+     * non-PII School reference/configuration data (this checkpoint's
+     * brief, section 17/59).
+     *
+     * @return array<string, mixed>
+     */
+    private function presentOffering(SubjectOffering $offering): array
+    {
+        return [
+            'id' => $offering->id,
+            'subject' => $offering->subject === null ? null : ['id' => $offering->subject->id, 'name' => $offering->subject->name, 'code' => $offering->subject->code],
+            'gradeLevel' => $offering->gradeLevel === null ? null : ['id' => $offering->gradeLevel->id, 'name' => $offering->gradeLevel->name],
+            'campus' => $offering->campus === null ? null : ['id' => $offering->campus->id, 'name' => $offering->campus->name],
+            'status' => $offering->status,
+            'electiveGroup' => $offering->electiveGroup === null ? null : ['id' => $offering->electiveGroup->id, 'name' => $offering->electiveGroup->name],
         ];
     }
 

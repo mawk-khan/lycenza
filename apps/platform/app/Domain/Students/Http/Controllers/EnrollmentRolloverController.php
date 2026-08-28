@@ -5,12 +5,14 @@ namespace App\Domain\Students\Http\Controllers;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\EnrollmentRolloverDryRunService;
 use App\Domain\Students\Application\EnrollmentRolloverExecutionService;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
 use App\Domain\Students\Application\EnrollmentRolloverReadService;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverSubjectMapping;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
@@ -215,7 +217,37 @@ class EnrollmentRolloverController extends Controller
             ...$this->presentSummary($plan),
             'isValidatedForCurrentConfiguration' => $plan->isValidatedForCurrentConfiguration(),
             'mappings' => $plan->mappings->map(fn (EnrollmentRolloverMapping $m) => $this->presentMapping($m))->all(),
+            'subjectMappings' => $plan->subjectMappings->map(fn (EnrollmentRolloverSubjectMapping $m) => $this->presentSubjectMapping($m))->all(),
+            'unmappedSourceSubjectOfferings' => $reads->unmappedSourceSubjectOfferings($plan)->map(fn (SubjectOffering $o) => $this->presentOffering($o))->all(),
             'executionSummary' => $reads->executionSummary($plan),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function presentSubjectMapping(EnrollmentRolloverSubjectMapping $mapping): array
+    {
+        return [
+            'id' => $mapping->id,
+            'sourceSubjectOffering' => $this->presentOffering($mapping->sourceSubjectOffering),
+            'state' => $mapping->isExplicitOmit() ? 'omit' : 'mapped',
+            'targetSubjectOffering' => $mapping->isExplicitOmit() ? null : $this->presentOffering($mapping->targetSubjectOffering),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function presentOffering(SubjectOffering $offering): array
+    {
+        return [
+            'id' => $offering->id,
+            'subject' => $offering->subject === null ? null : ['id' => $offering->subject->id, 'name' => $offering->subject->name, 'code' => $offering->subject->code],
+            'gradeLevel' => $offering->gradeLevel === null ? null : ['id' => $offering->gradeLevel->id, 'name' => $offering->gradeLevel->name],
+            'campus' => $offering->campus === null ? null : ['id' => $offering->campus->id, 'name' => $offering->campus->name],
+            'status' => $offering->status,
+            'electiveGroup' => $offering->electiveGroup === null ? null : ['id' => $offering->electiveGroup->id, 'name' => $offering->electiveGroup->name],
         ];
     }
 

@@ -5,6 +5,7 @@ namespace Tests\Concerns;
 use App\Domain\AcademicStructure\Infrastructure\AcademicDepartment;
 use App\Domain\AcademicStructure\Infrastructure\AcademicTerm;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\AcademicStructure\Infrastructure\ElectiveGroup;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
@@ -43,6 +44,7 @@ use App\Domain\Library\Infrastructure\LibraryTitle;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverSubjectMapping;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
@@ -297,6 +299,26 @@ trait CreatesTenancyFixtures
         );
     }
 
+    /**
+     * Phase 1F.1: same reasoning as createSubjectOffering() -- three
+     * independent parents that must share one School are supplied
+     * explicitly by the caller, never defaulted, so a fixture can never
+     * accidentally construct a cross-context ElectiveGroup a real
+     * service could not produce.
+     */
+    protected function createElectiveGroup(AcademicYear $year, Campus $campus, GradeLevel $gradeLevel, array $attributes = []): ElectiveGroup
+    {
+        return app(TenantContext::class)->withSchool(
+            $year->school,
+            fn () => ElectiveGroup::factory()->create(array_merge([
+                'school_id' => $year->school_id,
+                'academic_year_id' => $year->id,
+                'campus_id' => $campus->id,
+                'grade_level_id' => $gradeLevel->id,
+            ], $attributes)),
+        );
+    }
+
     // --- Phase 1A: Student & Guardian identity fixtures ---------------
 
     protected function createStudent(School $school, array $attributes = []): Student
@@ -422,6 +444,25 @@ trait CreatesTenancyFixtures
                 'plan_id' => $plan->id,
                 'student_id' => $student->id,
                 'source_enrollment_id' => $sourceEnrollment->id,
+            ], $attributes)),
+        );
+    }
+
+    /**
+     * Phase 1G.1: `$targetOffering === null` builds the explicit-omit
+     * fixture state directly -- callers wanting "unconfigured" simply
+     * never call this helper for that source Offering at all (absence
+     * of a row IS the unconfigured state).
+     */
+    protected function createEnrollmentRolloverSubjectMapping(EnrollmentRolloverPlan $plan, SubjectOffering $sourceOffering, ?SubjectOffering $targetOffering, array $attributes = []): EnrollmentRolloverSubjectMapping
+    {
+        return app(TenantContext::class)->withSchool(
+            $plan->school,
+            fn () => EnrollmentRolloverSubjectMapping::factory()->create(array_merge([
+                'school_id' => $plan->school_id,
+                'plan_id' => $plan->id,
+                'source_subject_offering_id' => $sourceOffering->id,
+                'target_subject_offering_id' => $targetOffering?->id,
             ], $attributes)),
         );
     }

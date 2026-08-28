@@ -23,6 +23,7 @@ class AcademicStructureRlsIsolationTest extends TestCase
     private const TABLES = [
         'academic_years', 'academic_terms', 'grade_levels',
         'academic_departments', 'subjects', 'rooms', 'sections', 'subject_offerings',
+        'elective_groups',
     ];
 
     private function setSchool(string $schoolId): void
@@ -59,6 +60,7 @@ class AcademicStructureRlsIsolationTest extends TestCase
         $this->createRoom($campus);
         $this->createSection($year, $campus, $grade);
         $this->createSubjectOffering($year, $campus, $grade, $subject);
+        $this->createElectiveGroup($year, $campus, $grade);
 
         DB::connection('pgsql')->statement('RESET '.TenantRls::SESSION_VAR);
 
@@ -83,6 +85,7 @@ class AcademicStructureRlsIsolationTest extends TestCase
         $roomB = $this->createRoom($campusB);
         $sectionB = $this->createSection($yearB, $campusB, $gradeB);
         $offeringB = $this->createSubjectOffering($yearB, $campusB, $gradeB, $subjectB);
+        $electiveGroupB = $this->createElectiveGroup($yearB, $campusB, $gradeB);
 
         $this->setSchool($schoolA->id);
 
@@ -95,6 +98,7 @@ class AcademicStructureRlsIsolationTest extends TestCase
             'rooms' => $roomB->id,
             'sections' => $sectionB->id,
             'subject_offerings' => $offeringB->id,
+            'elective_groups' => $electiveGroupB->id,
         ];
 
         foreach ($ids as $table => $id) {

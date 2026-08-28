@@ -70,6 +70,8 @@ class DashboardController extends Controller
                     && ($capabilities->canInSchool($user, 'finance.ledger.view', $school)
                         || $capabilities->canInSchool($user, 'finance.charges.view', $school)
                         || $capabilities->canInSchool($user, 'finance.payments.view', $school)),
+                // Phase 1H.1: SubjectOffering roster / elective administration.
+                'canViewSubjectOfferings' => $school !== null && $capabilities->canInSchool($user, 'academics.subjects.view', $school),
             ],
         ]);
     }

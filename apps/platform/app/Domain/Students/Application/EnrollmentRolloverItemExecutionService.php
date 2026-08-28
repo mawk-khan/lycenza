@@ -3,14 +3,22 @@
 namespace App\Domain\Students\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\Exceptions\ActiveEnrollmentConflictException;
+use App\Domain\Students\Application\Exceptions\ActiveSubjectEnrollmentConflictException;
 use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberException;
+use App\Domain\Students\Application\Exceptions\ElectiveGroupConflictException;
+use App\Domain\Students\Application\Exceptions\InactiveSubjectOfferingException;
+use App\Domain\Students\Application\Exceptions\IncompatibleSubjectOfferingException;
+use App\Domain\Students\Application\Exceptions\RequiredSubjectOfferingEnrollmentException;
 use App\Domain\Students\Application\Exceptions\RolloverItemNotExecutableException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNotExecutionReadyException;
+use App\Domain\Students\Application\Exceptions\RolloverSubjectMappingExecutionException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
@@ -75,6 +83,7 @@ class EnrollmentRolloverItemExecutionService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly StudentEnrollmentService $enrollmentService,
+        private readonly StudentSubjectEnrollmentService $subjectEnrollmentService,
     ) {}
 
     /**
@@ -82,139 +91,175 @@ class EnrollmentRolloverItemExecutionService
      * section 13): Plan -> Item -> source Enrollment -> (existing
      * target Enrollment, where a pre-check query finds one) -- followed
      * on every code path, including the idempotent-replay fast path,
-     * so no caller can observe a different acquisition order.
+     * so no caller can observe a different acquisition order. Phase
+     * 1G.3 adds exactly one further nested lock, via
+     * `applySubjectElectives()` -> `StudentSubjectEnrollmentService::enroll()`
+     * -> its own `lockOffering()`, AFTER the target Enrollment lock --
+     * see PHASE-1G-3 doc §7 for why this introduces no new deadlock
+     * cycle.
+     *
+     * `RolloverSubjectMappingExecutionException` is the ONE exception
+     * type this method itself catches from inside the transaction: by
+     * the time it is caught here, `DB::transaction()` has already
+     * rolled back EVERYTHING this attempt wrote (the fresh/reconciled
+     * target Enrollment included, if this attempt created it, and any
+     * elective already inserted earlier in this SAME attempt) --
+     * PHASE-1G-3 doc §6's atomicity guarantee. Only THEN is the
+     * `invalidateForDrift()` bookkeeping persisted, in a brand-new
+     * transaction, mirroring the placement side's existing drift
+     * handling exactly.
      */
     public function execute(EnrollmentRolloverItem $item, ?User $actor = null): EnrollmentRolloverItem
     {
         return $this->context->withSchool($item->school, function () use ($item, $actor) {
-            return DB::transaction(function () use ($item, $actor) {
-                $plan = EnrollmentRolloverPlan::query()->whereKey($item->plan_id)->lockForUpdate()->firstOrFail();
-                $lockedItem = EnrollmentRolloverItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();
+            try {
+                return $this->executeWithinTransaction($item, $actor);
+            } catch (RolloverSubjectMappingExecutionException $e) {
+                return DB::transaction(function () use ($item, $e, $actor) {
+                    $plan = EnrollmentRolloverPlan::query()->whereKey($item->plan_id)->lockForUpdate()->firstOrFail();
+                    $freshItem = EnrollmentRolloverItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();
 
-                // Idempotency-first (brief section 35): a retried/duplicate
-                // execute() call for an already-terminal Item is always
-                // safe, regardless of whether the Plan is STILL validated
-                // -- a later configuration edit to OTHER items must never
-                // retroactively fail a replay of THIS item's own
-                // already-complete work.
-                if ($lockedItem->target_enrollment_id !== null) {
-                    return $this->reconcileAlreadyExecuted($plan, $lockedItem);
+                    return $this->invalidateForDrift($plan, $freshItem, $e->reason, $actor);
+                });
+            }
+        });
+    }
+
+    private function executeWithinTransaction(EnrollmentRolloverItem $item, ?User $actor): EnrollmentRolloverItem
+    {
+        return DB::transaction(function () use ($item, $actor) {
+            $plan = EnrollmentRolloverPlan::query()->whereKey($item->plan_id)->lockForUpdate()->firstOrFail();
+            $lockedItem = EnrollmentRolloverItem::query()->whereKey($item->id)->lockForUpdate()->firstOrFail();
+
+            // Idempotency-first (brief section 35): a retried/duplicate
+            // execute() call for an already-terminal Item is always
+            // safe, regardless of whether the Plan is STILL validated
+            // -- a later configuration edit to OTHER items must never
+            // retroactively fail a replay of THIS item's own
+            // already-complete work.
+            if ($lockedItem->target_enrollment_id !== null) {
+                return $this->reconcileAlreadyExecuted($plan, $lockedItem);
+            }
+
+            // Phase 1B.7D: 'executing' is accepted alongside
+            // 'validated' -- EnrollmentRolloverExecutionService::start()
+            // transitions the Plan to 'executing' for the DURATION of
+            // a bulk run, and every Item it processes must still pass
+            // through this exact gate. `validated_configuration_version
+            // === configuration_version` remains required either way --
+            // it is what actually proves the Item's persisted
+            // validation_result belongs to the CURRENT configuration,
+            // not `status` alone.
+            if (! in_array($plan->status, ['validated', 'executing'], true) || $plan->validated_configuration_version !== $plan->configuration_version) {
+                throw new RolloverPlanNotExecutionReadyException;
+            }
+
+            if ($lockedItem->validation_result === 'excluded') {
+                return $this->markSkipped($plan, $lockedItem, $actor);
+            }
+
+            if (! in_array($lockedItem->validation_result, self::EXECUTABLE_RESULTS, true)) {
+                throw new RolloverItemNotExecutableException($lockedItem->validation_result);
+            }
+
+            $lockedSource = StudentEnrollment::query()->whereKey($lockedItem->source_enrollment_id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedSource->student_id !== $lockedItem->student_id) {
+                // Structurally impossible per the double composite FK
+                // on enrollment_rollover_items.source_enrollment_id
+                // (Phase 1B.7A) -- defense in depth only.
+                throw new RuntimeException("Rollover item {$lockedItem->id}: source Enrollment does not belong to the item's Student.");
+            }
+
+            if (! $this->sourceSnapshotStillCurrent($lockedItem, $lockedSource)) {
+                return $this->invalidateForDrift($plan, $lockedItem, 'source_changed_since_validation', $actor);
+            }
+
+            $targetSectionId = $this->resolveTargetSectionId($plan, $lockedItem, $lockedSource);
+            $targetSection = Section::query()->whereKey($targetSectionId)->first();
+
+            if (! $this->targetSectionStillValid($plan, $lockedItem, $targetSection)) {
+                return $this->invalidateForDrift($plan, $lockedItem, 'target_section_changed_since_validation', $actor);
+            }
+
+            $rollNumber = RollNumberNormalizer::resolveForStrategy($lockedItem->roll_number_strategy, $lockedItem->target_roll_number, $lockedSource->roll_number);
+            if ($rollNumber === null) {
+                // Unreachable for an Item dry-run already classified
+                // ready/already_enrolled -- the source snapshot check
+                // above already proved roll_number is unchanged.
+                throw new RuntimeException("Rollover item {$lockedItem->id}: no resolvable Roll Number despite a '{$lockedItem->validation_result}' validation result.");
+            }
+
+            $existingActiveTarget = $this->findActiveTargetEnrollment($plan, $lockedItem->student_id);
+
+            if ($existingActiveTarget !== null) {
+                if ($this->matchesProposal($existingActiveTarget, $targetSection->id, $rollNumber)) {
+                    $this->applySubjectElectives($plan, $lockedItem, $existingActiveTarget, $actor);
+
+                    return $this->reconcile($plan, $lockedItem, $existingActiveTarget, $actor);
                 }
 
-                // Phase 1B.7D: 'executing' is accepted alongside
-                // 'validated' -- EnrollmentRolloverExecutionService::start()
-                // transitions the Plan to 'executing' for the DURATION of
-                // a bulk run, and every Item it processes must still pass
-                // through this exact gate. `validated_configuration_version
-                // === configuration_version` remains required either way --
-                // it is what actually proves the Item's persisted
-                // validation_result belongs to the CURRENT configuration,
-                // not `status` alone.
-                if (! in_array($plan->status, ['validated', 'executing'], true) || $plan->validated_configuration_version !== $plan->configuration_version) {
-                    throw new RolloverPlanNotExecutionReadyException;
+                return $this->invalidateForDrift($plan, $lockedItem, 'existing_target_enrollment_conflict_at_execution', $actor);
+            }
+
+            if ($lockedItem->validation_result === 'already_enrolled') {
+                // Dry-run found a matching active target Enrollment;
+                // the fresh pre-check just above found none. The
+                // Student's target-year placement changed underneath
+                // this Plan since validation -- never re-derive a
+                // replacement here, always require fresh validation.
+                return $this->invalidateForDrift($plan, $lockedItem, 'already_enrolled_match_no_longer_valid', $actor);
+            }
+
+            try {
+                $target = $this->enrollmentService->enroll(
+                    $lockedItem->student,
+                    $targetSection,
+                    $rollNumber,
+                    $plan->targetAcademicYear->starts_on->toDateString(),
+                    $actor,
+                );
+            } catch (ActiveEnrollmentConflictException|DuplicateEnrollmentRollNumberException $e) {
+                // Insert-race window (brief sections 36-38): enroll()'s
+                // own nested transaction already rolled back to its
+                // SAVEPOINT before this exception reached us (see this
+                // class's own docblock) -- the connection here is not
+                // poisoned, so it is safe to re-query for
+                // reconciliation on THIS SAME transaction.
+                $raceTarget = $this->findActiveTargetEnrollment($plan, $lockedItem->student_id);
+
+                if ($raceTarget !== null && $this->matchesProposal($raceTarget, $targetSection->id, $rollNumber)) {
+                    $this->applySubjectElectives($plan, $lockedItem, $raceTarget, $actor);
+
+                    return $this->reconcile($plan, $lockedItem, $raceTarget, $actor);
                 }
 
-                if ($lockedItem->validation_result === 'excluded') {
-                    return $this->markSkipped($plan, $lockedItem, $actor);
-                }
+                $reason = $e instanceof DuplicateEnrollmentRollNumberException
+                    ? 'roll_number_conflict_detected_at_execution'
+                    : 'existing_target_enrollment_conflict_at_execution';
 
-                if (! in_array($lockedItem->validation_result, self::EXECUTABLE_RESULTS, true)) {
-                    throw new RolloverItemNotExecutableException($lockedItem->validation_result);
-                }
+                return $this->invalidateForDrift($plan, $lockedItem, $reason, $actor);
+            }
 
-                $lockedSource = StudentEnrollment::query()->whereKey($lockedItem->source_enrollment_id)->lockForUpdate()->firstOrFail();
+            $this->applySubjectElectives($plan, $lockedItem, $target, $actor);
 
-                if ($lockedSource->student_id !== $lockedItem->student_id) {
-                    // Structurally impossible per the double composite FK
-                    // on enrollment_rollover_items.source_enrollment_id
-                    // (Phase 1B.7A) -- defense in depth only.
-                    throw new RuntimeException("Rollover item {$lockedItem->id}: source Enrollment does not belong to the item's Student.");
-                }
+            $lockedItem->update([
+                'execution_status' => 'succeeded',
+                'target_enrollment_id' => $target->id,
+                'executed_at' => now(),
+            ]);
 
-                if (! $this->sourceSnapshotStillCurrent($lockedItem, $lockedSource)) {
-                    return $this->invalidateForDrift($plan, $lockedItem, 'source_changed_since_validation', $actor);
-                }
+            $this->audit->school($plan->school, 'enrollment_rollover.item_succeeded', actor: $actor, subject: $lockedItem, metadata: [
+                'planId' => $plan->id,
+                'itemId' => $lockedItem->id,
+                'sourceEnrollmentId' => $lockedItem->source_enrollment_id,
+                'targetEnrollmentId' => $target->id,
+                'configurationVersion' => $plan->configuration_version,
+                'decision' => $lockedItem->decision,
+                'validationResult' => $lockedItem->validation_result,
+            ]);
 
-                $targetSectionId = $this->resolveTargetSectionId($plan, $lockedItem, $lockedSource);
-                $targetSection = Section::query()->whereKey($targetSectionId)->first();
-
-                if (! $this->targetSectionStillValid($plan, $lockedItem, $targetSection)) {
-                    return $this->invalidateForDrift($plan, $lockedItem, 'target_section_changed_since_validation', $actor);
-                }
-
-                $rollNumber = RollNumberNormalizer::resolveForStrategy($lockedItem->roll_number_strategy, $lockedItem->target_roll_number, $lockedSource->roll_number);
-                if ($rollNumber === null) {
-                    // Unreachable for an Item dry-run already classified
-                    // ready/already_enrolled -- the source snapshot check
-                    // above already proved roll_number is unchanged.
-                    throw new RuntimeException("Rollover item {$lockedItem->id}: no resolvable Roll Number despite a '{$lockedItem->validation_result}' validation result.");
-                }
-
-                $existingActiveTarget = $this->findActiveTargetEnrollment($plan, $lockedItem->student_id);
-
-                if ($existingActiveTarget !== null) {
-                    if ($this->matchesProposal($existingActiveTarget, $targetSection->id, $rollNumber)) {
-                        return $this->reconcile($plan, $lockedItem, $existingActiveTarget, $actor);
-                    }
-
-                    return $this->invalidateForDrift($plan, $lockedItem, 'existing_target_enrollment_conflict_at_execution', $actor);
-                }
-
-                if ($lockedItem->validation_result === 'already_enrolled') {
-                    // Dry-run found a matching active target Enrollment;
-                    // the fresh pre-check just above found none. The
-                    // Student's target-year placement changed underneath
-                    // this Plan since validation -- never re-derive a
-                    // replacement here, always require fresh validation.
-                    return $this->invalidateForDrift($plan, $lockedItem, 'already_enrolled_match_no_longer_valid', $actor);
-                }
-
-                try {
-                    $target = $this->enrollmentService->enroll(
-                        $lockedItem->student,
-                        $targetSection,
-                        $rollNumber,
-                        $plan->targetAcademicYear->starts_on->toDateString(),
-                        $actor,
-                    );
-                } catch (ActiveEnrollmentConflictException|DuplicateEnrollmentRollNumberException $e) {
-                    // Insert-race window (brief sections 36-38): enroll()'s
-                    // own nested transaction already rolled back to its
-                    // SAVEPOINT before this exception reached us (see this
-                    // class's own docblock) -- the connection here is not
-                    // poisoned, so it is safe to re-query for
-                    // reconciliation on THIS SAME transaction.
-                    $raceTarget = $this->findActiveTargetEnrollment($plan, $lockedItem->student_id);
-
-                    if ($raceTarget !== null && $this->matchesProposal($raceTarget, $targetSection->id, $rollNumber)) {
-                        return $this->reconcile($plan, $lockedItem, $raceTarget, $actor);
-                    }
-
-                    $reason = $e instanceof DuplicateEnrollmentRollNumberException
-                        ? 'roll_number_conflict_detected_at_execution'
-                        : 'existing_target_enrollment_conflict_at_execution';
-
-                    return $this->invalidateForDrift($plan, $lockedItem, $reason, $actor);
-                }
-
-                $lockedItem->update([
-                    'execution_status' => 'succeeded',
-                    'target_enrollment_id' => $target->id,
-                    'executed_at' => now(),
-                ]);
-
-                $this->audit->school($plan->school, 'enrollment_rollover.item_succeeded', actor: $actor, subject: $lockedItem, metadata: [
-                    'planId' => $plan->id,
-                    'itemId' => $lockedItem->id,
-                    'sourceEnrollmentId' => $lockedItem->source_enrollment_id,
-                    'targetEnrollmentId' => $target->id,
-                    'configurationVersion' => $plan->configuration_version,
-                    'decision' => $lockedItem->decision,
-                    'validationResult' => $lockedItem->validation_result,
-                ]);
-
-                return $lockedItem->refresh();
-            });
+            return $lockedItem->refresh();
         });
     }
 
@@ -247,6 +292,134 @@ class EnrollmentRolloverItemExecutionService
     private function matchesProposal(StudentEnrollment $existing, string $targetSectionId, string $rollNumber): bool
     {
         return $existing->section_id === $targetSectionId && $existing->roll_number === $rollNumber;
+    }
+
+    /**
+     * Phase 1G.3: applies this Item's explicit elective rollover, INSIDE
+     * the caller's still-open `DB::transaction()`, immediately after
+     * `$targetEnrollment` has been established (freshly created,
+     * race-reconciled, or a pre-existing exact match) -- see PHASE-1G-3
+     * doc §3/§4 for the exact composition point this occupies. Reuses
+     * `SubjectRolloverResolution::resolve()` -- the SAME pure candidate-
+     * selection/legacy-anchor/three-state-mapping/collision logic
+     * `EnrollmentRolloverDryRunService` already validated this Item
+     * against -- so a properly revalidated Plan should never actually
+     * reach a blocking reason here; this is defense against
+     * configuration/data drift since the last successful dry-run
+     * (PHASE-1G-2 doc §12), never a second independent evaluation.
+     *
+     * Every actual write goes through `StudentSubjectEnrollmentService::enroll()`
+     * -- never a direct `StudentSubjectEnrollment::create()` (checkpoint
+     * brief section 15/19). A resolved target already actively held by
+     * `$targetEnrollment` is skipped (idempotent reconciliation,
+     * section 17/28) rather than re-enrolled.
+     *
+     * Throws `RolloverSubjectMappingExecutionException` -- never
+     * returns a "failed" value -- for every unrecoverable outcome, so
+     * the caller's `DB::transaction()` genuinely rolls back (section
+     * 26/36's whole-Item atomicity: an earlier elective already
+     * inserted in THIS SAME attempt must be undone too, which only a
+     * real rollback achieves, never a partial commit).
+     */
+    private function applySubjectElectives(EnrollmentRolloverPlan $plan, EnrollmentRolloverItem $item, StudentEnrollment $targetEnrollment, ?User $actor): void
+    {
+        $anchored = StudentSubjectEnrollment::query()
+            ->where('status', 'active')
+            ->where('student_enrollment_id', $item->source_enrollment_id)
+            ->with('subjectOffering')
+            ->get();
+
+        $legacy = StudentSubjectEnrollment::query()
+            ->where('status', 'active')
+            ->whereNull('student_enrollment_id')
+            ->where('student_id', $item->student_id)
+            ->where('academic_year_id', $plan->source_academic_year_id)
+            ->with('subjectOffering')
+            ->get();
+
+        if ($anchored->isEmpty() && $legacy->isEmpty()) {
+            // No eligible explicit electives for this Item -- unchanged
+            // Phase 1B execution behavior, section 30/36.
+            return;
+        }
+
+        $sourceYearCandidates = StudentEnrollment::query()
+            ->where('academic_year_id', $plan->source_academic_year_id)
+            ->where('student_id', $item->student_id)
+            ->get();
+
+        $mappingsBySource = $plan->subjectMappings()->get()->keyBy('source_subject_offering_id');
+
+        $targetOfferingIds = $mappingsBySource->pluck('target_subject_offering_id')->filter()->unique()->all();
+        $targetOfferingsById = SubjectOffering::query()->whereIn('id', $targetOfferingIds)->get()->keyBy('id');
+
+        $existingActiveTargetParticipations = StudentSubjectEnrollment::query()
+            ->where('status', 'active')
+            ->where('student_enrollment_id', $targetEnrollment->id)
+            ->get();
+
+        $resolution = SubjectRolloverResolution::resolve(
+            $item->source_enrollment_id,
+            $item->student_id,
+            $anchored,
+            $legacy,
+            $sourceYearCandidates,
+            $mappingsBySource,
+            $targetOfferingsById,
+            $targetEnrollment->academic_year_id,
+            $targetEnrollment->campus_id,
+            $targetEnrollment->grade_level_id,
+            $existingActiveTargetParticipations,
+        );
+
+        if ($resolution['reasons'] !== []) {
+            $winner = collect(SubjectRolloverResolution::REASON_PRECEDENCE)->first(fn ($reason) => in_array($reason, $resolution['reasons'], true));
+
+            throw new RolloverSubjectMappingExecutionException($winner);
+        }
+
+        $existingByOffering = $existingActiveTargetParticipations->keyBy('subject_offering_id');
+        $subjectStartsOn = $plan->targetAcademicYear->starts_on->toDateString();
+
+        foreach ($resolution['resolvedTargets'] as $targetOffering) {
+            if ($existingByOffering->has($targetOffering->id)) {
+                // elective_already_enrolled_match -- idempotent no-op,
+                // section 17/28: already satisfies this mapped intent.
+                continue;
+            }
+
+            try {
+                $this->subjectEnrollmentService->enroll($item->student, $targetOffering, $subjectStartsOn, $actor);
+            } catch (ActiveSubjectEnrollmentConflictException) {
+                // Exact-target race (section 22/34): a concurrent writer
+                // already satisfied this SAME (target Enrollment, target
+                // Offering) intent. enroll()'s own nested transaction
+                // already rolled back to its SAVEPOINT (mirrors this
+                // class's placement-side race handling) -- safe to
+                // re-query on THIS SAME transaction to confirm.
+                $raceRow = StudentSubjectEnrollment::query()
+                    ->where('status', 'active')
+                    ->where('student_enrollment_id', $targetEnrollment->id)
+                    ->where('subject_offering_id', $targetOffering->id)
+                    ->first();
+
+                if ($raceRow !== null) {
+                    continue;
+                }
+
+                throw new RolloverSubjectMappingExecutionException('elective_target_existing_conflict_at_execution');
+            } catch (ElectiveGroupConflictException) {
+                // Same-group conflicting race (section 23/35) -- never
+                // auto-resolved, always a stable Item conflict.
+                throw new RolloverSubjectMappingExecutionException('elective_target_group_conflict_at_execution');
+            } catch (InactiveSubjectOfferingException) {
+                throw new RolloverSubjectMappingExecutionException('elective_target_inactive_at_execution');
+            } catch (RequiredSubjectOfferingEnrollmentException) {
+                throw new RolloverSubjectMappingExecutionException('elective_target_required_at_execution');
+            } catch (IncompatibleSubjectOfferingException) {
+                throw new RolloverSubjectMappingExecutionException('elective_target_context_mismatch_at_execution');
+            }
+        }
     }
 
     /**
