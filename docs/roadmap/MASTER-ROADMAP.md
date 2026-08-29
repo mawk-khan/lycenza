@@ -573,7 +573,24 @@ legal/security readiness decision, since "incident records" may fall
 under that same unresolved Health gate (`docs/modules/VISITOR.md` §18,
 §24) — ideally resolved alongside Health's own review rather than
 separately. Neither Health/Safety legal blocker is resolved by
-Canteen's closure. Phase 0K as a whole is **not** complete.
+Canteen's closure.
+
+**Phase 0K status: Closed with explicitly deferred legally/security-blocked
+scope** (2026-08-29 readiness audit, `docs/modules/PHASE-10-CLOSURE.md`).
+This is not the same thing as "complete" — Phase 0K's originally
+documented scope was eight modules, and two of them (Health, Safety)
+remain wholly unimplemented, blocked on the unresolved legal/security
+prerequisites recorded above, not on remaining engineering work. This
+status means: the six modules that were not legally/security-blocked
+(Transport, Library, Inventory, Canteen, Hostel, Visitor) are each
+individually complete per their own module docs, and there is
+currently no further Phase 0K engineering work authorized to start —
+Health and Safety each require their own recorded legal/security
+resolution (see `docs/modules/PHASE-10-CLOSURE.md` for the exact
+reopening criteria) before a fresh readiness gate, not implementation,
+can begin for either. Phase 0K as a whole is **not** complete, and
+Health/Safety are not cancelled, removed from scope, or retroactively
+optional.
 
 ## Phase 0L — Oversight
 
