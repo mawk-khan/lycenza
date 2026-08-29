@@ -230,19 +230,40 @@ until that checkpoint connects it.
 
 ## Authorization
 
-`payroll.structures.*` gates formula/policy only (component names,
-calculation types, rates, ordering — School policy shape, not
-individual data). `payroll.compensation.sensitive.*` gates every place
-an individual Employee's actual monetary value appears —
-`compensation_assignment_values.amount` and every field on
-`payroll_run_results`/`_lines` — gated as a whole row, never a partial
-field, enforced in the read service, never in Vue. `payroll.runs.post`
-and `payroll.runs.reverse` are distinct capabilities (mirroring
-`finance.ledger.post`/`.reverse`). Separation of duties is an
-actor-level rule, not a capability-level one: the preparer of a run may
-never approve it (Application check + database CHECK, mirroring
-`CommunicationApprovalService`'s `SelfApprovalNotAllowedException`
-precedent); an approver may also post or reverse.
+Implemented at Checkpoint 9.7. Nine capabilities, all school-scoped:
+`payroll.structures.view`/`.manage` (formula/policy shape only —
+component names, calculation types, rates, ordering, never individual
+data), `payroll.compensation.sensitive.view`/`.manage` (the Highly
+Sensitive family — gates `compensation_assignment_values.amount` and
+every field on `payroll_run_results`/`_lines`, as a whole row, never a
+partial field, enforced in `PayrollRunResultReadService`, never in
+Vue), `payroll.periods.manage`, `payroll.runs.manage` (create,
+calculate, AND approve — Separation of Duties for approval is an
+ACTOR-level rule, not a capability-level one: the preparer of a run may
+never approve it, enforced by `SelfApprovalNotAllowedException` +
+the database CHECK `payroll_runs_sod_check`, mirroring
+`CommunicationApprovalService`'s identical precedent; an approver may
+also post or reverse), `payroll.runs.post` and `payroll.runs.reverse`
+(deliberately distinct from `.manage` and from each other, mirroring
+`finance.ledger.post`/`.reverse`), and `payroll.accounting.manage`.
+`school_admin` receives all nine by default; `principal` and every
+other school-scoped role receive none (`PayrollCapabilityRegistryTest`).
+
+Every Payroll Application-layer core service (`SalaryComponentService`,
+`SalaryStructureService`, `CompensationService`, `PayrollPeriodService`,
+`PayrollRunService`, `PayrollPostingService`,
+`PayrollAccountingConfigurationService`) remains capability-check-free
+by design, exactly like `App\Domain\Finance\Application\LedgerService`/
+`ChargeService` — a dedicated Administration wrapper per family
+(`PayrollStructureAdministrationService`,
+`PayrollCompensationAdministrationService`,
+`PayrollPeriodAdministrationService`, `PayrollRunAdministrationService`,
+`PayrollPostingAdministrationService`,
+`PayrollAccountingAdministrationService`) is the ONLY place a
+capability check happens, mirroring
+`LedgerAdministrationService`/`ChargeAdministrationService`'s identical
+split. No transport may call a core service directly; a future
+controller (Checkpoint 9.8) depends on the Administration layer.
 
 ## Statutory boundary
 
@@ -259,4 +280,15 @@ Salary/compensation data is Highly Sensitive per
 `docs/security/DATA-CLASSIFICATION.md`. Never in logs, audit metadata,
 event payloads, or an unauthorized read: raw amounts, rates, gross,
 deductions, net pay. Audit records the fact (which run, which action,
-which actor) by reference, never the value.
+which actor) by reference, never the value — verified directly:
+`PayrollRunResultReadService::listResults()`'s own audit call carries
+only `resultCount`, and `PayrollRunResultReadServiceTest` asserts no
+amount-shaped key ever appears in the recorded metadata.
+`PayrollRunResultReadService` (`payroll.compensation.sensitive.view`)
+is Checkpoint 9.7's sole read path for an individual Employee's actual
+result — every field returned as a typed `PayrollRunResultDetail`/
+`PayrollRunResultLineDetail` DTO, never the raw
+`PayrollRunResult`/`PayrollRunResultLine` Eloquent model, mirroring
+`App\Domain\Payments\Application\PaymentReadService`'s identical
+disclosure boundary (including the "no oracle" cross-School
+not-found uniformity via `PayrollRunNotFoundException`).

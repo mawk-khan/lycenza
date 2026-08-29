@@ -451,6 +451,48 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'canteen.orders.manage', 'label' => 'Place, fulfill, and cancel Canteen orders', 'namespace' => 'school'],
             ['key' => 'canteen.settings.view', 'label' => 'View Canteen billing configuration', 'namespace' => 'school'],
             ['key' => 'canteen.settings.manage', 'label' => 'Manage Canteen billing configuration', 'namespace' => 'school'],
+
+            // Phase 9.7 (ADR 0032 "Separation of duties";
+            // docs/modules/PAYROLL.md "Authorization") -- Payroll
+            // authorization. `.structures.*` gates formula/policy shape
+            // only (component names, calculation types, rates,
+            // ordering) -- never an individual Employee's actual
+            // monetary value. `.compensation.sensitive.*` is the
+            // Highly Sensitive family (docs/security/DATA-CLASSIFICATION.md):
+            // it gates `compensation_assignment_values.amount` and
+            // every field on `payroll_run_results`/`_lines`, as a whole
+            // row, never a partial field -- named `.sensitive.*` rather
+            // than a bare `.compensation.*` specifically so it reads,
+            // at a glance, as the same tier of grant as
+            // `hr.employees.sensitive.*` (the existing precedent for a
+            // Highly Sensitive per-Employee data family). `.runs.manage`
+            // covers create/calculate/approve as ONE capability --
+            // Separation of Duties for run approval is an ACTOR-level
+            // rule (the preparer of a run may never approve it,
+            // enforced by `SelfApprovalNotAllowedException` + the
+            // database CHECK `payroll_runs_sod_check`), never a
+            // capability-level one, so splitting `.runs.manage` into
+            // separate prepare/approve capabilities would not add any
+            // real additional guarantee (mirrors `finance.charges.manage`'s
+            // own reasoning for not splitting assess/cancel).
+            // `.runs.post`/`.runs.reverse` ARE deliberately separate
+            // from `.runs.manage` and from each other -- ADR 0032
+            // explicitly calls for this exact split, mirroring
+            // `finance.ledger.post`/`.reverse`'s identical "reversal is
+            // a materially higher-risk financial correction action"
+            // reasoning. `.accounting.manage` gates the Payroll ->
+            // Finance ledger-account mapping, mirroring
+            // `canteen.settings.manage`'s identical "financial account
+            // configuration" role.
+            ['key' => 'payroll.structures.view', 'label' => 'View Payroll salary components and structures', 'namespace' => 'school'],
+            ['key' => 'payroll.structures.manage', 'label' => 'Manage Payroll salary components and structures', 'namespace' => 'school'],
+            ['key' => 'payroll.compensation.sensitive.view', 'label' => 'View individual Employee compensation and payroll run results', 'namespace' => 'school'],
+            ['key' => 'payroll.compensation.sensitive.manage', 'label' => 'Assign individual Employee compensation', 'namespace' => 'school'],
+            ['key' => 'payroll.periods.manage', 'label' => 'Create, open, and close Payroll periods', 'namespace' => 'school'],
+            ['key' => 'payroll.runs.manage', 'label' => 'Create, calculate, and approve Payroll runs', 'namespace' => 'school'],
+            ['key' => 'payroll.runs.post', 'label' => 'Post Payroll runs to Finance', 'namespace' => 'school'],
+            ['key' => 'payroll.runs.reverse', 'label' => 'Reverse posted Payroll runs', 'namespace' => 'school'],
+            ['key' => 'payroll.accounting.manage', 'label' => 'Manage Payroll accounting (Finance account) configuration', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -608,6 +650,21 @@ class CapabilityAndRoleSeeder extends Seeder
                     'canteen.directory.view', 'canteen.directory.manage',
                     'canteen.orders.view', 'canteen.orders.manage',
                     'canteen.settings.view', 'canteen.settings.manage',
+                    // Phase 9.7: Payroll is a new, money-and-Highly-
+                    // Sensitive-data domain -- granted in full to School
+                    // Admin, mirroring Finance Ledger/Charges/Payments'
+                    // identical "top school-scoped administrative role
+                    // holds this catalog's most privileged grant"
+                    // reasoning. NOT granted to Principal below, for the
+                    // same reason `finance.*`/`canteen.settings.*` are
+                    // not: no established precedent of Principal
+                    // administering payroll runs, compensation, or
+                    // Finance account mappings in this product.
+                    'payroll.structures.view', 'payroll.structures.manage',
+                    'payroll.compensation.sensitive.view', 'payroll.compensation.sensitive.manage',
+                    'payroll.periods.manage',
+                    'payroll.runs.manage', 'payroll.runs.post', 'payroll.runs.reverse',
+                    'payroll.accounting.manage',
                 ],
             ],
             'principal' => [
