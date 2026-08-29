@@ -131,6 +131,7 @@ class PayrollApiTest extends TestCase
             ->assertForbidden();
 
         $this->actingWithCapabilities($f['school'], ['payroll.runs.approve'])
+            ->withHeader('Idempotency-Key', 'approve-key-001')
             ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve")
             ->assertOk()
             ->assertJsonPath('data.status', 'approved');
@@ -221,18 +222,21 @@ class PayrollApiTest extends TestCase
 
         $this->as($adminToken)->postJson("/api/v1/schools/{$school->id}/payroll-periods/{$period}/open")->assertOk();
 
-        $run = $this->as($adminToken)->postJson("/api/v1/schools/{$school->id}/payroll-periods/{$period}/payroll-runs")
+        $run = $this->as($adminToken)->withHeader('Idempotency-Key', 'create-run-key')
+            ->postJson("/api/v1/schools/{$school->id}/payroll-periods/{$period}/payroll-runs")
             ->assertCreated()->json('data.id');
 
         $this->as($adminToken)->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/calculate")
             ->assertOk()->assertJsonPath('data.transitionedToCalculated', true);
 
         $approverToken = $this->authToken($school, ['payroll.runs.approve']);
-        $this->as($approverToken)->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/approve")
+        $this->as($approverToken)->withHeader('Idempotency-Key', 'approve-run-key')
+            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/approve")
             ->assertOk()->assertJsonPath('data.status', 'approved');
 
         $posterToken = $this->authToken($school, ['payroll.runs.post', 'payroll.runs.reverse', 'payroll.compensation.sensitive.view']);
-        $this->as($posterToken)->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/post")
+        $this->as($posterToken)->withHeader('Idempotency-Key', 'post-run-key')
+            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/post")
             ->assertCreated()->assertJsonPath('data.postingKind', 'original');
 
         $this->as($posterToken)->getJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/results")
@@ -243,9 +247,10 @@ class PayrollApiTest extends TestCase
         ])->assertCreated()->json('data.id');
         $this->as($adminToken)->postJson("/api/v1/schools/{$school->id}/payroll-periods/{$correctionPeriod}/open")->assertOk();
 
-        $correction = $this->as($adminToken)->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/correction", [
-            'payroll_period_id' => $correctionPeriod,
-        ])->assertCreated()->assertJsonPath('data.runKind', 'correction')->json('data.id');
+        $correction = $this->as($adminToken)->withHeader('Idempotency-Key', 'create-correction-key')
+            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/correction", [
+                'payroll_period_id' => $correctionPeriod,
+            ])->assertCreated()->assertJsonPath('data.runKind', 'correction')->json('data.id');
 
         $this->as($adminToken)->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$correction}/correction-deltas", [
             'employment_record_id' => $employmentRecord->id,
@@ -260,7 +265,8 @@ class PayrollApiTest extends TestCase
         // correction now references it -- ADR 0032's deliberately
         // unrestricted reverse direction (Checkpoint 9.5), proven here
         // over HTTP too.
-        $this->as($posterToken)->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/reverse")
+        $this->as($posterToken)->withHeader('Idempotency-Key', 'reverse-run-key')
+            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/reverse")
             ->assertCreated()->assertJsonPath('data.postingKind', 'reversal');
     }
 
@@ -303,7 +309,8 @@ class PayrollApiTest extends TestCase
         ])->json('data.id');
         $admin->postJson("/api/v1/schools/{$school->id}/payroll-periods/{$period}/open");
 
-        $run = $admin->postJson("/api/v1/schools/{$school->id}/payroll-periods/{$period}/payroll-runs")->json('data.id');
+        $run = $admin->withHeader('Idempotency-Key', 'build-create-run-key')
+            ->postJson("/api/v1/schools/{$school->id}/payroll-periods/{$period}/payroll-runs")->json('data.id');
         $admin->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/calculate");
 
         return ['school' => $school, 'employmentRecordId' => $employmentRecord->id, 'assignmentId' => $assignment, 'runId' => $run];

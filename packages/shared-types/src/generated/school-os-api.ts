@@ -2241,7 +2241,7 @@ export interface paths {
         /** Lists a period's payroll runs (non-sensitive metadata only). Requires payroll.runs.view. */
         get: operations["listPayrollRuns"];
         put?: never;
-        /** Creates a regular payroll run for this period (at most one regular run per period). Requires payroll.runs.prepare. */
+        /** Creates a regular payroll run for this period (at most one regular run per period). Requires payroll.runs.prepare. Idempotency-Key required. */
         post: operations["createPayrollRun"];
         delete?: never;
         options?: never;
@@ -2275,7 +2275,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates a correction run against an original, posted regular run that has not been reversed (ADR 0032 -- no correction-of- correction chains). Requires payroll.runs.prepare. */
+        /** Creates a correction run against an original, posted regular run that has not been reversed (ADR 0032 -- no correction-of- correction chains). Requires payroll.runs.prepare. Idempotency-Key required. */
         post: operations["createCorrectionRun"];
         delete?: never;
         options?: never;
@@ -2343,7 +2343,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approves a calculated run -- the sole immutability boundary (ADR 0032). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. */
+        /** Approves a calculated run -- the sole immutability boundary (ADR 0032). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. */
         post: operations["approvePayrollRun"];
         delete?: never;
         options?: never;
@@ -2377,7 +2377,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Posts an approved run to Finance via PayrollPostingService -> LedgerService::post() (never a direct journal_entries write). Requires payroll.runs.post. NOT idempotent -- a row lock closes the concurrent-posting race window structurally instead (proven by a real two-process concurrency test); no Idempotency-Key is accepted or required. */
+        /** Posts an approved run to Finance via PayrollPostingService -> LedgerService::post() (never a direct journal_entries write). Requires payroll.runs.post. Idempotency-Key required -- a row lock closes the concurrent-posting race window structurally (proven by a real two-process concurrency test), and the Idempotency-Key contract additionally guarantees that a lost response can be safely retried without a second JournalEntry (Phase 9.8 correction; completed inside the same transaction as the posting itself via IdempotencyGuard::completeWithin()). */
         post: operations["postPayrollRun"];
         delete?: never;
         options?: never;
@@ -2394,7 +2394,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reverses a posted run's original posting via PayrollPostingService -> LedgerService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires payroll.runs.reverse (a separate capability from payroll.runs.post). NOT a generic HTTP-idempotent endpoint -- reversal has its own at-most-once semantics (PAYROLL_RUN_ALREADY_REVERSED, 409, on a repeat). Reversing an original that already has a correction run is still allowed (ADR 0032 -- deliberately unrestricted). */
+        /** Reverses a posted run's original posting via PayrollPostingService -> LedgerService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires payroll.runs.reverse (a separate capability from payroll.runs.post). Idempotency-Key required -- structural at-most-once is still enforced independently (PAYROLL_RUN_ALREADY_REVERSED, 409, on a genuine repeat), and the Idempotency-Key contract additionally guarantees a lost response can be safely retried without a second reversal JournalEntry (Phase 9.8 correction). Posting and reversal never share a replay namespace even if the identical literal key string is reused, since route_action is part of the idempotency scope. Reversing an original that already has a correction run is still allowed (ADR 0032 -- deliberately unrestricted). */
         post: operations["reversePayrollRun"];
         delete?: never;
         options?: never;
@@ -11908,7 +11908,10 @@ export interface operations {
     createPayrollRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 schoolId: components["parameters"]["SchoolId"];
                 payrollPeriodId: components["parameters"]["PayrollPeriodId"];
@@ -12027,7 +12030,10 @@ export interface operations {
     createCorrectionRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 schoolId: components["parameters"]["SchoolId"];
                 /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
@@ -12285,7 +12291,10 @@ export interface operations {
     approvePayrollRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 schoolId: components["parameters"]["SchoolId"];
                 /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
@@ -12405,7 +12414,10 @@ export interface operations {
     postPayrollRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 schoolId: components["parameters"]["SchoolId"];
                 /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
@@ -12464,7 +12476,10 @@ export interface operations {
     reversePayrollRun: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 schoolId: components["parameters"]["SchoolId"];
                 /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */

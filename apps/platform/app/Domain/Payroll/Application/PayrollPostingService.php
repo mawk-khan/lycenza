@@ -17,8 +17,10 @@ use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Domain\Payroll\Infrastructure\PayrollRunResult;
 use App\Domain\Payroll\Infrastructure\PayrollRunResultLine;
+use App\Models\ApiIdempotencyKey;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Idempotency\IdempotencyGuard;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -92,6 +94,7 @@ class PayrollPostingService
         private readonly PayrollAccountingConfigurationService $accountingConfig,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly IdempotencyGuard $idempotency,
     ) {}
 
     /**
@@ -115,13 +118,31 @@ class PayrollPostingService
      * `calculate()`'s identical `lockForUpdate()` rationale
      * (Checkpoint 9.4), extended here because posting's side effect is
      * external to this table.
+     *
+     * Phase 9.8 idempotency correction: `$idempotencyRecord`, when
+     * supplied by `App\Http\Middleware\EnsureIdempotent` via the
+     * controller (a NEW claim only -- a replay never reaches this
+     * method at all), is completed via
+     * `IdempotencyGuard::completeWithin()` INSIDE this same
+     * transaction -- the row lock, the Finance posting, the
+     * `PayrollRunPosting` insert, the status transition, the audit
+     * event, AND the idempotency completion all commit or roll back
+     * together. This closes the generic middleware's crash window
+     * entirely for this endpoint (see `IdempotencyGuard`'s own
+     * docblock: "a critical endpoint that cannot tolerate this MUST
+     * call completeWithin() inside the SAME database transaction as
+     * its own authoritative state change") -- financial posting cannot
+     * tolerate a crash between "committed" and "marked complete"
+     * leaving a retry to see a stale in-flight record. This class
+     * retains transaction ownership throughout; no controller-owned
+     * transaction was introduced to achieve this.
      */
-    public function post(PayrollRun $run, User $actor): PayrollRunPosting
+    public function post(PayrollRun $run, User $actor, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
     {
         $school = $run->school;
 
-        return $this->context->withSchool($school, function () use ($school, $run, $actor) {
-            return DB::transaction(function () use ($school, $run, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $run, $actor, $idempotencyRecord) {
+            return DB::transaction(function () use ($school, $run, $actor, $idempotencyRecord) {
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
                 if ($locked->status !== 'approved') {
                     throw new InvalidRunTransitionException($locked->status, 'posted');
@@ -156,6 +177,12 @@ class PayrollPostingService
                     'lineCount' => count($lines),
                 ]);
 
+                if ($idempotencyRecord !== null) {
+                    $this->idempotency->completeWithin($idempotencyRecord, 201, [
+                        'data' => PayrollRunPostingSummary::fromModel($posting)->toArray(),
+                    ]);
+                }
+
                 return $posting;
             });
         });
@@ -168,13 +195,24 @@ class PayrollPostingService
      * `PayrollRunPosting` row; a reversal is always a NEW, append-only
      * row (`TenantRls::makeAppendOnly()`, Checkpoint 9.1) linked via
      * `reversal_of_payroll_run_posting_id`.
+     *
+     * Phase 9.8 idempotency correction: same `completeWithin()`-inside-
+     * the-transaction treatment as `post()`, for the identical reason
+     * (financial, cannot tolerate the generic middleware's crash
+     * window). Posting and reversal are DIFFERENT HTTP routes
+     * (`schools.payroll-runs.post` vs `schools.payroll-runs.reverse`),
+     * so `IdempotencyGuard`'s own uniqueness scope -- which includes
+     * `route_action` -- already keeps their replay namespaces
+     * structurally separate even if a client reused the identical
+     * literal `Idempotency-Key` string for both; no extra scoping work
+     * was needed here to satisfy that.
      */
-    public function reverse(PayrollRun $run, User $actor, ?string $reason = null): PayrollRunPosting
+    public function reverse(PayrollRun $run, User $actor, ?string $reason = null, ?ApiIdempotencyKey $idempotencyRecord = null): PayrollRunPosting
     {
         $school = $run->school;
 
-        return $this->context->withSchool($school, function () use ($school, $run, $actor, $reason) {
-            return DB::transaction(function () use ($school, $run, $actor, $reason) {
+        return $this->context->withSchool($school, function () use ($school, $run, $actor, $reason, $idempotencyRecord) {
+            return DB::transaction(function () use ($school, $run, $actor, $reason, $idempotencyRecord) {
                 $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
                 if ($locked->status !== 'posted') {
                     throw new PayrollRunNotPostedException($run->id, $locked->status);
@@ -211,6 +249,12 @@ class PayrollPostingService
                     'originalPostingId' => $original->id,
                     'reversalJournalEntryId' => $reversalEntry->journalEntryId,
                 ]);
+
+                if ($idempotencyRecord !== null) {
+                    $this->idempotency->completeWithin($idempotencyRecord, 201, [
+                        'data' => PayrollRunPostingSummary::fromModel($reversal)->toArray(),
+                    ]);
+                }
 
                 return $reversal;
             });

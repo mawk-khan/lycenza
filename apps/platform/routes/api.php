@@ -1389,23 +1389,29 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
                 ->name('schools.timetable-entries.deactivate');
 
-            // Phase 9.8: Payroll HTTP transport -- thin controllers over
-            // the already-authorized 9.7 Administration/Read boundary
-            // (never PayrollRunService/PayrollPostingService/etc., the
-            // trusted cores, directly), mirroring
-            // JournalEntryController's exact split. `capability:`
-            // middleware here double-checks the identical capability
-            // each Administration/Read service already enforces
-            // internally, matching every other module's established
-            // convention. No `idempotent` middleware anywhere in this
-            // block -- every Payroll run-lifecycle mutation already has
-            // its own structural at-most-once guarantee (a row lock
-            // closing the race window for post(), a conditional UPDATE
-            // for approve(), a partial unique index for reversal),
-            // proven by Checkpoint 9.4/9.5's real two-process
-            // concurrency tests -- the same reasoning
-            // JournalEntryController documents for NOT adding
-            // `idempotent` to post/reverse.
+            // Phase 9.8 (idempotency corrected): Payroll HTTP transport --
+            // thin controllers over the already-authorized 9.7
+            // Administration/Read boundary (never PayrollRunService/
+            // PayrollPostingService/etc., the trusted cores, directly),
+            // mirroring JournalEntryController's exact split. `capability:`
+            // middleware here double-checks the identical capability each
+            // Administration/Read service already enforces internally,
+            // matching every other module's established convention.
+            //
+            // The structural backstops (a row lock closing the
+            // concurrent-posting race window, a conditional UPDATE for
+            // approve(), partial unique indexes for one-original-posting/
+            // one-reversal-per-posting, `payroll_runs_one_regular_per_period`,
+            // proven by Checkpoint 9.4/9.5's real two-process concurrency
+            // tests) guarantee AT MOST ONE genuine business effect ever
+            // happens -- but they do NOT provide the HTTP retry/replay
+            // CONTRACT: without `Idempotency-Key`, a client retrying a
+            // request whose successful response was lost (network drop,
+            // timeout) receives an invalid-transition/already-posted/
+            // already-reversed error instead of the original success. See
+            // the per-route comment just below the run/posting block for
+            // the exact five consequential commands that carry `idempotent`
+            // and why the rest deliberately do not.
             Route::get('/salary-components', [SalaryComponentController::class, 'index'])
                 ->middleware('capability:payroll.structures.view')
                 ->name('schools.salary-components.index');
@@ -1452,17 +1458,47 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:payroll.periods.manage', 'throttle:school-api-mutations'])
                 ->name('schools.payroll-periods.close');
 
+            // Idempotency (Phase 9.8 correction, docs/architecture/RELIABILITY.md
+            // "API idempotency"): `idempotent` is applied ONLY to the five
+            // consequential commands whose retry-after-success would
+            // otherwise surface a confusing error instead of replaying the
+            // original success -- create run, create correction run,
+            // approve, post, reverse. It is placed AFTER `capability:...`
+            // in every array below (never before) so a revoked actor is
+            // rejected by EnsureCapability before EnsureIdempotent is ever
+            // consulted -- a cached successful response can never be
+            // replayed to an actor who has since lost the capability
+            // (docs/security/AUTHORIZATION.md "Idempotent replay is not an
+            // authorization bypass"). `calculate` deliberately does NOT
+            // carry it -- recalculation is a whole-result-set replacement,
+            // safely re-runnable with an identical deterministic outcome,
+            // so a network retry poses no risk `idempotent` would guard
+            // against. `manual-overrides`/`correction-deltas` deliberately
+            // do NOT carry it either -- both write to the append-only
+            // `payroll_adjustments` table, whose OWN read-side resolution
+            // (`DISTINCT ON (salary_component_id) ... ORDER BY created_at
+            // DESC`, Checkpoint 9.3/9.5) already takes only the latest row
+            // per component, so a byte-identical retry never compounds a
+            // financial effect even though it does insert an extra
+            // (harmless, superseded) audit row. Ordinary draft CRUD
+            // (salary-components/-structures, payroll-periods themselves,
+            // compensation-assignment creation, accounting configuration)
+            // is likewise excluded -- matching this codebase's own
+            // precedent (e.g. `hostels.store` carries no `idempotent`
+            // either) and, for accounting configuration specifically, its
+            // own `updateOrCreate` upsert is already naturally safe to
+            // retry.
             Route::get('/payroll-periods/{payrollPeriod}/payroll-runs', [PayrollRunController::class, 'index'])
                 ->middleware('capability:payroll.runs.view')
                 ->name('schools.payroll-periods.payroll-runs.index');
             Route::post('/payroll-periods/{payrollPeriod}/payroll-runs', [PayrollRunController::class, 'store'])
-                ->middleware(['capability:payroll.runs.prepare', 'throttle:school-api-mutations'])
+                ->middleware(['capability:payroll.runs.prepare', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-periods.payroll-runs.store');
             Route::get('/payroll-runs/{payrollRun}', [PayrollRunController::class, 'show'])
                 ->middleware('capability:payroll.runs.view')
                 ->name('schools.payroll-runs.show');
             Route::post('/payroll-runs/{payrollRun}/correction', [PayrollRunController::class, 'correction'])
-                ->middleware(['capability:payroll.runs.prepare', 'throttle:school-api-mutations'])
+                ->middleware(['capability:payroll.runs.prepare', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.correction');
             Route::post('/payroll-runs/{payrollRun}/manual-overrides', [PayrollRunController::class, 'manualOverride'])
                 ->middleware(['capability:payroll.runs.prepare', 'throttle:school-api-mutations'])
@@ -1474,17 +1510,17 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:payroll.runs.prepare', 'throttle:school-api-mutations'])
                 ->name('schools.payroll-runs.calculate');
             Route::post('/payroll-runs/{payrollRun}/approve', [PayrollRunController::class, 'approve'])
-                ->middleware(['capability:payroll.runs.approve', 'throttle:school-api-mutations'])
+                ->middleware(['capability:payroll.runs.approve', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.approve');
 
             Route::get('/payroll-runs/{payrollRun}/results', [PayrollRunPostingController::class, 'results'])
                 ->middleware('capability:payroll.compensation.sensitive.view')
                 ->name('schools.payroll-runs.results');
             Route::post('/payroll-runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])
-                ->middleware(['capability:payroll.runs.post', 'throttle:school-api-mutations'])
+                ->middleware(['capability:payroll.runs.post', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.post');
             Route::post('/payroll-runs/{payrollRun}/reverse', [PayrollRunPostingController::class, 'reverse'])
-                ->middleware(['capability:payroll.runs.reverse', 'throttle:school-api-mutations'])
+                ->middleware(['capability:payroll.runs.reverse', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.reverse');
 
             Route::post('/payroll-accounting-configuration', [PayrollAccountingConfigurationController::class, 'store'])

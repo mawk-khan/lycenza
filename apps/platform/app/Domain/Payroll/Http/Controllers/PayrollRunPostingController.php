@@ -3,31 +3,40 @@
 namespace App\Domain\Payroll\Http\Controllers;
 
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
+use App\Domain\Payroll\Application\PayrollRunPostingSummary;
 use App\Domain\Payroll\Application\PayrollRunResultDetail;
 use App\Domain\Payroll\Application\PayrollRunResultLineDetail;
 use App\Domain\Payroll\Application\PayrollRunResultReadService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
-use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Phase 9.8 -- thin HTTP transport over `PayrollRunResultReadService`
- * (`payroll.compensation.sensitive.view` -- the Highly Sensitive
- * result figures) and `PayrollPostingAdministrationService`
- * (`payroll.runs.post`/`.reverse`, each already checked by that
- * class's own per-method capability -- see its docblock).
- * `{payrollRun}` resolved via `PayrollRun::query()->findOrFail()` --
- * see `SalaryComponentController`'s docblock for why this is safe.
- * Neither `post()` nor `reverse()` carries the `idempotent` middleware,
- * mirroring `JournalEntryController`'s identical reasoning: both
- * already have their own structural at-most-once guarantee
- * (`PayrollPostingService::post()`'s row lock closes the race window
- * entirely -- proven by Checkpoint 9.5's real two-process concurrency
- * test -- and `reverse()` rejects a repeat with
- * `PAYROLL_RUN_ALREADY_REVERSED`, 409).
+ * Phase 9.8 (idempotency corrected) -- thin HTTP transport over
+ * `PayrollRunResultReadService` (`payroll.compensation.sensitive.view`
+ * -- the Highly Sensitive result figures) and
+ * `PayrollPostingAdministrationService` (`payroll.runs.post`/`.reverse`,
+ * each already checked by that class's own per-method capability --
+ * see its docblock). `{payrollRun}` resolved via
+ * `PayrollRun::query()->findOrFail()` -- see
+ * `SalaryComponentController`'s docblock for why this is safe.
+ *
+ * `post()`/`reverse()` both carry the `idempotent` route middleware
+ * (routes/api.php, placed AFTER `capability:...` so authorization is
+ * re-evaluated before any replay is ever considered). Row locks/
+ * conditional transitions/unique constraints remain the authoritative
+ * structural guarantee against a genuine double-post or double-reversal;
+ * `Idempotency-Key` restores the HTTP retry/replay CONTRACT on top of
+ * that -- without it, a client retrying a request whose successful
+ * response was lost would receive an invalid-transition/already-
+ * reversed error instead of the original success. `$request->attributes->get('idempotency_record')`
+ * is non-null only for a NEW claim (a replay short-circuits inside
+ * `EnsureIdempotent` and never reaches this controller at all) and is
+ * passed straight through so `PayrollPostingService` can complete it
+ * INSIDE its own existing transaction (`completeWithin()`) -- this
+ * controller never opens a transaction of its own.
  */
 class PayrollRunPostingController extends Controller
 {
@@ -43,9 +52,10 @@ class PayrollRunPostingController extends Controller
     public function post(Request $request, School $school, string $payrollRun, PayrollPostingAdministrationService $service): JsonResponse
     {
         $run = PayrollRun::query()->findOrFail($payrollRun);
-        $posting = $service->post($run, $request->user());
+        $record = $request->attributes->get('idempotency_record');
+        $posting = $service->post($run, $request->user(), $record);
 
-        return response()->json(['data' => $this->presentPosting($posting)], 201);
+        return response()->json(['data' => PayrollRunPostingSummary::fromModel($posting)->toArray()], 201);
     }
 
     public function reverse(Request $request, School $school, string $payrollRun, PayrollPostingAdministrationService $service): JsonResponse
@@ -56,9 +66,10 @@ class PayrollRunPostingController extends Controller
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
-        $posting = $service->reverse($run, $request->user(), $validated['reason'] ?? null);
+        $record = $request->attributes->get('idempotency_record');
+        $posting = $service->reverse($run, $request->user(), $validated['reason'] ?? null, $record);
 
-        return response()->json(['data' => $this->presentPosting($posting)], 201);
+        return response()->json(['data' => PayrollRunPostingSummary::fromModel($posting)->toArray()], 201);
     }
 
     /**
@@ -78,21 +89,6 @@ class PayrollRunPostingController extends Controller
                 'effect' => $l->effect,
                 'resolvedLedgerAccountId' => $l->resolvedLedgerAccountId,
             ], $result->lines),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function presentPosting(PayrollRunPosting $posting): array
-    {
-        return [
-            'id' => $posting->id,
-            'payrollRunId' => $posting->payroll_run_id,
-            'journalEntryId' => $posting->journal_entry_id,
-            'postingKind' => $posting->posting_kind,
-            'reversalOfPayrollRunPostingId' => $posting->reversal_of_payroll_run_posting_id,
-            'reason' => $posting->reason,
         ];
     }
 }

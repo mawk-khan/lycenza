@@ -4506,9 +4506,11 @@ paths:
       summary: >
         Creates a regular payroll run for this period (at most one
         regular run per period). Requires payroll.runs.prepare.
+        Idempotency-Key required.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollPeriodId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
       responses:
         "201":
           description: Created.
@@ -4570,9 +4572,11 @@ paths:
         Creates a correction run against an original, posted regular
         run that has not been reversed (ADR 0032 -- no correction-of-
         correction chains). Requires payroll.runs.prepare.
+        Idempotency-Key required.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
       requestBody:
         required: true
         content:
@@ -4724,10 +4728,12 @@ paths:
         capability from payroll.runs.prepare -- an actor is never
         authorized to approve merely because they can prepare payroll).
         The preparer of this run may never approve it, enforced at the
-        actor level regardless of capability grants.
+        actor level regardless of capability grants. Idempotency-Key
+        required.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
       responses:
         "200":
           description: OK
@@ -4792,13 +4798,17 @@ paths:
       summary: >
         Posts an approved run to Finance via PayrollPostingService ->
         LedgerService::post() (never a direct journal_entries write).
-        Requires payroll.runs.post. NOT idempotent -- a row lock closes
-        the concurrent-posting race window structurally instead (proven
-        by a real two-process concurrency test); no Idempotency-Key is
-        accepted or required.
+        Requires payroll.runs.post. Idempotency-Key required -- a row
+        lock closes the concurrent-posting race window structurally
+        (proven by a real two-process concurrency test), and the
+        Idempotency-Key contract additionally guarantees that a lost
+        response can be safely retried without a second JournalEntry
+        (Phase 9.8 correction; completed inside the same transaction as
+        the posting itself via IdempotencyGuard::completeWithin()).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
       responses:
         "201":
           description: Created.
@@ -4833,14 +4843,21 @@ paths:
         PayrollPostingService -> LedgerService::reverse() (a new,
         inverse journal entry -- the original is never mutated).
         Requires payroll.runs.reverse (a separate capability from
-        payroll.runs.post). NOT a generic HTTP-idempotent endpoint --
-        reversal has its own at-most-once semantics
-        (PAYROLL_RUN_ALREADY_REVERSED, 409, on a repeat). Reversing an
-        original that already has a correction run is still allowed
-        (ADR 0032 -- deliberately unrestricted).
+        payroll.runs.post). Idempotency-Key required -- structural
+        at-most-once is still enforced independently
+        (PAYROLL_RUN_ALREADY_REVERSED, 409, on a genuine repeat), and
+        the Idempotency-Key contract additionally guarantees a lost
+        response can be safely retried without a second reversal
+        JournalEntry (Phase 9.8 correction). Posting and reversal never
+        share a replay namespace even if the identical literal key
+        string is reused, since route_action is part of the
+        idempotency scope. Reversing an original that already has a
+        correction run is still allowed (ADR 0032 -- deliberately
+        unrestricted).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
       requestBody:
         required: false
         content:
