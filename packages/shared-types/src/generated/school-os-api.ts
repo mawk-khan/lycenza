@@ -2551,6 +2551,231 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/timetable-periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's TimetablePeriod catalogue (active by default, ordered by sort_order then code). Fixed page size of 20. Requires timetable.periods.view. */
+        get: operations["listTimetablePeriods"];
+        put?: never;
+        /** Creates a new active TimetablePeriod. code is unique per School, case-insensitively. Requires timetable.periods.manage. */
+        post: operations["createTimetablePeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-periods/{timetablePeriodId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one TimetablePeriod. Requires timetable.periods.view. */
+        get: operations["getTimetablePeriod"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates a TimetablePeriod's name/code/sort_order and/or start_time/end_time -- status is never accepted here, use activate/deactivate. Changing start_time or end_time is rejected with a 409 (TIMETABLE_PERIOD_REFERENCED) while an active TimetableEntry still references this Period, and is re-validated against every other active Period's range exactly like create. Requires timetable.periods.manage. */
+        patch: operations["updateTimetablePeriod"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-periods/{timetablePeriodId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivates an inactive TimetablePeriod, re-running the full overlap check against every other currently-active Period. Requires timetable.periods.manage. */
+        post: operations["activateTimetablePeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-periods/{timetablePeriodId}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivates a TimetablePeriod. Rejected with a 409 (TIMETABLE_PERIOD_REFERENCED) while any active TimetableEntry still references it. Requires timetable.periods.manage. */
+        post: operations["deactivateTimetablePeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's TimetableEntry schedule (active by default, ordered by day_of_week then period_id). Fixed page size of 50. Requires timetable.schedule.view. */
+        get: operations["listTimetableEntries"];
+        put?: never;
+        /** Schedules a required, active SubjectOffering to an active Section, taught by an active teacher (HR Employee), in an optional active Room, during an active TimetablePeriod, on a given day of week. academic_year_id/campus_id/grade_level_id are always derived server-side from the resolved subject_offering_id, never accepted as input. Requires timetable.schedule.manage. */
+        post: operations["createTimetableEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/{timetableEntryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one TimetableEntry. Requires timetable.schedule.view. */
+        get: operations["getTimetableEntry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Re-validates and rewrites the ENTIRE scheduling assignment (SubjectOffering/Section/teacher/Room/Period/day_of_week) -- never a partial update; every field TimetableEntryInput accepts is required here too. Does not touch status -- use activate/deactivate. Requires timetable.schedule.manage. */
+        patch: operations["updateTimetableEntry"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/{timetableEntryId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivates an inactive TimetableEntry, re-running the full eligibility and double-booking re-check against its current parents (never trusting a possibly-stale in-memory relation). Requires timetable.schedule.manage. */
+        post: operations["activateTimetableEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/{timetableEntryId}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivates a TimetableEntry -- always safe, frees its slot immediately (every double-booking index is scoped WHERE status = 'active'). Requires timetable.schedule.manage. */
+        post: operations["deactivateTimetableEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/subject-offerings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active, REQUIRED SubjectOfferings by Subject code/name (q is an optional case-insensitive substring match), for the Schedule form's SubjectOffering picker. Gated by Timetable's own timetable.schedule.manage -- never Academic Structure's academics.* capability (the Canteen capability-boundary lesson, carried forward). */
+        get: operations["searchTimetableSubjectOfferings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active Sections by code/name (q is an optional case-insensitive substring match). Gated by timetable.schedule.manage -- never Academic Structure's academics.* capability. */
+        get: operations["searchTimetableSections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active Employees by full_name (q is an optional case-insensitive substring match), for the Schedule form's teacher picker. Data-minimized (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md): projects ONLY id/fullName -- never work_email/work_phone/any other HR field. Gated by timetable.schedule.manage -- never HR's employee-management capability. */
+        get: operations["searchTimetableTeachers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active Rooms by code/name (q is an optional case-insensitive substring match). Gated by timetable.schedule.manage -- never Academic Structure's academics.* capability. */
+        get: operations["searchTimetableRooms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active TimetablePeriods by code/name (q is an optional case-insensitive substring match), for the Schedule form's Period picker. Gated by timetable.periods.view (a TimetablePeriod is owned by that capability pair, not timetable.schedule.*, per this checkpoint's own capability-boundary choice). */
+        get: operations["searchTimetablePeriods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4397,6 +4622,146 @@ export interface components {
             guardian: components["schemas"]["GuardianSummary"] | null;
             relationship: components["schemas"]["AdmissionConversionRelationship"] | null;
         };
+        /** @description A School-owned, reusable named time slot ("Period 1", 09:00:00-09:45:00) that a TimetableEntry schedules against. No two ACTIVE Periods for the same School may have overlapping [startTime, endTime) ranges. */
+        TimetablePeriod: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /**
+             * @description H:i:s (24-hour, with seconds).
+             * @example 09:00:00
+             */
+            startTime: string;
+            /**
+             * @description H:i:s (24-hour, with seconds). Always strictly after startTime.
+             * @example 09:45:00
+             */
+            endTime: string;
+            sortOrder?: number | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        TimetablePeriodInput: {
+            code: string;
+            name: string;
+            /**
+             * @description H:i:s (24-hour, with seconds). Must be strictly before end_time.
+             * @example 09:00:00
+             */
+            start_time: string;
+            /** @example 09:45:00 */
+            end_time: string;
+            sort_order?: number | null;
+        };
+        /** @description All fields optional -- only supplied fields are changed. status is never accepted here; use activate/deactivate. */
+        TimetablePeriodUpdateInput: {
+            code?: string;
+            name?: string;
+            /** @example 09:00:00 */
+            start_time?: string;
+            /** @example 09:45:00 */
+            end_time?: string;
+            sort_order?: number | null;
+        };
+        /** @description The actual pagination envelope every Timetable list endpoint returns (Laravel's LengthAwarePaginator currentPage()/ lastPage()/total()) -- distinct in shape from this contract's general `PaginationMeta` schema (page/perPage/total). per_page is not caller-configurable for these two endpoints (fixed server-side page size: 20 for Periods, 50 for Entries). */
+        TimetablePaginationMeta: {
+            currentPage: number;
+            lastPage: number;
+            total: number;
+        };
+        /** @description A single scheduled slot: a required SubjectOffering taught to a Section by a teacher (HR Employee) in an optional Room during a TimetablePeriod on a given day of week. The teacher representation is data-minimized to id/teacherName ONLY (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never work_email/work_phone/any other HR field. */
+        TimetableEntry: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** @description 1 (Monday) .. 7 (Sunday). */
+            dayOfWeek: number;
+            /** Format: uuid */
+            subjectOfferingId: string;
+            subjectCode?: string | null;
+            subjectName?: string | null;
+            /** Format: uuid */
+            sectionId: string;
+            sectionCode?: string | null;
+            sectionName?: string | null;
+            /** Format: uuid */
+            teacherId: string;
+            /** @description Employee.full_name only -- never work_email/work_phone. */
+            teacherName?: string | null;
+            /** Format: uuid */
+            roomId?: string | null;
+            roomCode?: string | null;
+            roomName?: string | null;
+            /** Format: uuid */
+            periodId: string;
+            periodCode?: string | null;
+            periodName?: string | null;
+            /** @example 09:00:00 */
+            periodStartTime?: string | null;
+            /** @example 09:45:00 */
+            periodEndTime?: string | null;
+        };
+        /** @description Used identically for both create and update -- update re-validates and rewrites the entire assignment, so every field is required there too (never a partial update). academic_year_id/campus_id/grade_level_id are never accepted -- always derived server-side from the resolved subject_offering_id. */
+        TimetableEntryInput: {
+            /** Format: uuid */
+            subject_offering_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /**
+             * Format: uuid
+             * @description HR Employee id.
+             */
+            teacher_id: string;
+            /** Format: uuid */
+            room_id?: string | null;
+            /** Format: uuid */
+            period_id: string;
+            /** @description 1 (Monday) .. 7 (Sunday). */
+            day_of_week: number;
+        };
+        /** @description Timetable-owned narrow projection for the Schedule form's SubjectOffering picker -- never the full SubjectOffering schema. */
+        TimetableSubjectOfferingSummary: {
+            /** Format: uuid */
+            id: string;
+            subjectCode: string;
+            subjectName: string;
+            gradeLevelName: string;
+            campusName: string;
+            academicYearName: string;
+        };
+        /** @description Timetable-owned narrow projection for the Schedule form's Section picker -- never the full Section schema. */
+        TimetableSectionSummary: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+        };
+        /** @description Data-minimized (Sensitive-tier) Employee projection for the Schedule form's teacher picker -- ONLY id/fullName. Never work_email/work_phone/any other HR field, and never the broader Employee/EmployeeDirectoryEntry schema. */
+        TimetableTeacherSummary: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        /** @description Timetable-owned narrow projection for the Schedule form's Room picker -- never the full Room schema. */
+        TimetableRoomSummary: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+        };
+        /** @description Narrow projection for the Schedule form's Period picker. */
+        TimetablePeriodSummary: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @example 09:00:00 */
+            startTime: string;
+            /** @example 09:45:00 */
+            endTime: string;
+        };
     };
     responses: {
         /** @description Phase 8A.15 -- the caller's School+actor-scoped rate limit (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for the sensitive-documents endpoint) has been exceeded. The same global error envelope as every other `/api/v1` error; never a cross-School/Highly-Sensitive existence signal. */
@@ -4470,6 +4835,8 @@ export interface components {
         /** @description CanteenItemInventoryRequirement id. */
         CanteenRecipeRequirementId: string;
         CanteenOrderId: string;
+        TimetablePeriodId: string;
+        TimetableEntryId: string;
     };
     requestBodies: never;
     headers: {
@@ -12083,6 +12450,936 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listTimetablePeriods: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"][];
+                        meta: components["schemas"]["TimetablePaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimetablePeriodInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_PERIOD_OVERLAP -- this time range overlaps an existing active Period for this School. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure (missing/invalid field, duplicate code within this School), or TIMETABLE_PERIOD_INVALID when start_time is not strictly before end_time. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetablePeriodId: components["parameters"]["TimetablePeriodId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetablePeriod does not exist, or belongs to a different School -- deliberately indistinguishable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetablePeriodId: components["parameters"]["TimetablePeriodId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TimetablePeriodUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetablePeriod does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_PERIOD_REFERENCED (an active TimetableEntry still references this Period) or TIMETABLE_PERIOD_OVERLAP. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure, or TIMETABLE_PERIOD_INVALID when start_time is not strictly before end_time. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    activateTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetablePeriodId: components["parameters"]["TimetablePeriodId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetablePeriod does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_PERIOD_OVERLAP -- this Period's range overlaps another currently-active Period. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deactivateTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetablePeriodId: components["parameters"]["TimetablePeriodId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetablePeriod does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_PERIOD_REFERENCED -- an active TimetableEntry still references this Period. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listTimetableEntries: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+                section_id?: string;
+                teacher_id?: string;
+                /** @description 1 (Monday) .. 7 (Sunday). */
+                day_of_week?: number;
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"][];
+                        meta: components["schemas"]["TimetablePaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid query parameter (e.g. section_id not a UUID, day_of_week outside 1-7). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimetableEntryInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description subject_offering_id/section_id/teacher_id/room_id/period_id does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_TEACHER_ALREADY_SCHEDULED, TIMETABLE_SECTION_ALREADY_SCHEDULED, or TIMETABLE_ROOM_ALREADY_SCHEDULED -- this teacher/Section/Room already has another active class scheduled for this day and Period. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure, or one of TIMETABLE_ELECTIVE_OFFERING_NOT_SCHEDULABLE (SubjectOffering is not required), TIMETABLE_SUBJECT_OFFERING_NOT_AVAILABLE, TIMETABLE_SECTION_NOT_AVAILABLE, TIMETABLE_TEACHER_NOT_AVAILABLE, TIMETABLE_ROOM_NOT_AVAILABLE, or TIMETABLE_PERIOD_NOT_AVAILABLE when the referenced parent is not active. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetableEntryId: components["parameters"]["TimetableEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetableEntry does not exist, or belongs to a different School -- deliberately indistinguishable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetableEntryId: components["parameters"]["TimetableEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimetableEntryInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetableEntry (or a referenced SubjectOffering/Section/teacher/Room/Period) does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_TEACHER_ALREADY_SCHEDULED, TIMETABLE_SECTION_ALREADY_SCHEDULED, or TIMETABLE_ROOM_ALREADY_SCHEDULED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure, or one of the not-available/not-schedulable errors listed on createTimetableEntry. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    activateTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetableEntryId: components["parameters"]["TimetableEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetableEntry does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_TEACHER_ALREADY_SCHEDULED, TIMETABLE_SECTION_ALREADY_SCHEDULED, or TIMETABLE_ROOM_ALREADY_SCHEDULED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description One of the not-available/not-schedulable errors listed on createTimetableEntry (a parent is no longer active). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deactivateTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetableEntryId: components["parameters"]["TimetableEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetableEntry does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    searchTimetableSubjectOfferings: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableSubjectOfferingSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetableSections: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableSectionSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetableTeachers: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableTeacherSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetableRooms: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableRoomSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetablePeriods: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriodSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
 }

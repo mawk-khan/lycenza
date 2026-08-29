@@ -5085,6 +5085,610 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # Phase 0H (Timetable foundation): the Period catalogue + weekly
+  # schedule (Entry) administrative API, plus Timetable's own narrow
+  # read-only search/helper endpoints. Mirrors the Canteen section's
+  # structural style exactly. Fixed page size (Periods: 20, Entries:
+  # 50) -- per_page is never accepted, only `page`. GET/search
+  # endpoints carry no `throttle:` middleware in routes/api.php (unlike
+  # every mutating route, which carries `throttle:school-api-mutations`),
+  # so no 429 is documented on them.
+  /schools/{schoolId}/timetable-periods:
+    get:
+      operationId: listTimetablePeriods
+      summary: >
+        Lists a School's TimetablePeriod catalogue (active by default,
+        ordered by sort_order then code). Fixed page size of 20.
+        Requires timetable.periods.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+        - { $ref: "#/components/parameters/Page" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TimetablePeriod" } }
+                  meta: { $ref: "#/components/schemas/TimetablePaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.periods.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: createTimetablePeriod
+      summary: >
+        Creates a new active TimetablePeriod. code is unique per
+        School, case-insensitively. Requires timetable.periods.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TimetablePeriodInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetablePeriod" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.periods.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: TIMETABLE_PERIOD_OVERLAP -- this time range overlaps an existing active Period for this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Validation failure (missing/invalid field, duplicate code
+            within this School), or TIMETABLE_PERIOD_INVALID when
+            start_time is not strictly before end_time.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/timetable-periods/{timetablePeriodId}:
+    get:
+      operationId: getTimetablePeriod
+      summary: Fetch one TimetablePeriod. Requires timetable.periods.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TimetablePeriodId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetablePeriod" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.periods.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: TimetablePeriod does not exist, or belongs to a different School -- deliberately indistinguishable.
+    patch:
+      operationId: updateTimetablePeriod
+      summary: >
+        Updates a TimetablePeriod's name/code/sort_order and/or
+        start_time/end_time -- status is never accepted here, use
+        activate/deactivate. Changing start_time or end_time is
+        rejected with a 409 (TIMETABLE_PERIOD_REFERENCED) while an
+        active TimetableEntry still references this Period, and is
+        re-validated against every other active Period's range exactly
+        like create. Requires timetable.periods.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TimetablePeriodId" }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TimetablePeriodUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetablePeriod" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.periods.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: TimetablePeriod does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: TIMETABLE_PERIOD_REFERENCED (an active TimetableEntry still references this Period) or TIMETABLE_PERIOD_OVERLAP.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failure, or TIMETABLE_PERIOD_INVALID when start_time is not strictly before end_time.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/timetable-periods/{timetablePeriodId}/activate:
+    post:
+      operationId: activateTimetablePeriod
+      summary: >
+        Reactivates an inactive TimetablePeriod, re-running the full
+        overlap check against every other currently-active Period.
+        Requires timetable.periods.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TimetablePeriodId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetablePeriod" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.periods.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: TimetablePeriod does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: TIMETABLE_PERIOD_OVERLAP -- this Period's range overlaps another currently-active Period.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/timetable-periods/{timetablePeriodId}/deactivate:
+    post:
+      operationId: deactivateTimetablePeriod
+      summary: >
+        Deactivates a TimetablePeriod. Rejected with a 409
+        (TIMETABLE_PERIOD_REFERENCED) while any active TimetableEntry
+        still references it. Requires timetable.periods.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TimetablePeriodId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetablePeriod" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.periods.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: TimetablePeriod does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: TIMETABLE_PERIOD_REFERENCED -- an active TimetableEntry still references this Period.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/timetable-entries:
+    get:
+      operationId: listTimetableEntries
+      summary: >
+        Lists a School's TimetableEntry schedule (active by default,
+        ordered by day_of_week then period_id). Fixed page size of 50.
+        Requires timetable.schedule.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IncludeInactive" }
+        - { name: section_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: teacher_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: day_of_week, in: query, required: false, description: "1 (Monday) .. 7 (Sunday).", schema: { type: integer, minimum: 1, maximum: 7 } }
+        - { $ref: "#/components/parameters/Page" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TimetableEntry" } }
+                  meta: { $ref: "#/components/schemas/TimetablePaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid query parameter (e.g. section_id not a UUID, day_of_week outside 1-7).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: createTimetableEntry
+      summary: >
+        Schedules a required, active SubjectOffering to an active
+        Section, taught by an active teacher (HR Employee), in an
+        optional active Room, during an active TimetablePeriod, on a
+        given day of week. academic_year_id/campus_id/grade_level_id
+        are always derived server-side from the resolved
+        subject_offering_id, never accepted as input. Requires
+        timetable.schedule.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TimetableEntryInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetableEntry" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: subject_offering_id/section_id/teacher_id/room_id/period_id does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            TIMETABLE_TEACHER_ALREADY_SCHEDULED,
+            TIMETABLE_SECTION_ALREADY_SCHEDULED, or
+            TIMETABLE_ROOM_ALREADY_SCHEDULED -- this teacher/Section/Room
+            already has another active class scheduled for this day and
+            Period.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Validation failure, or one of
+            TIMETABLE_ELECTIVE_OFFERING_NOT_SCHEDULABLE (SubjectOffering
+            is not required), TIMETABLE_SUBJECT_OFFERING_NOT_AVAILABLE,
+            TIMETABLE_SECTION_NOT_AVAILABLE,
+            TIMETABLE_TEACHER_NOT_AVAILABLE,
+            TIMETABLE_ROOM_NOT_AVAILABLE, or
+            TIMETABLE_PERIOD_NOT_AVAILABLE when the referenced parent is
+            not active.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/timetable-entries/{timetableEntryId}:
+    get:
+      operationId: getTimetableEntry
+      summary: Fetch one TimetableEntry. Requires timetable.schedule.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TimetableEntryId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetableEntry" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: TimetableEntry does not exist, or belongs to a different School -- deliberately indistinguishable.
+    patch:
+      operationId: updateTimetableEntry
+      summary: >
+        Re-validates and rewrites the ENTIRE scheduling assignment
+        (SubjectOffering/Section/teacher/Room/Period/day_of_week) --
+        never a partial update; every field TimetableEntryInput
+        accepts is required here too. Does not touch status -- use
+        activate/deactivate. Requires timetable.schedule.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TimetableEntryId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TimetableEntryInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetableEntry" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: TimetableEntry (or a referenced SubjectOffering/Section/teacher/Room/Period) does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: TIMETABLE_TEACHER_ALREADY_SCHEDULED, TIMETABLE_SECTION_ALREADY_SCHEDULED, or TIMETABLE_ROOM_ALREADY_SCHEDULED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failure, or one of the not-available/not-schedulable errors listed on createTimetableEntry.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/timetable-entries/{timetableEntryId}/activate:
+    post:
+      operationId: activateTimetableEntry
+      summary: >
+        Reactivates an inactive TimetableEntry, re-running the full
+        eligibility and double-booking re-check against its current
+        parents (never trusting a possibly-stale in-memory relation).
+        Requires timetable.schedule.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TimetableEntryId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetableEntry" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: TimetableEntry does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: TIMETABLE_TEACHER_ALREADY_SCHEDULED, TIMETABLE_SECTION_ALREADY_SCHEDULED, or TIMETABLE_ROOM_ALREADY_SCHEDULED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: One of the not-available/not-schedulable errors listed on createTimetableEntry (a parent is no longer active).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/timetable-entries/{timetableEntryId}/deactivate:
+    post:
+      operationId: deactivateTimetableEntry
+      summary: >
+        Deactivates a TimetableEntry -- always safe, frees its slot
+        immediately (every double-booking index is scoped WHERE
+        status = 'active'). Requires timetable.schedule.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TimetableEntryId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TimetableEntry" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: TimetableEntry does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/timetable-entries/search/subject-offerings:
+    get:
+      operationId: searchTimetableSubjectOfferings
+      summary: >
+        Timetable-owned helper: searches active, REQUIRED
+        SubjectOfferings by Subject code/name (q is an optional
+        case-insensitive substring match), for the Schedule form's
+        SubjectOffering picker. Gated by Timetable's own
+        timetable.schedule.manage -- never Academic Structure's
+        academics.* capability (the Canteen capability-boundary lesson,
+        carried forward).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 255 } }
+      responses:
+        "200":
+          description: OK. At most 20 results, no pagination.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TimetableSubjectOfferingSummary" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/timetable-entries/search/sections:
+    get:
+      operationId: searchTimetableSections
+      summary: >
+        Timetable-owned helper: searches active Sections by code/name
+        (q is an optional case-insensitive substring match). Gated by
+        timetable.schedule.manage -- never Academic Structure's
+        academics.* capability.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 255 } }
+      responses:
+        "200":
+          description: OK. At most 20 results, no pagination.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TimetableSectionSummary" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/timetable-entries/search/teachers:
+    get:
+      operationId: searchTimetableTeachers
+      summary: >
+        Timetable-owned helper: searches active Employees by full_name
+        (q is an optional case-insensitive substring match), for the
+        Schedule form's teacher picker. Data-minimized (Sensitive-tier,
+        docs/security/DATA-CLASSIFICATION.md): projects ONLY
+        id/fullName -- never work_email/work_phone/any other HR field.
+        Gated by timetable.schedule.manage -- never HR's
+        employee-management capability.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 255 } }
+      responses:
+        "200":
+          description: OK. At most 20 results, no pagination.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TimetableTeacherSummary" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/timetable-entries/search/rooms:
+    get:
+      operationId: searchTimetableRooms
+      summary: >
+        Timetable-owned helper: searches active Rooms by code/name (q
+        is an optional case-insensitive substring match). Gated by
+        timetable.schedule.manage -- never Academic Structure's
+        academics.* capability.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 255 } }
+      responses:
+        "200":
+          description: OK. At most 20 results, no pagination.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TimetableRoomSummary" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.schedule.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/timetable-entries/search/periods:
+    get:
+      operationId: searchTimetablePeriods
+      summary: >
+        Timetable-owned helper: searches active TimetablePeriods by
+        code/name (q is an optional case-insensitive substring match),
+        for the Schedule form's Period picker. Gated by
+        timetable.periods.view (a TimetablePeriod is owned by that
+        capability pair, not timetable.schedule.*, per this
+        checkpoint's own capability-boundary choice).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 255 } }
+      responses:
+        "200":
+          description: OK. At most 20 results, no pagination.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TimetablePeriodSummary" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking timetable.periods.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -5350,6 +5954,16 @@ components:
       schema: { type: string, format: uuid }
     CanteenOrderId:
       name: canteenOrderId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TimetablePeriodId:
+      name: timetablePeriodId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TimetableEntryId:
+      name: timetableEntryId
       in: path
       required: true
       schema: { type: string, format: uuid }
@@ -7407,6 +8021,160 @@ components:
         enrollment: { $ref: "#/components/schemas/AdmissionConversionEnrollment" }
         guardian: { allOf: [{ $ref: "#/components/schemas/GuardianSummary" }], nullable: true }
         relationship: { allOf: [{ $ref: "#/components/schemas/AdmissionConversionRelationship" }], nullable: true }
+
+    TimetablePeriod:
+      type: object
+      required: [id, code, name, startTime, endTime, status]
+      description: >
+        A School-owned, reusable named time slot ("Period 1",
+        09:00:00-09:45:00) that a TimetableEntry schedules against. No
+        two ACTIVE Periods for the same School may have overlapping
+        [startTime, endTime) ranges.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        startTime: { type: string, pattern: "^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$", example: "09:00:00", description: "H:i:s (24-hour, with seconds)." }
+        endTime: { type: string, pattern: "^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$", example: "09:45:00", description: "H:i:s (24-hour, with seconds). Always strictly after startTime." }
+        sortOrder: { type: integer, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+
+    TimetablePeriodInput:
+      type: object
+      required: [code, name, start_time, end_time]
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        start_time: { type: string, pattern: "^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$", example: "09:00:00", description: "H:i:s (24-hour, with seconds). Must be strictly before end_time." }
+        end_time: { type: string, pattern: "^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$", example: "09:45:00" }
+        sort_order: { type: integer, nullable: true }
+
+    TimetablePeriodUpdateInput:
+      type: object
+      description: All fields optional -- only supplied fields are changed. status is never accepted here; use activate/deactivate.
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        start_time: { type: string, pattern: "^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$", example: "09:00:00" }
+        end_time: { type: string, pattern: "^([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d$", example: "09:45:00" }
+        sort_order: { type: integer, nullable: true }
+
+    TimetablePaginationMeta:
+      type: object
+      required: [currentPage, lastPage, total]
+      description: >
+        The actual pagination envelope every Timetable list endpoint
+        returns (Laravel's LengthAwarePaginator currentPage()/
+        lastPage()/total()) -- distinct in shape from this contract's
+        general `PaginationMeta` schema (page/perPage/total). per_page
+        is not caller-configurable for these two endpoints (fixed
+        server-side page size: 20 for Periods, 50 for Entries).
+      properties:
+        currentPage: { type: integer }
+        lastPage: { type: integer }
+        total: { type: integer }
+
+    TimetableEntry:
+      type: object
+      required: [id, status, dayOfWeek, subjectOfferingId, sectionId, teacherId, periodId]
+      description: >
+        A single scheduled slot: a required SubjectOffering taught to a
+        Section by a teacher (HR Employee) in an optional Room during a
+        TimetablePeriod on a given day of week. The teacher
+        representation is data-minimized to id/teacherName ONLY
+        (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never
+        work_email/work_phone/any other HR field.
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, inactive] }
+        dayOfWeek: { type: integer, minimum: 1, maximum: 7, description: "1 (Monday) .. 7 (Sunday)." }
+        subjectOfferingId: { type: string, format: uuid }
+        subjectCode: { type: string, nullable: true }
+        subjectName: { type: string, nullable: true }
+        sectionId: { type: string, format: uuid }
+        sectionCode: { type: string, nullable: true }
+        sectionName: { type: string, nullable: true }
+        teacherId: { type: string, format: uuid }
+        teacherName: { type: string, nullable: true, description: "Employee.full_name only -- never work_email/work_phone." }
+        roomId: { type: string, format: uuid, nullable: true }
+        roomCode: { type: string, nullable: true }
+        roomName: { type: string, nullable: true }
+        periodId: { type: string, format: uuid }
+        periodCode: { type: string, nullable: true }
+        periodName: { type: string, nullable: true }
+        periodStartTime: { type: string, nullable: true, example: "09:00:00" }
+        periodEndTime: { type: string, nullable: true, example: "09:45:00" }
+
+    TimetableEntryInput:
+      type: object
+      required: [subject_offering_id, section_id, teacher_id, period_id, day_of_week]
+      description: >
+        Used identically for both create and update -- update
+        re-validates and rewrites the entire assignment, so every field
+        is required there too (never a partial update).
+        academic_year_id/campus_id/grade_level_id are never accepted --
+        always derived server-side from the resolved
+        subject_offering_id.
+      properties:
+        subject_offering_id: { type: string, format: uuid }
+        section_id: { type: string, format: uuid }
+        teacher_id: { type: string, format: uuid, description: "HR Employee id." }
+        room_id: { type: string, format: uuid, nullable: true }
+        period_id: { type: string, format: uuid }
+        day_of_week: { type: integer, minimum: 1, maximum: 7, description: "1 (Monday) .. 7 (Sunday)." }
+
+    TimetableSubjectOfferingSummary:
+      type: object
+      required: [id, subjectCode, subjectName, gradeLevelName, campusName, academicYearName]
+      description: Timetable-owned narrow projection for the Schedule form's SubjectOffering picker -- never the full SubjectOffering schema.
+      properties:
+        id: { type: string, format: uuid }
+        subjectCode: { type: string }
+        subjectName: { type: string }
+        gradeLevelName: { type: string }
+        campusName: { type: string }
+        academicYearName: { type: string }
+
+    TimetableSectionSummary:
+      type: object
+      required: [id, code, name]
+      description: Timetable-owned narrow projection for the Schedule form's Section picker -- never the full Section schema.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+
+    TimetableTeacherSummary:
+      type: object
+      required: [id, fullName]
+      description: >
+        Data-minimized (Sensitive-tier) Employee projection for the
+        Schedule form's teacher picker -- ONLY id/fullName. Never
+        work_email/work_phone/any other HR field, and never the
+        broader Employee/EmployeeDirectoryEntry schema.
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+
+    TimetableRoomSummary:
+      type: object
+      required: [id, code, name]
+      description: Timetable-owned narrow projection for the Schedule form's Room picker -- never the full Room schema.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+
+    TimetablePeriodSummary:
+      type: object
+      required: [id, code, name, startTime, endTime]
+      description: Narrow projection for the Schedule form's Period picker.
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        startTime: { type: string, example: "09:00:00" }
+        endTime: { type: string, example: "09:45:00" }
 
   responses:
     TooManyRequests:
