@@ -454,45 +454,85 @@ class CapabilityAndRoleSeeder extends Seeder
 
             // Phase 9.7 (ADR 0032 "Separation of duties";
             // docs/modules/PAYROLL.md "Authorization") -- Payroll
-            // authorization. `.structures.*` gates formula/policy shape
-            // only (component names, calculation types, rates,
-            // ordering) -- never an individual Employee's actual
-            // monetary value. `.compensation.sensitive.*` is the
-            // Highly Sensitive family (docs/security/DATA-CLASSIFICATION.md):
-            // it gates `compensation_assignment_values.amount` and
-            // every field on `payroll_run_results`/`_lines`, as a whole
-            // row, never a partial field -- named `.sensitive.*` rather
-            // than a bare `.compensation.*` specifically so it reads,
-            // at a glance, as the same tier of grant as
+            // authorization, corrected at Phase 9.7's own
+            // accounting-integrity/authorization review (an initial
+            // draft of this block registered a single, over-broad
+            // `payroll.runs.manage` covering create/calculate/approve;
+            // that key was NEVER released -- this branch is unmerged --
+            // and has been replaced outright below, not deprecated
+            // alongside it).
+            //
+            // `.structures.*` gates formula/policy shape only (component
+            // names, calculation types, rates, ordering) -- never an
+            // individual Employee's actual monetary value.
+            //
+            // `.compensation.view` (non-sensitive: EmploymentRecord
+            // reference, salary structure/revision identity,
+            // effective_from/to, open/closed status) is separate from
+            // `.compensation.sensitive.*` (the Highly Sensitive family,
+            // docs/security/DATA-CLASSIFICATION.md: gates
+            // `compensation_assignment_values.amount` and every field on
+            // `payroll_run_results`/`_lines`, as a whole row, never a
+            // partial field) -- named `.sensitive.*` rather than folding
+            // amounts into a bare `.compensation.manage` specifically so
+            // it reads, at a glance, as the same tier of grant as
             // `hr.employees.sensitive.*` (the existing precedent for a
-            // Highly Sensitive per-Employee data family). `.runs.manage`
-            // covers create/calculate/approve as ONE capability --
-            // Separation of Duties for run approval is an ACTOR-level
-            // rule (the preparer of a run may never approve it,
-            // enforced by `SelfApprovalNotAllowedException` + the
-            // database CHECK `payroll_runs_sod_check`), never a
-            // capability-level one, so splitting `.runs.manage` into
-            // separate prepare/approve capabilities would not add any
-            // real additional guarantee (mirrors `finance.charges.manage`'s
-            // own reasoning for not splitting assess/cancel).
-            // `.runs.post`/`.runs.reverse` ARE deliberately separate
-            // from `.runs.manage` and from each other -- ADR 0032
-            // explicitly calls for this exact split, mirroring
+            // Highly Sensitive per-Employee data family) and so it can
+            // be withheld from every default role independently of the
+            // non-sensitive metadata capability (see the `school_admin`
+            // grant block below).
+            //
+            // `.runs.view`/`.runs.prepare`/`.runs.approve` are
+            // deliberately SEPARATE capabilities, not one `.runs.manage` --
+            // least-privilege authorization is a capability-level
+            // property; `payroll_runs_sod_check` (preparer != approver)
+            // is a SEPARATE, actor-level property that remains enforced
+            // regardless of how capabilities are split, but is not a
+            // substitute for it (an actor should not be able to prepare
+            // AND approve payroll merely because both happen to be
+            // gated by the same grant). `.runs.post`/`.runs.reverse`
+            // remain their own capabilities too, mirroring
             // `finance.ledger.post`/`.reverse`'s identical "reversal is
             // a materially higher-risk financial correction action"
-            // reasoning. `.accounting.manage` gates the Payroll ->
-            // Finance ledger-account mapping, mirroring
-            // `canteen.settings.manage`'s identical "financial account
-            // configuration" role.
+            // reasoning -- five distinct run-lifecycle capabilities in
+            // total, one per privilege level, never collapsed.
+            //
+            // `.periods.manage` and `.accounting.manage` are each a
+            // single capability (not split into view/manage) because
+            // each gates exactly one narrow, non-sensitive
+            // administrative surface with no independently-useful
+            // read-only tier yet (mirrors `canteen.settings.manage`'s
+            // identical "financial/config account mapping" shape for
+            // `.accounting.manage` specifically).
+            //
+            // `.statutory.manage` is registered now, granted to NOBODY,
+            // with NO functional statutory implementation behind it --
+            // Checkpoint 9.6 (PF/ESI/TDS) remains
+            // `[LEGAL REVIEW REQUIRED]` and blocked; this key exists
+            // only so the eventual statutory feature has a capability
+            // slot reserved in the SAME PR history as the rest of this
+            // module's authorization model, never to imply the feature
+            // itself is implemented.
+            //
+            // No `payroll.exports.generate` is registered -- Payroll
+            // export/payslip functionality itself is deferred
+            // (Checkpoint 9.10, not yet built), and a capability with no
+            // real gated action behind it would be dead configuration
+            // (rule 2); add it in the SAME PR that actually builds
+            // exports.
             ['key' => 'payroll.structures.view', 'label' => 'View Payroll salary components and structures', 'namespace' => 'school'],
             ['key' => 'payroll.structures.manage', 'label' => 'Manage Payroll salary components and structures', 'namespace' => 'school'],
-            ['key' => 'payroll.compensation.sensitive.view', 'label' => 'View individual Employee compensation and payroll run results', 'namespace' => 'school'],
-            ['key' => 'payroll.compensation.sensitive.manage', 'label' => 'Assign individual Employee compensation', 'namespace' => 'school'],
+            ['key' => 'payroll.compensation.view', 'label' => 'View non-sensitive Payroll compensation assignment metadata (structure/dates, no amounts)', 'namespace' => 'school'],
+            ['key' => 'payroll.compensation.sensitive.view', 'label' => 'View individual Employee compensation amounts and payroll run results', 'namespace' => 'school'],
+            ['key' => 'payroll.compensation.sensitive.manage', 'label' => 'Assign individual Employee compensation amounts', 'namespace' => 'school'],
             ['key' => 'payroll.periods.manage', 'label' => 'Create, open, and close Payroll periods', 'namespace' => 'school'],
-            ['key' => 'payroll.runs.manage', 'label' => 'Create, calculate, and approve Payroll runs', 'namespace' => 'school'],
+            ['key' => 'payroll.runs.view', 'label' => 'View Payroll run lists and non-sensitive run details', 'namespace' => 'school'],
+            ['key' => 'payroll.runs.prepare', 'label' => 'Create, calculate/recalculate, and prepare adjustments for Payroll runs', 'namespace' => 'school'],
+            ['key' => 'payroll.runs.approve', 'label' => 'Approve a calculated Payroll run', 'namespace' => 'school'],
             ['key' => 'payroll.runs.post', 'label' => 'Post Payroll runs to Finance', 'namespace' => 'school'],
             ['key' => 'payroll.runs.reverse', 'label' => 'Reverse posted Payroll runs', 'namespace' => 'school'],
             ['key' => 'payroll.accounting.manage', 'label' => 'Manage Payroll accounting (Finance account) configuration', 'namespace' => 'school'],
+            ['key' => 'payroll.statutory.manage', 'label' => 'Manage Payroll statutory (PF/ESI/TDS) configuration -- reserved, no functional implementation while Checkpoint 9.6 is legally gated', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -650,21 +690,56 @@ class CapabilityAndRoleSeeder extends Seeder
                     'canteen.directory.view', 'canteen.directory.manage',
                     'canteen.orders.view', 'canteen.orders.manage',
                     'canteen.settings.view', 'canteen.settings.manage',
-                    // Phase 9.7: Payroll is a new, money-and-Highly-
-                    // Sensitive-data domain -- granted in full to School
-                    // Admin, mirroring Finance Ledger/Charges/Payments'
-                    // identical "top school-scoped administrative role
-                    // holds this catalog's most privileged grant"
-                    // reasoning. NOT granted to Principal below, for the
-                    // same reason `finance.*`/`canteen.settings.*` are
-                    // not: no established precedent of Principal
-                    // administering payroll runs, compensation, or
-                    // Finance account mappings in this product.
+                    // Phase 9.7 (corrected at its own authorization
+                    // review): Payroll's NON-sensitive administrative
+                    // surface is granted to School Admin, mirroring
+                    // Finance Ledger/Charges/Payments' "top school-scoped
+                    // administrative role holds this domain's ordinary
+                    // administrative grant" reasoning. Deliberately
+                    // EXCLUDES `payroll.compensation.sensitive.*` and
+                    // `payroll.statutory.manage` -- see the dedicated
+                    // comment immediately below explaining why those are
+                    // granted to NOBODY by default, the same treatment
+                    // `hr.employees.sensitive.*` already receives for
+                    // Highly Sensitive per-Employee data. NOT granted to
+                    // Principal below, for the same reason
+                    // `finance.*`/`canteen.settings.*` are not: no
+                    // established precedent of Principal administering
+                    // payroll runs, compensation, or Finance account
+                    // mappings in this product. `preparer != approver`
+                    // (the database CHECK `payroll_runs_sod_check` plus
+                    // `PayrollRunService::approve()`'s own
+                    // `SelfApprovalNotAllowedException`) still applies
+                    // at the ACTOR level even though School Admin holds
+                    // both `.runs.prepare` and `.runs.approve` here -- a
+                    // single School Admin user can never approve a run
+                    // they themselves prepared, regardless of which
+                    // capabilities their role grants.
                     'payroll.structures.view', 'payroll.structures.manage',
-                    'payroll.compensation.sensitive.view', 'payroll.compensation.sensitive.manage',
+                    'payroll.compensation.view',
                     'payroll.periods.manage',
-                    'payroll.runs.manage', 'payroll.runs.post', 'payroll.runs.reverse',
+                    'payroll.runs.view', 'payroll.runs.prepare', 'payroll.runs.approve',
+                    'payroll.runs.post', 'payroll.runs.reverse',
                     'payroll.accounting.manage',
+                    // `payroll.compensation.sensitive.view`/`.manage` and
+                    // `payroll.statutory.manage` are DELIBERATELY NOT
+                    // listed here -- nobody receives them by default,
+                    // for any role, seeded by this class. Employee
+                    // salary amounts are Highly Sensitive
+                    // (docs/security/DATA-CLASSIFICATION.md), exactly
+                    // like `hr.employees.sensitive.*`, which this
+                    // catalog also grants to no default role; ordinary
+                    // role seeding must never automatically expose
+                    // Employee compensation. A School wanting a School
+                    // Admin (or a narrower dedicated role) to see/assign
+                    // actual salary figures must grant that explicitly,
+                    // after this seeder runs -- it is never an automatic
+                    // consequence of holding the broader
+                    // `payroll.*` administrative surface above.
+                    // `payroll.statutory.manage` has no functional
+                    // implementation while Checkpoint 9.6 remains
+                    // `[LEGAL REVIEW REQUIRED]`; granting it to anyone
+                    // now would be premature regardless of sensitivity.
                 ],
             ],
             'principal' => [

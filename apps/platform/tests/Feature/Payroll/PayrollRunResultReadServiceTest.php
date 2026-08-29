@@ -47,7 +47,7 @@ class PayrollRunResultReadServiceTest extends TestCase
         $structureManager = $this->createUserWithCapabilities($school, [
             'payroll.structures.manage', 'payroll.accounting.manage', 'payroll.compensation.sensitive.manage',
         ]);
-        $runManager = $this->createUserWithCapabilities($school, ['payroll.runs.manage', 'payroll.periods.manage']);
+        $runManager = $this->createUserWithCapabilities($school, ['payroll.runs.prepare', 'payroll.periods.manage']);
 
         $runId = $context->withSchool($school, function () use ($school, $structureManager, $runManager) {
             $expense = LedgerAccount::factory()->for($school, 'school')->type('expense')->create();

@@ -6,6 +6,7 @@ use App\Domain\Finance\Infrastructure\LedgerAccount;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\AddStructureComponentData;
 use App\Domain\Payroll\Application\CorrectionDeltaInput;
+use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
 use App\Domain\Payroll\Application\FixedComponentValueInput;
 use App\Domain\Payroll\Application\PayrollAccountingAdministrationService;
 use App\Domain\Payroll\Application\PayrollCompensationAdministrationService;
@@ -213,7 +214,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
     public function run_administration_authorized_flow_succeeds_through_calculate_and_approve(): void
     {
         $f = $this->baseFixtures();
-        $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.manage', 'payroll.periods.manage']);
+        $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.periods.manage']);
         $structureService = app(PayrollStructureAdministrationService::class);
         $runService = app(PayrollRunAdministrationService::class);
 
@@ -236,7 +237,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             $runService->calculate($run, $runManager);
             $run = $run->fresh();
 
-            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.manage', 'payroll.periods.manage']);
+            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
 
             return $runService->approve($run, $approver);
         });
@@ -264,7 +265,20 @@ class PayrollAdministrationAuthorizationTest extends TestCase
     public function run_administration_denies_approval_without_capability(): void
     {
         $f = $this->baseFixtures();
-        $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.manage', 'payroll.periods.manage']);
+        [$run, $preparer] = $this->makeCalculatedRunForApproval($f);
+        $viewer = $this->createUserWithCapabilities($f['school'], []);
+
+        $this->expectException(AuthorizationException::class);
+
+        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $viewer));
+    }
+
+    /**
+     * @return array{0: PayrollRun, 1: User}
+     */
+    private function makeCalculatedRunForApproval(array $f): array
+    {
+        $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.periods.manage']);
         $structureService = app(PayrollStructureAdministrationService::class);
         $runService = app(PayrollRunAdministrationService::class);
 
@@ -289,11 +303,74 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             return $run->fresh();
         });
 
-        $viewer = $this->createUserWithCapabilities($f['school'], []);
+        return [$run, $runManager];
+    }
+
+    #[Test]
+    public function run_administration_denies_approval_to_an_actor_holding_only_prepare(): void
+    {
+        $f = $this->baseFixtures();
+        [$run] = $this->makeCalculatedRunForApproval($f);
+        $prepareOnlyActor = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare']);
 
         $this->expectException(AuthorizationException::class);
 
-        $this->context()->withSchool($f['school'], fn () => $runService->approve($run, $viewer));
+        $this->context()->withSchool($f['school'], fn () => app(PayrollRunAdministrationService::class)->approve($run, $prepareOnlyActor));
+    }
+
+    #[Test]
+    public function run_administration_denies_preparation_to_an_actor_holding_only_approve(): void
+    {
+        $school = $this->createSchool();
+        $periodManager = $this->createUserWithCapabilities($school, ['payroll.periods.manage']);
+        $approveOnlyActor = $this->createUserWithCapabilities($school, ['payroll.runs.approve']);
+
+        $period = $this->context()->withSchool($school, fn () => app(PayrollPeriodAdministrationService::class)->open(
+            app(PayrollPeriodAdministrationService::class)->createPeriod($school, Carbon::parse('2026-09-01'), null, $periodManager), $periodManager,
+        ));
+
+        $this->expectException(AuthorizationException::class);
+
+        $this->context()->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->createRun($period, $approveOnlyActor));
+    }
+
+    #[Test]
+    public function run_administration_rejects_self_approval_even_when_the_actor_holds_both_capabilities(): void
+    {
+        $f = $this->baseFixtures();
+        $bothCapabilities = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.runs.approve', 'payroll.periods.manage']);
+        $structureService = app(PayrollStructureAdministrationService::class);
+        $runService = app(PayrollRunAdministrationService::class);
+
+        $run = $this->context()->withSchool($f['school'], function () use ($f, $bothCapabilities, $structureService, $runService) {
+            $component = $structureService->createComponent($f['school'], 'BASIC', 'Basic', 'earning', null, $f['structureManager']);
+            $structure = $structureService->createDraftStructure($f['school'], 'GRADE-SELF-APPROVE', 'Grade Self Approve', $f['structureManager']);
+            $sc = $structureService->addStructureComponent($structure, new AddStructureComponentData($component->id, 'fixed_amount', null, null, 1), $f['structureManager']);
+            $structure = $structureService->activateStructure($structure, $f['structureManager']);
+
+            $employmentRecord = $this->createEmploymentRecord($this->createEmployee($f['school']), ['starts_on' => '2025-01-01']);
+            app(PayrollCompensationAdministrationService::class)->assign(
+                $f['school'], $employmentRecord, $structure, Carbon::parse('2025-01-01'),
+                [new FixedComponentValueInput($sc->id, '50000.00')], $f['structureManager'],
+            );
+
+            $period = app(PayrollPeriodAdministrationService::class);
+            $p = $period->open($period->createPeriod($f['school'], Carbon::parse('2026-09-01'), null, $bothCapabilities), $bothCapabilities);
+
+            $run = $runService->createRun($p, $bothCapabilities);
+            $runService->calculate($run, $bothCapabilities);
+
+            return $run->fresh();
+        });
+
+        // The actor holds BOTH `payroll.runs.prepare` AND
+        // `payroll.runs.approve` -- capability-wise, nothing stops
+        // them from calling approve(). The ACTOR-level SoD rule
+        // (`SelfApprovalNotAllowedException`) is what must still block
+        // this, since they themselves prepared this exact run.
+        $this->expectException(SelfApprovalNotAllowedException::class);
+
+        $this->context()->withSchool($f['school'], fn () => $runService->approve($run, $bothCapabilities));
     }
 
     /**
@@ -302,7 +379,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
     private function makeApprovedRunForPosting(): array
     {
         $f = $this->baseFixtures();
-        $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.manage', 'payroll.periods.manage']);
+        $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.periods.manage']);
         $structureService = app(PayrollStructureAdministrationService::class);
         $runService = app(PayrollRunAdministrationService::class);
 
@@ -325,7 +402,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
             $runService->calculate($run, $runManager);
             $run = $run->fresh();
 
-            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.manage', 'payroll.periods.manage']);
+            $approver = $this->createUserWithCapabilities($f['school'], ['payroll.runs.approve']);
 
             return $runService->approve($run, $approver);
         });
@@ -377,7 +454,7 @@ class PayrollAdministrationAuthorizationTest extends TestCase
         $f = $this->makeApprovedRunForPosting();
         $this->context()->withSchool($f['school'], fn () => app(PayrollPostingAdministrationService::class)->post($f['run'], $f['poster']));
 
-        $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.manage', 'payroll.periods.manage']);
+        $runManager = $this->createUserWithCapabilities($f['school'], ['payroll.runs.prepare', 'payroll.periods.manage']);
         $runService = app(PayrollRunAdministrationService::class);
 
         $outcome = $this->context()->withSchool($f['school'], function () use ($f, $runManager, $runService) {

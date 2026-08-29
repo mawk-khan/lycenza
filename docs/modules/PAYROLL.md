@@ -230,40 +230,80 @@ until that checkpoint connects it.
 
 ## Authorization
 
-Implemented at Checkpoint 9.7. Nine capabilities, all school-scoped:
-`payroll.structures.view`/`.manage` (formula/policy shape only —
-component names, calculation types, rates, ordering, never individual
-data), `payroll.compensation.sensitive.view`/`.manage` (the Highly
-Sensitive family — gates `compensation_assignment_values.amount` and
-every field on `payroll_run_results`/`_lines`, as a whole row, never a
-partial field, enforced in `PayrollRunResultReadService`, never in
-Vue), `payroll.periods.manage`, `payroll.runs.manage` (create,
-calculate, AND approve — Separation of Duties for approval is an
-ACTOR-level rule, not a capability-level one: the preparer of a run may
-never approve it, enforced by `SelfApprovalNotAllowedException` +
-the database CHECK `payroll_runs_sod_check`, mirroring
-`CommunicationApprovalService`'s identical precedent; an approver may
-also post or reverse), `payroll.runs.post` and `payroll.runs.reverse`
-(deliberately distinct from `.manage` and from each other, mirroring
-`finance.ledger.post`/`.reverse`), and `payroll.accounting.manage`.
-`school_admin` receives all nine by default; `principal` and every
-other school-scoped role receive none (`PayrollCapabilityRegistryTest`).
+Implemented at Checkpoint 9.7, corrected at that same checkpoint's own
+authorization review (an initial draft collapsed run create/calculate/
+approve into one `payroll.runs.manage` and default-granted the Highly
+Sensitive compensation family to `school_admin`; both were wrong and
+were replaced outright before merge — never carried forward alongside
+the correction). Thirteen capabilities, all school-scoped:
+
+- `payroll.structures.view`/`.manage` — formula/policy shape only
+  (component names, calculation types, rates, ordering), never
+  individual data.
+- `payroll.compensation.view` — non-sensitive assignment metadata
+  (EmploymentRecord reference, salary structure/revision identity,
+  effective_from/to, open/closed status) — never an amount.
+- `payroll.compensation.sensitive.view`/`.manage` — the Highly
+  Sensitive family: gates `compensation_assignment_values.amount` and
+  every field on `payroll_run_results`/`_lines`, as a whole row, never
+  a partial field, enforced in `PayrollCompensationReadService`/
+  `PayrollRunResultReadService`, never in Vue.
+- `payroll.periods.manage` — a single capability (no independently
+  useful read-only tier exists yet for periods).
+- `payroll.runs.view`/`.prepare`/`.approve`/`.post`/`.reverse` — FIVE
+  distinct run-lifecycle capabilities, never collapsed into one
+  `.manage`. Least-privilege authorization is a capability-level
+  property; Separation of Duties for approval (`preparer != approver`)
+  is a SEPARATE, actor-level rule (enforced by
+  `SelfApprovalNotAllowedException` + the database CHECK
+  `payroll_runs_sod_check`, mirroring `CommunicationApprovalService`'s
+  identical precedent) that remains necessary even for an actor holding
+  BOTH `.prepare` and `.approve` — it is never a substitute for the
+  capability split, and the capability split is never a substitute for
+  it. `.post`/`.reverse` mirror `finance.ledger.post`/`.reverse`'s
+  identical "reversal is a materially higher-risk financial correction
+  action" reasoning.
+- `payroll.accounting.manage` — a single capability, mirroring
+  `canteen.settings.manage`'s identical "financial account mapping"
+  shape.
+- `payroll.statutory.manage` — registered with NO functional
+  implementation behind it while Checkpoint 9.6 remains
+  `[LEGAL REVIEW REQUIRED]`; exists only to reserve the eventual slot,
+  granted to nobody.
+
+`school_admin` receives every capability above EXCEPT
+`payroll.compensation.sensitive.view`/`.manage` and
+`payroll.statutory.manage`, which are granted to NO default role —
+mirroring `hr.employees.sensitive.*`'s identical "nobody by default"
+treatment for Highly Sensitive per-Employee data; a School wanting a
+role to see/assign actual salary figures must grant that explicitly.
+`principal` and every other school-scoped role receive none of the
+thirteen (`PayrollCapabilityRegistryTest`).
+
+No `payroll.exports.generate` is registered — export/payslip
+functionality is itself deferred (Checkpoint 9.10); a capability with
+no real gated action would be dead configuration.
 
 Every Payroll Application-layer core service (`SalaryComponentService`,
 `SalaryStructureService`, `CompensationService`, `PayrollPeriodService`,
 `PayrollRunService`, `PayrollPostingService`,
 `PayrollAccountingConfigurationService`) remains capability-check-free
 by design, exactly like `App\Domain\Finance\Application\LedgerService`/
-`ChargeService` — a dedicated Administration wrapper per family
+`ChargeService` — a dedicated Administration/Read wrapper per family
 (`PayrollStructureAdministrationService`,
 `PayrollCompensationAdministrationService`,
-`PayrollPeriodAdministrationService`, `PayrollRunAdministrationService`,
+`PayrollCompensationReadService`, `PayrollPeriodAdministrationService`,
+`PayrollRunAdministrationService`, `PayrollRunReadService`,
 `PayrollPostingAdministrationService`,
 `PayrollAccountingAdministrationService`) is the ONLY place a
 capability check happens, mirroring
 `LedgerAdministrationService`/`ChargeAdministrationService`'s identical
-split. No transport may call a core service directly; a future
-controller (Checkpoint 9.8) depends on the Administration layer.
+split; `PayrollRunAdministrationService` itself checks a DIFFERENT
+capability per method (`.prepare` for create/calculate/adjustments,
+`.approve` for `approve()` only), mirroring
+`PayrollPostingAdministrationService`'s own `.post`/`.reverse` split.
+No transport may call a core service directly; a future controller
+(Checkpoint 9.8) depends on the Administration/Read layer.
 
 ## Statutory boundary
 
@@ -279,16 +319,42 @@ read-only. This boundary blocks only Checkpoint 9.6.
 Salary/compensation data is Highly Sensitive per
 `docs/security/DATA-CLASSIFICATION.md`. Never in logs, audit metadata,
 event payloads, or an unauthorized read: raw amounts, rates, gross,
-deductions, net pay. Audit records the fact (which run, which action,
-which actor) by reference, never the value — verified directly:
-`PayrollRunResultReadService::listResults()`'s own audit call carries
-only `resultCount`, and `PayrollRunResultReadServiceTest` asserts no
-amount-shaped key ever appears in the recorded metadata.
-`PayrollRunResultReadService` (`payroll.compensation.sensitive.view`)
-is Checkpoint 9.7's sole read path for an individual Employee's actual
-result — every field returned as a typed `PayrollRunResultDetail`/
-`PayrollRunResultLineDetail` DTO, never the raw
-`PayrollRunResult`/`PayrollRunResultLine` Eloquent model, mirroring
-`App\Domain\Payments\Application\PaymentReadService`'s identical
-disclosure boundary (including the "no oracle" cross-School
-not-found uniformity via `PayrollRunNotFoundException`).
+deductions, net pay. Audit records the fact (which run/assignment,
+which action, which actor) by reference, never the value — verified
+directly: `PayrollRunResultReadService::listResults()`'s and
+`PayrollCompensationReadService::getAssignmentValues()`'s own audit
+calls carry only `resultCount`/`valueCount`, and
+`PayrollRunResultReadServiceTest`/`PayrollCompensationReadServiceTest`
+assert no amount-shaped key ever appears in the recorded metadata, and
+that a DENIED sensitive-read attempt leaves zero audit rows (no
+result leakage on denial).
+
+Two Checkpoint 9.7 read paths reach Employee-specific compensation
+data, split by sensitivity tier exactly like
+`App\Domain\HR\Application\EmployeeDocumentService`'s classification-
+aware authorization:
+
+- `PayrollCompensationReadService::listAssignments()`
+  (`payroll.compensation.view`) — non-sensitive identity/effective-
+  dating only (`CompensationAssignmentSummary`, ADR 0032 "Sensitive
+  values": "deliberately narrow ... never the Employee-specific
+  monetary values"). This method structurally never queries
+  `compensation_assignment_values` at all — not merely omits amounts
+  from the DTO — verified by a dedicated test asserting the executed
+  query log never mentions that table.
+- `PayrollCompensationReadService::getAssignmentValues()`/
+  `PayrollRunResultReadService::listResults()`
+  (`payroll.compensation.sensitive.view`) — the ONLY paths to actual
+  Employee monetary values outside of `assign()`'s own write-time
+  return. Every field returned as a typed DTO
+  (`CompensationAssignmentValueDetail`/`PayrollRunResultDetail`/
+  `PayrollRunResultLineDetail`), never a raw Eloquent model, mirroring
+  `App\Domain\Payments\Application\PaymentReadService`'s identical
+  disclosure boundary (including "no oracle" cross-School not-found
+  uniformity via `CompensationAssignmentNotFoundException`/
+  `PayrollRunNotFoundException`).
+
+`PayrollRunReadService` (`payroll.runs.view`) is a THIRD, wholly
+non-sensitive read path — `payroll_runs` itself carries no monetary
+column at all, so `PayrollRunSummary` is a complete, safe mirror of
+the row (status, kind, prepared/approved/posted-by, timestamps).
