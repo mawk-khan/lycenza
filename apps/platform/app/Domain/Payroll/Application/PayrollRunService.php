@@ -3,10 +3,13 @@
 namespace App\Domain\Payroll\Application;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\Payroll\Application\Exceptions\ConcurrentRunApprovalConflictException;
 use App\Domain\Payroll\Application\Exceptions\DuplicateRegularRunException;
+use App\Domain\Payroll\Application\Exceptions\InvalidRunTransitionException;
 use App\Domain\Payroll\Application\Exceptions\NegativeNetPayException;
 use App\Domain\Payroll\Application\Exceptions\PeriodNotOpenException;
 use App\Domain\Payroll\Application\Exceptions\RunNotEditableException;
+use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
 use App\Domain\Payroll\Infrastructure\CompensationAssignmentValue;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\PayrollAdjustment;
@@ -146,6 +149,20 @@ class PayrollRunService
 
         return $this->context->withSchool($school, function () use ($school, $run, $actor) {
             return DB::transaction(function () use ($school, $run, $actor) {
+                // Serializes concurrent calculate() attempts on the SAME
+                // run (Checkpoint 9.4 real-concurrency requirement) --
+                // a different run takes a different lock. Re-check status
+                // against the locked row: a concurrent approve() that
+                // committed between this method's entry check and here
+                // must be caught before this transaction ever attempts
+                // to touch payroll_run_results (which the freeze trigger
+                // would reject anyway, but this gives a clean domain
+                // error first).
+                $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
+                if (! in_array($locked->status, ['draft', 'calculated'], true)) {
+                    throw new RunNotEditableException($run->id, $locked->status);
+                }
+
                 $period = $run->period;
 
                 $employmentRecordIds = EmployeeCompensationAssignment::query()
@@ -193,6 +210,60 @@ class PayrollRunService
                 ]);
 
                 return new PayrollCalculationOutcome($resolved, $unresolved, $transitioned);
+            });
+        });
+    }
+
+    /**
+     * Phase 9.4 (ADR 0032 "Separation of duties") -- the sole
+     * `calculated -> approved` transition, the immutability boundary
+     * (no separate `finalized` state). Mirrors
+     * `App\Domain\Communications\Application\Approval\CommunicationApprovalService::decide()`'s
+     * exact shape: a conditional UPDATE `WHERE status = 'calculated'`
+     * is the real concurrency guarantee (two concurrent approve() calls
+     * race on this one row; Postgres serializes them, and exactly one
+     * UPDATE affects a row) -- no separate lockForUpdate() step needed
+     * first. The preparer-cannot-approve-own-run rule is checked here
+     * at the Application layer (this is the first place after
+     * `prepared_by_user_id` is genuinely fixed at creation) and is
+     * additionally backed by the database CHECK `payroll_runs_sod_check`
+     * (Checkpoint 9.1) -- both layers reject self-approval
+     * independently. An approver may also post (Checkpoint 9.5) -- no
+     * repository precedent requires further restriction, and no
+     * emergency override exists.
+     */
+    public function approve(PayrollRun $run, User $approver): PayrollRun
+    {
+        $school = $run->school;
+
+        if ($run->status !== 'calculated') {
+            throw new InvalidRunTransitionException($run->status, 'approved');
+        }
+
+        if ($run->prepared_by_user_id === $approver->id) {
+            throw new SelfApprovalNotAllowedException($run->id);
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $run, $approver) {
+            return DB::transaction(function () use ($school, $run, $approver) {
+                $affected = PayrollRun::query()
+                    ->where('id', $run->id)
+                    ->where('status', 'calculated')
+                    ->update([
+                        'status' => 'approved',
+                        'approved_by_user_id' => $approver->id,
+                        'approved_at' => now(),
+                    ]);
+
+                if ($affected === 0) {
+                    throw new ConcurrentRunApprovalConflictException($run->id);
+                }
+
+                $this->audit->school($school, 'payroll.run.approved', actor: $approver, subject: $run, metadata: [
+                    'preparedByUserId' => $run->prepared_by_user_id,
+                ]);
+
+                return $run->fresh();
             });
         });
     }
