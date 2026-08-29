@@ -533,6 +533,22 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'payroll.runs.reverse', 'label' => 'Reverse posted Payroll runs', 'namespace' => 'school'],
             ['key' => 'payroll.accounting.manage', 'label' => 'Manage Payroll accounting (Finance account) configuration', 'namespace' => 'school'],
             ['key' => 'payroll.statutory.manage', 'label' => 'Manage Payroll statutory (PF/ESI/TDS) configuration -- reserved, no functional implementation while Checkpoint 9.6 is legally gated', 'namespace' => 'school'],
+
+            // Phase 0H (Timetable foundation) -- mirrors Inventory's
+            // directory/stock split exactly: `.periods.*` covers the
+            // reusable named-time-slot reference catalogue (a Period
+            // has no independent meaning outside scheduling, the same
+            // "no capability per sub-entity" reasoning as every prior
+            // `.directory.*` pair), `.schedule.*` covers the actual
+            // weekly TimetableEntry scheduling lifecycle
+            // (create/update/activate/deactivate). Deliberately a
+            // SEPARATE pair from `.periods.*` -- curating the bell
+            // schedule is a distinct, less frequent concern from
+            // building/adjusting the weekly timetable itself.
+            ['key' => 'timetable.periods.view', 'label' => 'View the Timetable Period catalogue', 'namespace' => 'school'],
+            ['key' => 'timetable.periods.manage', 'label' => 'Manage the Timetable Period catalogue', 'namespace' => 'school'],
+            ['key' => 'timetable.schedule.view', 'label' => 'View the Timetable schedule', 'namespace' => 'school'],
+            ['key' => 'timetable.schedule.manage', 'label' => 'Manage the Timetable schedule', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -740,6 +756,13 @@ class CapabilityAndRoleSeeder extends Seeder
                     // implementation while Checkpoint 9.6 remains
                     // `[LEGAL REVIEW REQUIRED]`; granting it to anyone
                     // now would be premature regardless of sensitivity.
+                    // Phase 0H: same day-to-day operational parity
+                    // reasoning as Hostel/Inventory/Canteen/Visitor/
+                    // Transport/Library above -- curating the Period
+                    // catalogue and building/adjusting the weekly
+                    // Timetable is routine administrative work.
+                    'timetable.periods.view', 'timetable.periods.manage',
+                    'timetable.schedule.view', 'timetable.schedule.manage',
                 ],
             ],
             'principal' => [
@@ -844,6 +867,16 @@ class CapabilityAndRoleSeeder extends Seeder
                     // (never granted to Principal above).
                     'canteen.directory.view', 'canteen.directory.manage',
                     'canteen.orders.view', 'canteen.orders.manage',
+                    // Phase 0H: same day-to-day operational parity
+                    // reasoning as school_admin above -- no
+                    // "financial account configuration" style
+                    // narrowing applies here (unlike
+                    // `canteen.settings.*`, deliberately withheld from
+                    // Principal above) since Timetable has no
+                    // analogous financial-configuration surface; full
+                    // parity is granted.
+                    'timetable.periods.view', 'timetable.periods.manage',
+                    'timetable.schedule.view', 'timetable.schedule.manage',
                 ],
             ],
         ];

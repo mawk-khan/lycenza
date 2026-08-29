@@ -67,6 +67,8 @@ use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\SubjectOfferingController;
+use App\Http\Controllers\App\Timetable\TimetableEntryController;
+use App\Http\Controllers\App\Timetable\TimetablePeriodController;
 use App\Http\Controllers\App\TransportOperationsController;
 use App\Http\Controllers\App\TransportRouteController;
 use App\Http\Controllers\App\TransportStudentAssignmentController;
@@ -820,5 +822,31 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/{canteenOrder}', [CanteenOrderController::class, 'show'])->name('show');
         Route::post('/{canteenOrder}/fulfill', [CanteenOrderController::class, 'fulfill'])->name('fulfill');
         Route::post('/{canteenOrder}/cancel', [CanteenOrderController::class, 'cancel'])->name('cancel');
+    });
+
+    // Phase 0H: Timetable (Period catalogue + weekly schedule).
+    // Capability authorization happens both at the controller (every
+    // action calls `authorizeCapability()`) AND inside
+    // App\Domain\Timetable\Application\{TimetablePeriodService,TimetableScheduleService}
+    // themselves -- mirroring every other module's established
+    // double-layered pattern.
+    Route::prefix('app/timetable-periods')->name('app.timetable-periods.')->group(function (): void {
+        Route::get('/', [TimetablePeriodController::class, 'index'])->name('index');
+        Route::get('/create', [TimetablePeriodController::class, 'create'])->name('create');
+        Route::post('/', [TimetablePeriodController::class, 'store'])->name('store');
+        Route::patch('/{timetablePeriod}', [TimetablePeriodController::class, 'update'])->name('update');
+    });
+
+    Route::prefix('app/timetable-schedule')->name('app.timetable-schedule.')->group(function (): void {
+        Route::get('/', [TimetableEntryController::class, 'index'])->name('index');
+        Route::get('/create', [TimetableEntryController::class, 'create'])->name('create');
+        Route::get('/search/subject-offerings', [TimetableEntryController::class, 'searchSubjectOfferings'])->name('search-subject-offerings');
+        Route::get('/search/sections', [TimetableEntryController::class, 'searchSections'])->name('search-sections');
+        Route::get('/search/teachers', [TimetableEntryController::class, 'searchTeachers'])->name('search-teachers');
+        Route::get('/search/rooms', [TimetableEntryController::class, 'searchRooms'])->name('search-rooms');
+        Route::get('/search/periods', [TimetableEntryController::class, 'searchPeriods'])->name('search-periods');
+        Route::post('/', [TimetableEntryController::class, 'store'])->name('store');
+        Route::post('/{timetableEntry}/activate', [TimetableEntryController::class, 'activate'])->name('activate');
+        Route::post('/{timetableEntry}/deactivate', [TimetableEntryController::class, 'deactivate'])->name('deactivate');
     });
 });

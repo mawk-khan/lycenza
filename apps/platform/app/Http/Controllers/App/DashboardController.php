@@ -87,6 +87,9 @@ class DashboardController extends Controller
                 'canViewCanteenDirectory' => $school !== null && $capabilities->canInSchool($user, 'canteen.directory.view', $school),
                 'canViewCanteenOrders' => $school !== null && $capabilities->canInSchool($user, 'canteen.orders.view', $school),
                 'canViewCanteenSettings' => $school !== null && $capabilities->canInSchool($user, 'canteen.settings.view', $school),
+                // Phase 0H: Timetable (Period catalogue + weekly schedule).
+                'canViewTimetablePeriods' => $school !== null && $capabilities->canInSchool($user, 'timetable.periods.view', $school),
+                'canViewTimetableSchedule' => $school !== null && $capabilities->canInSchool($user, 'timetable.schedule.view', $school),
             ],
         ]);
     }
