@@ -45,7 +45,19 @@ type Status =
     // above; `pending`/`fulfilled` are new -- no collision with any
     // prior dimension).
     | 'pending'
-    | 'fulfilled';
+    | 'fulfilled'
+    // Phase 9.9: PayrollPeriod lifecycle (`draft` already existed
+    // above -- `open`/`closed` are new). PayrollRun lifecycle (`draft`
+    // already existed above -- `calculated`/`approved`/`posted` are
+    // new). `reversed` is a derived PayrollRunPosting state, never a
+    // real PayrollRun.status value (ADR 0032 -- a run's own status
+    // never becomes "reversed").
+    | 'open'
+    | 'closed'
+    | 'calculated'
+    | 'approved'
+    | 'posted'
+    | 'reversed';
 
 interface Props {
     status: Status;
@@ -105,6 +117,17 @@ const STYLES: Record<Status, { label: string; badge: string; dot: string }> = {
         badge: 'bg-emerald-50 text-emerald-700',
         dot: 'bg-emerald-500',
     },
+    // PayrollPeriod / PayrollRun lifecycle.
+    open: { label: 'Open', badge: 'bg-sky-50 text-sky-700', dot: 'bg-sky-500' },
+    closed: { label: 'Closed', badge: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+    calculated: {
+        label: 'Calculated',
+        badge: 'bg-indigo-50 text-indigo-700',
+        dot: 'bg-indigo-500',
+    },
+    approved: { label: 'Approved', badge: 'bg-violet-50 text-violet-700', dot: 'bg-violet-500' },
+    posted: { label: 'Posted', badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
+    reversed: { label: 'Reversed', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
 };
 
 const style = STYLES[props.status];

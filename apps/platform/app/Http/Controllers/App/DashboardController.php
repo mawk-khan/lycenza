@@ -90,6 +90,16 @@ class DashboardController extends Controller
                 // Phase 0H: Timetable (Period catalogue + weekly schedule).
                 'canViewTimetablePeriods' => $school !== null && $capabilities->canInSchool($user, 'timetable.periods.view', $school),
                 'canViewTimetableSchedule' => $school !== null && $capabilities->canInSchool($user, 'timetable.schedule.view', $school),
+                // Phase 9.9: Payroll workspace -- any one of its four
+                // top-level view capabilities is enough to show the entry
+                // point, mirroring Finance/HR's identical "any one view
+                // capability" nav-gate above; the Payroll hub page itself
+                // hides sub-areas the actor cannot see (PayrollController::index()).
+                'canViewPayroll' => $school !== null
+                    && ($capabilities->canInSchool($user, 'payroll.structures.view', $school)
+                        || $capabilities->canInSchool($user, 'payroll.compensation.view', $school)
+                        || $capabilities->canInSchool($user, 'payroll.runs.view', $school)
+                        || $capabilities->canInSchool($user, 'payroll.accounting.manage', $school)),
             ],
         ]);
     }
