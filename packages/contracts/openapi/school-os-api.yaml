@@ -4077,6 +4077,838 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # Phase 9.8: Payroll HTTP transport, mirroring the Finance section's
+  # exact style. Every path below is authorized through the 9.7
+  # Administration/Read boundary (App\Domain\Payroll\Application\*AdministrationService /
+  # *ReadService) -- never a trusted core service or raw Eloquent model
+  # directly. `payroll.compensation.sensitive.*`/`payroll.statutory.manage`
+  # are Highly Sensitive/reserved and granted to no default role (see
+  # docs/modules/PAYROLL.md "Authorization").
+  /schools/{schoolId}/salary-components:
+    get:
+      operationId: listSalaryComponents
+      summary: Lists a School's salary components (policy shape only, never an amount). Requires payroll.structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/SalaryComponent" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createSalaryComponent
+      summary: Creates a salary component (semantic identity only, no monetary value). Requires payroll.structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SalaryComponentInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SalaryComponent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/salary-components/{salaryComponentId}/deactivate:
+    post:
+      operationId: deactivateSalaryComponent
+      summary: Deactivates a salary component. Requires payroll.structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/SalaryComponentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SalaryComponent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School id.
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/salary-structures:
+    get:
+      operationId: listSalaryStructures
+      summary: Lists a School's salary structure revisions. Requires payroll.structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/SalaryStructureSummary" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createSalaryStructure
+      summary: Creates a new draft salary structure revision. Requires payroll.structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SalaryStructureInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SalaryStructureSummary" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/salary-structures/{salaryStructureId}:
+    get:
+      operationId: getSalaryStructure
+      summary: Fetch one salary structure revision with its ordered formula lines. Requires payroll.structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/SalaryStructureId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SalaryStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School id.
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/salary-structures/{salaryStructureId}/components:
+    post:
+      operationId: addSalaryStructureComponent
+      summary: >
+        Adds one formula line (fixed_amount or percentage_of_base) to a
+        DRAFT structure -- frozen once the structure is activated.
+        Requires payroll.structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/SalaryStructureId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SalaryStructureComponentInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SalaryStructureComponent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School salary structure id.
+        "422":
+          description: Validation failure (structure not draft, invalid shape, cycle).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/salary-structures/{salaryStructureId}/activate:
+    post:
+      operationId: activateSalaryStructure
+      summary: >
+        Activates a draft structure, superseding whatever was
+        previously active for the same code (ADR 0032). Requires
+        payroll.structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/SalaryStructureId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SalaryStructureSummary" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School id.
+        "409":
+          description: Concurrent activation conflict, or the structure is not in draft.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/employment-records/{employmentRecordId}/compensation-assignments:
+    get:
+      operationId: listCompensationAssignments
+      summary: >
+        Lists an EmploymentRecord's compensation assignment history --
+        identity and effective dates ONLY, never an amount (ADR 0032
+        "Sensitive values"). Requires payroll.compensation.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/CompensationAssignmentSummary" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.compensation.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: assignCompensation
+      summary: >
+        Assigns compensation for an EmploymentRecord against an ACTIVE
+        salary structure -- Highly Sensitive (writes actual per-component
+        amounts). Requires payroll.compensation.sensitive.manage
+        (granted to no default role).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompensationAssignmentInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CompensationAssignmentSummary" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.compensation.sensitive.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School EmploymentRecord/salary structure id.
+        "409":
+          description: Overlapping assignment for this EmploymentRecord.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failure (structure not active, missing/extra fixed values, wrong component type).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/compensation-assignments/{compensationAssignmentId}/values:
+    get:
+      operationId: getCompensationAssignmentValues
+      summary: >
+        Fetch one compensation assignment's actual per-component fixed
+        amounts -- Highly Sensitive. Requires
+        payroll.compensation.sensitive.view (granted to no default
+        role). Audited exactly once per successful call; a denied
+        attempt leaves no audit trail.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/CompensationAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/CompensationAssignmentValue" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.compensation.sensitive.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: PAYROLL_COMPENSATION_ASSIGNMENT_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-periods:
+    post:
+      operationId: createPayrollPeriod
+      summary: >
+        Creates a monthly payroll period (identity is period_month;
+        starts_on/ends_on derived). Requires payroll.periods.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayrollPeriodInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollPeriod" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.periods.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failure (duplicate period_month).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-periods/{payrollPeriodId}/open:
+    post:
+      operationId: openPayrollPeriod
+      summary: Opens a draft payroll period for run creation. Requires payroll.periods.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollPeriodId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollPeriod" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.periods.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School id.
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-periods/{payrollPeriodId}/close:
+    post:
+      operationId: closePayrollPeriod
+      summary: Closes a payroll period. Requires payroll.periods.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollPeriodId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollPeriod" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.periods.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School id.
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-periods/{payrollPeriodId}/payroll-runs:
+    get:
+      operationId: listPayrollRuns
+      summary: Lists a period's payroll runs (non-sensitive metadata only). Requires payroll.runs.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollPeriodId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PayrollRun" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createPayrollRun
+      summary: >
+        Creates a regular payroll run for this period (at most one
+        regular run per period). Requires payroll.runs.prepare.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollPeriodId" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.prepare in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School period id.
+        "409":
+          description: DUPLICATE_REGULAR_RUN -- this period already has a regular run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: The period is not open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}:
+    get:
+      operationId: getPayrollRun
+      summary: Fetch one payroll run's non-sensitive metadata (status, kind, prepared/approved/posted-by). Requires payroll.runs.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: PAYROLL_RUN_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/correction:
+    post:
+      operationId: createCorrectionRun
+      summary: >
+        Creates a correction run against an original, posted regular
+        run that has not been reversed (ADR 0032 -- no correction-of-
+        correction chains). Requires payroll.runs.prepare.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payroll_period_id]
+              properties:
+                payroll_period_id: { type: string, format: uuid, description: The OPEN period the correction itself belongs to (may differ from the original run's period). }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.prepare in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School run/period id.
+        "422":
+          description: >
+            PAYROLL_INVALID_CORRECTION_TARGET (not a posted regular
+            run) or PAYROLL_CORRECTION_TARGET_ALREADY_REVERSED, or the
+            correction's own period is not open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/manual-overrides:
+    post:
+      operationId: recordManualOverride
+      summary: >
+        Records the authoritative, complete result for a partial-period
+        EmploymentRecord in a REGULAR run (append-only). Requires
+        payroll.runs.prepare.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ManualOverrideInput" }
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: object, required: [recorded], properties: { recorded: { type: boolean } } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.prepare in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School run/EmploymentRecord id.
+        "422":
+          description: RUN_NOT_EDITABLE -- the run is approved or posted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/correction-deltas:
+    post:
+      operationId: recordCorrectionDelta
+      summary: >
+        Records a signed delta (increase|decrease) against one salary
+        component for a CORRECTION run (append-only). Requires
+        payroll.runs.prepare.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CorrectionDeltaInput" }
+      responses:
+        "201":
+          description: Recorded.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: object, required: [recorded], properties: { recorded: { type: boolean } } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.prepare in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School run/EmploymentRecord id.
+        "422":
+          description: RUN_NOT_EDITABLE -- the run is approved or posted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/calculate:
+    post:
+      operationId: calculatePayrollRun
+      summary: >
+        (Re)calculates a run's entire result set (whole-set replacement,
+        never a partial patch). Requires payroll.runs.prepare.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      responses:
+        "200":
+          description: >
+            OK. transitionedToCalculated is false, and the run stays
+            draft, if any eligible EmploymentRecord remains unresolved
+            (ADR 0032 fail-closed partial-period rule).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollCalculationOutcome" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.prepare in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School run id.
+        "422":
+          description: RUN_NOT_EDITABLE, NEGATIVE_NET_PAY, or PAYROLL_ZERO_EFFECT_CORRECTION.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/approve:
+    post:
+      operationId: approvePayrollRun
+      summary: >
+        Approves a calculated run -- the sole immutability boundary
+        (ADR 0032). Requires payroll.runs.approve (a SEPARATE
+        capability from payroll.runs.prepare -- an actor is never
+        authorized to approve merely because they can prepare payroll).
+        The preparer of this run may never approve it, enforced at the
+        actor level regardless of capability grants.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.approve in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School run id.
+        "409":
+          description: PAYROLL_SELF_APPROVAL_NOT_ALLOWED or a concurrent approval already won.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: PAYROLL_INVALID_RUN_TRANSITION -- the run is not calculated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/results:
+    get:
+      operationId: getPayrollRunResults
+      summary: >
+        Fetch a run's per-EmploymentRecord results (gross/deductions/net
+        and lines) -- Highly Sensitive. Requires
+        payroll.compensation.sensitive.view (granted to no default
+        role).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PayrollRunResult" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.compensation.sensitive.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: PAYROLL_RUN_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/post:
+    post:
+      operationId: postPayrollRun
+      summary: >
+        Posts an approved run to Finance via PayrollPostingService ->
+        LedgerService::post() (never a direct journal_entries write).
+        Requires payroll.runs.post. NOT idempotent -- a row lock closes
+        the concurrent-posting race window structurally instead (proven
+        by a real two-process concurrency test); no Idempotency-Key is
+        accepted or required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRunPosting" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.post in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School run id.
+        "422":
+          description: >
+            PAYROLL_INVALID_RUN_TRANSITION (not approved),
+            PAYROLL_ACCOUNTING_NOT_CONFIGURED,
+            PAYROLL_ACCOUNTING_ACCOUNT_INVALID, or
+            PAYROLL_DEDUCTION_MISSING_LEDGER_MAPPING.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/reverse:
+    post:
+      operationId: reversePayrollRun
+      summary: >
+        Reverses a posted run's original posting via
+        PayrollPostingService -> LedgerService::reverse() (a new,
+        inverse journal entry -- the original is never mutated).
+        Requires payroll.runs.reverse (a separate capability from
+        payroll.runs.post). NOT a generic HTTP-idempotent endpoint --
+        reversal has its own at-most-once semantics
+        (PAYROLL_RUN_ALREADY_REVERSED, 409, on a repeat). Reversing an
+        original that already has a correction run is still allowed
+        (ADR 0032 -- deliberately unrestricted).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 255, nullable: true }
+      responses:
+        "201":
+          description: Created (the reversal posting).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRunPosting" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.reverse in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School run id.
+        "409":
+          description: PAYROLL_RUN_ALREADY_REVERSED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: PAYROLL_RUN_NOT_POSTED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-accounting-configuration:
+    post:
+      operationId: configurePayrollAccounting
+      summary: >
+        Configures (upserts) this School's salary-expense/salary-payable
+        Finance account mapping. Requires payroll.accounting.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayrollAccountingConfigurationInput" }
+      responses:
+        "201":
+          description: Created/updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollAccountingConfiguration" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.accounting.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: PAYROLL_ACCOUNTING_ACCOUNT_INVALID (missing, inactive, or wrong-type ledger account).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/hostels:
     get:
       operationId: listHostels
@@ -5301,6 +6133,38 @@ components:
       in: path
       required: true
       description: Phase 0G.6. Nonexistent or cross-School ids both resolve to PAYMENT_NOT_FOUND -- no existence oracle.
+      schema: { type: string, format: uuid }
+    SalaryComponentId:
+      name: salaryComponentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SalaryStructureId:
+      name: salaryStructureId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EmploymentRecordId:
+      name: employmentRecordId
+      in: path
+      required: true
+      description: An HR EmploymentRecord id (read-only cross-module reference).
+      schema: { type: string, format: uuid }
+    CompensationAssignmentId:
+      name: compensationAssignmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PayrollPeriodId:
+      name: payrollPeriodId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PayrollRunId:
+      name: payrollRunId
+      in: path
+      required: true
+      description: Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle.
       schema: { type: string, format: uuid }
     HostelId:
       name: hostelId
@@ -7407,6 +8271,204 @@ components:
         enrollment: { $ref: "#/components/schemas/AdmissionConversionEnrollment" }
         guardian: { allOf: [{ $ref: "#/components/schemas/GuardianSummary" }], nullable: true }
         relationship: { allOf: [{ $ref: "#/components/schemas/AdmissionConversionRelationship" }], nullable: true }
+
+    # Phase 9.8: Payroll schemas.
+    SalaryComponent:
+      type: object
+      required: [id, code, name, type, status]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string, enum: [earning, deduction] }
+        liabilityLedgerAccountId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+    SalaryComponentInput:
+      type: object
+      required: [code, name, type]
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        type: { type: string, enum: [earning, deduction] }
+        liability_ledger_account_id: { type: string, format: uuid, nullable: true, description: Required (eventually, at posting time) for a deduction with a nonzero total. }
+    SalaryStructureSummary:
+      type: object
+      required: [id, code, version, name, status]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        version: { type: integer }
+        name: { type: string }
+        status: { type: string, enum: [draft, active, superseded] }
+    SalaryStructureComponent:
+      type: object
+      required: [id, salaryComponentId, calculationType, displayOrder]
+      properties:
+        id: { type: string, format: uuid }
+        salaryComponentId: { type: string, format: uuid }
+        calculationType: { type: string, enum: [fixed_amount, percentage_of_base] }
+        baseComponentId: { type: string, format: uuid, nullable: true }
+        rate: { type: string, nullable: true, description: "Decimal fraction 0-1, percentage_of_base only." }
+        displayOrder: { type: integer }
+    SalaryStructureDetail:
+      allOf:
+        - { $ref: "#/components/schemas/SalaryStructureSummary" }
+        - type: object
+          required: [components]
+          properties:
+            components: { type: array, items: { $ref: "#/components/schemas/SalaryStructureComponent" } }
+    SalaryStructureInput:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+    SalaryStructureComponentInput:
+      type: object
+      required: [salary_component_id, calculation_type, display_order]
+      properties:
+        salary_component_id: { type: string, format: uuid }
+        calculation_type: { type: string, enum: [fixed_amount, percentage_of_base] }
+        base_component_id: { type: string, format: uuid, nullable: true, description: percentage_of_base only -- must reference an earlier-ordered component in the same structure. }
+        rate: { type: string, nullable: true, description: "Decimal fraction 0-1, percentage_of_base only." }
+        display_order: { type: integer, minimum: 1 }
+    CompensationAssignmentSummary:
+      type: object
+      required: [id, employmentRecordId, salaryStructureId, effectiveFrom]
+      description: Identity and effective dates ONLY -- never an amount (ADR 0032 "Sensitive values").
+      properties:
+        id: { type: string, format: uuid }
+        employmentRecordId: { type: string, format: uuid }
+        salaryStructureId: { type: string, format: uuid }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo: { type: string, format: date, nullable: true }
+    CompensationAssignmentValue:
+      type: object
+      required: [salaryStructureComponentId, amount]
+      description: Highly Sensitive -- an Employee-specific fixed component amount.
+      properties:
+        salaryStructureComponentId: { type: string, format: uuid }
+        amount: { type: string, description: Exact decimal string, never a JSON float. }
+    CompensationAssignmentInput:
+      type: object
+      required: [salary_structure_id, effective_from, fixed_values]
+      properties:
+        salary_structure_id: { type: string, format: uuid, description: Must reference an ACTIVE structure. }
+        effective_from: { type: string, format: date }
+        fixed_values:
+          type: array
+          items:
+            type: object
+            required: [salary_structure_component_id, amount]
+            properties:
+              salary_structure_component_id: { type: string, format: uuid }
+              amount: { type: string, description: "Exact decimal string (e.g. \"50000.00\"), one value per fixed_amount component -- never for percentage_of_base." }
+    PayrollPeriod:
+      type: object
+      required: [id, periodMonth, startsOn, endsOn, status]
+      properties:
+        id: { type: string, format: uuid }
+        periodMonth: { type: string, format: date }
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date }
+        paymentDate: { type: string, format: date, nullable: true }
+        status: { type: string, enum: [draft, open, closed] }
+    PayrollPeriodInput:
+      type: object
+      required: [period_month]
+      properties:
+        period_month: { type: string, format: date, description: Any date within the target month -- normalized to that month's first day. }
+        payment_date: { type: string, format: date, nullable: true }
+    PayrollRun:
+      type: object
+      required: [id, payrollPeriodId, runKind, status, preparedByUserId]
+      description: Non-sensitive run metadata only -- payroll_runs itself carries no monetary column.
+      properties:
+        id: { type: string, format: uuid }
+        payrollPeriodId: { type: string, format: uuid }
+        runKind: { type: string, enum: [regular, correction] }
+        correctsPayrollRunId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [draft, calculated, approved, posted] }
+        preparedByUserId: { type: string, format: uuid }
+        approvedByUserId: { type: string, format: uuid, nullable: true }
+        postedByUserId: { type: string, format: uuid, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+        postedAt: { type: string, format: date-time, nullable: true }
+    PayrollCalculationOutcome:
+      type: object
+      required: [resolvedCount, unresolvedEmploymentRecordIds, transitionedToCalculated]
+      properties:
+        resolvedCount: { type: integer }
+        unresolvedEmploymentRecordIds: { type: array, items: { type: string, format: uuid } }
+        transitionedToCalculated: { type: boolean, description: "False if any eligible EmploymentRecord remains unresolved -- the run stays draft (ADR 0032 fail-closed rule)." }
+    ManualOverrideInput:
+      type: object
+      required: [employment_record_id, component_amounts, reason]
+      properties:
+        employment_record_id: { type: string, format: uuid }
+        component_amounts:
+          type: object
+          additionalProperties: { type: string }
+          description: "salary_component_id => absolute decimal-string amount, one entry per affected component."
+        reason: { type: string, maxLength: 1000 }
+    CorrectionDeltaInput:
+      type: object
+      required: [employment_record_id, lines, reason]
+      properties:
+        employment_record_id: { type: string, format: uuid }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [salary_component_id, amount, effect]
+            properties:
+              salary_component_id: { type: string, format: uuid }
+              amount: { type: string, description: Always a positive magnitude -- direction is carried by effect. }
+              effect: { type: string, enum: [increase, decrease] }
+        reason: { type: string, maxLength: 1000 }
+    PayrollRunResultLine:
+      type: object
+      required: [salaryComponentId, amount, effect]
+      properties:
+        salaryComponentId: { type: string, format: uuid }
+        amount: { type: string }
+        effect: { type: string, enum: [increase, decrease] }
+        resolvedLedgerAccountId: { type: string, format: uuid, nullable: true, description: Informational calculation-time snapshot only -- posting re-resolves the current mapping live. }
+    PayrollRunResult:
+      type: object
+      required: [employmentRecordId, employeeId, grossAmount, totalDeductions, netAmount, lines]
+      description: Highly Sensitive -- one EmploymentRecord's authoritative result for a run.
+      properties:
+        employmentRecordId: { type: string, format: uuid }
+        employeeId: { type: string, format: uuid }
+        grossAmount: { type: string }
+        totalDeductions: { type: string }
+        netAmount: { type: string }
+        lines: { type: array, items: { $ref: "#/components/schemas/PayrollRunResultLine" } }
+    PayrollRunPosting:
+      type: object
+      required: [id, payrollRunId, journalEntryId, postingKind]
+      properties:
+        id: { type: string, format: uuid }
+        payrollRunId: { type: string, format: uuid }
+        journalEntryId: { type: string, format: uuid }
+        postingKind: { type: string, enum: [original, reversal] }
+        reversalOfPayrollRunPostingId: { type: string, format: uuid, nullable: true }
+        reason: { type: string, nullable: true }
+    PayrollAccountingConfiguration:
+      type: object
+      required: [id, salaryExpenseLedgerAccountId, salaryPayableLedgerAccountId, currency]
+      properties:
+        id: { type: string, format: uuid }
+        salaryExpenseLedgerAccountId: { type: string, format: uuid }
+        salaryPayableLedgerAccountId: { type: string, format: uuid }
+        currency: { type: string }
+    PayrollAccountingConfigurationInput:
+      type: object
+      required: [salary_expense_ledger_account_id, salary_payable_ledger_account_id]
+      properties:
+        salary_expense_ledger_account_id: { type: string, format: uuid, description: Must be an active LedgerAccount of type expense. }
+        salary_payable_ledger_account_id: { type: string, format: uuid, description: Must be an active LedgerAccount of type liability. }
 
   responses:
     TooManyRequests:
