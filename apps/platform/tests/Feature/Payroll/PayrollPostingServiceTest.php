@@ -299,4 +299,94 @@ class PayrollPostingServiceTest extends TestCase
         $this->assertNotNull($event);
         $this->assertSame($reverser->id, $event->actor_user_id);
     }
+
+    /**
+     * Phase 9.5 accounting-integrity correction: proves posting
+     * resolves a deduction's liability account LIVE, from
+     * `SalaryComponent::liability_ledger_account_id`, never from the
+     * calculation-time `payroll_run_result_lines.resolved_ledger_account_id`
+     * snapshot. The component's mapping is changed to a DIFFERENT
+     * ledger account AFTER `calculate()` has already run (so the
+     * snapshot captured the OLD account) but BEFORE `post()` -- the
+     * posted journal entry must credit the NEW account, not the
+     * stale snapshot.
+     */
+    #[Test]
+    public function posting_uses_the_components_current_liability_mapping_not_the_stale_calculation_time_snapshot(): void
+    {
+        $school = $this->createSchool();
+        $context = app(TenantContext::class);
+        $poster = $this->createUser();
+        $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
+
+        $preparer = $this->createUser();
+        $structureService = app(SalaryStructureService::class);
+        $componentService = app(SalaryComponentService::class);
+
+        $result = $context->withSchool($school, function () use ($school, $preparer, $structureService, $componentService) {
+            $structure = $structureService->createDraft($school, 'GRADE-SNAP', 'Grade Snapshot', $preparer);
+            $basic = $componentService->create($school, 'BASIC', 'Basic', 'earning', null, $preparer);
+
+            $oldLedgerAccount = LedgerAccount::factory()->for($school, 'school')->type('liability')->create();
+            $pf = $componentService->create($school, 'PF', 'Provident Fund', 'deduction', $oldLedgerAccount->id, $preparer);
+
+            $basicSc = $structureService->addComponent($structure, new AddStructureComponentData($basic->id, 'fixed_amount', null, null, 1), $preparer);
+            $pfSc = $structureService->addComponent($structure, new AddStructureComponentData($pf->id, 'fixed_amount', null, null, 2), $preparer);
+            $structure = $structureService->activate($structure, $preparer);
+
+            $employmentRecord = $this->createEmploymentRecord($this->createEmployee($school), ['starts_on' => '2025-01-01']);
+
+            app(CompensationService::class)->assign(
+                $school, $employmentRecord, $structure, Carbon::parse('2025-01-01'),
+                [
+                    new FixedComponentValueInput($basicSc->id, '50000.00'),
+                    new FixedComponentValueInput($pfSc->id, '1800.00'),
+                ],
+                $preparer,
+            );
+
+            $period = $this->periodService()->open($this->periodService()->createPeriod($school, Carbon::parse('2026-09-01'), null, $preparer), $preparer);
+            $run = $this->runService()->createRun($period, $preparer);
+            $this->runService()->calculate($run, $preparer);
+            $run = $run->fresh();
+
+            $approver = $this->createUser();
+            $run = $this->runService()->approve($run, $approver);
+
+            // Reconfigure PF's liability account to a DIFFERENT one
+            // AFTER calculation/approval -- the frozen
+            // payroll_run_result_lines.resolved_ledger_account_id
+            // snapshot still points at $oldLedgerAccount.
+            $newLedgerAccount = LedgerAccount::factory()->for($school, 'school')->type('liability')->create();
+            $pf->update(['liability_ledger_account_id' => $newLedgerAccount->id]);
+
+            return compact('run', 'oldLedgerAccount', 'newLedgerAccount');
+        });
+
+        $posting = $context->withSchool($school, fn () => $this->postingService()->post($result['run'], $poster));
+
+        $lines = $context->withSchool($school, fn () => JournalLine::query()->where('journal_entry_id', $posting->journal_entry_id)->get());
+
+        $this->assertNull($lines->firstWhere('ledger_account_id', $result['oldLedgerAccount']->id), 'posting must NOT use the stale snapshot account');
+        $newAccountLine = $lines->firstWhere('ledger_account_id', $result['newLedgerAccount']->id);
+        $this->assertNotNull($newAccountLine, 'posting must use the CURRENT component mapping');
+        $this->assertSame('1800.00', $newAccountLine->credit_amount);
+    }
+
+    #[Test]
+    public function posting_is_blocked_when_a_previously_valid_liability_account_becomes_inactive_before_posting(): void
+    {
+        $school = $this->createSchool();
+        $context = app(TenantContext::class);
+        $poster = $this->createUser();
+        $context->withSchool($school, fn () => $this->configureAccounting($school, $poster));
+
+        [$run, , $deductionLedgerAccount] = $context->withSchool($school, fn () => $this->makeApprovedRun($school));
+
+        $context->withSchool($school, fn () => $deductionLedgerAccount->update(['status' => 'inactive']));
+
+        $this->expectException(DeductionMissingLedgerMappingException::class);
+
+        $context->withSchool($school, fn () => $this->postingService()->post($run, $poster));
+    }
 }

@@ -21,6 +21,17 @@ use App\Support\Money\Money;
  * decimal places, applied once per component line via
  * `Money::multiplyByRate()`, never re-rounded when lines are later
  * summed (ADR 0032 "Calculation semantics").
+ *
+ * Phase 9.5 correction: `summarize()` is effect-aware (`increase`
+ * adds, `decrease` subtracts) for BOTH gross and deductions -- this is
+ * a pure generalization, not a behavior change for `calculateFromStructure()`/
+ * `calculateFromManualOverrides()`, which only ever produce `increase`
+ * lines (unchanged: `signed amount == amount` when effect is always
+ * `increase`). Only `calculateFromCorrectionDeltas()` can produce a
+ * `decrease` line, and therefore only a correction run's aggregate
+ * gross/deductions/net can be negative -- exactly what
+ * `payroll_run_results_validate_sign` (Checkpoint 9.1) already
+ * anticipated and permits for `run_kind = 'correction'` alone.
  */
 final class PayrollCalculationEngine
 {
@@ -76,6 +87,25 @@ final class PayrollCalculationEngine
     }
 
     /**
+     * @param  list<CorrectionDeltaLineInput>  $deltas
+     */
+    public function calculateFromCorrectionDeltas(array $deltas): CalculatedResult
+    {
+        $lines = array_map(
+            fn (CorrectionDeltaLineInput $d) => new CalculatedResultLine(
+                $d->salaryComponentId,
+                $d->amount,
+                $d->effect,
+                $d->isEarning,
+                $d->isEarning ? null : $d->resolvedLedgerAccountId,
+            ),
+            $deltas,
+        );
+
+        return $this->summarize($lines);
+    }
+
+    /**
      * @param  list<CalculatedResultLine>  $lines
      */
     private function summarize(array $lines): CalculatedResult
@@ -90,10 +120,12 @@ final class PayrollCalculationEngine
 
         foreach ($lines as $line) {
             $amount = Money::of($line->amount, self::CURRENCY);
+            $signed = $line->effect === 'increase' ? $amount : $amount->negated();
+
             if ($line->isEarning) {
-                $gross = $gross->add($amount);
+                $gross = $gross->add($signed);
             } else {
-                $deductions = $deductions->add($amount);
+                $deductions = $deductions->add($signed);
             }
         }
 

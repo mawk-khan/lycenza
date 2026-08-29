@@ -184,24 +184,49 @@ unresolved EmploymentRecord as calculated.
 `salary_components.liability_ledger_account_id` (composite FK to
 Finance's `ledger_accounts`) names each deduction's destination;
 `payroll_accounting_configurations` names the salary-expense and
-salary-payable accounts. A run posts one aggregate debit (gross, to
-expense), one aggregate credit (net, to payable), and one aggregate
-credit per deduction with a nonzero total (to its configured
-liability account) — balanced by construction. A deduction with a
-nonzero total and no mapping blocks posting entirely; there is no
-suspense-account fallback. Resolved accounts are snapshotted onto
-`payroll_run_result_lines` at calculation time, frozen at `approved`,
-so later reconfiguration cannot retroactively alter an approved run's
-posting.
+salary-payable accounts. A run posts one aggregate debit (total GROSS
+earnings, to expense), one aggregate credit (total net pay, to
+payable), and one aggregate credit per deduction with a nonzero total
+(to its liability account) — balanced by construction. A deduction
+with a nonzero total and no mapping blocks posting entirely; there is
+no suspense-account fallback.
 
-Posting is owned by a Payroll Application-layer service that opens the
-authoritative transaction, locks the run, re-validates `approved`,
-builds the balanced journal, calls `LedgerService::post()` (a proven
+**Account resolution (amended at Checkpoint 9.5's accounting-integrity
+review):** all three account categories — salary expense, salary
+payable, and every deduction's liability account — resolve and
+validate the CURRENT `LedgerAccount` LIVE, at posting time, uniformly.
+An earlier draft of this document (and of ADR 0032) described the
+deduction account as snapshotted at calculation time and frozen at
+`approved`; that was inconsistent with the expense/payable pair, which
+were always resolved live, and has been corrected in favor of the
+single, coherent policy described here (see ADR 0032's amendment note
+for the full reconciliation). `payroll_run_result_lines.resolved_ledger_account_id`
+is still populated at calculation time as an informational record of
+what was configured then, but `PayrollPostingService` does not read it
+for posting.
+
+Posting is owned by `App\Domain\Payroll\Application\PayrollPostingService`,
+which opens the authoritative transaction, locks the run, re-validates
+`approved`, resolves and validates every account live, builds the
+balanced journal, calls `LedgerService::post()` (a proven
 nested-transaction call — see `App\Domain\Payments\Application\PaymentProviderEventService`
 for the existing precedent), records `payroll_run_postings`, transitions
-the run to `posted`, audits, and completes idempotency within the same
-transaction. Reversal uses `LedgerService::reverse()` and never mutates
-the original journal entry or the run's own historical result.
+the run to `posted`, and audits — all inside one transaction (proven by
+Checkpoint 9.5's real two-process concurrency tests: a losing concurrent
+poster is rejected before ever reaching `LedgerService`, never leaving
+an orphan `JournalEntry`). Reversal uses `LedgerService::reverse()` and
+never mutates the original journal entry or the run's own historical
+result.
+
+**Idempotency (explicitly scoped at Checkpoint 9.5):** the above is
+Application-layer atomicity only — a single `DB::transaction()` call.
+HTTP-transport idempotency (`Idempotency-Key` / `IdempotencyGuard::completeWithin()`,
+`docs/architecture/RELIABILITY.md`) is NOT yet wired to `post()`/`reverse()`
+because no HTTP endpoint exists for either operation yet — that
+integration belongs to Checkpoint 9.8 (API / OpenAPI), once a real
+consequential retryable endpoint exists to evaluate it against (rule
+29). This document does not claim end-to-end HTTP crash-window closure
+until that checkpoint connects it.
 
 ## Authorization
 

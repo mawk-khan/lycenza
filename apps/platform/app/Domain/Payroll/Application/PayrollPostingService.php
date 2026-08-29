@@ -7,6 +7,7 @@ use App\Domain\Finance\Application\JournalLineData;
 use App\Domain\Finance\Application\LedgerService;
 use App\Domain\Finance\Application\PostJournalEntryData;
 use App\Domain\Finance\Domain\JournalSide;
+use App\Domain\Finance\Infrastructure\LedgerAccount;
 use App\Domain\Payroll\Application\Exceptions\DeductionMissingLedgerMappingException;
 use App\Domain\Payroll\Application\Exceptions\InvalidRunTransitionException;
 use App\Domain\Payroll\Application\Exceptions\PayrollRunAlreadyReversedException;
@@ -44,19 +45,43 @@ use Illuminate\Support\Facades\DB;
  * Payroll Application service in this phase.
  *
  * Posting algorithm (fixed by `payroll_run_result_lines`' own
- * migration docblock, Checkpoint 9.1): one aggregate debit (net
- * earning total, to salary expense), one aggregate credit (net pay
- * total, to salary payable), and one aggregate credit per deduction
- * component with a nonzero total (to its snapshotted liability
- * account) -- balanced by construction, since for every result
- * `gross = net + deductions` holds, and therefore so does the
- * aggregate across every result in the run. `effect` (increase|decrease)
- * flips debit/credit direction per the same docblock, though only
- * `increase` can occur today -- no run kind that produces a
- * `decrease` line is creatable yet (`PayrollRunService::createRun()`
- * always writes `run_kind = 'regular'`); this method implements the
- * already-committed general algorithm rather than hardcoding today's
- * special case.
+ * migration docblock, Checkpoint 9.1): one aggregate debit (total
+ * GROSS earnings, to salary expense), one aggregate credit (total net
+ * pay, to salary payable), and one aggregate credit per deduction
+ * component with a nonzero total (to its liability account) --
+ * balanced by construction, since for every result `gross = net +
+ * deductions` holds, and therefore so does the aggregate across every
+ * result in the run. `effect` (increase|decrease) flips debit/credit
+ * direction per the same docblock -- a Phase 9.5 correction run
+ * (`PayrollRunService::createCorrectionRun()`) is the first creatable
+ * run kind that can produce a `decrease` line; this method implements
+ * the already-committed general algorithm, not a regular-run special
+ * case.
+ *
+ * Account resolution policy (Phase 9.5 accounting-integrity
+ * correction): ALL THREE account categories -- salary expense, salary
+ * payable, AND deduction liability -- resolve and validate the
+ * CURRENT `App\Domain\Finance\Infrastructure\LedgerAccount` at posting
+ * time, never a stale snapshot. Salary expense/payable already did
+ * this via `PayrollAccountingConfigurationService::resolveValidated()`;
+ * this class resolves a deduction's liability account the identical
+ * way, from `SalaryComponent::liability_ledger_account_id` (live), not
+ * from `payroll_run_result_lines.resolved_ledger_account_id` (a
+ * calculation-time snapshot). That snapshot column still exists and
+ * is still populated by `PayrollRunService::persistResult()` --
+ * unchanged 9.1/9.3 behavior, not itself reopened -- and remains a
+ * useful point-in-time record of what was configured when the run was
+ * calculated, but it is deliberately NOT read here: only ONE
+ * resolution policy governs what actually gets posted, applied
+ * uniformly to every account category, chosen over snapshot-at-
+ * calculation-time because the ADR's own rationale for freezing
+ * financial FACTS at `approved` (ADR 0032 "the sole immutability
+ * boundary") is about amounts and component identity, not about which
+ * Finance account a component happens to be mapped to today -- a
+ * School correcting a misconfigured liability account between
+ * calculation and posting should have that correction take effect,
+ * exactly as a salary-expense/payable reconfiguration already does.
+ * See the ADR 0032 amendment note for the full reconciliation.
  */
 class PayrollPostingService
 {
@@ -211,15 +236,19 @@ class PayrollPostingService
 
         $lines = [];
 
-        $earningNet = Money::of('0.00', self::CURRENCY);
+        // Total GROSS earnings (never net-of-deductions) -- summed
+        // separately from $payableTotal precisely so the two can
+        // differ by exactly $deductions, which is what makes the
+        // resulting entry balance (see this method's own docblock).
+        $grossEarningTotal = Money::of('0.00', self::CURRENCY);
         foreach ($resultLines->filter(fn (PayrollRunResultLine $l) => $l->component->isEarning()) as $line) {
-            $earningNet = $this->applyEffect($earningNet, $line);
+            $grossEarningTotal = $this->applyEffect($grossEarningTotal, $line);
         }
 
-        if (! $earningNet->isZero()) {
-            $lines[] = $earningNet->isPositive()
-                ? new JournalLineData($config->salary_expense_ledger_account_id, JournalSide::Debit, $earningNet)
-                : new JournalLineData($config->salary_expense_ledger_account_id, JournalSide::Credit, $earningNet->negated());
+        if (! $grossEarningTotal->isZero()) {
+            $lines[] = $grossEarningTotal->isPositive()
+                ? new JournalLineData($config->salary_expense_ledger_account_id, JournalSide::Debit, $grossEarningTotal)
+                : new JournalLineData($config->salary_expense_ledger_account_id, JournalSide::Credit, $grossEarningTotal->negated());
         }
 
         if (! $payableTotal->isZero()) {
@@ -240,10 +269,7 @@ class PayrollPostingService
                 continue;
             }
 
-            $ledgerAccountId = $group->first()->resolved_ledger_account_id;
-            if ($ledgerAccountId === null) {
-                throw new DeductionMissingLedgerMappingException($salaryComponentId, $run->id);
-            }
+            $ledgerAccountId = $this->resolveDeductionLedgerAccountId($run, $group->first());
 
             $lines[] = $total->isPositive()
                 ? new JournalLineData($ledgerAccountId, JournalSide::Credit, $total)
@@ -251,6 +277,35 @@ class PayrollPostingService
         }
 
         return $lines;
+    }
+
+    /**
+     * Resolves and validates the deduction's CURRENT liability account
+     * live, from `SalaryComponent::liability_ledger_account_id` --
+     * never from `payroll_run_result_lines.resolved_ledger_account_id`
+     * (a calculation-time snapshot, deliberately not authoritative for
+     * posting; see this class's own docblock). Same three checks as
+     * `PayrollAccountingConfigurationService::validateAccounts()`:
+     * configured (not null), active, and correctly typed (`liability`)
+     * -- applied here rather than delegated to that service, since it
+     * validates the School-wide expense/payable pair, not a
+     * per-component mapping.
+     */
+    private function resolveDeductionLedgerAccountId(PayrollRun $run, PayrollRunResultLine $line): string
+    {
+        $ledgerAccountId = $line->component->liability_ledger_account_id;
+
+        if ($ledgerAccountId === null) {
+            throw new DeductionMissingLedgerMappingException($line->salary_component_id, $run->id);
+        }
+
+        $ledgerAccount = LedgerAccount::query()->where('school_id', $run->school_id)->find($ledgerAccountId);
+
+        if ($ledgerAccount === null || ! $ledgerAccount->isActive() || $ledgerAccount->type !== 'liability') {
+            throw new DeductionMissingLedgerMappingException($line->salary_component_id, $run->id);
+        }
+
+        return $ledgerAccountId;
     }
 
     private function applyEffect(Money $running, PayrollRunResultLine $line): Money

@@ -4,17 +4,21 @@ namespace App\Domain\Payroll\Application;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\Exceptions\ConcurrentRunApprovalConflictException;
+use App\Domain\Payroll\Application\Exceptions\CorrectionTargetAlreadyReversedException;
 use App\Domain\Payroll\Application\Exceptions\DuplicateRegularRunException;
+use App\Domain\Payroll\Application\Exceptions\InvalidCorrectionTargetException;
 use App\Domain\Payroll\Application\Exceptions\InvalidRunTransitionException;
 use App\Domain\Payroll\Application\Exceptions\NegativeNetPayException;
 use App\Domain\Payroll\Application\Exceptions\PeriodNotOpenException;
 use App\Domain\Payroll\Application\Exceptions\RunNotEditableException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
+use App\Domain\Payroll\Application\Exceptions\ZeroEffectCorrectionException;
 use App\Domain\Payroll\Infrastructure\CompensationAssignmentValue;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\PayrollAdjustment;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
+use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Domain\Payroll\Infrastructure\PayrollRunResult;
 use App\Domain\Payroll\Infrastructure\PayrollRunResultLine;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
@@ -84,6 +88,107 @@ class PayrollRunService
             } catch (UniqueConstraintViolationException) {
                 throw new DuplicateRegularRunException($period->id);
             }
+        });
+    }
+
+    /**
+     * Phase 9.5 correction (ADR 0032 "Run kinds, correction model, and
+     * posting") -- creates a `correction` run against an original
+     * `regular`, already-`posted` run. Application-layer pre-checks
+     * (regular + posted + not-yet-reversed) give a clean domain error
+     * ahead of the database trigger `trg_payroll_runs_validate_correction_target`
+     * (Checkpoint 9.1), which remains the authoritative guarantee. A
+     * `posted` run always has exactly one `original` `PayrollRunPosting`
+     * row (`PayrollPostingService::post()` creates both atomically) --
+     * `$originalPosting === null` is structurally unreachable given the
+     * status check above it, but is treated identically to "already
+     * reversed" anyway (fail closed, no oracle for a state that should
+     * never occur).
+     */
+    public function createCorrectionRun(PayrollRun $correctsRun, PayrollPeriod $period, User $actor): PayrollRun
+    {
+        $school = $period->school;
+
+        if ($period->status !== 'open') {
+            throw new PeriodNotOpenException($period->id, $period->status);
+        }
+
+        if (! $correctsRun->isRegular() || $correctsRun->status !== 'posted') {
+            throw new InvalidCorrectionTargetException("payroll run '{$correctsRun->id}' must be a posted regular run, got run_kind={$correctsRun->run_kind}, status={$correctsRun->status}.");
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $correctsRun, $period, $actor) {
+            $originalPosting = PayrollRunPosting::query()
+                ->where('school_id', $school->id)
+                ->where('payroll_run_id', $correctsRun->id)
+                ->where('posting_kind', 'original')
+                ->first();
+
+            if ($originalPosting === null || $originalPosting->reversal()->exists()) {
+                throw new CorrectionTargetAlreadyReversedException($correctsRun->id);
+            }
+
+            return DB::transaction(function () use ($school, $correctsRun, $period, $actor) {
+                $run = PayrollRun::query()->create([
+                    'school_id' => $school->id,
+                    'payroll_period_id' => $period->id,
+                    'run_kind' => 'correction',
+                    'corrects_payroll_run_id' => $correctsRun->id,
+                    'status' => 'draft',
+                    'prepared_by_user_id' => $actor->id,
+                ]);
+
+                $this->audit->school($school, 'payroll.run.correction_created', actor: $actor, subject: $run, metadata: [
+                    'correctsPayrollRunId' => $correctsRun->id,
+                    'payrollPeriodId' => $period->id,
+                ]);
+
+                return $run;
+            });
+        });
+    }
+
+    /**
+     * Records one signed delta line against a correction run --
+     * mirrors `recordManualOverride()`'s append-only shape exactly
+     * (same `payroll_adjustments` table, `mode = 'correction_delta'`
+     * instead of `manual_override`). No `run_kind` pre-check here, by
+     * the SAME precedent `recordManualOverride()` already establishes:
+     * the database trigger `trg_payroll_adjustments_validate_mode`
+     * (Checkpoint 9.1) is the sole guard against a mode/run_kind
+     * mismatch for either method.
+     *
+     * @param  list<CorrectionDeltaInput>  $lines
+     */
+    public function recordCorrectionDelta(PayrollRun $run, EmploymentRecord $employmentRecord, array $lines, string $reason, User $actor): void
+    {
+        $school = $run->school;
+
+        if (! in_array($run->status, ['draft', 'calculated'], true)) {
+            throw new RunNotEditableException($run->id, $run->status);
+        }
+
+        $this->context->withSchool($school, function () use ($school, $run, $employmentRecord, $lines, $reason, $actor) {
+            DB::transaction(function () use ($school, $run, $employmentRecord, $lines, $reason, $actor) {
+                foreach ($lines as $line) {
+                    PayrollAdjustment::query()->create([
+                        'school_id' => $school->id,
+                        'payroll_run_id' => $run->id,
+                        'employment_record_id' => $employmentRecord->id,
+                        'salary_component_id' => $line->salaryComponentId,
+                        'mode' => 'correction_delta',
+                        'amount' => $line->amount,
+                        'effect' => $line->effect,
+                        'reason' => $reason,
+                        'actor_user_id' => $actor->id,
+                    ]);
+                }
+
+                $this->audit->school($school, 'payroll.run.correction_delta_recorded', actor: $actor, subject: $run, metadata: [
+                    'employmentRecordId' => $employmentRecord->id,
+                    'lineCount' => count($lines),
+                ]);
+            });
         });
     }
 
@@ -163,39 +268,13 @@ class PayrollRunService
                     throw new RunNotEditableException($run->id, $locked->status);
                 }
 
-                $period = $run->period;
-
-                $employmentRecordIds = EmployeeCompensationAssignment::query()
-                    ->where('school_id', $school->id)
-                    ->where('effective_from', '<=', $period->ends_on->toDateString())
-                    ->where(function ($query) use ($period) {
-                        $query->whereNull('effective_to')->orWhere('effective_to', '>=', $period->starts_on->toDateString());
-                    })
-                    ->distinct()
-                    ->pluck('employment_record_id');
-
-                $resolved = [];
-                $unresolved = [];
-
                 // Whole-result-set replacement -- never a partial patch
                 // (ADR 0032). Cascades to payroll_run_result_lines.
                 PayrollRunResult::query()->where('payroll_run_id', $run->id)->delete();
 
-                foreach ($employmentRecordIds as $employmentRecordId) {
-                    $employmentRecord = EmploymentRecord::query()->findOrFail($employmentRecordId);
-
-                    $result = $this->resolveEmploymentRecord($run, $period, $employmentRecord);
-
-                    if ($result === null) {
-                        $unresolved[] = $employmentRecordId;
-
-                        continue;
-                    }
-
-                    $this->assertNonNegativeNet($employmentRecordId, $result);
-                    $this->persistResult($school, $run, $employmentRecord, $result);
-                    $resolved[] = $employmentRecordId;
-                }
+                [$resolved, $unresolved] = $locked->isCorrection()
+                    ? $this->calculateCorrectionRun($school, $run)
+                    : $this->calculateRegularRun($school, $run);
 
                 $transitioned = false;
                 if (empty($unresolved) && ! empty($resolved)) {
@@ -212,6 +291,92 @@ class PayrollRunService
                 return new PayrollCalculationOutcome($resolved, $unresolved, $transitioned);
             });
         });
+    }
+
+    /**
+     * @return array{0: list<string>, 1: list<string>} [resolved employment record ids, unresolved]
+     */
+    private function calculateRegularRun(School $school, PayrollRun $run): array
+    {
+        $period = $run->period;
+
+        $employmentRecordIds = EmployeeCompensationAssignment::query()
+            ->where('school_id', $school->id)
+            ->where('effective_from', '<=', $period->ends_on->toDateString())
+            ->where(function ($query) use ($period) {
+                $query->whereNull('effective_to')->orWhere('effective_to', '>=', $period->starts_on->toDateString());
+            })
+            ->distinct()
+            ->pluck('employment_record_id');
+
+        $resolved = [];
+        $unresolved = [];
+
+        foreach ($employmentRecordIds as $employmentRecordId) {
+            $employmentRecord = EmploymentRecord::query()->findOrFail($employmentRecordId);
+
+            $result = $this->resolveEmploymentRecord($run, $period, $employmentRecord);
+
+            if ($result === null) {
+                $unresolved[] = $employmentRecordId;
+
+                continue;
+            }
+
+            $this->assertNonNegativeNet($employmentRecordId, $result);
+            $this->persistResult($school, $run, $employmentRecord, $result);
+            $resolved[] = $employmentRecordId;
+        }
+
+        return [$resolved, $unresolved];
+    }
+
+    /**
+     * Phase 9.5 correction -- a correction run's employment records are
+     * never derived from the period/assignment scan `calculateRegularRun()`
+     * uses (that scan answers "who was employed this period," a
+     * question a surgical, employee-by-employee correction does not
+     * ask); instead, they are exactly whichever EmploymentRecords have
+     * at least one `correction_delta` `payroll_adjustments` row against
+     * this run (via `recordCorrectionDelta()`). A correction run
+     * therefore has no "unresolved" concept the way a regular run's
+     * partial-period gate does -- every named EmploymentRecord always
+     * has a resolvable delta (or it would not appear here at all); an
+     * empty result set simply means no deltas have been recorded yet,
+     * which `calculate()`'s own `! empty($resolved)` check already
+     * correctly leaves at `draft` without transitioning.
+     *
+     * `assertNonNegativeNet()` deliberately does NOT apply here --
+     * `payroll_run_results_validate_sign` (Checkpoint 9.1) permits a
+     * negative gross/deductions/net specifically for `run_kind =
+     * 'correction'`; a decreased-earning or increased-deduction
+     * correction genuinely produces a negative net delta by design.
+     * `assertNonZeroEffect()` is this path's own equivalent fail-closed
+     * gate instead.
+     *
+     * @return array{0: list<string>, 1: list<string>} [resolved employment record ids, unresolved]
+     */
+    private function calculateCorrectionRun(School $school, PayrollRun $run): array
+    {
+        $employmentRecordIds = PayrollAdjustment::query()
+            ->where('payroll_run_id', $run->id)
+            ->where('mode', 'correction_delta')
+            ->distinct()
+            ->pluck('employment_record_id');
+
+        $resolved = [];
+
+        foreach ($employmentRecordIds as $employmentRecordId) {
+            $employmentRecord = EmploymentRecord::query()->findOrFail($employmentRecordId);
+
+            $result = $this->calculateFromCorrectionDeltas($run, $employmentRecord);
+
+            $this->assertNonZeroEffect($employmentRecordId, $run, $result);
+            $this->persistResult($school, $run, $employmentRecord, $result);
+            $resolved[] = $employmentRecordId;
+        }
+
+        return [$resolved, []];
     }
 
     /**
@@ -327,6 +492,57 @@ class PayrollRunService
         ))->all();
 
         return $this->engine->calculateFromManualOverrides($lines);
+    }
+
+    /**
+     * Mirrors `calculateFromManualOverride()`'s exact `DISTINCT ON`
+     * latest-per-component resolution (same append-only table, same
+     * reasoning) -- a correction delta may be resubmitted while the
+     * run is still `draft`/`calculated`, and only the latest row per
+     * component counts.
+     */
+    private function calculateFromCorrectionDeltas(PayrollRun $run, EmploymentRecord $employmentRecord): CalculatedResult
+    {
+        $latestIds = PayrollAdjustment::query()
+            ->where('payroll_run_id', $run->id)
+            ->where('employment_record_id', $employmentRecord->id)
+            ->where('mode', 'correction_delta')
+            ->selectRaw('DISTINCT ON (salary_component_id) id')
+            ->orderBy('salary_component_id')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->pluck('id');
+
+        $deltas = PayrollAdjustment::query()->whereIn('id', $latestIds)->with('component')->get();
+
+        $lines = $deltas->map(fn (PayrollAdjustment $d) => new CorrectionDeltaLineInput(
+            $d->salary_component_id,
+            $d->amount,
+            $d->effect,
+            $d->component->isEarning(),
+            $d->component->isEarning() ? null : $d->component->liability_ledger_account_id,
+        ))->all();
+
+        return $this->engine->calculateFromCorrectionDeltas($lines);
+    }
+
+    /**
+     * Rejects a correction whose NET effect is exactly zero, even when
+     * its gross/deductions are individually nonzero (e.g. an equal
+     * increase to an earning and a deduction that happen to offset) --
+     * a deliberate, conservative Phase 9 policy: this module has no
+     * concept yet of an intentional net-neutral compensation
+     * restatement, and a net-zero correction is far more likely to be
+     * a data-entry mistake (a component resubmitted with the wrong
+     * effect, or the same delta entered twice with opposite signs)
+     * than a genuine business need. Fail closed rather than silently
+     * post a correction with no take-home effect.
+     */
+    private function assertNonZeroEffect(string $employmentRecordId, PayrollRun $run, CalculatedResult $result): void
+    {
+        if (Money::of($result->netAmount, self::CURRENCY)->isZero()) {
+            throw new ZeroEffectCorrectionException($employmentRecordId, $run->id);
+        }
     }
 
     private function calculateFromCompensationAssignment(CompensationAssignmentSummary $summary): CalculatedResult

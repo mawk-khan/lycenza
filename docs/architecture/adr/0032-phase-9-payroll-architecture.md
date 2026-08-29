@@ -144,16 +144,41 @@ never a mutation of run history.
 Finance's `ledger_accounts`) names each deduction's Finance
 destination; `payroll_accounting_configurations` names the two fixed
 accounts (salary expense, salary payable). A run posts one aggregate
-debit (gross earnings, to salary expense), one aggregate credit (net
-pay, to salary payable), and one aggregate credit per deduction
-component with a nonzero total (to its configured liability account) —
+debit (total GROSS earnings, to salary expense), one aggregate credit
+(total net pay, to salary payable), and one aggregate credit per
+deduction component with a nonzero total (to its liability account) —
 balanced by construction, since `gross = net + deductions` holds for
 every result. A deduction with a nonzero total and no configured
-mapping blocks posting entirely (no suspense-account fallback). The
-resolved account for every line is snapshotted onto
-`payroll_run_result_lines` at calculation time, frozen at `approved`
-alongside the rest of the result, so a later reconfiguration can never
-alter what an already-approved run will post.
+mapping blocks posting entirely (no suspense-account fallback).
+
+> **Amendment (Checkpoint 9.5 accounting-integrity review, 2026-08-29):**
+> the paragraph above originally continued: *"The resolved account for
+> every line is snapshotted onto `payroll_run_result_lines` at
+> calculation time, frozen at `approved` alongside the rest of the
+> result, so a later reconfiguration can never alter what an
+> already-approved run will post."* That snapshot-at-calculation-time
+> policy for the DEDUCTION account was inconsistent with the
+> salary-expense/salary-payable accounts, which were always resolved
+> and validated LIVE at posting time
+> (`PayrollAccountingConfigurationService::resolveValidated()`) — a
+> mixed policy discovered during 9.5's accounting-integrity
+> verification. Resolved as **posting-time resolution for ALL THREE
+> account categories**, uniformly: `PayrollPostingService` now resolves
+> a deduction's liability account live from
+> `SalaryComponent::liability_ledger_account_id` at posting time (same
+> existence/active/correct-`type` validation the expense/payable pair
+> already received), exactly like the other two accounts. The
+> `payroll_run_result_lines.resolved_ledger_account_id` column is
+> unchanged and still populated at calculation time — it remains a
+> useful point-in-time record of what was configured when the run was
+> calculated — but is no longer read by `PayrollPostingService`; it is
+> informational only, not the posting-time source of truth. This
+> keeps ADR 0032's "`approved` is the sole immutability boundary"
+> principle scoped to monetary amounts and component identity (which
+> line existed, for how much) — never to which Finance account a
+> component happens to be mapped today, which a School must be able to
+> correct going forward exactly as it already could for the
+> expense/payable pair.
 
 ### Separation of duties
 
