@@ -399,6 +399,29 @@ gate — not yet performed.
 
 Attendance, Timetable, Academics, Examinations.
 
+**Timetable Foundation (Phase 0H.1) is complete** — recurring-weekly
+class scheduling: `TimetablePeriod` (reusable named time slots, a
+`TenantLock`-enforced non-overlap invariant) and `TimetableEntry`
+(SubjectOffering × Section × HR Employee-as-teacher × optional Room ×
+Period × day-of-week, three database partial-unique conflict indexes,
+required-SubjectOffering-only v1 scope), `timetable.periods.*`/
+`timetable.schedule.*` capabilities, an `/api/v1` administrative
+surface, and a session-authenticated Inertia UI — 110 tests / 298
+assertions, 3 real two-process concurrency races proven non-flaky, a
+full security review against the module's own checklist, and a
+definitive full-regression run. See `docs/modules/TIMETABLE.md` for
+the complete as-built record.
+
+**Attendance, Academics, and Examinations remain not started.** Phase
+0H as a whole is **not** complete — Timetable Foundation is one of
+four modules this phase scopes, and the other three have no
+implementation yet.
+
+**"Phase 0H Attendance" means Student class attendance.** Staff/
+Employee attendance remains outside this Phase 0H checkpoint and
+belongs to the separately-scoped HR/Phase 0J concern, unless future
+authoritative roadmap work changes that boundary.
+
 ## Phase 0I — LMS
 
 ## Phase 0J — HR and Payroll
