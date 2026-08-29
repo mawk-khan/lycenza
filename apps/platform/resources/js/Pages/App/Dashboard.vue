@@ -26,6 +26,8 @@ interface Props {
         canViewCanteenDirectory: boolean;
         canViewCanteenOrders: boolean;
         canViewCanteenSettings: boolean;
+        canViewTimetablePeriods: boolean;
+        canViewTimetableSchedule: boolean;
     };
 }
 
@@ -107,6 +109,12 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewCanteenSettings">
                     <a class="underline" href="/app/canteen-settings">Canteen Settings</a>
+                </li>
+                <li v-if="nav.canViewTimetablePeriods">
+                    <a class="underline" href="/app/timetable-periods">Timetable Periods</a>
+                </li>
+                <li v-if="nav.canViewTimetableSchedule">
+                    <a class="underline" href="/app/timetable-schedule">Timetable Schedule</a>
                 </li>
             </ul>
         </nav>

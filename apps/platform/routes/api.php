@@ -60,6 +60,8 @@ use App\Domain\Students\Http\Controllers\EnrollmentRolloverSubjectMappingControl
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
+use App\Domain\Timetable\Http\Controllers\TimetableEntryController;
+use App\Domain\Timetable\Http\Controllers\TimetablePeriodController;
 use App\Domain\Transport\Http\Controllers\TransportRouteAssignmentController;
 use App\Domain\Transport\Http\Controllers\TransportRouteController;
 use App\Domain\Transport\Http\Controllers\TransportStopController;
@@ -1307,6 +1309,78 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/canteen-orders/{canteenOrder}/cancel', [CanteenOrderController::class, 'cancel'])
                 ->middleware(['capability:canteen.orders.manage', 'throttle:school-api-mutations'])
                 ->name('schools.canteen-orders.cancel');
+
+            // Phase 0H: Timetable (Period catalogue + weekly schedule
+            // Entries). `create`/`update`/`activate` are NOT idempotent
+            // -- every double-booking effect (teacher/Section/Room, per
+            // day-of-week + Period) is already prevented at the database
+            // layer by three partial unique indexes
+            // (`create_timetable_entries_table` migration), so a network
+            // retry of an identical request can never duplicate the
+            // scheduling effect; the worst case is a clean, typed 409
+            // the client already needs to handle for a genuine conflict
+            // anyway. This mirrors AcademicYear activation's identical
+            // "protected by a database uniqueness guarantee, so no
+            // `idempotent` middleware needed" precedent. `deactivate` is
+            // a conditional status flip, safe to retry by construction,
+            // exactly like Hostel residency `end()`. Helper search
+            // endpoints (`search/*`) are gated by capability BEFORE any
+            // query executes -- Timetable's OWN capabilities only, never
+            // Academic Structure's `academics.*` or HR's employee-
+            // management capabilities (the Canteen capability-boundary
+            // lesson, carried forward explicitly).
+            Route::get('/timetable-periods', [TimetablePeriodController::class, 'index'])
+                ->middleware('capability:timetable.periods.view')
+                ->name('schools.timetable-periods.index');
+            Route::post('/timetable-periods', [TimetablePeriodController::class, 'store'])
+                ->middleware(['capability:timetable.periods.manage', 'throttle:school-api-mutations'])
+                ->name('schools.timetable-periods.store');
+            Route::get('/timetable-periods/{timetablePeriod}', [TimetablePeriodController::class, 'show'])
+                ->middleware('capability:timetable.periods.view')
+                ->name('schools.timetable-periods.show');
+            Route::patch('/timetable-periods/{timetablePeriod}', [TimetablePeriodController::class, 'update'])
+                ->middleware(['capability:timetable.periods.manage', 'throttle:school-api-mutations'])
+                ->name('schools.timetable-periods.update');
+            Route::post('/timetable-periods/{timetablePeriod}/activate', [TimetablePeriodController::class, 'activate'])
+                ->middleware(['capability:timetable.periods.manage', 'throttle:school-api-mutations'])
+                ->name('schools.timetable-periods.activate');
+            Route::post('/timetable-periods/{timetablePeriod}/deactivate', [TimetablePeriodController::class, 'deactivate'])
+                ->middleware(['capability:timetable.periods.manage', 'throttle:school-api-mutations'])
+                ->name('schools.timetable-periods.deactivate');
+
+            Route::get('/timetable-entries', [TimetableEntryController::class, 'index'])
+                ->middleware('capability:timetable.schedule.view')
+                ->name('schools.timetable-entries.index');
+            Route::post('/timetable-entries', [TimetableEntryController::class, 'store'])
+                ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
+                ->name('schools.timetable-entries.store');
+            Route::get('/timetable-entries/search/subject-offerings', [TimetableEntryController::class, 'searchSubjectOfferings'])
+                ->middleware('capability:timetable.schedule.manage')
+                ->name('schools.timetable-entries.search-subject-offerings');
+            Route::get('/timetable-entries/search/sections', [TimetableEntryController::class, 'searchSections'])
+                ->middleware('capability:timetable.schedule.manage')
+                ->name('schools.timetable-entries.search-sections');
+            Route::get('/timetable-entries/search/teachers', [TimetableEntryController::class, 'searchTeachers'])
+                ->middleware('capability:timetable.schedule.manage')
+                ->name('schools.timetable-entries.search-teachers');
+            Route::get('/timetable-entries/search/rooms', [TimetableEntryController::class, 'searchRooms'])
+                ->middleware('capability:timetable.schedule.manage')
+                ->name('schools.timetable-entries.search-rooms');
+            Route::get('/timetable-entries/search/periods', [TimetableEntryController::class, 'searchPeriods'])
+                ->middleware('capability:timetable.periods.view')
+                ->name('schools.timetable-entries.search-periods');
+            Route::get('/timetable-entries/{timetableEntry}', [TimetableEntryController::class, 'show'])
+                ->middleware('capability:timetable.schedule.view')
+                ->name('schools.timetable-entries.show');
+            Route::patch('/timetable-entries/{timetableEntry}', [TimetableEntryController::class, 'update'])
+                ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
+                ->name('schools.timetable-entries.update');
+            Route::post('/timetable-entries/{timetableEntry}/activate', [TimetableEntryController::class, 'activate'])
+                ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
+                ->name('schools.timetable-entries.activate');
+            Route::post('/timetable-entries/{timetableEntry}/deactivate', [TimetableEntryController::class, 'deactivate'])
+                ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
+                ->name('schools.timetable-entries.deactivate');
         });
 });
 
