@@ -120,9 +120,18 @@ return new class extends Migration
             $$ LANGUAGE plpgsql;
         SQL);
 
+        // INSERT only, deliberately -- Checkpoint 9.2 fix (ADR 0032
+        // "Compensation assignment" supersession flow): closing an
+        // EXISTING assignment (updating its own effective_to to end
+        // it, never touching salary_structure_id) must remain possible
+        // even after that assignment's structure has since been
+        // superseded by a newer revision -- superseding a structure
+        // must never retroactively invalidate assignments already made
+        // against it. Only a brand-new assignment must reference a
+        // currently-active revision.
         DB::unprepared(<<<'SQL'
             CREATE TRIGGER trg_compensation_assignments_require_active_structure
-                BEFORE INSERT OR UPDATE ON employee_compensation_assignments
+                BEFORE INSERT ON employee_compensation_assignments
                 FOR EACH ROW
                 EXECUTE FUNCTION compensation_assignments_require_active_structure();
         SQL);
