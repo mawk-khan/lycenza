@@ -4,6 +4,7 @@ namespace App\Domain\Payroll\Application;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\Exceptions\CompensationAssignmentOverlapException;
+use App\Domain\Payroll\Application\Exceptions\MissingFixedComponentValueException;
 use App\Domain\Payroll\Application\Exceptions\StructureComponentNotFixedAmountException;
 use App\Domain\Payroll\Application\Exceptions\StructureNotActiveException;
 use App\Domain\Payroll\Infrastructure\CompensationAssignmentValue;
@@ -77,6 +78,14 @@ class CompensationService
 
         return $this->context->withSchool($school, function () use ($school, $employmentRecord, $structure, $effectiveFrom, $fixedValues, $actor) {
             return DB::transaction(function () use ($school, $employmentRecord, $structure, $effectiveFrom, $fixedValues, $actor) {
+                // Runs INSIDE the tenant context/transaction -- checked
+                // here, not before withSchool(), because `$structure->components`
+                // is a lazy relation that would otherwise be evaluated
+                // with no RLS context set (returning zero rows, not the
+                // real set) if it were resolved before the context is
+                // active.
+                $this->assertEveryFixedComponentHasAValue($structure, $fixedValues);
+
                 // Serializes concurrent assign() calls for the SAME
                 // EmploymentRecord; a different EmploymentRecord takes a
                 // different row lock and proceeds independently.
@@ -151,6 +160,28 @@ class CompensationService
             ->first();
 
         return $assignment !== null ? CompensationAssignmentSummary::fromModel($assignment) : null;
+    }
+
+    /**
+     * Phase 9.3 discovery: the calculation kernel cannot safely default
+     * a missing fixed-amount value to zero (a silent underpayment, not
+     * a reasonable default) -- every fixed_amount component of the
+     * target revision must have an explicit value at assignment time,
+     * never resolved later. `percentage_of_base` components are
+     * exempt -- they are always derived, never separately valued
+     * (ADR 0032).
+     *
+     * @param  list<FixedComponentValueInput>  $fixedValues
+     */
+    private function assertEveryFixedComponentHasAValue(SalaryStructure $structure, array $fixedValues): void
+    {
+        $providedIds = array_map(fn (FixedComponentValueInput $v) => $v->salaryStructureComponentId, $fixedValues);
+
+        foreach ($structure->components as $component) {
+            if ($component->isFixedAmount() && ! in_array($component->id, $providedIds, true)) {
+                throw new MissingFixedComponentValueException($component->id);
+            }
+        }
     }
 
     private function createValue(School $school, EmployeeCompensationAssignment $assignment, FixedComponentValueInput $value): CompensationAssignmentValue

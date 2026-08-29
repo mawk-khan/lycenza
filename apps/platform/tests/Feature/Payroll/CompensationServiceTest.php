@@ -108,14 +108,17 @@ class CompensationServiceTest extends TestCase
         $school = $this->createSchool();
         $actor = $this->createUser();
         $context = app(TenantContext::class);
-        [$structure, , $hraStructureComponentId] = $this->makeActiveStructureWithBasicAndHra($school);
+        [$structure, $basicComponentId, $hraStructureComponentId] = $this->makeActiveStructureWithBasicAndHra($school);
         $employmentRecord = $context->withSchool($school, fn () => $this->createEmploymentRecord($this->createEmployee($school)));
 
         $this->expectException(StructureComponentNotFixedAmountException::class);
 
         $context->withSchool($school, fn () => $this->service()->assign(
             $school, $employmentRecord, $structure, Carbon::parse('2026-01-01'),
-            [new FixedComponentValueInput($hraStructureComponentId, '1000.00')],
+            [
+                new FixedComponentValueInput($basicComponentId, '50000.00'),
+                new FixedComponentValueInput($hraStructureComponentId, '1000.00'),
+            ],
             $actor,
         ));
     }
@@ -210,7 +213,7 @@ class CompensationServiceTest extends TestCase
         $schoolB = $this->createSchool();
         $actor = $this->createUser();
         $context = app(TenantContext::class);
-        [$structureA] = $this->makeActiveStructureWithBasicAndHra($schoolA);
+        [$structureA, $basicComponentIdA] = $this->makeActiveStructureWithBasicAndHra($schoolA);
 
         $employmentInB = $context->withSchool($schoolB, fn () => $this->createEmploymentRecord($this->createEmployee($schoolB)));
 
@@ -221,7 +224,8 @@ class CompensationServiceTest extends TestCase
         // EmploymentRecord is invisible under RLS (no oracle), so the
         // lock-then-check step's firstOrFail() throws.
         $context->withSchool($schoolA, fn () => $this->service()->assign(
-            $schoolA, $employmentInB, $structureA, Carbon::parse('2026-01-01'), [], $actor,
+            $schoolA, $employmentInB, $structureA, Carbon::parse('2026-01-01'),
+            [new FixedComponentValueInput($basicComponentIdA, '50000.00')], $actor,
         ));
     }
 
