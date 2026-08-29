@@ -426,6 +426,17 @@ originally documented order.
 for the full regression/closure record. Payroll (the remainder of this
 Phase 0J entry) remains not started.
 
+**Resequencing note (2026-08-29):** Payroll — the remainder of this
+Phase 0J entry — is now being built under a separately-numbered
+initiative ("Phase 9") on `feature/phase-9-payroll`, mirroring Phase
+8A's own exception. See ADR 0032 and `docs/modules/PAYROLL.md` for the
+full decision record and scope boundary. Checkpoint 9.6 (statutory
+PF/ESI/TDS) remains gated on the `[LEGAL REVIEW REQUIRED]` flag in
+`docs/security/DATA-CLASSIFICATION.md` and will not close without an
+explicit legal sign-off or an explicit user-approved scope-narrowing
+decision — this entry will not be marked complete while that checkpoint
+remains open.
+
 ## Phase 0K — Operational Modules
 
 Transport, Library, Inventory, Canteen, Hostel, Health, Visitor, Safety
