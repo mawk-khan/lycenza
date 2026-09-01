@@ -412,10 +412,40 @@ full security review against the module's own checklist, and a
 definitive full-regression run. See `docs/modules/TIMETABLE.md` for
 the complete as-built record.
 
-**Attendance, Academics, and Examinations remain not started.** Phase
-0H as a whole is **not** complete — Timetable Foundation is one of
-four modules this phase scopes, and the other three have no
-implementation yet.
+**Attendance Foundation (Phase 0H.2) is complete** — Student class
+attendance: `AttendanceSession` (the immutable header of one SUBMITTED
+class register, carrying an immutable snapshot of the class context it
+was instantiated from — AcademicYear/Campus/GradeLevel/Section/
+SubjectOffering/teacher/Period plus the Period's wall-clock times — so
+later Timetable or Period edits can never rewrite history;
+`timetable_entry_id` is provenance only) and `AttendanceRecord` (one
+StudentEnrollment's status, bound to its Session by DUAL composite
+context foreign keys that make a wrong-Section/year/campus/grade row
+structurally impossible), a complete-register submission discipline
+over a Students/SIS-owned as-of-date placement roster, `present`/
+`absent`/`late`/`excused` with no reason or free-text field anywhere,
+expected-status compare-and-swap correction, `attendance.view`/
+`attendance.manage` capabilities, an `/api/v1` command surface with a
+COMPLETE OpenAPI contract shipped in the same branch, and a
+session-authenticated Inertia UI. Phase 0H.2 also added a
+Section-before-Enrollment lock order to the existing
+`StudentEnrollmentService` so Attendance and Students/SIS serialize on
+one shared Section row — a synchronization discipline that changed no
+Students/SIS domain outcome. Five real two-process concurrency proofs
+(one of which caught and closed a genuine deadlock before it shipped),
+raw-PostgreSQL structural-integrity proofs from both FK directions, and
+historical-mutation proofs against TimetableEntry edits, Period
+retiming and backdated SIS changes. See `docs/modules/ATTENDANCE.md`
+for the complete as-built record.
+
+**Academics and Examinations remain not started.** Phase 0H as a whole
+is **not** complete — Timetable and Attendance are two of the four
+modules this phase scopes, and the other two have no implementation
+yet.
+
+**"Phase 0H Attendance" remains Student class attendance only.** Staff/
+Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR
+concern.
 
 **"Phase 0H Attendance" means Student class attendance.** Staff/
 Employee attendance remains outside this Phase 0H checkpoint and

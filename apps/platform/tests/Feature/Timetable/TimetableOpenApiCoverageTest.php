@@ -148,9 +148,22 @@ class TimetableOpenApiCoverageTest extends TestCase
             }
 
             // Any unindented (column-0) line ends the whole `paths:`
-            // map for our purposes (the only such line after this
-            // contract's Timetable block is `components:`).
+            // map for our purposes (e.g. `components:`).
             if ($currentPath !== null && preg_match('/^\S/', $line)) {
+                $currentPath = null;
+
+                continue;
+            }
+
+            // ANY other 2-space-indented path key also ends this block.
+            // Originally the Timetable block was the last one before
+            // `components:`, so the column-0 check above was sufficient;
+            // once another module's paths were appended after it (Phase
+            // 0H.2's Attendance block), that assumption broke and this
+            // parser attributed Attendance's operations to the last
+            // Timetable path. Same guard Attendance's own
+            // `AttendanceOpenApiCoverageTest` carries.
+            if ($currentPath !== null && preg_match('#^  /#', $line)) {
                 $currentPath = null;
 
                 continue;
