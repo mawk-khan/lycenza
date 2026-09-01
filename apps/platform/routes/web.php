@@ -16,6 +16,7 @@ use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\ApplicantController;
+use App\Http\Controllers\App\Attendance\AttendanceController;
 use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
 use App\Http\Controllers\App\Canteen\CanteenItemController;
 use App\Http\Controllers\App\Canteen\CanteenOrderController;
@@ -835,6 +836,20 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/create', [TimetablePeriodController::class, 'create'])->name('create');
         Route::post('/', [TimetablePeriodController::class, 'store'])->name('store');
         Route::patch('/{timetablePeriod}', [TimetablePeriodController::class, 'update'])->name('update');
+    });
+
+    // Phase 0H.2 -- the administrative Student Attendance workflow.
+    // Capability checks live in the controller itself (the
+    // AuthorizesCapability trait), matching every other App/* Inertia
+    // controller in this codebase; the API surface uses route
+    // middleware instead, where `idempotent` ordering matters.
+    Route::prefix('app/attendance')->name('app.attendance.')->group(function (): void {
+        Route::get('/', [AttendanceController::class, 'index'])->name('index');
+        Route::get('/take', [AttendanceController::class, 'take'])->name('take');
+        Route::get('/roster', [AttendanceController::class, 'roster'])->name('roster');
+        Route::post('/', [AttendanceController::class, 'store'])->name('store');
+        Route::get('/{attendanceSession}', [AttendanceController::class, 'show'])->name('show');
+        Route::post('/records/{attendanceRecord}/correct', [AttendanceController::class, 'correct'])->name('correct');
     });
 
     Route::prefix('app/timetable-schedule')->name('app.timetable-schedule.')->group(function (): void {
