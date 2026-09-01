@@ -324,6 +324,16 @@ is read off the entry *while it is locked*, so a concurrent
 never producing a torn snapshot built from two versions.
 
 **Step 2 is a SHARED lock, not `lockForUpdate()`, and that matters.**
+Both halves of that choice are proven empirically against real
+PostgreSQL, not taken from documentation: a child INSERT's implicit
+`FOR KEY SHARE` on the parent row proceeds immediately under a held
+`FOR SHARE` (so no deadlock), while a status `UPDATE`'s
+`FOR NO KEY UPDATE` blocks until the holder commits (so a concurrent
+close is still correctly serialized). The second half is pinned
+permanently by
+`Tests\Feature\Attendance\AttendanceVersusAcademicYearCloseConcurrencyTest`,
+whose two branches -- Attendance-wins and close-wins -- both occur in
+practice.
 Using `FOR UPDATE` here caused a real, reproducible deadlock (SQLSTATE
 40P01), caught by this checkpoint's own mandatory race before any of
 this shipped: every INSERT into `student_enrollments` takes an implicit
@@ -347,6 +357,30 @@ global order, so two concurrent submissions can never deadlock on
 overlapping rosters. The roster is derived, its rows locked, and then
 **re-derived**, so the authoritative exact-set comparison is made
 against locked rows.
+
+### The rollover ordering exception (audited, proven acyclic)
+
+`EnrollmentRolloverItemExecutionService` is the one runtime path that
+still acquires locks in the opposite order: it takes a
+`lockForUpdate()` on the SOURCE StudentEnrollment for drift detection,
+and only afterwards calls `StudentEnrollmentService::enroll()`, which
+locks the TARGET Section. That is Enrollment -> Section.
+
+It cannot cycle against Attendance, because rollover is inherently
+CROSS-AcademicYear: the Enrollment it holds belongs to the SOURCE
+year's Section, while the Section it waits for belongs to the TARGET
+year. Attendance only ever holds ONE Section and locks only the
+Enrollment rows of that same Section AND AcademicYear (the roster
+predicate filters on both), so it can never simultaneously hold
+rollover's source Enrollment and rollover's target Section.
+
+Proven, not merely argued, by
+`Tests\Feature\Attendance\AttendanceVersusRolloverConcurrencyTest`,
+which contends both paths on the same target Section with two real OS
+processes. This ordering was left as-is deliberately: changing
+rollover's lock sequence is a Students/SIS design change with its own
+idempotency/reconciliation implications, and no defect exists to
+justify it from inside an Attendance checkpoint.
 
 ### The Students/SIS side
 
@@ -542,6 +576,8 @@ register save · substitution modelling · a replace-register operation.
 | Dual composite FKs (both directions), RLS, CHECKs, uniqueness, delete integrity, FK shapes | `Tests\Feature\Postgres\AttendanceRecordsContextIntegrityTest` |
 | Races 1, 2, 3, 5 (real OS processes) | `Tests\Feature\Attendance\AttendanceConcurrencyTest` |
 | Race 4 — opposite-direction Section transfer | `Tests\Feature\Students\OppositeDirectionTransferConcurrencyTest` |
+| AcademicYear close vs submission (pins the FOR SHARE lock mode) | `Tests\Feature\Attendance\AttendanceVersusAcademicYearCloseConcurrencyTest` |
+| Rollover vs submission on one Section (proves the ordering exception acyclic) | `Tests\Feature\Attendance\AttendanceVersusRolloverConcurrencyTest` |
 | As-of-date roster predicate, inclusive boundaries, ambiguity guard | `Tests\Feature\Students\StudentEnrollmentRosterReadServiceTest` |
 | Single-writer, no reverse dependency, no reason/Health field | `Tests\Feature\Attendance\AttendanceArchitectureGuardTest` |
 | SubjectOffering identity premise | `Tests\Feature\Attendance\SubjectOfferingIdentityGuardTest` |
