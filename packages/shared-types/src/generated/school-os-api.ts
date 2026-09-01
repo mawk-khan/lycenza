@@ -2776,6 +2776,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/attendance-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists submitted Attendance registers, newest attendance_date first then by the register's own immutable period_start_time. Fixed page size of 50. Requires attendance.view. */
+        get: operations["listAttendanceSessions"];
+        put?: never;
+        /** Submits ONE complete class register. The client supplies only timetable_entry_id, attendance_date and the record set; the entire historical class context (AcademicYear, Campus, GradeLevel, Section, SubjectOffering, teacher, Period and the Period's wall-clock times) is derived server-side from the TimetableEntry while it is held under SELECT ... FOR UPDATE, and is immutable thereafter. The submitted record set must match the authoritative as-of-date Section roster EXACTLY -- no omission, no extra, no partial save, and never an implicit default-to-present. Requires attendance.manage, which is re-evaluated before any idempotency replay. Idempotency-Key is REQUIRED. */
+        post: operations["submitAttendanceRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-sessions/scheduled-classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pre-submission SELECTION helper: the classes scheduled on a given date according to the CURRENT weekly Timetable (active entries only). Reading current Timetable state is correct here and only here -- a historical register is never rendered from it. Requires attendance.manage, checked before any query runs. */
+        get: operations["listAttendanceScheduledClasses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-sessions/roster-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Non-authoritative roster preview for the marking screen, using the SAME Students/SIS as-of-date placement predicate the authoritative submission uses. Takes no locks and may go stale; submission always re-derives the roster under the Section lock and validates the payload against that set. Requires attendance.manage, checked before any query runs. */
+        get: operations["previewAttendanceRoster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-sessions/{attendanceSessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One submitted register, with its complete record set. Every class-identity field is rendered from the Session's own immutable snapshot; names/codes resolve through those snapshotted identities to the referenced entity's CURRENT row. Requires attendance.view. */
+        get: operations["getAttendanceSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-records/{attendanceRecordId}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Corrects ONE already-submitted attendance record using expected-status compare-and-swap: the caller states the status it believes the record currently holds, and the correction is refused if the record has moved since. Deliberately its own named command rather than a generic record update. Historical corrections stay possible after the AcademicYear closes, after the source TimetableEntry is deactivated, and after the Student is withdrawn. Requires attendance.manage. No Idempotency-Key is needed -- a duplicate delivery fails closed with 409 by construction. */
+        post: operations["correctAttendanceRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4669,6 +4755,146 @@ export interface components {
             currentPage: number;
             lastPage: number;
             total: number;
+        };
+        /**
+         * @description The complete, closed Attendance status vocabulary. `excused` records the generic status ONLY and never why -- there is no reason, note, medical explanation or evidence field anywhere in this module.
+         * @enum {string}
+         */
+        AttendanceStatus: "present" | "absent" | "late" | "excused";
+        /** @description One member of an as-of-date Section roster, projected deliberately minimally. Sensitive tier: no date of birth, no Guardian data, no contact details, no address. */
+        AttendanceRosterMember: {
+            /** Format: uuid */
+            studentEnrollmentId: string;
+            /** Format: uuid */
+            studentId: string;
+            rollNumber: string;
+            /** @description Composed server-side from the Student's name parts. */
+            fullName: string;
+        };
+        /** @description A CURRENTLY scheduled class, for pre-submission selection only. These values come from the live TimetableEntry and are NOT a historical register's identity. */
+        AttendanceScheduledClass: {
+            /** Format: uuid */
+            timetableEntryId: string;
+            /** Format: uuid */
+            sectionId: string;
+            sectionCode?: string | null;
+            sectionName?: string | null;
+            /** Format: uuid */
+            subjectOfferingId: string;
+            subjectCode?: string | null;
+            subjectName?: string | null;
+            /** Format: uuid */
+            teacherId: string;
+            /** @description Display name only -- never work_email/work_phone. */
+            teacherName?: string | null;
+            /** Format: uuid */
+            periodId: string;
+            periodCode?: string | null;
+            periodName?: string | null;
+            periodStartTime?: string | null;
+            periodEndTime?: string | null;
+            alreadySubmitted: boolean;
+        };
+        /** @description One Student's status on a submitted register. Student identity is derived THROUGH the StudentEnrollment -- there is no student_id column on the underlying table. The record's structural context columns (academic_year_id/campus_id/grade_level_id/section_id) exist only to carry the database's dual composite foreign keys and are deliberately never serialized here. */
+        AttendanceRecord: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description PROVENANCE: the placement that qualified this Student for this register AT SUBMISSION TIME. A later transfer, withdrawal, completion, cancellation or rollover -- including a BACKDATED one -- never rewrites Attendance, so this does NOT assert that the Enrollment's current interval still contains the register's attendance_date.
+             */
+            studentEnrollmentId: string;
+            /** Format: uuid */
+            studentId?: string | null;
+            rollNumber?: string | null;
+            fullName?: string | null;
+            status: components["schemas"]["AttendanceStatus"];
+            /**
+             * Format: date-time
+             * @description Null until the record is corrected.
+             */
+            correctedAt?: string | null;
+        };
+        /** @description A submitted register's header, without its record set. */
+        AttendanceSessionSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            attendanceDate: string;
+            /** @description DERIVED from attendance_date -- never stored, never read from the TimetableEntry. */
+            dayOfWeek?: number;
+            /** Format: uuid */
+            academicYearId?: string;
+            academicYearName?: string | null;
+            academicYearCode?: string | null;
+            /** Format: uuid */
+            campusId?: string;
+            campusName?: string | null;
+            campusCode?: string | null;
+            /** Format: uuid */
+            gradeLevelId?: string;
+            gradeLevelName?: string | null;
+            gradeLevelCode?: string | null;
+            /** Format: uuid */
+            sectionId: string;
+            sectionCode?: string | null;
+            sectionName?: string | null;
+            /** Format: uuid */
+            subjectOfferingId?: string;
+            /** Format: uuid */
+            subjectId?: string | null;
+            subjectCode?: string | null;
+            subjectName?: string | null;
+            /**
+             * Format: uuid
+             * @description The teacher SCHEDULED to take this class at submission time. Not an actual substitute (v1 has no substitution model) and not the submitter -- that is submittedByUserId.
+             */
+            teacherId?: string;
+            /** @description Display name only -- never work_email/work_phone or any other HR field. */
+            teacherName?: string | null;
+            /** Format: uuid */
+            periodId?: string;
+            /** @description CURRENT human-facing label, resolved through periodId. May legitimately disagree with the frozen times below after a Period is renamed or retimed. */
+            periodCode?: string | null;
+            /** @description CURRENT human-facing label -- see periodCode. */
+            periodName?: string | null;
+            /** @description IMMUTABLE historical wall-clock start, snapshotted at submission. Never the current TimetablePeriod's start_time, which can legitimately be changed later. */
+            periodStartTime: string;
+            /** @description IMMUTABLE historical wall-clock end -- see periodStartTime. */
+            periodEndTime: string;
+            /**
+             * Format: uuid
+             * @description PROVENANCE ONLY: the TimetableEntry from which this register was instantiated at submission time. That entry is fully mutable afterwards, so its CURRENT Section, SubjectOffering, teacher, Period, day-of-week and context values carry NO historical authority here. Never dereference it to render, filter, group or authorize a historical register.
+             */
+            timetableEntryId?: string;
+            /** Format: uuid */
+            submittedByUserId?: string;
+            /** Format: date-time */
+            submittedAt?: string;
+        };
+        AttendanceSession: components["schemas"]["AttendanceSessionSummary"] & {
+            records: components["schemas"]["AttendanceRecord"][];
+        };
+        /** @description The ONLY client-supplied input. Note what is deliberately absent: section_id, academic_year_id, campus_id, grade_level_id, subject_offering_id, teacher_id, period_id, period_start_time and period_end_time are ALL server-derived from the locked TimetableEntry and are never accepted from a client. */
+        AttendanceRegisterInput: {
+            /** Format: uuid */
+            timetable_entry_id: string;
+            /**
+             * Format: date
+             * @description Must not be in the future, must fall inside the AcademicYear, and its ISO weekday must match the TimetableEntry's day_of_week.
+             */
+            attendance_date: string;
+            /** @description Must be EXACTLY the authoritative as-of-date roster -- no omission, no extra, no duplicate. */
+            records: {
+                /** Format: uuid */
+                student_enrollment_id: string;
+                status: components["schemas"]["AttendanceStatus"];
+            }[];
+        };
+        /** @description Expected-status compare-and-swap. expected_status is the status the caller believes the record currently holds; new_status must differ from it. */
+        AttendanceCorrectionInput: {
+            expected_status: components["schemas"]["AttendanceStatus"];
+            new_status: components["schemas"]["AttendanceStatus"];
         };
         /** @description A single scheduled slot: a required SubjectOffering taught to a Section by a teacher (HR Employee) in an optional Room during a TimetablePeriod on a given day of week. The teacher representation is data-minimized to id/teacherName ONLY (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never work_email/work_phone/any other HR field. */
         TimetableEntry: {
@@ -13373,6 +13599,382 @@ export interface operations {
             };
             /** @description Authenticated but lacking timetable.periods.view in this School. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listAttendanceSessions: {
+        parameters: {
+            query?: {
+                section_id?: string;
+                academic_year_id?: string;
+                attendance_date?: string;
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceSessionSummary"][];
+                        meta: components["schemas"]["TimetablePaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid query parameter. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    submitAttendanceRegister: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceRegisterInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceSession"];
+                    };
+                };
+            };
+            /** @description Missing or malformed Idempotency-Key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A register already exists for this TimetableEntry + date (ATTENDANCE_SESSION_ALREADY_SUBMITTED), for this Section + Period + date (ATTENDANCE_SECTION_SLOT_ALREADY_SUBMITTED), or overlapping this Section's wall-clock interval on this date (ATTENDANCE_SESSION_TIME_OVERLAP); the AcademicYear is not active (ATTENDANCE_ACADEMIC_YEAR_NOT_ACTIVE); or one Student has more than one qualifying historical placement (STUDENT_ENROLLMENT_AMBIGUOUS_HISTORICAL_PLACEMENT). There is no replace-register operation -- correct individual records instead. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation or domain rejection: the TimetableEntry is not active, the date's weekday does not match it, the date is in the future or outside the AcademicYear, the roster is empty, an enrollment id is duplicated, or the register does not exactly match the roster. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listAttendanceScheduledClasses: {
+        parameters: {
+            query: {
+                attendance_date: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceScheduledClass"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or malformed attendance_date. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    previewAttendanceRoster: {
+        parameters: {
+            query: {
+                timetable_entry_id: string;
+                attendance_date: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceRosterMember"][];
+                        meta: {
+                            /** Format: uuid */
+                            timetableEntryId: string;
+                            /** Format: uuid */
+                            sectionId: string;
+                            /** Format: date */
+                            attendanceDate: string;
+                            /** @description Always false -- this preview may be stale. */
+                            authoritative: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such TimetableEntry in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One Student has more than one qualifying historical placement. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or malformed query parameter. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAttendanceSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                attendanceSessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceSession"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such register in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    correctAttendanceRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                attendanceRecordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceCorrectionInput"];
+            };
+        };
+        responses: {
+            /** @description Corrected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceRecord"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such attendance record in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ATTENDANCE_RECORD_STATUS_CHANGED -- the record is no longer in expected_status; reload before correcting. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid status value, or ATTENDANCE_CORRECTION_NO_OP when new_status equals the current status. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

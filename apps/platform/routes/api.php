@@ -10,6 +10,7 @@ use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
 use App\Domain\Admissions\Http\Controllers\AdmissionApplicationController;
 use App\Domain\Admissions\Http\Controllers\ApplicantController;
+use App\Domain\Attendance\Http\Controllers\AttendanceSessionController;
 use App\Domain\Canteen\Http\Controllers\CanteenBillingConfigurationController;
 use App\Domain\Canteen\Http\Controllers\CanteenItemController;
 use App\Domain\Canteen\Http\Controllers\CanteenOrderController;
@@ -1381,6 +1382,56 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/timetable-entries/{timetableEntry}/deactivate', [TimetableEntryController::class, 'deactivate'])
                 ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
                 ->name('schools.timetable-entries.deactivate');
+
+            // Phase 0H.2 (Student Attendance foundation). A deliberately
+            // narrow COMMAND surface, never generic CRUD: a register is
+            // submitted once, complete, and an already-submitted record
+            // is only ever changed through the explicit
+            // expected-status correction command. There is no Session
+            // update/replace/delete route and no generic
+            // AttendanceRecord update route, by design.
+            //
+            // `store` carries `idempotent`: submitting a register is a
+            // consequential mutation a browser or flaky connection can
+            // plausibly retry, and a duplicate submission would be both
+            // costly (a second authoritative register) and confusing.
+            // The capability middleware is declared BEFORE `idempotent`
+            // so authorization is re-evaluated ahead of any replay --
+            // an actor whose capability was revoked can never replay a
+            // stored success (CLAUDE.md rule 32, the same ordering
+            // webhook-endpoint mutations already use).
+            //
+            // `correct` deliberately does NOT carry `idempotent`: it is
+            // already safe to retry by construction, because
+            // expected-status compare-and-swap makes a duplicate
+            // delivery of the same correction fail closed with a
+            // typed 409 rather than apply twice.
+            //
+            // The two helper endpoints are gated by Attendance's OWN
+            // capability before any query executes -- never Timetable's
+            // `timetable.*` or Students' capabilities, carrying forward
+            // the Canteen capability-boundary lesson explicitly. They
+            // are registered BEFORE `{attendanceSession}` so their
+            // literal path segments are not swallowed by the parameter
+            // route.
+            Route::get('/attendance-sessions', [AttendanceSessionController::class, 'index'])
+                ->middleware('capability:attendance.view')
+                ->name('schools.attendance-sessions.index');
+            Route::post('/attendance-sessions', [AttendanceSessionController::class, 'store'])
+                ->middleware(['capability:attendance.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.attendance-sessions.store');
+            Route::get('/attendance-sessions/scheduled-classes', [AttendanceSessionController::class, 'scheduledClasses'])
+                ->middleware('capability:attendance.manage')
+                ->name('schools.attendance-sessions.scheduled-classes');
+            Route::get('/attendance-sessions/roster-preview', [AttendanceSessionController::class, 'rosterPreview'])
+                ->middleware('capability:attendance.manage')
+                ->name('schools.attendance-sessions.roster-preview');
+            Route::get('/attendance-sessions/{attendanceSession}', [AttendanceSessionController::class, 'show'])
+                ->middleware('capability:attendance.view')
+                ->name('schools.attendance-sessions.show');
+            Route::post('/attendance-records/{attendanceRecord}/correct', [AttendanceSessionController::class, 'correct'])
+                ->middleware(['capability:attendance.manage', 'throttle:school-api-mutations'])
+                ->name('schools.attendance-records.correct');
         });
 });
 

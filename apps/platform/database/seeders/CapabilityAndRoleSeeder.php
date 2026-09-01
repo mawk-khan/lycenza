@@ -467,6 +467,19 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'timetable.periods.manage', 'label' => 'Manage the Timetable Period catalogue', 'namespace' => 'school'],
             ['key' => 'timetable.schedule.view', 'label' => 'View the Timetable schedule', 'namespace' => 'school'],
             ['key' => 'timetable.schedule.manage', 'label' => 'Manage the Timetable schedule', 'namespace' => 'school'],
+
+            // Phase 0H.2 (Student Attendance). Deliberately ONE pair for
+            // the whole module -- `.manage` covers submitting a register
+            // AND correcting a record. There is intentionally no
+            // separate `attendance.correct`: correction is already
+            // protected by expected-status compare-and-swap and full
+            // audit, and splitting it would imply a reviewer/approver
+            // workflow this checkpoint does not build (CLAUDE.md rule
+            // 2). There is likewise no `attendance.teacher` -- v1 is
+            // admin-only, with no teacher self-service and no
+            // teacher-ownership rule.
+            ['key' => 'attendance.view', 'label' => 'View Student attendance registers', 'namespace' => 'school'],
+            ['key' => 'attendance.manage', 'label' => 'Submit and correct Student attendance registers', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -631,6 +644,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Timetable is routine administrative work.
                     'timetable.periods.view', 'timetable.periods.manage',
                     'timetable.schedule.view', 'timetable.schedule.manage',
+                    // Phase 0H.2: taking and correcting the daily
+                    // register is routine administrative work, the same
+                    // reasoning that already grants the Timetable pair
+                    // above.
+                    'attendance.view', 'attendance.manage',
                 ],
             ],
             'principal' => [
@@ -745,6 +763,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // parity is granted.
                     'timetable.periods.view', 'timetable.periods.manage',
                     'timetable.schedule.view', 'timetable.schedule.manage',
+                    // Phase 0H.2: taking and correcting the daily
+                    // register is routine administrative work, the same
+                    // reasoning that already grants the Timetable pair
+                    // above.
+                    'attendance.view', 'attendance.manage',
                 ],
             ],
         ];

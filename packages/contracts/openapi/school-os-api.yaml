@@ -5690,6 +5690,287 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  # --- Phase 0H.2: Student Attendance -------------------------------
+  #
+  # A deliberately narrow COMMAND surface, never generic CRUD: a
+  # register is submitted once, complete, and thereafter only individual
+  # records are corrected. There is no Session update/replace/delete
+  # operation and no generic AttendanceRecord update operation, by
+  # design (docs/modules/ATTENDANCE.md).
+  #
+  # Attendance is Sensitive-tier (docs/security/DATA-CLASSIFICATION.md).
+  # Every schema below is minimised accordingly: a Student is id + roll
+  # number + display name ONLY (never date of birth, Guardian data,
+  # contact details or address); a teacher is id + fullName ONLY (never
+  # work_email/work_phone). No record carries a reason, note, remark,
+  # minutes-late, medical explanation or evidence reference of any kind
+  # -- `excused` records the generic status and never why.
+  /schools/{schoolId}/attendance-sessions:
+    get:
+      operationId: listAttendanceSessions
+      summary: >
+        Lists submitted Attendance registers, newest attendance_date
+        first then by the register's own immutable period_start_time.
+        Fixed page size of 50. Requires attendance.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: section_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: attendance_date, in: query, required: false, schema: { type: string, format: date } }
+        - { $ref: "#/components/parameters/Page" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AttendanceSessionSummary" } }
+                  meta: { $ref: "#/components/schemas/TimetablePaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking attendance.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid query parameter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: submitAttendanceRegister
+      summary: >
+        Submits ONE complete class register. The client supplies only
+        timetable_entry_id, attendance_date and the record set; the
+        entire historical class context (AcademicYear, Campus,
+        GradeLevel, Section, SubjectOffering, teacher, Period and the
+        Period's wall-clock times) is derived server-side from the
+        TimetableEntry while it is held under SELECT ... FOR UPDATE, and
+        is immutable thereafter. The submitted record set must match the
+        authoritative as-of-date Section roster EXACTLY -- no omission,
+        no extra, no partial save, and never an implicit
+        default-to-present. Requires attendance.manage, which is
+        re-evaluated before any idempotency replay. Idempotency-Key is
+        REQUIRED.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttendanceRegisterInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AttendanceSession" } } }
+        "400":
+          description: Missing or malformed Idempotency-Key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking attendance.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            A register already exists for this TimetableEntry + date
+            (ATTENDANCE_SESSION_ALREADY_SUBMITTED), for this Section +
+            Period + date (ATTENDANCE_SECTION_SLOT_ALREADY_SUBMITTED),
+            or overlapping this Section's wall-clock interval on this
+            date (ATTENDANCE_SESSION_TIME_OVERLAP); the AcademicYear is
+            not active (ATTENDANCE_ACADEMIC_YEAR_NOT_ACTIVE); or one
+            Student has more than one qualifying historical placement
+            (STUDENT_ENROLLMENT_AMBIGUOUS_HISTORICAL_PLACEMENT). There
+            is no replace-register operation -- correct individual
+            records instead.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Validation or domain rejection: the TimetableEntry is not
+            active, the date's weekday does not match it, the date is in
+            the future or outside the AcademicYear, the roster is empty,
+            an enrollment id is duplicated, or the register does not
+            exactly match the roster.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/attendance-sessions/scheduled-classes:
+    get:
+      operationId: listAttendanceScheduledClasses
+      summary: >
+        Pre-submission SELECTION helper: the classes scheduled on a
+        given date according to the CURRENT weekly Timetable (active
+        entries only). Reading current Timetable state is correct here
+        and only here -- a historical register is never rendered from
+        it. Requires attendance.manage, checked before any query runs.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: attendance_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AttendanceScheduledClass" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking attendance.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Missing or malformed attendance_date.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/attendance-sessions/roster-preview:
+    get:
+      operationId: previewAttendanceRoster
+      summary: >
+        Non-authoritative roster preview for the marking screen, using
+        the SAME Students/SIS as-of-date placement predicate the
+        authoritative submission uses. Takes no locks and may go stale;
+        submission always re-derives the roster under the Section lock
+        and validates the payload against that set. Requires
+        attendance.manage, checked before any query runs.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: timetable_entry_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: attendance_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AttendanceRosterMember" } }
+                  meta:
+                    type: object
+                    required: [timetableEntryId, sectionId, attendanceDate, authoritative]
+                    properties:
+                      timetableEntryId: { type: string, format: uuid }
+                      sectionId: { type: string, format: uuid }
+                      attendanceDate: { type: string, format: date }
+                      authoritative: { type: boolean, description: "Always false -- this preview may be stale." }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking attendance.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such TimetableEntry in this School.
+        "409":
+          description: One Student has more than one qualifying historical placement.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Missing or malformed query parameter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/attendance-sessions/{attendanceSessionId}:
+    get:
+      operationId: getAttendanceSession
+      summary: >
+        One submitted register, with its complete record set. Every
+        class-identity field is rendered from the Session's own
+        immutable snapshot; names/codes resolve through those
+        snapshotted identities to the referenced entity's CURRENT row.
+        Requires attendance.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: attendanceSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AttendanceSession" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking attendance.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such register in this School.
+  /schools/{schoolId}/attendance-records/{attendanceRecordId}/correct:
+    post:
+      operationId: correctAttendanceRecord
+      summary: >
+        Corrects ONE already-submitted attendance record using
+        expected-status compare-and-swap: the caller states the status
+        it believes the record currently holds, and the correction is
+        refused if the record has moved since. Deliberately its own
+        named command rather than a generic record update. Historical
+        corrections stay possible after the AcademicYear closes, after
+        the source TimetableEntry is deactivated, and after the Student
+        is withdrawn. Requires attendance.manage. No Idempotency-Key is
+        needed -- a duplicate delivery fails closed with 409 by
+        construction.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: attendanceRecordId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttendanceCorrectionInput" }
+      responses:
+        "200":
+          description: Corrected.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AttendanceRecord" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking attendance.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such attendance record in this School.
+        "409":
+          description: >
+            ATTENDANCE_RECORD_STATUS_CHANGED -- the record is no longer
+            in expected_status; reload before correcting.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Invalid status value, or ATTENDANCE_CORRECTION_NO_OP when
+            new_status equals the current status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -8074,6 +8355,164 @@ components:
         lastPage: { type: integer }
         total: { type: integer }
 
+    AttendanceStatus:
+      type: string
+      description: >
+        The complete, closed Attendance status vocabulary. `excused`
+        records the generic status ONLY and never why -- there is no
+        reason, note, medical explanation or evidence field anywhere in
+        this module.
+      enum: [present, absent, late, excused]
+    AttendanceRosterMember:
+      type: object
+      description: >
+        One member of an as-of-date Section roster, projected
+        deliberately minimally. Sensitive tier: no date of birth, no
+        Guardian data, no contact details, no address.
+      required: [studentEnrollmentId, studentId, rollNumber, fullName]
+      properties:
+        studentEnrollmentId: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        rollNumber: { type: string }
+        fullName: { type: string, description: "Composed server-side from the Student's name parts." }
+    AttendanceScheduledClass:
+      type: object
+      description: >
+        A CURRENTLY scheduled class, for pre-submission selection only.
+        These values come from the live TimetableEntry and are NOT a
+        historical register's identity.
+      required: [timetableEntryId, sectionId, subjectOfferingId, teacherId, periodId, alreadySubmitted]
+      properties:
+        timetableEntryId: { type: string, format: uuid }
+        sectionId: { type: string, format: uuid }
+        sectionCode: { type: string, nullable: true }
+        sectionName: { type: string, nullable: true }
+        subjectOfferingId: { type: string, format: uuid }
+        subjectCode: { type: string, nullable: true }
+        subjectName: { type: string, nullable: true }
+        teacherId: { type: string, format: uuid }
+        teacherName: { type: string, nullable: true, description: "Display name only -- never work_email/work_phone." }
+        periodId: { type: string, format: uuid }
+        periodCode: { type: string, nullable: true }
+        periodName: { type: string, nullable: true }
+        periodStartTime: { type: string, nullable: true }
+        periodEndTime: { type: string, nullable: true }
+        alreadySubmitted: { type: boolean }
+    AttendanceRecord:
+      type: object
+      description: >
+        One Student's status on a submitted register. Student identity is
+        derived THROUGH the StudentEnrollment -- there is no student_id
+        column on the underlying table. The record's structural context
+        columns (academic_year_id/campus_id/grade_level_id/section_id)
+        exist only to carry the database's dual composite foreign keys
+        and are deliberately never serialized here.
+      required: [id, studentEnrollmentId, status]
+      properties:
+        id: { type: string, format: uuid }
+        studentEnrollmentId:
+          type: string
+          format: uuid
+          description: >
+            PROVENANCE: the placement that qualified this Student for
+            this register AT SUBMISSION TIME. A later transfer,
+            withdrawal, completion, cancellation or rollover -- including
+            a BACKDATED one -- never rewrites Attendance, so this does
+            NOT assert that the Enrollment's current interval still
+            contains the register's attendance_date.
+        studentId: { type: string, format: uuid, nullable: true }
+        rollNumber: { type: string, nullable: true }
+        fullName: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/AttendanceStatus" }
+        correctedAt: { type: string, format: date-time, nullable: true, description: "Null until the record is corrected." }
+    AttendanceSessionSummary:
+      type: object
+      description: A submitted register's header, without its record set.
+      required: [id, attendanceDate, sectionId, periodStartTime, periodEndTime]
+      properties:
+        id: { type: string, format: uuid }
+        attendanceDate: { type: string, format: date }
+        dayOfWeek: { type: integer, minimum: 1, maximum: 7, description: "DERIVED from attendance_date -- never stored, never read from the TimetableEntry." }
+        academicYearId: { type: string, format: uuid }
+        academicYearName: { type: string, nullable: true }
+        academicYearCode: { type: string, nullable: true }
+        campusId: { type: string, format: uuid }
+        campusName: { type: string, nullable: true }
+        campusCode: { type: string, nullable: true }
+        gradeLevelId: { type: string, format: uuid }
+        gradeLevelName: { type: string, nullable: true }
+        gradeLevelCode: { type: string, nullable: true }
+        sectionId: { type: string, format: uuid }
+        sectionCode: { type: string, nullable: true }
+        sectionName: { type: string, nullable: true }
+        subjectOfferingId: { type: string, format: uuid }
+        subjectId: { type: string, format: uuid, nullable: true }
+        subjectCode: { type: string, nullable: true }
+        subjectName: { type: string, nullable: true }
+        teacherId:
+          type: string
+          format: uuid
+          description: >
+            The teacher SCHEDULED to take this class at submission time.
+            Not an actual substitute (v1 has no substitution model) and
+            not the submitter -- that is submittedByUserId.
+        teacherName: { type: string, nullable: true, description: "Display name only -- never work_email/work_phone or any other HR field." }
+        periodId: { type: string, format: uuid }
+        periodCode: { type: string, nullable: true, description: "CURRENT human-facing label, resolved through periodId. May legitimately disagree with the frozen times below after a Period is renamed or retimed." }
+        periodName: { type: string, nullable: true, description: "CURRENT human-facing label -- see periodCode." }
+        periodStartTime: { type: string, description: "IMMUTABLE historical wall-clock start, snapshotted at submission. Never the current TimetablePeriod's start_time, which can legitimately be changed later." }
+        periodEndTime: { type: string, description: "IMMUTABLE historical wall-clock end -- see periodStartTime." }
+        timetableEntryId:
+          type: string
+          format: uuid
+          description: >
+            PROVENANCE ONLY: the TimetableEntry from which this register
+            was instantiated at submission time. That entry is fully
+            mutable afterwards, so its CURRENT Section, SubjectOffering,
+            teacher, Period, day-of-week and context values carry NO
+            historical authority here. Never dereference it to render,
+            filter, group or authorize a historical register.
+        submittedByUserId: { type: string, format: uuid }
+        submittedAt: { type: string, format: date-time }
+    AttendanceSession:
+      allOf:
+        - { $ref: "#/components/schemas/AttendanceSessionSummary" }
+        - type: object
+          required: [records]
+          properties:
+            records: { type: array, items: { $ref: "#/components/schemas/AttendanceRecord" } }
+    AttendanceRegisterInput:
+      type: object
+      description: >
+        The ONLY client-supplied input. Note what is deliberately absent:
+        section_id, academic_year_id, campus_id, grade_level_id,
+        subject_offering_id, teacher_id, period_id, period_start_time and
+        period_end_time are ALL server-derived from the locked
+        TimetableEntry and are never accepted from a client.
+      required: [timetable_entry_id, attendance_date, records]
+      properties:
+        timetable_entry_id: { type: string, format: uuid }
+        attendance_date: { type: string, format: date, description: "Must not be in the future, must fall inside the AcademicYear, and its ISO weekday must match the TimetableEntry's day_of_week." }
+        records:
+          type: array
+          minItems: 1
+          description: "Must be EXACTLY the authoritative as-of-date roster -- no omission, no extra, no duplicate."
+          items:
+            type: object
+            required: [student_enrollment_id, status]
+            properties:
+              student_enrollment_id: { type: string, format: uuid }
+              status: { $ref: "#/components/schemas/AttendanceStatus" }
+    AttendanceCorrectionInput:
+      type: object
+      description: >
+        Expected-status compare-and-swap. expected_status is the status
+        the caller believes the record currently holds; new_status must
+        differ from it.
+      required: [expected_status, new_status]
+      properties:
+        expected_status: { $ref: "#/components/schemas/AttendanceStatus" }
+        new_status: { $ref: "#/components/schemas/AttendanceStatus" }
     TimetableEntry:
       type: object
       required: [id, status, dayOfWeek, subjectOfferingId, sectionId, teacherId, periodId]
