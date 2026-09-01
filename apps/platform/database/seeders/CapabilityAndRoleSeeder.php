@@ -480,6 +480,21 @@ class CapabilityAndRoleSeeder extends Seeder
             // teacher-ownership rule.
             ['key' => 'attendance.view', 'label' => 'View Student attendance registers', 'namespace' => 'school'],
             ['key' => 'attendance.manage', 'label' => 'Submit and correct Student attendance registers', 'namespace' => 'school'],
+
+            // Phase 0H.3A (Syllabus Foundation -- the first concrete
+            // Academics fact). Deliberately rooted at `syllabus.*`, NOT
+            // `academics.*`: that root is already fully owned by
+            // Academic Structure (`academics.structure.*`/
+            // `academics.years.*`/`academics.subjects.*`), and a second
+            // unrelated family under it would leave an administrator
+            // granting rights unable to tell which domain a capability
+            // governs. The roadmap umbrella stays "Academics"; the
+            // implementation domain and capability root are the more
+            // precise "Syllabus" (docs/modules/ACADEMICS.md records the
+            // Academics -> Syllabus -> `syllabus.*` mapping so this can
+            // never be mistaken for accidental inconsistency).
+            ['key' => 'syllabus.view', 'label' => 'View Syllabus Units', 'namespace' => 'school'],
+            ['key' => 'syllabus.manage', 'label' => 'Manage Syllabus Units', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -649,6 +664,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // reasoning that already grants the Timetable pair
                     // above.
                     'attendance.view', 'attendance.manage',
+                    // Phase 0H.3A: curating a Subject Offering's
+                    // syllabus is routine academic administration, the
+                    // same reasoning that already grants the Academic
+                    // Structure and Timetable pairs above.
+                    'syllabus.view', 'syllabus.manage',
                 ],
             ],
             'principal' => [
@@ -768,6 +788,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // reasoning that already grants the Timetable pair
                     // above.
                     'attendance.view', 'attendance.manage',
+                    // Phase 0H.3A: curating a Subject Offering's
+                    // syllabus is routine academic administration, the
+                    // same reasoning that already grants the Academic
+                    // Structure and Timetable pairs above.
+                    'syllabus.view', 'syllabus.manage',
                 ],
             ],
         ];

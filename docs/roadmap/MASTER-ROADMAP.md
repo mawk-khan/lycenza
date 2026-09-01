@@ -438,10 +438,36 @@ historical-mutation proofs against TimetableEntry edits, Period
 retiming and backdated SIS changes. See `docs/modules/ATTENDANCE.md`
 for the complete as-built record.
 
-**Academics and Examinations remain not started.** Phase 0H as a whole
-is **not** complete — Timetable and Attendance are two of the four
-modules this phase scopes, and the other two have no implementation
-yet.
+**Syllabus Foundation (Phase 0H.3A) is complete** — the first concrete
+Academics fact: `SyllabusUnit`, one ordered unit of instructional
+content that a `SubjectOffering` is EXPECTED to cover. A catalogue of
+expected content only — it records nothing about what was actually
+taught, nothing about an individual lesson, and nothing about any
+Student. Exactly one parent (`SubjectOffering`, composite-FK
+RESTRICT, no denormalized context); no `Curriculum` entity, no
+`academic_term_id`, no `section_id`; required AND elective Offerings
+both supported; case-insensitive code uniqueness enforced by an
+unconditional PostgreSQL expression index (so an inactive unit keeps
+reserving its code, which is why the entity needs no
+activate/deactivate command); lifecycle through the ordinary PATCH and
+no delete route; `syllabus.view`/`syllabus.manage` capabilities —
+deliberately NOT under Academic Structure's `academics.*` root, with
+the Academics → Syllabus → `syllabus.*` mapping recorded in
+`docs/modules/ACADEMICS.md`; four `/api/v1` operations with a COMPLETE
+OpenAPI contract and regenerated shared types in the same branch; and a
+session-authenticated Inertia surface at `/app/syllabus`. Classified
+**Confidential** — it stores no personal data at all. See
+`docs/modules/ACADEMICS.md` for the complete as-built record.
+
+**Academics is NOT complete.** Syllabus Foundation is the first of its
+three scoped concerns: **Curriculum Delivery is not implemented** and
+**Lesson Planning is deferred** (the latter pending a real requirement
+and the platform's first ownership-based authorization model, which
+does not exist yet).
+
+**Examinations remains not started.** Phase 0H as a whole is **not**
+complete — Timetable and Attendance are done, Academics has only its
+Syllabus foundation, and Examinations has no implementation at all.
 
 **"Phase 0H Attendance" remains Student class attendance only.** Staff/
 Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR

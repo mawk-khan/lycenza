@@ -5971,6 +5971,162 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  # --- Phase 0H.3A: Syllabus (Academics) ----------------------------
+  #
+  # Exactly FOUR operations: list/create nested under the owning
+  # SubjectOffering, show/update flat. There is deliberately no delete,
+  # no activate and no deactivate operation -- `status` moves through
+  # the ordinary PATCH, exactly like every other Academic Structure
+  # reference entity (Section, SubjectOffering, Room, Subject,
+  # GradeLevel). The entities that DO carry activate/deactivate
+  # commands in this API (AcademicYear, TimetablePeriod,
+  # TimetableEntry) each re-validate a real invariant on activation; a
+  # SyllabusUnit cannot conflict with anything on reactivation because
+  # its unique code index is unconditional, so an inactive unit already
+  # reserves its code.
+  #
+  # Capabilities are rooted at `syllabus.*`, NOT `academics.*` -- that
+  # root belongs to Academic Structure. See docs/modules/ACADEMICS.md
+  # for the Academics -> Syllabus -> `syllabus.*` mapping.
+  #
+  # A SyllabusUnit is Confidential (docs/security/DATA-CLASSIFICATION.md):
+  # School instructional-planning content containing NO personal data.
+  # No Student, Guardian, Employee or teacher identity appears in any
+  # schema below, and no grading, marks, assignment or submission field
+  # exists anywhere -- those belong to Examinations and LMS.
+  /schools/{schoolId}/subject-offerings/{subjectOfferingId}/syllabus-units:
+    get:
+      operationId: listSyllabusUnits
+      summary: >
+        Lists a SubjectOffering's SyllabusUnits in teaching order
+        (sequence, then case-insensitive code as a deterministic
+        tie-break). Both required and elective Offerings are supported.
+        Requires syllabus.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/SyllabusUnit" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking syllabus.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SubjectOffering in this School.
+    post:
+      operationId: createSyllabusUnit
+      summary: >
+        Adds one SyllabusUnit to a SubjectOffering. `code` is
+        normalized to uppercase before validation and is
+        case-insensitively unique WITHIN that Offering -- the same
+        normalized code may legitimately exist under a different
+        Offering. Requires syllabus.manage. No Idempotency-Key is
+        needed: duplicate semantic creation is already prevented by the
+        database's own unique index.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyllabusUnitCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SyllabusUnit" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking syllabus.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SubjectOffering in this School.
+        "422":
+          description: >
+            Validation failure -- missing/oversized code or title, a
+            negative sequence, an out-of-vocabulary status, or a
+            case-insensitive duplicate code within this Offering.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/syllabus-units/{syllabusUnitId}:
+    get:
+      operationId: getSyllabusUnit
+      summary: One SyllabusUnit. Requires syllabus.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: syllabusUnitId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SyllabusUnit" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking syllabus.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SyllabusUnit in this School.
+    patch:
+      operationId: updateSyllabusUnit
+      summary: >
+        Updates a SyllabusUnit's code, title, sequence and/or status.
+        This is ALSO how a unit is retired or reinstated -- `status` is
+        an ordinary field here, and there is deliberately no separate
+        activate/deactivate operation. A syntactically valid no-op
+        returns the current representation. Requires syllabus.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: syllabusUnitId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SyllabusUnitUpdateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SyllabusUnit" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking syllabus.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SyllabusUnit in this School.
+        "422":
+          description: >
+            Validation failure -- oversized code/title, negative
+            sequence, out-of-vocabulary status, or a case-insensitive
+            duplicate code within this unit's Offering.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -8513,6 +8669,54 @@ components:
       properties:
         expected_status: { $ref: "#/components/schemas/AttendanceStatus" }
         new_status: { $ref: "#/components/schemas/AttendanceStatus" }
+    SyllabusUnitStatus:
+      type: string
+      description: >
+        The complete, closed SyllabusUnit lifecycle vocabulary, mirrored
+        by the database's own `syllabus_units_status_check` CHECK
+        constraint. A retired unit is marked `inactive` and kept -- there
+        is no delete operation, because a future Curriculum Delivery or
+        Examinations row may reference it.
+      enum: [active, inactive]
+    SyllabusUnit:
+      type: object
+      description: >
+        One ordered unit of instructional content that a SubjectOffering
+        is EXPECTED to cover. It records nothing about what was actually
+        taught (a future Curriculum Delivery checkpoint), nothing about
+        an individual lesson (future Lesson Planning), and nothing about
+        any Student. Grading/marks/grade scales belong to Examinations;
+        assignments and submissions belong to LMS.
+      required: [id, subjectOfferingId, code, title, sequence, status]
+      properties:
+        id: { type: string, format: uuid }
+        subjectOfferingId:
+          type: string
+          format: uuid
+          description: >
+            The single owning SubjectOffering, which already pins
+            AcademicYear, Campus, GradeLevel and Subject -- none of which
+            is duplicated onto this resource.
+        code: { type: string, maxLength: 64, description: "Uppercased on write; case-insensitively unique within the owning SubjectOffering." }
+        title: { type: string, maxLength: 255 }
+        sequence: { type: integer, minimum: 0, description: "Teaching order within the Offering. Deliberately NOT unique -- two units may share a position mid-reorder." }
+        status: { $ref: "#/components/schemas/SyllabusUnitStatus" }
+    SyllabusUnitCreateInput:
+      type: object
+      required: [code, title, sequence]
+      properties:
+        code: { type: string, maxLength: 64 }
+        title: { type: string, maxLength: 255 }
+        sequence: { type: integer, minimum: 0 }
+        status: { $ref: "#/components/schemas/SyllabusUnitStatus" }
+    SyllabusUnitUpdateInput:
+      type: object
+      description: Partial update; every field is optional.
+      properties:
+        code: { type: string, maxLength: 64 }
+        title: { type: string, maxLength: 255 }
+        sequence: { type: integer, minimum: 0 }
+        status: { $ref: "#/components/schemas/SyllabusUnitStatus" }
     TimetableEntry:
       type: object
       required: [id, status, dayOfWeek, subjectOfferingId, sectionId, teacherId, periodId]

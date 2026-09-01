@@ -68,6 +68,7 @@ use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\SubjectOfferingController;
+use App\Http\Controllers\App\Syllabus\SyllabusUnitController;
 use App\Http\Controllers\App\Timetable\TimetableEntryController;
 use App\Http\Controllers\App\Timetable\TimetablePeriodController;
 use App\Http\Controllers\App\TransportOperationsController;
@@ -843,6 +844,17 @@ Route::middleware('auth')->group(function (): void {
     // AuthorizesCapability trait), matching every other App/* Inertia
     // controller in this codebase; the API surface uses route
     // middleware instead, where `idempotent` ordering matters.
+    // Phase 0H.3A -- the administrative Syllabus surface. Capability
+    // checks live in the controller (the AuthorizesCapability trait),
+    // matching every other App/* Inertia controller in this codebase.
+    // No delete and no activate/deactivate route: `status` is edited
+    // through the ordinary update, exactly like the API.
+    Route::prefix('app/syllabus')->name('app.syllabus.')->group(function (): void {
+        Route::get('/', [SyllabusUnitController::class, 'index'])->name('index');
+        Route::post('/', [SyllabusUnitController::class, 'store'])->name('store');
+        Route::patch('/{syllabusUnit}', [SyllabusUnitController::class, 'update'])->name('update');
+    });
+
     Route::prefix('app/attendance')->name('app.attendance.')->group(function (): void {
         Route::get('/', [AttendanceController::class, 'index'])->name('index');
         Route::get('/take', [AttendanceController::class, 'take'])->name('take');

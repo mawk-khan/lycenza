@@ -2862,6 +2862,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/subject-offerings/{subjectOfferingId}/syllabus-units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a SubjectOffering's SyllabusUnits in teaching order (sequence, then case-insensitive code as a deterministic tie-break). Both required and elective Offerings are supported. Requires syllabus.view. */
+        get: operations["listSyllabusUnits"];
+        put?: never;
+        /** Adds one SyllabusUnit to a SubjectOffering. `code` is normalized to uppercase before validation and is case-insensitively unique WITHIN that Offering -- the same normalized code may legitimately exist under a different Offering. Requires syllabus.manage. No Idempotency-Key is needed: duplicate semantic creation is already prevented by the database's own unique index. */
+        post: operations["createSyllabusUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/syllabus-units/{syllabusUnitId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One SyllabusUnit. Requires syllabus.view. */
+        get: operations["getSyllabusUnit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates a SyllabusUnit's code, title, sequence and/or status. This is ALSO how a unit is retired or reinstated -- `status` is an ordinary field here, and there is deliberately no separate activate/deactivate operation. A syntactically valid no-op returns the current representation. Requires syllabus.manage. */
+        patch: operations["updateSyllabusUnit"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4895,6 +4931,40 @@ export interface components {
         AttendanceCorrectionInput: {
             expected_status: components["schemas"]["AttendanceStatus"];
             new_status: components["schemas"]["AttendanceStatus"];
+        };
+        /**
+         * @description The complete, closed SyllabusUnit lifecycle vocabulary, mirrored by the database's own `syllabus_units_status_check` CHECK constraint. A retired unit is marked `inactive` and kept -- there is no delete operation, because a future Curriculum Delivery or Examinations row may reference it.
+         * @enum {string}
+         */
+        SyllabusUnitStatus: "active" | "inactive";
+        /** @description One ordered unit of instructional content that a SubjectOffering is EXPECTED to cover. It records nothing about what was actually taught (a future Curriculum Delivery checkpoint), nothing about an individual lesson (future Lesson Planning), and nothing about any Student. Grading/marks/grade scales belong to Examinations; assignments and submissions belong to LMS. */
+        SyllabusUnit: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The single owning SubjectOffering, which already pins AcademicYear, Campus, GradeLevel and Subject -- none of which is duplicated onto this resource.
+             */
+            subjectOfferingId: string;
+            /** @description Uppercased on write; case-insensitively unique within the owning SubjectOffering. */
+            code: string;
+            title: string;
+            /** @description Teaching order within the Offering. Deliberately NOT unique -- two units may share a position mid-reorder. */
+            sequence: number;
+            status: components["schemas"]["SyllabusUnitStatus"];
+        };
+        SyllabusUnitCreateInput: {
+            code: string;
+            title: string;
+            sequence: number;
+            status?: components["schemas"]["SyllabusUnitStatus"];
+        };
+        /** @description Partial update; every field is optional. */
+        SyllabusUnitUpdateInput: {
+            code?: string;
+            title?: string;
+            sequence?: number;
+            status?: components["schemas"]["SyllabusUnitStatus"];
         };
         /** @description A single scheduled slot: a required SubjectOffering taught to a Section by a teacher (HR Employee) in an optional Room during a TimetablePeriod on a given day of week. The teacher representation is data-minimized to id/teacherName ONLY (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never work_email/work_phone/any other HR field. */
         TimetableEntry: {
@@ -13974,6 +14044,224 @@ export interface operations {
                 };
             };
             /** @description Invalid status value, or ATTENDANCE_CORRECTION_NO_OP when new_status equals the current status. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listSyllabusUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                subjectOfferingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SyllabusUnit"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking syllabus.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SubjectOffering in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSyllabusUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                subjectOfferingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyllabusUnitCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SyllabusUnit"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking syllabus.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SubjectOffering in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failure -- missing/oversized code or title, a negative sequence, an out-of-vocabulary status, or a case-insensitive duplicate code within this Offering. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getSyllabusUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                syllabusUnitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SyllabusUnit"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking syllabus.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SyllabusUnit in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateSyllabusUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                syllabusUnitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyllabusUnitUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SyllabusUnit"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking syllabus.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SyllabusUnit in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failure -- oversized code/title, negative sequence, out-of-vocabulary status, or a case-insensitive duplicate code within this unit's Offering. */
             422: {
                 headers: {
                     [name: string]: unknown;
