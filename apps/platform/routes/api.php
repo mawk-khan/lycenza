@@ -61,6 +61,7 @@ use App\Domain\Students\Http\Controllers\EnrollmentRolloverSubjectMappingControl
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
+use App\Domain\Syllabus\Http\Controllers\SyllabusUnitController;
 use App\Domain\Timetable\Http\Controllers\TimetableEntryController;
 use App\Domain\Timetable\Http\Controllers\TimetablePeriodController;
 use App\Domain\Transport\Http\Controllers\TransportRouteAssignmentController;
@@ -1432,6 +1433,43 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/attendance-records/{attendanceRecord}/correct', [AttendanceSessionController::class, 'correct'])
                 ->middleware(['capability:attendance.manage', 'throttle:school-api-mutations'])
                 ->name('schools.attendance-records.correct');
+
+            // Phase 0H.3A (Syllabus Foundation -- the first concrete
+            // Academics fact). Exactly FOUR operations: list/create
+            // nested under the owning SubjectOffering, show/update
+            // flat, matching Academic Structure's established nesting
+            // convention.
+            //
+            // Deliberately NO delete, NO activate and NO deactivate
+            // route. `status` moves through the ordinary PATCH exactly
+            // like every other Academic Structure reference entity
+            // (Section, SubjectOffering, Room, Subject, GradeLevel) --
+            // none of which has a lifecycle route. The entities that DO
+            // have activate/deactivate here (AcademicYear,
+            // TimetablePeriod, TimetableEntry) each re-validate a real
+            // invariant on activation; a SyllabusUnit cannot conflict
+            // with anything on reactivation because its unique code
+            // index is unconditional.
+            //
+            // Gated by Syllabus's OWN capability family -- never
+            // Academic Structure's `academics.subjects.*`, even though
+            // the parent Offering belongs to that module (the Canteen
+            // capability-boundary lesson, carried forward). No
+            // Idempotency-Key: these are small reference-catalogue
+            // mutations whose duplicate semantic creation is already
+            // prevented by `syllabus_units_offering_code_ci_unique`.
+            Route::get('/subject-offerings/{subjectOffering}/syllabus-units', [SyllabusUnitController::class, 'index'])
+                ->middleware('capability:syllabus.view')
+                ->name('schools.subject-offerings.syllabus-units.index');
+            Route::post('/subject-offerings/{subjectOffering}/syllabus-units', [SyllabusUnitController::class, 'store'])
+                ->middleware(['capability:syllabus.manage', 'throttle:school-api-mutations'])
+                ->name('schools.subject-offerings.syllabus-units.store');
+            Route::get('/syllabus-units/{syllabusUnit}', [SyllabusUnitController::class, 'show'])
+                ->middleware('capability:syllabus.view')
+                ->name('schools.syllabus-units.show');
+            Route::patch('/syllabus-units/{syllabusUnit}', [SyllabusUnitController::class, 'update'])
+                ->middleware(['capability:syllabus.manage', 'throttle:school-api-mutations'])
+                ->name('schools.syllabus-units.update');
         });
 });
 
