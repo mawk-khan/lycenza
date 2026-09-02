@@ -6334,6 +6334,149 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/academic-years/{academicYearId}/examinations:
+    get:
+      operationId: listExaminations
+      summary: >
+        Lists an AcademicYear's Examination windows in chronological
+        order (starts_on, then case-insensitive code as a deterministic
+        tie-break), optionally filtered by status. An Examination is a
+        named assessment WINDOW, not an individual paper. Requires
+        examinations.definitions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academicYearId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/ExaminationStatus" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Examination" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.definitions.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such AcademicYear in this School.
+    post:
+      operationId: createExamination
+      summary: >
+        Defines one Examination window inside an AcademicYear. `code` is
+        normalized to uppercase before validation and is
+        case-insensitively unique WITHIN that AcademicYear -- the same
+        normalized code legitimately recurs in a different year. The
+        window must fall inside the AcademicYear's inclusive date range;
+        the AcademicYear is NOT required to be active, so planning a
+        future examination inside a draft year is supported. FUTURE dates
+        are permitted and expected, and overlapping windows are
+        permitted. Requires examinations.definitions.manage. No
+        Idempotency-Key is needed: duplicate semantic creation is already
+        prevented by the database's own unique index.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academicYearId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExaminationCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Examination" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.definitions.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such AcademicYear in this School.
+        "422":
+          description: >
+            Validation or domain failure -- missing/oversized code or
+            name, a malformed date, an end date before the start date, a
+            window falling outside the AcademicYear, an
+            out-of-vocabulary status, or a case-insensitive duplicate
+            code within this AcademicYear.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/examinations/{examinationId}:
+    get:
+      operationId: getExamination
+      summary: One Examination window. Requires examinations.definitions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: examinationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Examination" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.definitions.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Examination in this School.
+    patch:
+      operationId: updateExamination
+      summary: >
+        Updates an Examination's code, name, dates and/or status. This is
+        ALSO how an Examination is retired or reinstated -- `status` is
+        an ordinary field here, and there is deliberately no separate
+        activate/deactivate operation. The owning AcademicYear is fixed
+        at creation and can never be reassigned. Every date invariant is
+        re-run. Requires examinations.definitions.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: examinationId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExaminationUpdateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Examination" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.definitions.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Examination in this School.
+        "422":
+          description: >
+            Validation or domain failure -- oversized code/name, a
+            malformed date, an end date before the start date, a window
+            falling outside the AcademicYear, an out-of-vocabulary
+            status, or a case-insensitive duplicate code within this
+            AcademicYear.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -9001,6 +9144,62 @@ components:
         expected_status: { $ref: "#/components/schemas/CurriculumDeliveryStatus" }
         new_status: { $ref: "#/components/schemas/CurriculumDeliveryStatus" }
         completed_on: { type: string, format: date }
+    ExaminationStatus:
+      type: string
+      description: >
+        The complete, closed Examination lifecycle vocabulary, mirrored
+        by the database's own `examinations_status_check` CHECK
+        constraint. Deliberately NOT a draft/active/closed state machine:
+        a retired or cancelled Examination is marked `inactive` and kept,
+        and an inactive Examination continues to reserve its code, which
+        is why there is no activate/deactivate operation and no delete.
+      enum: [active, inactive]
+    Examination:
+      type: object
+      description: >
+        One named assessment WINDOW that a School holds within one
+        AcademicYear -- "Mid-Term Examination 2026-27, 10 to 20
+        September". A container, NOT an individual paper: it owns only
+        its identity and the date range it spans, and owns no Subject,
+        SubjectOffering, Section, paper, per-paper sitting date/time or
+        max marks, no Student, enrollment, teacher or invigilator, and no
+        mark, grade, result, publication state, report card or
+        transcript. The per-Subject entity is a future ExaminationPaper.
+      required: [id, academicYearId, code, name, startsOn, endsOn, status]
+      properties:
+        id: { type: string, format: uuid }
+        academicYearId:
+          type: string
+          format: uuid
+          description: The single owning AcademicYear, fixed at creation and never reassignable.
+        code: { type: string, maxLength: 64, description: "Uppercased on write; case-insensitively unique within the owning AcademicYear." }
+        name: { type: string, maxLength: 255, description: "Human label. Deliberately NOT unique." }
+        startsOn: { type: string, format: date, description: "School calendar date the window opens. Future dates are permitted and expected." }
+        endsOn: { type: string, format: date, description: "School calendar date the window closes; >= startsOn. Windows may overlap one another." }
+        status: { $ref: "#/components/schemas/ExaminationStatus" }
+    ExaminationCreateInput:
+      type: object
+      description: >
+        The AcademicYear comes from the path and is never accepted here;
+        neither is schoolId.
+      required: [code, name, starts_on, ends_on]
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date }
+        status: { $ref: "#/components/schemas/ExaminationStatus" }
+    ExaminationUpdateInput:
+      type: object
+      description: >
+        Partial update; every field is optional. The owning AcademicYear
+        and School can never be changed.
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        starts_on: { type: string, format: date }
+        ends_on: { type: string, format: date }
+        status: { $ref: "#/components/schemas/ExaminationStatus" }
     TimetableEntry:
       type: object
       required: [id, status, dayOfWeek, subjectOfferingId, sectionId, teacherId, periodId]

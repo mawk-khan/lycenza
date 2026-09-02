@@ -2951,6 +2951,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/academic-years/{academicYearId}/examinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists an AcademicYear's Examination windows in chronological order (starts_on, then case-insensitive code as a deterministic tie-break), optionally filtered by status. An Examination is a named assessment WINDOW, not an individual paper. Requires examinations.definitions.view. */
+        get: operations["listExaminations"];
+        put?: never;
+        /** Defines one Examination window inside an AcademicYear. `code` is normalized to uppercase before validation and is case-insensitively unique WITHIN that AcademicYear -- the same normalized code legitimately recurs in a different year. The window must fall inside the AcademicYear's inclusive date range; the AcademicYear is NOT required to be active, so planning a future examination inside a draft year is supported. FUTURE dates are permitted and expected, and overlapping windows are permitted. Requires examinations.definitions.manage. No Idempotency-Key is needed: duplicate semantic creation is already prevented by the database's own unique index. */
+        post: operations["createExamination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/examinations/{examinationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One Examination window. Requires examinations.definitions.view. */
+        get: operations["getExamination"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates an Examination's code, name, dates and/or status. This is ALSO how an Examination is retired or reinstated -- `status` is an ordinary field here, and there is deliberately no separate activate/deactivate operation. The owning AcademicYear is fixed at creation and can never be reassigned. Every date invariant is re-run. Requires examinations.definitions.manage. */
+        patch: operations["updateExamination"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5077,6 +5113,56 @@ export interface components {
             new_status: components["schemas"]["CurriculumDeliveryStatus"];
             /** Format: date */
             completed_on?: string;
+        };
+        /**
+         * @description The complete, closed Examination lifecycle vocabulary, mirrored by the database's own `examinations_status_check` CHECK constraint. Deliberately NOT a draft/active/closed state machine: a retired or cancelled Examination is marked `inactive` and kept, and an inactive Examination continues to reserve its code, which is why there is no activate/deactivate operation and no delete.
+         * @enum {string}
+         */
+        ExaminationStatus: "active" | "inactive";
+        /** @description One named assessment WINDOW that a School holds within one AcademicYear -- "Mid-Term Examination 2026-27, 10 to 20 September". A container, NOT an individual paper: it owns only its identity and the date range it spans, and owns no Subject, SubjectOffering, Section, paper, per-paper sitting date/time or max marks, no Student, enrollment, teacher or invigilator, and no mark, grade, result, publication state, report card or transcript. The per-Subject entity is a future ExaminationPaper. */
+        Examination: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The single owning AcademicYear, fixed at creation and never reassignable.
+             */
+            academicYearId: string;
+            /** @description Uppercased on write; case-insensitively unique within the owning AcademicYear. */
+            code: string;
+            /** @description Human label. Deliberately NOT unique. */
+            name: string;
+            /**
+             * Format: date
+             * @description School calendar date the window opens. Future dates are permitted and expected.
+             */
+            startsOn: string;
+            /**
+             * Format: date
+             * @description School calendar date the window closes; >= startsOn. Windows may overlap one another.
+             */
+            endsOn: string;
+            status: components["schemas"]["ExaminationStatus"];
+        };
+        /** @description The AcademicYear comes from the path and is never accepted here; neither is schoolId. */
+        ExaminationCreateInput: {
+            code: string;
+            name: string;
+            /** Format: date */
+            starts_on: string;
+            /** Format: date */
+            ends_on: string;
+            status?: components["schemas"]["ExaminationStatus"];
+        };
+        /** @description Partial update; every field is optional. The owning AcademicYear and School can never be changed. */
+        ExaminationUpdateInput: {
+            code?: string;
+            name?: string;
+            /** Format: date */
+            starts_on?: string;
+            /** Format: date */
+            ends_on?: string;
+            status?: components["schemas"]["ExaminationStatus"];
         };
         /** @description A single scheduled slot: a required SubjectOffering taught to a Section by a teacher (HR Employee) in an optional Room during a TimetablePeriod on a given day of week. The teacher representation is data-minimized to id/teacherName ONLY (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never work_email/work_phone/any other HR field. */
         TimetableEntry: {
@@ -14674,6 +14760,226 @@ export interface operations {
                 };
             };
             /** @description Validation or domain failure -- a no-op transition, an illegal state pair, a missing completion date when completing, a future or out-of-year completion date, or a completion date earlier than the start date. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listExaminations: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["ExaminationStatus"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                academicYearId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Examination"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.definitions.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such AcademicYear in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createExamination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                academicYearId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExaminationCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Examination"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.definitions.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such AcademicYear in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- missing/oversized code or name, a malformed date, an end date before the start date, a window falling outside the AcademicYear, an out-of-vocabulary status, or a case-insensitive duplicate code within this AcademicYear. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getExamination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Examination"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.definitions.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Examination in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateExamination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExaminationUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Examination"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.definitions.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Examination in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- oversized code/name, a malformed date, an end date before the start date, a window falling outside the AcademicYear, an out-of-vocabulary status, or a case-insensitive duplicate code within this AcademicYear. */
             422: {
                 headers: {
                     [name: string]: unknown;

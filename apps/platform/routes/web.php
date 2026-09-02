@@ -27,6 +27,7 @@ use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
 use App\Http\Controllers\App\EnrollmentRolloverSubjectMappingController;
+use App\Http\Controllers\App\Examinations\ExaminationController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
@@ -869,6 +870,18 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/', [CurriculumDeliveryController::class, 'store'])->name('store');
         Route::patch('/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])->name('update');
         Route::post('/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])->name('transition');
+    });
+
+    // Phase 0H.4A -- the administrative Examination surface. Capability
+    // checks live in the controller (the AuthorizesCapability trait),
+    // matching every other App/* Inertia controller in this codebase.
+    // Exactly three routes: no delete, no activate/deactivate, and no
+    // paper/marks/grade-scale/result surface -- `status` is edited
+    // through the ordinary update, exactly like the API.
+    Route::prefix('app/examinations')->name('app.examinations.')->group(function (): void {
+        Route::get('/', [ExaminationController::class, 'index'])->name('index');
+        Route::post('/', [ExaminationController::class, 'store'])->name('store');
+        Route::patch('/{examination}', [ExaminationController::class, 'update'])->name('update');
     });
 
     Route::prefix('app/attendance')->name('app.attendance.')->group(function (): void {
