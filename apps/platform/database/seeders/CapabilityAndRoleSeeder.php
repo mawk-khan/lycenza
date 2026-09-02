@@ -495,6 +495,25 @@ class CapabilityAndRoleSeeder extends Seeder
             // never be mistaken for accidental inconsistency).
             ['key' => 'syllabus.view', 'label' => 'View Syllabus Units', 'namespace' => 'school'],
             ['key' => 'syllabus.manage', 'label' => 'Manage Syllabus Units', 'namespace' => 'school'],
+
+            // Phase 0H.3B (Curriculum Delivery -- the second concrete
+            // Academics fact). Rooted at `curriculum.delivery.*`, a
+            // sibling of `syllabus.*` rather than an extension of it:
+            // the catalogue and its delivery are independently
+            // grantable concerns, and folding delivery into
+            // `syllabus.manage` would permanently foreclose a future
+            // teacher role holding delivery rights WITHOUT the right to
+            // rewrite the syllabus itself. Deliberately depth-2 rather
+            // than a bare `curriculum.*` (which would imply rights over
+            // a `Curriculum` entity that Academic Structure explicitly
+            // defers) -- the same module.entity shape as
+            // `timetable.periods.*`/`timetable.schedule.*`. Still NOT
+            // `academics.*`, for the identical reason recorded above.
+            // No `curriculum.delivery.teacher`: v1 is admin-only, with
+            // no teacher self-service and no teacher-ownership rule,
+            // exactly as Attendance and Syllabus already are.
+            ['key' => 'curriculum.delivery.view', 'label' => 'View Curriculum Delivery records', 'namespace' => 'school'],
+            ['key' => 'curriculum.delivery.manage', 'label' => 'Record and correct Curriculum Delivery', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -669,6 +688,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // same reasoning that already grants the Academic
                     // Structure and Timetable pairs above.
                     'syllabus.view', 'syllabus.manage',
+                    // Phase 0H.3B: recording which Section has covered
+                    // which SyllabusUnit is the same routine academic
+                    // administration as curating the syllabus itself.
+                    'curriculum.delivery.view', 'curriculum.delivery.manage',
                 ],
             ],
             'principal' => [
@@ -793,6 +816,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // same reasoning that already grants the Academic
                     // Structure and Timetable pairs above.
                     'syllabus.view', 'syllabus.manage',
+                    // Phase 0H.3B: recording which Section has covered
+                    // which SyllabusUnit is the same routine academic
+                    // administration as curating the syllabus itself.
+                    'curriculum.delivery.view', 'curriculum.delivery.manage',
                 ],
             ],
         ];

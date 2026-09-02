@@ -459,15 +459,52 @@ session-authenticated Inertia surface at `/app/syllabus`. Classified
 **Confidential** — it stores no personal data at all. See
 `docs/modules/ACADEMICS.md` for the complete as-built record.
 
-**Academics is NOT complete.** Syllabus Foundation is the first of its
-three scoped concerns: **Curriculum Delivery is not implemented** and
-**Lesson Planning is deferred** (the latter pending a real requirement
-and the platform's first ownership-based authorization model, which
-does not exist yet).
+**Curriculum Delivery (Phase 0H.3B) is complete** — the second concrete
+Academics fact: `CurriculumDelivery`, the record that one `Section` has
+COVERED one `SyllabusUnit` — when that Section began it, and when, if
+yet, it finished. Actual instructional coverage by a cohort, the
+counterpart to `SyllabusUnit`'s catalogue of expected content; it
+records nothing about an individual lesson, nothing about who taught it,
+and nothing about any Student. **Section-specific** (per-Section
+variation is precisely what the Offering-wide syllabus deferred to
+delivery) and **required-SubjectOffering-only in v1** — an elective is a
+Student-level enrollment choice, not a Section-wide cohort, which is
+Timetable v1's identical restriction and rationale. **Cross-parent
+integrity is fully database-authoritative**: two 5-column composite
+foreign keys pin the Section and the SubjectOffering to the same
+AcademicYear/Campus/GradeLevel, and a third pins the SyllabusUnit to
+that exact Offering (consuming one additive, non-destructive
+`syllabus_units_offering_context_unique` key added to Phase 0H.3A's
+table), so a Section teaching one Subject can never record delivery
+against another Subject's unit even by raw SQL. One mutable state row
+per Section × SyllabusUnit (`in_progress`/`completed`; **`not_started`
+is deliberately the absence of a row**, so consumers LEFT JOIN from
+`syllabus_units` rather than counting deliveries), School-local dates
+validated as non-future and inside the AcademicYear, expected-status
+compare-and-swap transitions under a row lock — proven with two real
+separate OS processes — a closed two-edge state machine, and no delete
+route. An Application service is required here, unlike SyllabusUnit,
+because real invariants exist. `curriculum.delivery.view`/`.manage`
+capabilities, a sibling of `syllabus.*` rather than an extension of it;
+five `/api/v1` operations with a COMPLETE OpenAPI contract and
+regenerated shared types in the same branch; and a session-authenticated
+Inertia surface at `/app/syllabus-delivery`. **No teacher identity, no
+Timetable dependency, no Attendance dependency, no Student data, no
+`academic_term_id`, zero domain events.** Classified **Confidential** —
+it stores no personal data at all. See `docs/modules/ACADEMICS.md` §18
+for the complete as-built record.
+
+**Academics is NOT complete.** Syllabus Foundation and Curriculum
+Delivery are two of its three scoped concerns: **Lesson Planning remains
+deferred**, pending a real requirement and the platform's first
+ownership-based authorization model, which still does not exist. Phase
+0H.3B deliberately stores nothing at lesson granularity, so Lesson
+Planning remains fully necessary rather than redundant.
 
 **Examinations remains not started.** Phase 0H as a whole is **not**
-complete — Timetable and Attendance are done, Academics has only its
-Syllabus foundation, and Examinations has no implementation at all.
+complete — Timetable, Attendance, Syllabus Foundation and Curriculum
+Delivery are done; Academics still lacks Lesson Planning, and
+Examinations has no implementation at all.
 
 **"Phase 0H Attendance" remains Student class attendance only.** Staff/
 Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR

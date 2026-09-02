@@ -2898,6 +2898,59 @@ export interface paths {
         patch: operations["updateSyllabusUnit"];
         trace?: never;
     };
+    "/schools/{schoolId}/subject-offerings/{subjectOfferingId}/curriculum-deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists the CurriculumDelivery records for a SubjectOffering, in the syllabus catalogue's own teaching order (the SyllabusUnit's sequence, then its case-insensitive code). Optionally filtered by Section and/or status. A SyllabusUnit with NO row here has simply not been started -- `not_started` is never a stored value, so a client showing every unit must start from the Syllabus list and join these in. Requires curriculum.delivery.view. */
+        get: operations["listCurriculumDeliveries"];
+        put?: never;
+        /** Starts recording delivery of one SyllabusUnit to one Section. Always creates an `in_progress` record -- a delivery is never born completed. Only the three caller-chosen facts are accepted; the SubjectOffering, AcademicYear, Campus and GradeLevel pins are derived server-side from the resolved parents and are never taken from the request. Only a REQUIRED SubjectOffering is eligible: an elective is a Student-level enrollment choice, not a Section-wide cohort. Requires curriculum.delivery.manage. No Idempotency-Key is needed: duplicate creation is already prevented by the database's own `curriculum_deliveries_section_unit_unique` index. */
+        post: operations["startCurriculumDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/curriculum-deliveries/{curriculumDeliveryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One CurriculumDelivery. Requires curriculum.delivery.view. */
+        get: operations["getCurriculumDelivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Corrects a clerical mistake in either date. `status` is deliberately NOT an accepted field -- completing and reopening are guarded state transitions, not date edits. A completion date may only be corrected on an already-completed record. Every applicable date invariant is re-run, so an existing row is not a back door around them. Remains available after the AcademicYear closes. Requires curriculum.delivery.manage. */
+        patch: operations["correctCurriculumDeliveryDates"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/curriculum-deliveries/{curriculumDeliveryId}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Expected-status compare-and-swap between the two stored states. `expected_status` is the status the caller believes the record currently holds; if it no longer matches, the transition is refused with 409 rather than silently overwriting a colleague's change. Completing requires `completed_on`; reopening clears it. The only legal edges are in_progress -> completed and completed -> in_progress. Remains available after the AcademicYear closes. Requires curriculum.delivery.manage. */
+        post: operations["transitionCurriculumDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4965,6 +5018,65 @@ export interface components {
             title?: string;
             sequence?: number;
             status?: components["schemas"]["SyllabusUnitStatus"];
+        };
+        /**
+         * @description The complete, closed CurriculumDelivery state vocabulary, mirrored by the database's own `curriculum_deliveries_status_check` CHECK constraint. `not_started` is deliberately NOT a member: the ABSENCE of a record is what "not started" means, so nothing is ever pre-seeded and a client showing every unit must start from the Syllabus list.
+         * @enum {string}
+         */
+        CurriculumDeliveryStatus: "in_progress" | "completed";
+        /** @description The record that one Section has covered one SyllabusUnit -- when that Section began it, and when, if yet, it finished. ACTUAL instructional coverage by a cohort, the counterpart to SyllabusUnit's catalogue of EXPECTED content. It records nothing about an individual lesson (future Lesson Planning), nothing about who taught it (there is no teacher identity anywhere in this resource, which is what keeps it non-personal), and nothing about any Student. Grading/marks/grade scales belong to Examinations; assignments, submissions and learning content belong to LMS. Section-specific and required-SubjectOffering-only in v1. */
+        CurriculumDelivery: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The cohort that covered the unit. A Section is an organisational unit, never an individual.
+             */
+            sectionId: string;
+            /**
+             * Format: uuid
+             * @description The Offering that owns the SyllabusUnit. The AcademicYear/Campus/GradeLevel pins that structurally bind the Section and the Offering to one context are database correctness machinery and are deliberately not exposed.
+             */
+            subjectOfferingId: string;
+            /** Format: uuid */
+            syllabusUnitId: string;
+            /**
+             * Format: date
+             * @description School-LOCAL calendar date the Section began this unit. Never in the future; always inside the AcademicYear.
+             */
+            startedOn: string;
+            /**
+             * Format: date
+             * @description School-local calendar date coverage finished. NULL if and only if status is in_progress.
+             */
+            completedOn?: string | null;
+            status: components["schemas"]["CurriculumDeliveryStatus"];
+        };
+        /** @description Only the three facts a user actually chooses. Every structural context pin is derived server-side from the resolved parents. */
+        CurriculumDeliveryCreateInput: {
+            /** Format: uuid */
+            section_id: string;
+            /**
+             * Format: uuid
+             * @description Must belong to the SubjectOffering in the path.
+             */
+            syllabus_unit_id: string;
+            /** Format: date */
+            started_on: string;
+        };
+        /** @description Clerical date correction; both fields are optional. `status` is deliberately absent -- state changes go through the transition operation. `completed_on` is accepted only for an already-completed record. */
+        CurriculumDeliveryUpdateInput: {
+            /** Format: date */
+            started_on?: string;
+            /** Format: date */
+            completed_on?: string;
+        };
+        /** @description Expected-status compare-and-swap. `expected_status` is the status the caller believes the record currently holds; `new_status` must differ from it and form a legal edge. `completed_on` is required when completing and ignored when reopening. */
+        CurriculumDeliveryTransitionInput: {
+            expected_status: components["schemas"]["CurriculumDeliveryStatus"];
+            new_status: components["schemas"]["CurriculumDeliveryStatus"];
+            /** Format: date */
+            completed_on?: string;
         };
         /** @description A single scheduled slot: a required SubjectOffering taught to a Section by a teacher (HR Employee) in an optional Room during a TimetablePeriod on a given day of week. The teacher representation is data-minimized to id/teacherName ONLY (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never work_email/work_phone/any other HR field. */
         TimetableEntry: {
@@ -14262,6 +14374,306 @@ export interface operations {
                 content?: never;
             };
             /** @description Validation failure -- oversized code/title, negative sequence, out-of-vocabulary status, or a case-insensitive duplicate code within this unit's Offering. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listCurriculumDeliveries: {
+        parameters: {
+            query?: {
+                section_id?: string;
+                status?: components["schemas"]["CurriculumDeliveryStatus"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                subjectOfferingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SubjectOffering in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                subjectOfferingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurriculumDeliveryCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SubjectOffering, Section or SyllabusUnit in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The AcademicYear is not active, so no NEW delivery may be started. Correcting or transitioning an EXISTING delivery remains possible after the year closes. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation or domain failure -- an elective SubjectOffering, a SyllabusUnit belonging to a different Offering, a Section in a different AcademicYear/Campus/GradeLevel, a future started_on in the School's own timezone, a date outside the AcademicYear, or an existing delivery for this Section/SyllabusUnit pair. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such CurriculumDelivery in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    correctCurriculumDeliveryDates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurriculumDeliveryUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such CurriculumDelivery in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- a malformed date, a future date in the School's own timezone, a date outside the AcademicYear, a completion date earlier than the start date, or a completion date supplied for an in-progress record. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    transitionCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurriculumDeliveryTransitionInput"];
+            };
+        };
+        responses: {
+            /** @description Transitioned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such CurriculumDelivery in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The record's current status is not the supplied expected_status -- another transition landed first. Reload before retrying. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation or domain failure -- a no-op transition, an illegal state pair, a missing completion date when completing, a future or out-of-year completion date, or a completion date earlier than the start date. */
             422: {
                 headers: {
                     [name: string]: unknown;
