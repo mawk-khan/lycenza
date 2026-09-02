@@ -18,6 +18,7 @@ use App\Domain\Canteen\Http\Controllers\CanteenOutletController;
 use App\Domain\Canteen\Http\Controllers\CanteenRecipeController;
 use App\Domain\CurriculumDelivery\Http\Controllers\CurriculumDeliveryController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
+use App\Domain\Examinations\Http\Controllers\ExaminationController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
 use App\Domain\Finance\Http\Controllers\JournalEntryController;
 use App\Domain\Finance\Http\Controllers\LedgerAccountController;
@@ -1522,6 +1523,51 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/curriculum-deliveries/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])
                 ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
                 ->name('schools.curriculum-deliveries.transition');
+
+            // Phase 0H.4A (Examination Foundation -- the first
+            // Examinations fact). Exactly FOUR operations: list/create
+            // nested under the owning AcademicYear, show/update flat,
+            // matching AcademicTermController's established nesting
+            // convention.
+            //
+            // An Examination is a WINDOW, not a paper. There is
+            // deliberately NO paper, scheduling, marks, grade-scale,
+            // result, report-card, transcript, search, bulk or
+            // reporting endpoint here -- the per-Subject entity is a
+            // future ExaminationPaper (Phase 0H.4B, its own gate).
+            //
+            // Deliberately NO delete, NO activate and NO deactivate
+            // route. `status` moves through the ordinary PATCH exactly
+            // like Section/SubjectOffering/Room/Subject/GradeLevel/
+            // SyllabusUnit -- none of which has a lifecycle route. An
+            // Examination cannot conflict with anything on
+            // reactivation because `examinations_year_code_ci_unique`
+            // is unconditional, so an inactive one already reserves its
+            // code.
+            //
+            // Gated by Examinations' OWN capability family -- never
+            // Academic Structure's `academics.years.*`, even though the
+            // parent AcademicYear belongs to that module (the Canteen
+            // capability-boundary lesson, carried forward). Depth-2
+            // (`examinations.definitions.*`) so a later marks or
+            // result-publication family can never be granted by the
+            // same key.
+            //
+            // No Idempotency-Key (rule 29, evaluated per endpoint):
+            // duplicate creation is already prevented by the unique
+            // code index, and PATCH is naturally idempotent.
+            Route::get('/academic-years/{academicYear}/examinations', [ExaminationController::class, 'index'])
+                ->middleware('capability:examinations.definitions.view')
+                ->name('schools.academic-years.examinations.index');
+            Route::post('/academic-years/{academicYear}/examinations', [ExaminationController::class, 'store'])
+                ->middleware(['capability:examinations.definitions.manage', 'throttle:school-api-mutations'])
+                ->name('schools.academic-years.examinations.store');
+            Route::get('/examinations/{examination}', [ExaminationController::class, 'show'])
+                ->middleware('capability:examinations.definitions.view')
+                ->name('schools.examinations.show');
+            Route::patch('/examinations/{examination}', [ExaminationController::class, 'update'])
+                ->middleware(['capability:examinations.definitions.manage', 'throttle:school-api-mutations'])
+                ->name('schools.examinations.update');
         });
 });
 

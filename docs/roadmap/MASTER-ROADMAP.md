@@ -501,10 +501,54 @@ ownership-based authorization model, which still does not exist. Phase
 0H.3B deliberately stores nothing at lesson granularity, so Lesson
 Planning remains fully necessary rather than redundant.
 
-**Examinations remains not started.** Phase 0H as a whole is **not**
-complete — Timetable, Attendance, Syllabus Foundation and Curriculum
-Delivery are done; Academics still lacks Lesson Planning, and
-Examinations has no implementation at all.
+**Examination Foundation (Phase 0H.4A) is complete** — the first
+Examinations fact: `Examination`, one named assessment WINDOW that a
+School holds within one AcademicYear ("Mid-Term Examination 2026-27,
+10–20 September). **A window/container, NOT a paper**: it owns only its
+identity and the date range it spans, and owns no Subject,
+SubjectOffering, Section, paper, per-paper sitting date/time or max
+marks, no Student, enrollment, teacher or invigilator, and no mark,
+grade, result, publication state, report card or transcript. Exactly two
+parents (School and a composite-FK RESTRICT `AcademicYear`); no Campus
+or GradeLevel — per-campus/per-grade variation is a paper concern — and
+no `academic_term_id` ("Midterm" is a name, not a term reference;
+AcademicTerm still has no lifecycle status and no consuming domain).
+**Two deliberate departures from Curriculum Delivery**: future dates are
+permitted and expected (an examination is scheduled ahead, exactly as
+AcademicYears and AcademicTerms already are), and overlapping windows
+are permitted (examinations partition nothing) — so this module
+introduces no lock, no exclusion constraint and no concurrency test,
+there being no multi-row invariant at all; the AcademicYear need not be
+active, so planning next year's examinations inside a draft year is
+supported. Case-insensitive code uniqueness within one AcademicYear
+enforced by an unconditional PostgreSQL expression index (so an inactive
+Examination keeps reserving its code, which is why there is no
+activate/deactivate command); `active`/`inactive` through the ordinary
+PATCH and no delete route; an Application service because the
+AcademicYear range check needs a parent lookup;
+`examinations.definitions.view`/`.manage` capabilities, deliberately
+depth-2 so a later marks or result-publication family can never be
+granted by the same key; four `/api/v1` operations with a COMPLETE
+OpenAPI contract and regenerated shared types in the same branch; and a
+session-authenticated Inertia surface at `/app/examinations`. Classified
+**Confidential** — it stores no personal data at all. See
+`docs/modules/EXAMINATIONS.md` and ADR 0032 for the complete as-built
+record and the decomposition rationale.
+
+**Examinations has STARTED but is NOT complete.** Examination Foundation
+is only its first checkpoint: **ExaminationPaper/scheduling is not
+implemented**, **GradeScale is not implemented**, and **marks, result
+calculation, result publication, report cards and transcripts are all
+not implemented**. The checkpoint that first introduces Student marks
+crosses from Confidential into Sensitive personal data and must undergo
+a dedicated privacy/security architecture audit — including the
+children's-data **[LEGAL REVIEW REQUIRED]** gate in
+`docs/security/DATA-CLASSIFICATION.md` — before implementation.
+
+**Phase 0H as a whole is NOT complete** — Timetable, Attendance,
+Syllabus Foundation, Curriculum Delivery and Examination Foundation are
+done; Academics still lacks Lesson Planning, and Examinations has only
+its first foundation checkpoint.
 
 **"Phase 0H Attendance" remains Student class attendance only.** Staff/
 Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR

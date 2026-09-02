@@ -514,6 +514,29 @@ class CapabilityAndRoleSeeder extends Seeder
             // exactly as Attendance and Syllabus already are.
             ['key' => 'curriculum.delivery.view', 'label' => 'View Curriculum Delivery records', 'namespace' => 'school'],
             ['key' => 'curriculum.delivery.manage', 'label' => 'Record and correct Curriculum Delivery', 'namespace' => 'school'],
+
+            // Phase 0H.4A (Examination Foundation -- the first
+            // Examinations fact). Rooted at `examinations.*`, a NEW
+            // module root with no collision in this catalog, and
+            // deliberately DEPTH-2 (`examinations.definitions.*`)
+            // rather than a flat `examinations.view`/`.manage`: this
+            // module will grow to papers, grade scales, marks and
+            // result publication, and a flat `examinations.manage`
+            // would eventually grant clerical marks entry and
+            // principal-level result publication with the same key.
+            // Depth-2 leaves clean room for `examinations.papers.*`,
+            // `examinations.grade_scales.*`, `examinations.marks.*` and
+            // `examinations.results.*`, matching the established
+            // `timetable.periods.*`/`timetable.schedule.*` and
+            // `canteen.directory.*`/`canteen.orders.*` module.area
+            // shape. NOT `academics.*` (owned by Academic Structure)
+            // and never Academic Structure's own `academics.years.*`
+            // even though the parent AcademicYear belongs to it -- the
+            // Canteen capability-boundary lesson. No
+            // `examinations.*.teacher`: v1 is admin-only, with no
+            // teacher self-service and no teacher-ownership rule.
+            ['key' => 'examinations.definitions.view', 'label' => 'View Examinations', 'namespace' => 'school'],
+            ['key' => 'examinations.definitions.manage', 'label' => 'Manage Examinations', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -692,6 +715,12 @@ class CapabilityAndRoleSeeder extends Seeder
                     // which SyllabusUnit is the same routine academic
                     // administration as curating the syllabus itself.
                     'curriculum.delivery.view', 'curriculum.delivery.manage',
+                    // Phase 0H.4A: defining the School's examination
+                    // windows for an AcademicYear is routine academic
+                    // administration, the same reasoning that already
+                    // grants the Academic Structure and Academics pairs
+                    // above.
+                    'examinations.definitions.view', 'examinations.definitions.manage',
                 ],
             ],
             'principal' => [
@@ -820,6 +849,12 @@ class CapabilityAndRoleSeeder extends Seeder
                     // which SyllabusUnit is the same routine academic
                     // administration as curating the syllabus itself.
                     'curriculum.delivery.view', 'curriculum.delivery.manage',
+                    // Phase 0H.4A: defining the School's examination
+                    // windows for an AcademicYear is routine academic
+                    // administration, the same reasoning that already
+                    // grants the Academic Structure and Academics pairs
+                    // above.
+                    'examinations.definitions.view', 'examinations.definitions.manage',
                 ],
             ],
         ];
