@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Examinations;
 
+use App\Domain\Examinations\Http\Controllers\ExaminationController;
 use App\Domain\Examinations\Infrastructure\Examination;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -78,6 +79,21 @@ class ExaminationArchitectureGuardTest extends TestCase
     #[Test]
     public function the_module_references_no_forbidden_domain(): void
     {
+        // Phase 0H.4B added ExaminationPaper, whose own architecture
+        // gate (section 12 of its ADR) EXPLICITLY requires it to
+        // reference SubjectOffering via a composite FK -- unlike plain
+        // Examination (0H.4A), which correctly never may. The bare
+        // 'SubjectOffering' class-name ban therefore no longer applies
+        // module-wide; it is checked instead, precisely, by
+        // ExaminationPaperArchitectureGuardTest against every file
+        // EXCEPT ExaminationPaper's own. Every other forbidden
+        // namespace/class below still applies to ALL module files
+        // without exception, including ExaminationPaper's (Timetable,
+        // Attendance, Students, Syllabus, CurriculumDelivery, Documents,
+        // and SubjectOfferingRosterReadService remain just as forbidden
+        // for ExaminationPaper -- see that module's own spec).
+        $examinationPaperFiles = array_filter($this->moduleSources(), fn ($f) => str_contains(basename($f), 'ExaminationPaper') || str_contains(basename($f), 'SubjectOfferingNotAvailable'));
+
         foreach ($this->moduleSources() as $file) {
             $code = $this->code($file);
 
@@ -94,11 +110,16 @@ class ExaminationArchitectureGuardTest extends TestCase
                     basename($file).' must not reference '.$forbidden.' -- Examination Foundation depends outward on Academic Structure only.');
             }
 
-            foreach ([
-                'AcademicTerm', 'SubjectOffering', 'SyllabusUnit', 'CurriculumDelivery',
+            $forbiddenClasses = [
+                'AcademicTerm', 'SyllabusUnit', 'CurriculumDelivery',
                 'TimetableEntry', 'AttendanceSession', 'StudentEnrollment',
                 'SubjectOfferingRosterReadService',
-            ] as $forbiddenClass) {
+            ];
+            if (! in_array($file, $examinationPaperFiles, true)) {
+                $forbiddenClasses[] = 'SubjectOffering';
+            }
+
+            foreach ($forbiddenClasses as $forbiddenClass) {
                 $this->assertStringNotContainsString($forbiddenClass, $code,
                     basename($file).' must not use '.$forbiddenClass.'.');
             }
@@ -121,10 +142,20 @@ class ExaminationArchitectureGuardTest extends TestCase
     #[Test]
     public function only_the_application_service_writes_the_model(): void
     {
-        $service = app_path('Domain/Examinations/Application/ExaminationService.php');
+        // Phase 0H.4B added a SECOND entity (and sole writer) to this
+        // same module directory -- ExaminationPaperService, exactly as
+        // legitimate a writer of ExaminationPaper as ExaminationService
+        // is of Examination. Both are excluded here; neither writes the
+        // OTHER's model (proven by ExaminationPaperArchitectureGuardTest
+        // for the new entity, and unchanged by this exclusion for the
+        // original one).
+        $services = [
+            app_path('Domain/Examinations/Application/ExaminationService.php'),
+            app_path('Domain/Examinations/Application/ExaminationPaperService.php'),
+        ];
 
         foreach ($this->moduleSources() as $file) {
-            if ($file === $service) {
+            if (in_array($file, $services, true)) {
                 continue;
             }
 
@@ -170,8 +201,28 @@ class ExaminationArchitectureGuardTest extends TestCase
     #[Test]
     public function the_registered_route_surface_is_exactly_the_sanctioned_one(): void
     {
+        // Phase 0H.4B's ExaminationPaper API/web routes deliberately
+        // share the literal path segment "examinations" (e.g.
+        // `/examinations/{examination}/examination-papers`,
+        // `/app/examinations/{examination}/papers`) -- a URI substring
+        // filter would now also catch them. Filtered by controller
+        // class instead (the same technique
+        // ExaminationOpenApiCoverageTest::liveOperations() already
+        // uses), so this assertion stays exactly what it always was:
+        // Examination's own four API + three web routes, unchanged.
+        $apiController = ExaminationController::class;
+        $webController = \App\Http\Controllers\App\Examinations\ExaminationController::class;
+
         $routes = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn ($r) => str_contains($r->uri(), 'examinations'))
+            ->filter(function ($r) use ($apiController, $webController) {
+                $action = $r->getAction('controller');
+                if (! is_string($action)) {
+                    return false;
+                }
+                [$controller] = explode('@', $action, 2) + [null];
+
+                return $controller === $apiController || $controller === $webController;
+            })
             ->flatMap(fn ($r) => array_map(fn ($m) => $m.' /'.$r->uri(), array_values(array_diff($r->methods(), ['HEAD']))))
             ->sort()->values()->all();
 

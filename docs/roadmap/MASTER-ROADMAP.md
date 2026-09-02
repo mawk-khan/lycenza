@@ -535,20 +535,46 @@ session-authenticated Inertia surface at `/app/examinations`. Classified
 `docs/modules/EXAMINATIONS.md` and ADR 0032 for the complete as-built
 record and the decomposition rationale.
 
+**ExaminationPaper / Scheduling (Phase 0H.4B) is complete** — the second
+Examinations fact: `ExaminationPaper`, one SubjectOffering assessed
+within one Examination, with its scheduled sitting (date/time range) and
+maximum obtainable marks. Offering-wide, never Section-specific. An
+additive `examinations_context_unique` (`id, school_id,
+academic_year_id`) plus the pre-existing `subject_offerings_context_unique`
+let ExaminationPaper declare TWO composite FKs sharing the same stored
+`academic_year_id` column, structurally guaranteeing
+`Examination.academic_year_id == SubjectOffering.academic_year_id` even
+by raw SQL — proven in `Tests\Feature\Postgres\ExaminationPapersRlsIsolationTest`.
+Exactly one Paper per `(school_id, examination_id, subject_offering_id)`
+(unconditional unique constraint, so an inactive Paper keeps reserving
+the pair). Both required AND elective SubjectOfferings supported
+identically. Creation requires both parents active; ordinary corrections
+never re-check parent activity, but reactivating a withdrawn Paper does.
+School-local same-day sittings, positive `max_marks`
+(`NUMERIC(6,2)`), overlaps across different Offerings permitted (no
+lock, no concurrency test — mirroring Examination's own reasoning).
+`examinations.papers.view`/`.manage` capabilities; four more `/api/v1`
+operations with a COMPLETE OpenAPI contract and regenerated shared
+types; a session-authenticated drill-down UI at
+`/app/examinations/{examination}/papers`; zero domain events. Classified
+**Confidential**. See `docs/modules/EXAMINATIONS.md` §18 and ADR 0033
+for the complete as-built record.
+
 **Examinations has STARTED but is NOT complete.** Examination Foundation
-is only its first checkpoint: **ExaminationPaper/scheduling is not
-implemented**, **GradeScale is not implemented**, and **marks, result
-calculation, result publication, report cards and transcripts are all
-not implemented**. The checkpoint that first introduces Student marks
+and ExaminationPaper/Scheduling are its first two checkpoints:
+**GradeScale is not implemented**, and **marks, result calculation,
+result publication, report cards and transcripts are all not
+implemented**. The checkpoint that first introduces Student marks
 crosses from Confidential into Sensitive personal data and must undergo
 a dedicated privacy/security architecture audit — including the
 children's-data **[LEGAL REVIEW REQUIRED]** gate in
 `docs/security/DATA-CLASSIFICATION.md` — before implementation.
 
 **Phase 0H as a whole is NOT complete** — Timetable, Attendance,
-Syllabus Foundation, Curriculum Delivery and Examination Foundation are
-done; Academics still lacks Lesson Planning, and Examinations has only
-its first foundation checkpoint.
+Syllabus Foundation, Curriculum Delivery, Examination Foundation and
+ExaminationPaper/Scheduling are done; Academics still lacks Lesson
+Planning, and Examinations still lacks GradeScale, marks, results,
+report cards and transcripts.
 
 **"Phase 0H Attendance" remains Student class attendance only.** Staff/
 Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR

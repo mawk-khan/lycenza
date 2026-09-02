@@ -19,6 +19,7 @@ use App\Domain\Canteen\Http\Controllers\CanteenRecipeController;
 use App\Domain\CurriculumDelivery\Http\Controllers\CurriculumDeliveryController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
 use App\Domain\Examinations\Http\Controllers\ExaminationController;
+use App\Domain\Examinations\Http\Controllers\ExaminationPaperController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
 use App\Domain\Finance\Http\Controllers\JournalEntryController;
 use App\Domain\Finance\Http\Controllers\LedgerAccountController;
@@ -1568,6 +1569,40 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/examinations/{examination}', [ExaminationController::class, 'update'])
                 ->middleware(['capability:examinations.definitions.manage', 'throttle:school-api-mutations'])
                 ->name('schools.examinations.update');
+
+            // Phase 0H.4B (ExaminationPaper / Scheduling). Exactly FOUR
+            // operations: list/create nested under the owning
+            // Examination, show/update flat -- the identical nesting
+            // convention ExaminationController itself established.
+            //
+            // An ExaminationPaper is one SubjectOffering assessed within
+            // one Examination -- Offering-wide, never Section-specific.
+            // Deliberately NO delete, NO activate and NO deactivate
+            // route; `status` moves through the ordinary PATCH exactly
+            // like Examination itself, since the aggregate unique
+            // constraint is unconditional and an inactive Paper already
+            // reserves its Examination x SubjectOffering pair.
+            //
+            // Gated by Examinations' own capability family, one level
+            // deeper than `examinations.definitions.*`
+            // (`examinations.papers.*`) -- exactly the depth-2 room the
+            // 0H.4A capability catalog left for this checkpoint.
+            //
+            // No Idempotency-Key (rule 29, evaluated per endpoint):
+            // duplicate creation is already prevented by the aggregate
+            // unique constraint, and PATCH is naturally idempotent.
+            Route::get('/examinations/{examination}/examination-papers', [ExaminationPaperController::class, 'index'])
+                ->middleware('capability:examinations.papers.view')
+                ->name('schools.examinations.examination-papers.index');
+            Route::post('/examinations/{examination}/examination-papers', [ExaminationPaperController::class, 'store'])
+                ->middleware(['capability:examinations.papers.manage', 'throttle:school-api-mutations'])
+                ->name('schools.examinations.examination-papers.store');
+            Route::get('/examination-papers/{examinationPaper}', [ExaminationPaperController::class, 'show'])
+                ->middleware('capability:examinations.papers.view')
+                ->name('schools.examination-papers.show');
+            Route::patch('/examination-papers/{examinationPaper}', [ExaminationPaperController::class, 'update'])
+                ->middleware(['capability:examinations.papers.manage', 'throttle:school-api-mutations'])
+                ->name('schools.examination-papers.update');
         });
 });
 

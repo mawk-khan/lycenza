@@ -537,6 +537,21 @@ class CapabilityAndRoleSeeder extends Seeder
             // teacher self-service and no teacher-ownership rule.
             ['key' => 'examinations.definitions.view', 'label' => 'View Examinations', 'namespace' => 'school'],
             ['key' => 'examinations.definitions.manage', 'label' => 'Manage Examinations', 'namespace' => 'school'],
+
+            // Phase 0H.4B (ExaminationPaper / Scheduling). The
+            // `examinations.papers.*` leaf the 0H.4A comment above
+            // explicitly reserved. Deliberately separate from
+            // `examinations.definitions.*`: viewing/managing the
+            // Examination WINDOW is not the same right as
+            // viewing/managing which SubjectOffering sits, when, and
+            // for how many marks within it -- proven by
+            // Tests\Feature\Examinations\ExaminationPaperApiTest's
+            // assertion that `examinations.definitions.view` alone
+            // grants no ExaminationPaper access. No
+            // `examinations.papers.teacher`: v1 is admin-only, same as
+            // every other Examinations capability.
+            ['key' => 'examinations.papers.view', 'label' => 'View Examination Papers', 'namespace' => 'school'],
+            ['key' => 'examinations.papers.manage', 'label' => 'Manage Examination Papers', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -721,6 +736,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // grants the Academic Structure and Academics pairs
                     // above.
                     'examinations.definitions.view', 'examinations.definitions.manage',
+                    // Phase 0H.4B: scheduling which SubjectOffering sits,
+                    // when, and for how many marks within an Examination
+                    // is the same routine academic administration as
+                    // defining the Examination window itself.
+                    'examinations.papers.view', 'examinations.papers.manage',
                 ],
             ],
             'principal' => [
@@ -855,6 +875,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // grants the Academic Structure and Academics pairs
                     // above.
                     'examinations.definitions.view', 'examinations.definitions.manage',
+                    // Phase 0H.4B: scheduling which SubjectOffering sits,
+                    // when, and for how many marks within an Examination
+                    // is the same routine academic administration as
+                    // defining the Examination window itself.
+                    'examinations.papers.view', 'examinations.papers.manage',
                 ],
             ],
         ];
