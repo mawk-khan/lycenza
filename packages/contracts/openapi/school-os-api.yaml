@@ -6477,6 +6477,157 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/examinations/{examinationId}/examination-papers:
+    get:
+      operationId: listExaminationPapers
+      summary: >
+        Lists one Examination's Papers in chronological order
+        (scheduled_on, then starts_at). An ExaminationPaper is one
+        SubjectOffering assessed within this Examination, Offering-wide
+        and never Section-specific. Requires examinations.papers.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: examinationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/ExaminationPaper" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.papers.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Examination in this School.
+    post:
+      operationId: createExaminationPaper
+      summary: >
+        Schedules one SubjectOffering's Paper within this Examination.
+        Both the Examination and the SubjectOffering must be active, and
+        both required AND elective SubjectOfferings are supported
+        identically. `scheduled_on` must fall inside the Examination's
+        inclusive date window; `ends_at` must fall after `starts_at`
+        (same day only); `max_marks` must be positive. Exactly one Paper
+        may exist per (Examination, SubjectOffering) pair -- the
+        constraint is unconditional, so an inactive Paper continues to
+        reserve the pair. Overlapping sittings across DIFFERENT
+        SubjectOfferings are permitted. Requires
+        examinations.papers.manage. No Idempotency-Key is needed:
+        duplicate semantic creation is already prevented by the
+        database's own unique index.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: examinationId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExaminationPaperCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/ExaminationPaper" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.papers.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Examination in this School.
+        "422":
+          description: >
+            Validation or domain failure -- missing/malformed input, an
+            inactive Examination or SubjectOffering, an AcademicYear
+            mismatch between the Examination and the SubjectOffering, a
+            scheduled date outside the Examination's window, an end time
+            not after the start time, a non-positive max_marks, an
+            out-of-vocabulary status, or a duplicate Paper for this
+            Examination and SubjectOffering.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/examination-papers/{examinationPaperId}:
+    get:
+      operationId: getExaminationPaper
+      summary: One ExaminationPaper. Requires examinations.papers.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: examinationPaperId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/ExaminationPaper" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.papers.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such ExaminationPaper in this School.
+    patch:
+      operationId: updateExaminationPaper
+      summary: >
+        Updates an ExaminationPaper's schedule, maximum marks and/or
+        status. This is ALSO how a Paper is withdrawn or reinstated --
+        `status` is an ordinary field here, and there is deliberately no
+        separate activate/deactivate operation. The owning Examination
+        and SubjectOffering are fixed at creation and can never be
+        reassigned. An ordinary correction does NOT require either
+        parent to be currently active (historical correction remains
+        possible), but reactivating a Paper (inactive -> active) DOES
+        require both the Examination and the SubjectOffering to be
+        currently active. Every date/time/marks invariant is re-run.
+        Requires examinations.papers.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: examinationPaperId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExaminationPaperUpdateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/ExaminationPaper" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.papers.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such ExaminationPaper in this School.
+        "422":
+          description: >
+            Validation or domain failure -- a malformed date/time, an end
+            time not after the start time, a scheduled date outside the
+            Examination's window, a non-positive max_marks, an
+            out-of-vocabulary status, or a reactivation (inactive ->
+            active) while the Examination or SubjectOffering is
+            currently inactive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -9200,6 +9351,69 @@ components:
         starts_on: { type: string, format: date }
         ends_on: { type: string, format: date }
         status: { $ref: "#/components/schemas/ExaminationStatus" }
+    ExaminationPaperStatus:
+      type: string
+      description: >
+        The complete, closed ExaminationPaper lifecycle vocabulary,
+        mirrored by the database's own
+        `examination_papers_status_check` CHECK constraint. Deliberately
+        NOT a draft/scheduled/completed/closed/cancelled/published state
+        machine: a withdrawn Paper is marked `inactive` and kept, and an
+        inactive Paper continues to reserve its (Examination,
+        SubjectOffering) pair, which is why there is no
+        activate/deactivate operation and no delete.
+      enum: [active, inactive]
+    ExaminationPaper:
+      type: object
+      description: >
+        One SubjectOffering assessed within one Examination, with its
+        scheduled sitting (date and time range) and maximum obtainable
+        marks. Offering-wide, NOT Section-specific -- there is no
+        section_id. Not a physical uploaded question-paper file, not a
+        Student attempt, and carries no mark/result/grade-scale data.
+        Internal integrity pins (schoolId, academicYearId, campusId,
+        gradeLevelId) are server-derived and deliberately never exposed
+        here.
+      required: [id, examinationId, subjectOfferingId, scheduledOn, startsAt, endsAt, maxMarks, status]
+      properties:
+        id: { type: string, format: uuid }
+        examinationId:
+          type: string
+          format: uuid
+          description: The owning Examination, fixed at creation and never reassignable.
+        subjectOfferingId:
+          type: string
+          format: uuid
+          description: The assessed SubjectOffering, fixed at creation and never reassignable.
+        scheduledOn: { type: string, format: date, description: "School calendar date the Paper is sat; inside the owning Examination's inclusive window." }
+        startsAt: { type: string, description: "School-local wall-clock start time, HH:MM:SS." }
+        endsAt: { type: string, description: "School-local wall-clock end time, HH:MM:SS; strictly after startsAt. Same day only." }
+        maxMarks: { type: string, description: "Maximum obtainable marks, a positive decimal string." }
+        status: { $ref: "#/components/schemas/ExaminationPaperStatus" }
+    ExaminationPaperCreateInput:
+      type: object
+      description: >
+        The Examination comes from the path and is never accepted here;
+        neither is schoolId nor any integrity pin.
+      required: [subject_offering_id, scheduled_on, starts_at, ends_at, max_marks]
+      properties:
+        subject_offering_id: { type: string, format: uuid }
+        scheduled_on: { type: string, format: date }
+        starts_at: { type: string }
+        ends_at: { type: string }
+        max_marks: { type: string }
+        status: { $ref: "#/components/schemas/ExaminationPaperStatus" }
+    ExaminationPaperUpdateInput:
+      type: object
+      description: >
+        Partial update; every field is optional. The owning Examination
+        and SubjectOffering can never be changed.
+      properties:
+        scheduled_on: { type: string, format: date }
+        starts_at: { type: string }
+        ends_at: { type: string }
+        max_marks: { type: string }
+        status: { $ref: "#/components/schemas/ExaminationPaperStatus" }
     TimetableEntry:
       type: object
       required: [id, status, dayOfWeek, subjectOfferingId, sectionId, teacherId, periodId]

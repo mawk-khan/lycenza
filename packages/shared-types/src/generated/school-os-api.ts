@@ -2987,6 +2987,42 @@ export interface paths {
         patch: operations["updateExamination"];
         trace?: never;
     };
+    "/schools/{schoolId}/examinations/{examinationId}/examination-papers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists one Examination's Papers in chronological order (scheduled_on, then starts_at). An ExaminationPaper is one SubjectOffering assessed within this Examination, Offering-wide and never Section-specific. Requires examinations.papers.view. */
+        get: operations["listExaminationPapers"];
+        put?: never;
+        /** Schedules one SubjectOffering's Paper within this Examination. Both the Examination and the SubjectOffering must be active, and both required AND elective SubjectOfferings are supported identically. `scheduled_on` must fall inside the Examination's inclusive date window; `ends_at` must fall after `starts_at` (same day only); `max_marks` must be positive. Exactly one Paper may exist per (Examination, SubjectOffering) pair -- the constraint is unconditional, so an inactive Paper continues to reserve the pair. Overlapping sittings across DIFFERENT SubjectOfferings are permitted. Requires examinations.papers.manage. No Idempotency-Key is needed: duplicate semantic creation is already prevented by the database's own unique index. */
+        post: operations["createExaminationPaper"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/examination-papers/{examinationPaperId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One ExaminationPaper. Requires examinations.papers.view. */
+        get: operations["getExaminationPaper"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates an ExaminationPaper's schedule, maximum marks and/or status. This is ALSO how a Paper is withdrawn or reinstated -- `status` is an ordinary field here, and there is deliberately no separate activate/deactivate operation. The owning Examination and SubjectOffering are fixed at creation and can never be reassigned. An ordinary correction does NOT require either parent to be currently active (historical correction remains possible), but reactivating a Paper (inactive -> active) DOES require both the Examination and the SubjectOffering to be currently active. Every date/time/marks invariant is re-run. Requires examinations.papers.manage. */
+        patch: operations["updateExaminationPaper"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5163,6 +5199,58 @@ export interface components {
             /** Format: date */
             ends_on?: string;
             status?: components["schemas"]["ExaminationStatus"];
+        };
+        /**
+         * @description The complete, closed ExaminationPaper lifecycle vocabulary, mirrored by the database's own `examination_papers_status_check` CHECK constraint. Deliberately NOT a draft/scheduled/completed/closed/cancelled/published state machine: a withdrawn Paper is marked `inactive` and kept, and an inactive Paper continues to reserve its (Examination, SubjectOffering) pair, which is why there is no activate/deactivate operation and no delete.
+         * @enum {string}
+         */
+        ExaminationPaperStatus: "active" | "inactive";
+        /** @description One SubjectOffering assessed within one Examination, with its scheduled sitting (date and time range) and maximum obtainable marks. Offering-wide, NOT Section-specific -- there is no section_id. Not a physical uploaded question-paper file, not a Student attempt, and carries no mark/result/grade-scale data. Internal integrity pins (schoolId, academicYearId, campusId, gradeLevelId) are server-derived and deliberately never exposed here. */
+        ExaminationPaper: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The owning Examination, fixed at creation and never reassignable.
+             */
+            examinationId: string;
+            /**
+             * Format: uuid
+             * @description The assessed SubjectOffering, fixed at creation and never reassignable.
+             */
+            subjectOfferingId: string;
+            /**
+             * Format: date
+             * @description School calendar date the Paper is sat; inside the owning Examination's inclusive window.
+             */
+            scheduledOn: string;
+            /** @description School-local wall-clock start time, HH:MM:SS. */
+            startsAt: string;
+            /** @description School-local wall-clock end time, HH:MM:SS; strictly after startsAt. Same day only. */
+            endsAt: string;
+            /** @description Maximum obtainable marks, a positive decimal string. */
+            maxMarks: string;
+            status: components["schemas"]["ExaminationPaperStatus"];
+        };
+        /** @description The Examination comes from the path and is never accepted here; neither is schoolId nor any integrity pin. */
+        ExaminationPaperCreateInput: {
+            /** Format: uuid */
+            subject_offering_id: string;
+            /** Format: date */
+            scheduled_on: string;
+            starts_at: string;
+            ends_at: string;
+            max_marks: string;
+            status?: components["schemas"]["ExaminationPaperStatus"];
+        };
+        /** @description Partial update; every field is optional. The owning Examination and SubjectOffering can never be changed. */
+        ExaminationPaperUpdateInput: {
+            /** Format: date */
+            scheduled_on?: string;
+            starts_at?: string;
+            ends_at?: string;
+            max_marks?: string;
+            status?: components["schemas"]["ExaminationPaperStatus"];
         };
         /** @description A single scheduled slot: a required SubjectOffering taught to a Section by a teacher (HR Employee) in an optional Room during a TimetablePeriod on a given day of week. The teacher representation is data-minimized to id/teacherName ONLY (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never work_email/work_phone/any other HR field. */
         TimetableEntry: {
@@ -14980,6 +15068,224 @@ export interface operations {
                 content?: never;
             };
             /** @description Validation or domain failure -- oversized code/name, a malformed date, an end date before the start date, a window falling outside the AcademicYear, an out-of-vocabulary status, or a case-insensitive duplicate code within this AcademicYear. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listExaminationPapers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ExaminationPaper"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.papers.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Examination in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createExaminationPaper: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExaminationPaperCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ExaminationPaper"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.papers.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Examination in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- missing/malformed input, an inactive Examination or SubjectOffering, an AcademicYear mismatch between the Examination and the SubjectOffering, a scheduled date outside the Examination's window, an end time not after the start time, a non-positive max_marks, an out-of-vocabulary status, or a duplicate Paper for this Examination and SubjectOffering. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getExaminationPaper: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationPaperId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ExaminationPaper"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.papers.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such ExaminationPaper in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateExaminationPaper: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationPaperId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExaminationPaperUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ExaminationPaper"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.papers.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such ExaminationPaper in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- a malformed date/time, an end time not after the start time, a scheduled date outside the Examination's window, a non-positive max_marks, an out-of-vocabulary status, or a reactivation (inactive -> active) while the Examination or SubjectOffering is currently inactive. */
             422: {
                 headers: {
                     [name: string]: unknown;

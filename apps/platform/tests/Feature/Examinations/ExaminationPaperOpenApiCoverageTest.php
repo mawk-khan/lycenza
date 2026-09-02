@@ -2,27 +2,24 @@
 
 namespace Tests\Feature\Examinations;
 
-use App\Domain\Examinations\Http\Controllers\ExaminationController;
+use App\Domain\Examinations\Http\Controllers\ExaminationPaperController;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Phase 0H.4A (OpenAPI contract, MANDATORY in this first implementation
- * branch -- not a later correction pass). Bidirectional proof that
- * `packages/contracts/openapi/school-os-api.yaml`'s Examination paths
- * exactly match the live `/api/v1` routes registered for
- * ExaminationController: zero live-but-undocumented operations, zero
- * documented-but-nonexistent ones.
- *
- * Uses the CORRECTED path-block boundary logic established during Phase
- * 0H.2 and reused by 0H.3A/0H.3B: a block ends at a column-0 line (e.g.
- * `components:`) OR at any other 2-space-indented path key.
+ * Phase 0H.4B (OpenAPI contract, mandatory in this implementation branch
+ * -- CLAUDE.md rule 9/ADR 0009). Bidirectional proof that
+ * `packages/contracts/openapi/school-os-api.yaml`'s ExaminationPaper
+ * paths exactly match the live `/api/v1` routes registered for
+ * ExaminationPaperController. Mirrors
+ * Tests\Feature\Examinations\ExaminationOpenApiCoverageTest's corrected
+ * path-block boundary logic exactly.
  */
-class ExaminationOpenApiCoverageTest extends TestCase
+class ExaminationPaperOpenApiCoverageTest extends TestCase
 {
     #[Test]
-    public function every_live_examination_route_is_documented_and_vice_versa(): void
+    public function every_live_examination_paper_route_is_documented_and_vice_versa(): void
     {
         $live = $this->liveOperations();
         $documented = $this->documentedOperations();
@@ -31,14 +28,11 @@ class ExaminationOpenApiCoverageTest extends TestCase
         $documentedButNonexistent = array_values(array_diff($documented, $live));
 
         $this->assertSame([], $liveButUndocumented,
-            'Live Examination route(s) missing from the OpenAPI contract: '.implode(', ', $liveButUndocumented));
+            'Live ExaminationPaper route(s) missing from the OpenAPI contract: '.implode(', ', $liveButUndocumented));
         $this->assertSame([], $documentedButNonexistent,
-            'OpenAPI Examination path(s)/operation(s) with no matching live route: '.implode(', ', $documentedButNonexistent));
+            'OpenAPI ExaminationPaper path(s)/operation(s) with no matching live route: '.implode(', ', $documentedButNonexistent));
 
-        // Pinned so a silent drift (a route AND its doc entry quietly
-        // removed together, which the diffs above cannot catch) fails
-        // loudly too.
-        $this->assertCount(4, $live, 'Expected exactly 4 live Examination routes -- update this pin (and the contract) deliberately.');
+        $this->assertCount(4, $live, 'Expected exactly 4 live ExaminationPaper routes -- update this pin (and the contract) deliberately.');
         $this->assertCount(4, $documented);
     }
 
@@ -54,14 +48,10 @@ class ExaminationOpenApiCoverageTest extends TestCase
     }
 
     #[Test]
-    public function the_examination_schema_exposes_exactly_the_intended_properties(): void
+    public function the_examination_paper_schema_exposes_exactly_the_intended_properties(): void
     {
-        // Asserting the EXACT property set is stronger than scanning for
-        // forbidden words, and avoids false positives from OpenAPI's own
-        // `description:` keyword. Any new field -- a Student, a teacher,
-        // a paper, a mark, an AcademicTerm -- fails this immediately.
         $yaml = file_get_contents($this->contractPath());
-        $resource = $this->schemaBlock($yaml, '    Examination:', '    ExaminationCreateInput:');
+        $resource = $this->schemaBlock($yaml, '    ExaminationPaper:', '    ExaminationPaperCreateInput:');
 
         $properties = [];
         foreach (explode("\n", $resource) as $line) {
@@ -71,9 +61,9 @@ class ExaminationOpenApiCoverageTest extends TestCase
         }
 
         $this->assertSame(
-            ['id', 'academicYearId', 'code', 'name', 'startsOn', 'endsOn', 'status'],
+            ['id', 'examinationId', 'subjectOfferingId', 'scheduledOn', 'startsAt', 'endsAt', 'maxMarks', 'status'],
             $properties,
-            'Examination exposes exactly seven non-personal, non-paper, non-grading fields.',
+            'ExaminationPaper exposes exactly eight non-personal, non-integrity-pin fields.',
         );
     }
 
@@ -81,12 +71,10 @@ class ExaminationOpenApiCoverageTest extends TestCase
     public function the_documented_status_enum_is_the_closed_two_value_vocabulary(): void
     {
         $yaml = file_get_contents($this->contractPath());
-        $enum = $this->schemaBlock($yaml, '    ExaminationStatus:', '    Examination:');
+        $enum = $this->schemaBlock($yaml, '    ExaminationPaperStatus:', '    ExaminationPaper:');
 
-        // Assert on the `enum:` LINE, not the whole block: the schema's
-        // prose legitimately explains what is excluded.
         $this->assertSame(1, preg_match('/^      enum: \[(.+)\]$/m', $enum, $m),
-            'ExaminationStatus must declare a single-line enum.');
+            'ExaminationPaperStatus must declare a single-line enum.');
         $this->assertSame('active, inactive', $m[1]);
     }
 
@@ -122,7 +110,7 @@ class ExaminationOpenApiCoverageTest extends TestCase
             }
 
             [$controller] = explode('@', $action, 2) + [null];
-            if ($controller !== ExaminationController::class) {
+            if ($controller !== ExaminationPaperController::class) {
                 return;
             }
 
@@ -152,25 +140,18 @@ class ExaminationOpenApiCoverageTest extends TestCase
         $currentPath = null;
 
         foreach ($lines as $line) {
-            // Matches ONLY Examination's own two path shapes -- Phase
-            // 0H.4B's ExaminationPaper deliberately nests under
-            // `/examinations/{examinationId}/examination-papers`, which
-            // a loose `\S*examinations\S*` wildcard would also catch.
-            if (preg_match('#^  (/schools/\{schoolId\}/(?:academic-years/\{academicYearId\}/)?examinations(?:/\{examinationId\})?):$#', $line, $m)) {
+            if (preg_match('#^  (/schools/\{schoolId\}/\S*examination-papers\S*):$#', $line, $m)) {
                 $currentPath = preg_replace('/\{[^}]+\}/', '{param}', $m[1]);
 
                 continue;
             }
 
-            // A column-0 line ends the whole `paths:` map.
             if ($currentPath !== null && preg_match('/^\S/', $line)) {
                 $currentPath = null;
 
                 continue;
             }
 
-            // ANY other 2-space-indented path key also ends this block
-            // (the Phase 0H.2 correction).
             if ($currentPath !== null && preg_match('#^  /#', $line)) {
                 $currentPath = null;
 

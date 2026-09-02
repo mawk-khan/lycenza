@@ -14,10 +14,11 @@ coherent fact underneath it.
 | Layer | Name |
 |---|---|
 | Roadmap umbrella | **Examinations** (Phase 0H.4) |
-| First checkpoint | **Phase 0H.4A — Examination Foundation** |
+| First checkpoint | **Phase 0H.4A — Examination Foundation** (implemented) |
+| Second checkpoint | **Phase 0H.4B — ExaminationPaper / Scheduling** (implemented) |
 | Domain directory | `app/Domain/Examinations` |
-| Model / table | `Examination` / `examinations` |
-| Capability family | **`examinations.definitions.*`** |
+| Models / tables | `Examination` / `examinations`; `ExaminationPaper` / `examination_papers` |
+| Capability families | **`examinations.definitions.*`**; **`examinations.papers.*`** |
 
 **The capability root is `examinations.*`, deliberately depth-2.** A
 flat `examinations.view`/`.manage` would eventually grant clerical marks
@@ -406,25 +407,219 @@ there is no Student or Offering fact to resolve.
 
 ## 17. Not in this checkpoint
 
-ExaminationPaper · exam scheduling per Subject · per-paper sitting
-date/time · max marks · GradeScale · marks · grading · result
-calculation · result publication or revocation · report cards ·
-transcripts · promotion decisions · attendance at exams · assessment
-components/weighting · teacher or invigilator identity · ownership-based
+GradeScale · StudentMark/marks entry · grading · result calculation ·
+result publication or revocation · report cards · transcripts ·
+promotion decisions · attendance at exams · assessment
+components/weighting (Paper 1/Paper 2, theory/practical) · teacher or
+invigilator identity · room/invigilator allocation · ownership-based
 authorization · Student, StudentEnrollment or StudentSubjectEnrollment
-logic · rosters · SubjectOffering/Section/Syllabus/CurriculumDelivery
+logic · rosters · Section/Syllabus/CurriculumDelivery/AcademicTerm
 references · Timetable dependency · Attendance dependency · LMS
-assignment results · attachments/Documents · `academic_term_id` ·
-free text · domain events · webhooks · analytics/AI.
+assignment results · attachments/Documents · free text · domain events ·
+webhooks · analytics/AI · schedule-conflict optimization · Lesson
+Planning.
 
-## 18. Future
+## 18. Phase 0H.4B — ExaminationPaper / Scheduling
 
-- **Phase 0H.4B — ExaminationPaper / scheduling** (PROVISIONAL): one
-  Subject's paper within an Examination — `SubjectOffering`, a
-  per-paper date/time and max marks, with composite context FKs pinning
-  the Examination and the SubjectOffering to one AcademicYear. Requires
-  its own architecture gate. §16's required-and-elective constraint
-  binds it.
+> **One SubjectOffering assessed within one Examination, with its
+> scheduled sitting (date and time range) and maximum obtainable
+> marks.**
+
+An Examination **child** and an **Offering-wide** scheduling fact — NOT
+a physical uploaded question-paper file, NOT Section-specific, NOT a
+Student attempt, NOT a mark/result, NOT an LMS assignment. The pair
+`Examination` (container) + `ExaminationPaper` (member) resolves exactly
+as §3 anticipated.
+
+### 18.1 Cardinality and aggregate
+
+Exactly **one** Paper per `(school_id, examination_id,
+subject_offering_id)` — `examination_papers_examination_offering_unique`,
+**unconditional** (never scoped `WHERE status = 'active'`), so an
+inactive Paper continues to reserve the pair and ordinary reactivation
+is conflict-free. No Paper 1/Paper 2, no theory/practical component, no
+sequence — a future architecture/migration would be required for
+multi-component papers.
+
+### 18.2 Required and elective SubjectOfferings — §16's constraint honoured
+
+Both are supported **identically**; `is_required` is inspected only for
+UI presentation, never for eligibility. `App\Domain\Students\Application\SubjectOfferingRosterReadService`
+is **still not called** — Student roster resolution remains deferred to
+a future marks checkpoint, exactly as §16 reserved it.
+
+### 18.3 No `section_id` — Offering-wide, not Section-specific
+
+Future Student eligibility derives from the Offering roster seam, not
+from this Paper carrying a Section.
+
+### 18.4 The additive Examination context key
+
+`examinations_context_unique`: `UNIQUE (id, school_id,
+academic_year_id)`, added by a dedicated additive migration that runs
+**before** `examination_papers`' own creation migration. Every
+pre-existing Examination constraint, RLS policy and index is untouched —
+proven by rerunning `ExaminationsRlsIsolationTest`/
+`ExaminationArchitectureGuardTest`/`ExaminationApiTest` unchanged (with
+two narrow, controller-class-based route-filter corrections documented
+in ADR 0033 §"Deviations", made necessary only because the new
+ExaminationPaper routes deliberately share the literal path segment
+"examinations").
+
+### 18.5 Cross-parent PostgreSQL integrity
+
+Two composite FKs, **both referencing the same stored
+`academic_year_id` column**:
+
+```
+(examination_id, school_id, academic_year_id)
+  → examinations(id, school_id, academic_year_id)              RESTRICT
+(subject_offering_id, school_id, academic_year_id, campus_id, grade_level_id)
+  → subject_offerings(id, school_id, academic_year_id, campus_id, grade_level_id)  RESTRICT
+```
+
+This is what **structurally, not just by application validation**,
+guarantees `Examination.academic_year_id == SubjectOffering.academic_year_id`
+— even through a raw SQL insert bypassing
+`ExaminationPaperService` entirely (CLAUDE.md rule 70). Proven in
+`Tests\Feature\Postgres\ExaminationPapersRlsIsolationTest`, including
+that no single forged `academic_year_id` can satisfy both FKs when the
+parents genuinely disagree.
+
+`academic_year_id`, `campus_id` and `grade_level_id` are **internal
+integrity pins**: server-derived inside the service, never accepted from
+a client, and never exposed in the public API representation.
+
+### 18.6 Schema
+
+| Field | Type | Null | Notes |
+|---|---|---|---|
+| `id` | uuid | NOT NULL | PK, UUIDv7 |
+| `school_id` | uuid | NOT NULL | Tenant root; FK → `schools(id)` CASCADE |
+| `examination_id` | uuid | NOT NULL | Composite FK, RESTRICT; immutable after create |
+| `subject_offering_id` | uuid | NOT NULL | Composite FK, RESTRICT; immutable after create |
+| `academic_year_id` | uuid | NOT NULL | Internal pin, never exposed |
+| `campus_id` | uuid | NOT NULL | Internal pin, never exposed |
+| `grade_level_id` | uuid | NOT NULL | Internal pin, never exposed |
+| `scheduled_on` | date | NOT NULL | School calendar date; inside the Examination's inclusive window |
+| `starts_at` | time | NOT NULL | School-local wall-clock time |
+| `ends_at` | time | NOT NULL | School-local wall-clock time; `> starts_at`, same day only |
+| `max_marks` | numeric(6,2) | NOT NULL | `> 0`, DB CHECK |
+| `status` | varchar | NOT NULL | `active` \| `inactive`, DB CHECK, default `active` |
+| `created_at` / `updated_at` | timestamp | NOT NULL | Standard |
+
+`unique(id, school_id)` is retained for a future StudentMark tenant-pinned
+reference, exactly as `examinations`/`subject_offerings` already do.
+
+**Deliberately absent:** `section_id`, `student_id`,
+`student_enrollment_id`, `student_subject_enrollment_id`, `teacher_id`,
+`employee_id`, `invigilator_id`, `room_id`, `timetable_entry_id`,
+`academic_term_id`, `syllabus_unit_id`, `curriculum_delivery_id`, a
+duplicate Subject column, `code`/`title`/`component`/`paper_number`, any
+physical document/file field, marks/scores, grade scale, pass marks,
+result/publication data, and any free-text description/instructions.
+
+### 18.7 Local time semantics
+
+`scheduled_on`/`starts_at`/`ends_at` are School-local wall-clock values —
+never converted to or stored as UTC, no timezone column, no dispatch
+scheduler. Same-day sittings only: `examination_papers_time_order_check`
+enforces `ends_at > starts_at`; overnight sittings are unsupported in v1.
+
+### 18.8 Overlap is permitted, exactly like Examination itself
+
+Overlaps across **different** SubjectOfferings are intentionally
+allowed — no overlap query, no roster intersection, no Student-aware
+conflict detection, no `TenantLock`, no advisory lock, no exclusion
+constraint. The only duplicate prevention is §19.1's aggregate unique
+constraint. Proven with a positive test, mirroring `examinations`' own
+"future-dated and overlapping windows accepted" precedent.
+
+### 18.9 Lifecycle, active-parent rules and the reactivation guard
+
+No DELETE route, no activate/deactivate command — `status` moves through
+the ordinary PATCH, exactly like `Examination` itself.
+
+**Create** requires BOTH the Examination and the SubjectOffering to be
+currently active — `ExaminationNotActiveException` /
+`SubjectOfferingNotAvailableException` (422), applying identically to
+required and elective Offerings.
+
+**Ordinary corrections never re-check parent activity** — an existing
+Paper remains correctable as history even after a parent is later
+deactivated, and no cross-domain hook synchronizes Paper status when a
+parent is deactivated.
+
+**Reactivation is the one deliberate asymmetry.** When an update moves
+`status` from `inactive` to `active`, BOTH parents must currently be
+active, or the same two domain exceptions apply — this prevents
+reintroducing a Paper into active use beneath a withdrawn parent while
+still allowing pure historical correction. No lock or CAS is required;
+this is an ordinary invariant evaluated only on that specific
+transition.
+
+`examination_id` and `subject_offering_id` are **immutable after
+create** — absent from the PATCH-accepted field set entirely, so
+"changing the wrong Offering" is represented by inactivating the
+incorrect Paper and creating a new one, never by repointing an existing
+row.
+
+### 18.10 Classification: Confidential
+
+No Student, Employee, teacher/invigilator or roster-snapshot identity —
+the same reasoning as `Examination` itself. Re-tier triggers: a future
+Student roster snapshot, `StudentMark`, or teacher/invigilator identity
+would each elevate the affected entity to Sensitive.
+
+### 18.11 Audit
+
+`AuditRecorder`, bounded metadata:
+
+- `examinations.paper.created` — `paperId`, `examinationId`,
+  `subjectOfferingId`, `scheduledOn`, `startsAt`, `endsAt`, `maxMarks`,
+  `status`
+- `examinations.paper.updated` — `paperId`, `changedFields` (names
+  only), before/after limited to `scheduled_on`, `starts_at`, `ends_at`,
+  `max_marks`, `status`
+
+No Subject/Offering label, no Student data, no teacher identity, no full
+model dump. No separate activated/deactivated audit actions.
+
+### 18.12 API — exactly four operations
+
+| Method | Path (`/api/v1/schools/{school}`) | Capability |
+|---|---|---|
+| `GET` | `/examinations/{examination}/examination-papers` | `examinations.papers.view` |
+| `POST` | `/examinations/{examination}/examination-papers` | `examinations.papers.manage` |
+| `GET` | `/examination-papers/{examinationPaper}` | `examinations.papers.view` |
+| `PATCH` | `/examination-papers/{examinationPaper}` | `examinations.papers.manage` |
+
+Index orders by `scheduled_on`, then `starts_at`. Public representation
+is exactly `id`, `examinationId`, `subjectOfferingId`, `scheduledOn`,
+`startsAt`, `endsAt`, `maxMarks`, `status` — `schoolId` and every
+integrity pin are never exposed. No `Idempotency-Key`: duplicate
+creation is already prevented by the aggregate unique constraint, and
+PATCH is naturally idempotent.
+
+### 18.13 Administrative UI
+
+`/app/examinations/{examination}/papers` — a drill-down from the
+Examinations list (`resources/js/Pages/App/Examinations/Papers/Index.vue`).
+Offering selector scoped to active Offerings within the same
+AcademicYear as the Examination (convenience only — the service
+independently enforces active-Offering on write). Inactive Papers remain
+visible and editable in the management list; reactivation is denied with
+a clear validation error when a parent is currently inactive. Three web
+routes: index, store, update.
+
+### 18.14 Events, Communications, Documents
+
+**Zero domain events**, exactly like `Examination` — no consumer exists.
+Not registered in `WebhookEventRegistry`. No Timetable, Attendance, LMS,
+Lesson Planning, Communications, Notifications or Documents integration.
+
+## 19. Future
+
 - **GradeScale** (PROVISIONAL): a School-level reference catalogue
   mapping mark/percentage → letter/point/pass-fail. It has **no
   dependency on the Examination chain** and could ship in parallel; its

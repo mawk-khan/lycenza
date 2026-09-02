@@ -28,6 +28,7 @@ use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
 use App\Http\Controllers\App\EnrollmentRolloverSubjectMappingController;
 use App\Http\Controllers\App\Examinations\ExaminationController;
+use App\Http\Controllers\App\Examinations\ExaminationPaperController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
@@ -882,6 +883,16 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/', [ExaminationController::class, 'index'])->name('index');
         Route::post('/', [ExaminationController::class, 'store'])->name('store');
         Route::patch('/{examination}', [ExaminationController::class, 'update'])->name('update');
+    });
+
+    // Phase 0H.4B (ExaminationPaper / Scheduling) -- a drill-down from
+    // one Examination. No paper/marks/grade-scale/result surface beyond
+    // scheduling -- `status` is edited through the ordinary update,
+    // exactly like the Examination page and the API.
+    Route::prefix('app/examinations/{examination}/papers')->name('app.examinations.papers.')->group(function (): void {
+        Route::get('/', [ExaminationPaperController::class, 'index'])->name('index');
+        Route::post('/', [ExaminationPaperController::class, 'store'])->name('store');
+        Route::patch('/{examinationPaper}', [ExaminationPaperController::class, 'update'])->name('update');
     });
 
     Route::prefix('app/attendance')->name('app.attendance.')->group(function (): void {

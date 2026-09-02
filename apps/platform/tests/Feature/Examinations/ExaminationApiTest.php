@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Examinations;
 
+use App\Domain\Examinations\Http\Controllers\ExaminationController;
 use App\Domain\Examinations\Infrastructure\Examination;
 use App\Models\SchoolAuditEvent;
 use Illuminate\Support\Facades\Route;
@@ -379,8 +380,21 @@ class ExaminationApiTest extends TestCase
 
         $this->as($w)->deleteJson($this->base($w)."/examinations/{$examination->id}")->assertStatus(405);
 
+        // Filtered by controller class, not URI substring: Phase 0H.4B's
+        // ExaminationPaper API deliberately shares the literal path
+        // segment "examinations" (e.g.
+        // `/examinations/{examination}/examination-papers`), so a
+        // substring filter would now also catch it.
         $routes = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn ($r) => str_contains($r->uri(), 'examinations') && str_starts_with($r->uri(), 'api/'))
+            ->filter(function ($r) {
+                $action = $r->getAction('controller');
+                if (! is_string($action)) {
+                    return false;
+                }
+                [$controller] = explode('@', $action, 2) + [null];
+
+                return $controller === ExaminationController::class;
+            })
             ->flatMap(fn ($r) => array_map(fn ($m) => $m.' /'.$r->uri(), array_values(array_diff($r->methods(), ['HEAD']))))
             ->values();
 

@@ -150,7 +150,7 @@ function submitEdit(): void {
                         <th class="py-2">Starts</th>
                         <th class="py-2">Ends</th>
                         <th class="py-2">Status</th>
-                        <th v-if="canManage" class="py-2"></th>
+                        <th class="py-2"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -164,8 +164,18 @@ function submitEdit(): void {
                         <td class="py-2">{{ examination.startsOn }}</td>
                         <td class="py-2">{{ examination.endsOn }}</td>
                         <td class="py-2 capitalize">{{ examination.status }}</td>
-                        <td v-if="canManage" class="py-2 text-right">
-                            <button type="button" class="underline" @click="startEdit(examination)">
+                        <td class="py-2 text-right">
+                            <a
+                                class="underline"
+                                :href="`/app/examinations/${examination.id}/papers`"
+                                >Papers</a
+                            >
+                            <button
+                                v-if="canManage"
+                                type="button"
+                                class="ml-3 underline"
+                                @click="startEdit(examination)"
+                            >
                                 Edit
                             </button>
                         </td>
