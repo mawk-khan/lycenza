@@ -6126,6 +6126,214 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/subject-offerings/{subjectOfferingId}/curriculum-deliveries:
+    get:
+      operationId: listCurriculumDeliveries
+      summary: >
+        Lists the CurriculumDelivery records for a SubjectOffering, in
+        the syllabus catalogue's own teaching order (the SyllabusUnit's
+        sequence, then its case-insensitive code). Optionally filtered
+        by Section and/or status. A SyllabusUnit with NO row here has
+        simply not been started -- `not_started` is never a stored
+        value, so a client showing every unit must start from the
+        Syllabus list and join these in. Requires
+        curriculum.delivery.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: section_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/CurriculumDeliveryStatus" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/CurriculumDelivery" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking curriculum.delivery.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SubjectOffering in this School.
+    post:
+      operationId: startCurriculumDelivery
+      summary: >
+        Starts recording delivery of one SyllabusUnit to one Section.
+        Always creates an `in_progress` record -- a delivery is never
+        born completed. Only the three caller-chosen facts are accepted;
+        the SubjectOffering, AcademicYear, Campus and GradeLevel pins are
+        derived server-side from the resolved parents and are never
+        taken from the request. Only a REQUIRED SubjectOffering is
+        eligible: an elective is a Student-level enrollment choice, not
+        a Section-wide cohort. Requires curriculum.delivery.manage. No
+        Idempotency-Key is needed: duplicate creation is already
+        prevented by the database's own
+        `curriculum_deliveries_section_unit_unique` index.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CurriculumDeliveryCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CurriculumDelivery" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking curriculum.delivery.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SubjectOffering, Section or SyllabusUnit in this School.
+        "409":
+          description: >
+            The AcademicYear is not active, so no NEW delivery may be
+            started. Correcting or transitioning an EXISTING delivery
+            remains possible after the year closes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Validation or domain failure -- an elective SubjectOffering,
+            a SyllabusUnit belonging to a different Offering, a Section
+            in a different AcademicYear/Campus/GradeLevel, a future
+            started_on in the School's own timezone, a date outside the
+            AcademicYear, or an existing delivery for this
+            Section/SyllabusUnit pair.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/curriculum-deliveries/{curriculumDeliveryId}:
+    get:
+      operationId: getCurriculumDelivery
+      summary: One CurriculumDelivery. Requires curriculum.delivery.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: curriculumDeliveryId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CurriculumDelivery" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking curriculum.delivery.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such CurriculumDelivery in this School.
+    patch:
+      operationId: correctCurriculumDeliveryDates
+      summary: >
+        Corrects a clerical mistake in either date. `status` is
+        deliberately NOT an accepted field -- completing and reopening
+        are guarded state transitions, not date edits. A completion date
+        may only be corrected on an already-completed record. Every
+        applicable date invariant is re-run, so an existing row is not a
+        back door around them. Remains available after the AcademicYear
+        closes. Requires curriculum.delivery.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: curriculumDeliveryId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CurriculumDeliveryUpdateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CurriculumDelivery" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking curriculum.delivery.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such CurriculumDelivery in this School.
+        "422":
+          description: >
+            Validation or domain failure -- a malformed date, a future
+            date in the School's own timezone, a date outside the
+            AcademicYear, a completion date earlier than the start date,
+            or a completion date supplied for an in-progress record.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/curriculum-deliveries/{curriculumDeliveryId}/transition:
+    post:
+      operationId: transitionCurriculumDelivery
+      summary: >
+        Expected-status compare-and-swap between the two stored states.
+        `expected_status` is the status the caller believes the record
+        currently holds; if it no longer matches, the transition is
+        refused with 409 rather than silently overwriting a colleague's
+        change. Completing requires `completed_on`; reopening clears it.
+        The only legal edges are in_progress -> completed and completed
+        -> in_progress. Remains available after the AcademicYear closes.
+        Requires curriculum.delivery.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: curriculumDeliveryId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CurriculumDeliveryTransitionInput" }
+      responses:
+        "200":
+          description: Transitioned.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CurriculumDelivery" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking curriculum.delivery.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such CurriculumDelivery in this School.
+        "409":
+          description: >
+            The record's current status is not the supplied
+            expected_status -- another transition landed first. Reload
+            before retrying.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Validation or domain failure -- a no-op transition, an
+            illegal state pair, a missing completion date when
+            completing, a future or out-of-year completion date, or a
+            completion date earlier than the start date.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -8717,6 +8925,82 @@ components:
         title: { type: string, maxLength: 255 }
         sequence: { type: integer, minimum: 0 }
         status: { $ref: "#/components/schemas/SyllabusUnitStatus" }
+    CurriculumDeliveryStatus:
+      type: string
+      description: >
+        The complete, closed CurriculumDelivery state vocabulary,
+        mirrored by the database's own
+        `curriculum_deliveries_status_check` CHECK constraint.
+        `not_started` is deliberately NOT a member: the ABSENCE of a
+        record is what "not started" means, so nothing is ever
+        pre-seeded and a client showing every unit must start from the
+        Syllabus list.
+      enum: [in_progress, completed]
+    CurriculumDelivery:
+      type: object
+      description: >
+        The record that one Section has covered one SyllabusUnit -- when
+        that Section began it, and when, if yet, it finished. ACTUAL
+        instructional coverage by a cohort, the counterpart to
+        SyllabusUnit's catalogue of EXPECTED content. It records nothing
+        about an individual lesson (future Lesson Planning), nothing
+        about who taught it (there is no teacher identity anywhere in
+        this resource, which is what keeps it non-personal), and nothing
+        about any Student. Grading/marks/grade scales belong to
+        Examinations; assignments, submissions and learning content
+        belong to LMS. Section-specific and required-SubjectOffering-only
+        in v1.
+      required: [id, sectionId, subjectOfferingId, syllabusUnitId, startedOn, status]
+      properties:
+        id: { type: string, format: uuid }
+        sectionId:
+          type: string
+          format: uuid
+          description: The cohort that covered the unit. A Section is an organisational unit, never an individual.
+        subjectOfferingId:
+          type: string
+          format: uuid
+          description: >
+            The Offering that owns the SyllabusUnit. The
+            AcademicYear/Campus/GradeLevel pins that structurally bind
+            the Section and the Offering to one context are database
+            correctness machinery and are deliberately not exposed.
+        syllabusUnitId: { type: string, format: uuid }
+        startedOn: { type: string, format: date, description: "School-LOCAL calendar date the Section began this unit. Never in the future; always inside the AcademicYear." }
+        completedOn: { type: string, format: date, nullable: true, description: "School-local calendar date coverage finished. NULL if and only if status is in_progress." }
+        status: { $ref: "#/components/schemas/CurriculumDeliveryStatus" }
+    CurriculumDeliveryCreateInput:
+      type: object
+      description: >
+        Only the three facts a user actually chooses. Every structural
+        context pin is derived server-side from the resolved parents.
+      required: [section_id, syllabus_unit_id, started_on]
+      properties:
+        section_id: { type: string, format: uuid }
+        syllabus_unit_id: { type: string, format: uuid, description: "Must belong to the SubjectOffering in the path." }
+        started_on: { type: string, format: date }
+    CurriculumDeliveryUpdateInput:
+      type: object
+      description: >
+        Clerical date correction; both fields are optional. `status` is
+        deliberately absent -- state changes go through the transition
+        operation. `completed_on` is accepted only for an
+        already-completed record.
+      properties:
+        started_on: { type: string, format: date }
+        completed_on: { type: string, format: date }
+    CurriculumDeliveryTransitionInput:
+      type: object
+      description: >
+        Expected-status compare-and-swap. `expected_status` is the status
+        the caller believes the record currently holds; `new_status` must
+        differ from it and form a legal edge. `completed_on` is required
+        when completing and ignored when reopening.
+      required: [expected_status, new_status]
+      properties:
+        expected_status: { $ref: "#/components/schemas/CurriculumDeliveryStatus" }
+        new_status: { $ref: "#/components/schemas/CurriculumDeliveryStatus" }
+        completed_on: { type: string, format: date }
     TimetableEntry:
       type: object
       required: [id, status, dayOfWeek, subjectOfferingId, sectionId, teacherId, periodId]

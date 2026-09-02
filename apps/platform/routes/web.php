@@ -21,6 +21,7 @@ use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
 use App\Http\Controllers\App\Canteen\CanteenItemController;
 use App\Http\Controllers\App\Canteen\CanteenOrderController;
 use App\Http\Controllers\App\Canteen\CanteenOutletController;
+use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
@@ -853,6 +854,21 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/', [SyllabusUnitController::class, 'index'])->name('index');
         Route::post('/', [SyllabusUnitController::class, 'store'])->name('store');
         Route::patch('/{syllabusUnit}', [SyllabusUnitController::class, 'update'])->name('update');
+    });
+
+    // Phase 0H.3B -- the administrative Curriculum Delivery surface.
+    // Capability checks live in the controller (the
+    // AuthorizesCapability trait), matching every other App/* Inertia
+    // controller in this codebase. No delete and no archive route:
+    // these rows are historical instructional activity. `status` moves
+    // only through the dedicated transition route, never through the
+    // ordinary update -- completing/reopening is expected-status
+    // compare-and-swap guarded, which a plain PATCH cannot express.
+    Route::prefix('app/syllabus-delivery')->name('app.syllabus-delivery.')->group(function (): void {
+        Route::get('/', [CurriculumDeliveryController::class, 'index'])->name('index');
+        Route::post('/', [CurriculumDeliveryController::class, 'store'])->name('store');
+        Route::patch('/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])->name('update');
+        Route::post('/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])->name('transition');
     });
 
     Route::prefix('app/attendance')->name('app.attendance.')->group(function (): void {

@@ -16,6 +16,7 @@ use App\Domain\Canteen\Http\Controllers\CanteenItemController;
 use App\Domain\Canteen\Http\Controllers\CanteenOrderController;
 use App\Domain\Canteen\Http\Controllers\CanteenOutletController;
 use App\Domain\Canteen\Http\Controllers\CanteenRecipeController;
+use App\Domain\CurriculumDelivery\Http\Controllers\CurriculumDeliveryController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
 use App\Domain\Finance\Http\Controllers\JournalEntryController;
@@ -1470,6 +1471,57 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/syllabus-units/{syllabusUnit}', [SyllabusUnitController::class, 'update'])
                 ->middleware(['capability:syllabus.manage', 'throttle:school-api-mutations'])
                 ->name('schools.syllabus-units.update');
+
+            // Phase 0H.3B (Curriculum Delivery -- the second concrete
+            // Academics fact). Exactly FIVE operations: list/start
+            // nested under the owning SubjectOffering, show/correct/
+            // transition flat.
+            //
+            // Deliberately NO delete, NO archive, NO activate/
+            // deactivate, NO bulk, NO reorder, NO search or discovery
+            // helper, NO reporting/aggregate endpoint, NO teacher route
+            // and NO Student route. These rows are historical
+            // instructional activity, so there is no hard-delete API
+            // (CLAUDE.md rule 73).
+            //
+            // `status` moves ONLY through the dedicated transition
+            // operation, never through PATCH. Unlike SyllabusUnit --
+            // which correctly has no lifecycle route because it can
+            // conflict with nothing -- completing or reopening a
+            // delivery is guarded by an expected-status
+            // compare-and-swap that an ordinary PATCH cannot express,
+            // the same criterion that gives AcademicYear/
+            // TimetablePeriod/TimetableEntry their own commands.
+            //
+            // Gated by Curriculum Delivery's OWN capability family --
+            // never Syllabus's `syllabus.*` and never Academic
+            // Structure's `academics.subjects.*`, even though both
+            // parents belong to those modules (the Canteen
+            // capability-boundary lesson, carried forward). Keeping the
+            // catalogue and its delivery independently grantable is
+            // also what leaves room for a future teacher role to hold
+            // delivery rights without the right to rewrite the syllabus.
+            //
+            // No Idempotency-Key (rule 29, evaluated per endpoint):
+            // duplicate creation is already prevented by
+            // `curriculum_deliveries_section_unit_unique`, a duplicate
+            // transition fails closed on the compare-and-swap, and
+            // PATCH is naturally idempotent.
+            Route::get('/subject-offerings/{subjectOffering}/curriculum-deliveries', [CurriculumDeliveryController::class, 'index'])
+                ->middleware('capability:curriculum.delivery.view')
+                ->name('schools.subject-offerings.curriculum-deliveries.index');
+            Route::post('/subject-offerings/{subjectOffering}/curriculum-deliveries', [CurriculumDeliveryController::class, 'store'])
+                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->name('schools.subject-offerings.curriculum-deliveries.store');
+            Route::get('/curriculum-deliveries/{curriculumDelivery}', [CurriculumDeliveryController::class, 'show'])
+                ->middleware('capability:curriculum.delivery.view')
+                ->name('schools.curriculum-deliveries.show');
+            Route::patch('/curriculum-deliveries/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])
+                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->name('schools.curriculum-deliveries.update');
+            Route::post('/curriculum-deliveries/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])
+                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->name('schools.curriculum-deliveries.transition');
         });
 });
 
