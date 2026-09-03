@@ -9,11 +9,15 @@ use App\Domain\Payroll\Application\Exceptions\PayslipNotFoundException;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Domain\Payroll\Infrastructure\PayrollRunResult;
+use App\Domain\Payroll\Statutory\Infrastructure\EmployeeStatutoryIdentifier;
+use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryCalculationResult;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Privacy\PartialValueMasker;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Phase 9.10 -- the sole authorized read path for an on-demand
@@ -24,6 +28,16 @@ use App\Support\Tenancy\TenantContext;
  * rule). Never a second write path, never a persisted record --
  * `render()` only ever reads the frozen `payroll_run_results`/`_lines`
  * authority and returns a fresh `Payslip` DTO every call.
+ *
+ * Checkpoint 9.6J -- the statutory section additionally requires
+ * `payroll.statutory.view` (checked via `Gate`, not `authorizeCapabilityFor()`,
+ * since lacking it omits only that section rather than denying the
+ * whole payslip) and is populated from the already-frozen
+ * `payroll_statutory_calculation_results` row for this exact
+ * `PayrollRunResult` only -- never recalculated, never fabricated when
+ * absent (`renderStatutorySection()`). Folds into the SAME
+ * `payroll.payslip.viewed` audit event below (never a second event)
+ * with a boolean flag only -- never the statutory values themselves.
  *
  * Eligibility (docs/modules/PAYROLL.md "Payslip rendering"): the run
  * must have crossed `PayrollRun::isApprovedOrLater()` -- `approved` or
@@ -82,8 +96,16 @@ class PayslipReadService
                 $correctsPeriodMonth = $correctsRun?->period?->period_month->toDateString();
             }
 
+            $statutory = null;
+            $statutoryIncluded = false;
+            if (Gate::forUser($actor)->allows('capability', ['payroll.statutory.view', $school])) {
+                $statutory = $this->renderStatutorySection($school, $result->id, $employmentRecordId);
+                $statutoryIncluded = $statutory !== null;
+            }
+
             $this->audit->school($school, 'payroll.payslip.viewed', actor: $actor, subject: $run, metadata: [
                 'employmentRecordId' => $employmentRecordId,
+                'statutoryDataIncluded' => $statutoryIncluded,
             ]);
 
             return new Payslip(
@@ -106,7 +128,61 @@ class PayslipReadService
                 totalDeductions: $result->total_deductions,
                 netAmount: $result->net_amount,
                 lines: $result->lines->map(fn ($line) => PayslipLine::fromModel($line))->all(),
+                statutoryDeductionsIncluded: $statutoryIncluded,
+                statutory: $statutory,
             );
         });
+    }
+
+    /**
+     * Reads the FROZEN `payroll_statutory_calculation_results` row for
+     * this exact `PayrollRunResult` -- never recalculates. Returns
+     * `null` (never a fabricated all-zero row) when no such row exists
+     * -- either the run predates Checkpoint 9.6F statutory
+     * calculation, or the calculation genuinely never ran for this
+     * result; both cases must render as "statutory figures
+     * unavailable," never as "no statutory liability."
+     */
+    private function renderStatutorySection(School $school, string $payrollRunResultId, string $employmentRecordId): ?PayslipStatutorySection
+    {
+        $result = PayrollStatutoryCalculationResult::query()
+            ->where('school_id', $school->id)
+            ->where('payroll_run_result_id', $payrollRunResultId)
+            ->first();
+
+        if ($result === null) {
+            return null;
+        }
+
+        $identifiers = EmployeeStatutoryIdentifier::query()
+            ->where('school_id', $school->id)
+            ->where('employment_record_id', $employmentRecordId)
+            ->get()
+            ->keyBy('identifier_type');
+
+        $masked = fn (string $type) => $identifiers->has($type) ? PartialValueMasker::mask($identifiers->get($type)->encrypted_value) : null;
+
+        return new PayslipStatutorySection(
+            isPfExcludedEmployee: $result->is_pf_excluded_employee,
+            employeePfMandatory: $result->employee_pf_mandatory,
+            employeePfVoluntary: $result->employee_pf_voluntary,
+            employerPfTotal: $result->employer_pf_total,
+            employerEps: $result->employer_eps,
+            employerEpf: $result->employer_epf,
+            employerEdli: $result->pf_edli,
+            esiIsCovered: $result->esi_is_covered,
+            employeeEsi: $result->employee_esi,
+            employerEsi: $result->employer_esi,
+            professionalTax: $result->professional_tax,
+            lwfCharged: $result->lwf_charged,
+            employeeLwf: $result->employee_lwf,
+            employerLwf: $result->employer_lwf,
+            tdsMonthlyDeduction: $result->tds_monthly_deduction,
+            tdsResidualComplianceException: $result->tds_residual_compliance_exception,
+            maskedPan: $masked('pan'),
+            maskedUan: $masked('uan'),
+            maskedPfMemberId: $masked('pf_member_id'),
+            maskedEsicIpNumber: $masked('esic_ip_number'),
+        );
     }
 }

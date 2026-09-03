@@ -10435,9 +10435,12 @@ components:
       description: >
         Highly Sensitive -- one EmploymentRecord's on-demand payslip,
         rendered from the frozen payroll_run_results/_lines authority,
-        never persisted. Excludes bank details and statutory
-        identifiers by construction (Checkpoint 9.6 remains LEGAL
-        REVIEW REQUIRED).
+        never persisted. Excludes bank details by construction.
+        Checkpoint 9.6J: statutory carries the frozen
+        payroll_statutory_calculation_results figures for this exact
+        result when available AND the actor also holds
+        payroll.statutory.view -- null otherwise (never fabricated,
+        never recalculated from current rule versions).
       properties:
         schoolId: { type: string, format: uuid }
         schoolName: { type: string }
@@ -10458,7 +10461,42 @@ components:
         totalDeductions: { type: string }
         netAmount: { type: string }
         lines: { type: array, items: { $ref: "#/components/schemas/PayslipLine" } }
-        statutoryDeductionsIncluded: { type: boolean, description: "Always false in Phase 9 -- Checkpoint 9.6 statutory calculation remains LEGAL REVIEW REQUIRED." }
+        statutoryDeductionsIncluded: { type: boolean, description: "True only when a frozen statutory calculation result exists for this payslip AND the actor holds payroll.statutory.view." }
+        statutory: { $ref: "#/components/schemas/PayslipStatutorySection" }
+    PayslipStatutorySection:
+      type: object
+      nullable: true
+      description: >
+        Checkpoint 9.6J. Identifiers are always masked here -- there is
+        no reveal flow on a payslip. esiDisabilityProvisionsEvaluated
+        is always false: this system collects no disability-status
+        fact anywhere (the ESI disability threshold remains DEFERRED —
+        ADDITIONAL LEGAL CLARIFICATION REQUIRED), so a renderer MUST
+        show this as a standing notice, never omit it, and this
+        payload must never be labeled a statutory-compliance document.
+      required: [isPfExcludedEmployee, esiIsCovered, lwfCharged, esiDisabilityProvisionsEvaluated]
+      properties:
+        isPfExcludedEmployee: { type: boolean }
+        employeePfMandatory: { type: string, nullable: true }
+        employeePfVoluntary: { type: string, nullable: true }
+        employerPfTotal: { type: string, nullable: true, description: Informational -- employer cost, not withheld from the Employee. }
+        employerEps: { type: string, nullable: true }
+        employerEpf: { type: string, nullable: true }
+        employerEdli: { type: string, nullable: true }
+        esiIsCovered: { type: boolean }
+        employeeEsi: { type: string, nullable: true }
+        employerEsi: { type: string, nullable: true, description: Informational. }
+        professionalTax: { type: string, nullable: true }
+        lwfCharged: { type: boolean }
+        employeeLwf: { type: string, nullable: true }
+        employerLwf: { type: string, nullable: true, description: Informational. }
+        tdsMonthlyDeduction: { type: string, nullable: true }
+        tdsResidualComplianceException: { type: string, nullable: true, description: "Set only on a fail-closed insufficient-salary cycle (ADR 0035 §1.10) -- never a fabricated employer-funded TDS payment." }
+        maskedPan: { type: string, nullable: true }
+        maskedUan: { type: string, nullable: true }
+        maskedPfMemberId: { type: string, nullable: true }
+        maskedEsicIpNumber: { type: string, nullable: true }
+        esiDisabilityProvisionsEvaluated: { type: boolean, description: "Always false -- see this schema's own description." }
     PayrollRunPosting:
       type: object
       required: [id, payrollRunId, journalEntryId, postingKind]

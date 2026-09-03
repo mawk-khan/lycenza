@@ -5648,7 +5648,7 @@ export interface components {
             /** @enum {string} */
             effect: "increase" | "decrease";
         };
-        /** @description Highly Sensitive -- one EmploymentRecord's on-demand payslip, rendered from the frozen payroll_run_results/_lines authority, never persisted. Excludes bank details and statutory identifiers by construction (Checkpoint 9.6 remains LEGAL REVIEW REQUIRED). */
+        /** @description Highly Sensitive -- one EmploymentRecord's on-demand payslip, rendered from the frozen payroll_run_results/_lines authority, never persisted. Excludes bank details by construction. Checkpoint 9.6J: statutory carries the frozen payroll_statutory_calculation_results figures for this exact result when available AND the actor also holds payroll.statutory.view -- null otherwise (never fabricated, never recalculated from current rule versions). */
         Payslip: {
             /** Format: uuid */
             schoolId: string;
@@ -5681,9 +5681,39 @@ export interface components {
             totalDeductions: string;
             netAmount: string;
             lines: components["schemas"]["PayslipLine"][];
-            /** @description Always false in Phase 9 -- Checkpoint 9.6 statutory calculation remains LEGAL REVIEW REQUIRED. */
+            /** @description True only when a frozen statutory calculation result exists for this payslip AND the actor holds payroll.statutory.view. */
             statutoryDeductionsIncluded: boolean;
+            statutory?: components["schemas"]["PayslipStatutorySection"];
         };
+        /** @description Checkpoint 9.6J. Identifiers are always masked here -- there is no reveal flow on a payslip. esiDisabilityProvisionsEvaluated is always false: this system collects no disability-status fact anywhere (the ESI disability threshold remains DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED), so a renderer MUST show this as a standing notice, never omit it, and this payload must never be labeled a statutory-compliance document. */
+        PayslipStatutorySection: {
+            isPfExcludedEmployee: boolean;
+            employeePfMandatory?: string | null;
+            employeePfVoluntary?: string | null;
+            /** @description Informational -- employer cost */
+            employerPfTotal?: string | null;
+            employerEps?: string | null;
+            employerEpf?: string | null;
+            employerEdli?: string | null;
+            esiIsCovered: boolean;
+            employeeEsi?: string | null;
+            /** @description Informational. */
+            employerEsi?: string | null;
+            professionalTax?: string | null;
+            lwfCharged: boolean;
+            employeeLwf?: string | null;
+            /** @description Informational. */
+            employerLwf?: string | null;
+            tdsMonthlyDeduction?: string | null;
+            /** @description Set only on a fail-closed insufficient-salary cycle (ADR 0035 §1.10) -- never a fabricated employer-funded TDS payment. */
+            tdsResidualComplianceException?: string | null;
+            maskedPan?: string | null;
+            maskedUan?: string | null;
+            maskedPfMemberId?: string | null;
+            maskedEsicIpNumber?: string | null;
+            /** @description Always false -- see this schema's own description. */
+            esiDisabilityProvisionsEvaluated: boolean;
+        } | null;
         PayrollRunPosting: {
             /** Format: uuid */
             id: string;

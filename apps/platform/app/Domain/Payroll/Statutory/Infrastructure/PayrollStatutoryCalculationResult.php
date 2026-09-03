@@ -14,6 +14,35 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * reaches approved/posted). Never updated after that point -- the
  * Application layer (Checkpoint 9.6D) must construct every field at
  * INSERT time, matching `PayrollRunResult`'s own precedent.
+ *
+ * @property string $id
+ * @property string $school_id
+ * @property string $payroll_run_result_id
+ * @property string|null $pf_rule_version_id
+ * @property string|null $esi_rule_version_id
+ * @property string|null $professional_tax_rule_version_id
+ * @property string|null $lwf_rule_version_id
+ * @property string|null $income_tax_rule_version_id
+ * @property bool $is_pf_excluded_employee
+ * @property string|null $pf_uncapped_statutory_wage
+ * @property string|null $pf_contribution_base
+ * @property string|null $employee_pf_mandatory
+ * @property string|null $employee_pf_voluntary
+ * @property string|null $employer_pf_total
+ * @property string|null $employer_eps
+ * @property string|null $employer_epf
+ * @property string|null $pf_edli
+ * @property string|null $pf_admin_charge
+ * @property bool $esi_is_covered
+ * @property string|null $esi_statutory_wage
+ * @property string|null $employee_esi
+ * @property string|null $employer_esi
+ * @property string|null $professional_tax
+ * @property bool $lwf_charged
+ * @property string|null $employee_lwf
+ * @property string|null $employer_lwf
+ * @property string|null $tds_monthly_deduction
+ * @property string|null $tds_residual_compliance_exception
  */
 class PayrollStatutoryCalculationResult extends Model
 {

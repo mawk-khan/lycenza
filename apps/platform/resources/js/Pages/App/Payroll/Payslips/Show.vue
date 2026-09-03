@@ -10,6 +10,30 @@ interface PayslipLine {
     effect: 'increase' | 'decrease';
 }
 
+interface PayslipStatutorySection {
+    isPfExcludedEmployee: boolean;
+    employeePfMandatory: string | null;
+    employeePfVoluntary: string | null;
+    employerPfTotal: string | null;
+    employerEps: string | null;
+    employerEpf: string | null;
+    employerEdli: string | null;
+    esiIsCovered: boolean;
+    employeeEsi: string | null;
+    employerEsi: string | null;
+    professionalTax: string | null;
+    lwfCharged: boolean;
+    employeeLwf: string | null;
+    employerLwf: string | null;
+    tdsMonthlyDeduction: string | null;
+    tdsResidualComplianceException: string | null;
+    maskedPan: string | null;
+    maskedUan: string | null;
+    maskedPfMemberId: string | null;
+    maskedEsicIpNumber: string | null;
+    esiDisabilityProvisionsEvaluated: boolean;
+}
+
 interface Payslip {
     schoolId: string;
     schoolName: string;
@@ -31,6 +55,7 @@ interface Payslip {
     netAmount: string;
     lines: PayslipLine[];
     statutoryDeductionsIncluded: boolean;
+    statutory: PayslipStatutorySection | null;
 }
 
 interface Props {
@@ -85,8 +110,19 @@ function print(): void {
             v-if="!payslip.statutoryDeductionsIncluded"
             class="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
         >
-            Statutory deductions (PF/ESI/TDS) are not calculated by this system yet and are not
-            reflected below. This payslip is not a statutory-compliance document.
+            Statutory figures (PF/ESI/PT/LWF/TDS) are unavailable for this payslip -- either this
+            run predates statutory calculation, statutory calculation was never run for this result,
+            or you don't hold the required authority to view them. This is not a
+            statutory-compliance document.
+        </p>
+        <p
+            v-if="payslip.statutory"
+            class="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+        >
+            ESI disability-threshold provisions are NOT evaluated by this system (deferred, pending
+            legal clarification). If this Employee's average daily wage may qualify for the
+            disability exemption, verify manually -- do not treat the ESI figures below as legally
+            complete for that case.
         </p>
 
         <div class="mt-6 flex items-start justify-between gap-4 border-b border-slate-300 pb-4">
@@ -146,6 +182,74 @@ function print(): void {
                 </table>
             </section>
         </div>
+
+        <section v-if="payslip.statutory" class="mt-6 border-t border-slate-300 pt-4">
+            <h2 class="text-sm font-medium text-slate-900">Statutory</h2>
+            <dl class="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                <template v-if="!payslip.statutory.isPfExcludedEmployee">
+                    <dt class="text-slate-500">PF (employee)</dt>
+                    <dd class="text-right font-mono">
+                        {{ formatMoney(payslip.statutory.employeePfMandatory ?? '0.00', '') }}
+                    </dd>
+                    <dt class="text-slate-500">PF (employer, informational)</dt>
+                    <dd class="text-right font-mono text-slate-500">
+                        {{ formatMoney(payslip.statutory.employerPfTotal ?? '0.00', '') }}
+                    </dd>
+                </template>
+                <template v-if="payslip.statutory.esiIsCovered">
+                    <dt class="text-slate-500">ESI (employee)</dt>
+                    <dd class="text-right font-mono">
+                        {{ formatMoney(payslip.statutory.employeeEsi ?? '0.00', '') }}
+                    </dd>
+                    <dt class="text-slate-500">ESI (employer, informational)</dt>
+                    <dd class="text-right font-mono text-slate-500">
+                        {{ formatMoney(payslip.statutory.employerEsi ?? '0.00', '') }}
+                    </dd>
+                </template>
+                <dt class="text-slate-500">Professional Tax</dt>
+                <dd class="text-right font-mono">
+                    {{ formatMoney(payslip.statutory.professionalTax ?? '0.00', '') }}
+                </dd>
+                <template v-if="payslip.statutory.lwfCharged">
+                    <dt class="text-slate-500">Labour Welfare Fund (employee)</dt>
+                    <dd class="text-right font-mono">
+                        {{ formatMoney(payslip.statutory.employeeLwf ?? '0.00', '') }}
+                    </dd>
+                </template>
+                <dt class="text-slate-500">TDS (this cycle)</dt>
+                <dd class="text-right font-mono">
+                    {{ formatMoney(payslip.statutory.tdsMonthlyDeduction ?? '0.00', '') }}
+                </dd>
+            </dl>
+            <p
+                v-if="payslip.statutory.tdsResidualComplianceException"
+                class="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+            >
+                Insufficient available salary to withhold the full TDS due this cycle -- residual
+                unresolved amount:
+                {{ formatMoney(payslip.statutory.tdsResidualComplianceException, '') }}. This has
+                NOT been fabricated as an employer-funded payment; it requires manual compliance
+                follow-up.
+            </p>
+            <dl class="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-500">
+                <template v-if="payslip.statutory.maskedPan">
+                    <dt>PAN</dt>
+                    <dd class="text-right font-mono">{{ payslip.statutory.maskedPan }}</dd>
+                </template>
+                <template v-if="payslip.statutory.maskedUan">
+                    <dt>UAN</dt>
+                    <dd class="text-right font-mono">{{ payslip.statutory.maskedUan }}</dd>
+                </template>
+                <template v-if="payslip.statutory.maskedPfMemberId">
+                    <dt>PF Member ID</dt>
+                    <dd class="text-right font-mono">{{ payslip.statutory.maskedPfMemberId }}</dd>
+                </template>
+                <template v-if="payslip.statutory.maskedEsicIpNumber">
+                    <dt>ESIC IP Number</dt>
+                    <dd class="text-right font-mono">{{ payslip.statutory.maskedEsicIpNumber }}</dd>
+                </template>
+            </dl>
+        </section>
 
         <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-1 border-t border-slate-300 pt-3 text-sm">
             <dt class="text-slate-500">Gross</dt>
