@@ -7,6 +7,7 @@ use App\Domain\Payroll\Application\Exceptions\CompensationAssignmentOverlapExcep
 use App\Domain\Payroll\Application\Exceptions\MissingFixedComponentValueException;
 use App\Domain\Payroll\Application\Exceptions\StructureComponentNotFixedAmountException;
 use App\Domain\Payroll\Application\Exceptions\StructureNotActiveException;
+use App\Domain\Payroll\Events\EmployeeCompensationAssigned;
 use App\Domain\Payroll\Infrastructure\CompensationAssignmentValue;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
@@ -143,6 +144,15 @@ class CompensationService
                     'componentCount' => count($fixedValues),
                     'previousAssignmentId' => $currentOpen?->id,
                 ]);
+
+                event(new EmployeeCompensationAssigned(
+                    $school->id,
+                    $employmentRecord->id,
+                    $assignment->id,
+                    $structure->id,
+                    $currentOpen?->id,
+                    $effectiveFrom->toDateString(),
+                ));
 
                 return $assignment->fresh();
             });

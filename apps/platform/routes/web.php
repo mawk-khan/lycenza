@@ -64,6 +64,7 @@ use App\Http\Controllers\App\Payroll\PayrollController;
 use App\Http\Controllers\App\Payroll\PayrollPeriodController;
 use App\Http\Controllers\App\Payroll\PayrollRunController;
 use App\Http\Controllers\App\Payroll\PayrollRunPostingController;
+use App\Http\Controllers\App\Payroll\PayslipController as PayrollPayslipController;
 use App\Http\Controllers\App\Payroll\SalaryComponentController as PayrollSalaryComponentController;
 use App\Http\Controllers\App\Payroll\SalaryStructureController as PayrollSalaryStructureController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -928,6 +929,10 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/runs/{payrollRun}/approve', [PayrollRunController::class, 'approve'])->name('runs.approve');
         Route::post('/runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])->name('runs.post');
         Route::post('/runs/{payrollRun}/reverse', [PayrollRunPostingController::class, 'reverse'])->name('runs.reverse');
+
+        // Phase 9.10: printable on-demand payslip, never persisted --
+        // authorization/eligibility both enforced inside PayslipReadService.
+        Route::get('/runs/{payrollRun}/payslips/{employmentRecord}', [PayrollPayslipController::class, 'show'])->name('runs.payslips.show');
 
         // 'search' registered BEFORE the '/{employmentRecord}' wildcard
         // below, matching this file's own established convention.

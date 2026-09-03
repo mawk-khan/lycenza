@@ -13,6 +13,9 @@ use App\Domain\Payroll\Application\Exceptions\PeriodNotOpenException;
 use App\Domain\Payroll\Application\Exceptions\RunNotEditableException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
 use App\Domain\Payroll\Application\Exceptions\ZeroEffectCorrectionException;
+use App\Domain\Payroll\Events\PayrollRunApproved;
+use App\Domain\Payroll\Events\PayrollRunCalculated;
+use App\Domain\Payroll\Events\PayrollRunCreated;
 use App\Domain\Payroll\Infrastructure\CompensationAssignmentValue;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\PayrollAdjustment;
@@ -83,6 +86,8 @@ class PayrollRunService
                         'runKind' => 'regular',
                     ]);
 
+                    event(new PayrollRunCreated($school->id, $run->id, $period->id, 'regular', null));
+
                     return $run;
                 });
             } catch (UniqueConstraintViolationException) {
@@ -142,6 +147,8 @@ class PayrollRunService
                     'correctsPayrollRunId' => $correctsRun->id,
                     'payrollPeriodId' => $period->id,
                 ]);
+
+                event(new PayrollRunCreated($school->id, $run->id, $period->id, 'correction', $correctsRun->id));
 
                 return $run;
             });
@@ -288,6 +295,8 @@ class PayrollRunService
                     'transitionedToCalculated' => $transitioned,
                 ]);
 
+                event(new PayrollRunCalculated($school->id, $run->id, count($resolved), count($unresolved), $transitioned));
+
                 return new PayrollCalculationOutcome($resolved, $unresolved, $transitioned);
             });
         });
@@ -427,6 +436,8 @@ class PayrollRunService
                 $this->audit->school($school, 'payroll.run.approved', actor: $approver, subject: $run, metadata: [
                     'preparedByUserId' => $run->prepared_by_user_id,
                 ]);
+
+                event(new PayrollRunApproved($school->id, $run->id, $approver->id, $run->prepared_by_user_id));
 
                 return $run->fresh();
             });

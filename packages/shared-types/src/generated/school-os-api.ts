@@ -2368,6 +2368,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/payroll-runs/{payrollRunId}/payslips/{employmentRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Renders one EmploymentRecord's on-demand payslip for this run -- Highly Sensitive, never persisted (Phase 9.10; ADR 0032 v1 scope is render-on-demand from payroll_run_results/_lines only, no payslips table, no stored Document, no email delivery). Requires payroll.compensation.sensitive.view (payroll.runs.view alone never suffices). Only renders once the run has crossed PayrollRun.isApprovedOrLater() (approved or posted, regular or correction) -- a draft/calculated run's editable "Calculation preview" is a separate, non-authoritative surface. Excludes bank details, statutory identifiers, and any PF/ESI/TDS claim while Checkpoint 9.6 remains LEGAL REVIEW REQUIRED. */
+        get: operations["getPayrollPayslip"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/payroll-runs/{payrollRunId}/post": {
         parameters: {
             query?: never;
@@ -4972,6 +4989,53 @@ export interface components {
             totalDeductions: string;
             netAmount: string;
             lines: components["schemas"]["PayrollRunResultLine"][];
+        };
+        PayslipLine: {
+            /** Format: uuid */
+            salaryComponentId: string;
+            componentCode: string;
+            componentName: string;
+            /** @enum {string} */
+            componentType: "earning" | "deduction";
+            amount: string;
+            /** @enum {string} */
+            effect: "increase" | "decrease";
+        };
+        /** @description Highly Sensitive -- one EmploymentRecord's on-demand payslip, rendered from the frozen payroll_run_results/_lines authority, never persisted. Excludes bank details and statutory identifiers by construction (Checkpoint 9.6 remains LEGAL REVIEW REQUIRED). */
+        Payslip: {
+            /** Format: uuid */
+            schoolId: string;
+            schoolName: string;
+            /** Format: uuid */
+            payrollRunId: string;
+            /** @enum {string} */
+            runKind: "regular" | "correction";
+            /** Format: uuid */
+            correctsPayrollRunId?: string | null;
+            /** Format: date */
+            correctsPayrollPeriodMonth?: string | null;
+            /** @enum {string} */
+            runStatus: "approved" | "posted";
+            /** @description Derived from payroll_run_postings -- the original result is never rewritten or deleted on reversal. */
+            isReversed: boolean;
+            /** Format: uuid */
+            payrollPeriodId: string;
+            /** Format: date */
+            periodMonth: string;
+            /** Format: date */
+            paymentDate?: string | null;
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** Format: uuid */
+            employeeId: string;
+            employeeFullName?: string | null;
+            employeeNumber?: string | null;
+            grossAmount: string;
+            totalDeductions: string;
+            netAmount: string;
+            lines: components["schemas"]["PayslipLine"][];
+            /** @description Always false in Phase 9 -- Checkpoint 9.6 statutory calculation remains LEGAL REVIEW REQUIRED. */
+            statutoryDeductionsIncluded: boolean;
         };
         PayrollRunPosting: {
             /** Format: uuid */
@@ -12401,6 +12465,69 @@ export interface operations {
             };
             /** @description PAYROLL_RUN_NOT_FOUND. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getPayrollPayslip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
+                payrollRunId: components["parameters"]["PayrollRunId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Payslip"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking payroll.compensation.sensitive.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description PAYROLL_RUN_NOT_FOUND or PAYROLL_PAYSLIP_NOT_FOUND (no result for this EmploymentRecord on this run). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description PAYROLL_RUN_NOT_ELIGIBLE_FOR_PAYSLIP -- the run is still draft/calculated. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

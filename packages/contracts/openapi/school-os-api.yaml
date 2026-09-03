@@ -4792,6 +4792,50 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/payslips/{employmentRecordId}:
+    get:
+      operationId: getPayrollPayslip
+      summary: >
+        Renders one EmploymentRecord's on-demand payslip for this run --
+        Highly Sensitive, never persisted (Phase 9.10; ADR 0032 v1 scope
+        is render-on-demand from payroll_run_results/_lines only, no
+        payslips table, no stored Document, no email delivery). Requires
+        payroll.compensation.sensitive.view (payroll.runs.view alone
+        never suffices). Only renders once the run has crossed
+        PayrollRun.isApprovedOrLater() (approved or posted, regular or
+        correction) -- a draft/calculated run's editable "Calculation
+        preview" is a separate, non-authoritative surface. Excludes
+        bank details, statutory identifiers, and any PF/ESI/TDS claim
+        while Checkpoint 9.6 remains LEGAL REVIEW REQUIRED.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Payslip" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.compensation.sensitive.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: PAYROLL_RUN_NOT_FOUND or PAYROLL_PAYSLIP_NOT_FOUND (no result for this EmploymentRecord on this run).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: PAYROLL_RUN_NOT_ELIGIBLE_FOR_PAYSLIP -- the run is still draft/calculated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/payroll-runs/{payrollRunId}/post:
     post:
       operationId: postPayrollRun
@@ -8462,6 +8506,46 @@ components:
         totalDeductions: { type: string }
         netAmount: { type: string }
         lines: { type: array, items: { $ref: "#/components/schemas/PayrollRunResultLine" } }
+    PayslipLine:
+      type: object
+      required: [salaryComponentId, componentCode, componentName, componentType, amount, effect]
+      properties:
+        salaryComponentId: { type: string, format: uuid }
+        componentCode: { type: string }
+        componentName: { type: string }
+        componentType: { type: string, enum: [earning, deduction] }
+        amount: { type: string }
+        effect: { type: string, enum: [increase, decrease] }
+    Payslip:
+      type: object
+      required: [schoolId, schoolName, payrollRunId, runKind, runStatus, isReversed, payrollPeriodId, periodMonth, employmentRecordId, employeeId, grossAmount, totalDeductions, netAmount, lines, statutoryDeductionsIncluded]
+      description: >
+        Highly Sensitive -- one EmploymentRecord's on-demand payslip,
+        rendered from the frozen payroll_run_results/_lines authority,
+        never persisted. Excludes bank details and statutory
+        identifiers by construction (Checkpoint 9.6 remains LEGAL
+        REVIEW REQUIRED).
+      properties:
+        schoolId: { type: string, format: uuid }
+        schoolName: { type: string }
+        payrollRunId: { type: string, format: uuid }
+        runKind: { type: string, enum: [regular, correction] }
+        correctsPayrollRunId: { type: string, format: uuid, nullable: true }
+        correctsPayrollPeriodMonth: { type: string, format: date, nullable: true }
+        runStatus: { type: string, enum: [approved, posted] }
+        isReversed: { type: boolean, description: "Derived from payroll_run_postings -- the original result is never rewritten or deleted on reversal." }
+        payrollPeriodId: { type: string, format: uuid }
+        periodMonth: { type: string, format: date }
+        paymentDate: { type: string, format: date, nullable: true }
+        employmentRecordId: { type: string, format: uuid }
+        employeeId: { type: string, format: uuid }
+        employeeFullName: { type: string, nullable: true }
+        employeeNumber: { type: string, nullable: true }
+        grossAmount: { type: string }
+        totalDeductions: { type: string }
+        netAmount: { type: string }
+        lines: { type: array, items: { $ref: "#/components/schemas/PayslipLine" } }
+        statutoryDeductionsIncluded: { type: boolean, description: "Always false in Phase 9 -- Checkpoint 9.6 statutory calculation remains LEGAL REVIEW REQUIRED." }
     PayrollRunPosting:
       type: object
       required: [id, payrollRunId, journalEntryId, postingKind]

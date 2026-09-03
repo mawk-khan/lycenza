@@ -358,3 +358,105 @@ aware authorization:
 non-sensitive read path — `payroll_runs` itself carries no monetary
 column at all, so `PayrollRunSummary` is a complete, safe mirror of
 the row (status, kind, prepared/approved/posted-by, timestamps).
+
+## Payslip rendering
+
+**Checkpoint 9.10.** A payslip is rendered **on demand only**, every
+call, directly from `payroll_run_results`/`payroll_run_result_lines`
+— the sole numerical authority. There is no `payslips` table, no
+stored payslip Document, no Payroll→Documents linkage table, no
+employee self-service delivery, and no emailed distribution. A
+payslip must never become a second mutable financial authority; it is
+a read projection, nothing else.
+
+`App\Domain\Payroll\Application\PayslipReadService::render()` is the
+sole authorized path, mirroring `PayrollRunResultReadService`'s exact
+authorization/disclosure/audit shape: `payroll.compensation.sensitive.view`
+is checked before any query runs — `payroll.runs.view` alone never
+suffices, and no employee-self-service exception exists. Eligibility
+is `PayrollRun::isApprovedOrLater()` (`approved` or `posted`), applied
+identically to `regular` and `correction` runs — a `draft`/`calculated`
+run is still freely recalculable and is never rendered as an
+authoritative-looking payslip. That editable, in-progress figure
+remains available separately as the explicitly labeled
+**"Calculation preview"** on the Run page
+(`App\Http\Controllers\App\Payroll\PayrollRunController::renderShow()`
+/ `resources/js/Pages/App/Payroll/Runs/Show.vue`) — never presented as
+a final payslip.
+
+Content: School identity, Employee identity (full name, employee
+number), the `EmploymentRecord` reference, payroll period/month,
+payment date, earning lines, deduction lines, gross, total
+deductions, net, and run/correction identification. A correction
+result renders clearly labeled as a correction, referencing the
+original run and its period — never merged into a fabricated
+retroactive final statement (that merged view remains deferred). A
+reversed posted run's payslip remains renderable from its immutable
+historical result, with a derived `isReversed` indicator — amounts
+are never rewritten to zero and the original result is never deleted.
+
+Excluded, by construction (never present on `Payslip`/`PayslipLine`):
+bank details, statutory identifiers, and any PF/ESI/TDS figure or
+compliance claim — Checkpoint 9.6 remains `[LEGAL REVIEW REQUIRED]`,
+and `Payslip::$statutoryDeductionsIncluded` is always `false` in Phase
+9 so a renderer can show an explicit "does not include statutory
+deductions" notice rather than silently omitting it.
+
+Output format: an Inertia/HTML printable view
+(`resources/js/Pages/App/Payroll/Payslips/Show.vue`, `window.print()`),
+mirroring every other Payroll admin page's existing stack — no PDF
+library exists anywhere in this repository, and none was added for
+this checkpoint (root CLAUDE.md rule 2). A parallel JSON API endpoint
+(`GET .../payroll-runs/{payrollRunId}/payslips/{employmentRecordId}`)
+exists for API-surface consistency with every other Payroll read path.
+Neither surface persists its output.
+
+Sensitive-read auditing: `payroll.payslip.viewed` is recorded once per
+`render()` call — actor, School, run reference, and the
+EmploymentRecord id, never a component amount/gross/deductions/net or
+the rendered body, matching `PayrollRunResultReadService`'s identical
+audit discipline. `render()` guarantees the same exactly-once
+semantics that discipline already establishes (audit happens exactly
+once inside the single authorized read path; no separate audit call
+exists anywhere else in the payslip surface, so no duplicate-audit
+risk exists to guard against).
+
+## Domain events
+
+**Checkpoint 9.10.** Every event below implements
+`App\Support\Events\ShouldBeOutboxed` and is dispatched via the plain
+`event()` helper from *inside* the same `DB::transaction()` as its
+triggering mutation — `App\Listeners\RecordDomainEventToOutbox`
+(ADR 0025's transactional outbox) writes the `domain_event_outbox` row
+synchronously, on the same connection, so it commits or rolls back
+atomically with the business change. No second, Payroll-specific
+outbox mechanism exists or was introduced.
+
+| Event | `eventType()` | Producer | Emitted |
+|---|---|---|---|
+| `PayrollRunCreated` | `payroll_run.created.v1` | `PayrollRunService::createRun()`/`createCorrectionRun()` | Every run creation, regular or correction (`runKind`/`correctsPayrollRunId` distinguish them — one event type, not two, since one already-single method pair produces both). |
+| `PayrollRunCalculated` | `payroll_run.calculated.v1` | `PayrollRunService::calculate()` | Every calculate()/recalculate() call, whether or not it transitions the run to `calculated` (mirrors the existing unconditional `payroll.run.calculated` audit call). |
+| `PayrollRunApproved` | `payroll_run.approved.v1` | `PayrollRunService::approve()` | The single `calculated -> approved` transition; a losing concurrent approval never reaches the dispatch site. |
+| `PayrollRunPosted` | `payroll_run.posted.v1` | `PayrollPostingService::post()` | The single `approved -> posted` transition; a replayed idempotent HTTP request never re-enters `post()` at all, so this event structurally cannot duplicate. |
+| `PayrollRunReversed` | `payroll_run.reversed.v1` | `PayrollPostingService::reverse()` | The single reversal of a posted run's original posting; same replay-safety as above. |
+| `EmployeeCompensationAssigned` | `employee_compensation.assigned.v1` | `CompensationService::assign()` | Every compensation assignment — first assignment (`previousAssignmentId` null) and supersession (`previousAssignmentId` set) alike, since `assign()` is itself already one method for both cases; a separate "Superseded" event class would only duplicate this one's shape. |
+
+Payload minimization (root CLAUDE.md rule 9, ADR 0032 "Sensitive
+values"): every payload carries identifiers and non-sensitive
+operational metadata only — `schoolId`, run/period/assignment/
+EmploymentRecord ids, `runKind`, structural counts (`resolvedCount`,
+`unresolvedCount`, `lineCount` — a count of ledger LINES, never an
+amount), actor ids, and (for the compensation event) `effectiveFrom`,
+identical to what the corresponding audit call already logs. No
+payload ever carries `gross_amount`/`total_deductions`/`net_amount`,
+a component amount, a compensation-assignment amount, a bank detail,
+a statutory identifier, or any payslip content — verified directly by
+dedicated tests inspecting each event's serialized payload.
+
+External publication: internal transactional events only. None of the
+six event types above is registered in
+`App\Support\Webhooks\WebhookEventRegistry`'s closed catalog, so none
+is externally webhook-subscribable merely by existing in
+`domain_event_outbox` (root CLAUDE.md rule 45) — that remains a
+separate, explicit, future decision requiring an actual external
+consumer.

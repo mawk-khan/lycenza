@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
 import { formatMoney } from '../../../../money';
@@ -85,6 +85,12 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+// Phase 9.10 -- a payslip is only ever eligible once the run has
+// crossed the SAME immutability boundary PayslipReadService itself
+// enforces server-side (approved/posted); below that, the table below
+// is an editable, recalculable "Calculation preview", never a payslip.
+const isFinal = computed(() => props.run.status === 'approved' || props.run.status === 'posted');
 
 const calculating = ref(false);
 function calculate(): void {
@@ -470,10 +476,17 @@ const reversalPosting = computed(
 
         <!-- Sensitive results -->
         <section class="mt-6 border-t border-slate-200 pt-4">
-            <h2 class="text-sm font-medium text-slate-900">Calculation results</h2>
+            <h2 class="text-sm font-medium text-slate-900">
+                {{ isFinal ? 'Calculation results' : 'Calculation preview' }}
+            </h2>
             <p v-if="!canViewSensitive" class="mt-1 text-sm text-slate-500">
                 You don't hold payroll.compensation.sensitive.view -- financial results are not
                 shown.
+            </p>
+            <p v-else-if="!isFinal" class="mt-1 text-sm text-amber-700">
+                This is a calculation preview from an editable, recalculable run -- not a final
+                payslip. It can change on the next recalculation and is not eligible for payslip
+                rendering until the run is approved.
             </p>
             <table v-else-if="results && results.length > 0" class="mt-3 w-full text-left text-sm">
                 <thead>
@@ -482,6 +495,7 @@ const reversalPosting = computed(
                         <th scope="col" class="py-2 text-right font-medium">Gross</th>
                         <th scope="col" class="py-2 text-right font-medium">Deductions</th>
                         <th scope="col" class="py-2 text-right font-medium">Net</th>
+                        <th scope="col" class="py-2 font-medium"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -500,6 +514,14 @@ const reversalPosting = computed(
                         </td>
                         <td class="py-2 text-right font-mono">
                             {{ formatMoney(r.netAmount, '') }}
+                        </td>
+                        <td class="py-2 text-right">
+                            <Link
+                                :href="`/app/payroll/runs/${run.id}/payslips/${r.employmentRecordId}`"
+                                class="text-xs font-medium text-slate-700 underline"
+                            >
+                                View payslip
+                            </Link>
                         </td>
                     </tr>
                 </tbody>

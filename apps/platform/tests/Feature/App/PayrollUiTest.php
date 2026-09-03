@@ -479,4 +479,64 @@ class PayrollUiTest extends TestCase
             ->where('periods.0.status', 'open')
         );
     }
+
+    // --- Payslip rendering (Phase 9.10) ------------------------------------
+
+    #[Test]
+    public function the_payslip_page_renders_the_expected_props_for_an_approved_run(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $approver = $this->memberWith(['payroll.runs.approve'], $school);
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver));
+
+        $sensitiveViewer = $this->memberWith(['payroll.compensation.sensitive.view'], $school);
+        $response = $this->actingAs($sensitiveViewer)->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}");
+
+        $response->assertInertia(fn ($page) => $page
+            ->component('App/Payroll/Payslips/Show')
+            ->where('payslip.runStatus', 'approved')
+            ->where('payslip.isReversed', false)
+            ->where('payslip.netAmount', '50000.00')
+            ->where('payslip.statutoryDeductionsIncluded', false)
+        );
+
+        // Belt-and-suspenders, matching this file's own established
+        // pattern above: the raw payload never carries a bank/statutory
+        // field, not merely a Vue template that never renders one.
+        $raw = $response->getContent();
+        foreach (['bankAccount', 'ifsc', 'panNumber', 'pf', 'esi', 'tds'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $raw);
+        }
+    }
+
+    #[Test]
+    public function the_payslip_page_is_forbidden_without_sensitive_view(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $approver = $this->memberWith(['payroll.runs.approve'], $school);
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver));
+
+        $viewer = $this->memberWith(['payroll.runs.view'], $school);
+        $this->actingAs($viewer)->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}")
+            ->assertForbidden();
+    }
+
+    #[Test]
+    public function the_payslip_page_422s_for_a_still_draft_or_calculated_run(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+
+        $sensitiveViewer = $this->memberWith(['payroll.compensation.sensitive.view'], $school);
+        $this->actingAs($sensitiveViewer)->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}")
+            ->assertStatus(422);
+    }
 }

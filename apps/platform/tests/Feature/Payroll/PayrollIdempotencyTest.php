@@ -13,6 +13,7 @@ use App\Domain\Payroll\Application\PayrollRunAdministrationService;
 use App\Domain\Payroll\Application\PayrollStructureAdministrationService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\ApiIdempotencyKey;
+use App\Models\DomainEventOutbox;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -291,6 +292,57 @@ class PayrollIdempotencyTest extends TestCase
             fn () => ApiIdempotencyKey::query()->where('idempotency_key', $sharedKey)->count(),
         );
         $this->assertSame(2, $recordCount, 'post and reverse each own a SEPARATE idempotency record despite the identical literal key.');
+    }
+
+    #[Test]
+    public function a_replayed_post_does_not_duplicate_the_payroll_run_posted_event(): void
+    {
+        // Phase 9.10: a replayed successful HTTP response must not
+        // create a second PayrollRunPosted event -- PayrollPostingService::post()
+        // is never re-entered on a replay (EnsureIdempotent short-
+        // circuits it), so the outbox row can only ever be written once.
+        $f = $this->makeApprovedRun();
+
+        $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-event-replay-key')
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post")
+            ->assertCreated();
+
+        $replay = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-event-replay-key')
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post");
+        $replay->assertCreated();
+        $replay->assertHeader('Idempotency-Replayed', 'true');
+
+        $context = app(TenantContext::class);
+        $count = $context->withSchool(
+            $f['school'],
+            fn () => DomainEventOutbox::query()->where('school_id', $f['school']->id)->where('event_type', 'payroll_run.posted.v1')->count(),
+        );
+        $this->assertSame(1, $count, 'a replayed post must never emit a second PayrollRunPosted event.');
+    }
+
+    #[Test]
+    public function a_replayed_reversal_does_not_duplicate_the_payroll_run_reversed_event(): void
+    {
+        $f = $this->makeApprovedRun();
+        $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-before-reversal-event-replay')
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post")
+            ->assertCreated();
+
+        $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'reversal-event-replay-key')
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse")
+            ->assertCreated();
+
+        $replay = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'reversal-event-replay-key')
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse");
+        $replay->assertCreated();
+        $replay->assertHeader('Idempotency-Replayed', 'true');
+
+        $context = app(TenantContext::class);
+        $count = $context->withSchool(
+            $f['school'],
+            fn () => DomainEventOutbox::query()->where('school_id', $f['school']->id)->where('event_type', 'payroll_run.reversed.v1')->count(),
+        );
+        $this->assertSame(1, $count, 'a replayed reversal must never emit a second PayrollRunReversed event.');
     }
 
     #[Test]

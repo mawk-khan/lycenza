@@ -58,6 +58,7 @@ use App\Domain\Payroll\Http\Controllers\PayrollAccountingConfigurationController
 use App\Domain\Payroll\Http\Controllers\PayrollPeriodController;
 use App\Domain\Payroll\Http\Controllers\PayrollRunController;
 use App\Domain\Payroll\Http\Controllers\PayrollRunPostingController;
+use App\Domain\Payroll\Http\Controllers\PayslipController;
 use App\Domain\Payroll\Http\Controllers\SalaryComponentController;
 use App\Domain\Payroll\Http\Controllers\SalaryStructureController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
@@ -1516,6 +1517,16 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/payroll-runs/{payrollRun}/results', [PayrollRunPostingController::class, 'results'])
                 ->middleware('capability:payroll.compensation.sensitive.view')
                 ->name('schools.payroll-runs.results');
+
+            // Phase 9.10: on-demand payslip render, never persisted.
+            // Same capability as /results (`payroll.compensation.sensitive.view`
+            // alone -- `payroll.runs.view` never suffices, see
+            // PayslipReadService's own docblock) -- eligibility
+            // (approved/posted only) is enforced inside the service.
+            Route::get('/payroll-runs/{payrollRun}/payslips/{employmentRecord}', [PayslipController::class, 'show'])
+                ->middleware('capability:payroll.compensation.sensitive.view')
+                ->name('schools.payroll-runs.payslips.show');
+
             Route::post('/payroll-runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])
                 ->middleware(['capability:payroll.runs.post', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.payroll-runs.post');

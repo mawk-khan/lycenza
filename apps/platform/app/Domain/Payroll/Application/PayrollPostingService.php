@@ -12,6 +12,8 @@ use App\Domain\Payroll\Application\Exceptions\DeductionMissingLedgerMappingExcep
 use App\Domain\Payroll\Application\Exceptions\InvalidRunTransitionException;
 use App\Domain\Payroll\Application\Exceptions\PayrollRunAlreadyReversedException;
 use App\Domain\Payroll\Application\Exceptions\PayrollRunNotPostedException;
+use App\Domain\Payroll\Events\PayrollRunPosted;
+use App\Domain\Payroll\Events\PayrollRunReversed;
 use App\Domain\Payroll\Infrastructure\PayrollAccountingConfiguration;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
@@ -177,6 +179,8 @@ class PayrollPostingService
                     'lineCount' => count($lines),
                 ]);
 
+                event(new PayrollRunPosted($school->id, $run->id, $posted->journalEntryId, count($lines), $actor->id));
+
                 if ($idempotencyRecord !== null) {
                     $this->idempotency->completeWithin($idempotencyRecord, 201, [
                         'data' => PayrollRunPostingSummary::fromModel($posting)->toArray(),
@@ -249,6 +253,8 @@ class PayrollPostingService
                     'originalPostingId' => $original->id,
                     'reversalJournalEntryId' => $reversalEntry->journalEntryId,
                 ]);
+
+                event(new PayrollRunReversed($school->id, $run->id, $original->id, $reversalEntry->journalEntryId, $actor->id));
 
                 if ($idempotencyRecord !== null) {
                     $this->idempotency->completeWithin($idempotencyRecord, 201, [

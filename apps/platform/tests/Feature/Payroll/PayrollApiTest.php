@@ -170,6 +170,50 @@ class PayrollApiTest extends TestCase
             ->assertNotFound();
     }
 
+    // --- Payslip rendering (Phase 9.10) --------------------------------------
+
+    #[Test]
+    public function getting_a_payslip_requires_sensitive_view_not_runs_view_alone(): void
+    {
+        $f = $this->buildCalculatedRun();
+
+        $approverToken = $this->authToken($f['school'], ['payroll.runs.approve']);
+        $this->as($approverToken)->withHeader('Idempotency-Key', 'payslip-http-approve-key')
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve")
+            ->assertOk();
+
+        $this->actingWithCapabilities($f['school'], ['payroll.runs.view'])
+            ->getJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/payslips/{$f['employmentRecordId']}")
+            ->assertForbidden();
+
+        $this->actingWithCapabilities($f['school'], ['payroll.compensation.sensitive.view'])
+            ->getJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/payslips/{$f['employmentRecordId']}")
+            ->assertOk()
+            ->assertJsonPath('data.runStatus', 'approved');
+    }
+
+    #[Test]
+    public function a_draft_or_calculated_run_payslip_is_a_422_not_a_final_payslip_over_http(): void
+    {
+        $f = $this->buildCalculatedRun();
+
+        $this->actingWithCapabilities($f['school'], ['payroll.compensation.sensitive.view'])
+            ->getJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/payslips/{$f['employmentRecordId']}")
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'PAYROLL_RUN_NOT_ELIGIBLE_FOR_PAYSLIP');
+    }
+
+    #[Test]
+    public function a_cross_school_payslip_404s_not_leaks(): void
+    {
+        $f = $this->buildCalculatedRun();
+        $otherSchool = $this->createSchool();
+
+        $this->actingWithCapabilities($otherSchool, ['payroll.compensation.sensitive.view'])
+            ->getJson("/api/v1/schools/{$otherSchool->id}/payroll-runs/{$f['runId']}/payslips/{$f['employmentRecordId']}")
+            ->assertNotFound();
+    }
+
     // --- Full lifecycle -----------------------------------------------------
 
     #[Test]
@@ -241,6 +285,17 @@ class PayrollApiTest extends TestCase
 
         $this->as($posterToken)->getJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/results")
             ->assertOk()->assertJsonPath('data.0.netAmount', '50000.00');
+
+        // Phase 9.10: the on-demand payslip endpoint, proven over HTTP
+        // through the JSON envelope `PayslipController::present()`
+        // actually builds -- never a raw model dump.
+        $this->as($posterToken)->getJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/payslips/{$employmentRecord->id}")
+            ->assertOk()
+            ->assertJsonPath('data.runStatus', 'posted')
+            ->assertJsonPath('data.isReversed', false)
+            ->assertJsonPath('data.netAmount', '50000.00')
+            ->assertJsonPath('data.statutoryDeductionsIncluded', false)
+            ->assertJsonMissingPath('data.bankAccountNumber');
 
         $correctionPeriod = $this->as($adminToken)->postJson("/api/v1/schools/{$school->id}/payroll-periods", [
             'period_month' => '2026-10-01',
