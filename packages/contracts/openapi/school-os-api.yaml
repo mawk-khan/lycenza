@@ -7875,6 +7875,244 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/grade-scales:
+    get:
+      operationId: listGradeScales
+      summary: >
+        Lists this School's GradeScales, each with its ordered
+        GradeBands. School-only -- independent of the Examination
+        chain. Requires examinations.grade_scales.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/GradeScale" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.grade_scales.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: createGradeScale
+      summary: >
+        Creates a new GradeScale, always as `draft`, optionally with an
+        initial set of GradeBands in the same request. `code` is
+        normalized to uppercase before validation and is
+        case-insensitively unique within the School, unconditionally
+        (an inactive scale still reserves its code). Requires
+        examinations.grade_scales.manage. No Idempotency-Key is needed:
+        duplicate semantic creation is already prevented by the
+        database's own unique index.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GradeScaleCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GradeScale" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.grade_scales.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Validation or domain failure -- missing/oversized code or
+            name, a case-insensitive duplicate code within this School,
+            an out-of-domain or duplicate initial band threshold.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/grade-scales/{gradeScaleId}:
+    get:
+      operationId: getGradeScale
+      summary: One GradeScale with its bands. Requires examinations.grade_scales.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: gradeScaleId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GradeScale" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.grade_scales.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such GradeScale in this School.
+    patch:
+      operationId: updateGradeScale
+      summary: >
+        Updates a GradeScale's name and/or requests a lifecycle
+        transition. `status`, when present, is ALWAYS interpreted as a
+        guarded transition request -- never a raw field write. Exactly
+        three transitions are legal: draft -> active (requires a
+        GradeBand at the 0.00 threshold), active -> inactive, and
+        inactive -> active (re-verifies the 0.00 threshold
+        defensively). Every other transition, including every no-op, is
+        rejected. `code` can never be changed. Requires
+        examinations.grade_scales.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: gradeScaleId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GradeScaleUpdateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GradeScale" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.grade_scales.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such GradeScale in this School.
+        "422":
+          description: >
+            Validation or domain failure -- an illegal or no-op status
+            transition, or activation attempted without a GradeBand at
+            the 0.00 threshold.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/grade-scales/{gradeScaleId}/bands:
+    post:
+      operationId: createGradeBand
+      summary: >
+        Adds one GradeBand to a GradeScale. Permitted ONLY while the
+        scale is `draft` -- once the scale has ever been `active`, its
+        bands are frozen forever. Only `min_percentage` is stored
+        (no upper bound); duplicate thresholds within one scale are
+        rejected by the database's own unique index. Requires
+        examinations.grade_scales.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: gradeScaleId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GradeBandCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GradeBand" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.grade_scales.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such GradeScale in this School.
+        "422":
+          description: >
+            Validation or domain failure -- an out-of-domain or
+            duplicate threshold, or the parent GradeScale is not
+            `draft`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/grade-scales/{gradeScaleId}/bands/{gradeBandId}:
+    patch:
+      operationId: updateGradeBand
+      summary: >
+        Updates one GradeBand's threshold and/or label. Permitted ONLY
+        while the parent GradeScale is `draft`. Requires
+        examinations.grade_scales.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: gradeScaleId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: gradeBandId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GradeBandUpdateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GradeBand" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.grade_scales.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such GradeScale or GradeBand in this School.
+        "422":
+          description: >
+            Validation or domain failure -- an out-of-domain or
+            duplicate threshold, or the parent GradeScale is not
+            `draft`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      operationId: deleteGradeBand
+      summary: >
+        Removes one GradeBand. Permitted ONLY while the parent
+        GradeScale is `draft` -- this is the sole delete route
+        anywhere in the GradeScale surface; GradeScale itself is never
+        deleted. Requires examinations.grade_scales.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: gradeScaleId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: gradeBandId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking examinations.grade_scales.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such GradeScale or GradeBand in this School.
+        "422":
+          description: The parent GradeScale is not `draft`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
 components:
   securitySchemes:
@@ -11169,6 +11407,89 @@ components:
         ends_at: { type: string }
         max_marks: { type: string }
         status: { $ref: "#/components/schemas/ExaminationPaperStatus" }
+    GradeScaleStatus:
+      type: string
+      description: >
+        The complete, closed GradeScale lifecycle vocabulary, mirrored
+        by the database's own `grade_scales_status_check` CHECK
+        constraint. Exactly three transitions are legal:
+        draft -> active, active -> inactive, inactive -> active; every
+        other transition, including every no-op, is rejected.
+        `inactive` is reachable ONLY via `active`, so it structurally
+        means "was previously active; GradeBands permanently frozen."
+      enum: [draft, active, inactive]
+    GradeBand:
+      type: object
+      description: >
+        One lower-bound percentage threshold belonging to a GradeScale.
+        Deliberately carries no upper bound and no sequence -- a
+        percentage P maps to the band with the greatest
+        `minPercentage <= P`. Mutable only while the parent GradeScale
+        is `draft`; frozen forever once the parent has ever been
+        `active`.
+      required: [id, minPercentage, label]
+      properties:
+        id: { type: string, format: uuid }
+        minPercentage: { type: string, description: "Decimal string, 0.00-100.00, inclusive lower bound." }
+        label: { type: string, maxLength: 32, description: "Human grade label, e.g. \"A\", \"Pass\". Never included by value in audit metadata." }
+    GradeScale:
+      type: object
+      description: >
+        One named, School-owned reference mapping that converts a
+        normalized percentage (0.00-100.00) into a discrete grade
+        outcome through its ordered GradeBands. School-only --
+        independent of the Examination chain: no Examination,
+        ExaminationPaper, AcademicYear, GradeLevel or Subject
+        relationship of any kind.
+      required: [id, code, name, status, bands]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, maxLength: 64, description: "Uppercased on write; case-insensitively unique within the School, unconditionally." }
+        name: { type: string, maxLength: 255, description: "Human label. Deliberately NOT unique. Mutable at any lifecycle stage." }
+        status: { $ref: "#/components/schemas/GradeScaleStatus" }
+        bands:
+          type: array
+          items: { $ref: "#/components/schemas/GradeBand" }
+          description: Ordered by minPercentage descending.
+    GradeScaleCreateInput:
+      type: object
+      description: >
+        `schoolId` is never accepted here. A new GradeScale is always
+        created as `draft` -- there is no `status` field on create.
+      required: [code, name]
+      properties:
+        code: { type: string, maxLength: 64 }
+        name: { type: string, maxLength: 255 }
+        bands:
+          type: array
+          description: Optional initial GradeBands, created atomically with the scale.
+          items:
+            type: object
+            required: [min_percentage, label]
+            properties:
+              min_percentage: { type: string }
+              label: { type: string, maxLength: 32 }
+    GradeScaleUpdateInput:
+      type: object
+      description: >
+        Partial update; every field is optional. `code` can never be
+        changed. `status`, when present, is always interpreted as a
+        guarded lifecycle transition request, never a raw field write.
+      properties:
+        name: { type: string, maxLength: 255 }
+        status: { $ref: "#/components/schemas/GradeScaleStatus" }
+    GradeBandCreateInput:
+      type: object
+      required: [min_percentage, label]
+      properties:
+        min_percentage: { type: string }
+        label: { type: string, maxLength: 32 }
+    GradeBandUpdateInput:
+      type: object
+      description: Partial update; every field is optional.
+      properties:
+        min_percentage: { type: string }
+        label: { type: string, maxLength: 32 }
     TimetableEntry:
       type: object
       required: [id, status, dayOfWeek, subjectOfferingId, sectionId, teacherId, periodId]

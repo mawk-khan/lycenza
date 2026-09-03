@@ -560,9 +560,33 @@ types; a session-authenticated drill-down UI at
 **Confidential**. See `docs/modules/EXAMINATIONS.md` §18 and ADR 0033
 for the complete as-built record.
 
-**Examinations has STARTED but is NOT complete.** Examination Foundation
-and ExaminationPaper/Scheduling are its first two checkpoints:
-**GradeScale is not implemented**, and **marks, result calculation,
+**GradeScale / GradeBand mapping (Phase 0H.4C) is implemented but NOT
+YET PUBLISHED to `main`** — the third Examinations fact:
+`GradeScale`/`GradeBand`, a named, School-owned percentage-to-grade
+mapping wholly independent of the Examination chain. GradeBand stores
+ONLY a lower-bound threshold; overlap-freedom is a plain
+`UNIQUE(grade_scale_id, min_percentage)` constraint, coverage/gap-
+freedom is a single "band exists at 0.00" check — no PostgreSQL range
+type, exclusion constraint or `btree_gist`. Lifecycle
+`draft/active/inactive`, exactly three legal transitions; GradeBands
+mutable only while `draft`, frozen forever once ever `active`. Every
+mutating operation reloads the target GradeScale with a parent-row
+`lockForUpdate()` — an aggregate-local lock, deliberately NOT
+`TenantLock` (a corrected design from the original architecture-gate
+recommendation) — proven safe with two real, separate OS processes in
+`Tests\Feature\Examinations\GradeScaleConcurrencyTest`.
+`examinations.grade_scales.view`/`.manage` capabilities; seven
+`/api/v1` operations (no GradeScale delete; GradeBand removal is the
+sole delete route) with a COMPLETE OpenAPI contract and regenerated
+shared types; a session-authenticated Inertia surface at
+`/app/examinations/grade-scales`; zero domain events. Classified
+**Confidential**. See `docs/modules/EXAMINATIONS.md` §19 and ADR 0035
+for the complete as-built record. Pending: integration/publication gate
+to merge onto `main`.
+
+**Examinations has STARTED but is NOT complete.** Examination
+Foundation, ExaminationPaper/Scheduling and GradeScale/GradeBand
+mapping are its first three checkpoints: **marks, result calculation,
 result publication, report cards and transcripts are all not
 implemented**. The checkpoint that first introduces Student marks
 crosses from Confidential into Sensitive personal data and must undergo
@@ -571,9 +595,10 @@ children's-data **[LEGAL REVIEW REQUIRED]** gate in
 `docs/security/DATA-CLASSIFICATION.md` — before implementation.
 
 **Phase 0H as a whole is NOT complete** — Timetable, Attendance,
-Syllabus Foundation, Curriculum Delivery, Examination Foundation and
-ExaminationPaper/Scheduling are done; Academics still lacks Lesson
-Planning, and Examinations still lacks GradeScale, marks, results,
+Syllabus Foundation, Curriculum Delivery, Examination Foundation,
+ExaminationPaper/Scheduling and GradeScale/GradeBand mapping are done
+(GradeScale/GradeBand pending publication to `main`); Academics still
+lacks Lesson Planning, and Examinations still lacks marks, results,
 report cards and transcripts.
 
 **"Phase 0H Attendance" remains Student class attendance only.** Staff/

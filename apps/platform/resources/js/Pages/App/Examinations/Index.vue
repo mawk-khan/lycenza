@@ -105,6 +105,7 @@ function submitEdit(): void {
 <template>
     <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app">← Dashboard</a>
+        <a class="ml-4 text-sm underline" href="/app/examinations/grade-scales">Grade Scales →</a>
 
         <h1 class="mt-2 text-xl font-semibold">Examinations</h1>
         <p class="mt-1 text-sm text-slate-500">
