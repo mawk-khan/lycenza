@@ -36,13 +36,20 @@ as "fully complete" anywhere in this document while 9.6 remains open. See
   configuration, the posting algorithm, correction-run posting,
   reversal, transactional/idempotency integration with
   `LedgerService`.
-- **9.6 — Statutory Payroll Boundary — LEGAL GATE** [**BLOCKED / DEFERRED
-  — LEGAL REVIEW REQUIRED**]: PF/ESI/TDS. Blocked pending
-  `[LEGAL REVIEW REQUIRED]` sign-off
-  (`docs/security/DATA-CLASSIFICATION.md`). Not started until that
-  clears or is explicitly, visibly deferred by user decision. No PF/ESI/
-  TDS calculation, statutory rate table, government-identifier storage,
-  or statutory filing exists anywhere in this module.
+- **9.6 — Statutory Payroll Boundary — LEGAL GATE** [**IN PROGRESS —
+  legal review cleared, implementation underway**]: legal sign-off
+  received (`SCH/PAY/REG/2026-9.6`, effective 1 April 2026, Telangana
+  jurisdiction), accepted subject to the binding correction addendum
+  in `docs/architecture/adr/0035-phase-9-6-statutory-payroll-architecture.md`.
+  Implemented on a new, separately-numbered, post-publication branch
+  (`feature/phase-9-6-statutory-payroll`, ADR 0028/ADR 0034's own
+  precedent) — Phase 9's already-published non-statutory history is
+  never rewritten. **Not yet complete** — see "Phase 9.6 Checkpoints"
+  below for the exact 9.6A–9.6H status; do not treat this row as
+  statutory-complete until 9.6H's own closure record says so. The
+  ESI disability special threshold (₹25,000) remains
+  `DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED` regardless of
+  9.6's own completion.
 - **9.7 — Authorization, Sensitive Reads & Audit** [implemented].
 - **9.8 — API / OpenAPI** [implemented].
 - **9.9 — Administrative UI** [implemented].
@@ -798,3 +805,35 @@ attempted.
 through non-statutory scope. Statutory Payroll (9.6) remains deferred.
 NOT merged into `main`; that remains a separate, explicitly-authorized
 future step.**
+
+(Historical record as of Checkpoint 9.12's own closure. Phase 9
+non-statutory Payroll has since been published to `main` at `99cb641`,
+with explicit publication permission — see the Phase 9 Final
+Publication Report. Checkpoint 9.6 below is a new, separately
+authorized post-publication initiative on its own branch.)
+
+## Phase 9.6 Checkpoints (Statutory Payroll, in progress)
+
+Legal basis: `SCH/PAY/REG/2026-9.6` (effective 1 April 2026, Telangana
+jurisdiction), accepted subject to the binding correction addendum —
+see `docs/architecture/adr/0035-phase-9-6-statutory-payroll-architecture.md`
+for the full corrected contract. Implemented on
+`feature/phase-9-6-statutory-payroll`, branched from published `main`
+(`99cb641`) — Phase 9's own published non-statutory history above is
+never rewritten by this work.
+
+| Checkpoint | Status | Scope |
+|---|---|---|
+| 9.6A — Legal Addendum & Statutory Rule Contract | **[implemented]** | ADR 0035, this section |
+| 9.6B — Golden Statutory Fixtures | pending | |
+| 9.6C — Statutory Schema / Versioning / Privacy | pending | |
+| 9.6D — PF / ESI / PT / LWF Calculation Engine | pending | |
+| 9.6E — Annualized Salary TDS Engine | pending | |
+| 9.6F — Statutory Finance Posting | pending | |
+| 9.6G — ECR / ESI Worksheet / Form 138 Data Preparation | pending | |
+| 9.6H — Security / Concurrency / Migration / Publication Readiness | pending | |
+
+**9.6 is not complete.** Do not treat any row above `[implemented]` as
+done. The ESI disability special threshold (₹25,000) is `DEFERRED —
+ADDITIONAL LEGAL CLARIFICATION REQUIRED` regardless of 9.6's eventual
+completion (ADR 0035).
