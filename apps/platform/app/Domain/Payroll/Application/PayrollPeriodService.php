@@ -2,6 +2,8 @@
 
 namespace App\Domain\Payroll\Application;
 
+use App\Domain\Payroll\Application\Exceptions\ConcurrentPeriodTransitionConflictException;
+use App\Domain\Payroll\Application\Exceptions\InvalidPeriodTransitionException;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Models\School;
 use App\Models\User;
@@ -52,32 +54,71 @@ class PayrollPeriodService
         });
     }
 
+    /**
+     * Phase 9.11 -- `draft -> open` only. The initial check below is
+     * a fast, deterministic failure for the common (non-racing) case;
+     * the conditional UPDATE `WHERE status = 'draft'` inside the
+     * transaction is the actual concurrency guarantee -- mirroring
+     * `PayrollRunService::approve()`'s identical `WHERE status =
+     * 'calculated'` claim shape (Checkpoint 9.4). Two concurrent
+     * `open()` calls, or an `open()` racing a `close()`, can now never
+     * both silently "succeed" -- exactly one claims the transition,
+     * the other gets `ConcurrentPeriodTransitionConflictException`.
+     */
     public function open(PayrollPeriod $period, User $actor): PayrollPeriod
     {
         $school = $period->school;
 
+        if ($period->status !== 'draft') {
+            throw new InvalidPeriodTransitionException($period->status, 'open');
+        }
+
         return $this->context->withSchool($school, function () use ($school, $period, $actor) {
             return DB::transaction(function () use ($school, $period, $actor) {
-                $period->update(['status' => 'open']);
+                $affected = PayrollPeriod::query()
+                    ->where('id', $period->id)
+                    ->where('status', 'draft')
+                    ->update(['status' => 'open']);
 
-                $this->audit->school($school, 'payroll.period.opened', actor: $actor, subject: $period);
+                if ($affected === 0) {
+                    throw new ConcurrentPeriodTransitionConflictException($period->id);
+                }
 
-                return $period->fresh();
+                $fresh = $period->fresh();
+                $this->audit->school($school, 'payroll.period.opened', actor: $actor, subject: $fresh);
+
+                return $fresh;
             });
         });
     }
 
+    /**
+     * Phase 9.11 -- `open -> closed` only, same claim-then-verify
+     * shape as `open()` above.
+     */
     public function close(PayrollPeriod $period, User $actor): PayrollPeriod
     {
         $school = $period->school;
 
+        if ($period->status !== 'open') {
+            throw new InvalidPeriodTransitionException($period->status, 'closed');
+        }
+
         return $this->context->withSchool($school, function () use ($school, $period, $actor) {
             return DB::transaction(function () use ($school, $period, $actor) {
-                $period->update(['status' => 'closed']);
+                $affected = PayrollPeriod::query()
+                    ->where('id', $period->id)
+                    ->where('status', 'open')
+                    ->update(['status' => 'closed']);
 
-                $this->audit->school($school, 'payroll.period.closed', actor: $actor, subject: $period);
+                if ($affected === 0) {
+                    throw new ConcurrentPeriodTransitionConflictException($period->id);
+                }
 
-                return $period->fresh();
+                $fresh = $period->fresh();
+                $this->audit->school($school, 'payroll.period.closed', actor: $actor, subject: $fresh);
+
+                return $fresh;
             });
         });
     }

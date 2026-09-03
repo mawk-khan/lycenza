@@ -460,3 +460,127 @@ is externally webhook-subscribable merely by existing in
 `domain_event_outbox` (root CLAUDE.md rule 45) — that remains a
 separate, explicit, future decision requiring an actual external
 consumer.
+
+## Phase 9.11 Closure (Security / Concurrency / Migration Closure, implemented)
+
+Verification-and-hardening gate, mirroring HR's Phase 8A.16 closure
+template exactly (`docs/modules/HR.md` "Phase 8A Closure"). Unlike
+8A.16, this checkpoint found and closed one real, previously-open
+concurrency gap — recorded below, not silently folded into 9.1-9.10's
+own history.
+
+**Clean-install validation.** `php artisan platform:test-db-reset
+--force` against the shared `school_os_test` database migrated all 13
+Payroll migrations (12 original + this checkpoint's own, below) and
+ran the full `DatabaseSeeder` cleanly. `Tests\Feature\Postgres\PayrollSchemaInvariantsTest`
+(existing, re-verified) confirms every Payroll table
+`relrowsecurity = t`/`relforcerowsecurity = t`. Migration
+reversibility proven twice: the original 12 migrations
+(`migrate:rollback --step=12` then `migrate`) and this checkpoint's
+own new migration individually (`migrate:rollback --step=1` then
+`migrate`) both completed with zero errors.
+
+**Gap found and closed: `payroll_periods` had no transition guard at
+all.** Unlike `payroll_runs` (Application-layer conditional-UPDATE
+claim *and* `trg_payroll_runs_validate_transition`, both from
+Checkpoint 9.1/9.4) or `salary_structures`, `PayrollPeriodService::open()`/
+`close()` were a bare, unconditional `$period->update(['status' =>
+...])` — no up-front state check, no conditional-UPDATE concurrency
+claim, no database trigger. Two concurrent `open()` calls, or an
+`open()` racing a `close()`, would both silently "succeed" with no
+conflict signal. Closed by:
+- an up-front check (`draft` required for `open()`, `open` required
+  for `close()`) throwing the new `InvalidPeriodTransitionException`;
+- the same conditional-UPDATE claim shape `PayrollRunService::approve()`
+  already established (`WHERE status = 'draft'`/`'open'`, verifying
+  `$affected === 1`), throwing the new
+  `ConcurrentPeriodTransitionConflictException` on a lost race;
+- migration `2026_09_15_091200_add_transition_trigger_to_payroll_periods_table`
+  adding `trg_payroll_periods_validate_transition`, the same
+  defense-in-depth backstop `payroll_runs` already has against an
+  invalid transition even via raw SQL bypassing the Application layer
+  entirely (independently verified: a raw `UPDATE ... SET status =
+  'closed'` against a `draft` period was rejected by the trigger
+  itself, not merely by application code).
+- `PayrollPeriodServiceTest` (6 tests: valid transitions, invalid
+  transitions in both directions, reopen-after-close rejected) and
+  `PayrollPeriodConcurrencyTest` (one REQUIRED real-two-process proof,
+  mirroring `PayrollRunLifecycleConcurrencyTest::scenario_c`'s exact
+  shape) — both new, both passing.
+
+**Two other candidate gaps reviewed, found not to need a fix:**
+- **`PayrollAccountingConfigurationService::configure()`'s
+  `updateOrCreate()`** has the same narrow first-time-configure race
+  as `App\Domain\Canteen\Application\CanteenBillingConfigurationService`
+  (its own docblock: "mirrors ... identical shape exactly") — a
+  concurrent first *ever* save for a School could raise an unhandled
+  `UniqueConstraintViolationException` on the losing side. Low
+  severity (a one-time, admin-only setup action; the loser can simply
+  retry) and consistent with an intentionally-mirrored cross-module
+  pattern shared by Canteen/Hostel/Library — fixing it unilaterally
+  only in Payroll would itself be an inconsistency. Left as a
+  documented, accepted, cross-module pattern, not a Payroll-specific
+  defect.
+- **Concurrent `createCorrectionRun()` against the same original
+  run** is not a race bug: the schema deliberately allows multiple
+  correction runs per original (no unique-per-original constraint),
+  matching `PayrollCorrectionRunTest`'s own accepted coverage
+  ("reversing an original with an existing correction is still
+  allowed"). Two concurrent corrections simply create two rows, which
+  is supported, intended behavior, not corruption.
+
+**Security.** Grep audit of `app/Domain/Payroll` found: no
+`Storage::` call (Payroll has no file storage need); two raw
+`DB::table('payroll_runs')` writes (`PayrollRunService::calculate()`,
+`PayrollPostingService::post()`), both reviewed — each follows an
+Eloquent `lockForUpdate()` fetch (itself School-scoped by
+`BelongsToSchool`) in the same transaction, and RLS applies at the
+Postgres session level regardless of Eloquent vs. `DB::table()`, so
+neither is a tenant-isolation bypass; no role-name string comparison
+(every check is capability-based). No P0/P1 found beyond the period
+gap closed above.
+
+**API surface audit.** `php artisan route:list` for every
+`payroll`/`payslip` route confirms only `GET|HEAD` for reads and
+`POST` for mutations — no accidental verb, no unauthenticated route
+(every route sits inside the authenticated `api`/`app` middleware
+groups established in prior checkpoints).
+
+**Fresh HTTP validation.** A real `php artisan serve` process (not
+the PHPUnit harness) confirmed the app boots and Sanctum
+authentication genuinely enforces over the wire: `/up` returned `200`;
+an unauthenticated request to a Payroll endpoint returned `401`.
+Further authenticated-request checks against this ad hoc harness hit
+an unrelated container-networking Redis configuration issue outside
+Payroll's own code and were not pursued further, given the exhaustive
+in-process HTTP-layer coverage `PayrollApiTest`/`PayrollUiTest`
+already provide (guest-401, capability-403, cross-School-404, and the
+full lifecycle, all exercised through Laravel's real HTTP kernel and
+middleware stack, just not a literal second OS process).
+
+**Test results.** `php artisan test --filter=Payroll` → 212 passed,
+847 assertions, 0 failures (up from 9.10's 205 — 7 new: the period
+transition unit tests and its real-concurrency proof). Outbox/HR/
+Webhook regression (`OutboxTransactionalityTest`,
+`HrEmployeeDomainEventsTest`, `HrEmployeeDomainEventsRollbackTest`,
+`WebhookEventRegistryTest`) re-verified passing in the same session
+(9.10), unaffected by 9.11's Payroll-only changes. `vendor/bin/pint
+--test` and `vendor/bin/phpstan analyse` both clean.
+
+**Merge readiness.** Not attempted — 9.12 ("Integration / Publication
+Readiness") is this module's own dedicated, separately-numbered
+integration checkpoint, mirroring the Finance `0G.8`/Payroll
+`9.11`-vs-`9.12` split rather than HR's single 8A.16 (which folded a
+disposable rehearsal merge into its own closure). No merge, disposable
+or otherwise, was rehearsed here.
+
+**Files changed by 9.11:** `PayrollPeriodService.php` (transition
+guards), two new exception classes, one new migration
+(`2026_09_15_091200_add_transition_trigger_to_payroll_periods_table`),
+two new test files (`PayrollPeriodServiceTest`,
+`PayrollPeriodConcurrencyTest`), one new test-support script
+(`tests/Support/open-payroll-period.php`), and this documentation
+section. Unlike HR 8A.16, this was not a documentation-only closure —
+a real, previously-open concurrency gap was fixed.
+
+**PHASE 9.11 VERDICT: CLOSED.**
