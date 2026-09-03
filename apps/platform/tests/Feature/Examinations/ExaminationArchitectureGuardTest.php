@@ -149,13 +149,22 @@ class ExaminationArchitectureGuardTest extends TestCase
         // OTHER's model (proven by ExaminationPaperArchitectureGuardTest
         // for the new entity, and unchanged by this exclusion for the
         // original one).
+        //
+        // Phase 0H.4C added a THIRD, wholly independent entity pair to
+        // this same directory -- GradeScale/GradeBand, written solely by
+        // GradeScaleService (proven by GradeScaleArchitectureGuardTest).
+        // GradeScale's own files are excluded from this Examination/
+        // ExaminationPaper-scoped check entirely: GradeScaleService's
+        // `->forceFill()`/`->save()`/`->delete()` calls write GradeScale/
+        // GradeBand, never Examination or ExaminationPaper.
         $services = [
             app_path('Domain/Examinations/Application/ExaminationService.php'),
             app_path('Domain/Examinations/Application/ExaminationPaperService.php'),
         ];
+        $gradeScaleFiles = array_filter($this->moduleSources(), fn ($f) => str_contains(basename($f), 'GradeScale') || str_contains(basename($f), 'GradeBand'));
 
         foreach ($this->moduleSources() as $file) {
-            if (in_array($file, $services, true)) {
+            if (in_array($file, $services, true) || in_array($file, $gradeScaleFiles, true)) {
                 continue;
             }
 
@@ -177,7 +186,21 @@ class ExaminationArchitectureGuardTest extends TestCase
     {
         // Overlapping examination windows are PERMITTED, so there is no
         // multi-row invariant and therefore nothing to lock.
+        //
+        // GradeScale's own files are excluded: GradeScaleService's
+        // parent-row `lockForUpdate()` is a legitimate, ADR-0035-
+        // sanctioned aggregate-local lock for GradeScale's own
+        // activation/band-mutation invariant, wholly unrelated to
+        // Examination/ExaminationPaper (which genuinely have none) --
+        // proven not to be TenantLock/advisory by
+        // GradeScaleArchitectureGuardTest::no_tenant_lock_or_advisory_lock_was_introduced.
+        $gradeScaleFiles = array_filter($this->moduleSources(), fn ($f) => str_contains(basename($f), 'GradeScale') || str_contains(basename($f), 'GradeBand'));
+
         foreach ($this->moduleSources() as $file) {
+            if (in_array($file, $gradeScaleFiles, true)) {
+                continue;
+            }
+
             $code = $this->code($file);
 
             foreach (['TenantLock', 'lockForUpdate', 'advisory', 'pg_advisory'] as $forbidden) {

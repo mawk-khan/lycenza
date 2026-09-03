@@ -634,6 +634,22 @@ class CapabilityAndRoleSeeder extends Seeder
             // every other Examinations capability.
             ['key' => 'examinations.papers.view', 'label' => 'View Examination Papers', 'namespace' => 'school'],
             ['key' => 'examinations.papers.manage', 'label' => 'Manage Examination Papers', 'namespace' => 'school'],
+
+            // Phase 0H.4C (GradeScale). The `examinations.grade_scales.*`
+            // leaf the 0H.4A comment above explicitly reserved.
+            // Deliberately independent of `examinations.definitions.*`/
+            // `examinations.papers.*`: a GradeScale is School-owned
+            // reference configuration with no Examination/Paper
+            // relationship at all (ADR 0032/0035) -- and deliberately
+            // implies neither `examinations.marks.*` nor
+            // `examinations.results.*`, the same "a flat manage key
+            // would eventually grant clerical marks entry and
+            // principal-level result publication with the same key"
+            // reasoning the 0H.4A comment above already gives. No
+            // `examinations.grade_scales.teacher`: v1 is admin-only,
+            // same as every other Examinations capability.
+            ['key' => 'examinations.grade_scales.view', 'label' => 'View Grade Scales', 'namespace' => 'school'],
+            ['key' => 'examinations.grade_scales.manage', 'label' => 'Manage Grade Scales', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -873,6 +889,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // is the same routine academic administration as
                     // defining the Examination window itself.
                     'examinations.papers.view', 'examinations.papers.manage',
+                    // Phase 0H.4C: defining the School's grading scale
+                    // configuration is the same routine academic
+                    // administration as defining the Examination window
+                    // and scheduling its papers.
+                    'examinations.grade_scales.view', 'examinations.grade_scales.manage',
                 ],
             ],
             'principal' => [
@@ -1012,6 +1033,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // is the same routine academic administration as
                     // defining the Examination window itself.
                     'examinations.papers.view', 'examinations.papers.manage',
+                    // Phase 0H.4C: defining the School's grading scale
+                    // configuration is the same routine academic
+                    // administration as defining the Examination window
+                    // and scheduling its papers.
+                    'examinations.grade_scales.view', 'examinations.grade_scales.manage',
                 ],
             ],
         ];
