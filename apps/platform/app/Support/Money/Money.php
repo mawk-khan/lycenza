@@ -186,6 +186,43 @@ final class Money implements JsonSerializable
     }
 
     /**
+     * Phase 9.2 (ADR 0034 "Money arithmetic") -- the one extension
+     * Payroll's calculation kernel needs beyond 0G.2's add()/negated():
+     * multiplying by a decimal-FRACTION rate (e.g. "0.400000" for "HRA
+     * = 40% of Basic"), never a raw "40" needing an implicit /100 --
+     * see App\Domain\Payroll\Infrastructure\SalaryStructureComponent's
+     * own `rate` column. `$rate` is validated with the exact same
+     * strict decimal-string pattern `of()` already applies to amounts
+     * -- never a float, for the identical reason described on that
+     * method's own docblock.
+     *
+     * Rounds HALF-UP (away from zero) to `$scale` decimal places
+     * (default 2, matching `NUMERIC(14,2)` throughout Finance/Payroll)
+     * -- deterministic and golden-fixture-testable, unlike bcmath's own
+     * bcmul()/bcadd() truncation-only behavior at a given scale. The
+     * product is computed at `$scale + 10` digits of intermediate
+     * precision before rounding, so the rounding decision itself is
+     * never distorted by premature truncation.
+     */
+    public function multiplyByRate(string $rate, int $scale = 2): self
+    {
+        if (! preg_match(self::AMOUNT_PATTERN, $rate)) {
+            throw new InvalidMoneyException(
+                "Invalid Money rate '{$rate}': must be a plain decimal string ".
+                '(no leading zeros, no leading +, no scientific notation, no whitespace).'
+            );
+        }
+
+        $product = bcmul($this->amount, $rate, $scale + 10);
+        $halfUnit = '0.'.str_repeat('0', $scale).'5';
+        $rounded = bccomp($product, '0', $scale + 10) >= 0
+            ? bcadd($product, $halfUnit, $scale)
+            : bcsub($product, $halfUnit, $scale);
+
+        return new self($rounded, $this->currency);
+    }
+
+    /**
      * @return array{amount: string, currency: string}
      */
     public function jsonSerialize(): array

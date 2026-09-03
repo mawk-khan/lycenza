@@ -62,6 +62,15 @@ use App\Http\Controllers\App\InventoryLocationController;
 use App\Http\Controllers\App\InventoryStockController;
 use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
+use App\Http\Controllers\App\Payroll\CompensationController as PayrollCompensationController;
+use App\Http\Controllers\App\Payroll\PayrollAccountingConfigurationController;
+use App\Http\Controllers\App\Payroll\PayrollController;
+use App\Http\Controllers\App\Payroll\PayrollPeriodController;
+use App\Http\Controllers\App\Payroll\PayrollRunController;
+use App\Http\Controllers\App\Payroll\PayrollRunPostingController;
+use App\Http\Controllers\App\Payroll\PayslipController as PayrollPayslipController;
+use App\Http\Controllers\App\Payroll\SalaryComponentController as PayrollSalaryComponentController;
+use App\Http\Controllers\App\Payroll\SalaryStructureController as PayrollSalaryStructureController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
@@ -915,5 +924,92 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/', [TimetableEntryController::class, 'store'])->name('store');
         Route::post('/{timetableEntry}/activate', [TimetableEntryController::class, 'activate'])->name('activate');
         Route::post('/{timetableEntry}/deactivate', [TimetableEntryController::class, 'deactivate'])->name('deactivate');
+    });
+
+    // Phase 9.9: Payroll administrative UI. Capability checks live
+    // inside each controller (AuthorizesCapability trait, or the
+    // underlying Application-layer service's own `authorizeCapabilityFor()`
+    // -- see each controller's docblock), matching every other module's
+    // Inertia controller in this file -- no route-level `capability:`
+    // middleware for these session-authenticated pages (that pattern is
+    // reserved for the Bearer-token /api/v1 JSON API). Every mutation
+    // delegates to the SAME Application-layer services the JSON API
+    // controllers use (routes/api.php's own Payroll block).
+    //
+    // Phase 9.9 finding (documented per CLAUDE.md rule 15 -- an
+    // intentional deviation, not a silent gap): the five consequential
+    // commands (create run, create correction, approve, post, reverse)
+    // deliberately do NOT carry the `idempotent` route middleware here,
+    // unlike their API counterparts. `App\Http\Middleware\EnsureIdempotent::replay()`
+    // unconditionally returns `response()->json($body, $status)`, and
+    // `IdempotencyGuard`'s response capture only ever stores a
+    // `Content-Type` header (`ALLOWED_RESPONSE_HEADERS = ['Content-Type']`)
+    // and a `json_decode()`'d body -- both built exclusively for the
+    // JSON API's `JsonResponse` shape. A `RedirectResponse`'s `Location`
+    // header is never captured and its HTML redirect-stub body doesn't
+    // decode as JSON, so a replayed retry of one of these actions would
+    // come back as a target-less JSON 302 the browser/Inertia client
+    // cannot follow -- a genuine defect, not a theoretical one. Reusing
+    // the middleware as-is here would silently ship that bug; redesigning
+    // it to also support redirect/Inertia responses is a change to an
+    // already-reviewed, security-relevant primitive that deserves its
+    // own dedicated review, not a rushed addition to this UI checkpoint.
+    // Real protection today is: (1) the structural at-most-once
+    // guarantees these actions already have regardless of transport (row
+    // locks, unique constraints, status-transition checks -- unchanged
+    // by this checkpoint), and (2) the standard disabled-button/
+    // `processing` double-submit guard every consequential action's Vue
+    // component uses, matching this codebase's own established
+    // convention (see e.g. `Finance/Charges/Show.vue`'s `cancelling`
+    // guard). The Vue components for these five actions also generate
+    // and send a stable `Idempotency-Key` header (`resources/js/idempotency.ts`)
+    // reused across a retry of the same logical submission -- inert on
+    // this transport today, but forward-compatible groundwork should the
+    // middleware gain redirect-response support later.
+    Route::prefix('app/payroll')->name('app.payroll.')->group(function (): void {
+        Route::get('/', [PayrollController::class, 'index'])->name('index');
+
+        Route::get('/components', [PayrollSalaryComponentController::class, 'index'])->name('components.index');
+        Route::post('/components', [PayrollSalaryComponentController::class, 'store'])->name('components.store');
+        Route::post('/components/{salaryComponent}/deactivate', [PayrollSalaryComponentController::class, 'deactivate'])->name('components.deactivate');
+
+        // 'create' registered BEFORE the '/{salaryStructure}' wildcard
+        // below, matching this file's own established convention.
+        Route::get('/structures/create', [PayrollSalaryStructureController::class, 'create'])->name('structures.create');
+        Route::get('/structures', [PayrollSalaryStructureController::class, 'index'])->name('structures.index');
+        Route::post('/structures', [PayrollSalaryStructureController::class, 'store'])->name('structures.store');
+        Route::get('/structures/{salaryStructure}', [PayrollSalaryStructureController::class, 'show'])->name('structures.show');
+        Route::post('/structures/{salaryStructure}/components', [PayrollSalaryStructureController::class, 'storeComponent'])->name('structures.components.store');
+        Route::post('/structures/{salaryStructure}/activate', [PayrollSalaryStructureController::class, 'activate'])->name('structures.activate');
+
+        Route::get('/periods', [PayrollPeriodController::class, 'index'])->name('periods.index');
+        Route::post('/periods', [PayrollPeriodController::class, 'store'])->name('periods.store');
+        Route::post('/periods/{payrollPeriod}/open', [PayrollPeriodController::class, 'open'])->name('periods.open');
+        Route::post('/periods/{payrollPeriod}/close', [PayrollPeriodController::class, 'close'])->name('periods.close');
+        Route::post('/periods/{payrollPeriod}/runs', [PayrollRunController::class, 'store'])->name('periods.runs.store');
+
+        Route::get('/runs/{payrollRun}', [PayrollRunController::class, 'show'])->name('runs.show');
+        Route::post('/runs/{payrollRun}/calculate', [PayrollRunController::class, 'calculate'])->name('runs.calculate');
+        Route::post('/runs/{payrollRun}/manual-overrides', [PayrollRunController::class, 'manualOverride'])->name('runs.manual-overrides.store');
+        Route::post('/runs/{payrollRun}/correction-deltas', [PayrollRunController::class, 'correctionDelta'])->name('runs.correction-deltas.store');
+        Route::post('/runs/{payrollRun}/correction', [PayrollRunController::class, 'storeCorrection'])->name('runs.correction.store');
+        Route::post('/runs/{payrollRun}/approve', [PayrollRunController::class, 'approve'])->name('runs.approve');
+        Route::post('/runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])->name('runs.post');
+        Route::post('/runs/{payrollRun}/reverse', [PayrollRunPostingController::class, 'reverse'])->name('runs.reverse');
+
+        // Phase 9.10: printable on-demand payslip, never persisted --
+        // authorization/eligibility both enforced inside PayslipReadService.
+        Route::get('/runs/{payrollRun}/payslips/{employmentRecord}', [PayrollPayslipController::class, 'show'])->name('runs.payslips.show');
+
+        // 'search' registered BEFORE the '/{employmentRecord}' wildcard
+        // below, matching this file's own established convention.
+        Route::get('/compensation', [PayrollCompensationController::class, 'index'])->name('compensation.index');
+        Route::get('/compensation/search', [PayrollCompensationController::class, 'search'])->name('compensation.search');
+        Route::get('/compensation/{employmentRecord}', [PayrollCompensationController::class, 'show'])->name('compensation.show');
+        Route::post('/compensation/{employmentRecord}', [PayrollCompensationController::class, 'store'])->name('compensation.store');
+        Route::get('/compensation-assignments/{compensationAssignment}/values', [PayrollCompensationController::class, 'values'])->name('compensation.values');
+
+        Route::get('/accounting', [PayrollAccountingConfigurationController::class, 'show'])->name('accounting.show');
+        Route::post('/accounting', [PayrollAccountingConfigurationController::class, 'update'])->name('accounting.update');
     });
 });

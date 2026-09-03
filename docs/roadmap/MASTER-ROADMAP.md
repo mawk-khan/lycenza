@@ -532,7 +532,7 @@ granted by the same key; four `/api/v1` operations with a COMPLETE
 OpenAPI contract and regenerated shared types in the same branch; and a
 session-authenticated Inertia surface at `/app/examinations`. Classified
 **Confidential** — it stores no personal data at all. See
-`docs/modules/EXAMINATIONS.md` and ADR 0032 for the complete as-built
+`docs/modules/EXAMINATIONS.md` and ADR 0034 for the complete as-built
 record and the decomposition rationale.
 
 **ExaminationPaper / Scheduling (Phase 0H.4B) is complete** — the second
@@ -611,6 +611,30 @@ originally documented order.
 `docs/modules/HR.md`'s "Phase 8A Closure (8A.16, implemented)" section
 for the full regression/closure record. Payroll (the remainder of this
 Phase 0J entry) remains not started.
+
+**Resequencing note (2026-08-29):** Payroll — the remainder of this
+Phase 0J entry — is now being built under a separately-numbered
+initiative ("Phase 9") on `feature/phase-9-payroll`, mirroring Phase
+8A's own exception. See ADR 0034 and `docs/modules/PAYROLL.md` for the
+full decision record and scope boundary. Checkpoint 9.6 (statutory
+PF/ESI/TDS) remains gated on the `[LEGAL REVIEW REQUIRED]` flag in
+`docs/security/DATA-CLASSIFICATION.md` and will not close without an
+explicit legal sign-off or an explicit user-approved scope-narrowing
+decision — this entry will not be marked complete while that checkpoint
+remains open.
+
+**Closure (2026-09-03):** Phase 9 (9.0–9.5, 9.7–9.12) is engineering-
+implementation complete — see `docs/modules/PAYROLL.md`'s "Phase 9.12
+Closure" section for the full reconciliation/migration-compatibility/
+regression-attribution record, including a rigorous zero-Phase-9-
+regression proof against a genuinely separate `main` environment.
+**Checkpoint 9.6 (statutory PF/ESI/TDS) remains BLOCKED/DEFERRED**,
+gated on the `[LEGAL REVIEW REQUIRED]` flag in
+`docs/security/DATA-CLASSIFICATION.md` — this Phase 0J entry is
+therefore **not** marked fully complete; it is "engineering
+implementation complete through non-statutory scope, statutory Payroll
+deferred." `feature/phase-9-payroll` has not been merged into `main`;
+that remains a separate, explicitly-authorized future step.
 
 ## Phase 0K — Operational Modules
 

@@ -249,4 +249,54 @@ class MoneyTest extends TestCase
 
         $this->assertTrue($total->equals(Money::of('1.00', 'INR')), "Expected 1.00, got {$total->amount()}");
     }
+
+    /**
+     * Phase 9.2 (ADR 0034 "Money arithmetic") -- golden fixtures for
+     * `multiplyByRate()`, the one calculation-kernel primitive
+     * Checkpoint 9.3 depends on.
+     */
+    #[Test]
+    public function multiply_by_rate_computes_a_simple_percentage(): void
+    {
+        $result = Money::of('50000.00', 'INR')->multiplyByRate('0.400000');
+
+        $this->assertSame('20000.00', $result->amount());
+    }
+
+    #[Test]
+    public function multiply_by_rate_rounds_half_up_at_the_default_scale(): void
+    {
+        $this->assertSame('33.34', Money::of('100.00', 'INR')->multiplyByRate('0.333350')->amount());
+        $this->assertSame('33.33', Money::of('100.00', 'INR')->multiplyByRate('0.333349')->amount());
+    }
+
+    #[Test]
+    public function multiply_by_rate_rejects_a_malformed_rate(): void
+    {
+        $this->expectException(InvalidMoneyException::class);
+
+        Money::of('100.00', 'INR')->multiplyByRate('40%');
+    }
+
+    #[Test]
+    public function multiply_by_rate_zero_produces_zero(): void
+    {
+        $this->assertSame('0.00', Money::of('50000.00', 'INR')->multiplyByRate('0')->amount());
+    }
+
+    #[Test]
+    public function multiply_by_rate_preserves_currency(): void
+    {
+        $result = Money::of('50000.00', 'INR')->multiplyByRate('0.12');
+
+        $this->assertSame('INR', $result->currency());
+    }
+
+    #[Test]
+    public function multiply_by_rate_supports_a_wider_scale(): void
+    {
+        $result = Money::of('1.00', 'INR')->multiplyByRate('0.125', 3);
+
+        $this->assertSame('0.125', $result->amount());
+    }
 }
