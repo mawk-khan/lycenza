@@ -5,6 +5,7 @@ namespace App\Domain\Payroll\Http\Controllers;
 use App\Domain\Payroll\Application\Payslip;
 use App\Domain\Payroll\Application\PayslipLine;
 use App\Domain\Payroll\Application\PayslipReadService;
+use App\Domain\Payroll\Application\PayslipStatutorySection;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
@@ -58,6 +59,37 @@ class PayslipController extends Controller
                 'effect' => $l->effect,
             ], $payslip->lines),
             'statutoryDeductionsIncluded' => $payslip->statutoryDeductionsIncluded,
+            'statutory' => $payslip->statutory === null ? null : $this->presentStatutory($payslip->statutory),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function presentStatutory(PayslipStatutorySection $s): array
+    {
+        return [
+            'isPfExcludedEmployee' => $s->isPfExcludedEmployee,
+            'employeePfMandatory' => $s->employeePfMandatory,
+            'employeePfVoluntary' => $s->employeePfVoluntary,
+            'employerPfTotal' => $s->employerPfTotal,
+            'employerEps' => $s->employerEps,
+            'employerEpf' => $s->employerEpf,
+            'employerEdli' => $s->employerEdli,
+            'esiIsCovered' => $s->esiIsCovered,
+            'employeeEsi' => $s->employeeEsi,
+            'employerEsi' => $s->employerEsi,
+            'professionalTax' => $s->professionalTax,
+            'lwfCharged' => $s->lwfCharged,
+            'employeeLwf' => $s->employeeLwf,
+            'employerLwf' => $s->employerLwf,
+            'tdsMonthlyDeduction' => $s->tdsMonthlyDeduction,
+            'tdsResidualComplianceException' => $s->tdsResidualComplianceException,
+            'maskedPan' => $s->maskedPan,
+            'maskedUan' => $s->maskedUan,
+            'maskedPfMemberId' => $s->maskedPfMemberId,
+            'maskedEsicIpNumber' => $s->maskedEsicIpNumber,
+            'esiDisabilityProvisionsEvaluated' => $s->esiDisabilityProvisionsEvaluated,
         ];
     }
 }

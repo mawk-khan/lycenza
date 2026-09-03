@@ -7,6 +7,7 @@ interface Props {
         manageAccounting: boolean;
         managePeriods: boolean;
         viewRuns: boolean;
+        viewStatutory: boolean;
     };
 }
 
@@ -37,6 +38,9 @@ defineProps<Props>();
                     <a class="underline" href="/app/payroll/accounting"
                         >Payroll Accounting Configuration</a
                     >
+                </li>
+                <li v-if="can.viewStatutory">
+                    <a class="underline" href="/app/payroll/statutory">Statutory Payroll</a>
                 </li>
             </ul>
         </nav>

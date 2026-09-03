@@ -32,6 +32,10 @@ class PayrollController extends Controller
                 'manageAccounting' => $capabilities->canInSchool($user, 'payroll.accounting.manage', $school),
                 'managePeriods' => $capabilities->canInSchool($user, 'payroll.periods.manage', $school),
                 'viewRuns' => $capabilities->canInSchool($user, 'payroll.runs.view', $school),
+                // Checkpoint 9.6I -- additive: the Statutory Payroll
+                // workspace re-checks every capability server-side
+                // itself, this is UX-only like every other flag here.
+                'viewStatutory' => $capabilities->canInSchool($user, 'payroll.statutory.view', $school),
             ],
         ]);
     }

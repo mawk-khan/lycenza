@@ -4970,6 +4970,360 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/payroll-statutory/rule-status:
+    get:
+      operationId: getStatutoryRuleStatus
+      summary: >
+        Checkpoint 9.6I. Read-only visibility of the active PF/ESI/
+        Telangana PT/LWF/income-tax rule versions. No mutation --
+        rule-version content is code/seed-controlled reference data,
+        never a runtime rules engine. Requires payroll.statutory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryRuleStatus" } } }
+        "403":
+          description: Authenticated but lacking payroll.statutory.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/payroll-statutory/pf-status/{employmentRecordId}:
+    get:
+      operationId: getStatutoryPfStatus
+      summary: Checkpoint 9.6I. The five independent PF facts for one EmploymentRecord. Requires payroll.statutory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      responses:
+        "200":
+          description: OK (data is null if never configured).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryPfStatus" }, nullable: true } }
+        "404":
+          description: Nonexistent or cross-School EmploymentRecord id -- no existence oracle.
+    post:
+      operationId: configureStatutoryPfStatus
+      summary: >
+        Checkpoint 9.6I. Upserts the five independent PF facts. Never
+        infers one from another. Requires payroll.statutory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatutoryPfStatusInput" }
+      responses:
+        "201":
+          description: Created/updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryPfStatus" } } }
+        "403":
+          description: Authenticated but lacking payroll.statutory.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School EmploymentRecord id.
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-statutory/esi-coverage/{employmentRecordId}:
+    get:
+      operationId: listStatutoryEsiCoverage
+      summary: >
+        Checkpoint 9.6I. Full contribution-period coverage history for
+        one EmploymentRecord, including a derived (never separately
+        stored) continuity flag. Requires payroll.statutory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/StatutoryEsiCoveragePeriod" } } } }
+        "404":
+          description: Nonexistent or cross-School EmploymentRecord id.
+    post:
+      operationId: correctStatutoryEsiCoverage
+      summary: >
+        Checkpoint 9.6I. Corrects coverage for one contribution period.
+        Refused (STATUTORY_ESI_COVERAGE_LOCKED, 409) once a finalized
+        statutory calculation has already consumed that period.
+        Requires payroll.statutory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatutoryEsiCoverageInput" }
+      responses:
+        "201":
+          description: Created/updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryEsiCoveragePeriod" } } }
+        "403":
+          description: Authenticated but lacking payroll.statutory.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: STATUTORY_ESI_COVERAGE_LOCKED -- period already consumed by a finalized calculation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-statutory/tax-profile/{employmentRecordId}:
+    get:
+      operationId: listStatutoryTaxProfiles
+      summary: Checkpoint 9.6I. Fiscal-year-by-fiscal-year tax profile history for one EmploymentRecord. Requires payroll.statutory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/StatutoryTaxProfile" } } } }
+        "404":
+          description: Nonexistent or cross-School EmploymentRecord id.
+    post:
+      operationId: configureStatutoryTaxProfile
+      summary: >
+        Checkpoint 9.6I. Upserts one fiscal year's tax profile (regime
+        election, School-policy switch reference, declared income/
+        deductions). No arbitrary tax-code scripting. Requires
+        payroll.statutory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatutoryTaxProfileInput" }
+      responses:
+        "201":
+          description: Created/updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryTaxProfile" } } }
+        "403":
+          description: Authenticated but lacking payroll.statutory.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Nonexistent or cross-School EmploymentRecord id.
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-statutory/identifiers/{employmentRecordId}:
+    get:
+      operationId: listStatutoryIdentifiers
+      summary: >
+        Checkpoint 9.6I. Lists identifier types on file for one
+        EmploymentRecord in MASKED form only -- the raw value is never
+        present in this response. Requires payroll.statutory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/StatutoryIdentifierMasked" } } } }
+        "404":
+          description: Nonexistent or cross-School EmploymentRecord id.
+    post:
+      operationId: setStatutoryIdentifier
+      summary: >
+        Checkpoint 9.6I. Sets (encrypts + hashes) one identifier value.
+        Requires payroll.statutory.identifiers.manage -- a SEPARATE,
+        narrower capability from payroll.statutory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatutoryIdentifierInput" }
+      responses:
+        "201":
+          description: Created/updated (never returns the value itself).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryIdentifierSetResult" } } }
+        "403":
+          description: Authenticated but lacking payroll.statutory.identifiers.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-statutory/identifiers/{employmentRecordId}/{identifierType}/reveal:
+    get:
+      operationId: revealStatutoryIdentifier
+      summary: >
+        Checkpoint 9.6I. Returns the REAL, unmasked identifier value.
+        A SEPARATE endpoint from list() on purpose -- the raw value is
+        never bundled into any other response. Audited on every
+        successful call. Requires payroll.statutory.identifiers.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmploymentRecordId" }
+        - { $ref: "#/components/parameters/StatutoryIdentifierType" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryIdentifierRevealed" } } }
+        "403":
+          description: Authenticated but lacking payroll.statutory.identifiers.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/payroll-statutory/accounting-configuration:
+    get:
+      operationId: getStatutoryAccountingConfiguration
+      summary: Checkpoint 9.6I. This School's 14-account statutory Finance mapping. Requires payroll.statutory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK (data is null if never configured).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryAccountingConfiguration" }, nullable: true } }
+    post:
+      operationId: configureStatutoryAccountingConfiguration
+      summary: >
+        Checkpoint 9.6I. Configures (upserts) all 14 statutory
+        liability/expense Finance account mappings Checkpoint 9.6F's
+        journal posting requires. No account-name lookup. Requires
+        payroll.statutory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatutoryAccountingConfigurationInput" }
+      responses:
+        "201":
+          description: Created/updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StatutoryAccountingConfiguration" } } }
+        "403":
+          description: Authenticated but lacking payroll.statutory.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: STATUTORY_ACCOUNTING_ACCOUNT_INVALID (missing, inactive, or wrong-type ledger account).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/statutory-exports/ecr:
+    get:
+      operationId: exportStatutoryEcr
+      summary: >
+        Checkpoint 9.6I/9.6G. EPFO ECR data preparation (11-field
+        #~#-delimited rows) for this run -- data preparation only, no
+        government portal submission. Requires
+        payroll.statutory.exports.generate AND
+        payroll.statutory.identifiers.view (a row needs the real UAN).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      responses:
+        "200":
+          description: OK -- text/plain attachment.
+          content:
+            text/plain:
+              schema: { type: string }
+        "403":
+          description: Authenticated but lacking payroll.statutory.exports.generate or .identifiers.view.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: STATUTORY_IDENTIFIER_MISSING -- a member has no recorded UAN.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/statutory-exports/esi-worksheet:
+    get:
+      operationId: exportStatutoryEsiWorksheet
+      summary: >
+        Checkpoint 9.6I/9.6G. ESIC monthly contribution worksheet CSV
+        for this run -- data preparation only. Requires
+        payroll.statutory.exports.generate.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      responses:
+        "200":
+          description: OK -- text/csv attachment.
+          content:
+            text/csv:
+              schema: { type: string }
+        "403":
+          description: Authenticated but lacking payroll.statutory.exports.generate.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/statutory-exports/tds-draft-statement:
+    get:
+      operationId: exportStatutoryTdsDraftStatement
+      summary: >
+        Checkpoint 9.6I/9.6G. Form 138 draft TDS statement CSV for
+        this run (April 2026+ periods only) -- data preparation only,
+        never Form 24Q/Form 16/portal submission. PAN masked unless
+        the caller holds payroll.statutory.identifiers.view. Requires
+        payroll.statutory.exports.generate.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PayrollRunId" }
+      responses:
+        "200":
+          description: OK -- text/csv attachment.
+          content:
+            text/csv:
+              schema: { type: string }
+        "403":
+          description: Authenticated but lacking payroll.statutory.exports.generate.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: STATUTORY_FORM_NOT_YET_EFFECTIVE -- period is before 1 April 2026.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /schools/{schoolId}/hostels:
     get:
       operationId: listHostels
@@ -8008,6 +8362,12 @@ components:
       required: true
       description: Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle.
       schema: { type: string, format: uuid }
+    StatutoryIdentifierType:
+      name: identifierType
+      in: path
+      required: true
+      description: Checkpoint 9.6I.
+      schema: { type: string, enum: [pan, uan, pf_member_id, esic_ip_number] }
     HostelId:
       name: hostelId
       in: path
@@ -10313,9 +10673,12 @@ components:
       description: >
         Highly Sensitive -- one EmploymentRecord's on-demand payslip,
         rendered from the frozen payroll_run_results/_lines authority,
-        never persisted. Excludes bank details and statutory
-        identifiers by construction (Checkpoint 9.6 remains LEGAL
-        REVIEW REQUIRED).
+        never persisted. Excludes bank details by construction.
+        Checkpoint 9.6J: statutory carries the frozen
+        payroll_statutory_calculation_results figures for this exact
+        result when available AND the actor also holds
+        payroll.statutory.view -- null otherwise (never fabricated,
+        never recalculated from current rule versions).
       properties:
         schoolId: { type: string, format: uuid }
         schoolName: { type: string }
@@ -10336,7 +10699,42 @@ components:
         totalDeductions: { type: string }
         netAmount: { type: string }
         lines: { type: array, items: { $ref: "#/components/schemas/PayslipLine" } }
-        statutoryDeductionsIncluded: { type: boolean, description: "Always false in Phase 9 -- Checkpoint 9.6 statutory calculation remains LEGAL REVIEW REQUIRED." }
+        statutoryDeductionsIncluded: { type: boolean, description: "True only when a frozen statutory calculation result exists for this payslip AND the actor holds payroll.statutory.view." }
+        statutory: { $ref: "#/components/schemas/PayslipStatutorySection" }
+    PayslipStatutorySection:
+      type: object
+      nullable: true
+      description: >
+        Checkpoint 9.6J. Identifiers are always masked here -- there is
+        no reveal flow on a payslip. esiDisabilityProvisionsEvaluated
+        is always false: this system collects no disability-status
+        fact anywhere (the ESI disability threshold remains DEFERRED —
+        ADDITIONAL LEGAL CLARIFICATION REQUIRED), so a renderer MUST
+        show this as a standing notice, never omit it, and this
+        payload must never be labeled a statutory-compliance document.
+      required: [isPfExcludedEmployee, esiIsCovered, lwfCharged, esiDisabilityProvisionsEvaluated]
+      properties:
+        isPfExcludedEmployee: { type: boolean }
+        employeePfMandatory: { type: string, nullable: true }
+        employeePfVoluntary: { type: string, nullable: true }
+        employerPfTotal: { type: string, nullable: true, description: Informational -- employer cost, not withheld from the Employee. }
+        employerEps: { type: string, nullable: true }
+        employerEpf: { type: string, nullable: true }
+        employerEdli: { type: string, nullable: true }
+        esiIsCovered: { type: boolean }
+        employeeEsi: { type: string, nullable: true }
+        employerEsi: { type: string, nullable: true, description: Informational. }
+        professionalTax: { type: string, nullable: true }
+        lwfCharged: { type: boolean }
+        employeeLwf: { type: string, nullable: true }
+        employerLwf: { type: string, nullable: true, description: Informational. }
+        tdsMonthlyDeduction: { type: string, nullable: true }
+        tdsResidualComplianceException: { type: string, nullable: true, description: "Set only on a fail-closed insufficient-salary cycle (ADR 0036 §1.10) -- never a fabricated employer-funded TDS payment." }
+        maskedPan: { type: string, nullable: true }
+        maskedUan: { type: string, nullable: true }
+        maskedPfMemberId: { type: string, nullable: true }
+        maskedEsicIpNumber: { type: string, nullable: true }
+        esiDisabilityProvisionsEvaluated: { type: boolean, description: "Always false -- see this schema's own description." }
     PayrollRunPosting:
       type: object
       required: [id, payrollRunId, journalEntryId, postingKind]
@@ -10361,6 +10759,201 @@ components:
       properties:
         salary_expense_ledger_account_id: { type: string, format: uuid, description: Must be an active LedgerAccount of type expense. }
         salary_payable_ledger_account_id: { type: string, format: uuid, description: Must be an active LedgerAccount of type liability. }
+    StatutoryPfRuleStatus:
+      type: object
+      nullable: true
+      properties:
+        effectiveFrom: { type: string, format: date }
+        legalReference: { type: string }
+        employeeContributionRate: { type: string }
+        employerContributionRate: { type: string }
+        epsRate: { type: string }
+        edliRate: { type: string }
+        adminChargeRate: { type: string }
+        membershipWageCeiling: { type: string }
+        epsWageCeiling: { type: string }
+        edliWageCeiling: { type: string }
+        adminChargeMinimum: { type: string }
+    StatutoryEsiRuleStatus:
+      type: object
+      nullable: true
+      properties:
+        effectiveFrom: { type: string, format: date }
+        legalReference: { type: string }
+        employeeContributionRate: { type: string }
+        employerContributionRate: { type: string }
+        wageThreshold: { type: string }
+        averageDailyWageExemptionThreshold: { type: string }
+        disabilityThreshold: { type: string, nullable: true }
+        disabilityThresholdStatus: { type: string, description: "Always 'DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED' (ADR 0036)." }
+    StatutoryRuleStatus:
+      type: object
+      description: Checkpoint 9.6I. Read-only active rule-version status.
+      properties:
+        pf: { $ref: "#/components/schemas/StatutoryPfRuleStatus" }
+        esi: { $ref: "#/components/schemas/StatutoryEsiRuleStatus" }
+        professionalTax: { type: object, nullable: true }
+        lwf: { type: object, nullable: true }
+        incomeTaxNewRegime: { type: object, nullable: true }
+        incomeTaxOldRegime: { type: object, nullable: true }
+    StatutoryPfStatus:
+      type: object
+      required: [employmentRecordId, hasExistingPfMembership, hasUan, hasApprovedHigherWageContribution, isEpsEligible, hasHigherPensionStatus]
+      properties:
+        employmentRecordId: { type: string, format: uuid }
+        hasExistingPfMembership: { type: boolean }
+        hasUan: { type: boolean }
+        hasApprovedHigherWageContribution: { type: boolean }
+        higherWageApprovalReference: { type: string, nullable: true }
+        higherWageApprovalEffectiveFrom: { type: string, format: date, nullable: true }
+        isEpsEligible: { type: boolean }
+        hasHigherPensionStatus: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    StatutoryPfStatusInput:
+      type: object
+      required: [has_existing_pf_membership, has_uan, has_approved_higher_wage_contribution, is_eps_eligible, has_higher_pension_status]
+      description: Checkpoint 9.6I. Five independent facts -- never infer one from another.
+      properties:
+        has_existing_pf_membership: { type: boolean }
+        has_uan: { type: boolean }
+        has_approved_higher_wage_contribution: { type: boolean }
+        higher_wage_approval_reference: { type: string, nullable: true }
+        higher_wage_approval_effective_from: { type: string, format: date, nullable: true }
+        is_eps_eligible: { type: boolean }
+        has_higher_pension_status: { type: boolean }
+    StatutoryEsiCoveragePeriod:
+      type: object
+      required: [periodStart, periodEnd, entryWage, isCovered, continuous]
+      properties:
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        entryWage: { type: string }
+        isCovered: { type: boolean }
+        continuous: { type: boolean, description: Derived -- was this EmploymentRecord ALSO covered in the immediately preceding period. Never independently stored/editable. }
+    StatutoryEsiCoverageInput:
+      type: object
+      required: [period_start, period_end, entry_wage, is_covered]
+      properties:
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        entry_wage: { type: string }
+        is_covered: { type: boolean }
+    StatutoryTaxProfile:
+      type: object
+      required: [employmentRecordId, fiscalYearStart, regime, previousEmployerIncome, previousEmployerTds, declaredOtherIncome, declaredDeductions]
+      properties:
+        employmentRecordId: { type: string, format: uuid }
+        fiscalYearStart: { type: string, format: date }
+        regime: { type: string, enum: [old, new] }
+        regimeSwitchPolicyReference: { type: string, nullable: true, description: "SCHOOL POLICY, never itself a statutory rule." }
+        previousEmployerIncome: { type: string }
+        previousEmployerTds: { type: string }
+        declaredOtherIncome: { type: string }
+        declaredDeductions: { type: string }
+    StatutoryTaxProfileInput:
+      type: object
+      required: [fiscal_year_start, regime, previous_employer_income, previous_employer_tds, declared_other_income, declared_deductions]
+      properties:
+        fiscal_year_start: { type: string, format: date }
+        regime: { type: string, enum: [old, new] }
+        regime_switch_policy_reference: { type: string, nullable: true }
+        previous_employer_income: { type: string }
+        previous_employer_tds: { type: string }
+        declared_other_income: { type: string }
+        declared_deductions: { type: string }
+    StatutoryIdentifierMasked:
+      type: object
+      required: [identifierType, masked, updatedAt]
+      description: The raw identifier value is NEVER present on this schema.
+      properties:
+        identifierType: { type: string, enum: [pan, uan, pf_member_id, esic_ip_number] }
+        masked: { type: string }
+        updatedAt: { type: string, format: date-time }
+    StatutoryIdentifierRevealed:
+      type: object
+      required: [identifierType, value]
+      properties:
+        identifierType: { type: string, enum: [pan, uan, pf_member_id, esic_ip_number] }
+        value: { type: string, nullable: true }
+    StatutoryIdentifierInput:
+      type: object
+      required: [identifier_type, value]
+      properties:
+        identifier_type: { type: string, enum: [pan, uan, pf_member_id, esic_ip_number] }
+        value: { type: string }
+    StatutoryIdentifierSetResult:
+      type: object
+      required: [identifierType, updatedAt]
+      description: Never returns the value itself.
+      properties:
+        identifierType: { type: string, enum: [pan, uan, pf_member_id, esic_ip_number] }
+        updatedAt: { type: string, format: date-time }
+    StatutoryAccountingConfiguration:
+      type: object
+      required:
+        - employeePfPayableLedgerAccountId
+        - employerEpsPayableLedgerAccountId
+        - employerEpfPayableLedgerAccountId
+        - pfAdminChargePayableLedgerAccountId
+        - edliPayableLedgerAccountId
+        - esiPayableLedgerAccountId
+        - tdsPayableLedgerAccountId
+        - professionalTaxPayableLedgerAccountId
+        - lwfPayableLedgerAccountId
+        - employerPfContributionExpenseLedgerAccountId
+        - pfAdminChargeExpenseLedgerAccountId
+        - edliExpenseLedgerAccountId
+        - employerEsiContributionExpenseLedgerAccountId
+        - employerLwfContributionExpenseLedgerAccountId
+        - currency
+      properties:
+        employeePfPayableLedgerAccountId: { type: string, format: uuid }
+        employerEpsPayableLedgerAccountId: { type: string, format: uuid }
+        employerEpfPayableLedgerAccountId: { type: string, format: uuid }
+        pfAdminChargePayableLedgerAccountId: { type: string, format: uuid }
+        edliPayableLedgerAccountId: { type: string, format: uuid }
+        esiPayableLedgerAccountId: { type: string, format: uuid }
+        tdsPayableLedgerAccountId: { type: string, format: uuid }
+        professionalTaxPayableLedgerAccountId: { type: string, format: uuid }
+        lwfPayableLedgerAccountId: { type: string, format: uuid }
+        employerPfContributionExpenseLedgerAccountId: { type: string, format: uuid }
+        pfAdminChargeExpenseLedgerAccountId: { type: string, format: uuid }
+        edliExpenseLedgerAccountId: { type: string, format: uuid }
+        employerEsiContributionExpenseLedgerAccountId: { type: string, format: uuid }
+        employerLwfContributionExpenseLedgerAccountId: { type: string, format: uuid }
+        currency: { type: string }
+    StatutoryAccountingConfigurationInput:
+      type: object
+      required:
+        - employee_pf_payable_ledger_account_id
+        - employer_eps_payable_ledger_account_id
+        - employer_epf_payable_ledger_account_id
+        - pf_admin_charge_payable_ledger_account_id
+        - edli_payable_ledger_account_id
+        - esi_payable_ledger_account_id
+        - tds_payable_ledger_account_id
+        - professional_tax_payable_ledger_account_id
+        - lwf_payable_ledger_account_id
+        - employer_pf_contribution_expense_ledger_account_id
+        - pf_admin_charge_expense_ledger_account_id
+        - edli_expense_ledger_account_id
+        - employer_esi_contribution_expense_ledger_account_id
+        - employer_lwf_contribution_expense_ledger_account_id
+      properties:
+        employee_pf_payable_ledger_account_id: { type: string, format: uuid }
+        employer_eps_payable_ledger_account_id: { type: string, format: uuid }
+        employer_epf_payable_ledger_account_id: { type: string, format: uuid }
+        pf_admin_charge_payable_ledger_account_id: { type: string, format: uuid }
+        edli_payable_ledger_account_id: { type: string, format: uuid }
+        esi_payable_ledger_account_id: { type: string, format: uuid }
+        tds_payable_ledger_account_id: { type: string, format: uuid }
+        professional_tax_payable_ledger_account_id: { type: string, format: uuid }
+        lwf_payable_ledger_account_id: { type: string, format: uuid }
+        employer_pf_contribution_expense_ledger_account_id: { type: string, format: uuid }
+        pf_admin_charge_expense_ledger_account_id: { type: string, format: uuid }
+        edli_expense_ledger_account_id: { type: string, format: uuid }
+        employer_esi_contribution_expense_ledger_account_id: { type: string, format: uuid }
+        employer_lwf_contribution_expense_ledger_account_id: { type: string, format: uuid }
     TimetablePeriod:
       type: object
       required: [id, code, name, startTime, endTime, status]

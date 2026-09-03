@@ -12,16 +12,26 @@ namespace App\Domain\Payroll\Application;
  * never a partial field.
  *
  * Deliberately excludes: bank details (no bank-account table exists in
- * this module at all), any statutory identifier/PF/ESI/TDS figure
- * (Checkpoint 9.6 remains `[LEGAL REVIEW REQUIRED]` -- see
- * `$statutoryDeductionsIncluded`, always `false` in Phase 9, which
- * exists so a caller/renderer can show an explicit "does not include
- * statutory deductions" notice rather than silently omitting it), and
- * any salary-structure/revision reference (not stored on the frozen
- * result itself -- re-deriving it live from the current compensation
- * assignment could disagree with what was actually calculated, which
- * would misrepresent the frozen record this DTO exists to represent
- * faithfully).
+ * this module at all), and any salary-structure/revision reference
+ * (not stored on the frozen result itself -- re-deriving it live from
+ * the current compensation assignment could disagree with what was
+ * actually calculated, which would misrepresent the frozen record
+ * this DTO exists to represent faithfully).
+ *
+ * Checkpoint 9.6J -- `$statutory` is populated ONLY when a frozen
+ * `payroll_statutory_calculation_results` row exists for this exact
+ * `PayrollRunResult` AND the actor also holds `payroll.statutory.view`
+ * (a second, narrower authority layered on top of
+ * `payroll.compensation.sensitive.view` -- see `PayslipReadService`).
+ * `$statutoryDeductionsIncluded` is `true` only in that case -- never
+ * inferred, never guessed for a run that was never statutorily
+ * calculated (a `draft`/`calculated` run's payslip is already refused
+ * entirely by the existing eligibility check; a run calculated before
+ * Checkpoint 9.6F, or one an actor lacks `.statutory.view` for, simply
+ * shows no statutory section, with the flag `false` so a renderer can
+ * show an explicit "statutory figures unavailable" notice instead of
+ * silently omitting it -- never labeled "legally compliant" either
+ * way, see `PayslipStatutorySection`'s own docblock for why.
  *
  * @param  list<PayslipLine>  $lines
  */
@@ -48,5 +58,6 @@ final class Payslip
         public readonly string $netAmount,
         public readonly array $lines,
         public readonly bool $statutoryDeductionsIncluded = false,
+        public readonly ?PayslipStatutorySection $statutory = null,
     ) {}
 }

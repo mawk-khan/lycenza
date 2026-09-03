@@ -534,6 +534,29 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'payroll.accounting.manage', 'label' => 'Manage Payroll accounting (Finance account) configuration', 'namespace' => 'school'],
             ['key' => 'payroll.statutory.manage', 'label' => 'Manage Payroll statutory (PF/ESI/TDS) configuration -- reserved, no functional implementation while Checkpoint 9.6 is legally gated', 'namespace' => 'school'],
 
+            // Checkpoint 9.6F/9.6G (ADR 0036 correction addendum
+            // §1.11, Section 10) -- registered in the SAME checkpoint
+            // as the real gated actions behind them
+            // (StatutoryPayrollCalculationService/StatutoryPayrollPostingService/
+            // the Export/* services), following the exact discipline
+            // the `.statutory.manage` comment above already documents.
+            // Granted to NOBODY by default (same treatment as
+            // `.statutory.manage`/`.compensation.sensitive.*`) --
+            // `.identifiers.view`/`.manage` gate real, unmasked
+            // government identifiers (PAN/UAN/PF Member ID/ESIC IP
+            // Number, Highly Sensitive) and must never be default-
+            // granted; `.view`/`.exports.generate` gate statutory
+            // calculation figures and government-filing exports,
+            // financially/legally consequential enough to withhold
+            // from School Admin's otherwise-broad Payroll grant below.
+            // A full capability-suppression/no-default-grant proof is
+            // Checkpoint 9.6H's job -- this registration is the
+            // correctly-scoped starting point, not that proof itself.
+            ['key' => 'payroll.statutory.view', 'label' => 'View Payroll statutory (PF/ESI/PT/LWF/TDS) calculation results', 'namespace' => 'school'],
+            ['key' => 'payroll.statutory.identifiers.view', 'label' => 'View real, unmasked statutory government identifiers (PAN/UAN/PF Member ID/ESIC IP Number)', 'namespace' => 'school'],
+            ['key' => 'payroll.statutory.identifiers.manage', 'label' => 'Record/update statutory government identifiers -- reserved, write path deferred to the Section 11 administrative surfaces', 'namespace' => 'school'],
+            ['key' => 'payroll.statutory.exports.generate', 'label' => 'Generate statutory government-filing data-preparation exports (ECR/ESIC worksheet/Form 138 draft) -- data preparation only, no portal submission', 'namespace' => 'school'],
+
             // Phase 0H (Timetable foundation) -- mirrors Inventory's
             // directory/stock split exactly: `.periods.*` covers the
             // reusable named-time-slot reference catalogue (a Period

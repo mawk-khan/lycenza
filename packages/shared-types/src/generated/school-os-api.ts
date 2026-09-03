@@ -2436,6 +2436,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/payroll-statutory/rule-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I. Read-only visibility of the active PF/ESI/ Telangana PT/LWF/income-tax rule versions. No mutation -- rule-version content is code/seed-controlled reference data, never a runtime rules engine. Requires payroll.statutory.view. */
+        get: operations["getStatutoryRuleStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-statutory/pf-status/{employmentRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I. The five independent PF facts for one EmploymentRecord. Requires payroll.statutory.view. */
+        get: operations["getStatutoryPfStatus"];
+        put?: never;
+        /** Checkpoint 9.6I. Upserts the five independent PF facts. Never infers one from another. Requires payroll.statutory.manage. */
+        post: operations["configureStatutoryPfStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-statutory/esi-coverage/{employmentRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I. Full contribution-period coverage history for one EmploymentRecord, including a derived (never separately stored) continuity flag. Requires payroll.statutory.view. */
+        get: operations["listStatutoryEsiCoverage"];
+        put?: never;
+        /** Checkpoint 9.6I. Corrects coverage for one contribution period. Refused (STATUTORY_ESI_COVERAGE_LOCKED, 409) once a finalized statutory calculation has already consumed that period. Requires payroll.statutory.manage. */
+        post: operations["correctStatutoryEsiCoverage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-statutory/tax-profile/{employmentRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I. Fiscal-year-by-fiscal-year tax profile history for one EmploymentRecord. Requires payroll.statutory.view. */
+        get: operations["listStatutoryTaxProfiles"];
+        put?: never;
+        /** Checkpoint 9.6I. Upserts one fiscal year's tax profile (regime election, School-policy switch reference, declared income/ deductions). No arbitrary tax-code scripting. Requires payroll.statutory.manage. */
+        post: operations["configureStatutoryTaxProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-statutory/identifiers/{employmentRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I. Lists identifier types on file for one EmploymentRecord in MASKED form only -- the raw value is never present in this response. Requires payroll.statutory.view. */
+        get: operations["listStatutoryIdentifiers"];
+        put?: never;
+        /** Checkpoint 9.6I. Sets (encrypts + hashes) one identifier value. Requires payroll.statutory.identifiers.manage -- a SEPARATE, narrower capability from payroll.statutory.manage. */
+        post: operations["setStatutoryIdentifier"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-statutory/identifiers/{employmentRecordId}/{identifierType}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I. Returns the REAL, unmasked identifier value. A SEPARATE endpoint from list() on purpose -- the raw value is never bundled into any other response. Audited on every successful call. Requires payroll.statutory.identifiers.view. */
+        get: operations["revealStatutoryIdentifier"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-statutory/accounting-configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I. This School's 14-account statutory Finance mapping. Requires payroll.statutory.view. */
+        get: operations["getStatutoryAccountingConfiguration"];
+        put?: never;
+        /** Checkpoint 9.6I. Configures (upserts) all 14 statutory liability/expense Finance account mappings Checkpoint 9.6F's journal posting requires. No account-name lookup. Requires payroll.statutory.manage. */
+        post: operations["configureStatutoryAccountingConfiguration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-runs/{payrollRunId}/statutory-exports/ecr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I/9.6G. EPFO ECR data preparation (11-field #~#-delimited rows) for this run -- data preparation only, no government portal submission. Requires payroll.statutory.exports.generate AND payroll.statutory.identifiers.view (a row needs the real UAN). */
+        get: operations["exportStatutoryEcr"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-runs/{payrollRunId}/statutory-exports/esi-worksheet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I/9.6G. ESIC monthly contribution worksheet CSV for this run -- data preparation only. Requires payroll.statutory.exports.generate. */
+        get: operations["exportStatutoryEsiWorksheet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-runs/{payrollRunId}/statutory-exports/tds-draft-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Checkpoint 9.6I/9.6G. Form 138 draft TDS statement CSV for this run (April 2026+ periods only) -- data preparation only, never Form 24Q/Form 16/portal submission. PAN masked unless the caller holds payroll.statutory.identifiers.view. Requires payroll.statutory.exports.generate. */
+        get: operations["exportStatutoryTdsDraftStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/hostels": {
         parameters: {
             query?: never;
@@ -5544,7 +5719,7 @@ export interface components {
             /** @enum {string} */
             effect: "increase" | "decrease";
         };
-        /** @description Highly Sensitive -- one EmploymentRecord's on-demand payslip, rendered from the frozen payroll_run_results/_lines authority, never persisted. Excludes bank details and statutory identifiers by construction (Checkpoint 9.6 remains LEGAL REVIEW REQUIRED). */
+        /** @description Highly Sensitive -- one EmploymentRecord's on-demand payslip, rendered from the frozen payroll_run_results/_lines authority, never persisted. Excludes bank details by construction. Checkpoint 9.6J: statutory carries the frozen payroll_statutory_calculation_results figures for this exact result when available AND the actor also holds payroll.statutory.view -- null otherwise (never fabricated, never recalculated from current rule versions). */
         Payslip: {
             /** Format: uuid */
             schoolId: string;
@@ -5577,9 +5752,39 @@ export interface components {
             totalDeductions: string;
             netAmount: string;
             lines: components["schemas"]["PayslipLine"][];
-            /** @description Always false in Phase 9 -- Checkpoint 9.6 statutory calculation remains LEGAL REVIEW REQUIRED. */
+            /** @description True only when a frozen statutory calculation result exists for this payslip AND the actor holds payroll.statutory.view. */
             statutoryDeductionsIncluded: boolean;
+            statutory?: components["schemas"]["PayslipStatutorySection"];
         };
+        /** @description Checkpoint 9.6J. Identifiers are always masked here -- there is no reveal flow on a payslip. esiDisabilityProvisionsEvaluated is always false: this system collects no disability-status fact anywhere (the ESI disability threshold remains DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED), so a renderer MUST show this as a standing notice, never omit it, and this payload must never be labeled a statutory-compliance document. */
+        PayslipStatutorySection: {
+            isPfExcludedEmployee: boolean;
+            employeePfMandatory?: string | null;
+            employeePfVoluntary?: string | null;
+            /** @description Informational -- employer cost */
+            employerPfTotal?: string | null;
+            employerEps?: string | null;
+            employerEpf?: string | null;
+            employerEdli?: string | null;
+            esiIsCovered: boolean;
+            employeeEsi?: string | null;
+            /** @description Informational. */
+            employerEsi?: string | null;
+            professionalTax?: string | null;
+            lwfCharged: boolean;
+            employeeLwf?: string | null;
+            /** @description Informational. */
+            employerLwf?: string | null;
+            tdsMonthlyDeduction?: string | null;
+            /** @description Set only on a fail-closed insufficient-salary cycle (ADR 0036 §1.10) -- never a fabricated employer-funded TDS payment. */
+            tdsResidualComplianceException?: string | null;
+            maskedPan?: string | null;
+            maskedUan?: string | null;
+            maskedPfMemberId?: string | null;
+            maskedEsicIpNumber?: string | null;
+            /** @description Always false -- see this schema's own description. */
+            esiDisabilityProvisionsEvaluated: boolean;
+        } | null;
         PayrollRunPosting: {
             /** Format: uuid */
             id: string;
@@ -5613,6 +5818,195 @@ export interface components {
              * @description Must be an active LedgerAccount of type liability.
              */
             salary_payable_ledger_account_id: string;
+        };
+        StatutoryPfRuleStatus: {
+            /** Format: date */
+            effectiveFrom?: string;
+            legalReference?: string;
+            employeeContributionRate?: string;
+            employerContributionRate?: string;
+            epsRate?: string;
+            edliRate?: string;
+            adminChargeRate?: string;
+            membershipWageCeiling?: string;
+            epsWageCeiling?: string;
+            edliWageCeiling?: string;
+            adminChargeMinimum?: string;
+        } | null;
+        StatutoryEsiRuleStatus: {
+            /** Format: date */
+            effectiveFrom?: string;
+            legalReference?: string;
+            employeeContributionRate?: string;
+            employerContributionRate?: string;
+            wageThreshold?: string;
+            averageDailyWageExemptionThreshold?: string;
+            disabilityThreshold?: string | null;
+            /** @description Always 'DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED' (ADR 0036). */
+            disabilityThresholdStatus?: string;
+        } | null;
+        /** @description Checkpoint 9.6I. Read-only active rule-version status. */
+        StatutoryRuleStatus: {
+            pf?: components["schemas"]["StatutoryPfRuleStatus"];
+            esi?: components["schemas"]["StatutoryEsiRuleStatus"];
+            professionalTax?: Record<string, never> | null;
+            lwf?: Record<string, never> | null;
+            incomeTaxNewRegime?: Record<string, never> | null;
+            incomeTaxOldRegime?: Record<string, never> | null;
+        };
+        StatutoryPfStatus: {
+            /** Format: uuid */
+            employmentRecordId: string;
+            hasExistingPfMembership: boolean;
+            hasUan: boolean;
+            hasApprovedHigherWageContribution: boolean;
+            higherWageApprovalReference?: string | null;
+            /** Format: date */
+            higherWageApprovalEffectiveFrom?: string | null;
+            isEpsEligible: boolean;
+            hasHigherPensionStatus: boolean;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        /** @description Checkpoint 9.6I. Five independent facts -- never infer one from another. */
+        StatutoryPfStatusInput: {
+            has_existing_pf_membership: boolean;
+            has_uan: boolean;
+            has_approved_higher_wage_contribution: boolean;
+            higher_wage_approval_reference?: string | null;
+            /** Format: date */
+            higher_wage_approval_effective_from?: string | null;
+            is_eps_eligible: boolean;
+            has_higher_pension_status: boolean;
+        };
+        StatutoryEsiCoveragePeriod: {
+            /** Format: date */
+            periodStart: string;
+            /** Format: date */
+            periodEnd: string;
+            entryWage: string;
+            isCovered: boolean;
+            /** @description Derived -- was this EmploymentRecord ALSO covered in the immediately preceding period. Never independently stored/editable. */
+            continuous: boolean;
+        };
+        StatutoryEsiCoverageInput: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            entry_wage: string;
+            is_covered: boolean;
+        };
+        StatutoryTaxProfile: {
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** Format: date */
+            fiscalYearStart: string;
+            /** @enum {string} */
+            regime: "old" | "new";
+            /** @description SCHOOL POLICY, never itself a statutory rule. */
+            regimeSwitchPolicyReference?: string | null;
+            previousEmployerIncome: string;
+            previousEmployerTds: string;
+            declaredOtherIncome: string;
+            declaredDeductions: string;
+        };
+        StatutoryTaxProfileInput: {
+            /** Format: date */
+            fiscal_year_start: string;
+            /** @enum {string} */
+            regime: "old" | "new";
+            regime_switch_policy_reference?: string | null;
+            previous_employer_income: string;
+            previous_employer_tds: string;
+            declared_other_income: string;
+            declared_deductions: string;
+        };
+        /** @description The raw identifier value is NEVER present on this schema. */
+        StatutoryIdentifierMasked: {
+            /** @enum {string} */
+            identifierType: "pan" | "uan" | "pf_member_id" | "esic_ip_number";
+            masked: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        StatutoryIdentifierRevealed: {
+            /** @enum {string} */
+            identifierType: "pan" | "uan" | "pf_member_id" | "esic_ip_number";
+            value: string | null;
+        };
+        StatutoryIdentifierInput: {
+            /** @enum {string} */
+            identifier_type: "pan" | "uan" | "pf_member_id" | "esic_ip_number";
+            value: string;
+        };
+        /** @description Never returns the value itself. */
+        StatutoryIdentifierSetResult: {
+            /** @enum {string} */
+            identifierType: "pan" | "uan" | "pf_member_id" | "esic_ip_number";
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        StatutoryAccountingConfiguration: {
+            /** Format: uuid */
+            employeePfPayableLedgerAccountId: string;
+            /** Format: uuid */
+            employerEpsPayableLedgerAccountId: string;
+            /** Format: uuid */
+            employerEpfPayableLedgerAccountId: string;
+            /** Format: uuid */
+            pfAdminChargePayableLedgerAccountId: string;
+            /** Format: uuid */
+            edliPayableLedgerAccountId: string;
+            /** Format: uuid */
+            esiPayableLedgerAccountId: string;
+            /** Format: uuid */
+            tdsPayableLedgerAccountId: string;
+            /** Format: uuid */
+            professionalTaxPayableLedgerAccountId: string;
+            /** Format: uuid */
+            lwfPayableLedgerAccountId: string;
+            /** Format: uuid */
+            employerPfContributionExpenseLedgerAccountId: string;
+            /** Format: uuid */
+            pfAdminChargeExpenseLedgerAccountId: string;
+            /** Format: uuid */
+            edliExpenseLedgerAccountId: string;
+            /** Format: uuid */
+            employerEsiContributionExpenseLedgerAccountId: string;
+            /** Format: uuid */
+            employerLwfContributionExpenseLedgerAccountId: string;
+            currency: string;
+        };
+        StatutoryAccountingConfigurationInput: {
+            /** Format: uuid */
+            employee_pf_payable_ledger_account_id: string;
+            /** Format: uuid */
+            employer_eps_payable_ledger_account_id: string;
+            /** Format: uuid */
+            employer_epf_payable_ledger_account_id: string;
+            /** Format: uuid */
+            pf_admin_charge_payable_ledger_account_id: string;
+            /** Format: uuid */
+            edli_payable_ledger_account_id: string;
+            /** Format: uuid */
+            esi_payable_ledger_account_id: string;
+            /** Format: uuid */
+            tds_payable_ledger_account_id: string;
+            /** Format: uuid */
+            professional_tax_payable_ledger_account_id: string;
+            /** Format: uuid */
+            lwf_payable_ledger_account_id: string;
+            /** Format: uuid */
+            employer_pf_contribution_expense_ledger_account_id: string;
+            /** Format: uuid */
+            pf_admin_charge_expense_ledger_account_id: string;
+            /** Format: uuid */
+            edli_expense_ledger_account_id: string;
+            /** Format: uuid */
+            employer_esi_contribution_expense_ledger_account_id: string;
+            /** Format: uuid */
+            employer_lwf_contribution_expense_ledger_account_id: string;
         };
         /** @description A School-owned, reusable named time slot ("Period 1", 09:00:00-09:45:00) that a TimetableEntry schedules against. No two ACTIVE Periods for the same School may have overlapping [startTime, endTime) ranges. */
         TimetablePeriod: {
@@ -6209,6 +6603,8 @@ export interface components {
         PayrollPeriodId: string;
         /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
         PayrollRunId: string;
+        /** @description Checkpoint 9.6I. */
+        StatutoryIdentifierType: "pan" | "uan" | "pf_member_id" | "esic_ip_number";
         HostelId: string;
         HostelRoomId: string;
         HostelBedId: string;
@@ -13799,6 +14195,581 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getStatutoryRuleStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryRuleStatus"];
+                    };
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getStatutoryPfStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (data is null if never configured). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryPfStatus"];
+                        nullable?: unknown;
+                    };
+                };
+            };
+            /** @description Nonexistent or cross-School EmploymentRecord id -- no existence oracle. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    configureStatutoryPfStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatutoryPfStatusInput"];
+            };
+        };
+        responses: {
+            /** @description Created/updated. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryPfStatus"];
+                    };
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Nonexistent or cross-School EmploymentRecord id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listStatutoryEsiCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryEsiCoveragePeriod"][];
+                    };
+                };
+            };
+            /** @description Nonexistent or cross-School EmploymentRecord id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    correctStatutoryEsiCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatutoryEsiCoverageInput"];
+            };
+        };
+        responses: {
+            /** @description Created/updated. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryEsiCoveragePeriod"];
+                    };
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description STATUTORY_ESI_COVERAGE_LOCKED -- period already consumed by a finalized calculation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listStatutoryTaxProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryTaxProfile"][];
+                    };
+                };
+            };
+            /** @description Nonexistent or cross-School EmploymentRecord id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    configureStatutoryTaxProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatutoryTaxProfileInput"];
+            };
+        };
+        responses: {
+            /** @description Created/updated. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryTaxProfile"];
+                    };
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Nonexistent or cross-School EmploymentRecord id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listStatutoryIdentifiers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryIdentifierMasked"][];
+                    };
+                };
+            };
+            /** @description Nonexistent or cross-School EmploymentRecord id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    setStatutoryIdentifier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatutoryIdentifierInput"];
+            };
+        };
+        responses: {
+            /** @description Created/updated (never returns the value itself). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryIdentifierSetResult"];
+                    };
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.identifiers.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    revealStatutoryIdentifier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description An HR EmploymentRecord id (read-only cross-module reference). */
+                employmentRecordId: components["parameters"]["EmploymentRecordId"];
+                /** @description Checkpoint 9.6I. */
+                identifierType: components["parameters"]["StatutoryIdentifierType"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryIdentifierRevealed"];
+                    };
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.identifiers.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getStatutoryAccountingConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (data is null if never configured). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryAccountingConfiguration"];
+                        nullable?: unknown;
+                    };
+                };
+            };
+        };
+    };
+    configureStatutoryAccountingConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatutoryAccountingConfigurationInput"];
+            };
+        };
+        responses: {
+            /** @description Created/updated. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StatutoryAccountingConfiguration"];
+                    };
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description STATUTORY_ACCOUNTING_ACCOUNT_INVALID (missing, inactive, or wrong-type ledger account). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    exportStatutoryEcr: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
+                payrollRunId: components["parameters"]["PayrollRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK -- text/plain attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.exports.generate or .identifiers.view. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description STATUTORY_IDENTIFIER_MISSING -- a member has no recorded UAN. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    exportStatutoryEsiWorksheet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
+                payrollRunId: components["parameters"]["PayrollRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK -- text/csv attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.exports.generate. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    exportStatutoryTdsDraftStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 9.8. Nonexistent or cross-School ids both resolve to PAYROLL_RUN_NOT_FOUND -- no existence oracle. */
+                payrollRunId: components["parameters"]["PayrollRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK -- text/csv attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Authenticated but lacking payroll.statutory.exports.generate. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description STATUTORY_FORM_NOT_YET_EFFECTIVE -- period is before 1 April 2026. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listHostels: {

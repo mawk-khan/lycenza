@@ -66,6 +66,13 @@ use App\Domain\Payroll\Http\Controllers\PayrollRunPostingController;
 use App\Domain\Payroll\Http\Controllers\PayslipController;
 use App\Domain\Payroll\Http\Controllers\SalaryComponentController;
 use App\Domain\Payroll\Http\Controllers\SalaryStructureController;
+use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryAccountingConfigurationController;
+use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryEsiCoverageController;
+use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryExportController;
+use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryIdentifierController;
+use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryPfStatusController;
+use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryRuleStatusController;
+use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryTaxProfileController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
@@ -1543,6 +1550,66 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/payroll-accounting-configuration', [PayrollAccountingConfigurationController::class, 'store'])
                 ->middleware(['capability:payroll.accounting.manage', 'throttle:school-api-mutations'])
                 ->name('schools.payroll-accounting-configuration.store');
+
+            // Checkpoint 9.6I (Section 2) -- Statutory Payroll
+            // administration. `capability:` middleware here
+            // double-checks what each Admin service already enforces
+            // internally, matching every other Payroll route above.
+            // `payroll.statutory.identifiers.view`/`.manage` are
+            // separate, narrower capabilities from `.view`/`.manage`
+            // (Highly Sensitive government identifiers) -- see
+            // StatutoryIdentifierAdminService's own docblock.
+            Route::get('/payroll-statutory/rule-status', [StatutoryRuleStatusController::class, 'show'])
+                ->middleware('capability:payroll.statutory.view')
+                ->name('schools.payroll-statutory.rule-status.show');
+
+            Route::get('/payroll-statutory/pf-status/{employmentRecord}', [StatutoryPfStatusController::class, 'show'])
+                ->middleware('capability:payroll.statutory.view')
+                ->name('schools.payroll-statutory.pf-status.show');
+            Route::post('/payroll-statutory/pf-status/{employmentRecord}', [StatutoryPfStatusController::class, 'store'])
+                ->middleware(['capability:payroll.statutory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.payroll-statutory.pf-status.store');
+
+            Route::get('/payroll-statutory/esi-coverage/{employmentRecord}', [StatutoryEsiCoverageController::class, 'index'])
+                ->middleware('capability:payroll.statutory.view')
+                ->name('schools.payroll-statutory.esi-coverage.index');
+            Route::post('/payroll-statutory/esi-coverage/{employmentRecord}', [StatutoryEsiCoverageController::class, 'store'])
+                ->middleware(['capability:payroll.statutory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.payroll-statutory.esi-coverage.store');
+
+            Route::get('/payroll-statutory/tax-profile/{employmentRecord}', [StatutoryTaxProfileController::class, 'index'])
+                ->middleware('capability:payroll.statutory.view')
+                ->name('schools.payroll-statutory.tax-profile.index');
+            Route::post('/payroll-statutory/tax-profile/{employmentRecord}', [StatutoryTaxProfileController::class, 'store'])
+                ->middleware(['capability:payroll.statutory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.payroll-statutory.tax-profile.store');
+
+            Route::get('/payroll-statutory/identifiers/{employmentRecord}', [StatutoryIdentifierController::class, 'index'])
+                ->middleware('capability:payroll.statutory.view')
+                ->name('schools.payroll-statutory.identifiers.index');
+            Route::get('/payroll-statutory/identifiers/{employmentRecord}/{identifierType}/reveal', [StatutoryIdentifierController::class, 'reveal'])
+                ->middleware('capability:payroll.statutory.identifiers.view')
+                ->name('schools.payroll-statutory.identifiers.reveal');
+            Route::post('/payroll-statutory/identifiers/{employmentRecord}', [StatutoryIdentifierController::class, 'store'])
+                ->middleware(['capability:payroll.statutory.identifiers.manage', 'throttle:school-api-mutations'])
+                ->name('schools.payroll-statutory.identifiers.store');
+
+            Route::get('/payroll-statutory/accounting-configuration', [StatutoryAccountingConfigurationController::class, 'show'])
+                ->middleware('capability:payroll.statutory.view')
+                ->name('schools.payroll-statutory.accounting-configuration.show');
+            Route::post('/payroll-statutory/accounting-configuration', [StatutoryAccountingConfigurationController::class, 'store'])
+                ->middleware(['capability:payroll.statutory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.payroll-statutory.accounting-configuration.store');
+
+            Route::get('/payroll-runs/{payrollRun}/statutory-exports/ecr', [StatutoryExportController::class, 'ecr'])
+                ->middleware('capability:payroll.statutory.exports.generate')
+                ->name('schools.payroll-runs.statutory-exports.ecr');
+            Route::get('/payroll-runs/{payrollRun}/statutory-exports/esi-worksheet', [StatutoryExportController::class, 'esiWorksheet'])
+                ->middleware('capability:payroll.statutory.exports.generate')
+                ->name('schools.payroll-runs.statutory-exports.esi-worksheet');
+            Route::get('/payroll-runs/{payrollRun}/statutory-exports/tds-draft-statement', [StatutoryExportController::class, 'tdsDraftStatement'])
+                ->middleware('capability:payroll.statutory.exports.generate')
+                ->name('schools.payroll-runs.statutory-exports.tds-draft-statement');
 
             // Phase 0H.2 (Student Attendance foundation). A deliberately
             // narrow COMMAND surface, never generic CRUD: a register is

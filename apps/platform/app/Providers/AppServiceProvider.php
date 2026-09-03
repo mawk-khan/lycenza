@@ -12,6 +12,7 @@ use App\Support\Observability\LogErrorReporter;
 use App\Support\Observability\LogMetricsRecorder;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Privacy\ContactLookupHasher;
+use App\Support\Privacy\StatutoryIdentifierLookupHasher;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\TestDatabaseGuard;
 use Illuminate\Queue\Events\JobFailed;
@@ -54,6 +55,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ContactLookupHasher::class, fn () => new ContactLookupHasher(
             config('privacy.contact_lookup.hmac_key'),
             (int) config('privacy.contact_lookup.hmac_key_version'),
+        ));
+
+        // Checkpoint 9.6C: same fail-closed shape as ContactLookupHasher
+        // above, its own dedicated key.
+        $this->app->singleton(StatutoryIdentifierLookupHasher::class, fn () => new StatutoryIdentifierLookupHasher(
+            config('privacy.statutory_identifier_lookup.hmac_key'),
+            (int) config('privacy.statutory_identifier_lookup.hmac_key_version'),
         ));
 
         // Phase 0C.4 sections 38/45: provider-independent abstractions.

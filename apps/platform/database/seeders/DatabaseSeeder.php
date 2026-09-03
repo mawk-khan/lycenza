@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
         $this->call(CapabilityAndRoleSeeder::class);
         $this->call(ServiceIdentitySeeder::class);
         $this->call(EducationBoardSeeder::class);
+        $this->call(StatutoryRuleVersionSeeder::class);
 
         // Local development convenience only -- not real school data.
         if (app()->environment(['local', 'testing'])) {

@@ -54,5 +54,7 @@
         <env name="AI_GATEWAY_CONTEXT_SIGNING_KEY" value="test-only-context-signing-key"/>
         <env name="CONTACT_LOOKUP_HMAC_KEY" value="test-only-contact-lookup-hmac-key"/>
         <env name="CONTACT_LOOKUP_HMAC_KEY_VERSION" value="1"/>
+        <env name="STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY" value="test-only-statutory-identifier-lookup-hmac-key"/>
+        <env name="STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY_VERSION" value="1"/>
     </php>
 </phpunit>

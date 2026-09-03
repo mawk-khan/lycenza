@@ -36,6 +36,10 @@ class PayrollCapabilityRegistryTest extends TestCase
         'payroll.runs.reverse',
         'payroll.accounting.manage',
         'payroll.statutory.manage',
+        'payroll.statutory.view',
+        'payroll.statutory.identifiers.view',
+        'payroll.statutory.identifiers.manage',
+        'payroll.statutory.exports.generate',
     ];
 
     private const array SCHOOL_ADMIN_DEFAULT_KEYS = [
@@ -55,6 +59,10 @@ class PayrollCapabilityRegistryTest extends TestCase
         'payroll.compensation.sensitive.view',
         'payroll.compensation.sensitive.manage',
         'payroll.statutory.manage',
+        'payroll.statutory.view',
+        'payroll.statutory.identifiers.view',
+        'payroll.statutory.identifiers.manage',
+        'payroll.statutory.exports.generate',
     ];
 
     #[Test]

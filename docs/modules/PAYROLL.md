@@ -36,13 +36,20 @@ as "fully complete" anywhere in this document while 9.6 remains open. See
   configuration, the posting algorithm, correction-run posting,
   reversal, transactional/idempotency integration with
   `LedgerService`.
-- **9.6 — Statutory Payroll Boundary — LEGAL GATE** [**BLOCKED / DEFERRED
-  — LEGAL REVIEW REQUIRED**]: PF/ESI/TDS. Blocked pending
-  `[LEGAL REVIEW REQUIRED]` sign-off
-  (`docs/security/DATA-CLASSIFICATION.md`). Not started until that
-  clears or is explicitly, visibly deferred by user decision. No PF/ESI/
-  TDS calculation, statutory rate table, government-identifier storage,
-  or statutory filing exists anywhere in this module.
+- **9.6 — Statutory Payroll Boundary — LEGAL GATE** [**IN PROGRESS —
+  legal review cleared, implementation underway**]: legal sign-off
+  received (`SCH/PAY/REG/2026-9.6`, effective 1 April 2026, Telangana
+  jurisdiction), accepted subject to the binding correction addendum
+  in `docs/architecture/adr/0036-phase-9-6-statutory-payroll-architecture.md`.
+  Implemented on a new, separately-numbered, post-publication branch
+  (`feature/phase-9-6-statutory-payroll`, ADR 0028/ADR 0034's own
+  precedent) — Phase 9's already-published non-statutory history is
+  never rewritten. **Not yet complete** — see "Phase 9.6 Checkpoints"
+  below for the exact 9.6A–9.6H status; do not treat this row as
+  statutory-complete until 9.6H's own closure record says so. The
+  ESI disability special threshold (₹25,000) remains
+  `DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED` regardless of
+  9.6's own completion.
 - **9.7 — Authorization, Sensitive Reads & Audit** [implemented].
 - **9.8 — API / OpenAPI** [implemented].
 - **9.9 — Administrative UI** [implemented].
@@ -798,3 +805,41 @@ attempted.
 through non-statutory scope. Statutory Payroll (9.6) remains deferred.
 NOT merged into `main`; that remains a separate, explicitly-authorized
 future step.**
+
+(Historical record as of Checkpoint 9.12's own closure. Phase 9
+non-statutory Payroll has since been published to `main` at `99cb641`,
+with explicit publication permission — see the Phase 9 Final
+Publication Report. Checkpoint 9.6 below is a new, separately
+authorized post-publication initiative on its own branch.)
+
+## Phase 9.6 Checkpoints (Statutory Payroll, in progress)
+
+Legal basis: `SCH/PAY/REG/2026-9.6` (effective 1 April 2026, Telangana
+jurisdiction), accepted subject to the binding correction addendum —
+see `docs/architecture/adr/0036-phase-9-6-statutory-payroll-architecture.md`
+for the full corrected contract. Implemented on
+`feature/phase-9-6-statutory-payroll`, branched from published `main`
+(`99cb641`) — Phase 9's own published non-statutory history above is
+never rewritten by this work.
+
+| Checkpoint | Status | Scope |
+|---|---|---|
+| 9.6A — Legal Addendum & Statutory Rule Contract | **[implemented]** | ADR 0036, this section |
+| 9.6B — Golden Statutory Fixtures | **[implemented]** | 51 red fixtures: `PfCalculationServiceTest` (PF-01..12), `EsiCalculationServiceTest` (ESI-01..11, ESI-12 skipped/deferred), `ProfessionalTaxAndLwfCalculationServiceTest` (PT + LWF), `IncomeTaxSlabCalculatorTest` (TDS-01..12, TDS-20), `TdsMonthlyDeductionServiceTest` (TDS-13..19). Pure calculation-engine stubs under `app/Domain/Payroll/Statutory/Calculation/` throw until Checkpoint 9.6D/9.6E implements each against its docblock-documented algorithm. |
+| 9.6C — Statutory Schema / Versioning / Privacy | **[implemented]** | 15 migrations: 7 platform reference tables (PF/ESI/LWF/PT+slabs/income-tax+slabs, no `school_id`, no RLS, matching `education_boards`), 8 School-owned RLS-enforced tables (component classifications, PF status, ESI coverage, tax profile, encrypted statutory identifiers, immutable calculation-result snapshots with a freeze trigger, statutory accounting configuration, LWF once-per-cycle charges). `StatutoryIdentifierLookupHasher` (its own HMAC key, ADR 0028's pattern). `StatutoryRuleVersionSeeder` seeds the 1-April-2026 rule versions matching the 9.6B golden fixtures' numbers exactly. |
+| 9.6D — PF / ESI / PT / LWF Calculation Engine | **[implemented]** | `PfCalculationService`, `EsiCoverageDeterminationService`/`EsiContributionCalculationService`, `ProfessionalTaxCalculationService`, `LwfCalculationService` -- all pure/stateless, all 42 PF/ESI/PT/LWF golden fixtures green (1 ESI case correctly skipped/deferred). PF whole-INR rounding is half-up (`Money::multiplyByRate`); ESI rounding is upward-to-next-rupee (a dedicated ceiling helper, deliberately not half-up). |
+| 9.6E — Annualized Salary TDS Engine | **[implemented]** | `IncomeTaxSlabCalculator` (annual liability: slabs, §87A rebate, marginal relief, table-driven surcharge with its own marginal relief, cess) and `TdsMonthlyDeductionService` (annualized spreading, prior-employer credit, over-withholding carry-forward, fail-closed insufficient-salary handling). All 20 TDS golden fixtures green, including the surcharge boundary (TDS-20). |
+| 9.6F — Statutory Finance Posting | **[implemented]** | `StatutoryPayrollCalculationService` (Application-layer orchestration: resolves active rule versions/employee facts, groups `payroll_run_result_lines` by `payroll_salary_component_statutory_classifications`, calls the 9.6D/9.6E pure engines, persists one immutable `payroll_statutory_calculation_results` row per `payroll_run_results` row; fails closed on missing PF/tax-profile facts or an unclassified earning component -- never infers). `StatutoryPayrollPostingService` posts the FULL statutory GL effect (employee-side withholding debited against the SAME shared salary-payable account the main payroll entry uses; employer-side PF/ESI/LWF contributions as pure additional expense; every one of the 12 statutory figures appears exactly once as a debit and once as a credit) as ONE additional journal entry via `LedgerService::post()`/`reverseById()` only, alongside (never merged into) `PayrollPostingService`'s own entry -- new `payroll_statutory_run_postings` table (mirrors `payroll_run_postings`' one-original/one-reversal partial-unique-index shape). `StatutoryAccountingConfigurationService` mirrors `PayrollAccountingConfigurationService`'s configure/resolveValidated shape for the 14-account `payroll_statutory_accounting_configurations` table (corrected in this checkpoint to add the previously-missing dedicated PF-admin-charge and EDLI expense accounts -- see the 2026_10_06_090100 migration's own docblock). Balance proven end-to-end by a hand-verified feature test (`StatutoryPayrollCalculationAndPostingTest`). |
+| 9.6G — ECR / ESI Worksheet / Form 138 Data Preparation | **[implemented]** | `StatutoryEcrExportService` (EPFO ECR: exact 11-field `#~#`-delimited row format, requires `payroll.statutory.exports.generate` AND `payroll.statutory.identifiers.view` since a row needs the real unmasked UAN, fails closed via `StatutoryIdentifierMissingException` rather than exporting a blank/fabricated UAN). `StatutoryEsiContributionWorksheetExportService` (contribution period, coverage-at-period-start, a derived continuity flag, statutory wage, employee/employer contribution; no identifier required). `StatutoryTdsDraftStatementExportService` (Form 138 draft data prep, April 2026+ only -- `StatutoryFormNotYetEffectiveException` otherwise; PAN masked by default, full value only with `.identifiers.view`; explicitly NOT a claim of exact NSDL/Form 138 file-format conformance -- see the class's own docblock). Four new capabilities registered (`payroll.statutory.view`, `.identifiers.view`, `.identifiers.manage` (reserved), `.exports.generate`), granted to NOBODY by default -- same treatment as `.statutory.manage`/`.compensation.sensitive.*`. Every export call is audited on success; no portal submission anywhere in this checkpoint. |
+| 9.6H — Security / Concurrency / Migration / Publication Readiness | **[implemented]** | Capability catalogue: all 5 keys named by the checkpoint spec (`payroll.statutory.view`, `.manage`, `.identifiers.view`, `.identifiers.manage`, `.exports.generate`) are registered, granted to NOBODY by default. `StatutoryCalculationAlreadyPerformedException` closes a real duplicate-calculation race (`payroll_run_result_id`'s UNIQUE constraint translated cleanly, proven by a real two-process test). Real multi-process concurrency proofs: duplicate statutory calculation and duplicate statutory Finance posting (both mirror `PayrollPostingConcurrencyTest`'s exact pattern) -- see the Phase 9.6 Final Readiness Report for the full concurrency-scope reasoning, including which of the spec's 6 named scenarios have no real write path to race yet. Cross-School raw-SQL isolation proven for `employee_statutory_identifiers` (`PayrollStatutoryRawIsolationTest`, mirroring `RawIsolationTest`'s exact discipline). `payroll_statutory_run_postings`' append-only privilege set and structural one-original-per-run guarantee independently re-verified at the PostgreSQL catalogue level. Full 17-migration statutory batch rollback + reapply verified together (not just the most recent checkpoint's migrations). Full validation matrix run; see the Final Readiness Report for the complete P0-P4 register and regression comparison. |
+
+| 9.6I — Administrative API / UI | **[implemented]** | Six new Admin services (`app/Domain/Payroll/Statutory/Application/Admin/`): `StatutoryRuleStatusReadService` (read-only, no runtime rule mutation -- rule content stays code/seed-controlled), `EmployeePfStatusAdminService`, `EmployeeEsiCoverageAdminService` (corrections refused once a period is consumed by a finalized calculation), `EmployeeTaxProfileAdminService`, `StatutoryIdentifierAdminService` (masked `list()` vs. audited, capability-separated `reveal()` -- the raw value is never bundled into any other response), `StatutoryAccountingAdministrationService` (wraps the existing 9.6F core service, mirroring `PayrollAccountingAdministrationService`'s established core-service/Administration-wrapper split). 15 new `/api/v1` JSON endpoints + a parallel session-authenticated `/app/payroll/statutory/*` Inertia UI (hub page, per-Employee combined page with reveal-on-demand identifiers and a statutory result breakdown, accounting configuration form, per-run export download page) -- both transports call the same Admin services. `StatutoryCalculationAlreadyPerformedException`-style translation via `abort()` added to every `/app/*` controller path (the JSON API's exception renderer doesn't cover Inertia). OpenAPI updated (15 new paths, ~20 new schemas) and `packages/shared-types` regenerated. Real two-process concurrency proof for PF-status mutation (`StatutoryPfStatusMutationConcurrencyTest` -- no state-machine transition to lose against here, so both writers succeed and the proof is "never a torn mixed state," not "one loses"). Comprehensive HTTP-level tests prove raw PAN/UAN values are structurally absent from both the JSON API and the Inertia page payload for an unauthorized actor -- never merely masked client-side (`StatutoryAdminApiTest`, `StatutoryPayrollUiTest`). |
+
+| 9.6J — Statutory Payslip Extension | **[implemented]** | Extends the existing on-demand `Payslip` DTO (Phase 9.10) with a new `PayslipStatutorySection` (PF/ESI/PT/LWF/TDS deduction figures, informational employer contributions, masked-only identifiers -- no reveal flow on a payslip). `PayslipReadService::render()` populates it ONLY from the already-frozen `payroll_statutory_calculation_results` row for the exact `PayrollRunResult` being rendered (never recalculated from current rule versions) AND only when the actor additionally holds `payroll.statutory.view` (layered on top of the existing `payroll.compensation.sensitive.view`) -- absent either condition, `statutory` is `null` and `statutoryDeductionsIncluded` is `false`, never fabricated. Folds into the SAME existing `payroll.payslip.viewed` audit event (a boolean flag only, never the values) rather than adding a second event. `esiDisabilityProvisionsEvaluated` is a permanent `false` disclosure -- this system collects no disability-status fact anywhere, so it can never determine whether ADR 0036's deferred ESI branch would apply to a specific Employee; both the API and the printable Vue view surface this as a standing notice. No blanket "legally compliant" language anywhere. Both `PayslipController`s (JSON API and Inertia) and `Payslips/Show.vue` updated; OpenAPI/`shared-types` regenerated. Tests prove: full statutory breakdown for an authorized viewer, section entirely absent without `.statutory.view`, no stored `Document` is ever created, a draft run still cannot produce a payslip, a reversed run's statutory figures remain the original immutable values, and the raw PAN never appears in the raw HTTP response body (masked only) for either transport. |
+
+**9.6 implementation is complete pending explicit publication
+permission.** The ESI disability special threshold (₹25,000) remains
+`DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED` (ADR
+0035) -- this is a deliberate, disclosed legal gap, not an
+implementation gap. See the Phase 9.6 Final Readiness Report for the
+publication verdict.
