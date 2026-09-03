@@ -2946,6 +2946,478 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/timetable-periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's TimetablePeriod catalogue (active by default, ordered by sort_order then code). Fixed page size of 20. Requires timetable.periods.view. */
+        get: operations["listTimetablePeriods"];
+        put?: never;
+        /** Creates a new active TimetablePeriod. code is unique per School, case-insensitively. Requires timetable.periods.manage. */
+        post: operations["createTimetablePeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-periods/{timetablePeriodId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one TimetablePeriod. Requires timetable.periods.view. */
+        get: operations["getTimetablePeriod"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates a TimetablePeriod's name/code/sort_order and/or start_time/end_time -- status is never accepted here, use activate/deactivate. Changing start_time or end_time is rejected with a 409 (TIMETABLE_PERIOD_REFERENCED) while an active TimetableEntry still references this Period, and is re-validated against every other active Period's range exactly like create. Requires timetable.periods.manage. */
+        patch: operations["updateTimetablePeriod"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-periods/{timetablePeriodId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivates an inactive TimetablePeriod, re-running the full overlap check against every other currently-active Period. Requires timetable.periods.manage. */
+        post: operations["activateTimetablePeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-periods/{timetablePeriodId}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivates a TimetablePeriod. Rejected with a 409 (TIMETABLE_PERIOD_REFERENCED) while any active TimetableEntry still references it. Requires timetable.periods.manage. */
+        post: operations["deactivateTimetablePeriod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a School's TimetableEntry schedule (active by default, ordered by day_of_week then period_id). Fixed page size of 50. Requires timetable.schedule.view. */
+        get: operations["listTimetableEntries"];
+        put?: never;
+        /** Schedules a required, active SubjectOffering to an active Section, taught by an active teacher (HR Employee), in an optional active Room, during an active TimetablePeriod, on a given day of week. academic_year_id/campus_id/grade_level_id are always derived server-side from the resolved subject_offering_id, never accepted as input. Requires timetable.schedule.manage. */
+        post: operations["createTimetableEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/{timetableEntryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetch one TimetableEntry. Requires timetable.schedule.view. */
+        get: operations["getTimetableEntry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Re-validates and rewrites the ENTIRE scheduling assignment (SubjectOffering/Section/teacher/Room/Period/day_of_week) -- never a partial update; every field TimetableEntryInput accepts is required here too. Does not touch status -- use activate/deactivate. Requires timetable.schedule.manage. */
+        patch: operations["updateTimetableEntry"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/{timetableEntryId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivates an inactive TimetableEntry, re-running the full eligibility and double-booking re-check against its current parents (never trusting a possibly-stale in-memory relation). Requires timetable.schedule.manage. */
+        post: operations["activateTimetableEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/{timetableEntryId}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivates a TimetableEntry -- always safe, frees its slot immediately (every double-booking index is scoped WHERE status = 'active'). Requires timetable.schedule.manage. */
+        post: operations["deactivateTimetableEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/subject-offerings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active, REQUIRED SubjectOfferings by Subject code/name (q is an optional case-insensitive substring match), for the Schedule form's SubjectOffering picker. Gated by Timetable's own timetable.schedule.manage -- never Academic Structure's academics.* capability (the Canteen capability-boundary lesson, carried forward). */
+        get: operations["searchTimetableSubjectOfferings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active Sections by code/name (q is an optional case-insensitive substring match). Gated by timetable.schedule.manage -- never Academic Structure's academics.* capability. */
+        get: operations["searchTimetableSections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/teachers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active Employees by full_name (q is an optional case-insensitive substring match), for the Schedule form's teacher picker. Data-minimized (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md): projects ONLY id/fullName -- never work_email/work_phone/any other HR field. Gated by timetable.schedule.manage -- never HR's employee-management capability. */
+        get: operations["searchTimetableTeachers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active Rooms by code/name (q is an optional case-insensitive substring match). Gated by timetable.schedule.manage -- never Academic Structure's academics.* capability. */
+        get: operations["searchTimetableRooms"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Timetable-owned helper: searches active TimetablePeriods by code/name (q is an optional case-insensitive substring match), for the Schedule form's Period picker. Gated by timetable.periods.view (a TimetablePeriod is owned by that capability pair, not timetable.schedule.*, per this checkpoint's own capability-boundary choice). */
+        get: operations["searchTimetablePeriods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists submitted Attendance registers, newest attendance_date first then by the register's own immutable period_start_time. Fixed page size of 50. Requires attendance.view. */
+        get: operations["listAttendanceSessions"];
+        put?: never;
+        /** Submits ONE complete class register. The client supplies only timetable_entry_id, attendance_date and the record set; the entire historical class context (AcademicYear, Campus, GradeLevel, Section, SubjectOffering, teacher, Period and the Period's wall-clock times) is derived server-side from the TimetableEntry while it is held under SELECT ... FOR UPDATE, and is immutable thereafter. The submitted record set must match the authoritative as-of-date Section roster EXACTLY -- no omission, no extra, no partial save, and never an implicit default-to-present. Requires attendance.manage, which is re-evaluated before any idempotency replay. Idempotency-Key is REQUIRED. */
+        post: operations["submitAttendanceRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-sessions/scheduled-classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pre-submission SELECTION helper: the classes scheduled on a given date according to the CURRENT weekly Timetable (active entries only). Reading current Timetable state is correct here and only here -- a historical register is never rendered from it. Requires attendance.manage, checked before any query runs. */
+        get: operations["listAttendanceScheduledClasses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-sessions/roster-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Non-authoritative roster preview for the marking screen, using the SAME Students/SIS as-of-date placement predicate the authoritative submission uses. Takes no locks and may go stale; submission always re-derives the roster under the Section lock and validates the payload against that set. Requires attendance.manage, checked before any query runs. */
+        get: operations["previewAttendanceRoster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-sessions/{attendanceSessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One submitted register, with its complete record set. Every class-identity field is rendered from the Session's own immutable snapshot; names/codes resolve through those snapshotted identities to the referenced entity's CURRENT row. Requires attendance.view. */
+        get: operations["getAttendanceSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/attendance-records/{attendanceRecordId}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Corrects ONE already-submitted attendance record using expected-status compare-and-swap: the caller states the status it believes the record currently holds, and the correction is refused if the record has moved since. Deliberately its own named command rather than a generic record update. Historical corrections stay possible after the AcademicYear closes, after the source TimetableEntry is deactivated, and after the Student is withdrawn. Requires attendance.manage. No Idempotency-Key is needed -- a duplicate delivery fails closed with 409 by construction. */
+        post: operations["correctAttendanceRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/subject-offerings/{subjectOfferingId}/syllabus-units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a SubjectOffering's SyllabusUnits in teaching order (sequence, then case-insensitive code as a deterministic tie-break). Both required and elective Offerings are supported. Requires syllabus.view. */
+        get: operations["listSyllabusUnits"];
+        put?: never;
+        /** Adds one SyllabusUnit to a SubjectOffering. `code` is normalized to uppercase before validation and is case-insensitively unique WITHIN that Offering -- the same normalized code may legitimately exist under a different Offering. Requires syllabus.manage. No Idempotency-Key is needed: duplicate semantic creation is already prevented by the database's own unique index. */
+        post: operations["createSyllabusUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/syllabus-units/{syllabusUnitId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One SyllabusUnit. Requires syllabus.view. */
+        get: operations["getSyllabusUnit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates a SyllabusUnit's code, title, sequence and/or status. This is ALSO how a unit is retired or reinstated -- `status` is an ordinary field here, and there is deliberately no separate activate/deactivate operation. A syntactically valid no-op returns the current representation. Requires syllabus.manage. */
+        patch: operations["updateSyllabusUnit"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/subject-offerings/{subjectOfferingId}/curriculum-deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists the CurriculumDelivery records for a SubjectOffering, in the syllabus catalogue's own teaching order (the SyllabusUnit's sequence, then its case-insensitive code). Optionally filtered by Section and/or status. A SyllabusUnit with NO row here has simply not been started -- `not_started` is never a stored value, so a client showing every unit must start from the Syllabus list and join these in. Requires curriculum.delivery.view. */
+        get: operations["listCurriculumDeliveries"];
+        put?: never;
+        /** Starts recording delivery of one SyllabusUnit to one Section. Always creates an `in_progress` record -- a delivery is never born completed. Only the three caller-chosen facts are accepted; the SubjectOffering, AcademicYear, Campus and GradeLevel pins are derived server-side from the resolved parents and are never taken from the request. Only a REQUIRED SubjectOffering is eligible: an elective is a Student-level enrollment choice, not a Section-wide cohort. Requires curriculum.delivery.manage. No Idempotency-Key is needed: duplicate creation is already prevented by the database's own `curriculum_deliveries_section_unit_unique` index. */
+        post: operations["startCurriculumDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/curriculum-deliveries/{curriculumDeliveryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One CurriculumDelivery. Requires curriculum.delivery.view. */
+        get: operations["getCurriculumDelivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Corrects a clerical mistake in either date. `status` is deliberately NOT an accepted field -- completing and reopening are guarded state transitions, not date edits. A completion date may only be corrected on an already-completed record. Every applicable date invariant is re-run, so an existing row is not a back door around them. Remains available after the AcademicYear closes. Requires curriculum.delivery.manage. */
+        patch: operations["correctCurriculumDeliveryDates"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/curriculum-deliveries/{curriculumDeliveryId}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Expected-status compare-and-swap between the two stored states. `expected_status` is the status the caller believes the record currently holds; if it no longer matches, the transition is refused with 409 rather than silently overwriting a colleague's change. Completing requires `completed_on`; reopening clears it. The only legal edges are in_progress -> completed and completed -> in_progress. Remains available after the AcademicYear closes. Requires curriculum.delivery.manage. */
+        post: operations["transitionCurriculumDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/academic-years/{academicYearId}/examinations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists an AcademicYear's Examination windows in chronological order (starts_on, then case-insensitive code as a deterministic tie-break), optionally filtered by status. An Examination is a named assessment WINDOW, not an individual paper. Requires examinations.definitions.view. */
+        get: operations["listExaminations"];
+        put?: never;
+        /** Defines one Examination window inside an AcademicYear. `code` is normalized to uppercase before validation and is case-insensitively unique WITHIN that AcademicYear -- the same normalized code legitimately recurs in a different year. The window must fall inside the AcademicYear's inclusive date range; the AcademicYear is NOT required to be active, so planning a future examination inside a draft year is supported. FUTURE dates are permitted and expected, and overlapping windows are permitted. Requires examinations.definitions.manage. No Idempotency-Key is needed: duplicate semantic creation is already prevented by the database's own unique index. */
+        post: operations["createExamination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/examinations/{examinationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One Examination window. Requires examinations.definitions.view. */
+        get: operations["getExamination"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates an Examination's code, name, dates and/or status. This is ALSO how an Examination is retired or reinstated -- `status` is an ordinary field here, and there is deliberately no separate activate/deactivate operation. The owning AcademicYear is fixed at creation and can never be reassigned. Every date invariant is re-run. Requires examinations.definitions.manage. */
+        patch: operations["updateExamination"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/examinations/{examinationId}/examination-papers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists one Examination's Papers in chronological order (scheduled_on, then starts_at). An ExaminationPaper is one SubjectOffering assessed within this Examination, Offering-wide and never Section-specific. Requires examinations.papers.view. */
+        get: operations["listExaminationPapers"];
+        put?: never;
+        /** Schedules one SubjectOffering's Paper within this Examination. Both the Examination and the SubjectOffering must be active, and both required AND elective SubjectOfferings are supported identically. `scheduled_on` must fall inside the Examination's inclusive date window; `ends_at` must fall after `starts_at` (same day only); `max_marks` must be positive. Exactly one Paper may exist per (Examination, SubjectOffering) pair -- the constraint is unconditional, so an inactive Paper continues to reserve the pair. Overlapping sittings across DIFFERENT SubjectOfferings are permitted. Requires examinations.papers.manage. No Idempotency-Key is needed: duplicate semantic creation is already prevented by the database's own unique index. */
+        post: operations["createExaminationPaper"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/examination-papers/{examinationPaperId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One ExaminationPaper. Requires examinations.papers.view. */
+        get: operations["getExaminationPaper"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates an ExaminationPaper's schedule, maximum marks and/or status. This is ALSO how a Paper is withdrawn or reinstated -- `status` is an ordinary field here, and there is deliberately no separate activate/deactivate operation. The owning Examination and SubjectOffering are fixed at creation and can never be reassigned. An ordinary correction does NOT require either parent to be currently active (historical correction remains possible), but reactivating a Paper (inactive -> active) DOES require both the Examination and the SubjectOffering to be currently active. Every date/time/marks invariant is re-run. Requires examinations.papers.manage. */
+        patch: operations["updateExaminationPaper"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5071,6 +5543,481 @@ export interface components {
              */
             salary_payable_ledger_account_id: string;
         };
+        /** @description A School-owned, reusable named time slot ("Period 1", 09:00:00-09:45:00) that a TimetableEntry schedules against. No two ACTIVE Periods for the same School may have overlapping [startTime, endTime) ranges. */
+        TimetablePeriod: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /**
+             * @description H:i:s (24-hour, with seconds).
+             * @example 09:00:00
+             */
+            startTime: string;
+            /**
+             * @description H:i:s (24-hour, with seconds). Always strictly after startTime.
+             * @example 09:45:00
+             */
+            endTime: string;
+            sortOrder?: number | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        TimetablePeriodInput: {
+            code: string;
+            name: string;
+            /**
+             * @description H:i:s (24-hour, with seconds). Must be strictly before end_time.
+             * @example 09:00:00
+             */
+            start_time: string;
+            /** @example 09:45:00 */
+            end_time: string;
+            sort_order?: number | null;
+        };
+        /** @description All fields optional -- only supplied fields are changed. status is never accepted here; use activate/deactivate. */
+        TimetablePeriodUpdateInput: {
+            code?: string;
+            name?: string;
+            /** @example 09:00:00 */
+            start_time?: string;
+            /** @example 09:45:00 */
+            end_time?: string;
+            sort_order?: number | null;
+        };
+        /** @description The actual pagination envelope every Timetable list endpoint returns (Laravel's LengthAwarePaginator currentPage()/ lastPage()/total()) -- distinct in shape from this contract's general `PaginationMeta` schema (page/perPage/total). per_page is not caller-configurable for these two endpoints (fixed server-side page size: 20 for Periods, 50 for Entries). */
+        TimetablePaginationMeta: {
+            currentPage: number;
+            lastPage: number;
+            total: number;
+        };
+        /**
+         * @description The complete, closed Attendance status vocabulary. `excused` records the generic status ONLY and never why -- there is no reason, note, medical explanation or evidence field anywhere in this module.
+         * @enum {string}
+         */
+        AttendanceStatus: "present" | "absent" | "late" | "excused";
+        /** @description One member of an as-of-date Section roster, projected deliberately minimally. Sensitive tier: no date of birth, no Guardian data, no contact details, no address. */
+        AttendanceRosterMember: {
+            /** Format: uuid */
+            studentEnrollmentId: string;
+            /** Format: uuid */
+            studentId: string;
+            rollNumber: string;
+            /** @description Composed server-side from the Student's name parts. */
+            fullName: string;
+        };
+        /** @description A CURRENTLY scheduled class, for pre-submission selection only. These values come from the live TimetableEntry and are NOT a historical register's identity. */
+        AttendanceScheduledClass: {
+            /** Format: uuid */
+            timetableEntryId: string;
+            /** Format: uuid */
+            sectionId: string;
+            sectionCode?: string | null;
+            sectionName?: string | null;
+            /** Format: uuid */
+            subjectOfferingId: string;
+            subjectCode?: string | null;
+            subjectName?: string | null;
+            /** Format: uuid */
+            teacherId: string;
+            /** @description Display name only -- never work_email/work_phone. */
+            teacherName?: string | null;
+            /** Format: uuid */
+            periodId: string;
+            periodCode?: string | null;
+            periodName?: string | null;
+            periodStartTime?: string | null;
+            periodEndTime?: string | null;
+            alreadySubmitted: boolean;
+        };
+        /** @description One Student's status on a submitted register. Student identity is derived THROUGH the StudentEnrollment -- there is no student_id column on the underlying table. The record's structural context columns (academic_year_id/campus_id/grade_level_id/section_id) exist only to carry the database's dual composite foreign keys and are deliberately never serialized here. */
+        AttendanceRecord: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description PROVENANCE: the placement that qualified this Student for this register AT SUBMISSION TIME. A later transfer, withdrawal, completion, cancellation or rollover -- including a BACKDATED one -- never rewrites Attendance, so this does NOT assert that the Enrollment's current interval still contains the register's attendance_date.
+             */
+            studentEnrollmentId: string;
+            /** Format: uuid */
+            studentId?: string | null;
+            rollNumber?: string | null;
+            fullName?: string | null;
+            status: components["schemas"]["AttendanceStatus"];
+            /**
+             * Format: date-time
+             * @description Null until the record is corrected.
+             */
+            correctedAt?: string | null;
+        };
+        /** @description A submitted register's header, without its record set. */
+        AttendanceSessionSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date */
+            attendanceDate: string;
+            /** @description DERIVED from attendance_date -- never stored, never read from the TimetableEntry. */
+            dayOfWeek?: number;
+            /** Format: uuid */
+            academicYearId?: string;
+            academicYearName?: string | null;
+            academicYearCode?: string | null;
+            /** Format: uuid */
+            campusId?: string;
+            campusName?: string | null;
+            campusCode?: string | null;
+            /** Format: uuid */
+            gradeLevelId?: string;
+            gradeLevelName?: string | null;
+            gradeLevelCode?: string | null;
+            /** Format: uuid */
+            sectionId: string;
+            sectionCode?: string | null;
+            sectionName?: string | null;
+            /** Format: uuid */
+            subjectOfferingId?: string;
+            /** Format: uuid */
+            subjectId?: string | null;
+            subjectCode?: string | null;
+            subjectName?: string | null;
+            /**
+             * Format: uuid
+             * @description The teacher SCHEDULED to take this class at submission time. Not an actual substitute (v1 has no substitution model) and not the submitter -- that is submittedByUserId.
+             */
+            teacherId?: string;
+            /** @description Display name only -- never work_email/work_phone or any other HR field. */
+            teacherName?: string | null;
+            /** Format: uuid */
+            periodId?: string;
+            /** @description CURRENT human-facing label, resolved through periodId. May legitimately disagree with the frozen times below after a Period is renamed or retimed. */
+            periodCode?: string | null;
+            /** @description CURRENT human-facing label -- see periodCode. */
+            periodName?: string | null;
+            /** @description IMMUTABLE historical wall-clock start, snapshotted at submission. Never the current TimetablePeriod's start_time, which can legitimately be changed later. */
+            periodStartTime: string;
+            /** @description IMMUTABLE historical wall-clock end -- see periodStartTime. */
+            periodEndTime: string;
+            /**
+             * Format: uuid
+             * @description PROVENANCE ONLY: the TimetableEntry from which this register was instantiated at submission time. That entry is fully mutable afterwards, so its CURRENT Section, SubjectOffering, teacher, Period, day-of-week and context values carry NO historical authority here. Never dereference it to render, filter, group or authorize a historical register.
+             */
+            timetableEntryId?: string;
+            /** Format: uuid */
+            submittedByUserId?: string;
+            /** Format: date-time */
+            submittedAt?: string;
+        };
+        AttendanceSession: components["schemas"]["AttendanceSessionSummary"] & {
+            records: components["schemas"]["AttendanceRecord"][];
+        };
+        /** @description The ONLY client-supplied input. Note what is deliberately absent: section_id, academic_year_id, campus_id, grade_level_id, subject_offering_id, teacher_id, period_id, period_start_time and period_end_time are ALL server-derived from the locked TimetableEntry and are never accepted from a client. */
+        AttendanceRegisterInput: {
+            /** Format: uuid */
+            timetable_entry_id: string;
+            /**
+             * Format: date
+             * @description Must not be in the future, must fall inside the AcademicYear, and its ISO weekday must match the TimetableEntry's day_of_week.
+             */
+            attendance_date: string;
+            /** @description Must be EXACTLY the authoritative as-of-date roster -- no omission, no extra, no duplicate. */
+            records: {
+                /** Format: uuid */
+                student_enrollment_id: string;
+                status: components["schemas"]["AttendanceStatus"];
+            }[];
+        };
+        /** @description Expected-status compare-and-swap. expected_status is the status the caller believes the record currently holds; new_status must differ from it. */
+        AttendanceCorrectionInput: {
+            expected_status: components["schemas"]["AttendanceStatus"];
+            new_status: components["schemas"]["AttendanceStatus"];
+        };
+        /**
+         * @description The complete, closed SyllabusUnit lifecycle vocabulary, mirrored by the database's own `syllabus_units_status_check` CHECK constraint. A retired unit is marked `inactive` and kept -- there is no delete operation, because a future Curriculum Delivery or Examinations row may reference it.
+         * @enum {string}
+         */
+        SyllabusUnitStatus: "active" | "inactive";
+        /** @description One ordered unit of instructional content that a SubjectOffering is EXPECTED to cover. It records nothing about what was actually taught (a future Curriculum Delivery checkpoint), nothing about an individual lesson (future Lesson Planning), and nothing about any Student. Grading/marks/grade scales belong to Examinations; assignments and submissions belong to LMS. */
+        SyllabusUnit: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The single owning SubjectOffering, which already pins AcademicYear, Campus, GradeLevel and Subject -- none of which is duplicated onto this resource.
+             */
+            subjectOfferingId: string;
+            /** @description Uppercased on write; case-insensitively unique within the owning SubjectOffering. */
+            code: string;
+            title: string;
+            /** @description Teaching order within the Offering. Deliberately NOT unique -- two units may share a position mid-reorder. */
+            sequence: number;
+            status: components["schemas"]["SyllabusUnitStatus"];
+        };
+        SyllabusUnitCreateInput: {
+            code: string;
+            title: string;
+            sequence: number;
+            status?: components["schemas"]["SyllabusUnitStatus"];
+        };
+        /** @description Partial update; every field is optional. */
+        SyllabusUnitUpdateInput: {
+            code?: string;
+            title?: string;
+            sequence?: number;
+            status?: components["schemas"]["SyllabusUnitStatus"];
+        };
+        /**
+         * @description The complete, closed CurriculumDelivery state vocabulary, mirrored by the database's own `curriculum_deliveries_status_check` CHECK constraint. `not_started` is deliberately NOT a member: the ABSENCE of a record is what "not started" means, so nothing is ever pre-seeded and a client showing every unit must start from the Syllabus list.
+         * @enum {string}
+         */
+        CurriculumDeliveryStatus: "in_progress" | "completed";
+        /** @description The record that one Section has covered one SyllabusUnit -- when that Section began it, and when, if yet, it finished. ACTUAL instructional coverage by a cohort, the counterpart to SyllabusUnit's catalogue of EXPECTED content. It records nothing about an individual lesson (future Lesson Planning), nothing about who taught it (there is no teacher identity anywhere in this resource, which is what keeps it non-personal), and nothing about any Student. Grading/marks/grade scales belong to Examinations; assignments, submissions and learning content belong to LMS. Section-specific and required-SubjectOffering-only in v1. */
+        CurriculumDelivery: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The cohort that covered the unit. A Section is an organisational unit, never an individual.
+             */
+            sectionId: string;
+            /**
+             * Format: uuid
+             * @description The Offering that owns the SyllabusUnit. The AcademicYear/Campus/GradeLevel pins that structurally bind the Section and the Offering to one context are database correctness machinery and are deliberately not exposed.
+             */
+            subjectOfferingId: string;
+            /** Format: uuid */
+            syllabusUnitId: string;
+            /**
+             * Format: date
+             * @description School-LOCAL calendar date the Section began this unit. Never in the future; always inside the AcademicYear.
+             */
+            startedOn: string;
+            /**
+             * Format: date
+             * @description School-local calendar date coverage finished. NULL if and only if status is in_progress.
+             */
+            completedOn?: string | null;
+            status: components["schemas"]["CurriculumDeliveryStatus"];
+        };
+        /** @description Only the three facts a user actually chooses. Every structural context pin is derived server-side from the resolved parents. */
+        CurriculumDeliveryCreateInput: {
+            /** Format: uuid */
+            section_id: string;
+            /**
+             * Format: uuid
+             * @description Must belong to the SubjectOffering in the path.
+             */
+            syllabus_unit_id: string;
+            /** Format: date */
+            started_on: string;
+        };
+        /** @description Clerical date correction; both fields are optional. `status` is deliberately absent -- state changes go through the transition operation. `completed_on` is accepted only for an already-completed record. */
+        CurriculumDeliveryUpdateInput: {
+            /** Format: date */
+            started_on?: string;
+            /** Format: date */
+            completed_on?: string;
+        };
+        /** @description Expected-status compare-and-swap. `expected_status` is the status the caller believes the record currently holds; `new_status` must differ from it and form a legal edge. `completed_on` is required when completing and ignored when reopening. */
+        CurriculumDeliveryTransitionInput: {
+            expected_status: components["schemas"]["CurriculumDeliveryStatus"];
+            new_status: components["schemas"]["CurriculumDeliveryStatus"];
+            /** Format: date */
+            completed_on?: string;
+        };
+        /**
+         * @description The complete, closed Examination lifecycle vocabulary, mirrored by the database's own `examinations_status_check` CHECK constraint. Deliberately NOT a draft/active/closed state machine: a retired or cancelled Examination is marked `inactive` and kept, and an inactive Examination continues to reserve its code, which is why there is no activate/deactivate operation and no delete.
+         * @enum {string}
+         */
+        ExaminationStatus: "active" | "inactive";
+        /** @description One named assessment WINDOW that a School holds within one AcademicYear -- "Mid-Term Examination 2026-27, 10 to 20 September". A container, NOT an individual paper: it owns only its identity and the date range it spans, and owns no Subject, SubjectOffering, Section, paper, per-paper sitting date/time or max marks, no Student, enrollment, teacher or invigilator, and no mark, grade, result, publication state, report card or transcript. The per-Subject entity is a future ExaminationPaper. */
+        Examination: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The single owning AcademicYear, fixed at creation and never reassignable.
+             */
+            academicYearId: string;
+            /** @description Uppercased on write; case-insensitively unique within the owning AcademicYear. */
+            code: string;
+            /** @description Human label. Deliberately NOT unique. */
+            name: string;
+            /**
+             * Format: date
+             * @description School calendar date the window opens. Future dates are permitted and expected.
+             */
+            startsOn: string;
+            /**
+             * Format: date
+             * @description School calendar date the window closes; >= startsOn. Windows may overlap one another.
+             */
+            endsOn: string;
+            status: components["schemas"]["ExaminationStatus"];
+        };
+        /** @description The AcademicYear comes from the path and is never accepted here; neither is schoolId. */
+        ExaminationCreateInput: {
+            code: string;
+            name: string;
+            /** Format: date */
+            starts_on: string;
+            /** Format: date */
+            ends_on: string;
+            status?: components["schemas"]["ExaminationStatus"];
+        };
+        /** @description Partial update; every field is optional. The owning AcademicYear and School can never be changed. */
+        ExaminationUpdateInput: {
+            code?: string;
+            name?: string;
+            /** Format: date */
+            starts_on?: string;
+            /** Format: date */
+            ends_on?: string;
+            status?: components["schemas"]["ExaminationStatus"];
+        };
+        /**
+         * @description The complete, closed ExaminationPaper lifecycle vocabulary, mirrored by the database's own `examination_papers_status_check` CHECK constraint. Deliberately NOT a draft/scheduled/completed/closed/cancelled/published state machine: a withdrawn Paper is marked `inactive` and kept, and an inactive Paper continues to reserve its (Examination, SubjectOffering) pair, which is why there is no activate/deactivate operation and no delete.
+         * @enum {string}
+         */
+        ExaminationPaperStatus: "active" | "inactive";
+        /** @description One SubjectOffering assessed within one Examination, with its scheduled sitting (date and time range) and maximum obtainable marks. Offering-wide, NOT Section-specific -- there is no section_id. Not a physical uploaded question-paper file, not a Student attempt, and carries no mark/result/grade-scale data. Internal integrity pins (schoolId, academicYearId, campusId, gradeLevelId) are server-derived and deliberately never exposed here. */
+        ExaminationPaper: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: uuid
+             * @description The owning Examination, fixed at creation and never reassignable.
+             */
+            examinationId: string;
+            /**
+             * Format: uuid
+             * @description The assessed SubjectOffering, fixed at creation and never reassignable.
+             */
+            subjectOfferingId: string;
+            /**
+             * Format: date
+             * @description School calendar date the Paper is sat; inside the owning Examination's inclusive window.
+             */
+            scheduledOn: string;
+            /** @description School-local wall-clock start time, HH:MM:SS. */
+            startsAt: string;
+            /** @description School-local wall-clock end time, HH:MM:SS; strictly after startsAt. Same day only. */
+            endsAt: string;
+            /** @description Maximum obtainable marks, a positive decimal string. */
+            maxMarks: string;
+            status: components["schemas"]["ExaminationPaperStatus"];
+        };
+        /** @description The Examination comes from the path and is never accepted here; neither is schoolId nor any integrity pin. */
+        ExaminationPaperCreateInput: {
+            /** Format: uuid */
+            subject_offering_id: string;
+            /** Format: date */
+            scheduled_on: string;
+            starts_at: string;
+            ends_at: string;
+            max_marks: string;
+            status?: components["schemas"]["ExaminationPaperStatus"];
+        };
+        /** @description Partial update; every field is optional. The owning Examination and SubjectOffering can never be changed. */
+        ExaminationPaperUpdateInput: {
+            /** Format: date */
+            scheduled_on?: string;
+            starts_at?: string;
+            ends_at?: string;
+            max_marks?: string;
+            status?: components["schemas"]["ExaminationPaperStatus"];
+        };
+        /** @description A single scheduled slot: a required SubjectOffering taught to a Section by a teacher (HR Employee) in an optional Room during a TimetablePeriod on a given day of week. The teacher representation is data-minimized to id/teacherName ONLY (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never work_email/work_phone/any other HR field. */
+        TimetableEntry: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** @description 1 (Monday) .. 7 (Sunday). */
+            dayOfWeek: number;
+            /** Format: uuid */
+            subjectOfferingId: string;
+            subjectCode?: string | null;
+            subjectName?: string | null;
+            /** Format: uuid */
+            sectionId: string;
+            sectionCode?: string | null;
+            sectionName?: string | null;
+            /** Format: uuid */
+            teacherId: string;
+            /** @description Employee.full_name only -- never work_email/work_phone. */
+            teacherName?: string | null;
+            /** Format: uuid */
+            roomId?: string | null;
+            roomCode?: string | null;
+            roomName?: string | null;
+            /** Format: uuid */
+            periodId: string;
+            periodCode?: string | null;
+            periodName?: string | null;
+            /** @example 09:00:00 */
+            periodStartTime?: string | null;
+            /** @example 09:45:00 */
+            periodEndTime?: string | null;
+        };
+        /** @description Used identically for both create and update -- update re-validates and rewrites the entire assignment, so every field is required there too (never a partial update). academic_year_id/campus_id/grade_level_id are never accepted -- always derived server-side from the resolved subject_offering_id. */
+        TimetableEntryInput: {
+            /** Format: uuid */
+            subject_offering_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /**
+             * Format: uuid
+             * @description HR Employee id.
+             */
+            teacher_id: string;
+            /** Format: uuid */
+            room_id?: string | null;
+            /** Format: uuid */
+            period_id: string;
+            /** @description 1 (Monday) .. 7 (Sunday). */
+            day_of_week: number;
+        };
+        /** @description Timetable-owned narrow projection for the Schedule form's SubjectOffering picker -- never the full SubjectOffering schema. */
+        TimetableSubjectOfferingSummary: {
+            /** Format: uuid */
+            id: string;
+            subjectCode: string;
+            subjectName: string;
+            gradeLevelName: string;
+            campusName: string;
+            academicYearName: string;
+        };
+        /** @description Timetable-owned narrow projection for the Schedule form's Section picker -- never the full Section schema. */
+        TimetableSectionSummary: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+        };
+        /** @description Data-minimized (Sensitive-tier) Employee projection for the Schedule form's teacher picker -- ONLY id/fullName. Never work_email/work_phone/any other HR field, and never the broader Employee/EmployeeDirectoryEntry schema. */
+        TimetableTeacherSummary: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        /** @description Timetable-owned narrow projection for the Schedule form's Room picker -- never the full Room schema. */
+        TimetableRoomSummary: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+        };
+        /** @description Narrow projection for the Schedule form's Period picker. */
+        TimetablePeriodSummary: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            /** @example 09:00:00 */
+            startTime: string;
+            /** @example 09:45:00 */
+            endTime: string;
+        };
     };
     responses: {
         /** @description Phase 8A.15 -- the caller's School+actor-scoped rate limit (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for the sensitive-documents endpoint) has been exceeded. The same global error envelope as every other `/api/v1` error; never a cross-School/Highly-Sensitive existence signal. */
@@ -5152,6 +6099,8 @@ export interface components {
         /** @description CanteenItemInventoryRequirement id. */
         CanteenRecipeRequirementId: string;
         CanteenOrderId: string;
+        TimetablePeriodId: string;
+        TimetableEntryId: string;
     };
     requestBodies: never;
     headers: {
@@ -14295,6 +15244,2268 @@ export interface operations {
                 };
             };
             429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listTimetablePeriods: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"][];
+                        meta: components["schemas"]["TimetablePaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimetablePeriodInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_PERIOD_OVERLAP -- this time range overlaps an existing active Period for this School. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure (missing/invalid field, duplicate code within this School), or TIMETABLE_PERIOD_INVALID when start_time is not strictly before end_time. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetablePeriodId: components["parameters"]["TimetablePeriodId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetablePeriod does not exist, or belongs to a different School -- deliberately indistinguishable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetablePeriodId: components["parameters"]["TimetablePeriodId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TimetablePeriodUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetablePeriod does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_PERIOD_REFERENCED (an active TimetableEntry still references this Period) or TIMETABLE_PERIOD_OVERLAP. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure, or TIMETABLE_PERIOD_INVALID when start_time is not strictly before end_time. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    activateTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetablePeriodId: components["parameters"]["TimetablePeriodId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetablePeriod does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_PERIOD_OVERLAP -- this Period's range overlaps another currently-active Period. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deactivateTimetablePeriod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetablePeriodId: components["parameters"]["TimetablePeriodId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriod"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetablePeriod does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_PERIOD_REFERENCED -- an active TimetableEntry still references this Period. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listTimetableEntries: {
+        parameters: {
+            query?: {
+                /** @description When true, includes inactive/archived reference rows (default excludes them). */
+                include_inactive?: components["parameters"]["IncludeInactive"];
+                section_id?: string;
+                teacher_id?: string;
+                /** @description 1 (Monday) .. 7 (Sunday). */
+                day_of_week?: number;
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"][];
+                        meta: components["schemas"]["TimetablePaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid query parameter (e.g. section_id not a UUID, day_of_week outside 1-7). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimetableEntryInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description subject_offering_id/section_id/teacher_id/room_id/period_id does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_TEACHER_ALREADY_SCHEDULED, TIMETABLE_SECTION_ALREADY_SCHEDULED, or TIMETABLE_ROOM_ALREADY_SCHEDULED -- this teacher/Section/Room already has another active class scheduled for this day and Period. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure, or one of TIMETABLE_ELECTIVE_OFFERING_NOT_SCHEDULABLE (SubjectOffering is not required), TIMETABLE_SUBJECT_OFFERING_NOT_AVAILABLE, TIMETABLE_SECTION_NOT_AVAILABLE, TIMETABLE_TEACHER_NOT_AVAILABLE, TIMETABLE_ROOM_NOT_AVAILABLE, or TIMETABLE_PERIOD_NOT_AVAILABLE when the referenced parent is not active. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetableEntryId: components["parameters"]["TimetableEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetableEntry does not exist, or belongs to a different School -- deliberately indistinguishable. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetableEntryId: components["parameters"]["TimetableEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimetableEntryInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetableEntry (or a referenced SubjectOffering/Section/teacher/Room/Period) does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_TEACHER_ALREADY_SCHEDULED, TIMETABLE_SECTION_ALREADY_SCHEDULED, or TIMETABLE_ROOM_ALREADY_SCHEDULED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure, or one of the not-available/not-schedulable errors listed on createTimetableEntry. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    activateTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetableEntryId: components["parameters"]["TimetableEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetableEntry does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TIMETABLE_TEACHER_ALREADY_SCHEDULED, TIMETABLE_SECTION_ALREADY_SCHEDULED, or TIMETABLE_ROOM_ALREADY_SCHEDULED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description One of the not-available/not-schedulable errors listed on createTimetableEntry (a parent is no longer active). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deactivateTimetableEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                timetableEntryId: components["parameters"]["TimetableEntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableEntry"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TimetableEntry does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    searchTimetableSubjectOfferings: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableSubjectOfferingSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetableSections: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableSectionSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetableTeachers: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableTeacherSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetableRooms: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetableRoomSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.schedule.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetablePeriods: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriodSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking timetable.periods.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listAttendanceSessions: {
+        parameters: {
+            query?: {
+                section_id?: string;
+                academic_year_id?: string;
+                attendance_date?: string;
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceSessionSummary"][];
+                        meta: components["schemas"]["TimetablePaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid query parameter. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    submitAttendanceRegister: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceRegisterInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceSession"];
+                    };
+                };
+            };
+            /** @description Missing or malformed Idempotency-Key. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A register already exists for this TimetableEntry + date (ATTENDANCE_SESSION_ALREADY_SUBMITTED), for this Section + Period + date (ATTENDANCE_SECTION_SLOT_ALREADY_SUBMITTED), or overlapping this Section's wall-clock interval on this date (ATTENDANCE_SESSION_TIME_OVERLAP); the AcademicYear is not active (ATTENDANCE_ACADEMIC_YEAR_NOT_ACTIVE); or one Student has more than one qualifying historical placement (STUDENT_ENROLLMENT_AMBIGUOUS_HISTORICAL_PLACEMENT). There is no replace-register operation -- correct individual records instead. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation or domain rejection: the TimetableEntry is not active, the date's weekday does not match it, the date is in the future or outside the AcademicYear, the roster is empty, an enrollment id is duplicated, or the register does not exactly match the roster. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listAttendanceScheduledClasses: {
+        parameters: {
+            query: {
+                attendance_date: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceScheduledClass"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or malformed attendance_date. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    previewAttendanceRoster: {
+        parameters: {
+            query: {
+                timetable_entry_id: string;
+                attendance_date: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceRosterMember"][];
+                        meta: {
+                            /** Format: uuid */
+                            timetableEntryId: string;
+                            /** Format: uuid */
+                            sectionId: string;
+                            /** Format: date */
+                            attendanceDate: string;
+                            /** @description Always false -- this preview may be stale. */
+                            authoritative: boolean;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such TimetableEntry in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One Student has more than one qualifying historical placement. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or malformed query parameter. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAttendanceSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                attendanceSessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceSession"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such register in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    correctAttendanceRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                attendanceRecordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttendanceCorrectionInput"];
+            };
+        };
+        responses: {
+            /** @description Corrected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AttendanceRecord"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such attendance record in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ATTENDANCE_RECORD_STATUS_CHANGED -- the record is no longer in expected_status; reload before correcting. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid status value, or ATTENDANCE_CORRECTION_NO_OP when new_status equals the current status. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listSyllabusUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                subjectOfferingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SyllabusUnit"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking syllabus.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SubjectOffering in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSyllabusUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                subjectOfferingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyllabusUnitCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SyllabusUnit"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking syllabus.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SubjectOffering in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failure -- missing/oversized code or title, a negative sequence, an out-of-vocabulary status, or a case-insensitive duplicate code within this Offering. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getSyllabusUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                syllabusUnitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SyllabusUnit"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking syllabus.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SyllabusUnit in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateSyllabusUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                syllabusUnitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyllabusUnitUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SyllabusUnit"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking syllabus.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SyllabusUnit in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failure -- oversized code/title, negative sequence, out-of-vocabulary status, or a case-insensitive duplicate code within this unit's Offering. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listCurriculumDeliveries: {
+        parameters: {
+            query?: {
+                section_id?: string;
+                status?: components["schemas"]["CurriculumDeliveryStatus"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                subjectOfferingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SubjectOffering in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                subjectOfferingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurriculumDeliveryCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such SubjectOffering, Section or SyllabusUnit in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The AcademicYear is not active, so no NEW delivery may be started. Correcting or transitioning an EXISTING delivery remains possible after the year closes. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation or domain failure -- an elective SubjectOffering, a SyllabusUnit belonging to a different Offering, a Section in a different AcademicYear/Campus/GradeLevel, a future started_on in the School's own timezone, a date outside the AcademicYear, or an existing delivery for this Section/SyllabusUnit pair. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such CurriculumDelivery in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    correctCurriculumDeliveryDates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurriculumDeliveryUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such CurriculumDelivery in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- a malformed date, a future date in the School's own timezone, a date outside the AcademicYear, a completion date earlier than the start date, or a completion date supplied for an in-progress record. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    transitionCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurriculumDeliveryTransitionInput"];
+            };
+        };
+        responses: {
+            /** @description Transitioned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking curriculum.delivery.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such CurriculumDelivery in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The record's current status is not the supplied expected_status -- another transition landed first. Reload before retrying. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation or domain failure -- a no-op transition, an illegal state pair, a missing completion date when completing, a future or out-of-year completion date, or a completion date earlier than the start date. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listExaminations: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["ExaminationStatus"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                academicYearId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Examination"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.definitions.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such AcademicYear in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createExamination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                academicYearId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExaminationCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Examination"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.definitions.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such AcademicYear in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- missing/oversized code or name, a malformed date, an end date before the start date, a window falling outside the AcademicYear, an out-of-vocabulary status, or a case-insensitive duplicate code within this AcademicYear. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getExamination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Examination"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.definitions.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Examination in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateExamination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExaminationUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Examination"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.definitions.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Examination in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- oversized code/name, a malformed date, an end date before the start date, a window falling outside the AcademicYear, an out-of-vocabulary status, or a case-insensitive duplicate code within this AcademicYear. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listExaminationPapers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ExaminationPaper"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.papers.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Examination in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createExaminationPaper: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExaminationPaperCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ExaminationPaper"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.papers.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such Examination in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- missing/malformed input, an inactive Examination or SubjectOffering, an AcademicYear mismatch between the Examination and the SubjectOffering, a scheduled date outside the Examination's window, an end time not after the start time, a non-positive max_marks, an out-of-vocabulary status, or a duplicate Paper for this Examination and SubjectOffering. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getExaminationPaper: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationPaperId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ExaminationPaper"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.papers.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such ExaminationPaper in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateExaminationPaper: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                examinationPaperId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExaminationPaperUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ExaminationPaper"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.papers.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such ExaminationPaper in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- a malformed date/time, an end time not after the start time, a scheduled date outside the Examination's window, a non-positive max_marks, an out-of-vocabulary status, or a reactivation (inactive -> active) while the Examination or SubjectOffering is currently inactive. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
 }

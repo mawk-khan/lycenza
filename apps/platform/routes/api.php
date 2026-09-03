@@ -10,12 +10,16 @@ use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
 use App\Domain\Admissions\Http\Controllers\AdmissionApplicationController;
 use App\Domain\Admissions\Http\Controllers\ApplicantController;
+use App\Domain\Attendance\Http\Controllers\AttendanceSessionController;
 use App\Domain\Canteen\Http\Controllers\CanteenBillingConfigurationController;
 use App\Domain\Canteen\Http\Controllers\CanteenItemController;
 use App\Domain\Canteen\Http\Controllers\CanteenOrderController;
 use App\Domain\Canteen\Http\Controllers\CanteenOutletController;
 use App\Domain\Canteen\Http\Controllers\CanteenRecipeController;
+use App\Domain\CurriculumDelivery\Http\Controllers\CurriculumDeliveryController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
+use App\Domain\Examinations\Http\Controllers\ExaminationController;
+use App\Domain\Examinations\Http\Controllers\ExaminationPaperController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
 use App\Domain\Finance\Http\Controllers\JournalEntryController;
 use App\Domain\Finance\Http\Controllers\LedgerAccountController;
@@ -68,6 +72,7 @@ use App\Domain\Students\Http\Controllers\EnrollmentRolloverSubjectMappingControl
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
+use App\Domain\Syllabus\Http\Controllers\SyllabusUnitController;
 use App\Domain\Timetable\Http\Controllers\TimetableEntryController;
 use App\Domain\Timetable\Http\Controllers\TimetablePeriodController;
 use App\Domain\Transport\Http\Controllers\TransportRouteAssignmentController;
@@ -1537,6 +1542,223 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/payroll-accounting-configuration', [PayrollAccountingConfigurationController::class, 'store'])
                 ->middleware(['capability:payroll.accounting.manage', 'throttle:school-api-mutations'])
                 ->name('schools.payroll-accounting-configuration.store');
+
+            // Phase 0H.2 (Student Attendance foundation). A deliberately
+            // narrow COMMAND surface, never generic CRUD: a register is
+            // submitted once, complete, and an already-submitted record
+            // is only ever changed through the explicit
+            // expected-status correction command. There is no Session
+            // update/replace/delete route and no generic
+            // AttendanceRecord update route, by design.
+            //
+            // `store` carries `idempotent`: submitting a register is a
+            // consequential mutation a browser or flaky connection can
+            // plausibly retry, and a duplicate submission would be both
+            // costly (a second authoritative register) and confusing.
+            // The capability middleware is declared BEFORE `idempotent`
+            // so authorization is re-evaluated ahead of any replay --
+            // an actor whose capability was revoked can never replay a
+            // stored success (CLAUDE.md rule 32, the same ordering
+            // webhook-endpoint mutations already use).
+            //
+            // `correct` deliberately does NOT carry `idempotent`: it is
+            // already safe to retry by construction, because
+            // expected-status compare-and-swap makes a duplicate
+            // delivery of the same correction fail closed with a
+            // typed 409 rather than apply twice.
+            //
+            // The two helper endpoints are gated by Attendance's OWN
+            // capability before any query executes -- never Timetable's
+            // `timetable.*` or Students' capabilities, carrying forward
+            // the Canteen capability-boundary lesson explicitly. They
+            // are registered BEFORE `{attendanceSession}` so their
+            // literal path segments are not swallowed by the parameter
+            // route.
+            Route::get('/attendance-sessions', [AttendanceSessionController::class, 'index'])
+                ->middleware('capability:attendance.view')
+                ->name('schools.attendance-sessions.index');
+            Route::post('/attendance-sessions', [AttendanceSessionController::class, 'store'])
+                ->middleware(['capability:attendance.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.attendance-sessions.store');
+            Route::get('/attendance-sessions/scheduled-classes', [AttendanceSessionController::class, 'scheduledClasses'])
+                ->middleware('capability:attendance.manage')
+                ->name('schools.attendance-sessions.scheduled-classes');
+            Route::get('/attendance-sessions/roster-preview', [AttendanceSessionController::class, 'rosterPreview'])
+                ->middleware('capability:attendance.manage')
+                ->name('schools.attendance-sessions.roster-preview');
+            Route::get('/attendance-sessions/{attendanceSession}', [AttendanceSessionController::class, 'show'])
+                ->middleware('capability:attendance.view')
+                ->name('schools.attendance-sessions.show');
+            Route::post('/attendance-records/{attendanceRecord}/correct', [AttendanceSessionController::class, 'correct'])
+                ->middleware(['capability:attendance.manage', 'throttle:school-api-mutations'])
+                ->name('schools.attendance-records.correct');
+
+            // Phase 0H.3A (Syllabus Foundation -- the first concrete
+            // Academics fact). Exactly FOUR operations: list/create
+            // nested under the owning SubjectOffering, show/update
+            // flat, matching Academic Structure's established nesting
+            // convention.
+            //
+            // Deliberately NO delete, NO activate and NO deactivate
+            // route. `status` moves through the ordinary PATCH exactly
+            // like every other Academic Structure reference entity
+            // (Section, SubjectOffering, Room, Subject, GradeLevel) --
+            // none of which has a lifecycle route. The entities that DO
+            // have activate/deactivate here (AcademicYear,
+            // TimetablePeriod, TimetableEntry) each re-validate a real
+            // invariant on activation; a SyllabusUnit cannot conflict
+            // with anything on reactivation because its unique code
+            // index is unconditional.
+            //
+            // Gated by Syllabus's OWN capability family -- never
+            // Academic Structure's `academics.subjects.*`, even though
+            // the parent Offering belongs to that module (the Canteen
+            // capability-boundary lesson, carried forward). No
+            // Idempotency-Key: these are small reference-catalogue
+            // mutations whose duplicate semantic creation is already
+            // prevented by `syllabus_units_offering_code_ci_unique`.
+            Route::get('/subject-offerings/{subjectOffering}/syllabus-units', [SyllabusUnitController::class, 'index'])
+                ->middleware('capability:syllabus.view')
+                ->name('schools.subject-offerings.syllabus-units.index');
+            Route::post('/subject-offerings/{subjectOffering}/syllabus-units', [SyllabusUnitController::class, 'store'])
+                ->middleware(['capability:syllabus.manage', 'throttle:school-api-mutations'])
+                ->name('schools.subject-offerings.syllabus-units.store');
+            Route::get('/syllabus-units/{syllabusUnit}', [SyllabusUnitController::class, 'show'])
+                ->middleware('capability:syllabus.view')
+                ->name('schools.syllabus-units.show');
+            Route::patch('/syllabus-units/{syllabusUnit}', [SyllabusUnitController::class, 'update'])
+                ->middleware(['capability:syllabus.manage', 'throttle:school-api-mutations'])
+                ->name('schools.syllabus-units.update');
+
+            // Phase 0H.3B (Curriculum Delivery -- the second concrete
+            // Academics fact). Exactly FIVE operations: list/start
+            // nested under the owning SubjectOffering, show/correct/
+            // transition flat.
+            //
+            // Deliberately NO delete, NO archive, NO activate/
+            // deactivate, NO bulk, NO reorder, NO search or discovery
+            // helper, NO reporting/aggregate endpoint, NO teacher route
+            // and NO Student route. These rows are historical
+            // instructional activity, so there is no hard-delete API
+            // (CLAUDE.md rule 73).
+            //
+            // `status` moves ONLY through the dedicated transition
+            // operation, never through PATCH. Unlike SyllabusUnit --
+            // which correctly has no lifecycle route because it can
+            // conflict with nothing -- completing or reopening a
+            // delivery is guarded by an expected-status
+            // compare-and-swap that an ordinary PATCH cannot express,
+            // the same criterion that gives AcademicYear/
+            // TimetablePeriod/TimetableEntry their own commands.
+            //
+            // Gated by Curriculum Delivery's OWN capability family --
+            // never Syllabus's `syllabus.*` and never Academic
+            // Structure's `academics.subjects.*`, even though both
+            // parents belong to those modules (the Canteen
+            // capability-boundary lesson, carried forward). Keeping the
+            // catalogue and its delivery independently grantable is
+            // also what leaves room for a future teacher role to hold
+            // delivery rights without the right to rewrite the syllabus.
+            //
+            // No Idempotency-Key (rule 29, evaluated per endpoint):
+            // duplicate creation is already prevented by
+            // `curriculum_deliveries_section_unit_unique`, a duplicate
+            // transition fails closed on the compare-and-swap, and
+            // PATCH is naturally idempotent.
+            Route::get('/subject-offerings/{subjectOffering}/curriculum-deliveries', [CurriculumDeliveryController::class, 'index'])
+                ->middleware('capability:curriculum.delivery.view')
+                ->name('schools.subject-offerings.curriculum-deliveries.index');
+            Route::post('/subject-offerings/{subjectOffering}/curriculum-deliveries', [CurriculumDeliveryController::class, 'store'])
+                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->name('schools.subject-offerings.curriculum-deliveries.store');
+            Route::get('/curriculum-deliveries/{curriculumDelivery}', [CurriculumDeliveryController::class, 'show'])
+                ->middleware('capability:curriculum.delivery.view')
+                ->name('schools.curriculum-deliveries.show');
+            Route::patch('/curriculum-deliveries/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])
+                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->name('schools.curriculum-deliveries.update');
+            Route::post('/curriculum-deliveries/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])
+                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->name('schools.curriculum-deliveries.transition');
+
+            // Phase 0H.4A (Examination Foundation -- the first
+            // Examinations fact). Exactly FOUR operations: list/create
+            // nested under the owning AcademicYear, show/update flat,
+            // matching AcademicTermController's established nesting
+            // convention.
+            //
+            // An Examination is a WINDOW, not a paper. There is
+            // deliberately NO paper, scheduling, marks, grade-scale,
+            // result, report-card, transcript, search, bulk or
+            // reporting endpoint here -- the per-Subject entity is a
+            // future ExaminationPaper (Phase 0H.4B, its own gate).
+            //
+            // Deliberately NO delete, NO activate and NO deactivate
+            // route. `status` moves through the ordinary PATCH exactly
+            // like Section/SubjectOffering/Room/Subject/GradeLevel/
+            // SyllabusUnit -- none of which has a lifecycle route. An
+            // Examination cannot conflict with anything on
+            // reactivation because `examinations_year_code_ci_unique`
+            // is unconditional, so an inactive one already reserves its
+            // code.
+            //
+            // Gated by Examinations' OWN capability family -- never
+            // Academic Structure's `academics.years.*`, even though the
+            // parent AcademicYear belongs to that module (the Canteen
+            // capability-boundary lesson, carried forward). Depth-2
+            // (`examinations.definitions.*`) so a later marks or
+            // result-publication family can never be granted by the
+            // same key.
+            //
+            // No Idempotency-Key (rule 29, evaluated per endpoint):
+            // duplicate creation is already prevented by the unique
+            // code index, and PATCH is naturally idempotent.
+            Route::get('/academic-years/{academicYear}/examinations', [ExaminationController::class, 'index'])
+                ->middleware('capability:examinations.definitions.view')
+                ->name('schools.academic-years.examinations.index');
+            Route::post('/academic-years/{academicYear}/examinations', [ExaminationController::class, 'store'])
+                ->middleware(['capability:examinations.definitions.manage', 'throttle:school-api-mutations'])
+                ->name('schools.academic-years.examinations.store');
+            Route::get('/examinations/{examination}', [ExaminationController::class, 'show'])
+                ->middleware('capability:examinations.definitions.view')
+                ->name('schools.examinations.show');
+            Route::patch('/examinations/{examination}', [ExaminationController::class, 'update'])
+                ->middleware(['capability:examinations.definitions.manage', 'throttle:school-api-mutations'])
+                ->name('schools.examinations.update');
+
+            // Phase 0H.4B (ExaminationPaper / Scheduling). Exactly FOUR
+            // operations: list/create nested under the owning
+            // Examination, show/update flat -- the identical nesting
+            // convention ExaminationController itself established.
+            //
+            // An ExaminationPaper is one SubjectOffering assessed within
+            // one Examination -- Offering-wide, never Section-specific.
+            // Deliberately NO delete, NO activate and NO deactivate
+            // route; `status` moves through the ordinary PATCH exactly
+            // like Examination itself, since the aggregate unique
+            // constraint is unconditional and an inactive Paper already
+            // reserves its Examination x SubjectOffering pair.
+            //
+            // Gated by Examinations' own capability family, one level
+            // deeper than `examinations.definitions.*`
+            // (`examinations.papers.*`) -- exactly the depth-2 room the
+            // 0H.4A capability catalog left for this checkpoint.
+            //
+            // No Idempotency-Key (rule 29, evaluated per endpoint):
+            // duplicate creation is already prevented by the aggregate
+            // unique constraint, and PATCH is naturally idempotent.
+            Route::get('/examinations/{examination}/examination-papers', [ExaminationPaperController::class, 'index'])
+                ->middleware('capability:examinations.papers.view')
+                ->name('schools.examinations.examination-papers.index');
+            Route::post('/examinations/{examination}/examination-papers', [ExaminationPaperController::class, 'store'])
+                ->middleware(['capability:examinations.papers.manage', 'throttle:school-api-mutations'])
+                ->name('schools.examinations.examination-papers.store');
+            Route::get('/examination-papers/{examinationPaper}', [ExaminationPaperController::class, 'show'])
+                ->middleware('capability:examinations.papers.view')
+                ->name('schools.examination-papers.show');
+            Route::patch('/examination-papers/{examinationPaper}', [ExaminationPaperController::class, 'update'])
+                ->middleware(['capability:examinations.papers.manage', 'throttle:school-api-mutations'])
+                ->name('schools.examination-papers.update');
         });
 });
 

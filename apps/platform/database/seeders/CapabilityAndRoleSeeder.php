@@ -549,6 +549,91 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'timetable.periods.manage', 'label' => 'Manage the Timetable Period catalogue', 'namespace' => 'school'],
             ['key' => 'timetable.schedule.view', 'label' => 'View the Timetable schedule', 'namespace' => 'school'],
             ['key' => 'timetable.schedule.manage', 'label' => 'Manage the Timetable schedule', 'namespace' => 'school'],
+
+            // Phase 0H.2 (Student Attendance). Deliberately ONE pair for
+            // the whole module -- `.manage` covers submitting a register
+            // AND correcting a record. There is intentionally no
+            // separate `attendance.correct`: correction is already
+            // protected by expected-status compare-and-swap and full
+            // audit, and splitting it would imply a reviewer/approver
+            // workflow this checkpoint does not build (CLAUDE.md rule
+            // 2). There is likewise no `attendance.teacher` -- v1 is
+            // admin-only, with no teacher self-service and no
+            // teacher-ownership rule.
+            ['key' => 'attendance.view', 'label' => 'View Student attendance registers', 'namespace' => 'school'],
+            ['key' => 'attendance.manage', 'label' => 'Submit and correct Student attendance registers', 'namespace' => 'school'],
+
+            // Phase 0H.3A (Syllabus Foundation -- the first concrete
+            // Academics fact). Deliberately rooted at `syllabus.*`, NOT
+            // `academics.*`: that root is already fully owned by
+            // Academic Structure (`academics.structure.*`/
+            // `academics.years.*`/`academics.subjects.*`), and a second
+            // unrelated family under it would leave an administrator
+            // granting rights unable to tell which domain a capability
+            // governs. The roadmap umbrella stays "Academics"; the
+            // implementation domain and capability root are the more
+            // precise "Syllabus" (docs/modules/ACADEMICS.md records the
+            // Academics -> Syllabus -> `syllabus.*` mapping so this can
+            // never be mistaken for accidental inconsistency).
+            ['key' => 'syllabus.view', 'label' => 'View Syllabus Units', 'namespace' => 'school'],
+            ['key' => 'syllabus.manage', 'label' => 'Manage Syllabus Units', 'namespace' => 'school'],
+
+            // Phase 0H.3B (Curriculum Delivery -- the second concrete
+            // Academics fact). Rooted at `curriculum.delivery.*`, a
+            // sibling of `syllabus.*` rather than an extension of it:
+            // the catalogue and its delivery are independently
+            // grantable concerns, and folding delivery into
+            // `syllabus.manage` would permanently foreclose a future
+            // teacher role holding delivery rights WITHOUT the right to
+            // rewrite the syllabus itself. Deliberately depth-2 rather
+            // than a bare `curriculum.*` (which would imply rights over
+            // a `Curriculum` entity that Academic Structure explicitly
+            // defers) -- the same module.entity shape as
+            // `timetable.periods.*`/`timetable.schedule.*`. Still NOT
+            // `academics.*`, for the identical reason recorded above.
+            // No `curriculum.delivery.teacher`: v1 is admin-only, with
+            // no teacher self-service and no teacher-ownership rule,
+            // exactly as Attendance and Syllabus already are.
+            ['key' => 'curriculum.delivery.view', 'label' => 'View Curriculum Delivery records', 'namespace' => 'school'],
+            ['key' => 'curriculum.delivery.manage', 'label' => 'Record and correct Curriculum Delivery', 'namespace' => 'school'],
+
+            // Phase 0H.4A (Examination Foundation -- the first
+            // Examinations fact). Rooted at `examinations.*`, a NEW
+            // module root with no collision in this catalog, and
+            // deliberately DEPTH-2 (`examinations.definitions.*`)
+            // rather than a flat `examinations.view`/`.manage`: this
+            // module will grow to papers, grade scales, marks and
+            // result publication, and a flat `examinations.manage`
+            // would eventually grant clerical marks entry and
+            // principal-level result publication with the same key.
+            // Depth-2 leaves clean room for `examinations.papers.*`,
+            // `examinations.grade_scales.*`, `examinations.marks.*` and
+            // `examinations.results.*`, matching the established
+            // `timetable.periods.*`/`timetable.schedule.*` and
+            // `canteen.directory.*`/`canteen.orders.*` module.area
+            // shape. NOT `academics.*` (owned by Academic Structure)
+            // and never Academic Structure's own `academics.years.*`
+            // even though the parent AcademicYear belongs to it -- the
+            // Canteen capability-boundary lesson. No
+            // `examinations.*.teacher`: v1 is admin-only, with no
+            // teacher self-service and no teacher-ownership rule.
+            ['key' => 'examinations.definitions.view', 'label' => 'View Examinations', 'namespace' => 'school'],
+            ['key' => 'examinations.definitions.manage', 'label' => 'Manage Examinations', 'namespace' => 'school'],
+
+            // Phase 0H.4B (ExaminationPaper / Scheduling). The
+            // `examinations.papers.*` leaf the 0H.4A comment above
+            // explicitly reserved. Deliberately separate from
+            // `examinations.definitions.*`: viewing/managing the
+            // Examination WINDOW is not the same right as
+            // viewing/managing which SubjectOffering sits, when, and
+            // for how many marks within it -- proven by
+            // Tests\Feature\Examinations\ExaminationPaperApiTest's
+            // assertion that `examinations.definitions.view` alone
+            // grants no ExaminationPaper access. No
+            // `examinations.papers.teacher`: v1 is admin-only, same as
+            // every other Examinations capability.
+            ['key' => 'examinations.papers.view', 'label' => 'View Examination Papers', 'namespace' => 'school'],
+            ['key' => 'examinations.papers.manage', 'label' => 'Manage Examination Papers', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -763,6 +848,31 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Timetable is routine administrative work.
                     'timetable.periods.view', 'timetable.periods.manage',
                     'timetable.schedule.view', 'timetable.schedule.manage',
+                    // Phase 0H.2: taking and correcting the daily
+                    // register is routine administrative work, the same
+                    // reasoning that already grants the Timetable pair
+                    // above.
+                    'attendance.view', 'attendance.manage',
+                    // Phase 0H.3A: curating a Subject Offering's
+                    // syllabus is routine academic administration, the
+                    // same reasoning that already grants the Academic
+                    // Structure and Timetable pairs above.
+                    'syllabus.view', 'syllabus.manage',
+                    // Phase 0H.3B: recording which Section has covered
+                    // which SyllabusUnit is the same routine academic
+                    // administration as curating the syllabus itself.
+                    'curriculum.delivery.view', 'curriculum.delivery.manage',
+                    // Phase 0H.4A: defining the School's examination
+                    // windows for an AcademicYear is routine academic
+                    // administration, the same reasoning that already
+                    // grants the Academic Structure and Academics pairs
+                    // above.
+                    'examinations.definitions.view', 'examinations.definitions.manage',
+                    // Phase 0H.4B: scheduling which SubjectOffering sits,
+                    // when, and for how many marks within an Examination
+                    // is the same routine academic administration as
+                    // defining the Examination window itself.
+                    'examinations.papers.view', 'examinations.papers.manage',
                 ],
             ],
             'principal' => [
@@ -877,6 +987,31 @@ class CapabilityAndRoleSeeder extends Seeder
                     // parity is granted.
                     'timetable.periods.view', 'timetable.periods.manage',
                     'timetable.schedule.view', 'timetable.schedule.manage',
+                    // Phase 0H.2: taking and correcting the daily
+                    // register is routine administrative work, the same
+                    // reasoning that already grants the Timetable pair
+                    // above.
+                    'attendance.view', 'attendance.manage',
+                    // Phase 0H.3A: curating a Subject Offering's
+                    // syllabus is routine academic administration, the
+                    // same reasoning that already grants the Academic
+                    // Structure and Timetable pairs above.
+                    'syllabus.view', 'syllabus.manage',
+                    // Phase 0H.3B: recording which Section has covered
+                    // which SyllabusUnit is the same routine academic
+                    // administration as curating the syllabus itself.
+                    'curriculum.delivery.view', 'curriculum.delivery.manage',
+                    // Phase 0H.4A: defining the School's examination
+                    // windows for an AcademicYear is routine academic
+                    // administration, the same reasoning that already
+                    // grants the Academic Structure and Academics pairs
+                    // above.
+                    'examinations.definitions.view', 'examinations.definitions.manage',
+                    // Phase 0H.4B: scheduling which SubjectOffering sits,
+                    // when, and for how many marks within an Examination
+                    // is the same routine academic administration as
+                    // defining the Examination window itself.
+                    'examinations.papers.view', 'examinations.papers.manage',
                 ],
             ],
         ];

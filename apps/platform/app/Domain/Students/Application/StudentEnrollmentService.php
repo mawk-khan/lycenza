@@ -58,6 +58,36 @@ use Throwable;
  * service in this codebase -- a future controller must call
  * `Gate::authorize`/`authorizeCapability` before ever reaching this
  * service; no capability check lives here.
+ *
+ * SECTION-BEFORE-ENROLLMENT LOCK ORDER (Phase 0H.2). Every method here
+ * that creates or transitions a placement first takes a
+ * `SELECT ... FOR UPDATE` on the Section row(s) the operation touches,
+ * and only THEN locks/re-reads the Enrollment row(s). This is a
+ * synchronization discipline, not a new business rule -- no domain
+ * outcome changes -- and it exists because
+ * App\Domain\Attendance\Application\AttendanceSubmissionService must be
+ * able to derive a complete as-of-date Section roster, validate a
+ * submitted register against it as an EXACT SET, and write that
+ * register, without a concurrent membership change landing in between.
+ * Attendance holds the same Section row lock across exactly that
+ * window, so the two modules serialize on one shared row.
+ *
+ * The previous "lock the Enrollment, then read its Section" order is
+ * deliberately gone everywhere: keeping it would give Attendance
+ * (Section -> Enrollment) and SIS (Enrollment -> Section) opposite
+ * acquisition orders and therefore a genuine deadlock. The preliminary
+ * unlocked read each method now performs is DISCOVERY ONLY -- it
+ * exists solely to learn which Section row to lock. Every mutation
+ * still relies on the locked re-read, which re-verifies both the
+ * expected status AND that the Enrollment still belongs to the Section
+ * that was actually locked (a concurrent transfer could have moved it
+ * between the discovery read and the lock).
+ *
+ * `transferPlacement()` touches TWO Sections, so it locks both in
+ * ascending id order -- a stable global ordering that makes an
+ * A->B / B->A pair of concurrent transfers serialize instead of
+ * deadlocking (proven with two real OS processes in
+ * `Tests\Feature\Students\OppositeDirectionTransferConcurrencyTest`).
  */
 class StudentEnrollmentService
 {
@@ -86,7 +116,15 @@ class StudentEnrollmentService
 
         return $this->context->withSchool($student->school, function () use ($student, $section, $rollNumber, $startsOn, $actor) {
             try {
-                return DB::transaction(fn () => $this->createEnrollmentRow($student, $section, $rollNumber, $startsOn, $actor));
+                return DB::transaction(function () use ($student, $section, $rollNumber, $startsOn, $actor) {
+                    // Section lock FIRST, before any Enrollment mutation
+                    // (this class's own docblock). Nothing about the
+                    // Section is read from the lock -- it is a pure
+                    // serialization point shared with Attendance.
+                    $this->lockSections([$section->id]);
+
+                    return $this->createEnrollmentRow($student, $section, $rollNumber, $startsOn, $actor);
+                });
             } catch (UniqueConstraintViolationException $e) {
                 throw $this->translateUniqueViolation($e, $rollNumber);
             }
@@ -183,7 +221,26 @@ class StudentEnrollmentService
         return $this->context->withSchool($sourceEnrollment->school, function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor) {
             try {
                 return DB::transaction(function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor) {
+                    // Section-before-Enrollment, TWO Sections (this
+                    // class's docblock): discover the source Section
+                    // from an unlocked read, then lock BOTH Sections in
+                    // ascending id order -- the stable global ordering
+                    // that stops an A->B / B->A pair of concurrent
+                    // transfers from deadlocking -- and only then lock
+                    // the source Enrollment.
+                    $discovered = StudentEnrollment::query()->whereKey($sourceEnrollment->id)->firstOrFail();
+                    $this->lockSections([$discovered->section_id, $targetSection->id]);
+
                     $lockedSource = StudentEnrollment::query()->whereKey($sourceEnrollment->id)->lockForUpdate()->firstOrFail();
+
+                    // The source Enrollment must still belong to the
+                    // Section we actually locked; a concurrent transfer
+                    // between the discovery read and this lock would
+                    // otherwise leave this operation unserialized
+                    // against Attendance for the real Section.
+                    if ($lockedSource->section_id !== $discovered->section_id) {
+                        throw new InvalidEnrollmentTransitionException($lockedSource->status, 'transferred');
+                    }
 
                     if ($lockedSource->status !== 'active') {
                         throw new InvalidEnrollmentTransitionException($lockedSource->status, 'transferred');
@@ -227,10 +284,34 @@ class StudentEnrollmentService
         });
     }
 
+    /**
+     * Section-before-Enrollment order (this class's docblock):
+     *
+     *   1. preliminary UNLOCKED read -- discovery only, purely to learn
+     *      which Section row to lock (never trusted for the decision);
+     *   2. lock that Section;
+     *   3. lock/re-read the Enrollment;
+     *   4. verify it is still `active` AND still belongs to the Section
+     *      that was actually locked;
+     *   5. transition.
+     *
+     * Step 4's Section re-verification is what makes step 1's unlocked
+     * read safe: if a concurrent transfer moved the Enrollment to a
+     * different Section between the discovery read and the lock, we
+     * hold the WRONG Section's lock, so the transition is refused
+     * rather than proceeding unserialized against Attendance.
+     */
     private function transitionToTerminalStatus(StudentEnrollment $enrollment, string $newStatus, string $endedOn, string $eventType, ?User $actor): StudentEnrollment
     {
         return $this->context->withSchool($enrollment->school, fn () => DB::transaction(function () use ($enrollment, $newStatus, $endedOn, $eventType, $actor) {
+            $discovered = StudentEnrollment::query()->whereKey($enrollment->id)->firstOrFail();
+            $this->lockSections([$discovered->section_id]);
+
             $locked = StudentEnrollment::query()->whereKey($enrollment->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->section_id !== $discovered->section_id) {
+                throw new InvalidEnrollmentTransitionException($locked->status, $newStatus);
+            }
 
             if ($locked->status !== 'active') {
                 throw new InvalidEnrollmentTransitionException($locked->status, $newStatus);
@@ -260,6 +341,39 @@ class StudentEnrollmentService
 
             return $locked->refresh();
         }));
+    }
+
+    /**
+     * Takes `SELECT ... FOR UPDATE` on the given Section rows in
+     * ASCENDING ID ORDER -- the single shared serialization point
+     * between this module's membership mutations and
+     * App\Domain\Attendance\Application\AttendanceSubmissionService's
+     * roster derivation + complete-register write (this class's
+     * docblock).
+     *
+     * The ordering is the deadlock-avoidance mechanism, not a detail:
+     * two concurrent transfers moving Students in opposite directions
+     * (A->B and B->A) both request {A, B} and therefore both acquire A
+     * first, so one simply waits for the other instead of each holding
+     * what the other needs. Attendance takes exactly one Section lock
+     * and so trivially participates in the same ordering. Duplicates
+     * are collapsed -- requesting the same Section twice in one call
+     * (a same-Section transfer) must not attempt to lock it twice.
+     *
+     * Must be called INSIDE an established TenantContext and an open
+     * DB::transaction(); a row lock outside a transaction is released
+     * immediately and would silently guarantee nothing.
+     *
+     * @param  list<string>  $sectionIds
+     */
+    private function lockSections(array $sectionIds): void
+    {
+        $ordered = array_values(array_unique($sectionIds));
+        sort($ordered);
+
+        foreach ($ordered as $sectionId) {
+            Section::query()->whereKey($sectionId)->lockForUpdate()->firstOrFail();
+        }
     }
 
     /**

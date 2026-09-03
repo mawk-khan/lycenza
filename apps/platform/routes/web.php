@@ -16,15 +16,19 @@ use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\ApplicantController;
+use App\Http\Controllers\App\Attendance\AttendanceController;
 use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
 use App\Http\Controllers\App\Canteen\CanteenItemController;
 use App\Http\Controllers\App\Canteen\CanteenOrderController;
 use App\Http\Controllers\App\Canteen\CanteenOutletController;
+use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
 use App\Http\Controllers\App\EnrollmentRolloverSubjectMappingController;
+use App\Http\Controllers\App\Examinations\ExaminationController;
+use App\Http\Controllers\App\Examinations\ExaminationPaperController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
@@ -76,6 +80,7 @@ use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\SubjectOfferingController;
+use App\Http\Controllers\App\Syllabus\SyllabusUnitController;
 use App\Http\Controllers\App\Timetable\TimetableEntryController;
 use App\Http\Controllers\App\Timetable\TimetablePeriodController;
 use App\Http\Controllers\App\TransportOperationsController;
@@ -844,6 +849,68 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/create', [TimetablePeriodController::class, 'create'])->name('create');
         Route::post('/', [TimetablePeriodController::class, 'store'])->name('store');
         Route::patch('/{timetablePeriod}', [TimetablePeriodController::class, 'update'])->name('update');
+    });
+
+    // Phase 0H.2 -- the administrative Student Attendance workflow.
+    // Capability checks live in the controller itself (the
+    // AuthorizesCapability trait), matching every other App/* Inertia
+    // controller in this codebase; the API surface uses route
+    // middleware instead, where `idempotent` ordering matters.
+    // Phase 0H.3A -- the administrative Syllabus surface. Capability
+    // checks live in the controller (the AuthorizesCapability trait),
+    // matching every other App/* Inertia controller in this codebase.
+    // No delete and no activate/deactivate route: `status` is edited
+    // through the ordinary update, exactly like the API.
+    Route::prefix('app/syllabus')->name('app.syllabus.')->group(function (): void {
+        Route::get('/', [SyllabusUnitController::class, 'index'])->name('index');
+        Route::post('/', [SyllabusUnitController::class, 'store'])->name('store');
+        Route::patch('/{syllabusUnit}', [SyllabusUnitController::class, 'update'])->name('update');
+    });
+
+    // Phase 0H.3B -- the administrative Curriculum Delivery surface.
+    // Capability checks live in the controller (the
+    // AuthorizesCapability trait), matching every other App/* Inertia
+    // controller in this codebase. No delete and no archive route:
+    // these rows are historical instructional activity. `status` moves
+    // only through the dedicated transition route, never through the
+    // ordinary update -- completing/reopening is expected-status
+    // compare-and-swap guarded, which a plain PATCH cannot express.
+    Route::prefix('app/syllabus-delivery')->name('app.syllabus-delivery.')->group(function (): void {
+        Route::get('/', [CurriculumDeliveryController::class, 'index'])->name('index');
+        Route::post('/', [CurriculumDeliveryController::class, 'store'])->name('store');
+        Route::patch('/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])->name('update');
+        Route::post('/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])->name('transition');
+    });
+
+    // Phase 0H.4A -- the administrative Examination surface. Capability
+    // checks live in the controller (the AuthorizesCapability trait),
+    // matching every other App/* Inertia controller in this codebase.
+    // Exactly three routes: no delete, no activate/deactivate, and no
+    // paper/marks/grade-scale/result surface -- `status` is edited
+    // through the ordinary update, exactly like the API.
+    Route::prefix('app/examinations')->name('app.examinations.')->group(function (): void {
+        Route::get('/', [ExaminationController::class, 'index'])->name('index');
+        Route::post('/', [ExaminationController::class, 'store'])->name('store');
+        Route::patch('/{examination}', [ExaminationController::class, 'update'])->name('update');
+    });
+
+    // Phase 0H.4B (ExaminationPaper / Scheduling) -- a drill-down from
+    // one Examination. No paper/marks/grade-scale/result surface beyond
+    // scheduling -- `status` is edited through the ordinary update,
+    // exactly like the Examination page and the API.
+    Route::prefix('app/examinations/{examination}/papers')->name('app.examinations.papers.')->group(function (): void {
+        Route::get('/', [ExaminationPaperController::class, 'index'])->name('index');
+        Route::post('/', [ExaminationPaperController::class, 'store'])->name('store');
+        Route::patch('/{examinationPaper}', [ExaminationPaperController::class, 'update'])->name('update');
+    });
+
+    Route::prefix('app/attendance')->name('app.attendance.')->group(function (): void {
+        Route::get('/', [AttendanceController::class, 'index'])->name('index');
+        Route::get('/take', [AttendanceController::class, 'take'])->name('take');
+        Route::get('/roster', [AttendanceController::class, 'roster'])->name('roster');
+        Route::post('/', [AttendanceController::class, 'store'])->name('store');
+        Route::get('/{attendanceSession}', [AttendanceController::class, 'show'])->name('show');
+        Route::post('/records/{attendanceRecord}/correct', [AttendanceController::class, 'correct'])->name('correct');
     });
 
     Route::prefix('app/timetable-schedule')->name('app.timetable-schedule.')->group(function (): void {

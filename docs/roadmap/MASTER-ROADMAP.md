@@ -412,10 +412,173 @@ full security review against the module's own checklist, and a
 definitive full-regression run. See `docs/modules/TIMETABLE.md` for
 the complete as-built record.
 
-**Attendance, Academics, and Examinations remain not started.** Phase
-0H as a whole is **not** complete — Timetable Foundation is one of
-four modules this phase scopes, and the other three have no
-implementation yet.
+**Attendance Foundation (Phase 0H.2) is complete** — Student class
+attendance: `AttendanceSession` (the immutable header of one SUBMITTED
+class register, carrying an immutable snapshot of the class context it
+was instantiated from — AcademicYear/Campus/GradeLevel/Section/
+SubjectOffering/teacher/Period plus the Period's wall-clock times — so
+later Timetable or Period edits can never rewrite history;
+`timetable_entry_id` is provenance only) and `AttendanceRecord` (one
+StudentEnrollment's status, bound to its Session by DUAL composite
+context foreign keys that make a wrong-Section/year/campus/grade row
+structurally impossible), a complete-register submission discipline
+over a Students/SIS-owned as-of-date placement roster, `present`/
+`absent`/`late`/`excused` with no reason or free-text field anywhere,
+expected-status compare-and-swap correction, `attendance.view`/
+`attendance.manage` capabilities, an `/api/v1` command surface with a
+COMPLETE OpenAPI contract shipped in the same branch, and a
+session-authenticated Inertia UI. Phase 0H.2 also added a
+Section-before-Enrollment lock order to the existing
+`StudentEnrollmentService` so Attendance and Students/SIS serialize on
+one shared Section row — a synchronization discipline that changed no
+Students/SIS domain outcome. Five real two-process concurrency proofs
+(one of which caught and closed a genuine deadlock before it shipped),
+raw-PostgreSQL structural-integrity proofs from both FK directions, and
+historical-mutation proofs against TimetableEntry edits, Period
+retiming and backdated SIS changes. See `docs/modules/ATTENDANCE.md`
+for the complete as-built record.
+
+**Syllabus Foundation (Phase 0H.3A) is complete** — the first concrete
+Academics fact: `SyllabusUnit`, one ordered unit of instructional
+content that a `SubjectOffering` is EXPECTED to cover. A catalogue of
+expected content only — it records nothing about what was actually
+taught, nothing about an individual lesson, and nothing about any
+Student. Exactly one parent (`SubjectOffering`, composite-FK
+RESTRICT, no denormalized context); no `Curriculum` entity, no
+`academic_term_id`, no `section_id`; required AND elective Offerings
+both supported; case-insensitive code uniqueness enforced by an
+unconditional PostgreSQL expression index (so an inactive unit keeps
+reserving its code, which is why the entity needs no
+activate/deactivate command); lifecycle through the ordinary PATCH and
+no delete route; `syllabus.view`/`syllabus.manage` capabilities —
+deliberately NOT under Academic Structure's `academics.*` root, with
+the Academics → Syllabus → `syllabus.*` mapping recorded in
+`docs/modules/ACADEMICS.md`; four `/api/v1` operations with a COMPLETE
+OpenAPI contract and regenerated shared types in the same branch; and a
+session-authenticated Inertia surface at `/app/syllabus`. Classified
+**Confidential** — it stores no personal data at all. See
+`docs/modules/ACADEMICS.md` for the complete as-built record.
+
+**Curriculum Delivery (Phase 0H.3B) is complete** — the second concrete
+Academics fact: `CurriculumDelivery`, the record that one `Section` has
+COVERED one `SyllabusUnit` — when that Section began it, and when, if
+yet, it finished. Actual instructional coverage by a cohort, the
+counterpart to `SyllabusUnit`'s catalogue of expected content; it
+records nothing about an individual lesson, nothing about who taught it,
+and nothing about any Student. **Section-specific** (per-Section
+variation is precisely what the Offering-wide syllabus deferred to
+delivery) and **required-SubjectOffering-only in v1** — an elective is a
+Student-level enrollment choice, not a Section-wide cohort, which is
+Timetable v1's identical restriction and rationale. **Cross-parent
+integrity is fully database-authoritative**: two 5-column composite
+foreign keys pin the Section and the SubjectOffering to the same
+AcademicYear/Campus/GradeLevel, and a third pins the SyllabusUnit to
+that exact Offering (consuming one additive, non-destructive
+`syllabus_units_offering_context_unique` key added to Phase 0H.3A's
+table), so a Section teaching one Subject can never record delivery
+against another Subject's unit even by raw SQL. One mutable state row
+per Section × SyllabusUnit (`in_progress`/`completed`; **`not_started`
+is deliberately the absence of a row**, so consumers LEFT JOIN from
+`syllabus_units` rather than counting deliveries), School-local dates
+validated as non-future and inside the AcademicYear, expected-status
+compare-and-swap transitions under a row lock — proven with two real
+separate OS processes — a closed two-edge state machine, and no delete
+route. An Application service is required here, unlike SyllabusUnit,
+because real invariants exist. `curriculum.delivery.view`/`.manage`
+capabilities, a sibling of `syllabus.*` rather than an extension of it;
+five `/api/v1` operations with a COMPLETE OpenAPI contract and
+regenerated shared types in the same branch; and a session-authenticated
+Inertia surface at `/app/syllabus-delivery`. **No teacher identity, no
+Timetable dependency, no Attendance dependency, no Student data, no
+`academic_term_id`, zero domain events.** Classified **Confidential** —
+it stores no personal data at all. See `docs/modules/ACADEMICS.md` §18
+for the complete as-built record.
+
+**Academics is NOT complete.** Syllabus Foundation and Curriculum
+Delivery are two of its three scoped concerns: **Lesson Planning remains
+deferred**, pending a real requirement and the platform's first
+ownership-based authorization model, which still does not exist. Phase
+0H.3B deliberately stores nothing at lesson granularity, so Lesson
+Planning remains fully necessary rather than redundant.
+
+**Examination Foundation (Phase 0H.4A) is complete** — the first
+Examinations fact: `Examination`, one named assessment WINDOW that a
+School holds within one AcademicYear ("Mid-Term Examination 2026-27,
+10–20 September). **A window/container, NOT a paper**: it owns only its
+identity and the date range it spans, and owns no Subject,
+SubjectOffering, Section, paper, per-paper sitting date/time or max
+marks, no Student, enrollment, teacher or invigilator, and no mark,
+grade, result, publication state, report card or transcript. Exactly two
+parents (School and a composite-FK RESTRICT `AcademicYear`); no Campus
+or GradeLevel — per-campus/per-grade variation is a paper concern — and
+no `academic_term_id` ("Midterm" is a name, not a term reference;
+AcademicTerm still has no lifecycle status and no consuming domain).
+**Two deliberate departures from Curriculum Delivery**: future dates are
+permitted and expected (an examination is scheduled ahead, exactly as
+AcademicYears and AcademicTerms already are), and overlapping windows
+are permitted (examinations partition nothing) — so this module
+introduces no lock, no exclusion constraint and no concurrency test,
+there being no multi-row invariant at all; the AcademicYear need not be
+active, so planning next year's examinations inside a draft year is
+supported. Case-insensitive code uniqueness within one AcademicYear
+enforced by an unconditional PostgreSQL expression index (so an inactive
+Examination keeps reserving its code, which is why there is no
+activate/deactivate command); `active`/`inactive` through the ordinary
+PATCH and no delete route; an Application service because the
+AcademicYear range check needs a parent lookup;
+`examinations.definitions.view`/`.manage` capabilities, deliberately
+depth-2 so a later marks or result-publication family can never be
+granted by the same key; four `/api/v1` operations with a COMPLETE
+OpenAPI contract and regenerated shared types in the same branch; and a
+session-authenticated Inertia surface at `/app/examinations`. Classified
+**Confidential** — it stores no personal data at all. See
+`docs/modules/EXAMINATIONS.md` and ADR 0032 for the complete as-built
+record and the decomposition rationale.
+
+**ExaminationPaper / Scheduling (Phase 0H.4B) is complete** — the second
+Examinations fact: `ExaminationPaper`, one SubjectOffering assessed
+within one Examination, with its scheduled sitting (date/time range) and
+maximum obtainable marks. Offering-wide, never Section-specific. An
+additive `examinations_context_unique` (`id, school_id,
+academic_year_id`) plus the pre-existing `subject_offerings_context_unique`
+let ExaminationPaper declare TWO composite FKs sharing the same stored
+`academic_year_id` column, structurally guaranteeing
+`Examination.academic_year_id == SubjectOffering.academic_year_id` even
+by raw SQL — proven in `Tests\Feature\Postgres\ExaminationPapersRlsIsolationTest`.
+Exactly one Paper per `(school_id, examination_id, subject_offering_id)`
+(unconditional unique constraint, so an inactive Paper keeps reserving
+the pair). Both required AND elective SubjectOfferings supported
+identically. Creation requires both parents active; ordinary corrections
+never re-check parent activity, but reactivating a withdrawn Paper does.
+School-local same-day sittings, positive `max_marks`
+(`NUMERIC(6,2)`), overlaps across different Offerings permitted (no
+lock, no concurrency test — mirroring Examination's own reasoning).
+`examinations.papers.view`/`.manage` capabilities; four more `/api/v1`
+operations with a COMPLETE OpenAPI contract and regenerated shared
+types; a session-authenticated drill-down UI at
+`/app/examinations/{examination}/papers`; zero domain events. Classified
+**Confidential**. See `docs/modules/EXAMINATIONS.md` §18 and ADR 0033
+for the complete as-built record.
+
+**Examinations has STARTED but is NOT complete.** Examination Foundation
+and ExaminationPaper/Scheduling are its first two checkpoints:
+**GradeScale is not implemented**, and **marks, result calculation,
+result publication, report cards and transcripts are all not
+implemented**. The checkpoint that first introduces Student marks
+crosses from Confidential into Sensitive personal data and must undergo
+a dedicated privacy/security architecture audit — including the
+children's-data **[LEGAL REVIEW REQUIRED]** gate in
+`docs/security/DATA-CLASSIFICATION.md` — before implementation.
+
+**Phase 0H as a whole is NOT complete** — Timetable, Attendance,
+Syllabus Foundation, Curriculum Delivery, Examination Foundation and
+ExaminationPaper/Scheduling are done; Academics still lacks Lesson
+Planning, and Examinations still lacks GradeScale, marks, results,
+report cards and transcripts.
+
+**"Phase 0H Attendance" remains Student class attendance only.** Staff/
+Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR
+concern.
 
 **"Phase 0H Attendance" means Student class attendance.** Staff/
 Employee attendance remains outside this Phase 0H checkpoint and
