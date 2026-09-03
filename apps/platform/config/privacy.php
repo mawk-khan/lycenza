@@ -32,4 +32,23 @@ return [
         'hmac_key_version' => (int) env('CONTACT_LOOKUP_HMAC_KEY_VERSION', 1),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Statutory identifier exact-match lookup digest (Checkpoint 9.6C)
+    |--------------------------------------------------------------------------
+    |
+    | A dedicated secret for
+    | App\Support\Privacy\StatutoryIdentifierLookupHasher (PAN/UAN/PF
+    | Member ID/ESIC IP Number) -- deliberately its OWN key, separate
+    | from both APP_KEY and contact_lookup.hmac_key, so each secret can
+    | be rotated independently and a compromise of one never implies
+    | the other. See ADR 0035 and ADR 0028's identical precedent.
+    |
+    */
+
+    'statutory_identifier_lookup' => [
+        'hmac_key' => env('STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY'),
+        'hmac_key_version' => (int) env('STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY_VERSION', 1),
+    ],
+
 ];

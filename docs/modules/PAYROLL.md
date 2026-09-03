@@ -826,7 +826,7 @@ never rewritten by this work.
 |---|---|---|
 | 9.6A — Legal Addendum & Statutory Rule Contract | **[implemented]** | ADR 0035, this section |
 | 9.6B — Golden Statutory Fixtures | **[implemented]** | 51 red fixtures: `PfCalculationServiceTest` (PF-01..12), `EsiCalculationServiceTest` (ESI-01..11, ESI-12 skipped/deferred), `ProfessionalTaxAndLwfCalculationServiceTest` (PT + LWF), `IncomeTaxSlabCalculatorTest` (TDS-01..12, TDS-20), `TdsMonthlyDeductionServiceTest` (TDS-13..19). Pure calculation-engine stubs under `app/Domain/Payroll/Statutory/Calculation/` throw until Checkpoint 9.6D/9.6E implements each against its docblock-documented algorithm. |
-| 9.6C — Statutory Schema / Versioning / Privacy | pending | |
+| 9.6C — Statutory Schema / Versioning / Privacy | **[implemented]** | 15 migrations: 7 platform reference tables (PF/ESI/LWF/PT+slabs/income-tax+slabs, no `school_id`, no RLS, matching `education_boards`), 8 School-owned RLS-enforced tables (component classifications, PF status, ESI coverage, tax profile, encrypted statutory identifiers, immutable calculation-result snapshots with a freeze trigger, statutory accounting configuration, LWF once-per-cycle charges). `StatutoryIdentifierLookupHasher` (its own HMAC key, ADR 0028's pattern). `StatutoryRuleVersionSeeder` seeds the 1-April-2026 rule versions matching the 9.6B golden fixtures' numbers exactly. |
 | 9.6D — PF / ESI / PT / LWF Calculation Engine | pending | |
 | 9.6E — Annualized Salary TDS Engine | pending | |
 | 9.6F — Statutory Finance Posting | pending | |
