@@ -7,37 +7,53 @@ formal decision record this document elaborates.
 
 ## Checkpoint roadmap
 
-- **9.0 — Architecture Decisions & Legal Boundary** (this checkpoint):
+**Status summary (Checkpoint 9.12 closure):** engineering implementation
+complete through 9.5 and 9.7–9.12 (non-statutory scope). **Statutory
+Payroll (9.6) remains deferred, pending `[LEGAL REVIEW REQUIRED]`** — see
+`docs/security/DATA-CLASSIFICATION.md`. This is a legally-gated deferred
+scope item, not an engineering failure, and Phase 9 is **not** described
+as "fully complete" anywhere in this document while 9.6 remains open. See
+"Phase 9.12 Closure" below for the full validation record.
+
+- **9.0 — Architecture Decisions & Legal Boundary** [implemented]:
   ADR 0032, this document, roadmap/domain-map annotations. No schema.
-- **9.1 — Compensation Schema Foundation**: `salary_components`,
+- **9.1 — Compensation Schema Foundation** [implemented]: `salary_components`,
   `salary_structures`, `salary_structure_components`,
   `employee_compensation_assignments`, `compensation_assignment_values`,
   plus `payroll_periods`, `payroll_runs`, `payroll_run_results`,
   `payroll_run_result_lines`, `payroll_adjustments`,
   `payroll_accounting_configurations`, `payroll_run_postings`.
-- **9.2 — Compensation Application Services**: structure
+- **9.2 — Compensation Application Services** [implemented]: structure
   draft/activate/supersede, compensation assignment, overlap
   enforcement, real concurrency proofs.
-- **9.3 — Payroll Periods & Calculation Kernel**: period services, run
+- **9.3 — Payroll Periods & Calculation Kernel** [implemented]: period services, run
   creation, deterministic calculation, `Money::multiplyByRate()`,
   golden fixtures, the fail-closed partial-period rule.
-- **9.4 — Run Lifecycle, Snapshotting & Separation of Duties**: state
+- **9.4 — Run Lifecycle, Snapshotting & Separation of Duties** [implemented]: state
   machine, approval immutability, actor persistence, concurrency
   proofs.
-- **9.5 — Finance Configuration, Posting & Reversal**: accounting
+- **9.5 — Finance Configuration, Posting & Reversal** [implemented]: accounting
   configuration, the posting algorithm, correction-run posting,
   reversal, transactional/idempotency integration with
   `LedgerService`.
-- **9.6 — Statutory Payroll Boundary — LEGAL GATE**: PF/ESI/TDS.
-  Blocked pending `[LEGAL REVIEW REQUIRED]` sign-off
+- **9.6 — Statutory Payroll Boundary — LEGAL GATE** [**BLOCKED / DEFERRED
+  — LEGAL REVIEW REQUIRED**]: PF/ESI/TDS. Blocked pending
+  `[LEGAL REVIEW REQUIRED]` sign-off
   (`docs/security/DATA-CLASSIFICATION.md`). Not started until that
-  clears or is explicitly, visibly deferred by user decision.
-- **9.7 — Authorization, Sensitive Reads & Audit.**
-- **9.8 — API / OpenAPI.**
-- **9.9 — Administrative UI.**
-- **9.10 — Events / Payslip Rendering.**
-- **9.11 — Security / Concurrency / Migration Closure.**
-- **9.12 — Integration / Publication Readiness.**
+  clears or is explicitly, visibly deferred by user decision. No PF/ESI/
+  TDS calculation, statutory rate table, government-identifier storage,
+  or statutory filing exists anywhere in this module.
+- **9.7 — Authorization, Sensitive Reads & Audit** [implemented].
+- **9.8 — API / OpenAPI** [implemented].
+- **9.9 — Administrative UI** [implemented].
+- **9.10 — Events / Payslip Rendering** [implemented].
+- **9.11 — Security / Concurrency / Migration Closure** [implemented]:
+  closed a real gap (`payroll_periods` transition guard — see its own
+  "Phase 9.11 Closure" section below).
+- **9.12 — Integration / Publication Readiness** [implemented]: main
+  reconciliation, migration-compatibility proof against current main,
+  full behavioral/concurrency/security/UI closure, baseline-vs-branch
+  regression attribution. See "Phase 9.12 Closure" below.
 
 ## Purpose
 
@@ -584,3 +600,194 @@ section. Unlike HR 8A.16, this was not a documentation-only closure —
 a real, previously-open concurrency gap was fixed.
 
 **PHASE 9.11 VERDICT: CLOSED.**
+
+## Phase 9.12 Closure (Integration / Publication Readiness, implemented)
+
+Reconciliation and final validation gate. **Does not merge Phase 9 into
+`main`** — that remains a separate, explicitly-authorized future step.
+
+**Reconciliation.** A normal `git merge` (not a rebase, preserving
+already-published Phase 9 history) of the 19 commits that had landed on
+`origin/main` (Attendance, Syllabus, Curriculum Delivery, Examinations
+0H.4A/4B) since the original Phase 9 base. Three real conflicts, all
+purely-additive-at-the-same-insertion-point, resolved by concatenation
+and verified by an exact set-union check against both parents (zero
+content lost, zero duplicated): `routes/api.php`,
+`packages/contracts/openapi/school-os-api.yaml` (417 base + 56 Payroll
++ 78 main = 551 merged schema keys, exact), and the generated
+`school-os-api.ts` (regenerated fresh from the reconciled OpenAPI
+source, never hand-resolved, zero-diff on a second regeneration).
+`CapabilityAndRoleSeeder.php` and `routes/web.php` auto-merged cleanly,
+independently verified by the same exact-set-union method.
+
+**Known finding, not fixed by this reconciliation:**
+`docs/architecture/adr/0032-examinations-decomposition-and-foundation-fact.md`
+(new, arriving from `main`) collides in number with Payroll's own
+pre-existing `0032-phase-9-payroll-architecture.md` (60 references
+across 42 files). This repository already tolerates an identical
+pre-existing collision (`0028-phase-8a-hr-sequencing-and-domain-foundation.md`
+vs `0028-searchable-encrypted-pii.md`, both already on `main`) without
+renumbering, so this was deliberately left for resolution at actual
+`main`-integration time rather than a wide, risky mass-rename here.
+
+**Migration compatibility against current `main`.** Proven three ways
+against the reconciled branch's exact 185-migration history: (1) clean
+install from zero — all 185 migrations, including all 13 Payroll-owned
+ones, applied without error; (2) upgrade proof — a database migrated to
+current `main`'s exact 172-migration state, then the 13-migration
+Payroll-forward delta applied on top, succeeded with zero historical
+migration edits and zero trigger/function collisions; (3) rollback/
+reapply of the complete 13-migration Payroll delta, verified clean both
+times. (The pre-existing orphan-standalone-trigger-function defect in
+`ResetTestDatabase`/`migrate:fresh` — recorded since Checkpoint 9.1,
+see ADR 0032 §5 — remains explicitly out of Phase 9's scope; it did not
+recur here because each reset in this checkpoint used a full schema
+drop/recreate, not a bare `migrate:fresh` retry.)
+
+**PostgreSQL structural verification.** Direct catalogue inspection
+(`pg_class`/`information_schema.triggers`/`pg_constraint`), not test
+inspection: all 12 Payroll-owned tables (excluding the platform-wide
+reference tables) confirmed `relrowsecurity = t`/`relforcerowsecurity =
+t`; all 12 expected triggers present (compensation-overlap, structure
+freeze, run-result freeze, run-transition, period-transition,
+correction-target, reversal-target validation); every expected
+composite same-School FK, unique constraint, and CHECK constraint
+present. Six raw-SQL negative proofs executed directly via `psql`
+against a real seeded scenario (bypassing the Application layer and
+Eloquent entirely): a cross-School FK reference, a compensation-overlap
+bypass, a mutation of a posted run's frozen result, an invalid period
+transition, a second "original" posting for the same run, and a second
+reversal of the same posting — **all six rejected by the database
+itself**, each with the expected constraint/trigger error.
+
+**Full behavioral closure.** `php artisan test --filter=Payroll` → 212
+passed (unchanged from 9.11 — zero regression from reconciliation).
+Every category in the checkpoint's own risk list (compensation,
+calculation, run lifecycle, Finance posting/reversal/correction, HTTP
+idempotency, sensitive-data suppression, payslip/events) is covered by
+name in the 27 passing test classes.
+
+**Concurrency matrix** (every real multi-process proof, none replaced
+by a sequential simulation):
+
+| Competing operations | Test | Expected | Observed |
+|---|---|---|---|
+| Structure activation vs. activation | `CompensationConcurrencyTest::scenario_a` | Exactly one winner | Confirmed |
+| Compensation assignment overlap | `CompensationConcurrencyTest::scenario_b` | Exactly one winner | Confirmed |
+| Independent EmploymentRecords | `CompensationConcurrencyTest::scenario_c` | Both succeed independently | Confirmed |
+| Raw SQL compensation-overlap bypass | `CompensationConcurrencyTest::scenario_d` | DB rejects | Confirmed |
+| Recalculation vs. recalculation | `PayrollRunLifecycleConcurrencyTest::scenario_a` | Both succeed, no corruption | Confirmed |
+| Calculate vs. approve | `PayrollRunLifecycleConcurrencyTest::scenario_b` | Never mutates an approved run | Confirmed |
+| Approval vs. approval | `PayrollRunLifecycleConcurrencyTest::scenario_c` | Exactly one winner | Confirmed |
+| Period open vs. open (same period) | `PayrollPeriodConcurrencyTest` | Exactly one winner, loser gets `ConcurrentPeriodTransitionConflictException` | Confirmed |
+| Posting vs. posting (same run) | `PayrollPostingConcurrencyTest::scenario_a` | Exactly one original posting | Confirmed |
+| Reversal vs. reversal (same posted run) | `PayrollPostingConcurrencyTest::scenario_b` | Exactly one reversal | Confirmed |
+| HTTP idempotent duplicate POST /post | `PayrollIdempotencyRealConcurrencyTest` | Exactly one business effect, replay returns stored response | Confirmed |
+
+Final DB state after every scenario: exactly one winning row/status
+transition, the loser's attempt structurally rejected (never partially
+applied), matching the "expected" column in every row.
+
+**Authorization closure.** Exact capability catalogue confirmed via
+direct query (`SELECT key FROM capabilities WHERE key LIKE
+'payroll.%'`): exactly the 13 expected keys, no more, no fewer.
+Default grants confirmed via direct query
+(`role_capabilities`/`roles`): `school_admin` holds exactly the 10
+non-Highly-Sensitive operational capabilities
+(`.accounting.manage`, `.compensation.view`, `.periods.manage`,
+`.runs.*`, `.structures.*`); zero roles hold
+`payroll.compensation.sensitive.view`,
+`payroll.compensation.sensitive.manage`, or `payroll.statutory.manage`
+by default. No role-name string comparison anywhere in
+`app/Domain/Payroll`.
+
+**Security/privacy closure.** Re-ran the full grep sweep from
+Checkpoint 9.11 plus the additional items this checkpoint specifies:
+no direct `journal_entries`/`journal_lines` write (the sole
+`journal_entries`/`journal_lines` hits are `PayrollPostingService`'s
+own docblock explicitly documenting it never does this and calls
+`LedgerService` instead); no direct HR authoritative mutation; no
+role-name check; no `float`-typed monetary field; no bank-account
+field; no PF/ESI/TDS implementation (the only hits are a component
+*name* example in a docblock and the Payslip DTO's own explicit
+exclusion note); no statutory-identifier field; no event payload
+carries an amount-shaped key (verified both by grep and by
+`PayrollDomainEventsTest`'s own payload-inspection assertions). No
+P0/P1 found.
+
+**API/OpenAPI/contract closure.** `route:list` re-confirmed on the
+reconciled branch: same verbs, same middleware shape as 9.10/9.11,
+zero stray routes from the merge. `npm run generate` against the
+reconciled OpenAPI source produces a zero-diff `school-os-api.ts` a
+second time (idempotent); `tsc --noEmit` clean.
+
+**Administrative UI closure.** `format:check`, `lint` (0 errors, 2
+pre-existing unrelated warnings), `type-check`, and `build` (861
+modules, succeeds) all clean on the reconciled branch. `tests/Feature/App/`
+(580 tests, every module's own UI suite, since no single centralized
+navigation test file exists in this repository) shows the identical
+failure set as an equivalent `main`-only run (see below) — zero
+Payroll-attributable failures. Unauthorized-actor monetary-field
+suppression re-confirmed by `PayrollUiTest`'s existing raw-payload
+scans.
+
+**Baseline-vs-branch regression attribution — the mandatory
+requirement.** Ran the full repository suite (`php artisan test`, no
+path filter) twice, in the same Docker image
+(`school-os-platform-test:latest`), same PHP `memory_limit=1024M`,
+same `platform:test-db-reset`-equivalent procedure, against two
+*separate* PostgreSQL databases so the runs could execute truly in
+parallel with no cross-contamination:
+
+- **Phase 9 (reconciled branch):** 4814 passed, **13 failed**, 18266 assertions.
+- **`main` alone** (a genuinely separate, unmodified worktree pinned at
+  `origin/main`'s exact commit, `36c4a1ce9067d2e403c579179cdad5fcc3a9d629`):
+  4596 passed, **13 failed**, 17123 assertions.
+
+The two failure sets, compared by exact test name (not by count alone):
+**byte-identical, 13-for-13.** `comm -23`/`comm -13` between the two
+sorted failure-name lists both return empty. **Phase-9-specific
+regression delta = zero.** The 218 additional passing tests on the
+Phase 9 branch are exactly Payroll's own suite (212) plus a handful of
+9.11 additions already counted elsewhere — no test that passes on
+`main` fails on Phase 9, and no test fails on Phase 9 that passes on
+`main`.
+
+**Known infrastructure defects** (all reproduced identically on both
+`main` and Phase 9 in this exact ad hoc verification harness; none
+introduced by Phase 9; none block publication):
+
+| Defect | Reproduced on `main`? | Reproduced on Phase 9? | Phase 9 introduced? | Blocks publication? |
+|---|---|---|---|---|
+| Orphan standalone PostgreSQL trigger functions surviving a bare `migrate:fresh` retry (documented since Checkpoint 9.1, ADR 0032 §5) | Yes (repo-wide, spans Finance/Payments/Fees/Identity migrations) | Yes (same root cause) | No | No — worked around per-reset by a full schema drop/recreate in this checkpoint and 9.10/9.11; a real fix is explicitly out of Payroll's boundary |
+| `AnnouncementSchedulingTimezoneTest` (3 tests, Communications module) — timezone-dependent `null` `scheduled_at` | Yes | Yes | No | No — unrelated module, not exercised by any Payroll code path |
+| `CurriculumDeliveryArchitectureGuardTest` (1 test, Academics module) | Yes | Yes | No | No — unrelated module |
+| `Document*MinioIntegrationTest`/`DocumentStorageException` (5 tests) — this ad hoc container's `.env` `AWS_ENDPOINT=http://localhost:9000` does not resolve to the separately-networked `school-os-minio-1` container | Yes | Yes | No | No — a harness networking artifact of this verification session's containers, not application code; Documents module is untouched by Payroll |
+| `ExaminationsRlsIsolationTest`/`ExaminationPapersRlsIsolationTest` (2 tests) — a closed-column-set assertion observing a different `information_schema.columns` ordering than hardcoded | Yes | Yes | No | No — unrelated module (0H.4A/4B), pre-existing on `main` |
+| `HealthControllerTest`/`LoginThrottleTest` readiness-related (2 tests) — `/api/health/ready` returns `503` in this harness | Yes | Yes | No | No — this ad hoc container's dependency wiring (MinIO/Redis reachability) is incomplete for a full readiness check; unrelated to Payroll |
+
+**Documentation closure.** This section, the roadmap-status summary
+above, `docs/architecture/DOMAIN-MAP.md`'s Payroll row, and
+`docs/roadmap/MASTER-ROADMAP.md`'s Phase 0J closure note were all
+updated in the same commit as this checkpoint. No claim of "Phase 9
+Payroll fully complete" appears anywhere — the accurate status is
+"engineering implementation complete through non-statutory scope;
+statutory Payroll (9.6) remains deferred pending
+`[LEGAL REVIEW REQUIRED]`."
+
+**Statutory 9.6 final status.** Re-checked `docs/security/DATA-CLASSIFICATION.md`
+directly: the "Government/statutory identifiers" row remains tagged
+`[LEGAL REVIEW REQUIRED]`, with no qualifying sign-off artifact
+anywhere in the repository. A repository-wide grep for PF/ESI/TDS
+implementation, statutory rate tables, or government-identifier
+storage in `apps/platform/` returns zero hits. **9.6 remains BLOCKED /
+DEFERRED — LEGAL REVIEW REQUIRED.**
+
+**Git.** Merge commit `6cf4e88`; this closure's own commit follows it
+on `feature/phase-9-payroll`. No merge into `main` was made or
+attempted.
+
+**PHASE 9.12 VERDICT: CLOSED — engineering implementation complete
+through non-statutory scope. Statutory Payroll (9.6) remains deferred.
+NOT merged into `main`; that remains a separate, explicitly-authorized
+future step.**
