@@ -26,6 +26,7 @@ class PayrollStatutorySchemaInvariantsTest extends TestCase
             'payroll_statutory_calculation_results',
             'payroll_statutory_accounting_configurations',
             'payroll_lwf_annual_charges',
+            'payroll_statutory_run_postings',
         ];
     }
 
@@ -109,6 +110,66 @@ class PayrollStatutorySchemaInvariantsTest extends TestCase
         $this->assertContains('lookup_hash', $columnNames);
         foreach (['pan', 'uan', 'value', 'plaintext'] as $forbidden) {
             $this->assertNotContains($forbidden, $columnNames, "employee_statutory_identifiers must never carry a bare '{$forbidden}' column.");
+        }
+    }
+
+    /**
+     * Checkpoint 9.6H -- `payroll_statutory_run_postings` (Checkpoint
+     * 9.6F) is append-only: `school_os_app` (the runtime role every
+     * request/queue connection actually uses) must hold no UPDATE/
+     * DELETE privilege on it, mirroring `payroll_run_postings`'
+     * identical proof.
+     */
+    #[Test]
+    public function statutory_run_postings_is_append_only_for_the_runtime_role(): void
+    {
+        $privileges = $this->admin()->select(
+            'select privilege_type from information_schema.role_table_grants '.
+            "where table_name = 'payroll_statutory_run_postings' and grantee = 'school_os_app'",
+        );
+        $privilegeTypes = array_map(fn ($p) => $p->privilege_type, $privileges);
+
+        $this->assertContains('SELECT', $privilegeTypes);
+        $this->assertContains('INSERT', $privilegeTypes);
+        $this->assertNotContains('UPDATE', $privilegeTypes, 'payroll_statutory_run_postings must be append-only -- school_os_app must never hold UPDATE.');
+        $this->assertNotContains('DELETE', $privilegeTypes, 'payroll_statutory_run_postings must be append-only -- school_os_app must never hold DELETE.');
+    }
+
+    #[Test]
+    public function statutory_run_postings_has_the_one_original_per_run_structural_guarantee(): void
+    {
+        $row = $this->admin()->selectOne(
+            "select indexdef from pg_indexes where indexname = 'payroll_statutory_run_postings_one_original_per_run'",
+        );
+
+        $this->assertNotNull($row, 'expected the one-original-per-run partial unique index to exist');
+        $this->assertStringContainsString('UNIQUE', $row->indexdef);
+    }
+
+    /**
+     * Checkpoint 9.6F correction -- proves the PF-admin-charge and
+     * EDLI expense accounts (missing in the original 9.6C migration,
+     * added by a dedicated additive migration) actually exist as real
+     * composite-FK-backed columns, not just fillable array entries.
+     */
+    #[Test]
+    public function statutory_accounting_configuration_has_dedicated_pf_admin_and_edli_expense_accounts(): void
+    {
+        $columns = $this->admin()->select(
+            'select column_name from information_schema.columns where table_name = ?',
+            ['payroll_statutory_accounting_configurations'],
+        );
+        $columnNames = array_map(fn ($c) => $c->column_name, $columns);
+
+        $this->assertContains('pf_admin_charge_expense_ledger_account_id', $columnNames);
+        $this->assertContains('edli_expense_ledger_account_id', $columnNames);
+
+        foreach (['psac_pf_admin_expense_fk', 'psac_edli_expense_fk'] as $constraintName) {
+            $exists = $this->admin()->selectOne(
+                'select conname from pg_constraint where conname = ?',
+                [$constraintName],
+            );
+            $this->assertNotNull($exists, "expected composite FK constraint {$constraintName} to exist");
         }
     }
 }

@@ -6,6 +6,7 @@ use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Infrastructure\PayrollRunResult;
 use App\Domain\Payroll\Infrastructure\PayrollRunResultLine;
+use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryCalculationAlreadyPerformedException;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryEmployeeFactsMissingException;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryRuleVersionNotFoundException;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryRunNotEligibleForCalculationException;
@@ -93,40 +94,56 @@ class StatutoryPayrollCalculationService
         private readonly TdsMonthlyDeductionService $tds,
     ) {}
 
+    /**
+     * The `PayrollRun` row lock below serializes two concurrent calls
+     * for the SAME run (the second blocks until the first commits or
+     * rolls back) -- but `calculateForRun()` never mutates
+     * `payroll_runs.status`, so the second caller, once unblocked,
+     * still observes `draft`/`calculated` and would otherwise attempt
+     * a SECOND set of `payroll_statutory_calculation_results` inserts.
+     * `payroll_run_result_id`'s UNIQUE constraint (Checkpoint 9.6C) is
+     * the real guarantee against that -- caught here and translated to
+     * `StatutoryCalculationAlreadyPerformedException`, never a raw
+     * database exception (Checkpoint 9.6H concurrency proof).
+     */
     public function calculateForRun(PayrollRun $run, User $actor): int
     {
         $school = $run->school;
 
-        return $this->context->withSchool($school, function () use ($school, $run, $actor) {
-            return DB::transaction(function () use ($school, $run, $actor) {
-                $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
-                if (! in_array($locked->status, ['draft', 'calculated'], true)) {
-                    throw new StatutoryRunNotEligibleForCalculationException($run->id, $locked->status);
-                }
+        try {
+            return $this->context->withSchool($school, function () use ($school, $run, $actor) {
+                return DB::transaction(function () use ($school, $run, $actor) {
+                    $locked = PayrollRun::query()->where('id', $run->id)->lockForUpdate()->firstOrFail();
+                    if (! in_array($locked->status, ['draft', 'calculated'], true)) {
+                        throw new StatutoryRunNotEligibleForCalculationException($run->id, $locked->status);
+                    }
 
-                $period = $locked->period;
-                $asOf = Carbon::parse($period->period_month)->startOfMonth();
+                    $period = $locked->period;
+                    $asOf = Carbon::parse($period->period_month)->startOfMonth();
 
-                $classifications = PayrollSalaryComponentStatutoryClassification::query()
-                    ->where('school_id', $school->id)
-                    ->where('effective_from', '<=', $asOf)
-                    ->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>', $asOf))
-                    ->get()
-                    ->keyBy('salary_component_id');
+                    $classifications = PayrollSalaryComponentStatutoryClassification::query()
+                        ->where('school_id', $school->id)
+                        ->where('effective_from', '<=', $asOf)
+                        ->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>', $asOf))
+                        ->get()
+                        ->keyBy('salary_component_id');
 
-                $results = PayrollRunResult::query()->where('payroll_run_id', $run->id)->get();
-                $count = 0;
+                    $results = PayrollRunResult::query()->where('payroll_run_id', $run->id)->get();
+                    $count = 0;
 
-                foreach ($results as $result) {
-                    $this->calculateForResult($school, $run, $result, $asOf, $classifications, $actor);
-                    $count++;
-                }
+                    foreach ($results as $result) {
+                        $this->calculateForResult($school, $run, $result, $asOf, $classifications, $actor);
+                        $count++;
+                    }
 
-                $this->audit->school($school, 'payroll.statutory_calculation.completed', actor: $actor, subject: $run, metadata: ['resultCount' => $count]);
+                    $this->audit->school($school, 'payroll.statutory_calculation.completed', actor: $actor, subject: $run, metadata: ['resultCount' => $count]);
 
-                return $count;
+                    return $count;
+                });
             });
-        });
+        } catch (UniqueConstraintViolationException) {
+            throw new StatutoryCalculationAlreadyPerformedException($run->id);
+        }
     }
 
     /**
