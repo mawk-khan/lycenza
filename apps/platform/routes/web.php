@@ -71,6 +71,10 @@ use App\Http\Controllers\App\Payroll\PayrollRunPostingController;
 use App\Http\Controllers\App\Payroll\PayslipController as PayrollPayslipController;
 use App\Http\Controllers\App\Payroll\SalaryComponentController as PayrollSalaryComponentController;
 use App\Http\Controllers\App\Payroll\SalaryStructureController as PayrollSalaryStructureController;
+use App\Http\Controllers\App\Payroll\Statutory\StatutoryAccountingConfigurationController;
+use App\Http\Controllers\App\Payroll\Statutory\StatutoryController as StatutoryPayrollController;
+use App\Http\Controllers\App\Payroll\Statutory\StatutoryEmployeeController;
+use App\Http\Controllers\App\Payroll\Statutory\StatutoryExportController as StatutoryPayrollExportController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
@@ -1011,5 +1015,29 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/accounting', [PayrollAccountingConfigurationController::class, 'show'])->name('accounting.show');
         Route::post('/accounting', [PayrollAccountingConfigurationController::class, 'update'])->name('accounting.update');
+
+        // Checkpoint 9.6I -- Statutory Payroll administrative UI. Same
+        // capability-checks-live-inside-each-controller convention as
+        // the rest of this file (no route-level `capability:`
+        // middleware here either).
+        Route::prefix('statutory')->name('statutory.')->group(function (): void {
+            Route::get('/', [StatutoryPayrollController::class, 'index'])->name('index');
+
+            Route::get('/employees/search', [StatutoryEmployeeController::class, 'search'])->name('employees.search');
+            Route::get('/employees/{employmentRecord}', [StatutoryEmployeeController::class, 'show'])->name('employees.show');
+            Route::get('/employees/{employmentRecord}/identifiers/{identifierType}/reveal', [StatutoryEmployeeController::class, 'revealIdentifier'])->name('employees.identifiers.reveal');
+            Route::post('/employees/{employmentRecord}/pf-status', [StatutoryEmployeeController::class, 'storePfStatus'])->name('employees.pf-status.store');
+            Route::post('/employees/{employmentRecord}/esi-coverage', [StatutoryEmployeeController::class, 'storeEsiCoverage'])->name('employees.esi-coverage.store');
+            Route::post('/employees/{employmentRecord}/tax-profile', [StatutoryEmployeeController::class, 'storeTaxProfile'])->name('employees.tax-profile.store');
+            Route::post('/employees/{employmentRecord}/identifiers', [StatutoryEmployeeController::class, 'storeIdentifier'])->name('employees.identifiers.store');
+
+            Route::get('/accounting', [StatutoryAccountingConfigurationController::class, 'show'])->name('accounting.show');
+            Route::post('/accounting', [StatutoryAccountingConfigurationController::class, 'update'])->name('accounting.update');
+
+            Route::get('/runs/{payrollRun}/exports', [StatutoryPayrollExportController::class, 'show'])->name('runs.exports.show');
+            Route::get('/runs/{payrollRun}/exports/ecr', [StatutoryPayrollExportController::class, 'ecr'])->name('runs.exports.ecr');
+            Route::get('/runs/{payrollRun}/exports/esi-worksheet', [StatutoryPayrollExportController::class, 'esiWorksheet'])->name('runs.exports.esi-worksheet');
+            Route::get('/runs/{payrollRun}/exports/tds-draft-statement', [StatutoryPayrollExportController::class, 'tdsDraftStatement'])->name('runs.exports.tds-draft-statement');
+        });
     });
 });

@@ -7,6 +7,7 @@ use App\Support\Identifiers\GeneratesUuidV7;
 use App\Support\Tenancy\BelongsToSchool;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Checkpoint 9.6C (ADR 0035 correction addendum §1.1) -- the four
@@ -20,7 +21,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $has_uan
  * @property bool $has_approved_higher_wage_contribution
  * @property string|null $higher_wage_approval_reference
+ * @property Carbon|null $higher_wage_approval_effective_from
  * @property bool $is_eps_eligible
+ * @property bool $has_higher_pension_status
  */
 class EmployeePfStatus extends Model
 {
@@ -31,7 +34,8 @@ class EmployeePfStatus extends Model
     protected $fillable = [
         'school_id', 'employment_record_id', 'has_existing_pf_membership',
         'has_uan', 'has_approved_higher_wage_contribution',
-        'higher_wage_approval_reference', 'is_eps_eligible',
+        'higher_wage_approval_reference', 'higher_wage_approval_effective_from',
+        'is_eps_eligible', 'has_higher_pension_status',
     ];
 
     protected function casts(): array
@@ -40,7 +44,9 @@ class EmployeePfStatus extends Model
             'has_existing_pf_membership' => 'boolean',
             'has_uan' => 'boolean',
             'has_approved_higher_wage_contribution' => 'boolean',
+            'higher_wage_approval_effective_from' => 'date',
             'is_eps_eligible' => 'boolean',
+            'has_higher_pension_status' => 'boolean',
         ];
     }
 

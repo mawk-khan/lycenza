@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Money;
+use App\Support\Privacy\PartialValueMasker;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
@@ -127,15 +128,6 @@ class StatutoryTdsDraftStatementExportService
 
         $pan = $identifier->encrypted_value;
 
-        if ($canViewIdentifiers) {
-            return $pan;
-        }
-
-        $length = mb_strlen($pan);
-        if ($length <= 4) {
-            return str_repeat('X', $length);
-        }
-
-        return mb_substr($pan, 0, 2).str_repeat('X', $length - 4).mb_substr($pan, -2);
+        return $canViewIdentifiers ? $pan : PartialValueMasker::mask($pan);
     }
 }
