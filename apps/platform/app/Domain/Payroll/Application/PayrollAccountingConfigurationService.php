@@ -13,7 +13,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Phase 9.5 (ADR 0032 "Deduction accounting") -- the Payroll -> Finance
+ * Phase 9.5 (ADR 0034 "Deduction accounting") -- the Payroll -> Finance
  * configuration seam named by `payroll_accounting_configurations`'
  * own migration docblock. Thin CRUD-with-audit for the School-wide
  * singleton configuration, plus the one real invariant shared between

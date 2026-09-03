@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 9.2 -- the sole write path for `employee_compensation_assignments`/
- * `compensation_assignment_values` (ADR 0032 "Compensation assignment").
+ * `compensation_assignment_values` (ADR 0034 "Compensation assignment").
  * Anchored to `EmploymentRecord`, never bare `Employee` -- a rehired
  * Employee's second EmploymentRecord gets independent compensation
  * history for free, simply because assignments key on
@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\DB;
  * FOR UPDATE before any check, so two concurrent `assign()` calls for
  * the SAME EmploymentRecord serialize on that lock; a DIFFERENT
  * EmploymentRecord takes a different lock and is never blocked by this
- * one (ADR 0032 "Mandatory overlap guarantees" -- no School-wide
+ * one (ADR 0034 "Mandatory overlap guarantees" -- no School-wide
  * locking). The database triggers
  * (`trg_compensation_assignments_reject_overlap`,
  * `trg_compensation_assignments_require_active_structure`,
@@ -104,7 +104,7 @@ class CompensationService
 
                     // Close, never mutate anything else about the row --
                     // its own compensation_assignment_values remain
-                    // exactly as they were (immutable, ADR 0032).
+                    // exactly as they were (immutable, ADR 0034).
                     $currentOpen->update(['effective_to' => $effectiveFrom->copy()->subDay()]);
                 }
 
@@ -134,7 +134,7 @@ class CompensationService
                     $this->createValue($school, $assignment, $value);
                 }
 
-                // Entity references only -- never the amount (ADR 0032
+                // Entity references only -- never the amount (ADR 0034
                 // "Sensitive values": Highly Sensitive, never logged,
                 // never in audit metadata, never in an event payload).
                 $this->audit->school($school, 'payroll.compensation.assigned', actor: $actor, subject: $assignment, metadata: [
@@ -179,7 +179,7 @@ class CompensationService
      * target revision must have an explicit value at assignment time,
      * never resolved later. `percentage_of_base` components are
      * exempt -- they are always derived, never separately valued
-     * (ADR 0032).
+     * (ADR 0034).
      *
      * @param  list<FixedComponentValueInput>  $fixedValues
      */

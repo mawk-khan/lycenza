@@ -23,7 +23,7 @@ use Tests\TestCase;
 
 /**
  * Phase 9.3 functional tests for `PayrollPeriodService`/`PayrollRunService`
- * (ADR 0032 "Monthly period model" / "Partial-period policy").
+ * (ADR 0034 "Monthly period model" / "Partial-period policy").
  */
 class PayrollRunServiceTest extends TestCase
 {

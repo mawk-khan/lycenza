@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Phase 9.3 -- the sole write path for `payroll_periods` (ADR 0032
+ * Phase 9.3 -- the sole write path for `payroll_periods` (ADR 0034
  * "Monthly period model"). `period_month` is the true identity;
  * `starts_on`/`ends_on` are derived here to match the database's own
  * `payroll_periods_month_shape_check` exactly, never independently

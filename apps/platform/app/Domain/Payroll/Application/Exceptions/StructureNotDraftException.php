@@ -7,7 +7,7 @@ namespace App\Domain\Payroll\Application\Exceptions;
  * component, editing one) targets a `salary_structures` row that has
  * already left `draft` -- the Application-layer pre-check clean error
  * ahead of the database trigger `salary_structure_components_reject_after_draft`,
- * which remains the authoritative guarantee (ADR 0032).
+ * which remains the authoritative guarantee (ADR 0034).
  */
 class StructureNotDraftException extends PayrollException
 {

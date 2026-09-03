@@ -31,7 +31,7 @@ use Tests\TestCase;
 
 /**
  * Phase 9.5 correction -- functional tests for correction-run creation,
- * signed-effect calculation, and posting (ADR 0032 "Run kinds,
+ * signed-effect calculation, and posting (ADR 0034 "Run kinds,
  * correction model, and posting"). Proves all four signed posting
  * directions, positive/negative net correction, the zero-effect
  * fail-closed gate, and the correction-target eligibility guards.

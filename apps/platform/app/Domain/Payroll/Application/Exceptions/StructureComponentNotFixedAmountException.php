@@ -6,7 +6,7 @@ namespace App\Domain\Payroll\Application\Exceptions;
  * Thrown when a caller supplies an Employee-specific value for a
  * `salary_structure_components` row whose `calculation_type` is
  * `percentage_of_base` -- only `fixed_amount` components ever take an
- * Employee-specific value (ADR 0032 "Where employee-specific
+ * Employee-specific value (ADR 0034 "Where employee-specific
  * compensation values live"); a percentage component is always
  * derived from its base at calculation time. The Application-layer
  * clean error ahead of the database trigger

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Phase 9.1 (ADR 0032 "Deduction accounting" / "Run kinds, correction
+ * Phase 9.1 (ADR 0034 "Deduction accounting" / "Run kinds, correction
  * model, and posting") -- one earning/deduction line backing a
  * `PayrollRunResult`. `amount` is always non-negative; direction is
  * `salary_components.type` (earning|deduction) combined with `effect`

@@ -532,7 +532,7 @@ granted by the same key; four `/api/v1` operations with a COMPLETE
 OpenAPI contract and regenerated shared types in the same branch; and a
 session-authenticated Inertia surface at `/app/examinations`. Classified
 **Confidential** — it stores no personal data at all. See
-`docs/modules/EXAMINATIONS.md` and ADR 0032 for the complete as-built
+`docs/modules/EXAMINATIONS.md` and ADR 0034 for the complete as-built
 record and the decomposition rationale.
 
 **ExaminationPaper / Scheduling (Phase 0H.4B) is complete** — the second
@@ -615,7 +615,7 @@ Phase 0J entry) remains not started.
 **Resequencing note (2026-08-29):** Payroll — the remainder of this
 Phase 0J entry — is now being built under a separately-numbered
 initiative ("Phase 9") on `feature/phase-9-payroll`, mirroring Phase
-8A's own exception. See ADR 0032 and `docs/modules/PAYROLL.md` for the
+8A's own exception. See ADR 0034 and `docs/modules/PAYROLL.md` for the
 full decision record and scope boundary. Checkpoint 9.6 (statutory
 PF/ESI/TDS) remains gated on the `[LEGAL REVIEW REQUIRED]` flag in
 `docs/security/DATA-CLASSIFICATION.md` and will not close without an

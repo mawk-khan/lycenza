@@ -19,7 +19,7 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * Phase 9.2 -- REQUIRED real-concurrency proofs (ADR 0032 "Mandatory
+ * Phase 9.2 -- REQUIRED real-concurrency proofs (ADR 0034 "Mandatory
  * overlap guarantees"): two GENUINELY separate OS processes -- not
  * sequential calls in one PHP process -- race
  * SalaryStructureService::activate() and CompensationService::assign()

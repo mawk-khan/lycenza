@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Phase 9.1 (ADR 0032 "Salary structure revision model") -- each row
+ * Phase 9.1 (ADR 0034 "Salary structure revision model") -- each row
  * IS one immutable revision, not a mutable document with a hidden
  * version history. Frozen from the instant `status` becomes `active`
  * (database trigger `trg_salary_structures_freeze`) -- this model

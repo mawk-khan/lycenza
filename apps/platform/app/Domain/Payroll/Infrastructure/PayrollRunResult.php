@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Phase 9.1 (ADR 0032 "Run kinds, correction model, and posting") --
+ * Phase 9.1 (ADR 0034 "Run kinds, correction model, and posting") --
  * one authoritative result row per `EmploymentRecord` per run (never
  * per bare `Employee`). Frozen the instant the parent run reaches
  * `approved` or later (`trg_payroll_run_results_freeze`) -- this

@@ -24,7 +24,7 @@ use Tests\TestCase;
 
 /**
  * Phase 9.4 functional tests for `PayrollRunService::approve()`
- * (ADR 0032 "Separation of duties" -- the calculated -> approved
+ * (ADR 0034 "Separation of duties" -- the calculated -> approved
  * transition and its immutability boundary).
  */
 class PayrollRunApprovalTest extends TestCase

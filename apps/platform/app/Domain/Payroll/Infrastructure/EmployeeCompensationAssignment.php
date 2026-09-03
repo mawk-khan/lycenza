@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * Phase 9.1 (ADR 0032 "Compensation effective-dating and overlap") --
+ * Phase 9.1 (ADR 0034 "Compensation effective-dating and overlap") --
  * an effective-dated binding of an HR `EmploymentRecord` (never bare
  * `Employee`) to an exact `SalaryStructure` revision. Overlap for the
  * same EmploymentRecord is rejected by database trigger

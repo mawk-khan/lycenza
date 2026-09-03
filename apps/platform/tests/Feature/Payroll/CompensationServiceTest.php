@@ -22,7 +22,7 @@ use Tests\TestCase;
 
 /**
  * Phase 9.2 functional tests for `CompensationService`
- * (ADR 0032 "Compensation assignment").
+ * (ADR 0034 "Compensation assignment").
  */
 class CompensationServiceTest extends TestCase
 {

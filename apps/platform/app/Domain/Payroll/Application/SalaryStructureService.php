@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 9.2 -- the sole write path for `salary_structures`/
- * `salary_structure_components` (ADR 0032 "Salary structure revision
+ * `salary_structure_components` (ADR 0034 "Salary structure revision
  * model"). `activate()` mirrors
  * App\Domain\AcademicStructure\Application\AcademicYearService::activate()'s
  * exact shape: lock whatever is currently active for the same logical

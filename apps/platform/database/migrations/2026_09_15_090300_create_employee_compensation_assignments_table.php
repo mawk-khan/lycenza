@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Compensation effective-dating and overlap")
+     * Phase 9.1 (ADR 0034 "Compensation effective-dating and overlap")
      * -- an effective-dated binding of an HR `EmploymentRecord` (never
      * bare `Employee` -- an Employee may have multiple historical
      * EmploymentRecords via rehire, each with independent compensation
@@ -120,7 +120,7 @@ return new class extends Migration
             $$ LANGUAGE plpgsql;
         SQL);
 
-        // INSERT only, deliberately -- Checkpoint 9.2 fix (ADR 0032
+        // INSERT only, deliberately -- Checkpoint 9.2 fix (ADR 0034
         // "Compensation assignment" supersession flow): closing an
         // EXISTING assignment (updating its own effective_to to end
         // it, never touching salary_structure_id) must remain possible

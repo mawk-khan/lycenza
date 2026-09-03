@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Application;
 
 /**
- * Phase 9.5 correction (ADR 0032 "Run kinds, correction model, and
+ * Phase 9.5 correction (ADR 0034 "Run kinds, correction model, and
  * posting") -- one `correction_delta`-mode `payroll_adjustments` row,
  * translated into the plain shape
  * `PayrollCalculationEngine::calculateFromCorrectionDeltas()` needs --

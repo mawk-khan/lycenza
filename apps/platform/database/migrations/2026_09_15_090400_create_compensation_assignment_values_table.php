@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Where employee-specific compensation values
+     * Phase 9.1 (ADR 0034 "Where employee-specific compensation values
      * live") -- the ONE place an individual Employee's negotiated
      * monetary number is stored. Only `fixed_amount`-type
      * `salary_structure_components` ever get a row here (enforced by

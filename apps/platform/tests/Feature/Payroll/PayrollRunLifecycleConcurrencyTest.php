@@ -23,7 +23,7 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * Phase 9.4 -- REQUIRED real-concurrency proofs (ADR 0032 "Separation
+ * Phase 9.4 -- REQUIRED real-concurrency proofs (ADR 0034 "Separation
  * of duties" / run lifecycle): two GENUINELY separate OS processes
  * race `PayrollRunService::calculate()`/`approve()` against real
  * PostgreSQL, mirroring `CompensationConcurrencyTest`'s exact pattern.
@@ -52,7 +52,7 @@ class PayrollRunLifecycleConcurrencyTest extends TestCase
                 // the freeze triggers on payroll_run_results/_lines
                 // correctly reject the cascade delete too -- exactly
                 // the same guarantee that protects a run's history from
-                // an in-product recalculation attempt (ADR 0032) also,
+                // an in-product recalculation attempt (ADR 0034) also,
                 // deliberately, makes a School containing an approved
                 // run non-trivial to hard-delete. Leftover rows here
                 // are harmless test-database residue, cleaned up by the

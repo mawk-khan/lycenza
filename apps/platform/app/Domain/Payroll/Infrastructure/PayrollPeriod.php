@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * Phase 9.1 (ADR 0032 "Monthly period model") -- `period_month` is the
+ * Phase 9.1 (ADR 0034 "Monthly period model") -- `period_month` is the
  * true identity (normalized to the first of the month);
  * `starts_on`/`ends_on` are derived and CHECK-validated against it.
  * Monthly only -- no configurable-frequency calendar engine.

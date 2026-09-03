@@ -12,7 +12,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 
 /**
- * Phase 9.7 (ADR 0032 "Separation of duties"; docs/modules/PAYROLL.md
+ * Phase 9.7 (ADR 0034 "Separation of duties"; docs/modules/PAYROLL.md
  * "Sensitive-data handling") -- the sole authorized read path for an
  * individual Employee's actual payroll result, mirroring
  * `App\Domain\Payments\Application\PaymentReadService`'s exact

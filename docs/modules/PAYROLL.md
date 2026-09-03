@@ -2,7 +2,7 @@
 
 Living architecture document for Phase 9 (the Payroll remainder of
 `docs/roadmap/MASTER-ROADMAP.md`'s "Phase 0J — HR and Payroll"). See
-`docs/architecture/adr/0032-phase-9-payroll-architecture.md` for the
+`docs/architecture/adr/0034-phase-9-payroll-architecture.md` for the
 formal decision record this document elaborates.
 
 ## Checkpoint roadmap
@@ -16,7 +16,7 @@ as "fully complete" anywhere in this document while 9.6 remains open. See
 "Phase 9.12 Closure" below for the full validation record.
 
 - **9.0 — Architecture Decisions & Legal Boundary** [implemented]:
-  ADR 0032, this document, roadmap/domain-map annotations. No schema.
+  ADR 0034, this document, roadmap/domain-map annotations. No schema.
 - **9.1 — Compensation Schema Foundation** [implemented]: `salary_components`,
   `salary_structures`, `salary_structure_components`,
   `employee_compensation_assignments`, `compensation_assignment_values`,
@@ -145,7 +145,7 @@ history. Two assignments for the same EmploymentRecord may not
 overlap; enforced by a parent-row lock (`EmploymentRecord FOR UPDATE`)
 plus an Application check inside one transaction, backed by a database
 trigger that independently re-validates the same rule at INSERT time.
-No `EXCLUDE USING gist`/`btree_gist` — see ADR 0032's rationale (direct
+No `EXCLUDE USING gist`/`btree_gist` — see ADR 0034's rationale (direct
 precedent in `academic_years`/`employment_records` explicitly rejects
 that mechanism for this exact shape of problem).
 
@@ -211,11 +211,11 @@ no suspense-account fallback.
 review):** all three account categories — salary expense, salary
 payable, and every deduction's liability account — resolve and
 validate the CURRENT `LedgerAccount` LIVE, at posting time, uniformly.
-An earlier draft of this document (and of ADR 0032) described the
+An earlier draft of this document (and of ADR 0034) described the
 deduction account as snapshotted at calculation time and frozen at
 `approved`; that was inconsistent with the expense/payable pair, which
 were always resolved live, and has been corrected in favor of the
-single, coherent policy described here (see ADR 0032's amendment note
+single, coherent policy described here (see ADR 0034's amendment note
 for the full reconciliation). `payroll_run_result_lines.resolved_ledger_account_id`
 is still populated at calculation time as an informational record of
 what was configured then, but `PayrollPostingService` does not read it
@@ -326,7 +326,7 @@ No transport may call a core service directly; a future controller
 PF/ESI/TDS calculation, government/statutory identifiers, and any
 statutory-compliance claim remain `[LEGAL REVIEW REQUIRED]`
 (`docs/security/DATA-CLASSIFICATION.md`). Payroll owns the statutory
-*calculation* once cleared (ADR 0032's Compliance-ownership
+*calculation* once cleared (ADR 0034's Compliance-ownership
 resolution) — a future Compliance module only consumes results,
 read-only. This boundary blocks only Checkpoint 9.6.
 
@@ -352,7 +352,7 @@ aware authorization:
 
 - `PayrollCompensationReadService::listAssignments()`
   (`payroll.compensation.view`) — non-sensitive identity/effective-
-  dating only (`CompensationAssignmentSummary`, ADR 0032 "Sensitive
+  dating only (`CompensationAssignmentSummary`, ADR 0034 "Sensitive
   values": "deliberately narrow ... never the Employee-specific
   monetary values"). This method structurally never queries
   `compensation_assignment_values` at all — not merely omits amounts
@@ -457,7 +457,7 @@ outbox mechanism exists or was introduced.
 | `PayrollRunReversed` | `payroll_run.reversed.v1` | `PayrollPostingService::reverse()` | The single reversal of a posted run's original posting; same replay-safety as above. |
 | `EmployeeCompensationAssigned` | `employee_compensation.assigned.v1` | `CompensationService::assign()` | Every compensation assignment — first assignment (`previousAssignmentId` null) and supersession (`previousAssignmentId` set) alike, since `assign()` is itself already one method for both cases; a separate "Superseded" event class would only duplicate this one's shape. |
 
-Payload minimization (root CLAUDE.md rule 9, ADR 0032 "Sensitive
+Payload minimization (root CLAUDE.md rule 9, ADR 0034 "Sensitive
 values"): every payload carries identifiers and non-sensitive
 operational metadata only — `schoolId`, run/period/assignment/
 EmploymentRecord ids, `runKind`, structural counts (`resolvedCount`,
@@ -620,15 +620,22 @@ source, never hand-resolved, zero-diff on a second regeneration).
 `CapabilityAndRoleSeeder.php` and `routes/web.php` auto-merged cleanly,
 independently verified by the same exact-set-union method.
 
-**Known finding, not fixed by this reconciliation:**
-`docs/architecture/adr/0032-examinations-decomposition-and-foundation-fact.md`
-(new, arriving from `main`) collides in number with Payroll's own
-pre-existing `0032-phase-9-payroll-architecture.md` (60 references
-across 42 files). This repository already tolerates an identical
-pre-existing collision (`0028-phase-8a-hr-sequencing-and-domain-foundation.md`
-vs `0028-searchable-encrypted-pii.md`, both already on `main`) without
-renumbering, so this was deliberately left for resolution at actual
-`main`-integration time rather than a wide, risky mass-rename here.
+**ADR collision, corrected at Checkpoint 9.12 (actual main-integration
+time):** `docs/architecture/adr/0032-examinations-decomposition-and-foundation-fact.md`
+(arriving from `main`) collided in number with Payroll's own
+pre-existing `0032-phase-9-payroll-architecture.md`. Since Phase 9 had
+not yet been merged into `main`, the unpublished Payroll side was the
+correct one to renumber (never the already-published Examinations
+ADR): Payroll's ADR is now
+`docs/architecture/adr/0034-phase-9-payroll-architecture.md` (0034
+being the first genuinely unused number on fresh `main`, which tops
+out at 0033), and every one of the ~76 files referencing "ADR 0032" to
+mean Payroll was updated to "ADR 0034" (the OpenAPI-generated
+`school-os-api.ts` was regenerated, never hand-edited). This
+repository's other pre-existing, still-unresolved collision
+(`0028-phase-8a-hr-sequencing-and-domain-foundation.md` vs
+`0028-searchable-encrypted-pii.md`, both already on `main`) is
+out of Phase 9's scope and was left untouched.
 
 **Migration compatibility against current `main`.** Proven three ways
 against the reconciled branch's exact 185-migration history: (1) clean
@@ -640,7 +647,7 @@ migration edits and zero trigger/function collisions; (3) rollback/
 reapply of the complete 13-migration Payroll delta, verified clean both
 times. (The pre-existing orphan-standalone-trigger-function defect in
 `ResetTestDatabase`/`migrate:fresh` — recorded since Checkpoint 9.1,
-see ADR 0032 §5 — remains explicitly out of Phase 9's scope; it did not
+see ADR 0034 §5 — remains explicitly out of Phase 9's scope; it did not
 recur here because each reset in this checkpoint used a full schema
 drop/recreate, not a bare `migrate:fresh` retry.)
 
@@ -759,7 +766,7 @@ introduced by Phase 9; none block publication):
 
 | Defect | Reproduced on `main`? | Reproduced on Phase 9? | Phase 9 introduced? | Blocks publication? |
 |---|---|---|---|---|
-| Orphan standalone PostgreSQL trigger functions surviving a bare `migrate:fresh` retry (documented since Checkpoint 9.1, ADR 0032 §5) | Yes (repo-wide, spans Finance/Payments/Fees/Identity migrations) | Yes (same root cause) | No | No — worked around per-reset by a full schema drop/recreate in this checkpoint and 9.10/9.11; a real fix is explicitly out of Payroll's boundary |
+| Orphan standalone PostgreSQL trigger functions surviving a bare `migrate:fresh` retry (documented since Checkpoint 9.1, ADR 0034 §5) | Yes (repo-wide, spans Finance/Payments/Fees/Identity migrations) | Yes (same root cause) | No | No — worked around per-reset by a full schema drop/recreate in this checkpoint and 9.10/9.11; a real fix is explicitly out of Payroll's boundary |
 | `AnnouncementSchedulingTimezoneTest` (3 tests, Communications module) — timezone-dependent `null` `scheduled_at` | Yes | Yes | No | No — unrelated module, not exercised by any Payroll code path |
 | `CurriculumDeliveryArchitectureGuardTest` (1 test, Academics module) | Yes | Yes | No | No — unrelated module |
 | `Document*MinioIntegrationTest`/`DocumentStorageException` (5 tests) — this ad hoc container's `.env` `AWS_ENDPOINT=http://localhost:9000` does not resolve to the separately-networked `school-os-minio-1` container | Yes | Yes | No | No — a harness networking artifact of this verification session's containers, not application code; Documents module is untouched by Payroll |

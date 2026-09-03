@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Phase 9.1 (ADR 0032 "Deduction accounting") -- the Payroll -> Finance
+ * Phase 9.1 (ADR 0034 "Deduction accounting") -- the Payroll -> Finance
  * configuration seam. Exactly one row per School, naming the two fixed
  * accounts a normal (non-statutory) payroll run posts to. Per-deduction
  * liability accounts live on `SalaryComponent::$liability_ledger_account_id`

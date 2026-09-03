@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Phase 9.1 (ADR 0032 "Where employee-specific compensation values
+ * Phase 9.1 (ADR 0034 "Where employee-specific compensation values
  * live") -- the ONE place an individual Employee's negotiated
  * monetary number is stored, for `fixed_amount`-type
  * `SalaryStructureComponent`s only (enforced by database trigger).

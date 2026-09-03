@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Salary structure revision model" /
+     * Phase 9.1 (ADR 0034 "Salary structure revision model" /
      * "Compensation model") -- the calculation SHAPE for one
      * `salary_structures` revision. Exactly two calculation types,
      * both structure-level POLICY, never an Employee-specific value

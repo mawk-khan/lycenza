@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Phase 9.1 (ADR 0032 "Partial-period policy" / "Run kinds, correction
+ * Phase 9.1 (ADR 0034 "Partial-period policy" / "Run kinds, correction
  * model, and posting") -- explicit, human-entered amounts in exactly
  * two distinguished modes: `manual_override` (the authoritative
  * absolute amount for a partial-period EmploymentRecord in a REGULAR

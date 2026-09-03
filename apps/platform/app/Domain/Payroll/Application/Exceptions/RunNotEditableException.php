@@ -5,7 +5,7 @@ namespace App\Domain\Payroll\Application\Exceptions;
 /**
  * Thrown when `PayrollRunService::calculate()` (or any other
  * pre-approval mutation) targets a run whose status is `approved` or
- * `posted` -- `approved` is the sole immutability boundary (ADR 0032);
+ * `posted` -- `approved` is the sole immutability boundary (ADR 0034);
  * there is no separate `finalized` state, and no recalculation path
  * exists once it is reached. The Application-layer clean error ahead
  * of the database trigger `trg_payroll_run_results_freeze`/

@@ -5,7 +5,7 @@ namespace App\Domain\Payroll\Application;
 /**
  * Phase 9.3 -- the result of `PayrollRunService::calculate()`.
  * `transitionedToCalculated` is true only when every eligible
- * EmploymentRecord was resolved -- ADR 0032's fail-closed rule: "a run
+ * EmploymentRecord was resolved -- ADR 0034's fail-closed rule: "a run
  * may never represent an unresolved Employee as calculated."
  */
 final class PayrollCalculationOutcome

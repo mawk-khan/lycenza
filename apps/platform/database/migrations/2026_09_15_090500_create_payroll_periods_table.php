@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Monthly period model") -- `period_month`
+     * Phase 9.1 (ADR 0034 "Monthly period model") -- `period_month`
      * (normalized to the first of the month) is the true identity;
      * `starts_on`/`ends_on` are derived and CHECK-validated against
      * it, never independently arbitrary. `UNIQUE(school_id,

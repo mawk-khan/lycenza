@@ -31,7 +31,7 @@ use Tests\TestCase;
 
 /**
  * Phase 9.5 -- functional tests for `PayrollPostingService`
- * (ADR 0032 "Run kinds, correction model, and posting" / "Deduction
+ * (ADR 0034 "Run kinds, correction model, and posting" / "Deduction
  * accounting" / "Reversal model").
  */
 class PayrollPostingServiceTest extends TestCase

@@ -452,7 +452,7 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'canteen.settings.view', 'label' => 'View Canteen billing configuration', 'namespace' => 'school'],
             ['key' => 'canteen.settings.manage', 'label' => 'Manage Canteen billing configuration', 'namespace' => 'school'],
 
-            // Phase 9.7 (ADR 0032 "Separation of duties";
+            // Phase 9.7 (ADR 0034 "Separation of duties";
             // docs/modules/PAYROLL.md "Authorization") -- Payroll
             // authorization, corrected at Phase 9.7's own
             // accounting-integrity/authorization review (an initial

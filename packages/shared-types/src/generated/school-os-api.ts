@@ -2137,7 +2137,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Activates a draft structure, superseding whatever was previously active for the same code (ADR 0032). Requires payroll.structures.manage. */
+        /** Activates a draft structure, superseding whatever was previously active for the same code (ADR 0034). Requires payroll.structures.manage. */
         post: operations["activateSalaryStructure"];
         delete?: never;
         options?: never;
@@ -2152,7 +2152,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Lists an EmploymentRecord's compensation assignment history -- identity and effective dates ONLY, never an amount (ADR 0032 "Sensitive values"). Requires payroll.compensation.view. */
+        /** Lists an EmploymentRecord's compensation assignment history -- identity and effective dates ONLY, never an amount (ADR 0034 "Sensitive values"). Requires payroll.compensation.view. */
         get: operations["listCompensationAssignments"];
         put?: never;
         /** Assigns compensation for an EmploymentRecord against an ACTIVE salary structure -- Highly Sensitive (writes actual per-component amounts). Requires payroll.compensation.sensitive.manage (granted to no default role). */
@@ -2275,7 +2275,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Creates a correction run against an original, posted regular run that has not been reversed (ADR 0032 -- no correction-of- correction chains). Requires payroll.runs.prepare. Idempotency-Key required. */
+        /** Creates a correction run against an original, posted regular run that has not been reversed (ADR 0034 -- no correction-of- correction chains). Requires payroll.runs.prepare. Idempotency-Key required. */
         post: operations["createCorrectionRun"];
         delete?: never;
         options?: never;
@@ -2343,7 +2343,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approves a calculated run -- the sole immutability boundary (ADR 0032). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. */
+        /** Approves a calculated run -- the sole immutability boundary (ADR 0034). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. */
         post: operations["approvePayrollRun"];
         delete?: never;
         options?: never;
@@ -2375,7 +2375,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Renders one EmploymentRecord's on-demand payslip for this run -- Highly Sensitive, never persisted (Phase 9.10; ADR 0032 v1 scope is render-on-demand from payroll_run_results/_lines only, no payslips table, no stored Document, no email delivery). Requires payroll.compensation.sensitive.view (payroll.runs.view alone never suffices). Only renders once the run has crossed PayrollRun.isApprovedOrLater() (approved or posted, regular or correction) -- a draft/calculated run's editable "Calculation preview" is a separate, non-authoritative surface. Excludes bank details, statutory identifiers, and any PF/ESI/TDS claim while Checkpoint 9.6 remains LEGAL REVIEW REQUIRED. */
+        /** Renders one EmploymentRecord's on-demand payslip for this run -- Highly Sensitive, never persisted (Phase 9.10; ADR 0034 v1 scope is render-on-demand from payroll_run_results/_lines only, no payslips table, no stored Document, no email delivery). Requires payroll.compensation.sensitive.view (payroll.runs.view alone never suffices). Only renders once the run has crossed PayrollRun.isApprovedOrLater() (approved or posted, regular or correction) -- a draft/calculated run's editable "Calculation preview" is a separate, non-authoritative surface. Excludes bank details, statutory identifiers, and any PF/ESI/TDS claim while Checkpoint 9.6 remains LEGAL REVIEW REQUIRED. */
         get: operations["getPayrollPayslip"];
         put?: never;
         post?: never;
@@ -2411,7 +2411,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reverses a posted run's original posting via PayrollPostingService -> LedgerService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires payroll.runs.reverse (a separate capability from payroll.runs.post). Idempotency-Key required -- structural at-most-once is still enforced independently (PAYROLL_RUN_ALREADY_REVERSED, 409, on a genuine repeat), and the Idempotency-Key contract additionally guarantees a lost response can be safely retried without a second reversal JournalEntry (Phase 9.8 correction). Posting and reversal never share a replay namespace even if the identical literal key string is reused, since route_action is part of the idempotency scope. Reversing an original that already has a correction run is still allowed (ADR 0032 -- deliberately unrestricted). */
+        /** Reverses a posted run's original posting via PayrollPostingService -> LedgerService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires payroll.runs.reverse (a separate capability from payroll.runs.post). Idempotency-Key required -- structural at-most-once is still enforced independently (PAYROLL_RUN_ALREADY_REVERSED, 409, on a genuine repeat), and the Idempotency-Key contract additionally guarantees a lost response can be safely retried without a second reversal JournalEntry (Phase 9.8 correction). Posting and reversal never share a replay namespace even if the identical literal key string is reused, since route_action is part of the idempotency scope. Reversing an original that already has a correction run is still allowed (ADR 0034 -- deliberately unrestricted). */
         post: operations["reversePayrollRun"];
         delete?: never;
         options?: never;
@@ -5330,7 +5330,7 @@ export interface components {
             rate?: string | null;
             display_order: number;
         };
-        /** @description Identity and effective dates ONLY -- never an amount (ADR 0032 "Sensitive values"). */
+        /** @description Identity and effective dates ONLY -- never an amount (ADR 0034 "Sensitive values"). */
         CompensationAssignmentSummary: {
             /** Format: uuid */
             id: string;
@@ -5414,7 +5414,7 @@ export interface components {
         PayrollCalculationOutcome: {
             resolvedCount: number;
             unresolvedEmploymentRecordIds: string[];
-            /** @description False if any eligible EmploymentRecord remains unresolved -- the run stays draft (ADR 0032 fail-closed rule). */
+            /** @description False if any eligible EmploymentRecord remains unresolved -- the run stays draft (ADR 0034 fail-closed rule). */
             transitionedToCalculated: boolean;
         };
         ManualOverrideInput: {
@@ -13255,7 +13255,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK. transitionedToCalculated is false, and the run stays draft, if any eligible EmploymentRecord remains unresolved (ADR 0032 fail-closed partial-period rule). */
+            /** @description OK. transitionedToCalculated is false, and the run stays draft, if any eligible EmploymentRecord remains unresolved (ADR 0034 fail-closed partial-period rule). */
             200: {
                 headers: {
                     [name: string]: unknown;

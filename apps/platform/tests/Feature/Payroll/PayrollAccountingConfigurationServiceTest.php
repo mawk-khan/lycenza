@@ -16,7 +16,7 @@ use Tests\TestCase;
 
 /**
  * Phase 9.5 -- functional tests for `PayrollAccountingConfigurationService`
- * (ADR 0032 "Deduction accounting"), mirroring
+ * (ADR 0034 "Deduction accounting"), mirroring
  * `CanteenBillingConfigurationServiceTest`'s equivalent coverage shape.
  */
 class PayrollAccountingConfigurationServiceTest extends TestCase

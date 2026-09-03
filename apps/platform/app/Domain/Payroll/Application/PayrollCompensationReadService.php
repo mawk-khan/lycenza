@@ -22,7 +22,7 @@ use App\Support\Tenancy\TenantContext;
  *
  * `listAssignments()` deliberately never touches
  * `compensation_assignment_values` at all -- not merely omitted from
- * the returned DTO (`CompensationAssignmentSummary`, ADR 0032
+ * the returned DTO (`CompensationAssignmentSummary`, ADR 0034
  * "Sensitive values": "deliberately narrow: identity and effective
  * dates only"), but structurally absent from the query itself (no
  * eager-load of the `values` relation), so a `payroll.compensation.view`-

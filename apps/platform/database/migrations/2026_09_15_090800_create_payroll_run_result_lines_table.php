@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Deduction accounting" / "Run kinds,
+     * Phase 9.1 (ADR 0034 "Deduction accounting" / "Run kinds,
      * correction model, and posting") -- earning/deduction/statutory
      * line items backing one `payroll_run_results` row.
      *
@@ -30,7 +30,7 @@ return new class extends Migration
      *
      * `resolved_ledger_account_id` snapshots the deduction's Finance
      * destination (from `salary_components.liability_ledger_account_id`
-     * at the time of calculation, per ADR 0032) so a later
+     * at the time of calculation, per ADR 0034) so a later
      * reconfiguration of that mapping can never retroactively alter
      * what an already-approved run will post. Null for earning lines
      * (which post in aggregate to the single configured

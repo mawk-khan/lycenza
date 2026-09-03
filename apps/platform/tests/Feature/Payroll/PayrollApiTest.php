@@ -317,7 +317,7 @@ class PayrollApiTest extends TestCase
             ->assertOk()->assertJsonPath('data.transitionedToCalculated', true);
 
         // Reversing the ORIGINAL run is still allowed even though a
-        // correction now references it -- ADR 0032's deliberately
+        // correction now references it -- ADR 0034's deliberately
         // unrestricted reverse direction (Checkpoint 9.5), proven here
         // over HTTP too.
         $this->as($posterToken)->withHeader('Idempotency-Key', 'reverse-run-key')

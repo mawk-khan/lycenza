@@ -4,7 +4,7 @@ namespace App\Domain\Payroll\Application\Exceptions;
 
 /**
  * Thrown when a calculated result would produce a negative net amount
- * for a regular run (ADR 0032 "Calculation semantics" / Mandatory
+ * for a regular run (ADR 0034 "Calculation semantics" / Mandatory
  * Decision #13) -- rejected outright rather than silently clamped to
  * zero or allowed to post as a negative liability. The database CHECK
  * `payroll_run_results_net_identity_check` plus the run-kind-aware

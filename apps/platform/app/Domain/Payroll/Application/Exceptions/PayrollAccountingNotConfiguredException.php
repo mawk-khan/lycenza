@@ -9,7 +9,7 @@ namespace App\Domain\Payroll\Application\Exceptions;
  * `App\Domain\Canteen\Application\Exceptions\CanteenBillingNotConfiguredException`'s
  * identical role. Posting a payroll run is impossible without a
  * salary-expense/salary-payable mapping -- there is no suspense-account
- * fallback (ADR 0032 "Deduction accounting").
+ * fallback (ADR 0034 "Deduction accounting").
  */
 class PayrollAccountingNotConfiguredException extends PayrollException
 {

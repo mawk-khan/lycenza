@@ -15,7 +15,7 @@ use Tests\TestCase;
 
 /**
  * Phase 9.2 functional tests for `SalaryStructureService`
- * (ADR 0032 "Salary structure revision model").
+ * (ADR 0034 "Salary structure revision model").
  */
 class SalaryStructureServiceTest extends TestCase
 {

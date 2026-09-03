@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032, docs/modules/PAYROLL.md "Compensation
+     * Phase 9.1 (ADR 0034, docs/modules/PAYROLL.md "Compensation
      * model") -- semantic component identity ONLY (Basic, HRA,
      * PF-Employee, ...). No monetary value or rate lives here --
      * that is deliberately structure-level (`salary_structure_components`)
@@ -29,7 +29,7 @@ return new class extends Migration
      * never an account-name lookup, never a hardcoded UUID. Nullable:
      * an `earning` component never needs one (earnings post in
      * aggregate to the single configured salary-expense account,
-     * ADR 0032 "Accounting model"); a `deduction` component needs one
+     * ADR 0034 "Accounting model"); a `deduction` component needs one
      * only once it is actually used in a posted run (checked at
      * posting time by the Application layer, not here).
      *

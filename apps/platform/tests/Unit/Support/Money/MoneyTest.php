@@ -251,7 +251,7 @@ class MoneyTest extends TestCase
     }
 
     /**
-     * Phase 9.2 (ADR 0032 "Money arithmetic") -- golden fixtures for
+     * Phase 9.2 (ADR 0034 "Money arithmetic") -- golden fixtures for
      * `multiplyByRate()`, the one calculation-kernel primitive
      * Checkpoint 9.3 depends on.
      */

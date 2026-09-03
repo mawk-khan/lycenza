@@ -8,7 +8,7 @@ namespace App\Domain\Payroll\Application\Exceptions;
  * `InvalidRunTransitionException`, since reversal is not itself a
  * `payroll_runs.status` transition (a posted run stays `posted`
  * forever; reversal is a derived read over `payroll_run_postings`,
- * ADR 0032 "Run kinds, correction model, and posting").
+ * ADR 0034 "Run kinds, correction model, and posting").
  */
 class PayrollRunNotPostedException extends PayrollException
 {

@@ -13,7 +13,7 @@ use Symfony\Component\Uid\UuidV7;
 use Tests\TestCase;
 
 /**
- * Phase 9.1 (ADR 0032) -- raw-DB-level proof of every schema invariant
+ * Phase 9.1 (ADR 0034) -- raw-DB-level proof of every schema invariant
  * this checkpoint introduces.
  *
  * All fixtures AND assertions here go through `pgsql_admin` exclusively

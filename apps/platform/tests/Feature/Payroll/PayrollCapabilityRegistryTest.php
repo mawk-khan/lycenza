@@ -9,7 +9,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Phase 9.7 (ADR 0032 "Separation of duties"; docs/modules/PAYROLL.md
+ * Phase 9.7 (ADR 0034 "Separation of duties"; docs/modules/PAYROLL.md
  * "Authorization") -- proves the Payroll capability catalog is
  * registered through the existing, sole capability/role seeder,
  * mirroring `Tests\Feature\Payments\PaymentsCapabilityRegistryTest`'s

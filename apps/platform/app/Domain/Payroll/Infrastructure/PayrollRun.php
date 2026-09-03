@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * Phase 9.1 (ADR 0032 "Run kinds, correction model, and posting" /
+ * Phase 9.1 (ADR 0034 "Run kinds, correction model, and posting" /
  * "Separation of duties") -- one payroll calculation execution.
  * `approved` is the sole immutability boundary (no `finalized` state).
  * There is no `reversed` status -- reversal is derived from

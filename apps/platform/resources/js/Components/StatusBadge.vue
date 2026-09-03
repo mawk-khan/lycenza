@@ -50,7 +50,7 @@ type Status =
     // above -- `open`/`closed` are new). PayrollRun lifecycle (`draft`
     // already existed above -- `calculated`/`approved`/`posted` are
     // new). `reversed` is a derived PayrollRunPosting state, never a
-    // real PayrollRun.status value (ADR 0032 -- a run's own status
+    // real PayrollRun.status value (ADR 0034 -- a run's own status
     // never becomes "reversed").
     | 'open'
     | 'closed'

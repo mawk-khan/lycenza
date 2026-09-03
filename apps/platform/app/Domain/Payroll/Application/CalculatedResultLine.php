@@ -7,7 +7,7 @@ namespace App\Domain\Payroll\Application;
  * `PayrollCalculationEngine`, not yet persisted. `amount` is always
  * non-negative; `effect` (increase|decrease) plus the owning
  * component's `isEarning` flag together determine posting direction
- * later (Checkpoint 9.5, ADR 0032 "Deduction accounting").
+ * later (Checkpoint 9.5, ADR 0034 "Deduction accounting").
  */
 final class CalculatedResultLine
 {

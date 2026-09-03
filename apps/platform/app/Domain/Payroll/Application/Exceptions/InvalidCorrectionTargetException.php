@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Application\Exceptions;
 
 /**
- * ADR 0032 "Run kinds, correction model, and posting": a correction
+ * ADR 0034 "Run kinds, correction model, and posting": a correction
  * run's `corrects_payroll_run_id` must reference a `regular`, already-
  * `posted` run -- never a draft/calculated/approved run, never another
  * correction (no correction-of-correction chains). Raised by

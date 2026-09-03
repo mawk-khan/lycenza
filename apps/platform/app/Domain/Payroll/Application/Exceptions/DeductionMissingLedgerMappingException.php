@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Application\Exceptions;
 
 /**
- * ADR 0032 "Deduction accounting": "A deduction with a nonzero total
+ * ADR 0034 "Deduction accounting": "A deduction with a nonzero total
  * and no configured mapping blocks posting entirely (no suspense-
  * account fallback)." Raised by `PayrollPostingService::post()`'s
  * `resolveDeductionLedgerAccountId()` when a nonzero-total deduction

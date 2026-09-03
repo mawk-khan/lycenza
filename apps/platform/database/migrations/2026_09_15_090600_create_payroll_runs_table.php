@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Run kinds, correction model, and posting" /
+     * Phase 9.1 (ADR 0034 "Run kinds, correction model, and posting" /
      * "Separation of duties") -- one payroll calculation execution.
      *
      * `run_kind` is `regular`|`correction`.

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Run kinds, correction model, and posting" /
+     * Phase 9.1 (ADR 0034 "Run kinds, correction model, and posting" /
      * "Partial-period policy") -- one authoritative result row per
      * `EmploymentRecord` per run (never per bare `Employee` -- an
      * Employee may have multiple historical EmploymentRecords).
@@ -27,7 +27,7 @@ return new class extends Migration
      * since it requires looking at the parent `payroll_runs` row.
      *
      * Frozen the instant the parent run reaches `approved` or later --
-     * this IS the immutability boundary from ADR 0032 ("approved" is
+     * this IS the immutability boundary from ADR 0034 ("approved" is
      * the sole boundary; there is no separate `finalized` state).
      * Mirrors `journal_lines_reject_post_commit_insert()`'s structural
      * shape (Finance, ADR 0030), keyed off run status rather than

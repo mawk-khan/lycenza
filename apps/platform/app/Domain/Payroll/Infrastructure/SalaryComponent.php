@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Phase 9.1 (ADR 0032 "Compensation model") -- semantic component
+ * Phase 9.1 (ADR 0034 "Compensation model") -- semantic component
  * identity only (Basic, HRA, PF-Employee, ...). No monetary value or
  * rate lives here -- see `SalaryStructureComponent` (structure-level
  * formula) and `CompensationAssignmentValue` (Employee-specific

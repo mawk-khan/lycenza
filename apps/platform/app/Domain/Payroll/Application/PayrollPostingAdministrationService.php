@@ -19,7 +19,7 @@ use App\Support\Authorization\AuthorizesCapability;
  * this class.
  *
  * `payroll.runs.post` and `payroll.runs.reverse` are deliberately
- * SEPARATE capabilities (ADR 0032 "Separation of duties"), mirroring
+ * SEPARATE capabilities (ADR 0034 "Separation of duties"), mirroring
  * `finance.ledger.post`/`.reverse`'s identical "reversal is a
  * materially higher-risk financial correction action" reasoning.
  */

@@ -5,7 +5,7 @@ namespace App\Domain\Payroll\Application;
 use App\Support\Money\Money;
 
 /**
- * Phase 9.3 -- the pure, deterministic calculation kernel (ADR 0032
+ * Phase 9.3 -- the pure, deterministic calculation kernel (ADR 0034
  * "Calculation semantics"). Deliberately holds no database connection
  * and performs no I/O -- every input arrives as a plain DTO, so this
  * class is golden-fixture testable in complete isolation. `PayrollRunService`
@@ -20,7 +20,7 @@ use App\Support\Money\Money;
  * expression languages (rule 2). Rounding is round-half-up at 2
  * decimal places, applied once per component line via
  * `Money::multiplyByRate()`, never re-rounded when lines are later
- * summed (ADR 0032 "Calculation semantics").
+ * summed (ADR 0034 "Calculation semantics").
  *
  * Phase 9.5 correction: `summarize()` is effect-aware (`increase`
  * adds, `decrease` subtracts) for BOTH gross and deductions -- this is

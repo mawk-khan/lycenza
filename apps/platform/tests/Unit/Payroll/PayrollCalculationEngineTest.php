@@ -10,7 +10,7 @@ use Tests\TestCase;
 
 /**
  * Phase 9.3 -- golden-fixture tests for the pure, DB-free
- * `PayrollCalculationEngine` (ADR 0032 "Calculation semantics"). No
+ * `PayrollCalculationEngine` (ADR 0034 "Calculation semantics"). No
  * database involved -- every input is a plain DTO.
  */
 class PayrollCalculationEngineTest extends TestCase

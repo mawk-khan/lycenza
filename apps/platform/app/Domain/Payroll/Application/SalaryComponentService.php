@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 9.2 -- the sole write path for `salary_components` (semantic
- * component identity only -- no monetary value, ADR 0032). A simple,
+ * component identity only -- no monetary value, ADR 0034). A simple,
  * direct create-then-audit block is appropriate here (rule 76's
  * "genuinely simple entity" line): no multi-step invariant beyond the
  * database's own type/status CHECK constraints exists yet for this

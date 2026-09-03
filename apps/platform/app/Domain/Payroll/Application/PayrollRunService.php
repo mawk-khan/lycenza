@@ -34,7 +34,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Phase 9.3 -- creates and calculates `payroll_runs` (ADR 0032 "Run
+ * Phase 9.3 -- creates and calculates `payroll_runs` (ADR 0034 "Run
  * kinds, correction model, and posting" / "Partial-period policy").
  * `approve()`/`post()` do not exist here -- Checkpoints 9.4/9.5 own
  * those transitions; this class only ever moves a run `draft ->
@@ -97,7 +97,7 @@ class PayrollRunService
     }
 
     /**
-     * Phase 9.5 correction (ADR 0032 "Run kinds, correction model, and
+     * Phase 9.5 correction (ADR 0034 "Run kinds, correction model, and
      * posting") -- creates a `correction` run against an original
      * `regular`, already-`posted` run. Application-layer pre-checks
      * (regular + posted + not-yet-reversed) give a clean domain error
@@ -276,7 +276,7 @@ class PayrollRunService
                 }
 
                 // Whole-result-set replacement -- never a partial patch
-                // (ADR 0032). Cascades to payroll_run_result_lines.
+                // (ADR 0034). Cascades to payroll_run_result_lines.
                 PayrollRunResult::query()->where('payroll_run_id', $run->id)->delete();
 
                 [$resolved, $unresolved] = $locked->isCorrection()
@@ -389,7 +389,7 @@ class PayrollRunService
     }
 
     /**
-     * Phase 9.4 (ADR 0032 "Separation of duties") -- the sole
+     * Phase 9.4 (ADR 0034 "Separation of duties") -- the sole
      * `calculated -> approved` transition, the immutability boundary
      * (no separate `finalized` state). Mirrors
      * `App\Domain\Communications\Application\Approval\CommunicationApprovalService::decide()`'s

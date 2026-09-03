@@ -15,7 +15,7 @@ namespace App\Domain\Payroll\Application\Exceptions;
  * already-posted delta in its own right, exactly like
  * `App\Domain\Finance\Application\LedgerService::reverse()`'s own
  * "any posted entry may be reversed, uniformly" stance; adding a
- * restriction neither the schema nor ADR 0032 requires would itself
+ * restriction neither the schema nor ADR 0034 requires would itself
  * be inventing policy, mirroring that class's identical reasoning).
  */
 class CorrectionTargetAlreadyReversedException extends PayrollException

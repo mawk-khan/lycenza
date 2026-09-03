@@ -7,7 +7,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * Phase 9.2 -- deliberately narrow: identity and effective dates only,
- * never the Employee-specific monetary values (ADR 0032 "Sensitive
+ * never the Employee-specific monetary values (ADR 0034 "Sensitive
  * values"). `CompensationService` returns this from read paths a
  * broad/list context might reach; the full value set is only ever
  * loaded through `assign()`'s own return (the Eloquent model, for the

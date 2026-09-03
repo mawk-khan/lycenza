@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Application\Exceptions;
 
 /**
- * Phase 9.4 (ADR 0032 "Separation of duties") -- the preparer of a
+ * Phase 9.4 (ADR 0034 "Separation of duties") -- the preparer of a
  * payroll run may never approve it. Mirrors
  * `App\Domain\Communications\Application\Exceptions\SelfApprovalNotAllowedException`'s
  * exact role and rule, the one existing repository precedent for this

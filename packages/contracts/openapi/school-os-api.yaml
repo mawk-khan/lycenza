@@ -4274,7 +4274,7 @@ paths:
       operationId: activateSalaryStructure
       summary: >
         Activates a draft structure, superseding whatever was
-        previously active for the same code (ADR 0032). Requires
+        previously active for the same code (ADR 0034). Requires
         payroll.structures.manage.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
@@ -4306,7 +4306,7 @@ paths:
       operationId: listCompensationAssignments
       summary: >
         Lists an EmploymentRecord's compensation assignment history --
-        identity and effective dates ONLY, never an amount (ADR 0032
+        identity and effective dates ONLY, never an amount (ADR 0034
         "Sensitive values"). Requires payroll.compensation.view.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
@@ -4570,7 +4570,7 @@ paths:
       operationId: createCorrectionRun
       summary: >
         Creates a correction run against an original, posted regular
-        run that has not been reversed (ADR 0032 -- no correction-of-
+        run that has not been reversed (ADR 0034 -- no correction-of-
         correction chains). Requires payroll.runs.prepare.
         Idempotency-Key required.
       parameters:
@@ -4699,7 +4699,7 @@ paths:
           description: >
             OK. transitionedToCalculated is false, and the run stays
             draft, if any eligible EmploymentRecord remains unresolved
-            (ADR 0032 fail-closed partial-period rule).
+            (ADR 0034 fail-closed partial-period rule).
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollCalculationOutcome" } } }
@@ -4724,7 +4724,7 @@ paths:
       operationId: approvePayrollRun
       summary: >
         Approves a calculated run -- the sole immutability boundary
-        (ADR 0032). Requires payroll.runs.approve (a SEPARATE
+        (ADR 0034). Requires payroll.runs.approve (a SEPARATE
         capability from payroll.runs.prepare -- an actor is never
         authorized to approve merely because they can prepare payroll).
         The preparer of this run may never approve it, enforced at the
@@ -4797,7 +4797,7 @@ paths:
       operationId: getPayrollPayslip
       summary: >
         Renders one EmploymentRecord's on-demand payslip for this run --
-        Highly Sensitive, never persisted (Phase 9.10; ADR 0032 v1 scope
+        Highly Sensitive, never persisted (Phase 9.10; ADR 0034 v1 scope
         is render-on-demand from payroll_run_results/_lines only, no
         payslips table, no stored Document, no email delivery). Requires
         payroll.compensation.sensitive.view (payroll.runs.view alone
@@ -4896,7 +4896,7 @@ paths:
         share a replay namespace even if the identical literal key
         string is reused, since route_action is part of the
         idempotency scope. Reversing an original that already has a
-        correction run is still allowed (ADR 0032 -- deliberately
+        correction run is still allowed (ADR 0034 -- deliberately
         unrestricted).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
@@ -9949,7 +9949,7 @@ components:
     CompensationAssignmentSummary:
       type: object
       required: [id, employmentRecordId, salaryStructureId, effectiveFrom]
-      description: Identity and effective dates ONLY -- never an amount (ADR 0032 "Sensitive values").
+      description: Identity and effective dates ONLY -- never an amount (ADR 0034 "Sensitive values").
       properties:
         id: { type: string, format: uuid }
         employmentRecordId: { type: string, format: uuid }
@@ -10014,7 +10014,7 @@ components:
       properties:
         resolvedCount: { type: integer }
         unresolvedEmploymentRecordIds: { type: array, items: { type: string, format: uuid } }
-        transitionedToCalculated: { type: boolean, description: "False if any eligible EmploymentRecord remains unresolved -- the run stays draft (ADR 0032 fail-closed rule)." }
+        transitionedToCalculated: { type: boolean, description: "False if any eligible EmploymentRecord remains unresolved -- the run stays draft (ADR 0034 fail-closed rule)." }
     ManualOverrideInput:
       type: object
       required: [employment_record_id, component_amounts, reason]

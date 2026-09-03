@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Deduction accounting") -- the
+     * Phase 9.1 (ADR 0034 "Deduction accounting") -- the
      * Payroll -> Finance configuration seam. Exactly one row per
      * School (`UNIQUE(school_id)`) naming the two fixed accounts a
      * normal (non-statutory) payroll run posts to: salary expense

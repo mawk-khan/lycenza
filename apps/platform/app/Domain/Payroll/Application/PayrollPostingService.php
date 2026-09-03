@@ -28,7 +28,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Phase 9.5 (ADR 0032 "Run kinds, correction model, and posting" /
+ * Phase 9.5 (ADR 0034 "Run kinds, correction model, and posting" /
  * "Deduction accounting" / "Reversal model") -- the only sanctioned
  * write path for `approved -> posted` and for reversing a posted run.
  * Never writes `journal_entries`/`journal_lines` directly -- every
@@ -43,7 +43,7 @@ use Illuminate\Support\Facades\DB;
  * NOT an authorization boundary, for the same reason `LedgerService`/
  * `ChargeService` are not one: `$actor` is passed through purely for
  * WHO-did-this audit provenance. `payroll.runs.post`/`.reverse`
- * (ADR 0032 "Separation of duties" -- deliberately two distinct
+ * (ADR 0034 "Separation of duties" -- deliberately two distinct
  * capabilities, mirroring `finance.ledger.post`/`.reverse`) are
  * deliberately deferred to Checkpoint 9.7, exactly as every other
  * Payroll Application service in this phase.
@@ -79,13 +79,13 @@ use Illuminate\Support\Facades\DB;
  * resolution policy governs what actually gets posted, applied
  * uniformly to every account category, chosen over snapshot-at-
  * calculation-time because the ADR's own rationale for freezing
- * financial FACTS at `approved` (ADR 0032 "the sole immutability
+ * financial FACTS at `approved` (ADR 0034 "the sole immutability
  * boundary") is about amounts and component identity, not about which
  * Finance account a component happens to be mapped to today -- a
  * School correcting a misconfigured liability account between
  * calculation and posting should have that correction take effect,
  * exactly as a salary-expense/payable reconfiguration already does.
- * See the ADR 0032 amendment note for the full reconciliation.
+ * See the ADR 0034 amendment note for the full reconciliation.
  */
 class PayrollPostingService
 {
@@ -195,7 +195,7 @@ class PayrollPostingService
     /**
      * Reverses a posted run's ORIGINAL posting via
      * `LedgerService::reverseById()` -- never mutates `payroll_runs.status`
-     * (which stays `posted` forever, ADR 0032) nor the original
+     * (which stays `posted` forever, ADR 0034) nor the original
      * `PayrollRunPosting` row; a reversal is always a NEW, append-only
      * row (`TenantRls::makeAppendOnly()`, Checkpoint 9.1) linked via
      * `reversal_of_payroll_run_posting_id`.

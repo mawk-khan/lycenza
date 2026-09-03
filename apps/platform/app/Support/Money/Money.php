@@ -186,7 +186,7 @@ final class Money implements JsonSerializable
     }
 
     /**
-     * Phase 9.2 (ADR 0032 "Money arithmetic") -- the one extension
+     * Phase 9.2 (ADR 0034 "Money arithmetic") -- the one extension
      * Payroll's calculation kernel needs beyond 0G.2's add()/negated():
      * multiplying by a decimal-FRACTION rate (e.g. "0.400000" for "HRA
      * = 40% of Basic"), never a raw "40" needing an implicit /100 --

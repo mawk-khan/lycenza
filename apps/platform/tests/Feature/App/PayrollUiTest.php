@@ -383,7 +383,7 @@ class PayrollUiTest extends TestCase
         // correction run creation -- must happen BEFORE reversal: a
         // correction targets a posted-and-not-yet-reversed original
         // (CorrectionTargetAlreadyReversedException), the reverse
-        // direction is what stays unrestricted (ADR 0032).
+        // direction is what stays unrestricted (ADR 0034).
         $openPeriod = app(TenantContext::class)->withSchool($school, fn () => app(PayrollPeriodAdministrationService::class)->open(
             app(PayrollPeriodAdministrationService::class)->createPeriod($school, Carbon::parse('2026-11-01'), null, $periodManager),
             $periodManager,
@@ -418,7 +418,7 @@ class PayrollUiTest extends TestCase
             // A second EmploymentRecord hired mid-period (starts_on AFTER
             // the period start) with a compensation assignment -- the
             // engine flags a mid-period hire as needing manual input
-            // regardless of whether an assignment exists (ADR 0032
+            // regardless of whether an assignment exists (ADR 0034
             // fail-closed partial-period rule), since no proration is
             // computed automatically.
             $structure = SalaryStructure::query()->where('school_id', $school->id)->firstOrFail();

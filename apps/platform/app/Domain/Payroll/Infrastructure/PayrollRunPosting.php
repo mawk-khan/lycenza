@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Phase 9.1 (ADR 0032 "Run kinds, correction model, and posting" /
+ * Phase 9.1 (ADR 0034 "Run kinds, correction model, and posting" /
  * "Reversal model") -- append-only link between a `PayrollRun` and the
  * Finance `JournalEntry` `LedgerService::post()`/`reverse()` produced
  * for it. `posting_kind` is `original`|`reversal`; at most one

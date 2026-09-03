@@ -1,4 +1,4 @@
-# ADR 0032: Phase 9 Payroll Architecture
+# ADR 0034: Phase 9 Payroll Architecture
 
 - Status: Accepted
 - Date: 2026-08-29
@@ -173,7 +173,7 @@ mapping blocks posting entirely (no suspense-account fallback).
 > useful point-in-time record of what was configured when the run was
 > calculated — but is no longer read by `PayrollPostingService`; it is
 > informational only, not the posting-time source of truth. This
-> keeps ADR 0032's "`approved` is the sole immutability boundary"
+> keeps ADR 0034's "`approved` is the sole immutability boundary"
 > principle scoped to monetary amounts and component identity (which
 > line existed, for how much) — never to which Finance account a
 > component happens to be mapped today, which a School must be able to

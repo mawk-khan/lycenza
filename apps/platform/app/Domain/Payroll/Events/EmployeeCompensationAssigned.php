@@ -16,7 +16,7 @@ use App\Support\Events\ShouldBeOutboxed;
  * "EmployeeCompensationSuperseded" event class would only duplicate
  * this one's shape for no genuine distinction. `effectiveFrom` mirrors
  * exactly what the existing `payroll.compensation.assigned` audit call
- * already logs (ADR 0032 "Sensitive values") -- never an amount, rate,
+ * already logs (ADR 0034 "Sensitive values") -- never an amount, rate,
  * or component value.
  */
 class EmployeeCompensationAssigned implements ShouldBeOutboxed

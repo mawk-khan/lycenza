@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Partial-period policy" / "Run kinds,
+     * Phase 9.1 (ADR 0034 "Partial-period policy" / "Run kinds,
      * correction model, and posting") -- explicit, human-entered
      * amounts, in exactly two distinguished modes that are never
      * conflated:

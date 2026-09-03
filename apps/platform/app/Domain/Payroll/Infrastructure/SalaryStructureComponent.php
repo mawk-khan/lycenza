@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Phase 9.1 (ADR 0032 "Compensation model") -- the calculation SHAPE
+ * Phase 9.1 (ADR 0034 "Compensation model") -- the calculation SHAPE
  * for one `SalaryStructure` revision: `fixed_amount` or
  * `percentage_of_base` (`rate`, a decimal FRACTION 0-1). Frozen the
  * instant the parent structure leaves `draft`

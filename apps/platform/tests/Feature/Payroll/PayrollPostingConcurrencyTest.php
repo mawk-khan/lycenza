@@ -25,7 +25,7 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * Phase 9.5 -- REQUIRED real-concurrency proofs (ADR 0032 "Run kinds,
+ * Phase 9.5 -- REQUIRED real-concurrency proofs (ADR 0034 "Run kinds,
  * correction model, and posting" / "Reversal model"): two GENUINELY
  * separate OS processes race `PayrollPostingService::post()`/`reverse()`
  * against real PostgreSQL, mirroring `PayrollRunLifecycleConcurrencyTest`'s

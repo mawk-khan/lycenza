@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Salary structure revision model") -- each
+     * Phase 9.1 (ADR 0034 "Salary structure revision model") -- each
      * row here IS one immutable revision, not a mutable document with
      * a hidden version history. Logical identity is `(school_id,
      * code)`; `version` increments per revision sharing that code;

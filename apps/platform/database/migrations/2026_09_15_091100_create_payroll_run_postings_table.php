@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Phase 9.1 (ADR 0032 "Run kinds, correction model, and posting" /
+     * Phase 9.1 (ADR 0034 "Run kinds, correction model, and posting" /
      * "Reversal model") -- append-only link between a `payroll_runs`
      * row and the Finance `journal_entries` row
      * `LedgerService::post()`/`reverse()` produced for it.

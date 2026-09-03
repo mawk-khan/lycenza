@@ -8,7 +8,7 @@ namespace App\Domain\Payroll\Application\Exceptions;
  * overlaps an existing one for the same EmploymentRecord -- the
  * Application-layer clean error ahead of the database trigger
  * `compensation_assignments_reject_overlap`, which remains the
- * authoritative, concurrency-safe guarantee (ADR 0032 -- no
+ * authoritative, concurrency-safe guarantee (ADR 0034 -- no
  * `EXCLUDE USING gist`, matching `employment_records`' own precedent).
  */
 class CompensationAssignmentOverlapException extends PayrollException
