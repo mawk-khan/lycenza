@@ -10,7 +10,7 @@ return new class extends Migration
      * Checkpoint 9.6F correction -- the original Checkpoint 9.6C
      * migration provisioned only ONE combined
      * `employer_pf_contribution_expense_ledger_account_id` column, but
-     * ADR 0035 correction addendum §1.11 / the legal spec's §8 debit
+     * ADR 0036 correction addendum §1.11 / the legal spec's §8 debit
      * account list names FIVE distinct employer-side expense accounts
      * (salary/gross expense already exists in
      * `payroll_accounting_configurations`; employer PF contribution

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C/9.6F (ADR 0035 correction addendum §1.11) --
+     * Checkpoint 9.6C/9.6F (ADR 0036 correction addendum §1.11) --
      * extends `payroll_accounting_configurations`' exact pattern
      * (composite FK to `ledger_accounts(id, school_id, currency)`,
      * one row per School, no name lookup, no hardcoded UUID) to the

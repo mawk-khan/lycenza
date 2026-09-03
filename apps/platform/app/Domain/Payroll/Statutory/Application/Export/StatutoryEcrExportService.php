@@ -16,9 +16,9 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 
 /**
- * Checkpoint 9.6G (ADR 0035 correction addendum §1.11, Section 9) --
+ * Checkpoint 9.6G (ADR 0036 correction addendum §1.11, Section 9) --
  * EPFO ECR data preparation ONLY. This class never submits to any
- * government portal (ADR 0035's export-only filing boundary) -- it
+ * government portal (ADR 0036's export-only filing boundary) -- it
  * returns the formatted row content as a string for a caller to store/
  * download; what happens to that content after this method returns is
  * entirely outside this checkpoint's scope.
@@ -58,7 +58,7 @@ use Illuminate\Support\Carbon;
  * (the UAN is a real, unmasked Highly Sensitive government identifier
  * -- an ECR row is meaningless without it, so this export cannot be
  * produced by an actor who may not view identifiers). Neither
- * capability is granted to any role by default (ADR 0035).
+ * capability is granted to any role by default (ADR 0036).
  */
 class StatutoryEcrExportService
 {

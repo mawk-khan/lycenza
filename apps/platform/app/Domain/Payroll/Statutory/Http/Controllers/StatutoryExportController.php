@@ -14,7 +14,7 @@ use Illuminate\Http\Response;
 /**
  * Checkpoint 9.6I (Section 2 "Exports") -- streams the already-built
  * Checkpoint 9.6G export content directly in the response body (no
- * public file URL, ADR 0035's export-only boundary is unaffected --
+ * public file URL, ADR 0036's export-only boundary is unaffected --
  * this is still data PREPARATION, never a government portal
  * submission). Each export service already enforces
  * `payroll.statutory.exports.generate` (plus `.identifiers.view` for

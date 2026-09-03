@@ -18,7 +18,7 @@ use App\Support\Money\Money;
 class PfCalculationService
 {
     /**
-     * ADR 0035 correction addendum §1.1/§1.2 -- the algorithm, in
+     * ADR 0036 correction addendum §1.1/§1.2 -- the algorithm, in
      * order:
      *   1. uncappedStatutoryWage = coreWage + max(0, testedRemuneration - 0.5 * (coreWage + testedRemuneration))
      *   2. isExcludedEmployee = uncappedStatutoryWage > membershipWageCeiling

@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Application\Exceptions;
 
 /**
- * Checkpoint 9.6F (ADR 0035 correction addendum §1.2) -- every EARNING
+ * Checkpoint 9.6F (ADR 0036 correction addendum §1.2) -- every EARNING
  * salary component participating in a run's result must have a
  * `payroll_salary_component_statutory_classifications` row covering
  * the calculation date before statutory calculation can proceed. This

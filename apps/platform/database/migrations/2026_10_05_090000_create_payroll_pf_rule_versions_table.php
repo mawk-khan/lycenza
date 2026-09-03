@@ -8,11 +8,11 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035) -- PF is national law, identical for
+     * Checkpoint 9.6C (ADR 0036) -- PF is national law, identical for
      * every School; this is PLATFORM reference data, the same shape
      * as `education_boards` (rule 69 -- no `school_id`, no RLS). Rates
      * are typed `NUMERIC` columns, never a JSON blob (root CLAUDE.md
-     * rule 2 / ADR 0035 "no generic rules engine"). A version, once
+     * rule 2 / ADR 0036 "no generic rules engine"). A version, once
      * referenced by any `payroll_statutory_calculation_results` row,
      * is immutable -- enforced at the Application layer
      * (`StatutoryRuleVersionService`, Checkpoint 9.6D), mirroring

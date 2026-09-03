@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035 correction addendum §1.2) -- the
+     * Checkpoint 9.6C (ADR 0036 correction addendum §1.2) -- the
      * component-classification model that replaces any hardcoded
      * "Basic + DA + HRA + Special + Transport" field list. One row
      * per SalaryComponent, effective-dated (a legal reclassification

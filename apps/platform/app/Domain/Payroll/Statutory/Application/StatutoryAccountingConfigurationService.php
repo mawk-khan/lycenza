@@ -13,7 +13,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Checkpoint 9.6F (ADR 0035 correction addendum §1.11) -- the
+ * Checkpoint 9.6F (ADR 0036 correction addendum §1.11) -- the
  * School-scoped statutory liability/expense account configuration
  * seam, mirroring
  * `App\Domain\Payroll\Application\PayrollAccountingConfigurationService`'s

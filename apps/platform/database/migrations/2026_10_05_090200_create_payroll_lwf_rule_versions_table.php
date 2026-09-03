@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** Checkpoint 9.6C (ADR 0035) -- state (jurisdiction) reference data -- still platform-level (not School-owned): every School in the same state shares the identical LWF rule. */
+    /** Checkpoint 9.6C (ADR 0036) -- state (jurisdiction) reference data -- still platform-level (not School-owned): every School in the same state shares the identical LWF rule. */
     public function up(): void
     {
         Schema::create('payroll_lwf_rule_versions', function (Blueprint $table) {

@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Calculation;
 
 /**
- * Checkpoint 9.6A/9.6B (ADR 0035 correction addendum §1.7) --
+ * Checkpoint 9.6A/9.6B (ADR 0036 correction addendum §1.7) --
  * Telangana Labour Welfare Fund fixed amounts, charged once per
  * statutory annual cycle -- never twice yearly.
  */

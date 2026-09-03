@@ -5,7 +5,7 @@ namespace App\Support\Privacy;
 use App\Support\Privacy\Exceptions\StatutoryIdentifierLookupKeyNotConfiguredException;
 
 /**
- * Checkpoint 9.6C (ADR 0035, ADR 0028's pattern) -- computes the
+ * Checkpoint 9.6C (ADR 0036, ADR 0028's pattern) -- computes the
  * keyed, tenant-separated exact-match digest stored in
  * `employee_statutory_identifiers.lookup_hash`. A genuinely new,
  * dedicated class rather than reusing `ContactLookupHasher` --

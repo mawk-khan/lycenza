@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6F (ADR 0035 correction addendum §1.11) -- links a
+     * Checkpoint 9.6F (ADR 0036 correction addendum §1.11) -- links a
      * `payroll_runs` row to the SEPARATE statutory `journal_entries`
      * row `StatutoryPayrollPostingService::post()`/`reverse()` posts
      * for it, alongside (never merged into) the main

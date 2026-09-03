@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Application\Exceptions;
 
 /**
- * Checkpoint 9.6F (ADR 0035 correction addendum §1.1) -- PF
+ * Checkpoint 9.6F (ADR 0036 correction addendum §1.1) -- PF
  * membership facts are NEVER inferred. If `employee_pf_status` has no
  * row for an EmploymentRecord, the statutory calculation fails closed
  * rather than guessing a default -- the fix is to explicitly record

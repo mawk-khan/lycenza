@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Checkpoint 9.6C (ADR 0035) -- raw-DB-level proof of the statutory
+ * Checkpoint 9.6C (ADR 0036) -- raw-DB-level proof of the statutory
  * schema's own invariants, mirroring `PayrollSchemaInvariantsTest`'s
  * exact single-connection (`pgsql_admin` throughout) discipline and
  * rationale (see that file's own docblock).

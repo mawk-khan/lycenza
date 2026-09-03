@@ -15,7 +15,7 @@ return new class extends Migration
      * `TdsMonthlyDeductionService`/`IncomeTaxSlabCalculator` need.
      * `regime_switch_policy_reference` is explicitly labeled SCHOOL
      * POLICY (a School-approved deadline/process for switching), never
-     * itself a statutory rule (ADR 0035 correction addendum's own
+     * itself a statutory rule (ADR 0036 correction addendum's own
      * distinction).
      */
     public function up(): void

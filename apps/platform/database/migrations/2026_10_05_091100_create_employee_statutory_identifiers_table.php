@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035, ADR 0028's pattern) -- PAN, UAN, PF
+     * Checkpoint 9.6C (ADR 0036, ADR 0028's pattern) -- PAN, UAN, PF
      * Member ID, ESIC IP Number. Searchable PII, not plaintext:
      * `encrypted_value` (Laravel's `encrypted` cast) holds the real
      * value; `lookup_hash` (a keyed HMAC-SHA-256 digest via the new

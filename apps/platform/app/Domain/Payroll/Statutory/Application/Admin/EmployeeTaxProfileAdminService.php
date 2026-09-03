@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
  * Checkpoint 9.6I (Section 1 "Employee tax profile") -- administrative
  * read/write for `employee_tax_profile`: regime election, the
  * School-policy switch reference (explicitly SCHOOL POLICY, never
- * itself a statutory rule -- ADR 0035's own distinction), and the
+ * itself a statutory rule -- ADR 0036's own distinction), and the
  * declared-income/deduction inputs `TdsMonthlyDeductionService`/
  * `IncomeTaxSlabCalculator` already consume. Never exposes arbitrary
  * tax-code scripting -- only the fixed, typed field set the

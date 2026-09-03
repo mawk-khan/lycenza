@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035 correction addendum §1.1) -- the four
+     * Checkpoint 9.6C (ADR 0036 correction addendum §1.1) -- the four
      * independent PF facts, one row per EmploymentRecord (never one
      * per payroll cycle -- these are slow-changing membership facts,
      * updated explicitly when the fact itself changes, e.g. a new

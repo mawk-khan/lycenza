@@ -5,7 +5,7 @@ namespace App\Domain\Payroll\Statutory\Application\Exceptions;
 /**
  * Checkpoint 9.6I -- ESI coverage for a contribution period, once a
  * `payroll_statutory_calculation_results` row exists that consumed
- * it, is immutable (ADR 0035 correction addendum §1.8's "decided
+ * it, is immutable (ADR 0036 correction addendum §1.8's "decided
  * once" continuity rule, extended here to admin corrections too: a
  * correction after the fact would silently change history a payslip
  * or Finance posting already relied on). An admin wishing to correct

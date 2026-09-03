@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Calculation;
 
 /**
- * Checkpoint 9.6B/9.6A (ADR 0035 correction addendum §1.1/§1.2) --
+ * Checkpoint 9.6B/9.6A (ADR 0036 correction addendum §1.1/§1.2) --
  * effective-dated PF rule constants, injected into
  * `PfCalculationService` rather than hardcoded there. A future legal
  * rate change becomes a new `PfRuleVersion` instance (persisted as a

@@ -5776,7 +5776,7 @@ export interface components {
             /** @description Informational. */
             employerLwf?: string | null;
             tdsMonthlyDeduction?: string | null;
-            /** @description Set only on a fail-closed insufficient-salary cycle (ADR 0035 §1.10) -- never a fabricated employer-funded TDS payment. */
+            /** @description Set only on a fail-closed insufficient-salary cycle (ADR 0036 §1.10) -- never a fabricated employer-funded TDS payment. */
             tdsResidualComplianceException?: string | null;
             maskedPan?: string | null;
             maskedUan?: string | null;
@@ -5842,7 +5842,7 @@ export interface components {
             wageThreshold?: string;
             averageDailyWageExemptionThreshold?: string;
             disabilityThreshold?: string | null;
-            /** @description Always 'DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED' (ADR 0035). */
+            /** @description Always 'DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED' (ADR 0036). */
             disabilityThresholdStatus?: string;
         } | null;
         /** @description Checkpoint 9.6I. Read-only active rule-version status. */

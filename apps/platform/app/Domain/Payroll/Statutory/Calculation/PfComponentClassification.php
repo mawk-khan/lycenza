@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Calculation;
 
 /**
- * Checkpoint 9.6B (ADR 0035 correction addendum §1.2) -- the
+ * Checkpoint 9.6B (ADR 0036 correction addendum §1.2) -- the
  * classification a Payroll salary component carries for the PF 50%
  * test, replacing any hardcoded "Basic + DA + HRA + Special +
  * Transport" field list. `PfCalculationInput` groups a run's

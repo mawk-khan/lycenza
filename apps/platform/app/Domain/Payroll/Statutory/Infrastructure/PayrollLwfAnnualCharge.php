@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Checkpoint 9.6C (ADR 0035 correction addendum §1.7) -- the
+ * Checkpoint 9.6C (ADR 0036 correction addendum §1.7) -- the
  * `unique(school_id, employment_record_id, annual_cycle_year)`
  * constraint on this table IS the structural "once per cycle"
  * guarantee; `LwfCalculationService`'s `alreadyChargedThisCycle` input

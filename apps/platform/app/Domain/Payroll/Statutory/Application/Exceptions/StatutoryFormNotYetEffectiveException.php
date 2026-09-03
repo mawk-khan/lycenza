@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Application\Exceptions;
 
 /**
- * Checkpoint 9.6G (ADR 0035 correction addendum §1.4) -- Form 138
+ * Checkpoint 9.6G (ADR 0036 correction addendum §1.4) -- Form 138
  * applies to periods from April 2026 onward only (never Form 24Q,
  * which this checkpoint does not implement at all). A draft statement
  * requested for an earlier period is refused rather than silently

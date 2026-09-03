@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Calculation;
 
 /**
- * Checkpoint 9.6A/9.6B (ADR 0035 correction addendum §1.6) --
+ * Checkpoint 9.6A/9.6B (ADR 0036 correction addendum §1.6) --
  * Telangana Professional Tax monthly-wage slabs, effective-dated
  * rather than hardcoded in the service.
  */

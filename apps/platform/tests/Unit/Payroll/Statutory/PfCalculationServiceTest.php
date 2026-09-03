@@ -13,7 +13,7 @@ use Tests\TestCase;
 
 /**
  * Checkpoint 9.6B -- the PF golden-fixture legal acceptance contract
- * (ADR 0035 correction addendum §1.1/§1.2). Case IDs PF-01..PF-12
+ * (ADR 0036 correction addendum §1.1/§1.2). Case IDs PF-01..PF-12
  * match the checkpoint brief exactly, so each failure is directly
  * traceable to its legal source. `PfCalculationService::calculate()`
  * throws until Checkpoint 9.6D implements it against the algorithm
@@ -93,7 +93,7 @@ class PfCalculationServiceTest extends TestCase
     {
         // Identical salary shape to PF-02, but a NEW employee with no
         // prior membership and no higher-wage approval. This is the
-        // literal anti-pattern ADR 0035 exists to forbid: an
+        // literal anti-pattern ADR 0036 exists to forbid: an
         // implementation that caps first (to 15,000) and then infers
         // membership from the capped figure would wrongly enroll this
         // employee. The correct implementation must determine

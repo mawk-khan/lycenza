@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 /**
  * Checkpoint 9.6B -- the ESI golden-fixture legal acceptance contract
- * (ADR 0035 correction addendum §1.8/§1.9). Case IDs ESI-01..ESI-12
+ * (ADR 0036 correction addendum §1.8/§1.9). Case IDs ESI-01..ESI-12
  * match the checkpoint brief. Both engine classes throw until
  * Checkpoint 9.6D -- every test here is expected RED until then.
  *
@@ -195,6 +195,6 @@ class EsiCalculationServiceTest extends TestCase
     #[Test]
     public function esi_12_disability_special_threshold_is_legally_deferred(): void
     {
-        $this->markTestSkipped('ESI-12: disability special threshold (Rs 25,000) is DEFERRED -- ADDITIONAL LEGAL CLARIFICATION REQUIRED (ADR 0035 correction addendum §1.9). No expected value is invented.');
+        $this->markTestSkipped('ESI-12: disability special threshold (Rs 25,000) is DEFERRED -- ADDITIONAL LEGAL CLARIFICATION REQUIRED (ADR 0036 correction addendum §1.9). No expected value is invented.');
     }
 }

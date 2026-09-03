@@ -14,13 +14,13 @@ namespace App\Domain\Payroll\Application;
  *
  * Identifiers are ALWAYS masked here -- there is no reveal flow on a
  * payslip (unlike the Section 9.6I admin identifier surface); showing
- * an identifier "because it exists" is exactly what ADR 0035's privacy
+ * an identifier "because it exists" is exactly what ADR 0036's privacy
  * requirements exist to prevent. `tds` is this cycle's deduction only
  * -- never the employee's declared-income/deduction dossier
  * (`employee_tax_profile`), which has no place on a payslip.
  *
  * `esiDisabilityProvisionsEvaluated` is always `false` -- this system
- * collects no disability-status fact anywhere (ADR 0035's ESI
+ * collects no disability-status fact anywhere (ADR 0036's ESI
  * disability threshold remains `DEFERRED — ADDITIONAL LEGAL
  * CLARIFICATION REQUIRED`), so it can never determine whether the
  * deferred branch would have applied to a specific Employee. This is

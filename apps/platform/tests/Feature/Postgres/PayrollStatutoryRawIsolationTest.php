@@ -11,7 +11,7 @@ use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
 /**
- * Checkpoint 9.6H (rule 28, ADR 0035 correction addendum's privacy
+ * Checkpoint 9.6H (rule 28, ADR 0036 correction addendum's privacy
  * requirements) -- raw-SQL, no-application-layer proof that School A
  * can never read School B's statutory identifiers, mirroring
  * `RawIsolationTest`'s exact discipline (real `pgsql`/`school_os_app`

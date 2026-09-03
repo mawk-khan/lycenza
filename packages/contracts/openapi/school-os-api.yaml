@@ -10729,7 +10729,7 @@ components:
         employeeLwf: { type: string, nullable: true }
         employerLwf: { type: string, nullable: true, description: Informational. }
         tdsMonthlyDeduction: { type: string, nullable: true }
-        tdsResidualComplianceException: { type: string, nullable: true, description: "Set only on a fail-closed insufficient-salary cycle (ADR 0035 §1.10) -- never a fabricated employer-funded TDS payment." }
+        tdsResidualComplianceException: { type: string, nullable: true, description: "Set only on a fail-closed insufficient-salary cycle (ADR 0036 §1.10) -- never a fabricated employer-funded TDS payment." }
         maskedPan: { type: string, nullable: true }
         maskedUan: { type: string, nullable: true }
         maskedPfMemberId: { type: string, nullable: true }
@@ -10785,7 +10785,7 @@ components:
         wageThreshold: { type: string }
         averageDailyWageExemptionThreshold: { type: string }
         disabilityThreshold: { type: string, nullable: true }
-        disabilityThresholdStatus: { type: string, description: "Always 'DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED' (ADR 0035)." }
+        disabilityThresholdStatus: { type: string, description: "Always 'DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED' (ADR 0036)." }
     StatutoryRuleStatus:
       type: object
       description: Checkpoint 9.6I. Read-only active rule-version status.

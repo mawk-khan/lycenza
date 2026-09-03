@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Checkpoint 9.6C (ADR 0035 correction addendum §1.8) -- coverage
+ * Checkpoint 9.6C (ADR 0036 correction addendum §1.8) -- coverage
  * decided once per contribution period, never re-evaluated mid-period.
  *
  * @property string $id

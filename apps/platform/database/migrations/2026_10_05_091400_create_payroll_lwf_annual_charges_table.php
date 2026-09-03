@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035 correction addendum §1.7) --
+     * Checkpoint 9.6C (ADR 0036 correction addendum §1.7) --
      * structurally enforces "once per statutory annual cycle": the
      * `unique(school_id, employment_record_id, annual_cycle_year)`
      * constraint is what makes a second LWF charge attempt in the

@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Calculation;
 
 /**
- * Checkpoint 9.6B (ADR 0035 correction addendum §1.1) -- the four
+ * Checkpoint 9.6B (ADR 0036 correction addendum §1.1) -- the four
  * independent PF facts an EmploymentRecord carries, never inferred
  * from one another. Persisted as `employee_pf_status` in Checkpoint
  * 9.6C; this DTO is the pure-calculation-layer shape

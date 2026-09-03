@@ -11,7 +11,7 @@ use App\Support\Money\Money;
 class TdsMonthlyDeductionService
 {
     /**
-     * ADR 0035 correction addendum §1.10 -- the algorithm:
+     * ADR 0036 correction addendum §1.10 -- the algorithm:
      *   1. remainingLiability = annualProjectedLiability
      *        - cumulativeAlreadyDeducted - (priorEmployerTdsCredit ?? 0)
      *   2. if remainingLiability <= 0:

@@ -11,7 +11,7 @@ use App\Domain\Payroll\Statutory\Infrastructure\PayrollProfessionalTaxRuleVersio
 use Illuminate\Database\Seeder;
 
 /**
- * Checkpoint 9.6C (ADR 0035) -- the effective-1-April-2026 statutory
+ * Checkpoint 9.6C (ADR 0036) -- the effective-1-April-2026 statutory
  * rule versions, seeded as platform reference data. Every numeric
  * value here matches the corresponding
  * `App\Domain\Payroll\Statutory\Calculation\*RuleVersion::effectiveApril2026()`

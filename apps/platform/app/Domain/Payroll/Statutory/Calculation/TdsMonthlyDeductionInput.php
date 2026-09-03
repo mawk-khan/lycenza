@@ -8,7 +8,7 @@ use App\Support\Money\Money;
  * Checkpoint 9.6B -- one payroll cycle's TDS spreading input. Never
  * carries a "this month's raw salary %" concept -- only the annual
  * projection, what has already been withheld/credited, and how many
- * cycles remain (ADR 0035 correction addendum's annualized-projection
+ * cycles remain (ADR 0036 correction addendum's annualized-projection
  * principle, Section 392).
  */
 final class TdsMonthlyDeductionInput

@@ -9,7 +9,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Checkpoint 9.6B -- TDS monthly-spreading golden fixtures (ADR 0035
+ * Checkpoint 9.6B -- TDS monthly-spreading golden fixtures (ADR 0036
  * correction addendum §1.10, Section 392's annualized principle).
  * Case IDs TDS-13..TDS-19. `TdsMonthlyDeductionService` throws until
  * Checkpoint 9.6E.

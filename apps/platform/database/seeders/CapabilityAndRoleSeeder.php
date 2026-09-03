@@ -534,7 +534,7 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'payroll.accounting.manage', 'label' => 'Manage Payroll accounting (Finance account) configuration', 'namespace' => 'school'],
             ['key' => 'payroll.statutory.manage', 'label' => 'Manage Payroll statutory (PF/ESI/TDS) configuration -- reserved, no functional implementation while Checkpoint 9.6 is legally gated', 'namespace' => 'school'],
 
-            // Checkpoint 9.6F/9.6G (ADR 0035 correction addendum
+            // Checkpoint 9.6F/9.6G (ADR 0036 correction addendum
             // §1.11, Section 10) -- registered in the SAME checkpoint
             // as the real gated actions behind them
             // (StatutoryPayrollCalculationService/StatutoryPayrollPostingService/

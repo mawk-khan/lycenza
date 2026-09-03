@@ -17,18 +17,18 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Checkpoint 9.6G (ADR 0035 correction addendum §1.4, Section 9) --
+ * Checkpoint 9.6G (ADR 0036 correction addendum §1.4, Section 9) --
  * salary TDS DRAFT DATA PREPARATION for Form 138 periods (April 2026
  * onward) ONLY. This is explicitly NOT: Form 24Q (superseded, never
  * implemented here), an official Form 138/NSDL-FVU file (this
  * checkpoint's specification did not hand down that exact schema, and
  * one is not invented here -- see the field-mapping caveat on this
  * class), Form 16 production or digital signature, or any government
- * portal submission (ADR 0035's hard-deferred register).
+ * portal submission (ADR 0036's hard-deferred register).
  *
  * PAN is masked by default (first 2 / last 2 characters visible,
  * `payroll.statutory.identifiers.view` required to see the full
- * value) -- the narrow-capability-check + masking pattern ADR 0035
+ * value) -- the narrow-capability-check + masking pattern ADR 0036
  * requires for Highly Sensitive government identifiers. A missing PAN
  * record renders as `NOT_RECORDED`, never fabricated.
  */

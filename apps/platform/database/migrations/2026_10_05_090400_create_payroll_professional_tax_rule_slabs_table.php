@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035) -- one typed row per PT slab
+     * Checkpoint 9.6C (ADR 0036) -- one typed row per PT slab
      * boundary, ordered by `upper_bound` ascending; a null
      * `upper_bound` is the catch-all top band (never a magic sentinel
      * number).

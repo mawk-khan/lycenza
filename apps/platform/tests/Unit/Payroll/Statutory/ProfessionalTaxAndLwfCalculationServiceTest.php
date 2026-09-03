@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 /**
  * Checkpoint 9.6B -- Telangana Professional Tax and Labour Welfare
- * Fund golden fixtures (ADR 0035 correction addendum §1.6/§1.7). Both
+ * Fund golden fixtures (ADR 0036 correction addendum §1.6/§1.7). Both
  * engines throw until Checkpoint 9.6D.
  */
 class ProfessionalTaxAndLwfCalculationServiceTest extends TestCase

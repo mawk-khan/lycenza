@@ -17,7 +17,7 @@ use App\Support\Authorization\AuthorizesCapability;
  * exposes no mutation: rule-version content (rates, slabs, ceilings)
  * remains code/seed-controlled reference data
  * (`StatutoryRuleVersionSeeder`), never a runtime tenant-editable
- * "rules engine" (ADR 0035's explicit prohibition) -- a future legal
+ * "rules engine" (ADR 0036's explicit prohibition) -- a future legal
  * change ships as a new seeded version with a later `effective_from`,
  * through a reviewed code change, never a School admin's own edit.
  */

@@ -50,7 +50,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Checkpoint 9.6F (ADR 0035 correction addendum) -- the Application-
+ * Checkpoint 9.6F (ADR 0036 correction addendum) -- the Application-
  * layer orchestration that resolves real EmploymentRecord/rule-version
  * data and feeds it into the pure Checkpoint 9.6D/9.6E calculation
  * engines, persisting one immutable `PayrollStatutoryCalculationResult`
@@ -66,7 +66,7 @@ use Illuminate\Support\Facades\DB;
  * `payroll_run_results`' own freeze boundary exactly.
  *
  * Two deliberate, DISCLOSED scope limitations (never invented legal
- * behavior -- documented gaps, the same posture as ADR 0035's ESI
+ * behavior -- documented gaps, the same posture as ADR 0036's ESI
  * disability deferral):
  *   - `income_tax_treatment = 'partially_exempt'` components are
  *     treated as FULLY taxable (the conservative, never-under-
@@ -76,7 +76,7 @@ use Illuminate\Support\Facades\DB;
  *     here.
  *   - LWF category eligibility currently resolves to `true` for every
  *     EmploymentRecord -- a School-configurable employee-category
- *     exclusion model (ADR 0035 correction addendum §1.7's "respecting
+ *     exclusion model (ADR 0036 correction addendum §1.7's "respecting
  *     legal employee-definition exclusions") is not yet built; no
  *     exclusion is fabricated in its absence.
  */

@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Calculation;
 
 /**
- * Checkpoint 9.6A/9.6B (ADR 0035 correction addendum §1.3/§1.5) --
+ * Checkpoint 9.6A/9.6B (ADR 0036 correction addendum §1.3/§1.5) --
  * effective-dated income-tax rule constants under the Income-tax Act,
  * 2025 (Section 392's annualized/average-rate principle), never a
  * hardcoded slab table or a flat hardcoded surcharge inside the

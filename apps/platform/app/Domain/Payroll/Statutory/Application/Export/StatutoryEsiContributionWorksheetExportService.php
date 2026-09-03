@@ -11,13 +11,13 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 
 /**
- * Checkpoint 9.6G (ADR 0035 correction addendum §1.8, Section 9) --
+ * Checkpoint 9.6G (ADR 0036 correction addendum §1.8, Section 9) --
  * the ESIC monthly contribution worksheet: data preparation only, no
  * government portal submission. One row per EmploymentRecord with a
  * statutory result for the run: contribution period, coverage-at-
  * period-start, a continuity flag (was this employee ALSO covered in
  * the immediately preceding contribution period -- the observable
- * consequence of ADR 0035's "decided once, never re-evaluated
+ * consequence of ADR 0036's "decided once, never re-evaluated
  * mid-period" continuity rule), statutory wage, employee/employer
  * contribution, and a historical-adjustment column.
  *

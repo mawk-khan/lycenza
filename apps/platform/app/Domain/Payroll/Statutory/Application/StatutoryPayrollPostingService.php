@@ -24,7 +24,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Checkpoint 9.6F (ADR 0035 correction addendum §1.11) -- posts the
+ * Checkpoint 9.6F (ADR 0036 correction addendum §1.11) -- posts the
  * FULL statutory GL effect of a run's already-persisted
  * `payroll_statutory_calculation_results` rows as ONE additional
  * journal entry, SEPARATE from (never merged into, never replacing)

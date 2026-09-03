@@ -111,7 +111,7 @@ class StatutoryIdentifierAdminService
                 );
 
                 // Audited by reference only -- never the value itself
-                // (rule 63/ADR 0035's own privacy requirement).
+                // (rule 63/ADR 0036's own privacy requirement).
                 $this->audit->school($school, 'payroll.statutory.identifier.set', actor: $actor, subject: $identifier, metadata: [
                     'employmentRecordId' => $employmentRecordId,
                     'identifierType' => $identifierType,

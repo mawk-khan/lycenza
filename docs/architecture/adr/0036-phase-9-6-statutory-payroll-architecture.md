@@ -1,4 +1,4 @@
-# ADR 0035: Phase 9.6 Statutory Payroll Architecture
+# ADR 0036: Phase 9.6 Statutory Payroll Architecture
 
 - Status: Accepted
 - Date: 2026-09-03

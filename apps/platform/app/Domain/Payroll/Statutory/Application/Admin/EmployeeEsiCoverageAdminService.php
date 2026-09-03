@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\DB;
  *
  * A period's coverage is correctable ONLY before any statutory
  * calculation has consumed it (`StatutoryEsiCoverageLockedException`
- * otherwise) -- ADR 0035 correction addendum §1.8's "decided once"
+ * otherwise) -- ADR 0036 correction addendum §1.8's "decided once"
  * rule, extended to admin correction: changing coverage after a
  * calculation/payslip/Finance posting already relied on it would
  * silently rewrite history.

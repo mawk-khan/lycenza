@@ -11,7 +11,7 @@ use App\Support\Money\Money;
 class EsiContributionCalculationService
 {
     /**
-     * ADR 0035 correction addendum §1.8 -- the algorithm:
+     * ADR 0036 correction addendum §1.8 -- the algorithm:
      *   1. if NOT coveredForThisPeriod: employee = employer = 0, done.
      *   2. employerContribution = ceil_to_next_rupee(statutoryWage * employerContributionRate)
      *      -- ALWAYS payable once covered, never exempted by the
@@ -22,7 +22,7 @@ class EsiContributionCalculationService
      *   Rounding is UPWARD to the next whole rupee (ceiling), never
      *   half-up -- this is the one place statutory rounding in this
      *   checkpoint deliberately differs from PF's half-up whole-INR
-     *   rule (ADR 0035 correction addendum §1.8's own "upward
+     *   rule (ADR 0036 correction addendum §1.8's own "upward
      *   rounding" language), and must not reuse
      *   `Money::multiplyByRate()`'s half-up behavior unmodified.
      */
@@ -49,7 +49,7 @@ class EsiContributionCalculationService
     }
 
     /**
-     * ADR 0035 correction addendum §1.8's "upward rounding" -- ceiling
+     * ADR 0036 correction addendum §1.8's "upward rounding" -- ceiling
      * to the next whole rupee, deliberately never
      * `Money::multiplyByRate()`'s own half-up behavior (see this
      * class's own docblock). `$raw` is expected at a fine decimal

@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Calculation;
 
 /**
- * Checkpoint 9.6B/9.6A (ADR 0035 correction addendum §1.8) --
+ * Checkpoint 9.6B/9.6A (ADR 0036 correction addendum §1.8) --
  * effective-dated ESI rule constants. `wageThreshold` gates coverage
  * determination at contribution-period start (never mid-period, per
  * the continuity rule -- see `EsiCoverageDeterminationService`);

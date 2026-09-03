@@ -3,7 +3,7 @@
 namespace App\Domain\Payroll\Statutory\Application\Exceptions;
 
 /**
- * Checkpoint 9.6F (ADR 0035 correction addendum §1.11) -- raised by
+ * Checkpoint 9.6F (ADR 0036 correction addendum §1.11) -- raised by
  * `StatutoryAccountingConfigurationService::resolveValidated()` when
  * a School has never configured
  * `payroll_statutory_accounting_configurations`. There is no

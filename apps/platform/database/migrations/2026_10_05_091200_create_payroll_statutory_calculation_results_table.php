@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035) -- one immutable statutory snapshot
+     * Checkpoint 9.6C (ADR 0036) -- one immutable statutory snapshot
      * per `payroll_run_results` row, recording which rule version(s)
      * were used and every calculated base/contribution/tax figure.
      * Frozen the instant the parent run reaches `approved` or later,

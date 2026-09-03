@@ -10,7 +10,7 @@ use Tests\TestCase;
 
 /**
  * Checkpoint 9.6B -- annual income-tax golden fixtures under the
- * Income-tax Act, 2025 / Section 392 (ADR 0035 correction addendum
+ * Income-tax Act, 2025 / Section 392 (ADR 0036 correction addendum
  * §1.3/§1.5). Case IDs TDS-01..TDS-12/TDS-20 (the annual-liability
  * subset; TDS-13..TDS-19's monthly-spreading fixtures live in
  * `TdsMonthlyDeductionServiceTest`). `IncomeTaxSlabCalculator` throws

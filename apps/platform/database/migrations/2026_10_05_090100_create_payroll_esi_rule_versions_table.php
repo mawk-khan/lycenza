@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /** Checkpoint 9.6C (ADR 0035) -- platform reference data, mirroring `payroll_pf_rule_versions`' exact shape and immutability discipline. */
+    /** Checkpoint 9.6C (ADR 0036) -- platform reference data, mirroring `payroll_pf_rule_versions`' exact shape and immutability discipline. */
     public function up(): void
     {
         Schema::create('payroll_esi_rule_versions', function (Blueprint $table) {

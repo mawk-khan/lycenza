@@ -38,7 +38,7 @@ use Tests\TestCase;
 /**
  * Checkpoint 9.6F -- functional tests for
  * `StatutoryPayrollCalculationService`/`StatutoryPayrollPostingService`
- * (ADR 0035 correction addendum §1.11). The scenario below is chosen
+ * (ADR 0036 correction addendum §1.11). The scenario below is chosen
  * so every branch resolves to a hand-verifiable figure: Basic
  * (core_wage) 20000 + HRA (tested_remuneration) 8000 = 28000 gross,
  * ABOVE the ESI wage threshold (21000, so ESI contribution is zero --

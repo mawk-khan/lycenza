@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Checkpoint 9.6C (ADR 0035 correction addendum §1.1) -- the four
+ * Checkpoint 9.6C (ADR 0036 correction addendum §1.1) -- the four
  * independent PF facts. Never derive one from another anywhere this
  * model is consumed.
  *

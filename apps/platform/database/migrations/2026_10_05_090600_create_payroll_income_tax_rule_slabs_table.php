@@ -15,7 +15,7 @@ return new class extends Migration
      * the surcharge THRESHOLD income above which `rate` applies) --
      * two genuinely different shapes sharing the same
      * boundary/rate/sort_order columns, never a hardcoded flat
-     * surcharge rate in application code (ADR 0035 correction
+     * surcharge rate in application code (ADR 0036 correction
      * addendum, TDS-20).
      */
     public function up(): void

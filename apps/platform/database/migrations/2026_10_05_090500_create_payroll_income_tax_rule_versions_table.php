@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035 correction addendum §1.3/§1.5) --
+     * Checkpoint 9.6C (ADR 0036 correction addendum §1.3/§1.5) --
      * Income-tax Act, 2025 regime rule versions (national reference
      * data). `regime` distinguishes old/new -- an employee's own
      * election is a separate School-owned fact

@@ -13,7 +13,7 @@ use App\Support\Money\Money;
 class IncomeTaxSlabCalculator
 {
     /**
-     * ADR 0035 correction addendum §1.3/§1.5 -- the algorithm:
+     * ADR 0036 correction addendum §1.3/§1.5 -- the algorithm:
      *   1. slabTax = sum, across `rule.slabs`, of (portion of taxableIncome within that band) * band.rate.
      *   2. if taxableIncome <= rule.rebateQualifyingIncomeThreshold:
      *        rebate = min(slabTax, rule.rebateMaximum); taxAfterRebate = slabTax - rebate.

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035 correction addendum §1.8) -- one row
+     * Checkpoint 9.6C (ADR 0036 correction addendum §1.8) -- one row
      * per EmploymentRecord per contribution period (Apr-Sep / Oct-
      * Mar), storing the coverage decision made ONCE at period start
      * -- never re-evaluated mid-period, matching

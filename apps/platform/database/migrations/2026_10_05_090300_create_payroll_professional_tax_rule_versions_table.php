@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0035) -- state reference data. Slabs live
+     * Checkpoint 9.6C (ADR 0036) -- state reference data. Slabs live
      * in the child `payroll_professional_tax_rule_slabs` table (typed
      * rows, never a JSON array) -- see that migration.
      */

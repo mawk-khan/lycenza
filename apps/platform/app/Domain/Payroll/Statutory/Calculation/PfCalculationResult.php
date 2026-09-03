@@ -9,7 +9,7 @@ use App\Support\Money\Money;
  * output shape. `uncappedStatutoryWage` is retained on the result
  * (never dropped after membership determination) precisely so a
  * caller/test can prove membership was decided from it, not from
- * `contributionBase` -- ADR 0035 correction addendum §1.1's central
+ * `contributionBase` -- ADR 0036 correction addendum §1.1's central
  * anti-pattern this DTO exists to make impossible to hide.
  */
 final class PfCalculationResult
