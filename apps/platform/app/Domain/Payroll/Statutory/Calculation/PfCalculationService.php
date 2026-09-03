@@ -2,6 +2,8 @@
 
 namespace App\Domain\Payroll\Statutory\Calculation;
 
+use App\Support\Money\Money;
+
 /**
  * Checkpoint 9.6D implements this class's body against the
  * Checkpoint 9.6B golden fixtures (`Tests\Unit\Payroll\Statutory\PfCalculationServiceTest`).
@@ -37,6 +39,91 @@ class PfCalculationService
      */
     public function calculate(PfCalculationInput $input, PfRuleVersion $rule): PfCalculationResult
     {
-        throw new \LogicException('PfCalculationService::calculate() is implemented in Checkpoint 9.6D, not 9.6B. See the docblock above for the exact algorithm the golden fixtures in PfCalculationServiceTest already encode.');
+        $currency = $input->coreWage()->currency();
+        $zero = Money::of('0.00', $currency);
+
+        $coreWage = $input->coreWage();
+        $testedRemuneration = $input->testedRemuneration();
+        $remuneration = $coreWage->add($testedRemuneration);
+        $halfRemuneration = $remuneration->multiplyByRate('0.5', 2);
+        $excess = $testedRemuneration->add($halfRemuneration->negated());
+        $addBack = $excess->isPositive() ? $excess : $zero;
+        $uncappedStatutoryWage = $coreWage->add($addBack);
+
+        $facts = $input->facts;
+        $isExcludedEmployee = $this->exceeds($uncappedStatutoryWage, Money::of($rule->membershipWageCeiling, $currency))
+            && ! ($facts->hasExistingPfMembership || $facts->hasApprovedHigherWageContribution);
+
+        if ($isExcludedEmployee) {
+            return new PfCalculationResult(
+                uncappedStatutoryWage: $uncappedStatutoryWage,
+                isExcludedEmployee: true,
+                contributionBase: $zero,
+                employeeMandatoryContribution: $zero,
+                employeeVoluntaryContribution: $input->voluntaryEmployeeContribution ?? $zero,
+                employerTotalContribution: $zero,
+                employerEpsContribution: $zero,
+                employerEpfContribution: $zero,
+                edliContribution: $zero,
+                adminCharge: $zero,
+            );
+        }
+
+        $membershipWageCeiling = Money::of($rule->membershipWageCeiling, $currency);
+        $contributionBase = $facts->hasApprovedHigherWageContribution
+            ? $uncappedStatutoryWage
+            : $this->min($uncappedStatutoryWage, $membershipWageCeiling);
+
+        $employeeMandatory = $this->wholeRupee($contributionBase, $rule->employeeContributionRate);
+        $employerTotal = $this->wholeRupee($contributionBase, $rule->employerContributionRate);
+
+        $epsWageCeiling = Money::of($rule->epsWageCeiling, $currency);
+        $epsBase = $this->min($contributionBase, $epsWageCeiling);
+        $employerEps = $facts->isEpsEligible ? $this->wholeRupee($epsBase, $rule->epsRate) : $zero;
+        $employerEpf = $employerTotal->add($employerEps->negated());
+
+        $edliWageCeiling = Money::of($rule->edliWageCeiling, $currency);
+        $edliBase = $this->min($contributionBase, $edliWageCeiling);
+        $edli = $this->wholeRupee($edliBase, $rule->edliRate);
+
+        $adminChargeMinimum = Money::of($rule->adminChargeMinimum, $currency);
+        $adminChargeRaw = $this->wholeRupee($edliBase, $rule->adminChargeRate);
+        $adminCharge = $this->exceeds($adminChargeRaw, $adminChargeMinimum) ? $adminChargeRaw : $adminChargeMinimum;
+
+        return new PfCalculationResult(
+            uncappedStatutoryWage: $uncappedStatutoryWage,
+            isExcludedEmployee: false,
+            contributionBase: $contributionBase,
+            employeeMandatoryContribution: $employeeMandatory,
+            employeeVoluntaryContribution: $input->voluntaryEmployeeContribution ?? $zero,
+            employerTotalContribution: $employerTotal,
+            employerEpsContribution: $employerEps,
+            employerEpfContribution: $employerEpf,
+            edliContribution: $edli,
+            adminCharge: $adminCharge,
+        );
+    }
+
+    private function exceeds(Money $a, Money $b): bool
+    {
+        return $a->add($b->negated())->isPositive();
+    }
+
+    private function min(Money $a, Money $b): Money
+    {
+        return $this->exceeds($a, $b) ? $b : $a;
+    }
+
+    /**
+     * Statutory "whole INR" rounding: rounds the RESULT to zero
+     * decimal places (half-up, `Money::multiplyByRate()`'s own
+     * behavior) -- the actual legally-significant rounding decision --
+     * then re-expresses that already-whole amount at the DTO's usual
+     * 2-decimal-place format (an exact re-scale, never a second
+     * rounding decision, since the value is already an integer).
+     */
+    private function wholeRupee(Money $base, string $rate): Money
+    {
+        return $base->multiplyByRate($rate, 0)->multiplyByRate('1.00', 2);
     }
 }

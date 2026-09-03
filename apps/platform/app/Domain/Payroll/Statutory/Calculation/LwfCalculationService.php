@@ -2,6 +2,8 @@
 
 namespace App\Domain\Payroll\Statutory\Calculation;
 
+use App\Support\Money\Money;
+
 /**
  * Checkpoint 9.6D implements this against Checkpoint 9.6B's LWF
  * fixtures.
@@ -17,6 +19,12 @@ class LwfCalculationService
      */
     public function calculate(bool $isEligibleCategory, bool $alreadyChargedThisCycle, LabourWelfareFundRuleVersion $rule): LwfCalculationResult
     {
-        throw new \LogicException('LwfCalculationService::calculate() is implemented in Checkpoint 9.6D.');
+        $shouldCharge = $isEligibleCategory && ! $alreadyChargedThisCycle;
+
+        return new LwfCalculationResult(
+            shouldCharge: $shouldCharge,
+            employeeAmount: Money::of($shouldCharge ? $rule->employeeAmount : '0.00', 'INR'),
+            employerAmount: Money::of($shouldCharge ? $rule->employerAmount : '0.00', 'INR'),
+        );
     }
 }

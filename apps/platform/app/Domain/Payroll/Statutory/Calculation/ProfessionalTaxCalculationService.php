@@ -15,6 +15,19 @@ class ProfessionalTaxCalculationService
 {
     public function calculate(Money $monthlyWage, ProfessionalTaxRuleVersion $rule): Money
     {
-        throw new \LogicException('ProfessionalTaxCalculationService::calculate() is implemented in Checkpoint 9.6D.');
+        foreach ($rule->slabs as $slab) {
+            if ($slab['upTo'] === null) {
+                return Money::of($slab['amount'], $monthlyWage->currency());
+            }
+
+            $upperBound = Money::of($slab['upTo'], $monthlyWage->currency());
+            if (! $monthlyWage->add($upperBound->negated())->isPositive()) {
+                return Money::of($slab['amount'], $monthlyWage->currency());
+            }
+        }
+
+        // Unreachable while $rule->slabs' final row has upTo: null,
+        // but PHP requires a return on every path.
+        return Money::of('0.00', $monthlyWage->currency());
     }
 }

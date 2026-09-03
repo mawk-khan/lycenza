@@ -20,6 +20,8 @@ class EsiCoverageDeterminationService
      */
     public function determineCoverageAtPeriodStart(Money $wageAtPeriodStart, EsiRuleVersion $rule): bool
     {
-        throw new \LogicException('EsiCoverageDeterminationService::determineCoverageAtPeriodStart() is implemented in Checkpoint 9.6D.');
+        $threshold = Money::of($rule->wageThreshold, $wageAtPeriodStart->currency());
+
+        return ! $wageAtPeriodStart->add($threshold->negated())->isPositive();
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Payroll\Statutory\Calculation;
 
+use App\Support\Money\Money;
+
 /**
  * Checkpoint 9.6D implements this against Checkpoint 9.6B's TDS-13..
  * TDS-19 golden fixtures.
@@ -28,6 +30,33 @@ class TdsMonthlyDeductionService
      */
     public function calculate(TdsMonthlyDeductionInput $input): TdsMonthlyDeductionResult
     {
-        throw new \LogicException('TdsMonthlyDeductionService::calculate() is implemented in Checkpoint 9.6D.');
+        $currency = $input->annualProjectedLiability->currency();
+        $zero = Money::of('0.00', $currency);
+
+        $priorCredit = $input->priorEmployerTdsCredit ?? $zero;
+        $remainingLiability = $input->annualProjectedLiability
+            ->add($input->cumulativeAlreadyDeducted->negated())
+            ->add($priorCredit->negated());
+
+        if (! $remainingLiability->isPositive()) {
+            return new TdsMonthlyDeductionResult(
+                monthlyDeduction: $zero,
+                carryForwardExcess: $remainingLiability->isNegative() ? $remainingLiability->negated() : null,
+            );
+        }
+
+        $rawMonthly = $remainingLiability
+            ->multiplyByRate(bcdiv('1', (string) $input->remainingCycles, 20), 0)
+            ->multiplyByRate('1.00', 2);
+
+        if ($input->availableSalaryForWithholding !== null
+            && $rawMonthly->add($input->availableSalaryForWithholding->negated())->isPositive()) {
+            return new TdsMonthlyDeductionResult(
+                monthlyDeduction: $input->availableSalaryForWithholding,
+                residualComplianceException: $rawMonthly->add($input->availableSalaryForWithholding->negated()),
+            );
+        }
+
+        return new TdsMonthlyDeductionResult(monthlyDeduction: $rawMonthly);
     }
 }
