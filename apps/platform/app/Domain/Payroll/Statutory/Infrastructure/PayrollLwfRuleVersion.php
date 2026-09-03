@@ -4,8 +4,20 @@ namespace App\Domain\Payroll\Statutory\Infrastructure;
 
 use App\Support\Identifiers\GeneratesUuidV7;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
-/** Checkpoint 9.6C -- state (jurisdiction) reference data, still PLATFORM-level (no `school_id`). */
+/**
+ * Checkpoint 9.6C -- state (jurisdiction) reference data, still PLATFORM-level (no `school_id`).
+ *
+ * @property string $id
+ * @property string $jurisdiction
+ * @property Carbon $effective_from
+ * @property Carbon|null $effective_to
+ * @property string $status
+ * @property string $legal_reference
+ * @property string $employee_amount
+ * @property string $employer_amount
+ */
 class PayrollLwfRuleVersion extends Model
 {
     use GeneratesUuidV7;

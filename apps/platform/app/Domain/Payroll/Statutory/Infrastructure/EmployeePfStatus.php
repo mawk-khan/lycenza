@@ -12,10 +12,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Checkpoint 9.6C (ADR 0035 correction addendum §1.1) -- the four
  * independent PF facts. Never derive one from another anywhere this
  * model is consumed.
+ *
+ * @property string $id
+ * @property string $school_id
+ * @property string $employment_record_id
+ * @property bool $has_existing_pf_membership
+ * @property bool $has_uan
+ * @property bool $has_approved_higher_wage_contribution
+ * @property string|null $higher_wage_approval_reference
+ * @property bool $is_eps_eligible
  */
 class EmployeePfStatus extends Model
 {
     use BelongsToSchool, GeneratesUuidV7;
+
+    protected $table = 'employee_pf_status';
 
     protected $fillable = [
         'school_id', 'employment_record_id', 'has_existing_pf_membership',

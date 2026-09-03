@@ -15,6 +15,16 @@ use Illuminate\Support\Carbon;
  * @property Carbon $effective_from
  * @property Carbon|null $effective_to
  * @property string $status
+ * @property string $legal_reference
+ * @property string $employee_contribution_rate
+ * @property string $employer_contribution_rate
+ * @property string $eps_rate
+ * @property string $edli_rate
+ * @property string $admin_charge_rate
+ * @property string $membership_wage_ceiling
+ * @property string $eps_wage_ceiling
+ * @property string $edli_wage_ceiling
+ * @property string $admin_charge_minimum
  */
 class PayrollPfRuleVersion extends Model
 {

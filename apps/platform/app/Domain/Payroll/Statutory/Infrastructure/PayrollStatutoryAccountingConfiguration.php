@@ -22,6 +22,8 @@ class PayrollStatutoryAccountingConfiguration extends Model
         'professional_tax_payable_ledger_account_id',
         'lwf_payable_ledger_account_id',
         'employer_pf_contribution_expense_ledger_account_id',
+        'pf_admin_charge_expense_ledger_account_id',
+        'edli_expense_ledger_account_id',
         'employer_esi_contribution_expense_ledger_account_id',
         'employer_lwf_contribution_expense_ledger_account_id',
         'currency',

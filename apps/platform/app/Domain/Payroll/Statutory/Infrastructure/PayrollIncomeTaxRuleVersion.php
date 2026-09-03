@@ -5,8 +5,22 @@ namespace App\Domain\Payroll\Statutory\Infrastructure;
 use App\Support\Identifiers\GeneratesUuidV7;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
-/** Checkpoint 9.6C -- national reference data (Income-tax Act, 2025). */
+/**
+ * Checkpoint 9.6C -- national reference data (Income-tax Act, 2025).
+ *
+ * @property string $id
+ * @property string $regime old|new
+ * @property Carbon $effective_from
+ * @property Carbon|null $effective_to
+ * @property string $status
+ * @property string $legal_reference
+ * @property string $standard_deduction
+ * @property string $rebate_qualifying_income_threshold
+ * @property string $rebate_maximum
+ * @property string $cess_rate
+ */
 class PayrollIncomeTaxRuleVersion extends Model
 {
     use GeneratesUuidV7;
