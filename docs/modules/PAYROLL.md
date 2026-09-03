@@ -839,7 +839,7 @@ never rewritten by this work.
 
 **9.6 implementation is complete pending explicit publication
 permission.** The ESI disability special threshold (₹25,000) remains
-`DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED` permanently (ADR
+`DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED` (ADR
 0035) -- this is a deliberate, disclosed legal gap, not an
 implementation gap. See the Phase 9.6 Final Readiness Report for the
 publication verdict.
