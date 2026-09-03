@@ -11,7 +11,7 @@ return new class extends Migration
     /**
      * Phase 0H.4C -- one named, School-owned reference mapping that
      * converts a normalized percentage into a discrete grade outcome
-     * (ADR 0034). School-only parent -- deliberately no AcademicYear,
+     * (ADR 0035). School-only parent -- deliberately no AcademicYear,
      * GradeLevel, Subject, Examination or ExaminationPaper reference;
      * independent of the Examination chain, exactly as ADR 0032 already
      * anticipated ("GradeScale... has no dependency on the Examination
@@ -23,7 +23,7 @@ return new class extends Migration
      * enforced entirely in
      * `App\Domain\Examinations\Application\GradeScaleService` under a
      * parent-row `lockForUpdate()`, never by a raw status
-     * mass-assignment and never by a database trigger (ADR 0034).
+     * mass-assignment and never by a database trigger (ADR 0035).
      * `inactive` is reachable ONLY via `active`, so it structurally
      * means "this scale was previously active, and its GradeBands
      * (`grade_bands`) are permanently frozen" -- no separate

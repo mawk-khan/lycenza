@@ -624,8 +624,8 @@ Lesson Planning, Communications, Notifications or Documents integration.
 A named, School-owned mapping that converts a normalized percentage
 (0.00–100.00) into a discrete grade outcome through its ordered
 GradeBands — wholly independent of the Examination chain, exactly as
-§21 below anticipated. Full design and rationale: ADR 0034
-(`docs/architecture/adr/0034-grade-scale-band-mapping.md`).
+§21 below anticipated. Full design and rationale: ADR 0035
+(`docs/architecture/adr/0035-grade-scale-band-mapping.md`).
 
 **GradeBand stores only a lower-bound threshold** (`min_percentage`,
 `label`) — no upper bound, no sequence. A percentage maps to the band

@@ -1,4 +1,4 @@
-# ADR 0034 — GradeScale / GradeBand percentage-to-grade mapping
+# ADR 0035 — GradeScale / GradeBand percentage-to-grade mapping
 
 **Status:** Accepted (Phase 0H.4C)
 

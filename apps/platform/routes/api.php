@@ -1607,7 +1607,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
             // Phase 0H.4C (GradeScale). School-only -- no Examination
             // nesting of any kind, deliberately: GradeScale is
-            // independent of the Examination chain (ADR 0032/0034).
+            // independent of the Examination chain (ADR 0032/0035).
             // Exactly SEVEN operations: list/create/show/update the
             // scale, plus create/update/delete a band.
             //

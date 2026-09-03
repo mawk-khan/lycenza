@@ -188,7 +188,7 @@ class ExaminationArchitectureGuardTest extends TestCase
         // multi-row invariant and therefore nothing to lock.
         //
         // GradeScale's own files are excluded: GradeScaleService's
-        // parent-row `lockForUpdate()` is a legitimate, ADR-0034-
+        // parent-row `lockForUpdate()` is a legitimate, ADR-0035-
         // sanctioned aggregate-local lock for GradeScale's own
         // activation/band-mutation invariant, wholly unrelated to
         // Examination/ExaminationPaper (which genuinely have none) --

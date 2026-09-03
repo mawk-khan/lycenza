@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 0H.4C -- the ONE sanctioned write path for `grade_scales` and
- * `grade_bands` (ADR 0034). Neither controller writes either model
+ * `grade_bands` (ADR 0035). Neither controller writes either model
  * directly (proven by
  * Tests\Feature\Examinations\GradeScaleArchitectureGuardTest).
  *
@@ -49,7 +49,7 @@ use Illuminate\Support\Facades\DB;
  * its own aggregate-local CAS. No database trigger backstops this --
  * the row-lock protocol, this service's sole-write-path status, and
  * the architecture guard together are the sanctioned protection (ADR
- * 0034).
+ * 0035).
  *
  * DUPLICATE TRANSLATION is constraint-specific in both directions:
  * `grade_scales_school_id_code_ci_unique` -> DuplicateGradeScaleCodeException,

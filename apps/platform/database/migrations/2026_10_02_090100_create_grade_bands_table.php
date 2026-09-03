@@ -10,7 +10,7 @@ return new class extends Migration
 {
     /**
      * Phase 0H.4C -- one lower-bound percentage threshold belonging to
-     * a GradeScale (ADR 0034). Deliberately stores ONLY
+     * a GradeScale (ADR 0035). Deliberately stores ONLY
      * `min_percentage` -- no upper bound, no sequence column, no
      * PostgreSQL range type, no `EXCLUDE` constraint, no `btree_gist`
      * extension. This codebase has explicitly considered and rejected
@@ -32,11 +32,11 @@ return new class extends Migration
      * index, inherently race-safe under PostgreSQL's own guarantee, no
      * lock required for THIS specific invariant (the composite parent
      * `lockForUpdate()` used elsewhere protects the coverage/lifecycle
-     * invariants instead -- see ADR 0034).
+     * invariants instead -- see ADR 0035).
      *
      * Mutable (create/update/delete) ONLY while the parent GradeScale
      * is `draft`, enforced by `GradeScaleService` under a parent-row
-     * `lockForUpdate()` -- never a database trigger (ADR 0034 records
+     * `lockForUpdate()` -- never a database trigger (ADR 0035 records
      * why: the row-lock protocol already makes the application-level
      * protocol correct under concurrency, and a cross-row
      * parent-status-checking trigger would be a genuinely new trigger

@@ -580,7 +580,7 @@ recommendation) — proven safe with two real, separate OS processes in
 sole delete route) with a COMPLETE OpenAPI contract and regenerated
 shared types; a session-authenticated Inertia surface at
 `/app/examinations/grade-scales`; zero domain events. Classified
-**Confidential**. See `docs/modules/EXAMINATIONS.md` §19 and ADR 0034
+**Confidential**. See `docs/modules/EXAMINATIONS.md` §19 and ADR 0035
 for the complete as-built record. Pending: integration/publication gate
 to merge onto `main`.
 

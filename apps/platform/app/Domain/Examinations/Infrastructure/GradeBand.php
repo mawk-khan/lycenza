@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Duplicate thresholds within one scale are rejected by
  * `grade_bands_min_percentage_unique` alone -- no PostgreSQL range
  * type or exclusion constraint is used anywhere in this module (ADR
- * 0034).
+ * 0035).
  *
  * Mutable (create/update/delete) ONLY while the parent GradeScale is
  * `draft`; frozen forever once the parent has ever been `active`.

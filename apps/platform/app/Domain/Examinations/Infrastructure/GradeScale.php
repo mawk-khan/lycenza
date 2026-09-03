@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * into a discrete grade outcome through ordered, lower-bound-only
  * percentage thresholds (`GradeBand`). Independent of the Examination
  * chain -- no Examination, ExaminationPaper, AcademicYear, GradeLevel or
- * Subject parent (ADR 0034).
+ * Subject parent (ADR 0035).
  *
  * `App\Domain\Examinations\Application\GradeScaleService` is the ONLY
  * sanctioned write path. Lifecycle: draft -> active -> inactive, with

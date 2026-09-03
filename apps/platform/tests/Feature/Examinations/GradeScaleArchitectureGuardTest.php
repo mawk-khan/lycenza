@@ -166,7 +166,7 @@ class GradeScaleArchitectureGuardTest extends TestCase
 
             foreach (['TenantLock', 'advisory', 'pg_advisory'] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code,
-                    basename($file).' must not introduce '.$forbidden.' -- see ADR 0034\'s corrected concurrency protocol.');
+                    basename($file).' must not introduce '.$forbidden.' -- see ADR 0035\'s corrected concurrency protocol.');
             }
         }
     }

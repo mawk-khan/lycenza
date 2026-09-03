@@ -558,7 +558,7 @@ class CapabilityAndRoleSeeder extends Seeder
             // Deliberately independent of `examinations.definitions.*`/
             // `examinations.papers.*`: a GradeScale is School-owned
             // reference configuration with no Examination/Paper
-            // relationship at all (ADR 0032/0034) -- and deliberately
+            // relationship at all (ADR 0032/0035) -- and deliberately
             // implies neither `examinations.marks.*` nor
             // `examinations.results.*`, the same "a flat manage key
             // would eventually grant clerical marks entry and
