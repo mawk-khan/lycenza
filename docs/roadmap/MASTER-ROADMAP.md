@@ -532,7 +532,7 @@ granted by the same key; four `/api/v1` operations with a COMPLETE
 OpenAPI contract and regenerated shared types in the same branch; and a
 session-authenticated Inertia surface at `/app/examinations`. Classified
 **Confidential** — it stores no personal data at all. See
-`docs/modules/EXAMINATIONS.md` and ADR 0034 for the complete as-built
+`docs/modules/EXAMINATIONS.md` and ADR 0032 for the complete as-built
 record and the decomposition rationale.
 
 **ExaminationPaper / Scheduling (Phase 0H.4B) is complete** — the second
