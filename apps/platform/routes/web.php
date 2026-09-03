@@ -29,6 +29,7 @@ use App\Http\Controllers\App\EnrollmentRolloverMappingController;
 use App\Http\Controllers\App\EnrollmentRolloverSubjectMappingController;
 use App\Http\Controllers\App\Examinations\ExaminationController;
 use App\Http\Controllers\App\Examinations\ExaminationPaperController;
+use App\Http\Controllers\App\Examinations\GradeScaleController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
@@ -893,6 +894,21 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/', [ExaminationPaperController::class, 'index'])->name('index');
         Route::post('/', [ExaminationPaperController::class, 'store'])->name('store');
         Route::patch('/{examinationPaper}', [ExaminationPaperController::class, 'update'])->name('update');
+    });
+
+    // Phase 0H.4C (GradeScale) -- School-only, independent of the
+    // Examination chain; no AcademicYear/Examination context of any
+    // kind, unlike every other Examinations admin page. `status` is
+    // edited through the ordinary update -- there is no dedicated
+    // activate/deactivate/reactivate route; the service interprets it
+    // as a guarded lifecycle transition.
+    Route::prefix('app/examinations/grade-scales')->name('app.examinations.grade-scales.')->group(function (): void {
+        Route::get('/', [GradeScaleController::class, 'index'])->name('index');
+        Route::post('/', [GradeScaleController::class, 'store'])->name('store');
+        Route::patch('/{gradeScale}', [GradeScaleController::class, 'update'])->name('update');
+        Route::post('/{gradeScale}/bands', [GradeScaleController::class, 'storeBand'])->name('bands.store');
+        Route::patch('/{gradeScale}/bands/{gradeBand}', [GradeScaleController::class, 'updateBand'])->name('bands.update');
+        Route::delete('/{gradeScale}/bands/{gradeBand}', [GradeScaleController::class, 'destroyBand'])->name('bands.destroy');
     });
 
     Route::prefix('app/attendance')->name('app.attendance.')->group(function (): void {

@@ -3023,6 +3023,77 @@ export interface paths {
         patch: operations["updateExaminationPaper"];
         trace?: never;
     };
+    "/schools/{schoolId}/grade-scales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists this School's GradeScales, each with its ordered GradeBands. School-only -- independent of the Examination chain. Requires examinations.grade_scales.view. */
+        get: operations["listGradeScales"];
+        put?: never;
+        /** Creates a new GradeScale, always as `draft`, optionally with an initial set of GradeBands in the same request. `code` is normalized to uppercase before validation and is case-insensitively unique within the School, unconditionally (an inactive scale still reserves its code). Requires examinations.grade_scales.manage. No Idempotency-Key is needed: duplicate semantic creation is already prevented by the database's own unique index. */
+        post: operations["createGradeScale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/grade-scales/{gradeScaleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One GradeScale with its bands. Requires examinations.grade_scales.view. */
+        get: operations["getGradeScale"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates a GradeScale's name and/or requests a lifecycle transition. `status`, when present, is ALWAYS interpreted as a guarded transition request -- never a raw field write. Exactly three transitions are legal: draft -> active (requires a GradeBand at the 0.00 threshold), active -> inactive, and inactive -> active (re-verifies the 0.00 threshold defensively). Every other transition, including every no-op, is rejected. `code` can never be changed. Requires examinations.grade_scales.manage. */
+        patch: operations["updateGradeScale"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/grade-scales/{gradeScaleId}/bands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds one GradeBand to a GradeScale. Permitted ONLY while the scale is `draft` -- once the scale has ever been `active`, its bands are frozen forever. Only `min_percentage` is stored (no upper bound); duplicate thresholds within one scale are rejected by the database's own unique index. Requires examinations.grade_scales.manage. */
+        post: operations["createGradeBand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/grade-scales/{gradeScaleId}/bands/{gradeBandId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes one GradeBand. Permitted ONLY while the parent GradeScale is `draft` -- this is the sole delete route anywhere in the GradeScale surface; GradeScale itself is never deleted. Requires examinations.grade_scales.manage. */
+        delete: operations["deleteGradeBand"];
+        options?: never;
+        head?: never;
+        /** Updates one GradeBand's threshold and/or label. Permitted ONLY while the parent GradeScale is `draft`. Requires examinations.grade_scales.manage. */
+        patch: operations["updateGradeBand"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5251,6 +5322,56 @@ export interface components {
             ends_at?: string;
             max_marks?: string;
             status?: components["schemas"]["ExaminationPaperStatus"];
+        };
+        /**
+         * @description The complete, closed GradeScale lifecycle vocabulary, mirrored by the database's own `grade_scales_status_check` CHECK constraint. Exactly three transitions are legal: draft -> active, active -> inactive, inactive -> active; every other transition, including every no-op, is rejected. `inactive` is reachable ONLY via `active`, so it structurally means "was previously active; GradeBands permanently frozen."
+         * @enum {string}
+         */
+        GradeScaleStatus: "draft" | "active" | "inactive";
+        /** @description One lower-bound percentage threshold belonging to a GradeScale. Deliberately carries no upper bound and no sequence -- a percentage P maps to the band with the greatest `minPercentage <= P`. Mutable only while the parent GradeScale is `draft`; frozen forever once the parent has ever been `active`. */
+        GradeBand: {
+            /** Format: uuid */
+            id: string;
+            /** @description Decimal string, 0.00-100.00, inclusive lower bound. */
+            minPercentage: string;
+            /** @description Human grade label, e.g. "A", "Pass". Never included by value in audit metadata. */
+            label: string;
+        };
+        /** @description One named, School-owned reference mapping that converts a normalized percentage (0.00-100.00) into a discrete grade outcome through its ordered GradeBands. School-only -- independent of the Examination chain: no Examination, ExaminationPaper, AcademicYear, GradeLevel or Subject relationship of any kind. */
+        GradeScale: {
+            /** Format: uuid */
+            id: string;
+            /** @description Uppercased on write; case-insensitively unique within the School, unconditionally. */
+            code: string;
+            /** @description Human label. Deliberately NOT unique. Mutable at any lifecycle stage. */
+            name: string;
+            status: components["schemas"]["GradeScaleStatus"];
+            /** @description Ordered by minPercentage descending. */
+            bands: components["schemas"]["GradeBand"][];
+        };
+        /** @description `schoolId` is never accepted here. A new GradeScale is always created as `draft` -- there is no `status` field on create. */
+        GradeScaleCreateInput: {
+            code: string;
+            name: string;
+            /** @description Optional initial GradeBands, created atomically with the scale. */
+            bands?: {
+                min_percentage: string;
+                label: string;
+            }[];
+        };
+        /** @description Partial update; every field is optional. `code` can never be changed. `status`, when present, is always interpreted as a guarded lifecycle transition request, never a raw field write. */
+        GradeScaleUpdateInput: {
+            name?: string;
+            status?: components["schemas"]["GradeScaleStatus"];
+        };
+        GradeBandCreateInput: {
+            min_percentage: string;
+            label: string;
+        };
+        /** @description Partial update; every field is optional. */
+        GradeBandUpdateInput: {
+            min_percentage?: string;
+            label?: string;
         };
         /** @description A single scheduled slot: a required SubjectOffering taught to a Section by a teacher (HR Employee) in an optional Room during a TimetablePeriod on a given day of week. The teacher representation is data-minimized to id/teacherName ONLY (Sensitive-tier, docs/security/DATA-CLASSIFICATION.md) -- never work_email/work_phone/any other HR field. */
         TimetableEntry: {
@@ -15286,6 +15407,385 @@ export interface operations {
                 content?: never;
             };
             /** @description Validation or domain failure -- a malformed date/time, an end time not after the start time, a scheduled date outside the Examination's window, a non-positive max_marks, an out-of-vocabulary status, or a reactivation (inactive -> active) while the Examination or SubjectOffering is currently inactive. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listGradeScales: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GradeScale"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.grade_scales.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createGradeScale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeScaleCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GradeScale"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.grade_scales.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation or domain failure -- missing/oversized code or name, a case-insensitive duplicate code within this School, an out-of-domain or duplicate initial band threshold. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getGradeScale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                gradeScaleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GradeScale"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.grade_scales.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such GradeScale in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateGradeScale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                gradeScaleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeScaleUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GradeScale"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.grade_scales.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such GradeScale in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- an illegal or no-op status transition, or activation attempted without a GradeBand at the 0.00 threshold. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createGradeBand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                gradeScaleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeBandCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GradeBand"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.grade_scales.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such GradeScale in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- an out-of-domain or duplicate threshold, or the parent GradeScale is not `draft`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteGradeBand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                gradeScaleId: string;
+                gradeBandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.grade_scales.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such GradeScale or GradeBand in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The parent GradeScale is not `draft`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateGradeBand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                gradeScaleId: string;
+                gradeBandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeBandUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["GradeBand"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking examinations.grade_scales.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such GradeScale or GradeBand in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation or domain failure -- an out-of-domain or duplicate threshold, or the parent GradeScale is not `draft`. */
             422: {
                 headers: {
                     [name: string]: unknown;

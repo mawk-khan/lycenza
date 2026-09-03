@@ -16,9 +16,10 @@ coherent fact underneath it.
 | Roadmap umbrella | **Examinations** (Phase 0H.4) |
 | First checkpoint | **Phase 0H.4A — Examination Foundation** (implemented) |
 | Second checkpoint | **Phase 0H.4B — ExaminationPaper / Scheduling** (implemented) |
+| Third checkpoint | **Phase 0H.4C — GradeScale / GradeBand mapping** (implemented; not yet merged to main) |
 | Domain directory | `app/Domain/Examinations` |
-| Models / tables | `Examination` / `examinations`; `ExaminationPaper` / `examination_papers` |
-| Capability families | **`examinations.definitions.*`**; **`examinations.papers.*`** |
+| Models / tables | `Examination` / `examinations`; `ExaminationPaper` / `examination_papers`; `GradeScale` / `grade_scales`; `GradeBand` / `grade_bands` |
+| Capability families | **`examinations.definitions.*`**; **`examinations.papers.*`**; **`examinations.grade_scales.*`** |
 
 **The capability root is `examinations.*`, deliberately depth-2.** A
 flat `examinations.view`/`.manage` would eventually grant clerical marks
@@ -618,12 +619,49 @@ routes: index, store, update.
 Not registered in `WebhookEventRegistry`. No Timetable, Attendance, LMS,
 Lesson Planning, Communications, Notifications or Documents integration.
 
-## 19. Future
+## 19. Phase 0H.4C — GradeScale / GradeBand mapping (implemented; not yet published to main)
 
-- **GradeScale** (PROVISIONAL): a School-level reference catalogue
-  mapping mark/percentage → letter/point/pass-fail. It has **no
-  dependency on the Examination chain** and could ship in parallel; its
-  only hard constraint is that it must exist before result calculation.
+A named, School-owned mapping that converts a normalized percentage
+(0.00–100.00) into a discrete grade outcome through its ordered
+GradeBands — wholly independent of the Examination chain, exactly as
+§21 below anticipated. Full design and rationale: ADR 0034
+(`docs/architecture/adr/0034-grade-scale-band-mapping.md`).
+
+**GradeBand stores only a lower-bound threshold** (`min_percentage`,
+`label`) — no upper bound, no sequence. A percentage maps to the band
+with the greatest `min_percentage <= P`. Overlap-freedom is a plain
+`UNIQUE (grade_scale_id, min_percentage)` constraint; coverage/gap-
+freedom is a single check — a GradeScale may activate only if it has a
+GradeBand at `min_percentage = 0.00`.
+
+**Lifecycle**: `draft | active | inactive`, exactly three legal
+transitions (`draft->active`, `active->inactive`, `inactive->active`);
+every other transition, including every no-op, is illegal. GradeBands
+are mutable only while the parent is `draft`; once a scale has ever
+been `active`, its bands are frozen forever. `code` is immutable after
+creation; `name` is mutable at any lifecycle stage.
+
+**Concurrency**: every mutating `GradeScaleService` method reloads the
+target GradeScale with a parent-row `lockForUpdate()` — an aggregate-
+local lock, deliberately NOT a School-wide `TenantLock`. Proven with
+two real, separate OS processes in `GradeScaleConcurrencyTest`.
+
+**API/web surface**: exactly seven API operations
+(list/create/read/update the scale; create/update/delete a band) and
+six web routes. No GradeScale DELETE route; GradeBand removal is the
+sole delete anywhere in the surface.
+
+**Audit**: GradeBand `label` values and GradeScale `name` values are
+never included by value in audit metadata — only field names
+(`changedFields`) and bounded status values.
+
+StudentMark and result calculation remain blocked pending the
+children's-data legal review (§20 below); GradeScale itself carries no
+Student/Enrollment/marks data and ships fully independently of that
+blocker, as anticipated.
+
+## 20. Future
+
 - **Marks** (PROVISIONAL, **GATED**): the first per-Student academic
   record. This crosses from Confidential into **Sensitive** personal
   data, so the checkpoint that introduces it must undergo a dedicated

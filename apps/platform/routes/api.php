@@ -20,6 +20,7 @@ use App\Domain\CurriculumDelivery\Http\Controllers\CurriculumDeliveryController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
 use App\Domain\Examinations\Http\Controllers\ExaminationController;
 use App\Domain\Examinations\Http\Controllers\ExaminationPaperController;
+use App\Domain\Examinations\Http\Controllers\GradeScaleController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
 use App\Domain\Finance\Http\Controllers\JournalEntryController;
 use App\Domain\Finance\Http\Controllers\LedgerAccountController;
@@ -1603,6 +1604,52 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/examination-papers/{examinationPaper}', [ExaminationPaperController::class, 'update'])
                 ->middleware(['capability:examinations.papers.manage', 'throttle:school-api-mutations'])
                 ->name('schools.examination-papers.update');
+
+            // Phase 0H.4C (GradeScale). School-only -- no Examination
+            // nesting of any kind, deliberately: GradeScale is
+            // independent of the Examination chain (ADR 0032/0034).
+            // Exactly SEVEN operations: list/create/show/update the
+            // scale, plus create/update/delete a band.
+            //
+            // `status` is never a raw mass-assignable field on the
+            // update route -- GradeScaleService interprets it as a
+            // guarded lifecycle transition (exactly three legal
+            // transitions; every no-op and every illegal cross-state
+            // request is rejected). GradeBands may be created, edited,
+            // or deleted ONLY while the parent scale is `draft`; once
+            // ever `active`, bands are frozen forever.
+            //
+            // Gated by its OWN capability family
+            // (`examinations.grade_scales.*`), the depth-2 leaf 0H.4A's
+            // capability catalog already reserved -- never implied by
+            // `examinations.definitions.*`/`examinations.papers.*`, and
+            // never implying `examinations.marks.*`/`.results.*`.
+            //
+            // No Idempotency-Key (rule 29, evaluated per endpoint):
+            // duplicate creation is already prevented by the unique
+            // code/threshold indexes, and PATCH is naturally
+            // idempotent.
+            Route::get('/grade-scales', [GradeScaleController::class, 'index'])
+                ->middleware('capability:examinations.grade_scales.view')
+                ->name('schools.grade-scales.index');
+            Route::post('/grade-scales', [GradeScaleController::class, 'store'])
+                ->middleware(['capability:examinations.grade_scales.manage', 'throttle:school-api-mutations'])
+                ->name('schools.grade-scales.store');
+            Route::get('/grade-scales/{gradeScale}', [GradeScaleController::class, 'show'])
+                ->middleware('capability:examinations.grade_scales.view')
+                ->name('schools.grade-scales.show');
+            Route::patch('/grade-scales/{gradeScale}', [GradeScaleController::class, 'update'])
+                ->middleware(['capability:examinations.grade_scales.manage', 'throttle:school-api-mutations'])
+                ->name('schools.grade-scales.update');
+            Route::post('/grade-scales/{gradeScale}/bands', [GradeScaleController::class, 'storeBand'])
+                ->middleware(['capability:examinations.grade_scales.manage', 'throttle:school-api-mutations'])
+                ->name('schools.grade-scales.bands.store');
+            Route::patch('/grade-scales/{gradeScale}/bands/{gradeBand}', [GradeScaleController::class, 'updateBand'])
+                ->middleware(['capability:examinations.grade_scales.manage', 'throttle:school-api-mutations'])
+                ->name('schools.grade-scales.bands.update');
+            Route::delete('/grade-scales/{gradeScale}/bands/{gradeBand}', [GradeScaleController::class, 'destroyBand'])
+                ->middleware(['capability:examinations.grade_scales.manage', 'throttle:school-api-mutations'])
+                ->name('schools.grade-scales.bands.destroy');
         });
 });
 
