@@ -148,6 +148,29 @@ class RateLimiterServiceProvider extends ServiceProvider
         // sheer request volume, not the primary control.
         RateLimiter::for('guardian-invitation-accept', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
 
+        // Phase 0H.4D-P1 section 14/23: MFA has three separate attack
+        // surfaces, each its own dedicated limiter (never the existing
+        // `login` limiter reused) -- login-stage code guessing,
+        // enrollment-confirmation guessing, and recovery-code
+        // guessing/exhaustion. `mfa-challenge` is keyed off
+        // session('mfa_pending_user_id') directly (the request is NOT
+        // yet authenticated at this point -- see
+        // MfaChallengeController) with an IP fallback for the
+        // theoretical case that key is somehow absent; the other three
+        // are keyed off the authenticated actor, since by the time
+        // those routes run `$request->user()` is always set.
+        RateLimiter::for('mfa-challenge', fn (Request $request) => Limit::perMinute(8)
+            ->by($request->session()->get('mfa_pending_user_id') ?? $request->ip()));
+
+        RateLimiter::for('mfa-enrollment-confirm', fn (Request $request) => Limit::perMinute(8)
+            ->by($request->user()->id));
+
+        RateLimiter::for('mfa-recovery-code', fn (Request $request) => Limit::perMinute(8)
+            ->by($request->user()->id));
+
+        RateLimiter::for('mfa-password-confirmation', fn (Request $request) => Limit::perMinute(6)
+            ->by($request->user()->id));
+
         // Deliberately NO limiter for /health/live or /health/ready
         // (section 32) -- infrastructure must be able to poll them as
         // frequently as its own probe interval requires, and both are

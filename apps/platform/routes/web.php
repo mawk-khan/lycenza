@@ -14,6 +14,8 @@ use App\Domain\Communications\Http\Controllers\CommunicationHubController;
 use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
+use App\Http\Controllers\App\Account\AccountSecurityController;
+use App\Http\Controllers\App\Account\MfaAdminController;
 use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\ApplicantController;
 use App\Http\Controllers\App\Attendance\AttendanceController;
@@ -95,7 +97,9 @@ use App\Http\Controllers\App\TransportVehicleController;
 use App\Http\Controllers\App\VisitorController;
 use App\Http\Controllers\App\VisitorVisitController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\MfaChallengeController;
 use App\Http\Controllers\Identity\InvitationAcceptanceController;
+use App\Http\Controllers\Internal\MfaDemoController;
 use App\Http\Controllers\SystemStatusController;
 use Illuminate\Support\Facades\Route;
 
@@ -107,6 +111,20 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [LoginController::class, 'store'])
         ->middleware('throttle:login')
         ->name('login.store');
+
+    // Phase 0H.4D-P1: stage 2 of the two-stage login for an
+    // MFA-enrolled User. Deliberately under 'guest' (like /login
+    // itself) -- reached only via session('mfa_pending_user_id'), the
+    // request is NOT yet authenticated (MfaChallengeController::
+    // create() redirects to /login if that key is absent). Its own
+    // dedicated throttle (mfa-challenge, user-keyed once the pending
+    // User is known) is applied inside the controller, not here,
+    // since the limiter key needs the pending user id from the
+    // session, unavailable at route-middleware-declaration time.
+    Route::get('/login/mfa', [MfaChallengeController::class, 'create'])->name('login.mfa');
+    Route::post('/login/mfa', [MfaChallengeController::class, 'store'])
+        ->middleware('throttle:mfa-challenge')
+        ->name('login.mfa.store');
 });
 
 // Phase 5D.3 -- the Guardian account-invitation acceptance page.
@@ -132,6 +150,50 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/app/settings', [SchoolSettingsController::class, 'show'])
         ->middleware('capability:school.settings.view')
         ->name('app.settings.show');
+
+    // Phase 0H.4D-P1 section 17: User-level "Account Security" --
+    // deliberately NOT under app/settings or app/school-setup (those
+    // are School-scoped); no `capability:`/`school-membership`
+    // middleware, since a User manages their OWN MFA regardless of
+    // which School is active. Each mutating action's own
+    // fresh-password-confirmation/rate-limiting is enforced inside
+    // AccountSecurityController (PasswordConfirmationService), not
+    // route middleware -- see its docblock.
+    Route::prefix('app/account/security')->name('app.account.security.')->group(function (): void {
+        Route::get('/', [AccountSecurityController::class, 'show'])->name('show');
+        Route::post('/password-confirmation', [AccountSecurityController::class, 'confirmPassword'])
+            ->middleware('throttle:mfa-password-confirmation')
+            ->name('password-confirmation');
+
+        Route::post('/mfa/begin', [AccountSecurityController::class, 'beginMfaEnrollment'])->name('mfa.begin');
+        Route::post('/mfa/confirm', [AccountSecurityController::class, 'confirmMfaEnrollment'])
+            ->middleware('throttle:mfa-enrollment-confirm')
+            ->name('mfa.confirm');
+        Route::post('/mfa/recovery-codes/regenerate', [AccountSecurityController::class, 'regenerateRecoveryCodes'])
+            ->middleware('throttle:mfa-recovery-code')
+            ->name('mfa.recovery-codes.regenerate');
+        Route::delete('/mfa', [AccountSecurityController::class, 'disableMfa'])
+            ->middleware('throttle:mfa-recovery-code')
+            ->name('mfa.disable');
+    });
+
+    // Phase 0H.4D-P1: a tiny infrastructure-only demonstration route
+    // proving the `mfa` middleware composes with `capability:` rather
+    // than substituting for it -- see MfaDemoController's docblock.
+    // Reuses the existing `platform.operations.view` capability rather
+    // than inventing a demo-only one; matches
+    // IdempotencyDemoController's exact local/testing-only pattern.
+    if (app()->environment(['local', 'testing'])) {
+        Route::get('/internal/mfa-demo/ping', [MfaDemoController::class, 'ping'])
+            ->middleware(['capability:platform.operations.view,platform', 'mfa'])
+            ->name('internal.mfa-demo.ping');
+    }
+
+    // Phase 0H.4D-P1 section 19: platform-level MFA reset -- see
+    // MfaAdminController's docblock for why this is not a
+    // School-scoped route.
+    Route::post('/app/account/admin/users/{targetUser}/mfa/reset', [MfaAdminController::class, 'reset'])
+        ->name('app.account.admin.mfa.reset');
 
     // Authorization for this action is enforced inside the controller
     // via the AuthorizesCapability trait, not route middleware -- see

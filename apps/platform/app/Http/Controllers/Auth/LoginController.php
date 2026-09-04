@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\MfaChallengeService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,11 +18,26 @@ use Inertia\Response;
  * Phase 0B auth foundation (section 15): Laravel's built-in session
  * guard, bcrypt password hashing (Laravel default hasher), CSRF (the
  * framework's default web-group middleware), login-attempt rate
- * limiting, and safe logout/session invalidation. No custom
- * cryptography, no OIDC/SSO/MFA yet -- see
- * docs/security/AUTHORIZATION.md for the documented future path.
- * Authentication success/failure is recorded to the platform audit
- * ledger (section 29).
+ * limiting, and safe logout/session invalidation.
+ *
+ * Phase 0H.4D-P1: two-stage login for a User with an active MFA
+ * factor (section 6/13). `Auth::attempt()` below still validates
+ * credentials, but for an MFA-enrolled User this controller
+ * immediately `Auth::logout()`s again rather than letting that
+ * temporary login stand -- $request->user() returns null again until
+ * MfaChallengeController's stage 2 completes. A single, distinct
+ * `mfa_pending_user_id` session key (regenerated at the SAME point
+ * `session()->regenerate()` already ran for the password-only path,
+ * for identical session-fixation hygiene) carries identity across the
+ * two requests; `session()->regenerate()` runs a SECOND time in
+ * MfaChallengeController on actual completion. A password-only User's
+ * behavior is byte-for-byte unchanged (see
+ * Tests\Feature\Auth\PasswordOnlyLoginUnchangedTest). Authentication
+ * success/failure is recorded to the platform audit ledger (section
+ * 29) -- `auth.login_succeeded` fires only once, at the point full
+ * assurance is actually established (end of stage 1 for a
+ * password-only User, end of stage 2 for an MFA-enrolled one) -- see
+ * docs/security/AUTHORIZATION.md.
  */
 class LoginController extends Controller
 {
@@ -30,7 +46,7 @@ class LoginController extends Controller
         return Inertia::render('Auth/Login');
     }
 
-    public function store(Request $request, AuditRecorder $audit): RedirectResponse
+    public function store(Request $request, AuditRecorder $audit, MfaChallengeService $mfa): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
@@ -73,6 +89,16 @@ class LoginController extends Controller
             throw ValidationException::withMessages([
                 'email' => 'This account has been disabled.',
             ]);
+        }
+
+        if ($mfa->userHasActiveFactor($user)) {
+            // Undo Auth::attempt()'s temporary login -- an MFA-enrolled
+            // User is not fully authenticated until stage 2 succeeds.
+            Auth::logout();
+            $request->session()->regenerate();
+            $request->session()->put('mfa_pending_user_id', $user->id);
+
+            return redirect('/login/mfa');
         }
 
         $request->session()->regenerate();

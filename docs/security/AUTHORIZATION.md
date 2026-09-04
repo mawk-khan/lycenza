@@ -130,6 +130,28 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
+## Multi-factor authentication (Phase 0H.4D-P1, ADR 0037)
+
+This is the "documented future path" `App\Http\Controllers\Auth\LoginController`'s
+docblock has referenced since Phase 0B. TOTP-only (RFC 6238) v1, no
+SMS/email/WebAuthn yet; one active factor per User, database-enforced
+(`user_mfa_factors_one_active_per_user` partial unique index); recovery
+codes hashed and single-use. MFA is User-global identity data (no
+`school_id`, no RLS — a User's MFA state is identical across every
+School they belong to), enforced per-route via the opt-in `mfa`
+middleware alongside `capability:` — never replacing it, never applied
+globally. Session-scoped assurance (`session('mfa_verified_at')`)
+expires after `config('mfa.assurance_window_minutes')` (default 60),
+independent of the underlying session lifetime. Administrative reset
+is a platform-scoped capability (`platform.users.mfa.reset`), never a
+School-admin action — User identity's cross-School scope means a
+School admin resetting another User's MFA would exceed what that admin
+actually owns. Full detail, including the actual (not aspirational)
+TOTP replay-prevention behavior, is in ADR 0037. This exists as a
+prerequisite for future Highly Sensitive capabilities (StudentMark
+chief among them) to require MFA assurance in addition to a capability
+check — it does not itself gate any capability yet.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles, a UI for managing role assignments (only the data

@@ -55,6 +55,23 @@ class User extends Authenticatable
     }
 
     /**
+     * Phase 0H.4D-P1: User-global MFA factors (no school_id -- see
+     * user_mfa_factors' migration docblock).
+     *
+     * @return HasMany<UserMfaFactor, $this>
+     */
+    public function mfaFactors(): HasMany
+    {
+        return $this->hasMany(UserMfaFactor::class);
+    }
+
+    /** @return HasMany<UserMfaRecoveryCode, $this> */
+    public function mfaRecoveryCodes(): HasMany
+    {
+        return $this->hasMany(UserMfaRecoveryCode::class);
+    }
+
+    /**
      * Section 31: a disabled user must lose access immediately.
      */
     public function isDisabled(): bool
