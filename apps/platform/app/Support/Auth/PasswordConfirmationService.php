@@ -5,7 +5,6 @@ namespace App\Support\Auth;
 use App\Models\User;
 use App\Support\Auth\Exceptions\FreshPasswordConfirmationRequiredException;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 
 /**
@@ -42,18 +41,12 @@ class PasswordConfirmationService
      */
     public function require(Request $request): void
     {
-        $confirmedAt = $request->session()->get('password_confirmed_at');
+        $fresh = AssuranceFreshness::isFresh(
+            $request->session()->get('password_confirmed_at'),
+            (int) config('mfa.password_confirmation_window_minutes'),
+        );
 
-        if ($confirmedAt === null) {
-            throw new FreshPasswordConfirmationRequiredException;
-        }
-
-        $windowMinutes = (int) config('mfa.password_confirmation_window_minutes');
-
-        // abs() is deliberate -- see MfaChallengeService::
-        // hasValidAssurance()'s identical comment: Carbon 3's
-        // diffInMinutes() returns a signed value by default.
-        if (abs(now()->diffInMinutes(Carbon::parse($confirmedAt))) > $windowMinutes) {
+        if (! $fresh) {
             throw new FreshPasswordConfirmationRequiredException;
         }
     }

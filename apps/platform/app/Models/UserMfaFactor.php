@@ -20,7 +20,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $label
  * @property string $status
  * @property Carbon|null $confirmed_at
- * @property Carbon|null $last_used_at
+ * @property Carbon|null $last_used_at real wall-clock time of the last successful TOTP use -- never a replay counter (replay-correction, see ADR 0037)
+ * @property int|null $last_used_totp_step google2fa TOTP period counter (`time() / 30`, NOT epoch seconds) accepted at the last successful verification -- the sole replay floor (replay-correction, see ADR 0037)
  */
 #[Hidden(['secret_encrypted'])]
 class UserMfaFactor extends Model
@@ -36,7 +37,10 @@ class UserMfaFactor extends Model
             // WebhookEndpoint::secret_encrypted (CLAUDE.md rule 46).
             'secret_encrypted' => 'encrypted',
             'confirmed_at' => 'datetime',
+            // Genuine wall-clock timestamp only -- never a TOTP period
+            // counter. See `last_used_totp_step` for the replay floor.
             'last_used_at' => 'datetime',
+            'last_used_totp_step' => 'integer',
         ];
     }
 

@@ -604,15 +604,18 @@ report cards and transcripts.
 **Phase 0H.4D-P1 — Staff MFA Foundation — is implemented** (ADR 0037):
 generic, TOTP-only, User-global multi-factor authentication
 infrastructure, built as a mandatory platform prerequisite identified
-by the StudentMark engineering-readiness audit — independent of, and
-not affected by, StudentMark's own unresolved children's-data legal
-gate. It gates nothing yet on its own (the `mfa` middleware is
-available for any future route to compose alongside `capability:`, but
-no Examinations/marks route exists to use it). Not yet merged into
-`main`. **StudentMark itself remains NOT implemented**, still blocked
-by the unresolved children's-data **[LEGAL REVIEW REQUIRED]** gate in
-`docs/security/DATA-CLASSIFICATION.md` — this checkpoint does not
-change that determination or imply it is resolved.
+by the StudentMark engineering-readiness audit — independent of
+StudentMark's own legal/compliance status. It gates nothing yet on its
+own (the `mfa` middleware is available for any future route to compose
+alongside `capability:`, but no Examinations/marks route exists to use
+it). Not yet merged into `main`. **StudentMark itself remains NOT
+implemented.** StudentMark architecture/backend processing has legal
+approval with conditions, but implementation remains blocked by unmet
+platform/engineering prerequisites, and production enablement remains
+separately withheld — this checkpoint does not start StudentMark
+implementation and does not itself constitute production approval; see
+`docs/security/DATA-CLASSIFICATION.md` for the current classification
+and conditions.
 
 **"Phase 0H Attendance" remains Student class attendance only.** Staff/
 Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR

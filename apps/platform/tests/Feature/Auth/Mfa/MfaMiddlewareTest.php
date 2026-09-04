@@ -83,6 +83,39 @@ class MfaMiddlewareTest extends TestCase
     }
 
     #[Test]
+    public function an_enrolled_user_with_a_future_assurance_timestamp_is_denied_with_the_step_up_code(): void
+    {
+        // Replay-security correction regression: the previous
+        // abs(now()->diffInMinutes(...)) comparison would have
+        // accepted this forged future timestamp as "close enough."
+        $user = $this->authorizedUser();
+        $this->enrollActiveMfaFactor($user);
+
+        $this->actingAs($user);
+        session(['mfa_verified_at' => now()->addMinutes(5)->toIso8601String()]);
+
+        $response = $this->get('/internal/mfa-demo/ping');
+
+        $response->assertStatus(401);
+        $response->assertJsonPath('error.code', 'mfa_step_up_required');
+    }
+
+    #[Test]
+    public function an_enrolled_user_with_a_malformed_assurance_timestamp_is_denied_without_a_server_error(): void
+    {
+        $user = $this->authorizedUser();
+        $this->enrollActiveMfaFactor($user);
+
+        $this->actingAs($user);
+        session(['mfa_verified_at' => 'not-a-real-timestamp']);
+
+        $response = $this->get('/internal/mfa-demo/ping');
+
+        $response->assertStatus(401);
+        $response->assertJsonPath('error.code', 'mfa_step_up_required');
+    }
+
+    #[Test]
     public function valid_mfa_assurance_never_substitutes_for_a_missing_capability(): void
     {
         $user = User::factory()->create(); // no platform_super_admin role

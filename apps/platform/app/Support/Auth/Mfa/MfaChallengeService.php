@@ -4,8 +4,9 @@ namespace App\Support\Auth\Mfa;
 
 use App\Models\User;
 use App\Models\UserMfaFactor;
+use App\Support\Auth\AssuranceFreshness;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use PragmaRX\Google2FA\Google2FA;
 
 /**
@@ -15,49 +16,91 @@ use PragmaRX\Google2FA\Google2FA;
  * (session('mfa_verified_at')), never a database fact (that would
  * make "assurance" survive across devices/browsers, which is wrong --
  * see ADR 0037).
+ *
+ * Replay-security correction (Phase 0H.4D-P1 closure blockers):
+ * google2fa's `verifyKeyNewer()`/`getTimestamp()` operate on a
+ * 30-second TOTP PERIOD COUNTER (`time() / 30`), never Unix epoch
+ * seconds, despite the library's own parameter being named
+ * `$oldTimestamp`/`$timestamp`. `last_used_totp_step` is the ONLY
+ * value ever passed as that parameter or read back from it -- it is
+ * never a datetime, and `last_used_at` (a genuine Carbon column) is
+ * never fed back into the library. See UserMfaFactor's docblock and
+ * ADR 0037.
  */
 class MfaChallengeService
 {
     public function __construct(private readonly Google2FA $google2fa) {}
 
     /**
-     * Verifies a submitted TOTP code against the factor's secret.
+     * Verifies a submitted TOTP code against the factor's secret and,
+     * on success, atomically claims the accepted TOTP step as the new
+     * replay floor.
      *
      * Clock-skew tolerance: config('mfa.totp_window') adjacent
      * 30-second time-steps either side of "now" (default 1 -- NOT an
      * unbounded window).
      *
-     * Replay prevention (section 26 -- the actual implemented
-     * behavior, not aspirational): uses google2fa's own
-     * `verifyKeyNewer()`, which additionally rejects a code from the
-     * SAME OR AN EARLIER time-step than the last one this factor
-     * successfully verified. `last_used_at` stores the actual epoch
-     * time-step timestamp google2fa returns on success (not merely
-     * "now()") specifically so it can be fed back in as the
-     * `oldTimestamp` floor on the next attempt. This prevents
-     * immediate reuse of an intercepted code within the same/earlier
-     * window; it is NOT RFC-level replay resistance against an
-     * attacker who captures a code and replays it in a LATER,
-     * not-yet-used time-step before the legitimate user does -- no
-     * TOTP library can prevent that without an additional out-of-band
-     * signal, and this implementation does not claim to.
+     * Replay prevention (the actual implemented behavior, not
+     * aspirational): the read of the current floor
+     * (`last_used_totp_step`), google2fa's own `verifyKeyNewer()`
+     * check, and the write of the newly accepted step all happen
+     * inside one `SELECT ... FOR UPDATE` transaction on the factor
+     * row -- a second, genuinely concurrent request for the SAME
+     * TOTP step blocks on the row lock until the first request
+     * commits, then re-reads the now-advanced floor and is correctly
+     * rejected as a replay. A plain read-verify-write (no lock) lets
+     * two concurrent requests both read the stale floor and both
+     * succeed -- proven exploitable in the Phase 0H.4D-P1 closure
+     * audit, which is why this is a transactional claim and not a
+     * bare comparison. `verifyKeyNewer()` is always called with an
+     * explicit floor (0 when the factor has never verified
+     * successfully) so a successful match always returns the real
+     * accepted step as an integer -- google2fa's `findValidOTP()`
+     * returns the boolean `true` instead of the matched step ONLY
+     * when no old-step floor is passed at all, which is the exact
+     * defect that corrupted `last_used_at` before this correction.
+     *
+     * NOT RFC-level replay resistance against an attacker who
+     * captures a code and replays it in a LATER, not-yet-used time-
+     * step before the legitimate user does -- no TOTP library can
+     * prevent that without an additional out-of-band signal, and this
+     * implementation does not claim to.
      */
     public function verifyTotp(UserMfaFactor $factor, string $code): bool
     {
-        $oldTimestamp = $factor->last_used_at?->getTimestamp();
         $window = (int) config('mfa.totp_window');
 
-        $result = $oldTimestamp !== null
-            ? $this->google2fa->verifyKeyNewer($factor->secret_encrypted, $code, $oldTimestamp, $window)
-            : $this->google2fa->verifyKey($factor->secret_encrypted, $code, $window);
+        return DB::transaction(function () use ($factor, $code, $window) {
+            // The caller's $factor instance may have been loaded
+            // before this transaction started -- re-read AND lock the
+            // row so the floor this request compares against can
+            // never be stale relative to a concurrent winner.
+            $locked = UserMfaFactor::query()->lockForUpdate()->findOrFail($factor->id);
 
-        if ($result === false) {
-            return false;
-        }
+            $previousStep = $locked->last_used_totp_step;
+            $floor = $previousStep ?? 0;
 
-        $factor->forceFill(['last_used_at' => now()->setTimestamp((int) $result)])->save();
+            $acceptedStep = $this->google2fa->verifyKeyNewer($locked->secret_encrypted, $code, $floor, $window);
 
-        return true;
+            if ($acceptedStep === false) {
+                return false;
+            }
+
+            // Defensive, not merely decorative: makeStartingTimestamp()
+            // already guarantees this via max($window floor, $floor+1),
+            // but the replay invariant is security-critical enough to
+            // assert explicitly rather than trust implicitly.
+            if ($previousStep !== null && $acceptedStep <= $previousStep) {
+                return false;
+            }
+
+            $locked->forceFill([
+                'last_used_totp_step' => $acceptedStep,
+                'last_used_at' => now(),
+            ])->save();
+
+            return true;
+        });
     }
 
     public function establishAssurance(Request $request): void
@@ -67,22 +110,10 @@ class MfaChallengeService
 
     public function hasValidAssurance(Request $request): bool
     {
-        $verifiedAt = $request->session()->get('mfa_verified_at');
-
-        if ($verifiedAt === null) {
-            return false;
-        }
-
-        $windowMinutes = (int) config('mfa.assurance_window_minutes');
-
-        // abs() is deliberate: Carbon 3's diffInMinutes() returns a
-        // SIGNED value by default (unlike Carbon 2's implicit
-        // absolute-value behavior) -- a naive `<=` comparison here
-        // would silently treat an EXPIRED (in-the-past) timestamp as
-        // still valid, a real bug caught by
-        // Tests\Feature\Auth\Mfa\MfaMiddlewareTest::
-        // an_enrolled_user_with_expired_assurance_is_denied_with_the_step_up_code.
-        return abs(now()->diffInMinutes(Carbon::parse($verifiedAt))) <= $windowMinutes;
+        return AssuranceFreshness::isFresh(
+            $request->session()->get('mfa_verified_at'),
+            (int) config('mfa.assurance_window_minutes'),
+        );
     }
 
     public function clearAssurance(Request $request): void

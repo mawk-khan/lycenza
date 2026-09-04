@@ -79,18 +79,35 @@ class MfaEnrollmentService
         }
 
         $window = (int) config('mfa.totp_window');
-        $result = $this->google2fa->verifyKey($factor->secret_encrypted, $code, $window);
 
-        if ($result === false) {
+        // Replay-security correction: always pass an explicit floor
+        // (0 -- this factor has never verified successfully) so a
+        // match returns the real accepted TOTP step as an integer.
+        // Plain verifyKey() with no old-step argument returns the
+        // boolean `true` instead of the matched step on success --
+        // that boolean, cast to (int), previously primed the replay
+        // floor to a meaningless `1` and left the enrollment code
+        // itself replayable at the very next login. See
+        // MfaChallengeService::verifyTotp() for the identical
+        // convention used on every subsequent verification.
+        $acceptedStep = $this->google2fa->verifyKeyNewer($factor->secret_encrypted, $code, 0, $window);
+
+        if ($acceptedStep === false) {
             throw new MfaInvalidCodeException;
         }
 
         try {
-            return DB::transaction(function () use ($user, $factor, $result) {
+            return DB::transaction(function () use ($user, $factor, $acceptedStep) {
                 $factor->forceFill([
                     'status' => 'active',
                     'confirmed_at' => now(),
-                    'last_used_at' => now()->setTimestamp((int) $result),
+                    // Genuine wall-clock time of first successful use --
+                    // never a TOTP counter (see UserMfaFactor's docblock).
+                    'last_used_at' => now(),
+                    // The replay floor: the ACTUAL accepted step, so the
+                    // enrollment code cannot be replayed at the next
+                    // login attempt.
+                    'last_used_totp_step' => $acceptedStep,
                 ])->save();
 
                 $codes = $this->recoveryCodes->issue($user);

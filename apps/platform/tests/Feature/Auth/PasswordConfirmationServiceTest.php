@@ -78,4 +78,28 @@ class PasswordConfirmationServiceTest extends TestCase
 
         app(PasswordConfirmationService::class)->require($request);
     }
+
+    #[Test]
+    public function require_throws_for_a_future_confirmation_timestamp(): void
+    {
+        // Replay-security correction regression: abs() previously
+        // accepted a forged future timestamp within the window.
+        $request = $this->requestWithSession();
+        $request->session()->put('password_confirmed_at', now()->addMinutes(5)->toIso8601String());
+
+        $this->expectException(FreshPasswordConfirmationRequiredException::class);
+
+        app(PasswordConfirmationService::class)->require($request);
+    }
+
+    #[Test]
+    public function require_throws_for_a_malformed_confirmation_timestamp_without_a_server_error(): void
+    {
+        $request = $this->requestWithSession();
+        $request->session()->put('password_confirmed_at', 'not-a-real-timestamp');
+
+        $this->expectException(FreshPasswordConfirmationRequiredException::class);
+
+        app(PasswordConfirmationService::class)->require($request);
+    }
 }

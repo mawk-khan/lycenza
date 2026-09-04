@@ -70,15 +70,29 @@ checks it against `config('mfa.assurance_window_minutes')` (default
 60 — deliberately shorter than `config('session.lifetime')`'s 120
 minutes, so a stale-but-technically-live session cannot coast
 indefinitely on one earlier check for a Highly Sensitive operation).
-**Bug found and fixed during implementation:** the initial comparison
-used `now()->diffInMinutes($verifiedAt) <= $window` — Carbon 3 returns
-a *signed* difference by default (unlike Carbon 2's implicit
+**Bug found and fixed during implementation, then corrected again at
+closure:** the initial comparison used
+`now()->diffInMinutes($verifiedAt) <= $window` — Carbon 3 returns a
+*signed* difference by default (unlike Carbon 2's implicit
 absolute-value behavior), so an expired, in-the-past timestamp
-satisfied `<=` and was wrongly treated as still valid. The fix wraps
-the comparison in `abs()`; `App\Support\Auth\PasswordConfirmationService::require()`
-had the identical bug and received the identical fix. Both are covered
-by dedicated tests that would have caught this on the very first run
-had they existed beforehand — they exist now.
+satisfied `<=` and was wrongly treated as still valid. The first fix
+wrapped the comparison in `abs()`, which over-corrected: `abs()` also
+makes a *future* stored timestamp within the window pass, which is
+never legitimate here (both `mfa_verified_at` and
+`password_confirmed_at` are written only server-side via a plain
+`now()` at the moment of establishment — a future value can only mean
+tampered/corrupted session state or clock skew). The closure
+correction replaces `abs()` with `App\Support\Auth\AssuranceFreshness`,
+a single shared helper (used by both
+`MfaChallengeService::hasValidAssurance()` and
+`PasswordConfirmationService::require()`) that compares raw Unix
+timestamps rather than a Carbon diff method, so the sign of "age" is
+unambiguous by construction: missing → invalid; malformed/unparseable
+→ invalid (caught, never an uncontrolled parse exception); future (age
+< 0) → invalid; age beyond the configured window → invalid; a genuine
+past timestamp within the window → valid. Covered by dedicated tests
+for every one of those five states, including the boundary exactly
+inside and exactly outside the window.
 
 ### Two-stage login, single session-regeneration point preserved
 
@@ -166,21 +180,68 @@ recovery-code plaintext or hash, or the otpauth URI, proven by
 `Tests\Feature\Auth\Mfa\MfaAuditPayloadSecurityTest` against real
 issued values, not synthetic placeholders.
 
-### TOTP verification window and replay behavior (actual, not aspirational)
+### TOTP verification window and replay behavior (actual, not aspirational; corrected)
 
 Clock-skew tolerance is `config('mfa.totp_window')`, default 1 —
 google2fa's adjacent 30-second time-steps either side of "now," not an
-unbounded window. Replay prevention uses google2fa's own
-`verifyKeyNewer()`: `last_used_at` stores the actual epoch time-step
-timestamp google2fa returns on success (not merely `now()`)
-specifically so it can be fed back as the `oldTimestamp` floor on the
-next attempt, rejecting a code from the same or an earlier time-step
-than the last one this factor successfully verified. This is **not**
-RFC-level replay resistance against an attacker who captures a code
-and replays it in a *later*, not-yet-used time-step before the
-legitimate user does — no TOTP library prevents that without an
-additional out-of-band signal, and this implementation makes no such
-claim.
+unbounded window.
+
+**Replay counter vs. human timestamp — corrected model.** google2fa's
+`getTimestamp()`/`verifyKeyNewer()` operate on a 30-second TOTP
+**period counter** (`time() / 30`), never a Unix epoch timestamp,
+despite the library's own parameter being named `$oldTimestamp` — an
+earlier revision of this ADR (and the code it described) incorrectly
+stated that google2fa "returns the actual epoch time-step timestamp."
+It does not. `user_mfa_factors` therefore carries two distinct
+columns, never conflated:
+
+- **`last_used_totp_step`** (nullable `bigint`) — the google2fa period
+  counter accepted at the last successful verification. This is the
+  *only* value ever passed as `verifyKeyNewer()`'s `$oldTimestamp`
+  argument or read back from it. Never a datetime. Null until the
+  first successful verification.
+- **`last_used_at`** (nullable `timestamp`) — a genuine wall-clock
+  Carbon timestamp of when a TOTP factor last verified successfully,
+  written via a plain `now()`, for humans/audit/observability. Never
+  fed back into google2fa.
+
+**Atomic replay claim.** `MfaChallengeService::verifyTotp()` performs
+the read of `last_used_totp_step`, the `verifyKeyNewer()` check, and
+the write of the newly accepted step inside one `SELECT ... FOR
+UPDATE` transaction on the factor row. A prior version of this
+verification read-then-wrote without a lock, which the closure audit
+proved allows two genuinely concurrent requests submitting the
+identical valid code to both read the same stale floor and both
+succeed — defeating "reject a code from the same or an earlier
+time-step than the last one this factor successfully verified"
+entirely under concurrency, not just at the margins. With the row
+lock, a second concurrent request for the same TOTP step blocks until
+the first commits, then re-reads the now-advanced floor and is
+correctly rejected. `verifyKeyNewer()` is always called with an
+explicit floor (`0` when the factor has never verified) rather than
+falling back to plain `verifyKey()` with no floor — google2fa's
+`findValidOTP()` returns the boolean `true`, not the matched step, on
+success only when no floor is supplied, and casting that boolean to
+`(int)` is what previously corrupted the counter's predecessor
+(`last_used_at`, doubling as the counter) to a meaningless value on
+enrollment confirmation, leaving the enrollment code itself replayable
+at the very next login. Enrollment confirmation
+(`MfaEnrollmentService::confirm()`) now establishes the replay floor
+identically, from the real accepted step, in the same transaction that
+activates the factor.
+
+**Concurrent-identical-TOTP invariant**, proven by a committed
+real-process test (two genuinely separate OS processes, not
+sequential simulation): for one factor and one valid TOTP period, at
+most one concurrent request may successfully claim that step — exactly
+one `ACCEPTED`, exactly one `REJECTED`, enforced by the database row
+lock, not by application-level comparison alone.
+
+This is still **not** RFC-level replay resistance against an attacker
+who captures a code and replays it in a *later*, not-yet-used
+time-step before the legitimate user does — no TOTP library prevents
+that without an additional out-of-band signal, and this implementation
+makes no such claim.
 
 ### Rate limiting: one named limiter per risk profile
 
