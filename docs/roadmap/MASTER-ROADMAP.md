@@ -612,6 +612,36 @@ authoritative roadmap work changes that boundary.
 
 ## Phase 0I — LMS
 
+**Phase 0I.1 (2026-09-04): architecture contract frozen, zero
+implementation.** Learning content, assignments, submissions, coursework
+files — see ADR 0037 (`docs/architecture/adr/0037-lms-domain-contract.md`)
+for the full ten-decision record and `docs/modules/LMS.md` for the
+living operational reference. No migration, model, controller, service,
+route, or capability exists yet.
+
+**Submission is classified Sensitive and gated
+`[LEGAL REVIEW REQUIRED]`** — the first checkpoint in this roadmap to
+durably store unbounded Student-authored free-text/file content, a
+distinct gate from the Examinations `StudentMark` flag. Learning
+Content and Assignment (staff-authored, Confidential, no Student
+identity) are not gated and may proceed to a future checkpoint without
+legal review, following the Syllabus Foundation precedent. Who may
+submit a Submission (Student/Guardian/both) is additionally an
+unresolved dependency on a future Student/Guardian authenticated-actor
+checkpoint — direct verification found no Student or Guardian
+authentication exists anywhere in the platform today (Phase 5B/5D's
+`StudentGuardianAccountLink` links an existing staff membership for
+Communications reachability only, never a delegated action or
+self-service identity). Teacher authorization is capability-only in v1
+— no teacher-ownership model exists yet.
+
+No external LMS integration or standard (Canvas, Moodle, Google
+Classroom, Microsoft Teams, OneRoster, LTI, QTI, SCORM, xAPI, Common
+Cartridge, Caliper) is authorized by this checkpoint.
+
+**Recommended next checkpoint: Phase 0I.2 — Learning Content
+Foundation** (Confidential, staff-authored, no legal gate).
+
 ## Phase 0J — HR and Payroll
 
 Including the **[LEGAL REVIEW REQUIRED]** statutory-compliance
