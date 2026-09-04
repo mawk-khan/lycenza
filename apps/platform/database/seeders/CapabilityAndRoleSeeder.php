@@ -48,6 +48,16 @@ class CapabilityAndRoleSeeder extends Seeder
             // this checkpoint's internal diagnostics API mutates state.
             ['key' => 'platform.operations.view', 'label' => 'View cross-tenant operational diagnostics (platform)', 'namespace' => 'platform'],
 
+            // Phase 0H.4D-P1 (section 19) -- MFA administrative reset.
+            // Deliberately platform-scoped, NOT a `school.*` capability
+            // -- User identity is cross-School (SchoolMembership's own
+            // "central/platform data" docblock), so a School admin
+            // resetting a User's MFA would carry cross-School blast
+            // radius on an object it doesn't own. See
+            // App\Http\Controllers\App\Account\MfaAdminController and
+            // ADR 0037.
+            ['key' => 'platform.users.mfa.reset', 'label' => 'Reset a User\'s MFA enrollment (platform)', 'namespace' => 'platform'],
+
             // Phase 0D (section 47) -- School profile and
             // organizational/academic-structure administration. A
             // single `academics.structure.*` pair covers GradeLevel,
@@ -688,6 +698,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'platform.feature_flags.view', 'platform.feature_flags.manage',
                     'platform.service_identities.view', 'platform.service_identities.manage',
                     'platform.operations.view',
+                    'platform.users.mfa.reset',
                 ],
             ],
             'school_admin' => [

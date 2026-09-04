@@ -601,6 +601,19 @@ ExaminationPaper/Scheduling and GradeScale/GradeBand mapping are done
 lacks Lesson Planning, and Examinations still lacks marks, results,
 report cards and transcripts.
 
+**Phase 0H.4D-P1 — Staff MFA Foundation — is implemented** (ADR 0037):
+generic, TOTP-only, User-global multi-factor authentication
+infrastructure, built as a mandatory platform prerequisite identified
+by the StudentMark engineering-readiness audit — independent of, and
+not affected by, StudentMark's own unresolved children's-data legal
+gate. It gates nothing yet on its own (the `mfa` middleware is
+available for any future route to compose alongside `capability:`, but
+no Examinations/marks route exists to use it). Not yet merged into
+`main`. **StudentMark itself remains NOT implemented**, still blocked
+by the unresolved children's-data **[LEGAL REVIEW REQUIRED]** gate in
+`docs/security/DATA-CLASSIFICATION.md` — this checkpoint does not
+change that determination or imply it is resolved.
+
 **"Phase 0H Attendance" remains Student class attendance only.** Staff/
 Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR
 concern.
