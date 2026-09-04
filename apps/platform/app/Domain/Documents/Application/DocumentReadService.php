@@ -45,6 +45,9 @@ use Throwable;
  * tier split, since a LearningContent-owned Document only ever carries
  * the one valid `internal` tier (see DocumentService's own docblock).
  *
+ * Phase 0I.3 activates a THIRD: Assignment (`lms.assignments.view`),
+ * identical shape.
+ *
  * Archived Documents remain readable by an authorized actor --
  * evidence-based, not invented: neither
  * App\Domain\HR\Application\EmployeeProfileWorkspaceService's
@@ -142,6 +145,7 @@ class DocumentReadService
         match ($document->owner_type) {
             'employee' => $this->authorizeCapabilityFor($actor, $this->employeeReadCapability($document->classification_tier), $school),
             'learning_content' => $this->authorizeCapabilityFor($actor, 'lms.content.view', $school),
+            'assignment' => $this->authorizeCapabilityFor($actor, 'lms.assignments.view', $school),
             default => throw new DocumentOwnerTypeNotSupportedException($document->owner_type),
         };
     }
@@ -163,7 +167,7 @@ class DocumentReadService
         return new DocumentMetadata(
             documentId: $document->id,
             ownerType: $document->owner_type,
-            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id ?? $document->learning_content_id,
+            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id ?? $document->learning_content_id ?? $document->assignment_id,
             classificationTier: $document->classification_tier,
             status: $document->status,
             originalFilename: $document->original_filename,

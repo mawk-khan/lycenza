@@ -8,6 +8,7 @@ use App\Support\Tenancy\TenantStoragePath;
 use Illuminate\Database\QueryException;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
+use Tests\Feature\LMS\Concerns\CreatesAssignmentFixtures;
 use Tests\Feature\LMS\Concerns\CreatesLearningContentFixtures;
 use Tests\TestCase;
 
@@ -22,11 +23,14 @@ use Tests\TestCase;
  */
 class DocumentSchemaTest extends TestCase
 {
-    // CreatesLearningContentFixtures already includes CreatesTenancyFixtures
-    // internally (the same "used read-only" precedent every module fixture
-    // trait follows) -- using both directly here would flatten the same
-    // trait in twice, so only the LMS-aware one is used.
-    use CreatesLearningContentFixtures;
+    // Both fixture traits independently include CreatesTenancyFixtures --
+    // PHP tolerates that "diamond" (identical trait via two paths), but
+    // both ALSO independently declare their own identical `inSchool()`
+    // helper, which IS a genuine name collision needing explicit
+    // resolution.
+    use CreatesAssignmentFixtures, CreatesLearningContentFixtures {
+        CreatesLearningContentFixtures::inSchool insteadof CreatesAssignmentFixtures;
+    }
 
     #[Test]
     public function document_id_is_a_real_uuidv7(): void
@@ -362,5 +366,103 @@ class DocumentSchemaTest extends TestCase
 
         $guardianDoc = $this->createDocumentForGuardian($this->createGuardian($school));
         $this->assertSame('guardian', $guardianDoc->owner_type);
+    }
+
+    // --- Phase 0I.3: the `assignment` owner arm -------------------------
+
+    #[Test]
+    public function a_document_may_belong_to_an_assignment(): void
+    {
+        $w = $this->assignmentWorld();
+        $assignment = $this->createAssignment($w['offering']);
+        $document = $this->createDocumentForAssignment($assignment);
+
+        $this->assertSame($assignment->id, $document->assignment_id);
+        $this->assertNull($document->employee_id);
+        $this->assertNull($document->student_id);
+        $this->assertNull($document->guardian_id);
+        $this->assertNull($document->learning_content_id);
+        $this->assertSame('assignment', $document->owner_type);
+    }
+
+    #[Test]
+    public function a_document_with_assignment_and_learning_content_owners_is_rejected(): void
+    {
+        $w = $this->assignmentWorld();
+        $assignment = $this->createAssignment($w['offering']);
+        $content = $this->createLearningContent($w['offering']);
+
+        app(TenantContext::class)->set($w['school']);
+
+        $this->expectException(QueryException::class);
+
+        Document::factory()->create([
+            'school_id' => $w['school']->id,
+            'assignment_id' => $assignment->id,
+            'learning_content_id' => $content->id,
+        ]);
+    }
+
+    #[Test]
+    public function a_document_with_all_five_owners_is_rejected(): void
+    {
+        $w = $this->assignmentWorld();
+        $assignment = $this->createAssignment($w['offering']);
+        $content = $this->createLearningContent($w['offering']);
+        $employee = $this->createEmployee($w['school']);
+        $student = $this->createStudent($w['school']);
+        $guardian = $this->createGuardian($w['school']);
+
+        app(TenantContext::class)->set($w['school']);
+
+        $this->expectException(QueryException::class);
+
+        Document::factory()->create([
+            'school_id' => $w['school']->id,
+            'employee_id' => $employee->id,
+            'student_id' => $student->id,
+            'guardian_id' => $guardian->id,
+            'learning_content_id' => $content->id,
+            'assignment_id' => $assignment->id,
+        ]);
+    }
+
+    #[Test]
+    public function a_cross_school_assignment_owner_is_rejected_by_the_composite_foreign_key(): void
+    {
+        $schoolA = $this->createSchool();
+        $worldB = $this->assignmentWorld();
+        $assignmentB = $this->createAssignment($worldB['offering']);
+
+        app(TenantContext::class)->set($schoolA);
+
+        $this->expectException(QueryException::class);
+
+        Document::factory()->create([
+            'school_id' => $schoolA->id,
+            'assignment_id' => $assignmentB->id,
+        ]);
+    }
+
+    #[Test]
+    public function the_existing_four_owner_arms_still_function_unchanged_after_the_fifth_is_added(): void
+    {
+        // Regression proof that widening the CHECK constraint a SECOND
+        // time (Phase 0I.3) did not disturb employee/student/guardian/
+        // learning_content in any way.
+        $school = $this->createSchool();
+
+        $employeeDoc = $this->createDocumentForEmployee($this->createEmployee($school));
+        $this->assertSame('employee', $employeeDoc->owner_type);
+
+        $studentDoc = $this->createDocumentForStudent($this->createStudent($school));
+        $this->assertSame('student', $studentDoc->owner_type);
+
+        $guardianDoc = $this->createDocumentForGuardian($this->createGuardian($school));
+        $this->assertSame('guardian', $guardianDoc->owner_type);
+
+        $w = $this->learningContentWorld(); // its own School -- learning_content needs a SubjectOffering
+        $contentDoc = $this->createDocumentForLearningContent($this->createLearningContent($w['offering']));
+        $this->assertSame('learning_content', $contentDoc->owner_type);
     }
 }

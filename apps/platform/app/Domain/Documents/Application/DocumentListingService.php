@@ -6,6 +6,7 @@ use App\Domain\Documents\Application\Exceptions\DocumentOwnerNotFoundException;
 use App\Domain\Documents\Application\Exceptions\DocumentOwnerTypeNotSupportedException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\LMS\Infrastructure\Assignment;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\School;
 use App\Models\User;
@@ -119,6 +120,7 @@ class DocumentListingService
         return match ($owner->type) {
             'employee' => $this->resolveAndAuthorizeEmployeeOwner($school, $owner->id, $actor, $sensitive),
             'learning_content' => $this->resolveAndAuthorizeLearningContentOwner($school, $owner->id, $actor, $sensitive),
+            'assignment' => $this->resolveAndAuthorizeAssignmentOwner($school, $owner->id, $actor, $sensitive),
             'student', 'guardian' => throw new DocumentOwnerTypeNotSupportedException($owner->type),
             default => throw new DocumentOwnerTypeNotSupportedException($owner->type),
         };
@@ -167,6 +169,30 @@ class DocumentListingService
     }
 
     /**
+     * An Assignment-owned Document only ever carries the single
+     * `internal` tier -- identical reasoning to LearningContent's own
+     * `listSensitive()` rejection above.
+     *
+     * @return array{column: string, id: string, ownerModel: Assignment}
+     */
+    private function resolveAndAuthorizeAssignmentOwner(School $school, string $assignmentId, User $actor, bool $sensitive): array
+    {
+        if ($sensitive) {
+            throw new DocumentOwnerTypeNotSupportedException('assignment');
+        }
+
+        $assignment = Assignment::query()->where('school_id', $school->id)->find($assignmentId);
+
+        if ($assignment === null) {
+            throw new DocumentOwnerNotFoundException('assignment', $assignmentId);
+        }
+
+        $this->authorizeCapabilityFor($actor, 'lms.assignments.view', $school);
+
+        return ['column' => 'assignment_id', 'id' => $assignment->id, 'ownerModel' => $assignment];
+    }
+
+    /**
      * @param  Builder<Document>  $sqlQuery
      */
     private function paginate(Builder $sqlQuery, DocumentListingQuery $query): LengthAwarePaginator
@@ -186,7 +212,7 @@ class DocumentListingService
         return new DocumentMetadata(
             documentId: $document->id,
             ownerType: $document->owner_type,
-            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id ?? $document->learning_content_id,
+            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id ?? $document->learning_content_id ?? $document->assignment_id,
             classificationTier: $document->classification_tier,
             status: $document->status,
             originalFilename: $document->original_filename,

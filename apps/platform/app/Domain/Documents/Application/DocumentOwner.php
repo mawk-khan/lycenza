@@ -19,6 +19,11 @@ namespace App\Domain\Documents\Application;
  * `lms.content.view` are real, already-scoped capabilities, exactly the
  * gap that keeps Student/Guardian owner writes deferred (see
  * DocumentService's own docblock).
+ *
+ * Phase 0I.3 adds `assignment()` -- the identical pattern, activated
+ * behind `lms.assignments.manage`/`lms.assignments.view`. `submission()`
+ * is deliberately NOT added: it remains blocked on ADR 0037 §4's
+ * Submission legal-review gate (Phase 0I.4).
  */
 final class DocumentOwner
 {
@@ -45,5 +50,10 @@ final class DocumentOwner
     public static function learningContent(string $learningContentId): self
     {
         return new self('learning_content', $learningContentId);
+    }
+
+    public static function assignment(string $assignmentId): self
+    {
+        return new self('assignment', $assignmentId);
     }
 }

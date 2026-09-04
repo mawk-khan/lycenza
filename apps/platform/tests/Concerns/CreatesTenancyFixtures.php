@@ -43,6 +43,7 @@ use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Domain\Library\Infrastructure\LibraryTitle;
+use App\Domain\LMS\Infrastructure\Assignment;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
@@ -680,6 +681,19 @@ trait CreatesTenancyFixtures
             fn () => Document::factory()->create(array_merge([
                 'school_id' => $content->school_id,
                 'learning_content_id' => $content->id,
+            ], $attributes)),
+        );
+    }
+
+    // --- Phase 0I.3: LMS Assignment owner arm ---------------------------
+
+    protected function createDocumentForAssignment(Assignment $assignment, array $attributes = []): Document
+    {
+        return app(TenantContext::class)->withSchool(
+            $assignment->school,
+            fn () => Document::factory()->create(array_merge([
+                'school_id' => $assignment->school_id,
+                'assignment_id' => $assignment->id,
             ], $attributes)),
         );
     }

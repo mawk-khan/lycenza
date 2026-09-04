@@ -57,6 +57,7 @@ use App\Domain\Inventory\Http\Controllers\InventoryStockController;
 use App\Domain\Library\Http\Controllers\LibraryCopyController;
 use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
+use App\Domain\LMS\Http\Controllers\AssignmentController;
 use App\Domain\LMS\Http\Controllers\LearningContentController;
 use App\Domain\Payments\Http\Controllers\PaymentController;
 use App\Domain\Payroll\Http\Controllers\CompensationAssignmentController;
@@ -1755,6 +1756,52 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/learning-content/{learningContent}/documents', [DocumentController::class, 'indexForLearningContent'])
                 ->middleware(['throttle:documents-reads', 'private-no-store'])
                 ->name('schools.learning-content.documents.index');
+
+            // Phase 0I.3 (Assignments -- the second concrete LMS fact,
+            // ADR 0037). Exactly SIX operations, structurally identical
+            // to Learning Content's own shape: list/create nested under
+            // the owning SubjectOffering, show/update flat, publish/
+            // close as dedicated action routes -- `status` moves ONLY
+            // through those two, never through the ordinary PATCH.
+            //
+            // Deliberately NO delete route and NO Submission operation
+            // of any kind -- Submission remains a future, separately
+            // legal-review-gated checkpoint (ADR 0037 §4).
+            //
+            // Gated by LMS's OWN capability family (`lms.assignments.*`)
+            // -- never Academic Structure's `academics.subjects.*`, the
+            // Canteen capability-boundary lesson carried forward.
+            Route::get('/subject-offerings/{subjectOffering}/assignments', [AssignmentController::class, 'index'])
+                ->middleware('capability:lms.assignments.view')
+                ->name('schools.subject-offerings.assignments.index');
+            Route::post('/subject-offerings/{subjectOffering}/assignments', [AssignmentController::class, 'store'])
+                ->middleware(['capability:lms.assignments.manage', 'throttle:school-api-mutations'])
+                ->name('schools.subject-offerings.assignments.store');
+            Route::get('/assignments/{assignment}', [AssignmentController::class, 'show'])
+                ->middleware('capability:lms.assignments.view')
+                ->name('schools.assignments.show');
+            Route::patch('/assignments/{assignment}', [AssignmentController::class, 'update'])
+                ->middleware(['capability:lms.assignments.manage', 'throttle:school-api-mutations'])
+                ->name('schools.assignments.update');
+            Route::post('/assignments/{assignment}/publish', [AssignmentController::class, 'publish'])
+                ->middleware(['capability:lms.assignments.manage', 'throttle:school-api-mutations'])
+                ->name('schools.assignments.publish');
+            Route::post('/assignments/{assignment}/close', [AssignmentController::class, 'close'])
+                ->middleware(['capability:lms.assignments.manage', 'throttle:school-api-mutations'])
+                ->name('schools.assignments.close');
+
+            // Phase 0I.3 -- the Assignment owner-type extension of the
+            // shared Documents module (ADR 0037 decision 8), reusing the
+            // EXACT same shape the Learning Content owner arm above
+            // already established. The existing generic
+            // `/documents/{document}` show/content/archive routes need
+            // no change for this owner type either.
+            Route::post('/assignments/{assignment}/documents', [DocumentController::class, 'storeForAssignment'])
+                ->middleware(['throttle:documents-writes', 'private-no-store'])
+                ->name('schools.assignments.documents.store');
+            Route::get('/assignments/{assignment}/documents', [DocumentController::class, 'indexForAssignment'])
+                ->middleware(['throttle:documents-reads', 'private-no-store'])
+                ->name('schools.assignments.documents.index');
 
             // Phase 0H.3B (Curriculum Delivery -- the second concrete
             // Academics fact). Exactly FIVE operations: list/start

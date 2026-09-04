@@ -77,15 +77,20 @@ class LearningContentArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function no_assignment_or_submission_table_exists(): void
+    public function no_submission_table_exists(): void
     {
+        // `assignments` is DELIBERATELY not checked here any more --
+        // Phase 0I.3 legitimately added it (see
+        // Tests\Feature\LMS\AssignmentArchitectureGuardTest, which owns
+        // that table's own closed-column-set proof). Submission remains
+        // blocked on ADR 0037 §4's legal-review gate.
         $tables = collect(DB::connection('pgsql_admin')->select(
             "select tablename from pg_tables where schemaname = 'public'",
         ))->pluck('tablename')->all();
 
-        foreach (['assignments', 'submissions', 'lms_assignments', 'lms_submissions'] as $forbidden) {
+        foreach (['submissions', 'lms_submissions'] as $forbidden) {
             $this->assertNotContains($forbidden, $tables,
-                "`{$forbidden}` must not exist -- Phase 0I.2 implements Learning Content only (ADR 0037's Submission legal-review gate is not bypassed).");
+                "`{$forbidden}` must not exist -- ADR 0037's Submission legal-review gate is not bypassed.");
         }
     }
 
@@ -131,6 +136,15 @@ class LearningContentArchitectureGuardTest extends TestCase
     #[Test]
     public function only_the_application_service_writes_the_model(): void
     {
+        // Deliberately checks only `LearningContent::`-qualified static
+        // write calls, NOT the generic `->forceFill(`/`->save()`/
+        // `->delete()` patterns this test originally used in Phase
+        // 0I.2 -- those generic patterns started producing false
+        // positives once Phase 0I.3 added a SIBLING aggregate
+        // (AssignmentService.php) to the same `App\Domain\LMS`
+        // namespace, which legitimately calls them for ITS OWN model.
+        // `AssignmentArchitectureGuardTest::only_the_application_service_writes_the_assignment_model()`
+        // is the identical, correctly-scoped counterpart for Assignment.
         $service = app_path('Domain/LMS/Application/LearningContentService.php');
 
         foreach ($this->moduleSources() as $file) {
@@ -143,10 +157,9 @@ class LearningContentArchitectureGuardTest extends TestCase
             foreach ([
                 'LearningContent::create', 'LearningContent::query()->create',
                 'LearningContent::insert', 'LearningContent::updateOrCreate',
-                '->forceFill(', '->save()', '->delete()',
             ] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code,
-                    basename($file).' must delegate every write to LearningContentService.');
+                    basename($file).' must delegate every LearningContent write to LearningContentService.');
             }
         }
     }

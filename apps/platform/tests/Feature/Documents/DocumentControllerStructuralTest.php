@@ -77,6 +77,7 @@ class DocumentControllerStructuralTest extends TestCase
         foreach ([
             'storeForEmployee', 'indexForEmployee', 'sensitiveIndexForEmployee',
             'storeForLearningContent', 'indexForLearningContent',
+            'storeForAssignment', 'indexForAssignment',
             'show', 'content', 'archive',
         ] as $method) {
             $parameters = $reflection->getMethod($method)->getParameters();
@@ -91,6 +92,9 @@ class DocumentControllerStructuralTest extends TestCase
                 if ($type !== null && str_contains((string) $type, 'LearningContent')) {
                     $this->fail("{$method}() must accept the LearningContent id as a raw string, never an implicitly-bound LearningContent model.");
                 }
+                if ($type !== null && str_contains((string) $type, 'Assignment')) {
+                    $this->fail("{$method}() must accept the Assignment id as a raw string, never an implicitly-bound Assignment model.");
+                }
             }
         }
 
@@ -98,11 +102,12 @@ class DocumentControllerStructuralTest extends TestCase
     }
 
     #[Test]
-    public function only_the_eight_expected_public_actions_exist(): void
+    public function only_the_ten_expected_public_actions_exist(): void
     {
-        // Phase 0I.2 added storeForLearningContent/indexForLearningContent
-        // -- the LearningContent owner-arm counterpart of the pre-existing
-        // Employee pair -- widening this closed list from six to eight.
+        // Phase 0I.3 added storeForAssignment/indexForAssignment -- the
+        // Assignment owner-arm counterpart of the pre-existing
+        // Employee/LearningContent pairs -- widening this closed list
+        // from eight to ten.
         $reflection = new ReflectionClass(DocumentController::class);
         $publicMethods = array_map(
             fn ($m) => $m->getName(),
@@ -113,8 +118,8 @@ class DocumentControllerStructuralTest extends TestCase
 
         $this->assertSame(
             [
-                'archive', 'content', 'indexForEmployee', 'indexForLearningContent',
-                'sensitiveIndexForEmployee', 'show', 'storeForEmployee', 'storeForLearningContent',
+                'archive', 'content', 'indexForAssignment', 'indexForEmployee', 'indexForLearningContent',
+                'sensitiveIndexForEmployee', 'show', 'storeForAssignment', 'storeForEmployee', 'storeForLearningContent',
             ],
             $publicMethods,
         );

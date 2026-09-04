@@ -29,9 +29,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * of its own; every one of those already lives in the service layer
  * and stays there (CLAUDE.md rule 3).
  *
- * Only the Employee and (Phase 0I.2) LearningContent owner types are
- * exposed here, exactly matching the Application layer's own activation
- * boundary -- there is no Student/Guardian route.
+ * Only the Employee, (Phase 0I.2) LearningContent, and (Phase 0I.3)
+ * Assignment owner types are exposed here, exactly matching the
+ * Application layer's own activation boundary -- there is no
+ * Student/Guardian/Submission route.
  *
  * `{employee}`/`{document}` are always raw route-parameter strings,
  * never implicit Eloquent route-model binding -- the same pattern
@@ -120,6 +121,39 @@ class DocumentController extends Controller
 
         $page = app(DocumentListingService::class)->list(
             $school, DocumentOwner::learningContent($learningContent), $request->user(), $this->listingQuery($request),
+        );
+
+        return $this->paginatedResponse($page);
+    }
+
+    /**
+     * Phase 0I.3 -- the Assignment owner-type counterpart of
+     * `storeForLearningContent()`. `classification_tier` is fixed to
+     * `internal` server-side for the identical reason.
+     */
+    public function storeForAssignment(Request $request, School $school, string $assignment): JsonResponse
+    {
+        abort_if(! Str::isUuid($assignment), 404);
+
+        $validated = $request->validate([
+            'file' => ['required', 'file'],
+        ]);
+
+        $document = app(DocumentService::class)->create(
+            $school,
+            new CreateDocumentData(DocumentOwner::assignment($assignment), 'internal', $validated['file']),
+            $request->user(),
+        );
+
+        return response()->json(['data' => $this->presentCreated($document)], 201);
+    }
+
+    public function indexForAssignment(Request $request, School $school, string $assignment): JsonResponse
+    {
+        abort_if(! Str::isUuid($assignment), 404);
+
+        $page = app(DocumentListingService::class)->list(
+            $school, DocumentOwner::assignment($assignment), $request->user(), $this->listingQuery($request),
         );
 
         return $this->paginatedResponse($page);
@@ -251,7 +285,7 @@ class DocumentController extends Controller
         return (new DocumentMetadata(
             documentId: $document->id,
             ownerType: $document->owner_type,
-            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id ?? $document->learning_content_id,
+            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id ?? $document->learning_content_id ?? $document->assignment_id,
             classificationTier: $document->classification_tier,
             status: $document->status,
             originalFilename: $document->original_filename,
