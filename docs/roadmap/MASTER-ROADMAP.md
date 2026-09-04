@@ -627,13 +627,14 @@ Content and Assignment (staff-authored, Confidential, no Student
 identity) are not gated and may proceed to a future checkpoint without
 legal review, following the Syllabus Foundation precedent. Who may
 submit a Submission (Student/Guardian/both) is additionally an
-unresolved dependency on a future Student/Guardian authenticated-actor
-checkpoint — direct verification found no Student or Guardian
-authentication exists anywhere in the platform today (Phase 5B/5D's
-`StudentGuardianAccountLink` links an existing staff membership for
-Communications reachability only, never a delegated action or
-self-service identity). Teacher authorization is capability-only in v1
-— no teacher-ownership model exists yet.
+unresolved product-policy dependency, not purely an authentication
+gap — direct verification confirmed a real Guardian self-service login
+already exists on `origin/main` (Phase 5D.3's `AccountInvitationService`/
+`GuardianAccountActivationService`), but no Student authentication of
+any kind exists, and no module lets one domain identity act "on behalf
+of" another; moot for now regardless, since the Submission legal-review
+gate blocks implementation either way. Teacher authorization is
+capability-only in v1 — no teacher-ownership model exists yet.
 
 No external LMS integration or standard (Canvas, Moodle, Google
 Classroom, Microsoft Teams, OneRoster, LTI, QTI, SCORM, xAPI, Common

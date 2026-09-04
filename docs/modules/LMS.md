@@ -152,31 +152,53 @@ authored, gated by capability only, matching `SyllabusUnit`/
 
 ## 6. Student/Guardian actor model — unresolved dependency, not an LMS decision
 
-Verified directly against the current implementation (Phase 5B/5D),
-not inherited Phase 5 assumptions:
+Verified directly against the current `origin/main` source (file
+presence, not checkpoint-report prose alone):
 
 - **No authenticated Student account exists.** `students` has no
-  `user_id`; no `student` role exists in `CapabilityAndRoleSeeder`.
-- **No authenticated Guardian account exists.** The only "Guardian"
-  mechanism today (`StudentGuardianAccountLink`, Phase 5B.2) links an
-  **existing staff/admin `SchoolMembership`** to a Guardian record,
-  purely for Communications reachability — no credential/portal is
-  ever provisioned by it.
-- **No delegated "on behalf of" model exists anywhere** — every
-  authenticated actor acts only as itself.
-- **No Student/Guardian self-service portal exists** — repeatedly and
-  explicitly deferred in every Phase 5D checkpoint.
-- `docs/security/AUTHORIZATION.md`'s "Actor categories" table is itself
-  self-labeled an unimplemented design reference.
+  `user_id`; no `student` role exists in `CapabilityAndRoleSeeder`; per
+  `docs/communication-hub/PHASE-5D-3-FINAL-INTEGRATION.md` §10, "no
+  synthetic Student account role or provisioning path exists... only
+  linking an account that already exists is supported."
+- **A real Guardian self-service login DOES exist on `origin/main`
+  today.** `App\Domain\Identity\Application\{AccountInvitationService,
+  GuardianAccountActivationService}` and the `identity_account_invitations`
+  migration are present in this checkpoint's own worktree. An admin
+  issues a one-time hashed-token email invitation to a Guardian's own
+  verified `GuardianContact` email; accepting it resolves-or-creates a
+  `User` (proving mailbox control) and a `SchoolMembership`, then
+  links-or-reuses the `AccountLink` — one atomic transaction, no
+  password ever set by an admin. The resulting membership still holds
+  no `school_admin`/`principal`-shaped role.
+- **No delegated "on behalf of" model exists anywhere** — a linked
+  Guardian's `AccountLink` "never, by itself, authorizes" acting for
+  the linked Student; every authenticated actor acts only as itself.
+- **No Student/Guardian self-service *portal* exists** — the Guardian
+  login above reaches Communications' existing IN_APP surfaces only,
+  not a dedicated parent-portal product surface.
+- **No action anywhere is authorized through the ordinary staff
+  capability system for a Guardian or Student actor** — no `student`/
+  `guardian` role exists, and a linked Guardian's membership is never
+  assigned one. Guardian eligibility for an existing feature
+  (Communications conversation participation) instead flows through
+  `ConversationParticipantAuthorizationService`'s capability + policy +
+  target-exists + active-`AccountLink` chain — never a bare capability
+  check against the Guardian's own membership.
 
-**Decision: deferred, not invented in LMS** (ADR 0037 §5). Who may
-submit a Submission — student only, guardian on behalf of student,
-both, or another shape — is **unresolved** until a real Student and/or
-Guardian authenticated actor exists somewhere in the platform. This is
-a **cross-cutting dependency on a future Student/Guardian portal
-identity checkpoint**, outside LMS's own scope — it blocks Submission
-*creation* specifically, not Learning Content/Assignment work, and not
-this documentation checkpoint.
+**Decision: unresolved for Student; a real dependency exists for
+Guardian, but the product-policy question is not decided here** (ADR
+0037 §5). For Student, the blocker is structural (no actor exists at
+all). For Guardian, an authenticated actor now genuinely exists and
+could technically reach a future submit action through the same
+AccountLink chain Communications already uses — but whether a School
+should let a Guardian submit schoolwork on a Student's behalf is a
+product-policy question with no existing precedent either way. Who may
+submit a Submission remains **unresolved**, and is independently moot
+for now because §5 above (data classification) blocks any real
+Submission implementation regardless of which actor is eventually
+authorized. This is a dependency for a future checkpoint to resolve —
+not a Phase 0I.1 blocker, and not something Learning Content/Assignment
+work needs resolved first.
 
 ## 7. Teacher authorization model — Option A, capability-only v1
 
