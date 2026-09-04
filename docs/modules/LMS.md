@@ -1,12 +1,12 @@
 # LMS (Phase 0I)
 
-**Status: architecture contract frozen (Phase 0I.1); zero implementation.**
-No migration, model, controller, service, route, or capability exists
-yet. This document is the living operational reference for the LMS
-bounded context; the decision record is ADR 0037
-(`docs/architecture/adr/0037-lms-domain-contract.md`) — read that first
-for the *why*, this document for the *what*, mirroring how
-`ACADEMIC-STRUCTURE.md`/`HR.md` relate to their own ADRs.
+**Status: Phase 0I.1 architecture contract frozen; Phase 0I.2 (Learning
+Content Foundation) implemented.** Assignment, Submission, and every
+external LMS integration remain unimplemented. This document is the
+living operational reference for the LMS bounded context; the decision
+record is ADR 0037 (`docs/architecture/adr/0037-lms-domain-contract.md`)
+— read that first for the *why*, this document for the *what*,
+mirroring how `ACADEMIC-STRUCTURE.md`/`HR.md` relate to their own ADRs.
 
 ## 1. Module scope
 
@@ -338,13 +338,79 @@ build) · teacher-scoped/ownership-based authorization · webhook
 registration for any LMS event · a `Curriculum`/`Course` entity ·
 `Section`-scoped Assignment · any UI.
 
-## 13. Future
+## 13. Phase 0I.2 — Learning Content Foundation (as-built)
 
-- **Phase 0I.2 — Learning Content Foundation**: the recommended next
-  checkpoint. Confidential-tier, staff-authored, no legal gate — may
-  proceed following the Syllabus Foundation precedent.
+`App\Domain\LMS` — the first concrete LMS fact, implementing exactly
+the §5-cleared scope: Learning Content only, no Assignment, no
+Submission, no external integration.
+
+**Model**: `LearningContent` / `learning_content` — `id`, `school_id`,
+`subject_offering_id` (single parent, composite FK RESTRICT, mirroring
+`SyllabusUnit`'s exact shape — no `code` column, no author/owner
+column), `title`, `description` (nullable text), `sequence` (display
+order, not unique), `status`. `unique(id, school_id)` kept for the
+Documents owner-arm FK below.
+
+**Lifecycle**: `draft | published | archived`, exactly three legal
+transitions — `draft→published`, `published→archived`,
+`archived→published` — the identical closed-transition-map shape ADR
+0035 (GradeScale) established, under a parent-row `lockForUpdate()`
+(never `TenantLock`). Ordinary field edits (title/description/sequence)
+are permitted at **any** status via `update()`, which never accepts
+`status`; a lifecycle change always goes through the dedicated
+`publish()`/`archive()` service methods and API/web action routes,
+matching `CurriculumDeliveryService`'s update/transition split. No
+delete route (rule 73).
+
+**Application service**: `App\Domain\LMS\Application\LearningContentService`
+is the sole write path (proven by an architecture guard test) — required
+here (unlike `SyllabusUnit`'s thin controller) because the lifecycle
+state machine plus its aggregate-local lock are rule 76's literal
+trigger, the same shape GradeScaleService already established.
+
+**Authorization**: `lms.content.view` / `lms.content.manage`
+(§8/decision 7's frozen namespace, now seeded), granted to
+`school_admin`/`principal` only — capability-only v1, no teacher
+capability, matching decision 6 exactly.
+
+**API** (`/api/v1/schools/{school}/...`): exactly six operations — list/
+create nested under `subject-offerings/{subjectOffering}/learning-content`,
+show/update flat at `learning-content/{learningContent}`, plus dedicated
+`POST .../publish` and `POST .../archive` action routes. No delete, no
+Assignment or Submission route. Web (`/app/learning-content`) mirrors
+the same five operations (list/create/update/publish/archive) through
+`App\Http\Controllers\App\LMS\LearningContentController`, converting a
+domain `LmsException` into an ordinary Inertia form error exactly like
+`CurriculumDeliveryController` already does.
+
+**Documents integration** (decision 8, realized): a fourth
+exclusive-arc owner column, `learning_content_id`, added additively to
+`documents` alongside its own composite FK and a widened
+`documents_exactly_one_owner_check` (now four terms). Activated in
+`DocumentOwner`/`DocumentService`/`DocumentReadService`/
+`DocumentListingService` behind `lms.content.manage`/`.view` — the
+first non-personal-data owner type, so (unlike Employee's two-tier
+split) it carries exactly ONE valid `classification_tier`, `internal`,
+fixed server-side and never caller-supplied. New transport:
+`POST`/`GET /api/v1/schools/{school}/learning-content/{learningContent}/documents`
+on the existing shared `DocumentController` — the generic by-id
+`show`/`content`/`archive` Document routes needed no change at all,
+since they resolve owner type from the persisted row, never the URL.
+`assignment_id`/`submission_id` remain unadded (`submission_id` stays
+gated on §5's legal-review clearance when that checkpoint arrives).
+
+**Events**: none. `assignment.published.v1`/etc. remain illustrative
+future work per §11 — this checkpoint emits nothing (no consumer
+exists, rule 2).
+
+**Classification**: unchanged from §5 — Learning Content is
+Confidential, not gated. No Student/Guardian/Employee/teacher identity
+exists anywhere in `learning_content` (architecture-guard-tested).
+
+## 14. Future
+
 - **A future Assignment definition checkpoint**: same posture as
-  Learning Content.
+  Learning Content — recommended next (Phase 0I.3).
 - **Submission**: blocked until §5's legal review clears AND §6's
   Student/Guardian actor-model dependency resolves elsewhere in the
   platform.

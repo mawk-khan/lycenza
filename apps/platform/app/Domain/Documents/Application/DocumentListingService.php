@@ -6,6 +6,7 @@ use App\Domain\Documents\Application\Exceptions\DocumentOwnerNotFoundException;
 use App\Domain\Documents\Application\Exceptions\DocumentOwnerTypeNotSupportedException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -117,6 +118,7 @@ class DocumentListingService
     {
         return match ($owner->type) {
             'employee' => $this->resolveAndAuthorizeEmployeeOwner($school, $owner->id, $actor, $sensitive),
+            'learning_content' => $this->resolveAndAuthorizeLearningContentOwner($school, $owner->id, $actor, $sensitive),
             'student', 'guardian' => throw new DocumentOwnerTypeNotSupportedException($owner->type),
             default => throw new DocumentOwnerTypeNotSupportedException($owner->type),
         };
@@ -139,6 +141,32 @@ class DocumentListingService
     }
 
     /**
+     * A LearningContent-owned Document only ever carries the single
+     * `internal` tier (DocumentService's own docblock) -- there is
+     * nothing for `listSensitive()` to ever return for this owner type,
+     * so that path is rejected the same way an unsupported owner type
+     * is, rather than silently returning an always-empty page.
+     *
+     * @return array{column: string, id: string, ownerModel: LearningContent}
+     */
+    private function resolveAndAuthorizeLearningContentOwner(School $school, string $learningContentId, User $actor, bool $sensitive): array
+    {
+        if ($sensitive) {
+            throw new DocumentOwnerTypeNotSupportedException('learning_content');
+        }
+
+        $content = LearningContent::query()->where('school_id', $school->id)->find($learningContentId);
+
+        if ($content === null) {
+            throw new DocumentOwnerNotFoundException('learning_content', $learningContentId);
+        }
+
+        $this->authorizeCapabilityFor($actor, 'lms.content.view', $school);
+
+        return ['column' => 'learning_content_id', 'id' => $content->id, 'ownerModel' => $content];
+    }
+
+    /**
      * @param  Builder<Document>  $sqlQuery
      */
     private function paginate(Builder $sqlQuery, DocumentListingQuery $query): LengthAwarePaginator
@@ -158,7 +186,7 @@ class DocumentListingService
         return new DocumentMetadata(
             documentId: $document->id,
             ownerType: $document->owner_type,
-            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id,
+            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id ?? $document->learning_content_id,
             classificationTier: $document->classification_tier,
             status: $document->status,
             originalFilename: $document->original_filename,

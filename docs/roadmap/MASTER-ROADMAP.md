@@ -640,8 +640,18 @@ No external LMS integration or standard (Canvas, Moodle, Google
 Classroom, Microsoft Teams, OneRoster, LTI, QTI, SCORM, xAPI, Common
 Cartridge, Caliper) is authorized by this checkpoint.
 
-**Recommended next checkpoint: Phase 0I.2 — Learning Content
-Foundation** (Confidential, staff-authored, no legal gate).
+**Phase 0I.2 (2026-10-08): Learning Content Foundation implemented.**
+`App\Domain\LMS` — `LearningContent`/`learning_content`
+(`draft→published→archived` lifecycle, `lms.content.view`/`.manage`
+capabilities, six `/api/v1` operations plus a session-authenticated
+Inertia surface at `/app/learning-content`), and the Documents module's
+fourth exclusive-arc owner column (`learning_content_id`, `internal`
+tier only). No Assignment, no Submission, no external LMS integration
+— see `docs/modules/LMS.md` §13 for the full as-built record.
+
+**Recommended next checkpoint: Phase 0I.3 — Assignments** (same
+Confidential/staff-authored posture as Learning Content; Phase 0I.4
+Submissions remains blocked on ADR 0037 §4's legal-review gate).
 
 ## Phase 0J — HR and Payroll
 

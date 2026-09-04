@@ -10,6 +10,7 @@ use App\Domain\Documents\Application\Exceptions\DocumentTypeNotAllowedException;
 use App\Domain\Documents\Application\Exceptions\InvalidDocumentClassificationException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -59,12 +60,30 @@ use Throwable;
  * Student/Guardian are deliberately deferred (no existing capability
  * whose documented scope covers document/attachment management for
  * either), not silently unsupported.
+ *
+ * Phase 0I.2 activates a SECOND owner type: LearningContent
+ * (`lms.content.manage`, ADR 0037 decision 8). Unlike Employee's
+ * two-tier classification split (ordinary vs `highly_sensitive`), a
+ * LearningContent resource file has exactly ONE valid classification --
+ * `internal` (Confidential-tier operational content, never personal
+ * data, so neither `sensitive` nor `highly_sensitive` can ever
+ * legitimately apply, and `public` would bypass the capability-gated
+ * access ADR 0037 requires). A caller requesting any other tier for
+ * this owner type is rejected before any I/O, exactly like an
+ * unsupported owner type is.
  */
 class DocumentService
 {
     use AuthorizesCapability;
 
     private const VALID_CLASSIFICATION_TIERS = ['public', 'internal', 'sensitive', 'highly_sensitive'];
+
+    /**
+     * The ONE valid tier for a LearningContent-owned Document -- see
+     * this class's own docblock ("Phase 0I.2 activates a SECOND owner
+     * type").
+     */
+    private const LEARNING_CONTENT_CLASSIFICATION_TIER = 'internal';
 
     public function __construct(
         private readonly AuditRecorder $audit,
@@ -177,6 +196,7 @@ class DocumentService
     {
         return match ($owner->type) {
             'employee' => $this->resolveAndAuthorizeEmployeeOwner($school, $owner->id, $classificationTier, $actor),
+            'learning_content' => $this->resolveAndAuthorizeLearningContentOwner($school, $owner->id, $classificationTier, $actor),
             'student', 'guardian' => throw new DocumentOwnerTypeNotSupportedException($owner->type),
             default => throw new DocumentOwnerTypeNotSupportedException($owner->type),
         };
@@ -198,10 +218,34 @@ class DocumentService
         return ['employee_id' => $employee->id];
     }
 
+    /**
+     * @return array{learning_content_id: string}
+     */
+    private function resolveAndAuthorizeLearningContentOwner(School $school, string $learningContentId, string $classificationTier, User $actor): array
+    {
+        $content = LearningContent::query()->where('school_id', $school->id)->find($learningContentId);
+
+        if ($content === null) {
+            throw new DocumentOwnerNotFoundException('learning_content', $learningContentId);
+        }
+
+        // A LearningContent resource has exactly one valid tier -- see
+        // this class's own docblock. Rejected here, before any I/O,
+        // exactly like an unsupported owner type is.
+        if ($classificationTier !== self::LEARNING_CONTENT_CLASSIFICATION_TIER) {
+            throw new InvalidDocumentClassificationException($classificationTier);
+        }
+
+        $this->authorizeCapabilityFor($actor, 'lms.content.manage', $school);
+
+        return ['learning_content_id' => $content->id];
+    }
+
     private function authorizeForExistingOwner(School $school, Document $document, User $actor): void
     {
         match ($document->owner_type) {
             'employee' => $this->authorizeCapabilityFor($actor, $this->employeeDocumentCapability($document->classification_tier), $school),
+            'learning_content' => $this->authorizeCapabilityFor($actor, 'lms.content.manage', $school),
             default => throw new DocumentOwnerTypeNotSupportedException($document->owner_type),
         };
     }

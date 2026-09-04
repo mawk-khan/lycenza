@@ -63,6 +63,7 @@ use App\Http\Controllers\App\InventoryLocationController;
 use App\Http\Controllers\App\InventoryStockController;
 use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
+use App\Http\Controllers\App\LMS\LearningContentController as LmsLearningContentController;
 use App\Http\Controllers\App\Payroll\CompensationController as PayrollCompensationController;
 use App\Http\Controllers\App\Payroll\PayrollAccountingConfigurationController;
 use App\Http\Controllers\App\Payroll\PayrollController;
@@ -885,6 +886,22 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/', [CurriculumDeliveryController::class, 'store'])->name('store');
         Route::patch('/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])->name('update');
         Route::post('/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])->name('transition');
+    });
+
+    // Phase 0I.2 -- the administrative Learning Content surface (ADR
+    // 0037). Capability checks live in the controller (the
+    // AuthorizesCapability trait), matching every other App/* Inertia
+    // controller in this codebase. No delete route: status-based
+    // retirement only. `status` moves only through the dedicated
+    // publish/archive routes, never through the ordinary update --
+    // mirroring the syllabus-delivery group's own transition-route
+    // split above.
+    Route::prefix('app/learning-content')->name('app.learning-content.')->group(function (): void {
+        Route::get('/', [LmsLearningContentController::class, 'index'])->name('index');
+        Route::post('/', [LmsLearningContentController::class, 'store'])->name('store');
+        Route::patch('/{learningContent}', [LmsLearningContentController::class, 'update'])->name('update');
+        Route::post('/{learningContent}/publish', [LmsLearningContentController::class, 'publish'])->name('publish');
+        Route::post('/{learningContent}/archive', [LmsLearningContentController::class, 'archive'])->name('archive');
     });
 
     // Phase 0H.4A -- the administrative Examination surface. Capability

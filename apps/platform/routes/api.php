@@ -57,6 +57,7 @@ use App\Domain\Inventory\Http\Controllers\InventoryStockController;
 use App\Domain\Library\Http\Controllers\LibraryCopyController;
 use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
+use App\Domain\LMS\Http\Controllers\LearningContentController;
 use App\Domain\Payments\Http\Controllers\PaymentController;
 use App\Domain\Payroll\Http\Controllers\CompensationAssignmentController;
 use App\Domain\Payroll\Http\Controllers\PayrollAccountingConfigurationController;
@@ -1697,6 +1698,63 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::patch('/syllabus-units/{syllabusUnit}', [SyllabusUnitController::class, 'update'])
                 ->middleware(['capability:syllabus.manage', 'throttle:school-api-mutations'])
                 ->name('schools.syllabus-units.update');
+
+            // Phase 0I.2 (Learning Content Foundation -- the first
+            // concrete LMS fact, ADR 0037). Exactly SIX operations:
+            // list/create nested under the owning SubjectOffering,
+            // show/update flat, publish/archive as dedicated action
+            // routes -- the CurriculumDelivery-style split (PATCH never
+            // accepts `status`; a lifecycle change always goes through
+            // its own action).
+            //
+            // Deliberately NO delete route (status-based retirement
+            // only, rule 73) and NO Assignment/Submission route of any
+            // kind -- those remain future, separately-gated checkpoints.
+            //
+            // Gated by LMS's OWN capability family (`lms.content.*`) --
+            // never Academic Structure's `academics.subjects.*`, even
+            // though the parent Offering belongs to that module (the
+            // Canteen capability-boundary lesson, carried forward). No
+            // Idempotency-Key: create/update/publish/archive are all
+            // either naturally idempotent (PATCH) or already guarded by
+            // the service's own row lock + closed transition map
+            // (duplicate publish/archive fails closed with a 422, never
+            // applies twice).
+            Route::get('/subject-offerings/{subjectOffering}/learning-content', [LearningContentController::class, 'index'])
+                ->middleware('capability:lms.content.view')
+                ->name('schools.subject-offerings.learning-content.index');
+            Route::post('/subject-offerings/{subjectOffering}/learning-content', [LearningContentController::class, 'store'])
+                ->middleware(['capability:lms.content.manage', 'throttle:school-api-mutations'])
+                ->name('schools.subject-offerings.learning-content.store');
+            Route::get('/learning-content/{learningContent}', [LearningContentController::class, 'show'])
+                ->middleware('capability:lms.content.view')
+                ->name('schools.learning-content.show');
+            Route::patch('/learning-content/{learningContent}', [LearningContentController::class, 'update'])
+                ->middleware(['capability:lms.content.manage', 'throttle:school-api-mutations'])
+                ->name('schools.learning-content.update');
+            Route::post('/learning-content/{learningContent}/publish', [LearningContentController::class, 'publish'])
+                ->middleware(['capability:lms.content.manage', 'throttle:school-api-mutations'])
+                ->name('schools.learning-content.publish');
+            Route::post('/learning-content/{learningContent}/archive', [LearningContentController::class, 'archive'])
+                ->middleware(['capability:lms.content.manage', 'throttle:school-api-mutations'])
+                ->name('schools.learning-content.archive');
+
+            // Phase 0I.2 -- the LearningContent owner-type extension of
+            // the shared Documents module (ADR 0037 decision 8). Reuses
+            // the EXACT same `DocumentController`/throttle/
+            // `private-no-store` shape `employees/{employee}/documents`
+            // above already established -- store/index are owner-type-
+            // specific (need the owner id in the URL); the existing
+            // generic `/documents/{document}` show/content/archive
+            // routes below already work for this owner type unchanged,
+            // since DocumentReadService/DocumentService resolve owner
+            // type from the ALREADY-PERSISTED row, never from the URL.
+            Route::post('/learning-content/{learningContent}/documents', [DocumentController::class, 'storeForLearningContent'])
+                ->middleware(['throttle:documents-writes', 'private-no-store'])
+                ->name('schools.learning-content.documents.store');
+            Route::get('/learning-content/{learningContent}/documents', [DocumentController::class, 'indexForLearningContent'])
+                ->middleware(['throttle:documents-reads', 'private-no-store'])
+                ->name('schools.learning-content.documents.index');
 
             // Phase 0H.3B (Curriculum Delivery -- the second concrete
             // Academics fact). Exactly FIVE operations: list/start

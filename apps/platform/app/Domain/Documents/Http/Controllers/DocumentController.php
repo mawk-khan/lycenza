@@ -29,9 +29,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * of its own; every one of those already lives in the service layer
  * and stays there (CLAUDE.md rule 3).
  *
- * Only the Employee owner type is exposed here, exactly matching
- * 0E.2/0E.3/0E.4's own activation boundary -- there is no Student/
- * Guardian route.
+ * Only the Employee and (Phase 0I.2) LearningContent owner types are
+ * exposed here, exactly matching the Application layer's own activation
+ * boundary -- there is no Student/Guardian route.
  *
  * `{employee}`/`{document}` are always raw route-parameter strings,
  * never implicit Eloquent route-model binding -- the same pattern
@@ -82,6 +82,44 @@ class DocumentController extends Controller
 
         $page = app(DocumentListingService::class)->list(
             $school, DocumentOwner::employee($employee), $request->user(), $this->listingQuery($request),
+        );
+
+        return $this->paginatedResponse($page);
+    }
+
+    /**
+     * Phase 0I.2 -- the LearningContent owner-type counterpart of
+     * `storeForEmployee()`. `classification_tier` is NOT accepted from
+     * the request: a LearningContent-owned Document has exactly one
+     * valid tier (`internal`, DocumentService's own docblock), so
+     * exposing the field here would only ever let a caller supply the
+     * one already-correct value or trigger a guaranteed 422 -- fixing
+     * it removes an entire class of caller error rather than validating
+     * around it.
+     */
+    public function storeForLearningContent(Request $request, School $school, string $learningContent): JsonResponse
+    {
+        abort_if(! Str::isUuid($learningContent), 404);
+
+        $validated = $request->validate([
+            'file' => ['required', 'file'],
+        ]);
+
+        $document = app(DocumentService::class)->create(
+            $school,
+            new CreateDocumentData(DocumentOwner::learningContent($learningContent), 'internal', $validated['file']),
+            $request->user(),
+        );
+
+        return response()->json(['data' => $this->presentCreated($document)], 201);
+    }
+
+    public function indexForLearningContent(Request $request, School $school, string $learningContent): JsonResponse
+    {
+        abort_if(! Str::isUuid($learningContent), 404);
+
+        $page = app(DocumentListingService::class)->list(
+            $school, DocumentOwner::learningContent($learningContent), $request->user(), $this->listingQuery($request),
         );
 
         return $this->paginatedResponse($page);
@@ -213,7 +251,7 @@ class DocumentController extends Controller
         return (new DocumentMetadata(
             documentId: $document->id,
             ownerType: $document->owner_type,
-            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id,
+            ownerId: $document->employee_id ?? $document->student_id ?? $document->guardian_id ?? $document->learning_content_id,
             classificationTier: $document->classification_tier,
             status: $document->status,
             originalFilename: $document->original_filename,

@@ -74,7 +74,11 @@ class DocumentControllerStructuralTest extends TestCase
     {
         $reflection = new ReflectionClass(DocumentController::class);
 
-        foreach (['storeForEmployee', 'indexForEmployee', 'sensitiveIndexForEmployee', 'show', 'content', 'archive'] as $method) {
+        foreach ([
+            'storeForEmployee', 'indexForEmployee', 'sensitiveIndexForEmployee',
+            'storeForLearningContent', 'indexForLearningContent',
+            'show', 'content', 'archive',
+        ] as $method) {
             $parameters = $reflection->getMethod($method)->getParameters();
             foreach ($parameters as $parameter) {
                 $type = $parameter->getType();
@@ -84,6 +88,9 @@ class DocumentControllerStructuralTest extends TestCase
                 if ($type !== null && str_contains((string) $type, 'Employee')) {
                     $this->fail("{$method}() must accept the Employee id as a raw string, never an implicitly-bound Employee model.");
                 }
+                if ($type !== null && str_contains((string) $type, 'LearningContent')) {
+                    $this->fail("{$method}() must accept the LearningContent id as a raw string, never an implicitly-bound LearningContent model.");
+                }
             }
         }
 
@@ -91,8 +98,11 @@ class DocumentControllerStructuralTest extends TestCase
     }
 
     #[Test]
-    public function only_the_six_expected_public_actions_exist(): void
+    public function only_the_eight_expected_public_actions_exist(): void
     {
+        // Phase 0I.2 added storeForLearningContent/indexForLearningContent
+        // -- the LearningContent owner-arm counterpart of the pre-existing
+        // Employee pair -- widening this closed list from six to eight.
         $reflection = new ReflectionClass(DocumentController::class);
         $publicMethods = array_map(
             fn ($m) => $m->getName(),
@@ -102,7 +112,10 @@ class DocumentControllerStructuralTest extends TestCase
         sort($publicMethods);
 
         $this->assertSame(
-            ['archive', 'content', 'indexForEmployee', 'sensitiveIndexForEmployee', 'show', 'storeForEmployee'],
+            [
+                'archive', 'content', 'indexForEmployee', 'indexForLearningContent',
+                'sensitiveIndexForEmployee', 'show', 'storeForEmployee', 'storeForLearningContent',
+            ],
             $publicMethods,
         );
     }
