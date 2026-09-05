@@ -580,3 +580,32 @@ assumption baked in by this contract.
   gate.
 - No code, migration, route, or capability-catalog entry is introduced
   by this ADR.
+
+## Phase 0I.4 review addendum (2026-09-05)
+
+Phase 0I.4 (`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`) independently
+re-verified §4's gate and §5's actor-model dependency against the
+codebase as it stood after Phase 0I.2 (Learning Content) and Phase 0I.3
+(Assignment) shipped, performed the detailed data-inventory/
+classification exercise §4 above summarizes, and produced a
+counsel-facing legal-review question set. **No decision in this ADR's
+frozen body is altered, narrowed, or weakened by that review.** Its
+findings:
+
+- No authoritative legal clearance for Submission exists anywhere in
+  this repository — §4's gate remains **BLOCKED**, evaluated against
+  this repository's own evidentiary bar for what a cleared gate looks
+  like (ADR 0036, Payroll 9.6's statutory clearance).
+- §5's actor-model dependency remains unresolved exactly as stated
+  here; nothing built since (Learning Content, Assignment) changed it.
+- The review additionally identifies engineering prerequisites that are
+  independent of legal clearance (e.g. malware/virus scanning for
+  untrusted uploads, a teacher-ownership/scoping model before Teacher
+  access to Submissions specifically, given Submission's materially
+  higher sensitivity than Assignment) — see that document's §11/§20 for
+  the full list.
+
+This addendum does not clear the gate, does not narrow its scope, and
+does not authorize any Submission implementation. It exists only to
+record that the gate was re-examined and confirmed still correct and
+still in force.

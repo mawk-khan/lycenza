@@ -1,12 +1,15 @@
 # LMS (Phase 0I)
 
 **Status: Phase 0I.1 architecture contract frozen; Phase 0I.2 (Learning
-Content Foundation) implemented.** Assignment, Submission, and every
-external LMS integration remain unimplemented. This document is the
-living operational reference for the LMS bounded context; the decision
-record is ADR 0037 (`docs/architecture/adr/0037-lms-domain-contract.md`)
-— read that first for the *why*, this document for the *what*,
-mirroring how `ACADEMIC-STRUCTURE.md`/`HR.md` relate to their own ADRs.
+Content Foundation) and Phase 0I.3 (Assignments) implemented; Phase
+0I.4 (Submission legal-gate review) conducted 2026-09-05 — the gate
+remains BLOCKED, see `docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`.**
+Submission and every external LMS integration remain unimplemented.
+This document is the living operational reference for the LMS bounded
+context; the decision record is ADR 0037
+(`docs/architecture/adr/0037-lms-domain-contract.md`) — read that first
+for the *why*, this document for the *what*, mirroring how
+`ACADEMIC-STRUCTURE.md`/`HR.md` relate to their own ADRs.
 
 ## 1. Module scope
 
@@ -149,6 +152,18 @@ Submission content (text, files, or per-Student teacher feedback).
 (definition/lifecycle/resource attachments) — Confidential, staff-
 authored, gated by capability only, matching `SyllabusUnit`/
 `Examination`/`ExaminationPaper`'s precedent exactly.
+
+**Phase 0I.4 (2026-09-05) independently re-verified this gate** after
+Learning Content and Assignment shipped, performed a detailed
+per-category data-inventory/classification exercise, and produced a
+counsel-facing legal-review question set — see
+`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`. The gate remains
+**BLOCKED**; no authoritative legal clearance exists in this repository.
+That review also flags engineering prerequisites independent of legal
+clearance — notably, malware/virus scanning for untrusted uploads does
+not exist yet, and a teacher-ownership/scoping model is required before
+Teacher access to Submissions specifically (not required for an
+Admin/Principal-only v1).
 
 ## 6. Student/Guardian actor model — unresolved dependency, not an LMS decision
 

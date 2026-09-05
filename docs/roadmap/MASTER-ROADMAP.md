@@ -649,9 +649,35 @@ fourth exclusive-arc owner column (`learning_content_id`, `internal`
 tier only). No Assignment, no Submission, no external LMS integration
 — see `docs/modules/LMS.md` §13 for the full as-built record.
 
-**Recommended next checkpoint: Phase 0I.3 — Assignments** (same
-Confidential/staff-authored posture as Learning Content; Phase 0I.4
-Submissions remains blocked on ADR 0037 §4's legal-review gate).
+**Phase 0I.3 (2026-09-04): Assignments implemented.** Same
+Confidential/staff-authored posture as Learning Content — six `/api/v1`
+operations (`draft→published→closed` lifecycle, `lms.assignments.view`/
+`.manage`), a session-authenticated Inertia surface at
+`/app/assignments`, and the Documents module's fifth exclusive-arc
+owner column (`assignment_id`, `internal` tier only). No Submission, no
+external LMS integration.
+
+**Phase 0I.4 (2026-09-05): Submission legal-gate review conducted —
+gate remains `BLOCKED`.** A dedicated legal/data-governance review
+(`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`) independently
+re-verified ADR 0037 §4's classification and gate reasoning now that
+Learning Content and Assignment are real, implemented code; performed
+a detailed per-category data inventory/classification exercise; and
+produced an 18-question set for qualified counsel/product governance.
+**No authoritative legal clearance for Submission exists anywhere in
+this repository** — engineering review cannot itself clear this gate,
+following the same discipline already applied to Health and (prior to
+its own clearance) Payroll's statutory checkpoint. The review also
+identifies engineering prerequisites independent of legal clearance:
+malware/virus scanning for untrusted uploads does not exist yet, and a
+teacher-ownership/scoping model is required before Teacher (not
+Admin/Principal) access to Submissions specifically, since Submission
+exposes individually identifiable Student work rather than
+staff-authored administrative content. **Next action: escalate the
+review's question set to qualified legal counsel and product
+governance outside this repository; no Submission schema/model/
+service/controller/route/capability/UI may be implemented until that
+clearance is obtained and recorded.**
 
 ## Phase 0J — HR and Payroll
 
