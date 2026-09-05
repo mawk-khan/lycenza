@@ -224,6 +224,56 @@ later withdrawal never retroactively invalidates an already-created
 historical mark (core academic records are retained per the
 supersedes-decision).
 
+**Freshness correction (Phase 0H.4D-P2 lock-freshness correction):**
+the caller may pass any `Student` instance it already holds, but the
+method uses that instance for its `->id` ONLY — every mutable field
+the qualification decision depends on (`date_of_birth`) is read from
+the row this method itself locks under `FOR UPDATE`, never from the
+caller-supplied snapshot. The closure audit found the original
+implementation locked the fresh row and then discarded it, continuing
+to evaluate age against whatever `Student` object the caller happened
+to be holding — meaning a concurrent DOB correction landing between
+the caller's own fetch and this method's call would not be reflected
+in the qualification decision, even though the row lock itself was
+genuinely held. This made the ordinary read methods and the
+lock-capable seam inconsistent with each other in an important way:
+`relationshipStillLegalGuardian()` was always a fresh, un-cached
+lookup, while age was not. Both mutable qualification inputs (age via
+the locked Student row; legal-guardian status via the relationship
+row, already re-fetched fresh) are now treated symmetrically — see
+`StudentProcessingAuthorizationReadService`'s class docblock for the
+explicit statement of which methods carry which concurrency guarantee.
+The ordinary (non-locking) read methods
+(`isAuthorizedForProcessing()`/`assertAuthorizedForProcessing()`/
+`qualifyingAuthorizationIdForStudent()`/`qualifyingGrants()`) are
+unaffected and unchanged: they still evaluate age against whatever
+`Student` the caller supplies, with no row lock and no transactional
+serialization guarantee — correct for an ordinary point-in-time read,
+but never suitable for a future check-and-write consumer, which must
+use `lockQualifyingAuthorizationIdForProcessing()` instead.
+
+**Documented future StudentMark usage sequence** (not implemented by
+this ADR — recorded here so the future consumer follows the contract
+this seam was built for, rather than re-deriving it):
+
+1. Begin a `DB::transaction()`.
+2. Obtain the current Student identity (route-bound/freshly queried,
+   as every real caller already does).
+3. Call the Students-owned
+   `StudentProcessingAuthorizationReadService::lockQualifyingAuthorizationIdForProcessing()`
+   — never query `student_processing_authorizations` directly.
+4. Receive the exact qualifying authorization id, decided against the
+   freshly locked Student (and, for `guardian_consent`, relationship)
+   row — never a pre-lock snapshot.
+5. Perform whatever remaining StudentMark-specific eligibility checks
+   and locks that future checkpoint needs, inside the SAME
+   transaction.
+6. Insert the StudentMark row with the returned authorization id as
+   its own provenance FK.
+7. Commit.
+
+Examinations code must never query a P2 model directly at any step.
+
 Deterministic provenance selection (never PostgreSQL's unspecified row
 order): among every currently-qualifying active grant, the most
 recently `recorded_at`, ties broken by `id` descending. This ordering
@@ -272,13 +322,32 @@ authorization, per that resolver's own documented rule.
 
 No DELETE route exists or ever will (matching every other "reference/
 history entity has no delete route" precedent in this codebase).
-Retention is indefinite by default, pending an explicit future
-retention policy — none is invented here. Zero domain events are
-emitted; this registry is never externally webhook-subscribable
-(`App\Support\Webhooks\WebhookEventRegistry`'s closed catalog, unless
-explicitly and separately added later). No Student-facing or Guardian-
-facing route exists — staff records what was obtained through approved
-School procedure.
+"Retention is indefinite by default" means precisely this, no more and
+no less (Phase 0H.4D-P2 lock-freshness correction §19 — this wording
+replaces an earlier, unqualified version the closure audit flagged as
+ambiguous): every *ordinary application path* provides no deletion or
+purge of a `StudentProcessingAuthorization` row — there is no DELETE
+route, no scheduled purge job, and no TTL, and the composite FKs from
+this table to `students`/`student_guardian_relationships` are all
+`ON DELETE RESTRICT`, so a Student or StudentGuardianRelationship
+referenced by a P2 row cannot itself be deleted while the reference
+exists. The ONE way P2 history can disappear is as part of a top-level
+School (tenant) hard destruction — `student_processing_authorizations`
+cascades from `schools.school_id ON DELETE CASCADE`, the same as every
+other School-owned table. This is inherited platform-wide tenant-
+destruction behaviour, not a P2-specific retention mechanism, and no
+production route performs it today (no Student or School DELETE
+endpoint exists anywhere in this codebase). Retention here is NOT a
+cryptographic or otherwise-enforced permanence claim independent of
+that tenant-destruction model — it is "safe from every ordinary
+application action," not "unconditionally indestructible." An explicit
+future retention *policy* (e.g. a bounded retention window with its
+own deletion path) remains future work; none is invented here. Zero
+domain events are emitted; this registry is never externally webhook-
+subscribable (`App\Support\Webhooks\WebhookEventRegistry`'s closed
+catalog, unless explicitly and separately added later). No Student-
+facing or Guardian-facing route exists — staff records what was
+obtained through approved School procedure.
 
 ## Consequences
 
@@ -289,12 +358,11 @@ School procedure.
   independent: this registry has no `SubjectOffering`/elective/Paper-
   date reference, and P3 has none of this registry's concerns.
 - `docs/security/DATA-CLASSIFICATION.md`'s blanket children's-data
-  `[LEGAL REVIEW REQUIRED]` marker needs narrowing to reflect that
-  architecture/backend is approved with conditions, while still-open
-  gates (production enablement, Student-facing, Guardian-facing,
-  result publication, report cards, transcripts) remain visible and
-  distinct — tracked as a documentation follow-up, not performed as
-  part of this ADR.
+  `[LEGAL REVIEW REQUIRED]` marker has been narrowed (in this same
+  Phase 0H.4D-P2 change) to reflect that architecture/backend is
+  approved with conditions, while still-open gates (production
+  enablement, Student-facing, Guardian-facing, result publication,
+  report cards, transcripts) remain visible and distinct.
 - The `School OS` runtime role's UPDATE/DELETE privileges on this table
   remain granted (unlike every other append-only ledger in this
   codebase) — this is a deliberate, documented exception to the

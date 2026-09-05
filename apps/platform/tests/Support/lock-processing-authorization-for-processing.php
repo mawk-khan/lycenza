@@ -11,25 +11,26 @@ use Illuminate\Support\Facades\DB;
 // Standalone bootstrap script for ProcessingAuthorizationConcurrencyTest
 // (the "read-lock vs withdrawal" race): opens a real transaction, calls
 // the lock-capable read seam (which locks the Student row and the
-// qualifying grant row), holds the transaction open for $sleepSeconds,
-// then commits -- so a genuinely separate OS process attempting a
-// terminal action against the SAME grant concurrently must block on
-// the row lock until this process's transaction ends.
+// qualifying grant row), then signals lock acquisition EXPLICITLY --
+// via a file the parent test waits for -- rather than relying on the
+// parent inferring "the lock must be held by now" from elapsed time.
+// Only after a separate release signal appears does this process
+// commit, so a genuinely separate OS process attempting a terminal
+// action against the SAME grant concurrently must block on the row
+// lock for as long as the parent test chooses, provably, not
+// approximately.
 //
-// Usage: php lock-processing-authorization-for-processing.php <schoolId> <studentId> <sleepSeconds> [barrierFile]
+// Usage: php lock-processing-authorization-for-processing.php <schoolId> <studentId> <startBarrierFile> <lockAcquiredFile> <releaseFile>
 
 require __DIR__.'/../../vendor/autoload.php';
 $app = require __DIR__.'/../../bootstrap/app.php';
 $kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 
-[, $schoolId, $studentId, $sleepSeconds] = $argv;
-$barrierFile = $argv[4] ?? null;
+[, $schoolId, $studentId, $startBarrierFile, $lockAcquiredFile, $releaseFile] = $argv;
 
-if ($barrierFile !== null) {
-    while (! file_exists($barrierFile)) {
-        usleep(200);
-    }
+while (! file_exists($startBarrierFile)) {
+    usleep(200);
 }
 
 $school = School::query()->findOrFail($schoolId);
@@ -40,9 +41,21 @@ $context = $app->make(TenantContext::class);
 $student = $context->withSchool($school, fn () => Student::query()->where('id', $studentId)->firstOrFail());
 $readService = $app->make(StudentProcessingAuthorizationReadService::class);
 
-$id = DB::transaction(function () use ($readService, $school, $student, $sleepSeconds) {
+$id = DB::transaction(function () use ($readService, $school, $student, $lockAcquiredFile, $releaseFile) {
+    // At this point the Student row lock (and the qualifying grant's
+    // row lock) are genuinely held by THIS transaction -- the call
+    // above has already returned, meaning PostgreSQL granted both
+    // locks. Only NOW do we signal "lock acquired" -- never before the
+    // locking call itself has returned, unlike the prior version's
+    // fixed sleep, which only ever approximated "the lock should be
+    // held by now."
     $lockedId = $readService->lockQualifyingAuthorizationIdForProcessing($school, $student, ProcessingAuthorizationPurpose::AcademicRecords);
-    sleep((int) $sleepSeconds);
+
+    touch($lockAcquiredFile);
+
+    while (! file_exists($releaseFile)) {
+        usleep(200);
+    }
 
     return $lockedId;
 });

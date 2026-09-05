@@ -36,6 +36,27 @@ use LogicException;
  * satisfied -- evaluated fresh on every read, never cached/frozen at
  * grant time (Student.date_of_birth and
  * StudentGuardianRelationship.is_legal_guardian are both read live).
+ *
+ * Two different concurrency guarantees exist here, deliberately NOT
+ * the same strength:
+ *
+ * - The ordinary read methods (`isAuthorizedForProcessing()`,
+ *   `assertAuthorizedForProcessing()`, `qualifyingAuthorizationIdForStudent()`,
+ *   `qualifyingGrants()`) evaluate age against whatever `Student`
+ *   instance the CALLER supplies, with no row lock -- correct for an
+ *   ordinary point-in-time display/decision read, but they give NO
+ *   transactional serialization against a concurrent write landing
+ *   between the caller's own Student fetch and the call into this
+ *   service. A caller that needs a decision to remain valid through a
+ *   subsequent write in the SAME transaction must NOT use these.
+ * - `lockQualifyingAuthorizationIdForProcessing()` is the ONLY method
+ *   with a real transactional guarantee: it re-fetches the Student row
+ *   itself, under `FOR UPDATE`, and uses that freshly locked instance
+ *   (never the caller's) for every qualification decision it makes.
+ *   This is the seam a future check-and-write consumer (StudentMark
+ *   chief among them) must use -- never the ordinary read methods --
+ *   for anything that needs to survive a race with a concurrent
+ *   withdrawal/revocation or a concurrent DOB/relationship correction.
  */
 class StudentProcessingAuthorizationReadService
 {
@@ -138,6 +159,20 @@ class StudentProcessingAuthorizationReadService
      * those locks before returning -- eliminating the read-then-write
      * gap entirely.
      *
+     * `$student` is accepted for API ergonomics (a caller almost
+     * always already has one in hand) but is used for its `id` ONLY --
+     * every mutable field this method's qualification decision depends
+     * on (`date_of_birth`) is read from the row THIS method itself
+     * locks, never from the caller-supplied instance. A caller passing
+     * a `$student` fetched before this method runs (routine: the
+     * ordinary case for every real caller) must never have that
+     * snapshot silently used for the actual decision once a fresher
+     * row is available under lock -- see the Phase 0H.4D-P2 closure
+     * audit finding this correction fixes: the pre-correction version
+     * locked the Student row and then discarded the freshly locked
+     * instance, continuing to evaluate age against the caller's
+     * possibly-stale snapshot.
+     *
      * @throws StudentNotAuthorizedForProcessingException
      */
     public function lockQualifyingAuthorizationIdForProcessing(School $school, Student $student, ProcessingAuthorizationPurpose $purpose, ?CarbonImmutable $asOf = null): string
@@ -147,9 +182,12 @@ class StudentProcessingAuthorizationReadService
         }
 
         return $this->context->withSchool($school, function () use ($school, $student, $purpose, $asOf) {
-            Student::query()->lockForUpdate()->findOrFail($student->id);
+            // Authoritative from this point on: the caller's $student
+            // is never read again for a qualification decision, only
+            // for its ->id (identity input) via $lockedStudent below.
+            $lockedStudent = Student::query()->lockForUpdate()->findOrFail($student->id);
 
-            $candidateIds = $this->activeGrantsQuery($school, $student, $purpose)->pluck('id');
+            $candidateIds = $this->activeGrantsQuery($school, $lockedStudent, $purpose)->pluck('id');
 
             if ($candidateIds->isEmpty()) {
                 throw new StudentNotAuthorizedForProcessingException($purpose->value);
@@ -167,7 +205,7 @@ class StudentProcessingAuthorizationReadService
                     StudentGuardianRelationship::query()->lockForUpdate()->find($grant->student_guardian_relationship_id);
                 }
 
-                if ($this->qualifies($school, $student, $grant, $asOf)) {
+                if ($this->qualifies($school, $lockedStudent, $grant, $asOf)) {
                     return $grant->id;
                 }
             }
