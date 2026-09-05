@@ -1,5 +1,23 @@
 # LMS Submission — Legal/Data-Governance Gate Review (Phase 0I.4)
 
+> ## STATUS: CLOSED — FEATURE CANCELLED / OUT OF SCOPE (2026-09-05)
+>
+> This review was **never legally cleared** — the formal request it
+> produced (`docs/security/LMS-SUBMISSION-LEGAL-REVIEW-REQUEST.md`)
+> received no qualifying response from qualified legal counsel or
+> product governance. On 2026-09-05, the product owner independently
+> **cancelled the Submission capability entirely** as a product-scope
+> decision, unrelated to whether that legal question was ever answered.
+> Further legal/product review of Submission is no longer required
+> **while that capability remains out of scope** — but this is not, and
+> must never be represented as, legal clearance of the processing this
+> document describes. This document, and everything below, is retained
+> as a historical architecture/governance record — the 18-question
+> escalation and the analysis behind it remain intact as provenance for
+> whatever future checkpoint might reopen this scope from first
+> principles. See `docs/architecture/adr/0037-lms-domain-contract.md`'s
+> Submission cancellation addendum for the authoritative decision text.
+
 - Checkpoint: Phase 0I.4 (2026-09-05)
 - Review baseline: `feature/phase-0i3-assignments @ 229f963` — the
   newest published Phase 0I prerequisite tip (0I.1 `d6d1994` → 0I.2

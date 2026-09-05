@@ -1,12 +1,28 @@
 # LMS Submission — Qualified Legal & Product Governance Review Request (as issued)
 
+> ## STATUS: CLOSED — FEATURE CANCELLED / OUT OF SCOPE (2026-09-05)
+>
+> This request received **no qualifying response** from qualified legal
+> counsel or product governance before the product owner cancelled the
+> Submission capability entirely on 2026-09-05, as an independent
+> product-scope decision. The 20-question set below remains **intact as
+> historical provenance** — it is not withdrawn, answered, or resolved
+> by the cancellation. Further legal/product review is no longer
+> required while Submission remains out of scope; this is not legal
+> clearance of any of the processing described below. See
+> `docs/architecture/adr/0037-lms-domain-contract.md`'s Submission
+> cancellation addendum and `docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`
+> for the full governance record.
+
 - Issued: 2026-09-05, following Phase 0I.4
 - Engineering source documents: `docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`,
   `docs/architecture/adr/0037-lms-domain-contract.md` §4/§5
-- Status: **AWAITING RESPONSE.** This document records the request as
-  formally issued to qualified legal counsel and product governance
-  outside this engineering repository. It is not itself a decision, and
-  it does not, and cannot, change the gate's status.
+- Status: **CLOSED, unanswered — see banner above.** This document
+  records the request as formally issued to qualified legal counsel and
+  product governance outside this engineering repository. It was never
+  itself a decision and never changed the gate's status; the gate was
+  ultimately retired by feature cancellation, not by any response to
+  this request.
 
 > This is a record of the request, not an answer to it. Engineering has
 > not responded to, resolved, or pre-empted any question below — doing

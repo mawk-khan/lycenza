@@ -609,3 +609,49 @@ This addendum does not clear the gate, does not narrow its scope, and
 does not authorize any Submission implementation. It exists only to
 record that the gate was re-examined and confirmed still correct and
 still in force.
+
+## Phase 0I — Submission cancellation addendum (2026-09-05)
+
+**Submission was originally included in this ADR's Phase 0I LMS domain
+contract** (§2's terminology table, §3's boundary, §4's classification/
+gate, §5's actor model, §8's Documents seam, §9's lifecycle contract,
+§10's illustrative events). **Phase 0I.4
+(`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`) identified the legal,
+product, and technical prerequisites** a Submission implementation
+would require and formally escalated them
+(`docs/security/LMS-SUBMISSION-LEGAL-REVIEW-REQUEST.md`); no qualifying
+response was ever received (Phase 0I.4A found no authoritative external
+decision on the record).
+
+**On 2026-09-05, the product owner cancelled the Submission capability
+entirely**, as a product-scope decision independent of that unresolved
+legal question. Submission is therefore **no longer part of the LMS
+bounded context roadmap.**
+
+**The previous `[LEGAL REVIEW REQUIRED]` gate (§4) is retired because
+the underlying feature has been cancelled — not because legal clearance
+was obtained.** This distinction is load-bearing and must not be
+blurred in any future reading of this ADR: no repository document, then
+or now, ever recorded qualified legal clearance for Submission. The
+question §4/§19 of the legal-review documents raised remains
+factually unanswered; it is simply no longer operative because there is
+no longer a feature for it to gate.
+
+**Consequently, no Submission schema, service, API, UI, event,
+capability, Documents owner arm, or student-coursework-upload path
+should be introduced** under this ADR or any successor Phase 0I
+checkpoint, unless a future, explicit product decision formally
+reopens the scope. **Reopening would require a fresh architecture and
+governance review from first principles** — this addendum's existence
+must not be read as any part of that review already having happened,
+and the historical legal/data-governance concerns §4 raised must not
+be assumed resolved merely because time has passed or because this
+addendum exists.
+
+**The approved Phase 0I LMS scope is now Learning Content (0I.2) and
+Assignment (0I.3) only.** §§1–3 and §§6–10 of this ADR's original
+decision record remain accurate as *historical* architecture reasoning
+for the bounded context as a whole (module boundary, terminology,
+Documents-seam pattern, capability-namespace convention) and are not
+retracted; only Submission's status as a live, buildable feature is
+changed by this addendum.

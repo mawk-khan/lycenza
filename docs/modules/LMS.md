@@ -1,15 +1,49 @@
 # LMS (Phase 0I)
 
 **Status: Phase 0I.1 architecture contract frozen; Phase 0I.2 (Learning
-Content Foundation) and Phase 0I.3 (Assignments) implemented; Phase
-0I.4 (Submission legal-gate review) conducted 2026-09-05 — the gate
-remains BLOCKED, see `docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`.**
-Submission and every external LMS integration remain unimplemented.
-This document is the living operational reference for the LMS bounded
+Content Foundation) and Phase 0I.3 (Assignments) implemented. Phase 0I
+is complete as an active LMS scope of Learning Content + Assignment
+only.** Student Submission was reviewed (Phase 0I.4,
+2026-09-05) and never legally cleared, and was then **cancelled as a
+product-scope decision on 2026-09-05** — see §0 below and
+`docs/architecture/adr/0037-lms-domain-contract.md`'s Submission
+cancellation addendum. External LMS integration remains unscoped. This
+document is the living operational reference for the LMS bounded
 context; the decision record is ADR 0037
 (`docs/architecture/adr/0037-lms-domain-contract.md`) — read that first
 for the *why*, this document for the *what*, mirroring how
 `ACADEMIC-STRUCTURE.md`/`HR.md` relate to their own ADRs.
+
+## 0. Submission — CANCELLED / OUT OF SCOPE (2026-09-05)
+
+**LMS student Submission functionality is cancelled and intentionally
+out of scope for the School System ERP**, per a product-owner decision
+dated 2026-09-05. This includes, without limitation: student
+homework/coursework submission; student-authored Submission records;
+Submission text responses; Submission file uploads; Submission
+revisions/resubmissions; Teacher review of submitted coursework;
+Guardian-on-behalf Submission; staff-on-behalf Submission; Submission
+grading/scoring; Submission-related Documents ownership; and every
+Submission-related event/API/UI named anywhere below in this document.
+
+**This is a product-scope cancellation, not legal clearance.** No
+repository document, at any point, ever recorded qualified legal
+clearance for Submission — Phase 0I.4's escalation
+(`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`,
+`docs/security/LMS-SUBMISSION-LEGAL-REVIEW-REQUEST.md`) received no
+qualifying response before the product owner cancelled the underlying
+capability. The historical legal/data-governance concerns those
+documents raised are **not** resolved by this cancellation and must
+not be assumed resolved if this scope is ever reopened.
+
+**Every section below that still describes Submission (§§2–6, 8–11, 14)
+is retained as historical architecture reasoning, not as a live,
+buildable plan.** Where a section's original wording reads as
+forward-looking ("blocked until...", "future checkpoint...", "approved
+future extension"), treat it as superseded by this §0 — it is preserved
+for provenance and for whatever future checkpoint might reopen this
+scope from first principles, not as an active roadmap item. The active
+LMS scope is **Learning Content and Assignment only**.
 
 ## 1. Module scope
 
@@ -24,12 +58,16 @@ coursework files | **LMS** (Phase 0I)."*
 | Layer | Name |
 |---|---|
 | Roadmap umbrella | **LMS** (Phase 0I) |
-| First planned checkpoint | Phase 0I.2 — Learning Content Foundation (not started) |
-| Domain directory (planned) | `App\Domain\LMS` |
-| Capability namespace (frozen, not seeded) | `lms.content.*` / `lms.assignments.*` / `lms.submissions.*` |
+| Active scope | Learning Content (0I.2, implemented) + Assignment (0I.3, implemented) |
+| Domain directory | `App\Domain\LMS` |
+| Capability namespace (seeded) | `lms.content.*` / `lms.assignments.*` |
 
-**In scope, eventually:** Learning Content, Assignment, Submission,
+**In scope, and complete:** Learning Content, Assignment,
 coursework/resource files (via Documents, decision 8).
+
+**Cancelled, 2026-09-05 (see §0) — not in scope:** Submission (student
+homework/coursework submission in any form), and the `lms.submissions.*`
+capability family.
 
 **Explicitly out of scope for Phase 0I, permanently, absent a new
 roadmap/ADR/product decision:**
@@ -56,16 +94,16 @@ reference):
 |---|---|---|
 | **Learning Content** | A School-authored instructional resource (reading/link/note/attached file) belonging to one `SubjectOffering` — distributable material, not a topic outline (that's `SyllabusUnit`). | — |
 | **Assignment** | A staff-authored unit of work (title, instructions, optional resource attachments, due date, lifecycle) that a `SubjectOffering`'s current roster is expected to complete. Never itself a grade-bearing record. | `Course` (see Academic Structure's own naming discipline — `Subject` already owns that concept) |
-| **Submission** | One Student's response to one Assignment — coursework file(s)/text, a lifecycle, and optional non-authoritative teacher feedback. | — |
+| **Submission** *(CANCELLED, §0)* | One Student's response to one Assignment — coursework file(s)/text, a lifecycle, and optional non-authoritative teacher feedback. Historical term only; not a buildable entity. | — |
 | **Coursework File** | Not a distinct domain entity — a Documents-module file whose owner arm is a LearningContent/Assignment/Submission row (§8). | — |
 
 ## 3. Entity relationships
 
 ```
 SubjectOffering (Academic Structure)
-  └─ LearningContent   (LMS; School-authored resource)
-  └─ Assignment        (LMS; School-authored unit of work)
-       └─ Submission   (LMS; one per Student per Assignment)
+  └─ LearningContent   (LMS; School-authored resource) -- active
+  └─ Assignment        (LMS; School-authored unit of work) -- active
+       └─ Submission   (LMS; one per Student per Assignment) -- CANCELLED, §0
 ```
 
 - **Assignment is scoped by SubjectOffering, not SubjectOffering +
@@ -105,10 +143,10 @@ SubjectOffering (Academic Structure)
 | Exam scheduling, grading, marks, grade scales, result publication, report cards, transcripts | **Examinations** |
 | Learning content, assignments, submissions, coursework files | **LMS** |
 
-**LMS may own:** Assignment title, instructions, resource attachments,
-Assignment lifecycle, due date, Submission lifecycle, teacher feedback,
-a returned/revision-requested state (if later approved, §9), and
-non-authoritative feedback metadata.
+**LMS owns:** Learning Content, Assignment title, instructions, resource
+attachments, Assignment lifecycle, due date. Submission lifecycle,
+teacher feedback, and a returned/revision-requested state were
+originally contemplated here but are **CANCELLED (§0)**.
 
 **LMS must never own as an authoritative academic record:**
 Examination marks, official grades, report-card values, transcript
@@ -122,53 +160,49 @@ LMS-side score can never be mistaken for an authoritative mark). Only
 qualitative (free-text) teacher feedback is in scope, and that text is
 itself subject to §5's classification/legal gate.
 
-## 5. Data classification — Sensitive, `[LEGAL REVIEW REQUIRED]`
+## 5. Data classification — historical (Submission cancelled, see §0)
 
-See `docs/security/DATA-CLASSIFICATION.md` for the authoritative rows.
-Summary:
+See `docs/security/DATA-CLASSIFICATION.md` for the authoritative,
+current rows.
 
-| Entity | Tier | Gate |
+| Entity | Tier | Status |
 |---|---|---|
-| Learning Content | Confidential | none — staff-authored, no Student identity |
-| Assignment (definition/lifecycle) | Confidential | none — staff-authored, no Student identity |
-| Submission (content, feedback, history) | **Sensitive** | **`[LEGAL REVIEW REQUIRED]`** |
+| Learning Content | Confidential | active, implemented |
+| Assignment (definition/lifecycle) | Confidential | active, implemented |
+| Submission (content, feedback, history) | Sensitive (was) | **CANCELLED / OUT OF SCOPE (2026-09-05) — never legally cleared** |
 
-**Verdict: SUBMISSIONS REQUIRE LEGAL REVIEW.** Submission is the first
-checkpoint in this roadmap to durably store unbounded, Student-authored
-free-text and/or file content — every prior Sensitive-tier Student
-module (`AttendanceRecord`, `SyllabusUnit`, `CurriculumDelivery`,
-`Examination`, `ExaminationPaper`) deliberately *excludes* free text for
-exactly this reason. This is **not** the same gate as Examinations'
-`StudentMark` flag (grade-authority concern) — it is Submission's own,
-independently-triggered instance of the children's-data DPDP gate, and
-is **not** waived merely because Documents storage already exists
-(ADR 0012 governs storage/access-control mechanics, not the antecedent
-lawfulness-of-collection question). Full reasoning: ADR 0037 §4.
+**Historical record, retained for provenance:** Submission was
+originally classified Sensitive with a `[LEGAL REVIEW REQUIRED]` gate,
+on the grounds that it would have been the first checkpoint in this
+roadmap to durably store unbounded, Student-authored free-text and/or
+file content — every prior Sensitive-tier Student module
+(`AttendanceRecord`, `SyllabusUnit`, `CurriculumDelivery`, `Examination`,
+`ExaminationPaper`) deliberately *excludes* free text for exactly this
+reason. That gate was distinct from Examinations' `StudentMark` flag
+(grade-authority concern) and was never waived merely because Documents
+storage already exists. Full historical reasoning: ADR 0037 §4.
 
-**Blocked:** any implementation collecting, storing, or exposing actual
-Submission content (text, files, or per-Student teacher feedback).
-
-**Not blocked, may proceed:** Learning Content and Assignment
-(definition/lifecycle/resource attachments) — Confidential, staff-
-authored, gated by capability only, matching `SyllabusUnit`/
-`Examination`/`ExaminationPaper`'s precedent exactly.
-
-**Phase 0I.4 (2026-09-05) independently re-verified this gate** after
+**Phase 0I.4 (2026-09-05)** independently re-verified this gate after
 Learning Content and Assignment shipped, performed a detailed
-per-category data-inventory/classification exercise, and produced a
-counsel-facing legal-review question set — see
-`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`. The gate remains
-**BLOCKED**; no authoritative legal clearance exists in this repository.
-That review also flags engineering prerequisites independent of legal
-clearance — notably, malware/virus scanning for untrusted uploads does
-not exist yet, and a teacher-ownership/scoping model is required before
-Teacher access to Submissions specifically (not required for an
-Admin/Principal-only v1).
+per-category data-inventory/classification exercise, and formally
+escalated a counsel-facing legal-review question set — see
+`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md` and
+`docs/security/LMS-SUBMISSION-LEGAL-REVIEW-REQUEST.md`. **No qualifying
+response was ever received.** On 2026-09-05 the product owner cancelled
+the Submission capability entirely, as a product-scope decision
+independent of that unresolved legal question — the gate is retired
+because the feature no longer exists, **not because legal clearance was
+obtained.** Learning Content and Assignment remain Confidential,
+unaffected, and were never gated.
 
-## 6. Student/Guardian actor model — unresolved dependency, not an LMS decision
+## 6. Student/Guardian actor model — historical (moot, Submission cancelled)
 
-Verified directly against the current `origin/main` source (file
-presence, not checkpoint-report prose alone):
+**This section is retained as historical record only.** It was
+material to whether/how Submission could be built; since Submission is
+cancelled (§0), the question it describes no longer blocks anything in
+the active LMS scope (Learning Content, Assignment). Verified directly
+against the current `origin/main` source at the time this section was
+written (file presence, not checkpoint-report prose alone):
 
 - **No authenticated Student account exists.** `students` has no
   `user_id`; no `student` role exists in `CapabilityAndRoleSeeder`; per
@@ -239,57 +273,47 @@ LMS checkpoint is blocked on the same ownership-based authorization
 model every other academic module already defers to, not on anything
 LMS-specific.
 
-## 8. Capability namespace (frozen, not registered)
+## 8. Capability namespace
 
-| Capability | Scope |
-|---|---|
-| `lms.content.view` | View Learning Content |
-| `lms.content.manage` | Author/edit Learning Content |
-| `lms.assignments.view` | View Assignments |
-| `lms.assignments.manage` | Author/edit/publish/close Assignments |
-| `lms.submissions.view` | Staff view of Submissions |
-| `lms.submissions.manage` | Staff management of Submissions (e.g. return/feedback) |
-| `lms.submissions.submit` | The Student/Guardian-side act of submitting |
+| Capability | Scope | Status |
+|---|---|---|
+| `lms.content.view` | View Learning Content | active, seeded |
+| `lms.content.manage` | Author/edit Learning Content | active, seeded |
+| `lms.assignments.view` | View Assignments | active, seeded |
+| `lms.assignments.manage` | Author/edit/publish/close Assignments | active, seeded |
+| `lms.submissions.view` | Staff view of Submissions | **CANCELLED (2026-09-05) — must never be seeded** |
+| `lms.submissions.manage` | Staff management of Submissions | **CANCELLED (2026-09-05) — must never be seeded** |
+| `lms.submissions.submit` | The Student/Guardian-side act of submitting | **CANCELLED (2026-09-05) — must never be seeded** |
 
 Depth-2 dotted convention, matching `examinations.definitions.*`/
-`curriculum.delivery.*`/`syllabus.*`. **Not seeded in
-`CapabilityAndRoleSeeder`** — this checkpoint freezes the namespace
-shape only; registration happens at implementation time, per every
-prior module's precedent.
+`curriculum.delivery.*`/`syllabus.*`. The `lms.submissions.*` family was
+frozen (never seeded) pending Submission implementation; it is now
+retired along with the feature (§0) and must not be added to
+`CapabilityAndRoleSeeder` unless a future, explicit product decision
+formally reopens Submission scope.
 
-`lms.submissions.submit` is **not** a normal staff capability — §6
-already established that no Student/Guardian capability model exists
-at all today. This capability's authorization mechanism is blocked on
-§6's dependency, exactly like Submission generally; it is named here
-only to freeze its spelling.
-
-## 9. Documents ownership seam (approved future extension, not implemented)
+## 9. Documents ownership seam (as-built: Learning Content + Assignment only)
 
 Per ADR 0012 and the current `documents_exactly_one_owner_check`
-exclusive-arc CHECK (`employee_id`/`student_id`/`guardian_id`, exactly
-one non-null, database-enforced), LMS coursework/resource files extend
-the **same shared arc** — not a dedicated table (ADR 0029's
-separate-table criteria — non-generic structured fields, narrower
-classification vocabulary — do not apply to LMS files).
+exclusive-arc CHECK, LMS coursework/resource files extend the **same
+shared arc** — not a dedicated table (ADR 0029's separate-table
+criteria do not apply to LMS files).
 
-**Approved future shape:**
-- Three new nullable owner columns on `documents` —
-  `learning_content_id`, `assignment_id`, `submission_id` — each with a
-  composite FK to `(id, school_id)` on its LMS table, added additively.
-- `documents_exactly_one_owner_check`'s sum widens to include all
-  three, preserving exactly-one-owner-always.
-- **`submission_id` ships deactivated at the application layer**
-  (`DocumentOwnerTypeNotSupportedException`, matching the existing
-  `student_id`/`guardian_id` pattern) until §5's legal-review gate
-  clears. `learning_content_id`/`assignment_id` may activate
-  independently once their own checkpoints ship, since neither is
-  gated.
-- Delete/archive: unchanged — Documents are archived, never hard
-  deleted; cascade-on-delete fires only if the owning LMS row itself is
-  deleted, which never happens once referenced (§10 — status-based
-  retirement only).
-- Tenant isolation: unchanged — composite-FK + `TenantRls`, no new
-  mechanism.
+**As built (0I.2, 0I.3):** `learning_content_id` and `assignment_id`
+were added additively to `documents`, each with a composite FK to
+`(id, school_id)` on its LMS table; `documents_exactly_one_owner_check`
+widened to include both, preserving exactly-one-owner-always. Both are
+active, `internal`-tier only, gated by `lms.content.*`/`lms.assignments.*`.
+
+**`submission_id` — CANCELLED, not added, must not be added.** It was
+previously named as an approved-but-not-yet-implemented future owner
+column, deactivated at the application layer
+(`DocumentOwnerTypeNotSupportedException`) pending §5's legal-review
+gate. Since Submission itself is cancelled (§0), this column must not
+be added to `documents` under any future Phase 0I checkpoint unless a
+fresh, explicit product decision reopens Submission scope — at which
+point the legal-review question, not merely a schema seam, would need
+to be reopened from first principles.
 
 ## 10. Lifecycle contract
 
@@ -308,22 +332,21 @@ separate `archived`):
   with no confirmed product requirement yet.
 - No DELETE route — status-based retirement only (rule 73).
 
-**Submission** — `submitted` is the only state this contract commits
-to. A `returned`/`resubmitted` revision loop is product-likely but
-**PROVISIONAL**, left for the checkpoint that actually builds
-Submission (necessarily after §5's legal-review gate clears and §6's
-actor-model dependency resolves) to confirm against real product
-requirement. A Student-side `draft` (unsubmitted) state is **not**
-committed to either, for the same reason — it presumes an interactive
-Student session §6 shows does not exist. Multiple independent grading
-attempts are **not** supported; if resubmission is later approved, it
-replaces which Submission is "current" via an append-only revision
-history, never an in-place overwrite. No DELETE route once referenced.
+**Submission — CANCELLED (§0).** The lifecycle sketch below is retained
+as historical record only; it was never implemented and is not an
+active plan. `submitted` was the only state this contract committed to;
+a `returned`/`resubmitted` revision loop was left provisional for
+whichever checkpoint might have built Submission; a Student-side
+`draft` state was deliberately not committed to. None of this is
+buildable now — Submission is out of scope (§0) and this subsection
+must not be read as a queued design.
 
 ## 11. Events and notifications contract (illustrative, not implemented)
 
-`assignment.published.v1` · `assignment.closed.v1` ·
-`submission.created.v1` · `submission.resubmitted.v1`
+`assignment.published.v1` · `assignment.closed.v1` — the only two
+events remaining in scope. `submission.created.v1` /
+`submission.resubmitted.v1` are **CANCELLED (§0)** along with
+Submission itself and must not be implemented or registered.
 
 - Each event, once its owning checkpoint ships, implements
   `App\Support\Events\ShouldBeOutboxed` via `OutboxedEventDefaults`
@@ -411,8 +434,8 @@ fixed server-side and never caller-supplied. New transport:
 on the existing shared `DocumentController` — the generic by-id
 `show`/`content`/`archive` Document routes needed no change at all,
 since they resolve owner type from the persisted row, never the URL.
-`assignment_id`/`submission_id` remain unadded (`submission_id` stays
-gated on §5's legal-review clearance when that checkpoint arrives).
+`assignment_id` was added in Phase 0I.3 (§9, as-built); `submission_id`
+remains unadded and, per §0, is now cancelled rather than merely gated.
 
 **Events**: none. `assignment.published.v1`/etc. remain illustrative
 future work per §11 — this checkpoint emits nothing (no consumer
@@ -424,15 +447,21 @@ exists anywhere in `learning_content` (architecture-guard-tested).
 
 ## 14. Future
 
-- **A future Assignment definition checkpoint**: same posture as
-  Learning Content — recommended next (Phase 0I.3).
-- **Submission**: blocked until §5's legal review clears AND §6's
-  Student/Guardian actor-model dependency resolves elsewhere in the
-  platform.
+- **Phase 0I is complete** as Learning Content (0I.2) + Assignment
+  (0I.3). No further Phase 0I checkpoint is planned or required.
+- **Submission: CANCELLED / OUT OF SCOPE (2026-09-05, §0).** Not
+  "blocked" or "awaiting legal review" — a terminal product-scope
+  decision. Reopening it would require a fresh architecture and
+  governance review from first principles, including re-raising the
+  legal-review question this ADR/module never received a qualifying
+  answer to; nothing in this cancellation should be read as having
+  resolved that question.
 - **Teacher ownership**: blocked on the platform's first
   ownership-based authorization model, whenever a future checkpoint
   (Lesson Planning, a teacher-scoped LMS view, or a dedicated
-  ownership-model checkpoint) builds it.
+  ownership-model checkpoint) builds it. Independent of Submission's
+  cancellation — Assignment's existing capability-only posture is
+  unaffected.
 - **SyllabusUnit/CurriculumDelivery references from LMS**: purely
   additive, nullable, not yet needed.
 - **External LMS integration/standards**: unscoped; requires its own

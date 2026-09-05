@@ -612,72 +612,74 @@ authoritative roadmap work changes that boundary.
 
 ## Phase 0I — LMS
 
-**Phase 0I.1 (2026-09-04): architecture contract frozen, zero
-implementation.** Learning content, assignments, submissions, coursework
-files — see ADR 0037 (`docs/architecture/adr/0037-lms-domain-contract.md`)
-for the full ten-decision record and `docs/modules/LMS.md` for the
-living operational reference. No migration, model, controller, service,
-route, or capability exists yet.
+**Status: COMPLETE.** Active scope is Learning Content (0I.2) +
+Assignment (0I.3), both implemented. Submission was reviewed (0I.4) and
+then **cancelled as a product-scope decision on 2026-09-05** — see
+below. Phase 0I.4A (Submission legal decision incorporation) is **NOT
+REQUIRED — FEATURE CANCELLED**. No further Phase 0I checkpoint is
+planned.
 
-**Submission is classified Sensitive and gated
-`[LEGAL REVIEW REQUIRED]`** — the first checkpoint in this roadmap to
-durably store unbounded Student-authored free-text/file content, a
-distinct gate from the Examinations `StudentMark` flag. Learning
-Content and Assignment (staff-authored, Confidential, no Student
-identity) are not gated and may proceed to a future checkpoint without
-legal review, following the Syllabus Foundation precedent. Who may
-submit a Submission (Student/Guardian/both) is additionally an
-unresolved product-policy dependency, not purely an authentication
-gap — direct verification confirmed a real Guardian self-service login
-already exists on `origin/main` (Phase 5D.3's `AccountInvitationService`/
-`GuardianAccountActivationService`), but no Student authentication of
-any kind exists, and no module lets one domain identity act "on behalf
-of" another; moot for now regardless, since the Submission legal-review
-gate blocks implementation either way. Teacher authorization is
-capability-only in v1 — no teacher-ownership model exists yet.
+**Phase 0I.1 (2026-09-04): architecture contract frozen — complete.**
+See ADR 0037 (`docs/architecture/adr/0037-lms-domain-contract.md`) for
+the full decision record and `docs/modules/LMS.md` for the living
+operational reference.
 
-No external LMS integration or standard (Canvas, Moodle, Google
-Classroom, Microsoft Teams, OneRoster, LTI, QTI, SCORM, xAPI, Common
-Cartridge, Caliper) is authorized by this checkpoint.
-
-**Phase 0I.2 (2026-10-08): Learning Content Foundation implemented.**
-`App\Domain\LMS` — `LearningContent`/`learning_content`
+**Phase 0I.2 (2026-10-08): Learning Content Foundation implemented —
+complete.** `App\Domain\LMS` — `LearningContent`/`learning_content`
 (`draft→published→archived` lifecycle, `lms.content.view`/`.manage`
 capabilities, six `/api/v1` operations plus a session-authenticated
 Inertia surface at `/app/learning-content`), and the Documents module's
 fourth exclusive-arc owner column (`learning_content_id`, `internal`
-tier only). No Assignment, no Submission, no external LMS integration
-— see `docs/modules/LMS.md` §13 for the full as-built record.
+tier only) — see `docs/modules/LMS.md` §13 for the full as-built
+record.
 
-**Phase 0I.3 (2026-09-04): Assignments implemented.** Same
+**Phase 0I.3 (2026-09-04): Assignments implemented — complete.** Same
 Confidential/staff-authored posture as Learning Content — six `/api/v1`
 operations (`draft→published→closed` lifecycle, `lms.assignments.view`/
 `.manage`), a session-authenticated Inertia surface at
 `/app/assignments`, and the Documents module's fifth exclusive-arc
-owner column (`assignment_id`, `internal` tier only). No Submission, no
-external LMS integration.
+owner column (`assignment_id`, `internal` tier only).
 
 **Phase 0I.4 (2026-09-05): Submission legal-gate review conducted —
-gate remains `BLOCKED`.** A dedicated legal/data-governance review
-(`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`) independently
-re-verified ADR 0037 §4's classification and gate reasoning now that
-Learning Content and Assignment are real, implemented code; performed
-a detailed per-category data inventory/classification exercise; and
-produced an 18-question set for qualified counsel/product governance.
-**No authoritative legal clearance for Submission exists anywhere in
-this repository** — engineering review cannot itself clear this gate,
-following the same discipline already applied to Health and (prior to
-its own clearance) Payroll's statutory checkpoint. The review also
-identifies engineering prerequisites independent of legal clearance:
-malware/virus scanning for untrusted uploads does not exist yet, and a
-teacher-ownership/scoping model is required before Teacher (not
-Admin/Principal) access to Submissions specifically, since Submission
-exposes individually identifiable Student work rather than
-staff-authored administrative content. **Next action: escalate the
-review's question set to qualified legal counsel and product
-governance outside this repository; no Submission schema/model/
-service/controller/route/capability/UI may be implemented until that
-clearance is obtained and recorded.**
+completed as a governance review; gate never cleared.** A dedicated
+legal/data-governance review (`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`)
+classified Submission Sensitive/`[LEGAL REVIEW REQUIRED]`, performed a
+detailed per-category data-inventory/classification exercise, and
+formally escalated an 18-question set to qualified legal counsel and
+product governance (`docs/security/LMS-SUBMISSION-LEGAL-REVIEW-REQUEST.md`).
+**No qualifying response was ever received.**
+
+**Submission capability — CANCELLED / OUT OF SCOPE (2026-09-05).** The
+product owner made a final scope decision that LMS student Submission
+functionality (coursework submission, Submission records/text/file
+uploads, revisions/resubmissions, teacher review of submitted
+coursework, Guardian-on-behalf or staff-on-behalf submission,
+Submission grading/scoring, the Submission Documents owner arm, and all
+Submission events/APIs/UI) is not required for the intended product
+(Indian school-system ERP market) and is intentionally cancelled. **This
+is a product-scope cancellation, not legal clearance** — the
+`[LEGAL REVIEW REQUIRED]` gate is retired because the underlying
+feature no longer exists, not because a qualified legal answer was ever
+obtained; the historical legal/data-governance concerns Phase 0I.4
+raised remain unresolved and must not be assumed settled if this scope
+is ever reopened. Both legal-review documents are retained, marked
+`CLOSED — FEATURE CANCELLED / OUT OF SCOPE`, as historical governance
+records (see `docs/architecture/adr/0037-lms-domain-contract.md`'s
+Submission cancellation addendum for the authoritative decision text).
+
+**Phase 0I.4A (Submission legal decision incorporation): NOT REQUIRED
+— FEATURE CANCELLED.** There is no legal decision to incorporate; the
+feature it would have gated no longer exists.
+
+**Proposed "Phase 0I.5 — Submission implementation": REMOVED /
+CANCELLED.** No such checkpoint will be scheduled. Reopening Submission
+in the future requires a fresh architecture and governance review from
+first principles, not a resumption of this cancelled scope.
+
+No external LMS integration or standard (Canvas, Moodle, Google
+Classroom, Microsoft Teams, OneRoster, LTI, QTI, SCORM, xAPI, Common
+Cartridge, Caliper) was ever authorized for Phase 0I and none is
+authorized now.
 
 ## Phase 0J — HR and Payroll
 
