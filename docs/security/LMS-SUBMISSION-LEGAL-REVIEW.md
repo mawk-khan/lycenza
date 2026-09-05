@@ -528,6 +528,12 @@ per this checkpoint's explicit instruction.
 
 **Determination: the gate remains blocked.**
 
+The question set in §19 was formally packaged and issued to qualified
+legal counsel and product governance outside this repository on
+2026-09-05 — see `docs/security/LMS-SUBMISSION-LEGAL-REVIEW-REQUEST.md`
+for the request as issued. That document records the request only; it
+is not a response and does not change this determination.
+
 ## 19. Required legal-review questions
 
 The following question set is produced for qualified counsel / product
