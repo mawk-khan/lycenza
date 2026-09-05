@@ -85,6 +85,7 @@ use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
+use App\Http\Controllers\App\StudentProcessingAuthorizationController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\SubjectOfferingController;
 use App\Http\Controllers\App\Syllabus\SyllabusUnitController;
@@ -262,6 +263,32 @@ Route::middleware('auth')->group(function (): void {
         // guardians.* routes above.
         Route::get('/{student}/enrollments/create', [StudentEnrollmentController::class, 'create'])->name('enrollments.create');
         Route::post('/{student}/enrollments', [StudentEnrollmentController::class, 'store'])->name('enrollments.store');
+
+        // Phase 0H.4D-P2: the Student Processing Authorization
+        // Registry -- Highly Sensitive, so unlike every other route in
+        // this group, `capability:` + `mfa` are composed explicitly at
+        // the route level (this group's other actions gate capability
+        // in-controller; this is the first genuine production
+        // consumer of ADR 0037's capability+MFA seam, not a
+        // demonstration route). No PATCH of historical records, no
+        // DELETE.
+        Route::prefix('/{student}/processing-authorizations')->name('processing-authorizations.')->group(function (): void {
+            Route::get('/', [StudentProcessingAuthorizationController::class, 'index'])
+                ->middleware(['capability:students.processing_authorizations.view', 'mfa'])
+                ->name('index');
+            Route::post('/', [StudentProcessingAuthorizationController::class, 'store'])
+                ->middleware(['capability:students.processing_authorizations.manage', 'mfa'])
+                ->name('store');
+            Route::post('/{authorization}/withdraw', [StudentProcessingAuthorizationController::class, 'withdraw'])
+                ->middleware(['capability:students.processing_authorizations.manage', 'mfa'])
+                ->name('withdraw');
+            Route::post('/{authorization}/revoke', [StudentProcessingAuthorizationController::class, 'revoke'])
+                ->middleware(['capability:students.processing_authorizations.manage', 'mfa'])
+                ->name('revoke');
+            Route::post('/{authorization}/supersede', [StudentProcessingAuthorizationController::class, 'supersede'])
+                ->middleware(['capability:students.processing_authorizations.manage', 'mfa'])
+                ->name('supersede');
+        });
     });
 
     Route::prefix('app/relationships')->name('app.relationships.')->group(function (): void {

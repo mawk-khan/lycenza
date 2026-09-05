@@ -86,6 +86,20 @@ class Student extends Model
     }
 
     /**
+     * Phase 0H.4D-P2: the append-only processing-authorization ledger
+     * (guardian/adult-student consent, statutory School purpose).
+     * Read-only convenience -- StudentProcessingAuthorizationService/
+     * ReadService own every write and every "current state" query;
+     * this relation is never used to derive qualifying status.
+     *
+     * @return HasMany<StudentProcessingAuthorization, $this>
+     */
+    public function processingAuthorizations(): HasMany
+    {
+        return $this->hasMany(StudentProcessingAuthorization::class);
+    }
+
+    /**
      * Read convenience only (eager-loading, counting, querying "all
      * Guardians of this Student"). Phase 1A.2's P3 finding, resolved in
      * Phase 1A.3: `attach()`/`sync()`/`detach()` are NOT the supported

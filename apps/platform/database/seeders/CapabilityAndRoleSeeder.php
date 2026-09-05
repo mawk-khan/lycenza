@@ -96,6 +96,15 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'guardians.view', 'label' => 'View Guardians and their contact information', 'namespace' => 'school'],
             ['key' => 'guardians.manage', 'label' => 'Manage Guardians, Guardian contact information, and Guardian links', 'namespace' => 'school'],
 
+            // Phase 0H.4D-P2 -- Student Processing Authorization
+            // Registry. Deliberately depth-2 and separate from
+            // `students.manage` (never implied by it) -- this is a
+            // privacy/legal control, not routine SIS data entry;
+            // initial grants are `school_admin`/`principal` only, see
+            // below.
+            ['key' => 'students.processing_authorizations.view', 'label' => 'View Student processing-authorization records', 'namespace' => 'school'],
+            ['key' => 'students.processing_authorizations.manage', 'label' => 'Record/withdraw/revoke/supersede Student processing-authorization records', 'namespace' => 'school'],
+
             // Phase 5A.1 -- Communication Hub foundation. A single
             // `communications.manage` capability covers thread/
             // participant administration (deliberately not split
@@ -716,6 +725,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     'academics.years.view', 'academics.years.manage',
                     'academics.subjects.view', 'academics.subjects.manage',
                     'students.view', 'students.manage',
+                    // Phase 0H.4D-P2: a legal/privacy control, not
+                    // ordinary Student data entry -- deliberately NOT
+                    // implied by students.manage alone.
+                    'students.processing_authorizations.view', 'students.processing_authorizations.manage',
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',
@@ -956,6 +969,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Student/Guardian identity is an operational, not
                     // purely administrative, concern.
                     'students.view', 'students.manage',
+                    // Phase 0H.4D-P2: a legal/privacy control, not
+                    // ordinary Student data entry -- deliberately NOT
+                    // implied by students.manage alone.
+                    'students.processing_authorizations.view', 'students.processing_authorizations.manage',
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.announce', 'communications.templates.manage', 'communications.approve',

@@ -150,7 +150,22 @@ actually owns. Full detail, including the actual (not aspirational)
 TOTP replay-prevention behavior, is in ADR 0037. This exists as a
 prerequisite for future Highly Sensitive capabilities (StudentMark
 chief among them) to require MFA assurance in addition to a capability
-check — it does not itself gate any capability yet.
+check. Phase 0H.4D-P2 (below) is the first real capability this
+composes with in production.
+
+## Student processing-authorization registry (Phase 0H.4D-P2, ADR 0038)
+
+`students.processing_authorizations.view`/`.manage` (School-scoped,
+`school_admin`/`principal` only, deliberately not implied by
+`students.manage`) are each composed with the `mfa` middleware on every
+route — the first genuine production route pairing a capability with
+MFA, not `App\Http\Controllers\Internal\MfaDemoController`'s
+demonstration-only route. Recording, withdrawing, or revoking a
+`StudentProcessingAuthorization` is a Highly Sensitive, privacy-facing
+action: a compromised password-only administrative session must not be
+able to falsely establish or destroy the basis that gates a future
+StudentMark checkpoint's processing. Full detail in ADR 0038 and
+`docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md`.
 
 ## What is NOT yet implemented
 

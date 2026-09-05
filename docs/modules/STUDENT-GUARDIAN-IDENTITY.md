@@ -1350,3 +1350,26 @@ implemented)" above (StudentIdentifier, Address, portal login,
 verification workflows, key rotation, domain events, Admissions/
 academics/attendance/fees/etc.) — none render any UI for those
 concerns, matching the backend's own scope exactly.
+
+## Student Processing Authorization Registry (Phase 0H.4D-P2, ADR 0038)
+
+A separate, append-only ledger —
+`App\Domain\Students\Infrastructure\StudentProcessingAuthorization` —
+recording the basis (Guardian consent, adult Student consent, or
+statutory School purpose) authorizing a Student's data processing for
+a given purpose (currently only `academic_records`, the future
+StudentMark checkpoint's need). Not a redesign of anything above: it
+references `StudentGuardianRelationship` by id (requiring
+`is_legal_guardian = true` at record time, re-evaluated dynamically on
+every read against the relationship's current value, never frozen) and
+`students.date_of_birth` (via the new `App\Domain\Students\Domain\
+StudentAge` School-local age helper) but adds no columns to either.
+`students.processing_authorizations.view`/`.manage` (School-scoped,
+`school_admin`/`principal` only) are each composed with `mfa` (ADR
+0037) on every route — the first genuine production consumer of that
+capability+MFA seam. No Student-facing or Guardian-facing surface; no
+DELETE route; classified Highly Sensitive
+(`docs/security/DATA-CLASSIFICATION.md`). See ADR 0038 for the full
+design (lifecycle, concurrency, read-service contract) and
+`docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md` for the
+underlying legal/privacy determination this exists to satisfy.

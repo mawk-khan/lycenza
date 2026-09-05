@@ -601,21 +601,34 @@ ExaminationPaper/Scheduling and GradeScale/GradeBand mapping are done
 lacks Lesson Planning, and Examinations still lacks marks, results,
 report cards and transcripts.
 
-**Phase 0H.4D-P1 — Staff MFA Foundation — is implemented** (ADR 0037):
-generic, TOTP-only, User-global multi-factor authentication
-infrastructure, built as a mandatory platform prerequisite identified
-by the StudentMark engineering-readiness audit — independent of
-StudentMark's own legal/compliance status. It gates nothing yet on its
-own (the `mfa` middleware is available for any future route to compose
-alongside `capability:`, but no Examinations/marks route exists to use
-it). Not yet merged into `main`. **StudentMark itself remains NOT
+**Phase 0H.4D-P1 — Staff MFA Foundation — is implemented and published
+to `main`** (ADR 0037): generic, TOTP-only, User-global multi-factor
+authentication infrastructure, built as a mandatory platform
+prerequisite identified by the StudentMark engineering-readiness audit
+— independent of StudentMark's own legal/compliance status.
+
+**Phase 0H.4D-P2 — Student Processing Authorization Registry — is
+implemented but not yet published to `main`** (ADR 0038): the second
+Students/SIS platform prerequisite — `StudentProcessingAuthorization`,
+an append-only, School/Student-scoped record of the processing basis
+(Guardian consent, adult Student consent, or statutory School purpose)
+authorizing a Student's data processing for a given purpose, gated by
+`students.processing_authorizations.view`/`.manage` composed with
+`mfa` — the first real production route pairing a capability with MFA.
+Phase 0H.4D-P3 (elective historical eligibility, not yet started)
+remains fully independent.
+
+Neither P1 nor P2 gates anything yet on its own (no Examinations/marks
+route exists to consume either). **StudentMark itself remains NOT
 implemented.** StudentMark architecture/backend processing has legal
 approval with conditions, but implementation remains blocked by unmet
-platform/engineering prerequisites, and production enablement remains
-separately withheld — this checkpoint does not start StudentMark
-implementation and does not itself constitute production approval; see
-`docs/security/DATA-CLASSIFICATION.md` for the current classification
-and conditions.
+platform/engineering prerequisites (P2 published, P3 not yet started),
+and production enablement remains separately withheld — this
+checkpoint does not start StudentMark implementation and does not
+itself constitute production approval; see
+`docs/security/DATA-CLASSIFICATION.md` and
+`docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md` for the
+current classification and conditions.
 
 **"Phase 0H Attendance" remains Student class attendance only.** Staff/
 Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR

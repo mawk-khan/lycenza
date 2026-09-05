@@ -655,10 +655,17 @@ sole delete anywhere in the surface.
 never included by value in audit metadata — only field names
 (`changedFields`) and bounded status values.
 
-StudentMark and result calculation remain blocked pending the
-children's-data legal review (§20 below); GradeScale itself carries no
-Student/Enrollment/marks data and ships fully independently of that
-blocker, as anticipated.
+StudentMark and result calculation remain blocked: architecture/
+backend implementation has legal approval with conditions
+(`docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md`), but
+implementation has not started, pending its remaining platform
+prerequisites (Phase 0H.4D-P1 Staff MFA — published; Phase 0H.4D-P2
+Student Processing Authorization Registry, ADR 0038 — implemented;
+Phase 0H.4D-P3 elective historical eligibility — not yet started), and
+production enablement/Student-facing/Guardian-facing/result
+publication remain separately withheld pending their own review (§20
+below). GradeScale itself carries no Student/Enrollment/marks data and
+ships fully independently of that blocker, as anticipated.
 
 ## 20. Future
 
