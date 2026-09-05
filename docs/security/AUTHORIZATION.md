@@ -130,6 +130,32 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
+## Source-record access vs. derived/aggregate-view access are separate concepts (ADR 0038)
+
+A capability that authorizes reading a module's own transactional
+records does not, by itself, authorize viewing a dashboard/report
+derived from that data, and the reverse does not hold either — these
+are two separate authorization decisions, never assumed to imply one
+another:
+
+- **`source-record access = analytics/reporting access` is FALSE.**
+  Holding a module's own `.view` capability (e.g. `attendance.view`)
+  does not grant access to an aggregate/dashboard built from that data
+  — a School may reasonably want a Principal to see aggregate trends
+  without seeing every individual record, or the reverse.
+- **`analytics/reporting access = source-record access` is FALSE.**
+  Holding a reporting/analytics capability never lets an actor drill
+  through to an individual underlying record — a read surface offering
+  row-level drill-down must additionally check that row's own
+  source-module capability, never substitute a reporting-only check for
+  it.
+
+This principle governs any future Layer 5 (Oversight — Compliance,
+Analytics, Automation) or Layer 6 module that reads across module
+boundaries, not Analytics alone; see ADR 0038 and
+`docs/modules/ANALYTICS.md` §5 for the concrete Analytics-specific
+capability namespace this principle was first applied to.
+
 ## Multi-factor authentication (Phase 0H.4D-P1, ADR 0037)
 
 This is the "documented future path" `App\Http\Controllers\Auth\LoginController`'s

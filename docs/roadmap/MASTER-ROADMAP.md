@@ -849,6 +849,28 @@ Compliance, Analytics, Automation (Layer 5) — read-mostly consumers of
 everything built so far; deliberately sequenced after there's
 meaningful data/events for them to work with.
 
+**Phase 0L.1 (2026-09-05): Analytics Domain Contract frozen, zero
+implementation.** Analytics only — see ADR 0038
+(`docs/architecture/adr/0038-analytics-domain-contract.md`) for the
+full ten-decision record and `docs/modules/ANALYTICS.md` for the living
+operational reference. No migration, model, controller, service,
+route, or capability exists yet. Single-School (tenant-local) Analytics
+only in v1; cross-School/platform-wide Analytics explicitly deferred to
+its own future checkpoint. Aggregate/derived data inherits the
+strongest classification tier among its sources by default
+(`docs/security/DATA-CLASSIFICATION.md`); a minimum-cohort-size
+suppression threshold for small-group re-identification risk is
+recorded as an explicit, still-open **[LEGAL/PRODUCT/SECURITY REVIEW
+REQUIRED]** gate — no Analytics read model capable of producing a
+small-cohort cell may ship until it is set. Compliance and Automation
+remain wholly unscoped by this checkpoint and require their own future
+contracts.
+
+**Recommended next checkpoint: Phase 0L.2 — Analytics Foundation**
+(one or two already-stable Layer 0–4 data sources, a real, minimal,
+capability-gated, single-School read surface, following ADR 0038
+exactly — no dashboard/API/schema exists yet).
+
 ## Phase 0M — AI Platform: Real Agents
 
 First real model-provider integration (ADR 0013, with the
