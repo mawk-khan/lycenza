@@ -57,6 +57,11 @@ pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8100
 ```
 
+**Browser review / demo:** a DDEV environment with a resettable demo
+School and a login for every implemented persona is described in
+[`docs/development/DDEV-DEMO-REVIEW.md`](docs/development/DDEV-DEMO-REVIEW.md)
+(`ddev start && ddev composer install && ddev exec npm ci && ddev demo-reset`).
+
 See `CLAUDE.md` for the full command reference, including quality gates
 (Pint, Larastan, vue-tsc, ruff, mypy, pytest) and the full
 `docker compose` service list.
