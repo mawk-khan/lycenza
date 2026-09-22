@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+## Description: Run the apps/platform PHPUnit suite against DDEV's dedicated school_os_test database (never the demo database)
+## Usage: test [--reset-db] [phpunit/artisan-test arguments...]
+## Example: "ddev test", "ddev test --reset-db", "ddev test --filter=DemoDataBuilderTest", "ddev test tests/Feature/Postgres"
+
+# DDEV injects the demo's connection settings (DB_DATABASE=db, CACHE_STORE=redis,
+# ...) as real container environment variables, and phpunit.xml's <env> entries
+# do NOT override variables that already exist (CLAUDE.md rule 52). This
+# command therefore exports every phpunit.xml <env> value explicitly --
+# read from phpunit.xml itself so it can never drift -- and only then points
+# the DB host/admin credentials at DDEV's own db container. A raw
+# `php artisan test` inside DDEV is refused by TestDatabaseGuard instead
+# (APP_ENV=testing but DB_DATABASE=db), which is the intended fail-closed
+# behaviour.
+
+set -euo pipefail
+
+fail() {
+    echo "ddev test: REFUSING TO RUN -- $*" >&2
+    exit 1
+}
+
+[[ "${IS_DDEV_PROJECT:-}" == "true" ]] || fail "not running inside DDEV."
+
+reset_db=false
+args=()
+for arg in "$@"; do
+    if [[ "$arg" == "--reset-db" ]]; then
+        reset_db=true
+    else
+        args+=("$arg")
+    fi
+done
+
+cd /var/www/html/apps/platform
+
+# Export every <env> entry from phpunit.xml verbatim.
+eval "$(php -r '
+$xml = simplexml_load_file("phpunit.xml");
+foreach ($xml->php->env as $env) {
+    printf("export %s=%s\n", (string) $env["name"], escapeshellarg((string) $env["value"]));
+}
+')"
+
+# DDEV-specific connection target: same database NAME phpunit.xml uses
+# (school_os_test), on DDEV's private db container, migrated by DDEV's
+# `db` superuser (the pgsql_admin role, ADR 0021).
+export DB_HOST=db
+export DB_PORT=5432
+export DB_ADMIN_USERNAME=db
+export DB_ADMIN_PASSWORD=db
+export DB_ADMIN_URL=
+
+[[ "${APP_ENV}" == "testing" ]] || fail "phpunit.xml did not set APP_ENV=testing."
+[[ "${DB_DATABASE}" == "school_os_test" ]] || fail "phpunit.xml DB_DATABASE is '${DB_DATABASE}', expected school_os_test."
+
+export PGPASSWORD=db
+psql_admin() {
+    psql -v ON_ERROR_STOP=1 -X -q -h db -U db "$@"
+}
+
+if [[ "$(psql_admin -d db -tAc "SELECT 1 FROM pg_database WHERE datname = 'school_os_test'")" != "1" ]]; then
+    reset_db=true
+fi
+
+if [[ "$reset_db" == "true" ]]; then
+    # Recreate the whole (DDEV-private) database rather than relying on
+    # migrate:fresh alone: migrate:fresh drops tables but not the
+    # PL/pgSQL functions some migrations create, so a second fresh
+    # migration would fail with "function ... already exists".
+    echo "ddev test: (re)creating DDEV database school_os_test"
+    psql_admin -d db -c 'DROP DATABASE IF EXISTS school_os_test WITH (FORCE)'
+    psql_admin -d db -c 'CREATE DATABASE school_os_test OWNER db'
+fi
+
+# Runtime role + default privileges for the test database (mirrors
+# infrastructure/docker/postgres/init/01-roles.sql / 03-test-database-roles.sql).
+psql_admin -d school_os_test <<'SQL'
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'school_os_app') THEN
+        CREATE ROLE school_os_app LOGIN PASSWORD 'school_os_app_local_only_password'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    END IF;
+END
+$$;
+ALTER ROLE school_os_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+GRANT CONNECT ON DATABASE school_os_test TO school_os_app;
+GRANT USAGE ON SCHEMA public TO school_os_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE db IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO school_os_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE db IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO school_os_app;
+SQL
+
+php artisan config:clear --no-interaction >/dev/null
+
+if [[ "$reset_db" == "true" ]]; then
+    # The canonical, identity-verifying reset (CLAUDE.md rule 51).
+    php artisan platform:test-db-reset --force --no-interaction
+fi
+
+exec php artisan test "${args[@]}"

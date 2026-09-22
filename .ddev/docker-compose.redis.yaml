@@ -1,0 +1,17 @@
+# Valkey (Redis-protocol) cache/session/queue service for the DDEV
+# local environment -- same image as docker-compose.yml and CI.
+# Reachable only on DDEV's internal network as `redis:6379`; no host
+# port is published.
+services:
+  redis:
+    container_name: ddev-${DDEV_SITENAME}-redis
+    image: valkey/valkey:8-alpine
+    restart: "no"
+    labels:
+      com.ddev.site-name: ${DDEV_SITENAME}
+      com.ddev.approot: ${DDEV_APPROOT}
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
