@@ -174,6 +174,7 @@ final class DemoDataBuilder
         $this->buildStudentsAndGuardians();
         $this->buildHr();
         $this->buildIdentityLinkedAccounts();
+        $this->buildOperationsDeskAccounts();
 
         (new DemoModuleData($this))->build();
 
@@ -610,6 +611,34 @@ final class DemoDataBuilder
         $pendingGuardian = $this->guardians[1];
         $invitations->invite($this->school, $pendingGuardian, $this->admin);
         $this->note('Pending guardian invitation for guardian02@example.test ('.$pendingGuardian->first_name.' '.$pendingGuardian->last_name.') -- open Mailpit (`ddev mailpit`) and follow the link to review the activation flow.');
+    }
+
+    // ------------------------------------------------------------------
+    // Operations-desk accounts (demo-only roles, existing capabilities)
+    // ------------------------------------------------------------------
+
+    /**
+     * One demo-only, non-system school role per existing operations
+     * capability family (DemoAccountCatalog::OPERATIONS_DESK_ROLES), so
+     * each module can be reviewed by an account that has ONLY that
+     * module's access. Same mechanism as the HR & Payroll demo role.
+     */
+    private function buildOperationsDeskAccounts(): void
+    {
+        foreach (DemoAccountCatalog::OPERATIONS_DESK_ROLES as $key => $definition) {
+            $role = Role::query()->create([
+                'key' => $key,
+                'name' => $definition['name'],
+                'scope' => 'school',
+                'is_system' => false,
+            ]);
+            $role->capabilities()->sync($definition['capabilities']);
+
+            $user = $this->user($definition['user'], $definition['email']);
+            $this->assignSchoolRole($this->member($user, $this->school), $key);
+            $families = array_values(array_unique(array_map(fn (string $capability) => strtok($capability, '.').'.*', $definition['capabilities'])));
+            $this->account($definition['persona'].' (demo-only role)', $user, $this->school->name, 'Only '.implode(' + ', $families).' (existing capabilities)');
+        }
     }
 
     // ------------------------------------------------------------------
