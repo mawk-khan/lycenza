@@ -109,8 +109,8 @@ What it does, in order:
    education boards, statutory rule versions).
 7. `php artisan db:seed --class=Database\Seeders\Demo\DemoSeeder` -- the
    demo School, demo data and demo accounts (prints the account table).
-8. `optimize:clear`, `queue:restart` (the supervised worker restarts and
-   processes the seeded deliveries).
+8. `optimize:clear`, `queue:restart`, and ensures the supervised queue
+   worker and scheduler are running (they process the seeded deliveries).
 9. Builds frontend assets if requested or missing, then prints the URL.
 
 ## 6. URLs
@@ -124,7 +124,7 @@ What it does, in order:
 ## 7. Queue and scheduler behaviour
 
 Both run automatically inside the web container after `ddev start`
-(check with `ddev exec ps aux | grep artisan`). They make these flows
+(check with `ddev exec supervisorctl status`). They make these flows
 behave as they would in a real deployment:
 
 - announcement / conversation deliveries (status, Failed page, Analytics);
@@ -390,7 +390,7 @@ run -- use the docker-compose `minio` service for those.
 | Invitation link says invalid/expired | Links from earlier resets are dead; `ddev demo-reset` and use the newest Mailpit message. |
 | "Page expired" (419) | Session was flushed by a reset -- reload `/login`. |
 | Port 80/443 conflicts | Stop the conflicting service or see `ddev config global --router-http-port`. |
-| Queue/scheduler not running | `ddev restart`; check `ddev exec ps aux \| grep artisan`. |
+| Queue/scheduler not running (deliveries stay `pending`) | `ddev exec supervisorctl status`; `ddev exec supervisorctl start 'webextradaemons:*'` or `ddev restart`. `ddev start` on an already-running project can skip them; `ddev demo-reset` starts them. |
 
 ## 18. Complete DDEV reset
 
