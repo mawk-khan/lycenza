@@ -6,6 +6,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for PayrollPeriodConcurrencyTest: run in
 // a GENUINELY separate OS process (via Symfony\Process::start(),
@@ -31,7 +32,7 @@ $context->set($school);
 try {
     $period = PayrollPeriod::query()->findOrFail($periodId);
     $actor = User::query()->findOrFail($actorUserId);
-    $app->make(PayrollPeriodService::class)->open($period, $actor);
+    HeldTransaction::run(fn () => $app->make(PayrollPeriodService::class)->open($period, $actor));
     echo 'opened';
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

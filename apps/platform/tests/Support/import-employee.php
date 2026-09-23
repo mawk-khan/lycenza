@@ -5,6 +5,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for a real Employee-import concurrency
 // proof: run in a GENUINELY separate OS process (via
@@ -39,7 +40,7 @@ if (! empty($userId)) {
 }
 
 try {
-    $result = $app->make(EmployeeImportService::class)->import($school, $actor, [$row]);
+    $result = HeldTransaction::run(fn () => $app->make(EmployeeImportService::class)->import($school, $actor, [$row]));
     $rowResult = $result->rows[0];
     echo $rowResult->status.':'.($rowResult->employeeId ?? '');
 } catch (Throwable $e) {
