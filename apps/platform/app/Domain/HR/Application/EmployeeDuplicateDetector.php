@@ -55,6 +55,22 @@ class EmployeeDuplicateDetector
                 ->count();
 
             if ($candidateCount > 0) {
+                // The user_id lookup above and this name lookup are two
+                // separate READ COMMITTED statements: a concurrent import
+                // for the SAME linked User can commit between them, so the
+                // name match may be that very Employee. Re-check the exact
+                // key before reporting a merely "potential" duplicate.
+                if ($row->userId !== null) {
+                    $existing = Employee::query()
+                        ->where('school_id', $school->id)
+                        ->where('user_id', $row->userId)
+                        ->first();
+
+                    if ($existing !== null) {
+                        return EmployeeDuplicateDetectionResult::exact($existing->id, $existing->employee_number);
+                    }
+                }
+
                 return EmployeeDuplicateDetectionResult::potential($candidateCount);
             }
 

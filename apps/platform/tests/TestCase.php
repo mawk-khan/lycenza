@@ -3,8 +3,11 @@
 namespace Tests;
 
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 
 /**
  * DatabaseTransactions, not RefreshDatabase -- see
@@ -52,12 +55,61 @@ abstract class TestCase extends BaseTestCase
 {
     use DatabaseTransactions;
 
+    /** Wall-clock start of this test, for committing-test cleanup below. */
+    private ?CarbonImmutable $testStartedAt = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->testStartedAt = CarbonImmutable::now()->subSecond();
+    }
+
     protected function tearDown(): void
     {
         if ($this->app !== null) {
             $this->app->make(TenantContext::class)->clearAllTolerantly();
+            $this->purgeOutboxResidueAfterCommittingTest();
         }
 
         parent::tearDown();
+    }
+
+    /**
+     * Tests that opt out of DatabaseTransactions (`$connectionsToTransact
+     * = []`, e.g. the real two-process concurrency proofs) COMMIT their
+     * data. Most then delete their School; some cannot (a School holding
+     * an approved/posted payroll run is protected by freeze triggers, by
+     * design), so their rows stay as test-database residue.
+     * `domain_event_outbox` deliberately has no FK to `schools` (ADR
+     * 0025), so either way those Schools' events were left permanently
+     * `pending` -- and `platform:outbox-dispatch` claims the OLDEST pending
+     * rows first (batch 100), so once enough residue accumulated, a later
+     * test's own event was never claimed (the root cause of the
+     * order-dependent Webhooks/EndToEndProofBTest and WebhookReliability
+     * failures). Removes the outbox rows of Schools that no longer exist,
+     * or that THIS test created (every committing test creates fresh
+     * Schools); a School that existed before this test is never touched.
+     */
+    private function purgeOutboxResidueAfterCommittingTest(): void
+    {
+        if (! property_exists($this, 'connectionsToTransact') || $this->connectionsToTransact !== [] || $this->testStartedAt === null) {
+            return;
+        }
+
+        $startedAt = $this->testStartedAt;
+
+        DB::table('domain_event_outbox')
+            ->whereNotNull('school_id')
+            ->where(fn (Builder $query) => $query
+                ->whereNotExists(fn (Builder $schools) => $schools
+                    ->selectRaw('1')
+                    ->from('schools')
+                    ->whereColumn('schools.id', 'domain_event_outbox.school_id'))
+                ->orWhereIn('school_id', fn (Builder $schools) => $schools
+                    ->select('id')
+                    ->from('schools')
+                    ->where('created_at', '>=', $startedAt)))
+            ->delete();
     }
 }

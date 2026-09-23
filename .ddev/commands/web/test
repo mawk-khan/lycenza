@@ -72,10 +72,9 @@ if [[ "$(psql_admin -d db -tAc "SELECT 1 FROM pg_database WHERE datname = 'schoo
 fi
 
 if [[ "$reset_db" == "true" ]]; then
-    # Recreate the whole (DDEV-private) database rather than relying on
-    # migrate:fresh alone: migrate:fresh drops tables but not the
-    # PL/pgSQL functions some migrations create, so a second fresh
-    # migration would fail with "function ... already exists".
+    # Recreate the whole (DDEV-private) database first, so every reset
+    # starts from an empty database (including anything committed by
+    # earlier real-concurrency tests), then run the canonical reset.
     echo "ddev test: (re)creating DDEV database school_os_test"
     psql_admin -d db -c 'DROP DATABASE IF EXISTS school_os_test WITH (FORCE)'
     psql_admin -d db -c 'CREATE DATABASE school_os_test OWNER db'

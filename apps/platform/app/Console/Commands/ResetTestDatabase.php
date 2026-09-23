@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Support\Testing\Exceptions\UnsafeTestDatabaseException;
 use App\Support\Testing\TestDatabaseGuard;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 0C.3A: the ONE canonical, safe way to reset the testing
@@ -61,6 +62,8 @@ class ResetTestDatabase extends Command
         $database = config('database.testing_database');
         $this->info("Resetting testing database '{$database}'...");
 
+        $this->dropSchemaFunctions();
+
         $this->call('migrate:fresh', ['--database' => 'pgsql_admin', '--force' => true]);
 
         // The FULL canonical testing seed set (Database\Seeders\
@@ -74,5 +77,39 @@ class ResetTestDatabase extends Command
         $this->info('Testing database reset complete.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * `migrate:fresh` drops every table (and with it every trigger) but
+     * not the PL/pgSQL functions several migrations create with a plain
+     * `CREATE FUNCTION`, so a second reset of an already-migrated test
+     * database failed with "function ... already exists". Runs only
+     * after TestDatabaseGuard has verified the database identity above,
+     * via the same pgsql_admin connection migrate:fresh uses, and never
+     * touches extension-owned functions.
+     */
+    private function dropSchemaFunctions(): void
+    {
+        DB::connection('pgsql_admin')->unprepared(<<<'SQL'
+            DO $$
+            DECLARE
+                fn record;
+            BEGIN
+                FOR fn IN
+                    SELECT p.oid::regprocedure AS signature
+                    FROM pg_proc p
+                    JOIN pg_namespace n ON n.oid = p.pronamespace
+                    WHERE n.nspname = 'public'
+                      AND p.prokind IN ('f', 'p')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM pg_depend d
+                          WHERE d.objid = p.oid AND d.deptype = 'e'
+                      )
+                LOOP
+                    EXECUTE 'DROP ROUTINE IF EXISTS ' || fn.signature || ' CASCADE';
+                END LOOP;
+            END
+            $$;
+            SQL);
     }
 }
