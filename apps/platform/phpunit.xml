@@ -82,6 +82,14 @@
             above). Two wrongs were cancelling out. force="true" makes
             this block authoritative again, so the value written here
             must now be the genuinely correct one.
+
+            CI (127.0.0.1) and DDEV (`db`, admin role `db`) reach the
+            test database elsewhere; they redirect ONLY the connection
+            target, deliberately, via PHPUNIT_DB_HOST / PHPUNIT_DB_PORT /
+            PHPUNIT_DB_ADMIN_USERNAME / PHPUNIT_DB_ADMIN_PASSWORD, applied
+            in tests/bootstrap.php after these forced values. An ambient
+            DB_HOST still never wins, and DB_DATABASE is never
+            overridable.
         -->
         <env name="DB_CONNECTION" value="pgsql" force="true"/>
         <env name="DB_HOST" value="postgres" force="true"/>

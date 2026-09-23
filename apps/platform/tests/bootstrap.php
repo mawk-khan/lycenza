@@ -31,6 +31,29 @@
  * force, and is exactly the correction needed for every variable it
  * did.
  */
+/*
+ * Explicit, test-only connection-TARGET overrides. phpunit.xml forces
+ * DB_HOST/DB_PORT/DB_ADMIN_* to the docker-compose `platform` container's
+ * values so that an AMBIENT variable can never silently redirect the
+ * suite (e.g. a host shell's DB_HOST=127.0.0.1 reaching an unrelated
+ * local PostgreSQL). Environments that legitimately reach the test
+ * database elsewhere -- CI's service container on 127.0.0.1, DDEV's
+ * `db` service with its own admin role -- must say so deliberately via
+ * these PHPUNIT_-prefixed names, which no .env/env_file ever sets by
+ * accident. Only WHERE the test database lives can be redirected:
+ * DB_DATABASE, APP_ENV, the runtime role and every cache/session/queue/
+ * mail value stay forced, and TestDatabaseGuard still verifies the
+ * resolved database identity at boot.
+ */
+foreach (['DB_HOST', 'DB_PORT', 'DB_ADMIN_USERNAME', 'DB_ADMIN_PASSWORD'] as $name) {
+    $override = getenv('PHPUNIT_'.$name);
+
+    if ($override !== false && $override !== '') {
+        putenv("{$name}={$override}");
+        $_ENV[$name] = $override;
+    }
+}
+
 foreach ($_ENV as $name => $value) {
     $_SERVER[$name] = $value;
 }

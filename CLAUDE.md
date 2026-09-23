@@ -684,6 +684,13 @@ docs/roadmap             MASTER-ROADMAP.md
     closure verification before the root cause was found. Never remove
     `force="true"` from a safety-relevant entry, and never add a new
     safety-relevant `<env>` entry without it.
+    The ONLY sanctioned way to point the suite at a test database in
+    another location (CI's `127.0.0.1` service, DDEV's `db` service) is
+    the explicit `PHPUNIT_DB_HOST` / `PHPUNIT_DB_PORT` /
+    `PHPUNIT_DB_ADMIN_USERNAME` / `PHPUNIT_DB_ADMIN_PASSWORD` overrides
+    applied in `tests/bootstrap.php` -- connection target only; never
+    add `DB_DATABASE`, `APP_ENV` or any cache/queue/mail value to that
+    list.
 
 80. **A `force="true"` `<env>` alone is not sufficient — Laravel's
     `env()`/`config()` can still resolve the ambient value even when

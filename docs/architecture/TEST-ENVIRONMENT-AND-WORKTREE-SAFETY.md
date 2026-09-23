@@ -211,6 +211,20 @@ become the genuinely correct one for the only realistic invocation
 path (inside the `platform` container; the host toolchain has no
 `pdo_pgsql`).
 
+**Explicit connection-target override (added at integration into
+`main`).** A forced `DB_HOST=postgres` is correct inside the
+docker-compose `platform` container but unreachable from CI (whose
+PostgreSQL service is on `127.0.0.1`) and from DDEV (`db`, admin role
+`db`). Rather than un-forcing `DB_HOST` -- which would re-open the
+ambient-shadowing hole this section closes -- `tests/bootstrap.php`
+applies `PHPUNIT_DB_HOST` / `PHPUNIT_DB_PORT` / `PHPUNIT_DB_ADMIN_USERNAME`
+/ `PHPUNIT_DB_ADMIN_PASSWORD` after PHPUnit's forced values. These
+names are set only deliberately (CI's PHPUnit step, `ddev test`), never
+by `.env`/`env_file`, and can change only WHERE the test database is:
+`DB_DATABASE`, `APP_ENV`, the runtime role and every cache/session/
+queue/mail value remain forced (proven by
+`TestEnvironmentSafetyTest::the_connection_target_override_cannot_redirect_the_test_database_name`).
+
 `TestDatabaseGuard` remains the authoritative fail-closed backstop:
 `APP_ENV=testing` plus a resolved `pgsql`/`pgsql_admin` database other
 than `config('database.testing_database')` refuses application boot

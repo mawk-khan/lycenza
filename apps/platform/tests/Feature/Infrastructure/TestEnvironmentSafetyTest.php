@@ -131,6 +131,29 @@ class TestEnvironmentSafetyTest extends TestCase
     }
 
     /**
+     * The explicit PHPUNIT_DB_* connection-target overrides
+     * (tests/bootstrap.php, used by CI and DDEV) must never become a way
+     * to change WHICH database the suite uses: a hostile ambient
+     * DB_DATABASE plus a PHPUNIT_DB_DATABASE lookalike must both be
+     * ignored, and the resolved database stays the approved test one.
+     */
+    #[Test]
+    public function the_connection_target_override_cannot_redirect_the_test_database_name(): void
+    {
+        $process = $this->phpunitSubprocess(
+            'EnvironmentContractMarkerTest',
+            ['DB_DATABASE' => 'school_os', 'PHPUNIT_DB_DATABASE' => 'school_os'],
+        );
+        $process->run();
+
+        $this->assertTrue(
+            $process->isSuccessful(),
+            "EnvironmentContractMarkerTest must still resolve the approved test database.\n".
+            'Output: '.$process->getOutput()."\nError: ".$process->getErrorOutput()
+        );
+    }
+
+    /**
      * @param  array<int, string>  $artisanArgs
      * @param  array<string, string>  $hostileEnv
      */

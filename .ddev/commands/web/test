@@ -10,9 +10,9 @@
 # command therefore exports every phpunit.xml <env> value explicitly --
 # read from phpunit.xml itself so it can never drift -- and only then points
 # the DB host/admin credentials at DDEV's own db container. A raw
-# `php artisan test` inside DDEV is refused by TestDatabaseGuard instead
-# (APP_ENV=testing but DB_DATABASE=db), which is the intended fail-closed
-# behaviour.
+# `php artisan test` inside DDEV fails closed: phpunit.xml forces
+# APP_ENV=testing and DB_DATABASE=school_os_test, and forces DB_HOST to
+# docker-compose's `postgres`, which does not resolve inside DDEV.
 
 set -euo pipefail
 
@@ -51,6 +51,13 @@ export DB_PORT=5432
 export DB_ADMIN_USERNAME=db
 export DB_ADMIN_PASSWORD=db
 export DB_ADMIN_URL=
+# phpunit.xml force="true"s the connection target to docker-compose's
+# `postgres`; redirect it (target only -- never the database name)
+# through tests/bootstrap.php's explicit PHPUNIT_ overrides.
+export PHPUNIT_DB_HOST=db
+export PHPUNIT_DB_PORT=5432
+export PHPUNIT_DB_ADMIN_USERNAME=db
+export PHPUNIT_DB_ADMIN_PASSWORD=db
 
 [[ "${APP_ENV}" == "testing" ]] || fail "phpunit.xml did not set APP_ENV=testing."
 [[ "${DB_DATABASE}" == "school_os_test" ]] || fail "phpunit.xml DB_DATABASE is '${DB_DATABASE}', expected school_os_test."

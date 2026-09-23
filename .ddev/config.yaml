@@ -35,12 +35,10 @@ working_dir:
 #
 # APP_ENV and APP_KEY are deliberately NOT set here: they come from
 # apps/platform/.env (created from .env.example by `ddev demo-reset`
-# when missing). Keeping APP_ENV out of the container environment is a
-# safety property, not an omission: a raw `php artisan test` then gets
-# APP_ENV=testing from phpunit.xml while DB_DATABASE stays `db`, so
-# App\Support\Testing\TestDatabaseGuard refuses to boot instead of
-# silently running the suite against the demo database (CLAUDE.md
-# rules 50-53). Use `ddev test` to run the suite.
+# when missing). Tests never use these values: phpunit.xml force="true"s
+# APP_ENV/DB_DATABASE/cache/queue/mail, so a raw `php artisan test` here
+# fails closed (its forced DB_HOST, docker-compose's `postgres`, does not
+# resolve in DDEV). Use `ddev test` to run the suite.
 web_environment:
     - APP_URL=https://lycenza.ddev.site
     # Runtime connection: the unprivileged, NOBYPASSRLS school_os_app

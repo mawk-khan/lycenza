@@ -359,12 +359,15 @@ ddev test --filter=DemoEnvironmentGuardTest
 ```
 
 `ddev test` runs against a separate **`school_os_test`** database inside
-DDEV's PostgreSQL -- never the demo database. It exports every `<env>`
-value from `phpunit.xml` explicitly (DDEV's container environment would
-otherwise shadow them, CLAUDE.md rule 52) and resets with the canonical
-`platform:test-db-reset`. A raw `ddev exec php artisan test` is refused
-by `TestDatabaseGuard` (APP_ENV=testing but DB_DATABASE=db) -- that
-refusal is the safety mechanism working; use `ddev test`.
+DDEV's PostgreSQL -- never the demo database. `phpunit.xml` forces every
+safety-relevant value (`APP_ENV=testing`, `DB_DATABASE=school_os_test`,
+array cache/session, sync queue, array mail); `ddev test` only redirects
+the connection *target* to DDEV's `db` service through the explicit
+`PHPUNIT_DB_HOST` / `PHPUNIT_DB_PORT` / `PHPUNIT_DB_ADMIN_*` overrides
+(`tests/bootstrap.php`), and resets with the canonical
+`platform:test-db-reset`. A raw `ddev exec php artisan test` fails
+closed: its forced `DB_HOST` is docker-compose's `postgres`, which does
+not resolve inside DDEV.
 
 `ddev test --reset-db` drops and recreates the DDEV-private
 `school_os_test` database before running `platform:test-db-reset`:
