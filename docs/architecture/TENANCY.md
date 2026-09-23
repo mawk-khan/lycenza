@@ -123,7 +123,12 @@ asserts this directly against `pg_roles`, not just by convention.
   is possible because it's one shared database, but every such code
   path is explicit and treated as privileged — never the default query
   behavior any module reaches for. No such reporting path is
-  implemented yet.
+  implemented yet. **Confirmed unchanged by ADR 0038 (Phase 0L.1,
+  Analytics Domain Contract):** Analytics v1 is single-School/
+  tenant-local only, using the ordinary isolation layers above with no
+  new bypass of any kind; cross-School/platform-wide Analytics remains
+  explicitly deferred to its own future, separately-reviewed
+  architecture checkpoint.
 
 ## TenantContext cleanup and aborted-transaction safety (Phase 1B.4A)
 
