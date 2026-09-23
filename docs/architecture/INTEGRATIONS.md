@@ -235,20 +235,33 @@ event or fake Student module.
 
 ## Retention
 
-No aggressive pruning is implemented yet for `webhook_deliveries`/
-`webhook_delivery_attempts` — payload/response minimization (section
-86/87) is the priority over early deletion, since audit/business
-requirements for delivery history retention aren't yet determined.
-`expires_at`-style pruning, if and when needed, should follow the same
-per-School, bounded-batch, RLS-respecting pattern as
-`App\Console\Commands\PruneIdempotencyRecords`.
+Payload/response minimization (section 86/87) remains the primary
+protection; deletion is secondary. Since the Phase 0C closeout,
+`php artisan platform:webhook-deliveries-prune [--days=N] [--dry-run]`
+(`App\Console\Commands\PruneWebhookDeliveries`, scheduled daily)
+removes TERMINAL deliveries (`delivered`/`failed`/`abandoned`, no live
+processing lease) whose last state change is older than
+`WEBHOOKS_DELIVERY_RETENTION_DAYS` — per School, in bounded batches,
+through the RLS-bound runtime connection, exactly like
+`App\Console\Commands\PruneIdempotencyRecords`. Their append-only
+attempt rows leave only through `ON DELETE CASCADE`, never individually;
+pending/delivering/retrying deliveries, school audit events and the
+outbox are never touched.
+
+`WEBHOOKS_DELIVERY_RETENTION_DAYS` has **no default**: the business/legal
+retention period for delivery history is still undecided
+([LEGAL REVIEW REQUIRED], `docs/security/DATA-CLASSIFICATION.md`), so
+until an operator sets it the scheduled run deletes nothing. Outbox
+retention stays deferred (ADR 0025). Full record:
+`docs/architecture/PHASE-0C-CLOSEOUT.md`.
 
 ## Rate limiting
 
-No rate-limiting infrastructure exists yet (tracked, same as
-`docs/architecture/RELIABILITY.md`'s note, for a future Phase 0C
-checkpoint). When it lands, it must not let a webhook redelivery bypass
-a rate limit meant for genuinely new deliveries.
+Rate limiting landed in Phase 0C.4 (`App\Providers\RateLimiterServiceProvider`,
+`docs/architecture/OBSERVABILITY.md`). Every webhook management route —
+including manual redelivery — carries the tenant-aware
+`throttle:webhook-admin` limiter, so a redelivery cannot bypass the
+limit applied to other administrative actions.
 
 ## Health
 

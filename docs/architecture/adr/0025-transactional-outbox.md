@@ -213,6 +213,11 @@ checkpoint, not invented here.
   (mirrors the same open question already documented for
   `webhook_deliveries`/`webhook_delivery_attempts` in
   `docs/architecture/INTEGRATIONS.md`) — deferred, not forgotten.
+  *Phase 0C closeout (2026-09-23):* webhook delivery-history pruning now
+  exists (`platform:webhook-deliveries-prune`); outbox retention remains
+  deliberately deferred, because deliveries read the original event
+  payload from this table — see `docs/architecture/PHASE-0C-CLOSEOUT.md`
+  section 6.
 
 ## Future extraction/evolution path
 
