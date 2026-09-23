@@ -503,3 +503,63 @@ isolation.
   but the DEFAULT (non-isolated) path still shares the one `school-os`
   Redis/MinIO instance across whichever worktree currently has it
   mounted, same as before this checkpoint.
+
+## Environment-specific integration tests (real MinIO)
+
+`tests/Feature/Documents/DocumentMinioStorageTest.php`,
+`DocumentReadMinioIntegrationTest.php` and
+`DocumentHttpMinioIntegrationTest.php` (5 tests) deliberately exercise a
+REAL S3-compatible endpoint rather than `Storage::fake()` (ADR 0011).
+They require a reachable MinIO whose `AWS_*` settings (endpoint,
+credentials, bucket) are supplied for the run -- the docker-compose
+`minio` service (`docker compose up -d minio`). They are **expected to
+fail** in any environment without one, including the DDEV review
+environment (which deliberately runs no MinIO; see
+`docs/development/DDEV-DEMO-REVIEW.md`). Such a failure means "MinIO
+not provisioned", not a Documents regression; they are not skipped
+automatically so that a missing object store can never masquerade as a
+passing storage proof.
+
+## Committed test data and the outbox (fixed)
+
+Tests that opt out of `DatabaseTransactions` (`$connectionsToTransact =
+[]` -- the real multi-process concurrency proofs) commit their rows.
+`domain_event_outbox` has no FK to `schools`, so their events stayed
+`pending` forever (whether or not the test then deleted its School; a
+School with an approved/posted payroll run cannot be hard-deleted, by
+design). `platform:outbox-dispatch` claims the oldest 100 pending rows,
+so once enough residue accumulated in `school_os_test`, later tests'
+own events were never claimed -- order-dependent failures in
+`Webhooks/EndToEndProofBTest` and `WebhookReliability*`.
+`Tests\TestCase::purgeOutboxResidueAfterCommittingTest()` now removes,
+after every committing test, the outbox rows of Schools that no longer
+exist or that the test itself created. Pre-existing Schools are never
+touched.
+
+## Load-sensitive real-concurrency tests (known, not yet fixed)
+
+These tests race two or more real OS processes and assume the processes
+genuinely overlap. Under full-suite load a process can finish before its
+rival starts, so an occasional single failure appears in a full run;
+each passes when re-run on its own. Observed during the 2026-09-23
+consolidation (one per full run, never the same twice in a row):
+
+- `Payroll/CompensationConcurrencyTest` scenario A -- root-caused:
+  `SalaryStructureService::activate()` legitimately supersedes an
+  already-active revision, so a SERIALIZED run activates both revisions
+  in turn (still exactly one active at the end) while the test asserts
+  exactly one `activated` output. Product behaviour is correct.
+- `Payroll/PayrollRunLifecycleConcurrencyTest`,
+  `AcademicStructure/AcademicYearActivationConcurrencyTest`,
+  `HR/PrimaryAssignmentConcurrencyTest`,
+  `Students/ProcessingAuthorization/ProcessingAuthorizationConcurrencyTest`
+  (lock-holder signal deadline of 10s), and one
+  `StudentEnrollment/*ConcurrencyTest` -- same symptom class, not
+  individually root-caused.
+
+Recommended fix (not applied): a start barrier in each subprocess script
+(every process signals "booted" and waits until all have, then calls
+the service), and assertions that accept every outcome the product
+actually allows under serialization. Until then, re-run a single failing
+concurrency test in isolation before treating it as a regression.
+
