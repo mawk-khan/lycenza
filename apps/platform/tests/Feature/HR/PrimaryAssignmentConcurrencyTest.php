@@ -6,8 +6,8 @@ use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use PHPUnit\Framework\Attributes\Test;
-use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
 
 /**
@@ -31,7 +31,7 @@ use Tests\TestCase;
  */
 class PrimaryAssignmentConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -69,14 +69,15 @@ class PrimaryAssignmentConcurrencyTest extends TestCase
 
         $script = __DIR__.'/../../Support/set-assignment-primary.php';
 
-        $process1 = new Process(['php', $script, $this->school->id, $assignmentA->id, $actor->id]);
-        $process2 = new Process(['php', $script, $this->school->id, $assignmentB->id, $actor->id]);
-        $process1->start();
-        $process2->start();
-        $process1->wait();
-        $process2->wait();
-
-        $outputs = [trim($process1->getOutput()), trim($process2->getOutput())];
+        // Forced, verified overlap (Tests\Concerns\ForcesConcurrentOverlap):
+        // a SEQUENTIAL second setPrimary() legitimately replaces the first,
+        // so B is proven blocked on A's uncommitted partial-unique-index
+        // entry before A commits.
+        $outputs = $this->raceWithHeldHolder(
+            ['php', $script, $this->school->id, $assignmentA->id, $actor->id],
+            ['php', $script, $this->school->id, $assignmentB->id, $actor->id],
+        );
+        $this->assertSame('ok:'.$assignmentA->id, $outputs[0], 'The first (held) setPrimary() must succeed.');
 
         $succeeded = array_filter($outputs, fn (string $o) => str_starts_with($o, 'ok:'));
         $rejected = array_filter($outputs, fn (string $o) => str_starts_with($o, 'rejected:'));

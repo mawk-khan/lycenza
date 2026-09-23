@@ -6,6 +6,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for a real primary-assignment
 // concurrency proof (Phase 8A closure correction, item 10): run in a
@@ -39,7 +40,7 @@ try {
     $assignment = EmployeeAssignment::query()->findOrFail($assignmentId);
     $actor = User::query()->findOrFail($actorId);
 
-    $result = $app->make(EmployeeAssignmentService::class)->setPrimary($assignment, $actor);
+    $result = HeldTransaction::run(fn () => $app->make(EmployeeAssignmentService::class)->setPrimary($assignment, $actor));
     echo 'ok:'.$result->id;
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

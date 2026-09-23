@@ -16,6 +16,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Uid\UuidV7;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
 
 /**
@@ -35,7 +36,7 @@ use Tests\TestCase;
  */
 class CompensationConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -91,17 +92,17 @@ class CompensationConcurrencyTest extends TestCase
             'code' => 'GRADE-CONC', 'version' => 2, 'status' => 'draft',
         ]));
 
+        // Forced, verified overlap (Tests\Concerns\ForcesConcurrentOverlap).
+        // A merely SEQUENTIAL second activation legitimately supersedes
+        // the first, so overlap must be proven, never assumed.
         $script = __DIR__.'/../../Support/activate-salary-structure.php';
-        $processA = new Process(['php', $script, $this->school->id, $v1->id, $actor->id]);
-        $processB = new Process(['php', $script, $this->school->id, $v2->id, $actor->id]);
-        $processA->start();
-        $processB->start();
-        $processA->wait();
-        $processB->wait();
-
-        $outputs = [$processA->getOutput(), $processB->getOutput()];
+        $outputs = $this->raceWithHeldHolder(
+            ['php', $script, $this->school->id, $v1->id, $actor->id],
+            ['php', $script, $this->school->id, $v2->id, $actor->id],
+        );
         $activatedCount = count(array_filter($outputs, fn ($o) => $o === 'activated'));
 
+        $this->assertSame('activated', $outputs[0], 'The first (held) activation must succeed.');
         $this->assertSame(1, $activatedCount, 'Exactly one of the two concurrent activations must succeed.');
         $this->assertTrue(
             in_array('rejected:App\\Domain\\Payroll\\Application\\Exceptions\\ConcurrentStructureActivationConflictException', $outputs, true),

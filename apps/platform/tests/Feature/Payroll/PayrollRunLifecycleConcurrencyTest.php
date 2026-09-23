@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
 
 /**
@@ -35,7 +36,7 @@ use Tests\TestCase;
  */
 class PayrollRunLifecycleConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -166,16 +167,18 @@ class PayrollRunLifecycleConcurrencyTest extends TestCase
         $approverA = $this->createUser();
         $approverB = $this->createUser();
 
+        // Forced, verified overlap (Tests\Concerns\ForcesConcurrentOverlap):
+        // a SEQUENTIAL second approve() fails its status pre-check with
+        // InvalidRunTransitionException instead; B must instead be proven
+        // blocked on A's uncommitted row update.
         $script = __DIR__.'/../../Support/approve-payroll-run.php';
-        $processA = new Process(['php', $script, $this->school->id, $run->id, $approverA->id]);
-        $processB = new Process(['php', $script, $this->school->id, $run->id, $approverB->id]);
-        $processA->start();
-        $processB->start();
-        $processA->wait();
-        $processB->wait();
-
-        $outputs = [$processA->getOutput(), $processB->getOutput()];
+        $outputs = $this->raceWithHeldHolder(
+            ['php', $script, $this->school->id, $run->id, $approverA->id],
+            ['php', $script, $this->school->id, $run->id, $approverB->id],
+        );
         $approvedCount = count(array_filter($outputs, fn ($o) => $o === 'approved'));
+
+        $this->assertSame('approved', $outputs[0], 'The first (held) approval must succeed.');
 
         $this->assertSame(1, $approvedCount, 'Exactly one of the two concurrent approvals must succeed.');
         $this->assertTrue(

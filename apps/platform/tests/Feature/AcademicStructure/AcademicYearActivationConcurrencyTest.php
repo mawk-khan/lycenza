@@ -6,8 +6,8 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use PHPUnit\Framework\Attributes\Test;
-use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
 
 /**
@@ -28,7 +28,7 @@ use Tests\TestCase;
  */
 class AcademicYearActivationConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -57,18 +57,21 @@ class AcademicYearActivationConcurrencyTest extends TestCase
             'code' => 'AY-B', 'name' => '2027-28', 'starts_on' => '2027-06-01', 'ends_on' => '2028-05-31',
         ]));
 
+        // Forced, verified overlap (Tests\Concerns\ForcesConcurrentOverlap):
+        // A's activation stays uncommitted until B is observed blocked on
+        // the one-active-per-School partial unique index entry A holds.
         $script = __DIR__.'/../../Support/activate-academic-year.php';
-        $processA = new Process(['php', $script, $this->school->id, $yearA->id]);
-        $processB = new Process(['php', $script, $this->school->id, $yearB->id]);
-        $processA->start();
-        $processB->start();
-        $processA->wait();
-        $processB->wait();
+        [$holderOutput, $contenderOutput] = $this->raceWithHeldHolder(
+            ['php', $script, $this->school->id, $yearA->id],
+            ['php', $script, $this->school->id, $yearB->id],
+        );
 
-        $outputs = [$processA->getOutput(), $processB->getOutput()];
-        $activatedCount = count(array_filter($outputs, fn ($o) => $o === 'activated'));
-
-        $this->assertSame(1, $activatedCount, 'Exactly one of the two concurrent activations must succeed.');
+        $this->assertSame('activated', $holderOutput, 'The first (held) activation must succeed.');
+        $this->assertSame(
+            'rejected:App\\Domain\\AcademicStructure\\Application\\Exceptions\\ConcurrentActivationConflictException',
+            $contenderOutput,
+            'The overlapping activation must be rejected with the domain concurrency exception.',
+        );
 
         $activeYears = $context->withSchool(
             $this->school,
