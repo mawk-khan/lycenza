@@ -754,7 +754,7 @@ docs/roadmap             MASTER-ROADMAP.md
 
 ```bash
 # Backend infra
-docker compose up -d postgres redis minio
+docker compose up -d postgres redis minio minio-init   # minio-init creates the local bucket
 
 # Laravel (apps/platform)
 cd apps/platform

@@ -4,7 +4,7 @@
 # docs/architecture/ARCHITECTURE.md.
 #
 # Usage:
-#   docker compose up -d postgres redis minio
+#   docker compose up -d postgres redis minio minio-init   # minio-init creates the bucket
 #   docker compose run --rm platform composer install
 #   docker compose run --rm platform php artisan migrate
 #   docker compose up platform vite ai
@@ -58,6 +58,20 @@ services:
       timeout: 5s
       retries: 10
 
+  # One-shot: creates the local bucket (AWS_BUCKET in
+  # apps/platform/.env.example) on a fresh minio_data volume, so the s3
+  # documents disk and the real-MinIO integration tests work without a
+  # manual step. Idempotent (--ignore-existing); exits when done.
+  minio-init:
+    image: minio/minio:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - mc alias set local http://minio:9000 school_os school_os_secret >/dev/null && mc mb --ignore-existing local/school-os-local
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+
   platform:
     build:
       context: .
@@ -65,11 +79,19 @@ services:
     working_dir: /var/www/app
     volumes:
       - ./apps/platform:/var/www/app
+      # Read-only, at the repo-relative location the contract tests
+      # resolve (base_path('../../packages/contracts/...')).
+      - ./packages/contracts:/var/packages/contracts:ro
     env_file:
       - ./apps/platform/.env
     environment:
+      # In-network service targets. Ports are pinned too: a local .env
+      # may set host-side DB_PORT/REDIS_PORT (e.g. 25432/26379 to coexist
+      # with another stack), and env_file: would otherwise pass them in.
       DB_HOST: postgres
+      DB_PORT: "5432"
       REDIS_HOST: redis
+      REDIS_PORT: "6379"
       AWS_ENDPOINT: http://minio:9000
     ports:
       - "8000:8000"
@@ -80,6 +102,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
 
   queue:
     build:
@@ -91,8 +115,13 @@ services:
     env_file:
       - ./apps/platform/.env
     environment:
+      # In-network service targets. Ports are pinned too: a local .env
+      # may set host-side DB_PORT/REDIS_PORT (e.g. 25432/26379 to coexist
+      # with another stack), and env_file: would otherwise pass them in.
       DB_HOST: postgres
+      DB_PORT: "5432"
       REDIS_HOST: redis
+      REDIS_PORT: "6379"
       AWS_ENDPOINT: http://minio:9000
     command: ["php", "artisan", "queue:work", "--tries=3"]
     depends_on:
