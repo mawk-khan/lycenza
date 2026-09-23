@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Checkpoint 9.6C (ADR 0036, ADR 0028's pattern) -- PAN, UAN, PF
+     * Checkpoint 9.6C (ADR 0036, ADR 0041's pattern) -- PAN, UAN, PF
      * Member ID, ESIC IP Number. Searchable PII, not plaintext:
      * `encrypted_value` (Laravel's `encrypted` cast) holds the real
      * value; `lookup_hash` (a keyed HMAC-SHA-256 digest via the new
@@ -17,7 +17,7 @@ return new class extends Migration
      * domain-separation prefix -- never `ContactLookupHasher`'s
      * guardian-contact-specific one) supports duplicate-identifier
      * detection within a School without a full-table decrypt scan.
-     * Exactly ADR 0028's `guardian_contacts` shape: `unique(school_id,
+     * Exactly ADR 0041's `guardian_contacts` shape: `unique(school_id,
      * employment_record_id, identifier_type)` (one PAN/UAN/etc. per
      * EmploymentRecord), `index(school_id, identifier_type,
      * lookup_hash)` for the duplicate-candidate lookup.

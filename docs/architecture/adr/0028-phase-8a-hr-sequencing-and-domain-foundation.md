@@ -2,6 +2,11 @@
 
 - Status: Accepted
 - Date: 2026-08-23 (Phase 8A.0)
+- Number note: until 2026-09-23 a second, unrelated ADR (searchable
+  encrypted PII, Phase 1A.3) also carried number 0028; it is now
+  ADR 0041. References to "ADR 0028" about HR resequencing, Employee/
+  Employment/Assignment, or the `employee_documents` reconciliation
+  obligation mean this ADR.
 
 ## Context
 

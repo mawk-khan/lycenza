@@ -303,7 +303,7 @@ protection. That reasoning was wrong: **pre-canonical PII is still
 PII.** A plain-text email/phone column — searchable in the trivial
 `LIKE`/`=` sense even if not indexed for it — is exactly the kind of
 column `GuardianContact` was built specifically to avoid (`docs/modules/
-STUDENT-GUARDIAN-IDENTITY.md`'s "Searchable PII" section, ADR 0028).
+STUDENT-GUARDIAN-IDENTITY.md`'s "Searchable PII" section, ADR 0041).
 Storing it in Admissions instead of Students/SIS does not change its
 sensitivity classification.
 

@@ -1,7 +1,15 @@
-# ADR 0028: Searchable Encrypted PII (Encrypted Value + Keyed Lookup Digest)
+# ADR 0041: Searchable Encrypted PII (Encrypted Value + Keyed Lookup Digest)
 
 - Status: Accepted
 - Date: 2026-08-23 (Phase 1A.3)
+- Renumbered: originally published as **ADR 0028**. The same number was
+  independently assigned, on a parallel branch the same day, to
+  `0028-phase-8a-hr-sequencing-and-domain-foundation.md`; both reached
+  `main`. On 2026-09-23 this ADR was renumbered to 0041 (the next unused
+  number) and every repository reference to it updated. The decision
+  text is unchanged. Historical reports that cite "ADR 0028" for
+  searchable encrypted PII / Guardian contact lookup digests mean this
+  ADR.
 
 ## Context
 

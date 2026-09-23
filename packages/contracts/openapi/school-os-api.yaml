@@ -1608,7 +1608,7 @@ paths:
       operationId: addGuardianContact
       summary: >
         Adds a Guardian contact (email/mobile) -- encrypted at rest
-        with a keyed exact-match lookup digest (ADR 0028), never
+        with a keyed exact-match lookup digest (ADR 0041), never
         stored as plaintext. Requires guardians.manage.
         Idempotency-Key required.
       parameters:

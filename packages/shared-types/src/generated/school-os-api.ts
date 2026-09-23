@@ -804,7 +804,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Adds a Guardian contact (email/mobile) -- encrypted at rest with a keyed exact-match lookup digest (ADR 0028), never stored as plaintext. Requires guardians.manage. Idempotency-Key required. */
+        /** Adds a Guardian contact (email/mobile) -- encrypted at rest with a keyed exact-match lookup digest (ADR 0041), never stored as plaintext. Requires guardians.manage. Idempotency-Key required. */
         post: operations["addGuardianContact"];
         delete?: never;
         options?: never;
