@@ -131,6 +131,10 @@ behave as they would in a real deployment:
 - `communications:publish-scheduled` (scheduled announcements);
 - `platform:outbox-dispatch` (domain-event outbox), webhook and
   communication redispatch.
+- daily retention prunes: `platform:idempotency-prune` and
+  `platform:webhook-deliveries-prune` (the latter deletes nothing unless
+  `WEBHOOKS_DELIVERY_RETENTION_DAYS` is set; try
+  `ddev artisan platform:webhook-deliveries-prune --days=1 --dry-run`).
 
 Logs: `ddev exec tail -f storage/logs/laravel.log`.
 

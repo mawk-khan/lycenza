@@ -251,10 +251,11 @@ non-`processing` records, one School and one bounded batch
 (`idempotency.prune_batch_size`, default 500) at a time, through the
 ordinary RLS-protected runtime connection
 (`TenantContext::withSchool()`) — never a single cross-tenant `DELETE`,
-never the migration-only `pgsql_admin` connection. **Not scheduled
-yet** (deliberately, per this checkpoint's brief) — run manually/ad hoc
-until a future checkpoint wires it into the scheduler alongside the
-rest of Phase 0C's operational-safety work.
+never the migration-only `pgsql_admin` connection. Originally
+unscheduled (deliberately, per Phase 0C.2's brief); **scheduled daily
+since the Phase 0C closeout** (`routes/console.php`, `idempotency-prune`,
+`withoutOverlapping()`), alongside the webhook delivery-history prune
+(`docs/architecture/PHASE-0C-CLOSEOUT.md`).
 
 ### Rate limiting interaction
 

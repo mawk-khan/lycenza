@@ -53,7 +53,26 @@ Schedule::command('communications:publish-scheduled')
     ->withoutOverlapping()
     ->name('communications-publish-scheduled');
 
-// platform:idempotency-prune is deliberately NOT scheduled here --
-// unchanged from Phase 0C.2's explicit decision (run manually/ad hoc
-// until a future checkpoint's retention policy actually requires
-// automatic pruning). Phase 0C.4 does not change that.
+// Phase 0C closeout: the two retention prunes run daily. Neither records
+// a scheduler heartbeat -- OperationalStatusService judges heartbeats
+// against one minute-scale staleness threshold, which a daily task would
+// always breach; each command logs its own structured result instead.
+//
+// platform:idempotency-prune -- expired api_idempotency_keys (TTL
+// idempotency.default_ttl_hours, 48h), deferred by Phase 0C.2 until
+// "the rest of Phase 0C's operational-safety work"
+// (docs/architecture/RELIABILITY.md "Expiration and pruning").
+Schedule::command('platform:idempotency-prune')
+    ->dailyAt('02:10')
+    ->withoutOverlapping()
+    ->name('idempotency-prune');
+
+// platform:webhook-deliveries-prune -- terminal webhook delivery history
+// older than WEBHOOKS_DELIVERY_RETENTION_DAYS. That setting has no
+// default (no retention period decided, [LEGAL REVIEW REQUIRED]), so
+// until it is configured this run deletes nothing and logs
+// `webhooks.deliveries_prune.skipped`.
+Schedule::command('platform:webhook-deliveries-prune')
+    ->dailyAt('02:20')
+    ->withoutOverlapping()
+    ->name('webhook-deliveries-prune');

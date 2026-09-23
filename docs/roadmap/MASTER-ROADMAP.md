@@ -55,7 +55,7 @@ PostgreSQL (ADR 0024) — see the Phase 0B Final Report for the full
 verification record, including the PostgreSQL isolation proof and
 security review.
 
-## Phase 0C — Reliability & Integration Substrate (in progress)
+## Phase 0C — Reliability & Integration Substrate (complete)
 
 Re-sequenced ahead of the originally-planned "Organizational Structure"
 phase (now Phase 0D, below): every later business module needs to
@@ -66,7 +66,7 @@ retrofitting that substrate after several modules already exist would
 be far more expensive than building it first, the same reasoning that
 put Phase 0B ahead of every business module. Landing in checkpoints:
 
-- **Phase 0C (core substrate, in progress):** durable domain events +
+- **Phase 0C (core substrate, complete):** durable domain events +
   transactional outbox (ADR 0025), event-consumer idempotency
   (`EventConsumerReceipt`), reliable queued dispatch (`SKIP LOCKED`
   outbox dispatcher), notification infrastructure (fake/local
@@ -136,10 +136,15 @@ put Phase 0B ahead of every business module. Landing in checkpoints:
   (`GET /api/internal/operations/status`, `platform:operations-status`
   CLI). Full design: `docs/architecture/OBSERVABILITY.md`.
 
-Remaining Phase 0C work not yet started as of the 0C.4 checkpoint:
-webhook delivery/attempt retention pruning, and the full core-substrate
-closeout report consolidating 0C/0C.2/0C.3/0C.3A/0C.4 into one
-checkpoint record.
+**Phase 0C closeout (2026-09-23, complete):** the two items that
+remained after 0C.4 are done — webhook delivery/attempt retention
+pruning (`platform:webhook-deliveries-prune`, scheduled daily; the
+retention PERIOD itself stays unset pending the [LEGAL REVIEW REQUIRED]
+retention decision) and the consolidated closeout report
+(`docs/architecture/PHASE-0C-CLOSEOUT.md`). The closeout also scheduled
+`platform:idempotency-prune`, which Phase 0C.2 had deferred to "the rest
+of Phase 0C's operational-safety work". Outbox retention remains
+deliberately deferred (ADR 0025).
 
 ## Phase 0D — Organizational & Academic Structure Foundation (complete)
 

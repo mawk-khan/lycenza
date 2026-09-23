@@ -9,8 +9,9 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Section 23. NOT scheduled yet (section 23: "do not schedule
- * production pruning yet") -- run manually/ad hoc for now.
+ * Section 23. Originally unscheduled (Phase 0C.2: "do not schedule
+ * production pruning yet"); scheduled daily by the Phase 0C closeout
+ * (routes/console.php, `idempotency-prune`).
  *
  * Iterates Schools one at a time and deletes only THAT School's
  * expired rows through the ordinary RLS-protected runtime connection

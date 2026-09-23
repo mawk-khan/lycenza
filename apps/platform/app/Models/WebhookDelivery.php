@@ -52,8 +52,17 @@ class WebhookDelivery extends Model
         return $this->hasMany(WebhookDeliveryAttempt::class);
     }
 
+    /**
+     * States a delivery never leaves on its own (only a manual redelivery
+     * moves it back to `pending`). Shared by isTerminal() and the
+     * retention prune (App\Console\Commands\PruneWebhookDeliveries).
+     *
+     * @var list<string>
+     */
+    public const TERMINAL_STATUSES = ['delivered', 'failed', 'abandoned'];
+
     public function isTerminal(): bool
     {
-        return in_array($this->status, ['delivered', 'failed', 'abandoned'], true);
+        return in_array($this->status, self::TERMINAL_STATUSES, true);
     }
 }
