@@ -101,6 +101,20 @@ SQL
 echo "demo-reset: migrating (pgsql_admin)"
 php artisan migrate --database=pgsql_admin --force --no-interaction
 
+# Flush this project's private DDEV Redis (no host port, unreachable from
+# anything else) BEFORE seeding: stale sessions/caches/queued jobs from a
+# previous dataset would otherwise point at rows that no longer exist.
+# It must not run after seeding -- that would discard the delivery jobs
+# the seeded announcements/conversations have just queued.
+php -r '
+require "vendor/autoload.php";
+$app = require "bootstrap/app.php";
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+foreach (["default", "cache"] as $connection) {
+    Illuminate\Support\Facades\Redis::connection($connection)->flushdb();
+}
+'
+
 # Empty DDEV's local Mailpit so only this run's invitation e-mails (with
 # links valid for THIS dataset) are shown.
 curl -fsS -o /dev/null -X DELETE http://127.0.0.1:8025/api/v1/messages \
@@ -112,18 +126,7 @@ php artisan db:seed --force --no-interaction
 echo "demo-reset: seeding demo school and demo accounts (Demo\\DemoSeeder)"
 php artisan db:seed --class='Database\Seeders\Demo\DemoSeeder' --force --no-interaction
 
-# --- Caches, sessions, queue workers. ---
-# Flushes only this project's private DDEV Redis service (no host port,
-# unreachable from anything else): stale sessions/caches from a previous
-# dataset would otherwise point at rows that no longer exist.
-php -r '
-require "vendor/autoload.php";
-$app = require "bootstrap/app.php";
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-foreach (["default", "cache"] as $connection) {
-    Illuminate\Support\Facades\Redis::connection($connection)->flushdb();
-}
-'
+# --- Caches, queue workers. ---
 php artisan optimize:clear --no-interaction >/dev/null
 php artisan queue:restart --no-interaction >/dev/null
 
