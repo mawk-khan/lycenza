@@ -186,22 +186,52 @@ tenant isolation.
 
 Password for every account: **`Demo1234!`** (LOCAL DEMO ONLY).
 
-| Persona | Email | School/Tenant | Start page | Key access |
+### Login-page shortcuts
+
+In the DDEV demo environment the login page shows a **Demo accounts**
+panel under the normal form. Clicking an account **only fills the email and
+password fields** of that same form and focuses **Sign in** -- you still
+sign in through the normal `POST /login` (same validation, throttling, MFA
+and audit). There is no auto-login route.
+
+The panel is decided server-side by `App\Support\Demo\DemoLoginPanel`
+using the same fail-closed `DemoEnvironmentGuard` as the demo seeder
+(`APP_ENV=local` AND `IS_DDEV_PROJECT=true` AND both database connections
+on DDEV's private `db` database). Anywhere else the page receives
+`demo: null`: no email or password reaches the browser, and the compiled
+JS bundle contains no credentials. Only accounts that exist are listed
+(nothing before `ddev demo-reset`). The account list lives in
+`database/seeders/Demo/DemoAccountCatalog.php`.
+
+The product's login limiter allows **6 sign-in attempts per minute per
+IP** -- switching accounts very quickly shows "Too Many Attempts"; wait a
+minute.
+
+### Accounts
+
+| Persona | Email | Purpose | Main access | Known limitations |
 |---|---|---|---|---|
-| Platform Super Admin | `platform.admin@example.test` | none (platform scope) | `/app` (empty dashboard) | Platform capabilities only; **no platform web UI exists** |
-| School Admin | `school.admin@example.test` | Lycenza Demo School | `/app` -> select School | `school_admin` system role: every module incl. Finance and Payroll administration |
-| Principal | `principal@example.test` | Lycenza Demo School | `/app` -> select School | `principal` system role: academics, students, admissions, communications, operations; no Finance/Payroll |
-| HR & Payroll Officer *(demo-only role)* | `hr.payroll@example.test` | Lycenza Demo School | `/app` -> select School | HR incl. departments/positions/categories and sensitive records; payroll incl. payslips and statutory screens |
-| Multi-school member | `multi.school@example.test` | Both schools | `/app` -> choose a School | Principal at Demo School, School Admin at Annexe |
-| School Admin (second school) | `annexe.admin@example.test` | Lycenza Demo Annexe School | `/app` -> select School | `school_admin` at the Annexe only |
-| Teacher / staff (no role) | `teacher@example.test` | Lycenza Demo School | `/app` -> select School | No capabilities; linked to employee EMP-000003 (Kavya Reddy) |
-| Student account | `student@example.test` | Lycenza Demo School | `/app` -> select School | No capabilities; linked to student LDS-0025 |
-| Guardian account | `guardian01@example.test` | Lycenza Demo School | `/app` -> select School | No capabilities; linked to guardian Priya Sharma (activated through the real invitation flow) |
-| *(pending invitation)* | `guardian02@example.test` | Lycenza Demo School | Mailpit invitation link | Not an account yet -- accept the invitation from Mailpit to review guardian activation |
+| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (108 capabilities): all modules incl. Finance and Payroll administration | HR departments/positions/categories, payslips and statutory screens are 403 (no system role holds them) |
+| Principal | `principal@example.test` | Academic administration | `principal` system role (78): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403 |
+| HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
+| Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
+| Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
+| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (8 `platform.*` capabilities) | **No platform UI exists**: empty dashboard, no School; module URLs return 500 (no tenant) |
+| Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
+| Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: same as Teacher |
+| Guardian | `guardian01@example.test` | Current parent experience | Member with no role, linked to Guardian Priya Sharma (activated via the real invitation flow) | **No parent/guardian portal exists**: same as Teacher |
+| Finance Officer *(demo-only role)* | `finance.officer@example.test` | Finance in isolation | `demo.finance_officer`: only `finance.*` (6) -- ledger, journals, charges, payments | Everything else 403 |
+| Librarian *(demo-only role)* | `library.operator@example.test` | Library in isolation | `demo.librarian`: only `library.*` (4) | No menu link: use `/app/library/titles`, `/app/library/circulation` |
+| Transport Coordinator *(demo-only role)* | `transport.operator@example.test` | Transport in isolation | `demo.transport_coordinator`: only `transport.*` (6) | No menu link: use `/app/transport/routes` |
+| Reception / Visitor Desk *(demo-only role)* | `reception@example.test` | Visitors in isolation | `demo.reception`: only `visitor.*` (4) | No menu link: use `/app/visitor/directory`, `/app/visitor/visits` |
+| Hostel Warden *(demo-only role)* | `hostel.warden@example.test` | Hostel in isolation | `demo.hostel_warden`: only `hostel.*` (4) | No menu link: use `/app/hostels`, `/app/hostel-residency` |
+| Canteen & Stores *(demo-only role)* | `canteen.operator@example.test` | Canteen + inventory | `demo.canteen_stores`: only `canteen.*` (6) + `inventory.*` (4) | Inventory has no menu link: `/app/inventory-stock` |
+| Communications Coordinator *(demo-only role)* | `communications@example.test` | Communication Hub in isolation | `demo.communications_coordinator`: exactly the Principal's 7 `communications.*` capabilities | Analytics/failed/audit/channel settings 403 (same as Principal) |
+| *(pending invitation)* | `guardian02@example.test` | Guardian activation flow | -- | Not an account until the Mailpit invitation is accepted; not in the login panel |
 
 `DatabaseSeeder` also creates its pre-existing local convenience user
 `test@example.com` / `password` (no School membership). It is not part of
-the demo.
+the demo and not in the login panel.
 
 **Selecting a School is required after every login.** The application does
 not auto-select a School: the dashboard lists your memberships -- click
@@ -209,36 +239,46 @@ the School. Until you do, every module URL returns **500**
 (`TenantContextRequiredException`) -- existing application behaviour, not a
 demo defect.
 
-### About the "HR & Payroll Officer" role
+### About the demo-only roles
 
-No seeded system role holds `hr.departments.*`, `hr.positions.*`,
-`hr.categories.*`, the HR sensitive/personal-manage/assignments/documents/
-notes/qualifications capabilities, `payroll.compensation.sensitive.*` or
-any `payroll.statutory.*` capability, and the application has **no role-
-management UI**. Without a custom role those implemented screens could not
-be reviewed at all. The demo therefore creates one non-system school role,
-`demo.hr_payroll_officer` ("Demo: HR & Payroll Officer"), through the real
-`roles` / `role_capabilities` / `membership_role_assignments` tables -- the
-same mechanism the test suite uses. It is **not** a product persona.
+The seeded system roles are only `platform_super_admin`, `school_admin` and
+`principal`, and the application has **no role-management UI**. Several
+implemented screens are therefore unreachable by any system role (HR
+org-structure and sensitive records, payslips, statutory payroll), and no
+account shows a single module in isolation. The demo creates non-system
+school roles -- all keys `demo.*`, all names `Demo: ...` -- through the real
+`roles` / `role_capabilities` / `membership_role_assignments` tables (the
+same mechanism the test suite uses), each holding **only capabilities that
+already exist** in `CapabilityAndRoleSeeder`. They are created solely by
+the guarded `DemoSeeder`, never by `DatabaseSeeder`, and are **not**
+product personas.
+
+Considered and not created: a "canteen student" or any student/guardian
+self-service desk (no student- or guardian-facing capability exists), a
+teacher role (the product has none), an examinations/timetable/attendance
+desk (those capabilities are held by the Principal already, and nothing new
+would become reviewable), and a platform-operations account beyond the
+Platform Admin (there is no platform UI to review).
 
 ## 11. Implemented persona matrix
 
 | Persona | Exists in code? | Login? | Tenant scope | Capabilities | Usable UI |
 |---|---|---|---|---|---|
-| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | `platform.*` | **None** -- no platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
-| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 102 of the 137 catalog capabilities | Full admin UI |
-| Principal | Yes (system role `principal`) | Yes | One School | 72 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
-| Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock |
+| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 8 `platform.*` | **None** -- no platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
+| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 108 of the 143 catalog capabilities | Full admin UI |
+| Principal | Yes (system role `principal`) | Yes | One School | 78 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
+| Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
 | School member, no role (teacher/staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
 | Guardian | Yes (Phase 5D.3 invitation -> membership + account link) | Yes | One School | None | Same as "no role" -- **no guardian portal** |
 | Student | Yes (Phase 5B account link) | Yes | One School | None | Same as "no role" -- **no student portal** |
 | Teacher (as a role) | **No** -- there is no teacher role or teacher portal | -- | -- | -- | -- |
-| Finance / Payroll / Operations officers | **No** distinct personas -- capabilities attached to a role | -- | -- | -- | -- |
+| Finance / Library / Transport / Reception / Hostel / Canteen / Communications officers | **No** product roles -- each is a real, complete capability family, reviewable through a `demo.*` role | Yes (demo) | One School | One family each | That module only |
 
 ## 12. Recommended review walkthrough
 
-1. `ddev demo-reset`, open https://lycenza.ddev.site, sign in as
-   **school.admin@example.test**, click **Lycenza Demo School**.
+1. `ddev demo-reset`, open https://lycenza.ddev.site/login, click
+   **School Admin** in the Demo accounts panel, press **Sign in**, then
+   click **Lycenza Demo School**.
 2. Dashboard navigation: Students -> open a student (guardians, enrollment,
    account link); Guardians; Enrollments; Enrollment Rollovers (draft plan);
    Admissions (4 states); Subject Offerings (Grade 8 elective group).
@@ -390,6 +430,7 @@ run -- use the docker-compose `minio` service for those.
 | `ContactLookupKeyNotConfiguredException` | `ddev restart` (container environment changes need a restart). |
 | Invitation link says invalid/expired | Links from earlier resets are dead; `ddev demo-reset` and use the newest Mailpit message. |
 | "Page expired" (419) | Session was flushed by a reset -- reload `/login`. |
+| "Too Many Attempts" on sign-in | The product login limiter allows 6 attempts/minute/IP; wait a minute. |
 | Port 80/443 conflicts | Stop the conflicting service or see `ddev config global --router-http-port`. |
 | Queue/scheduler not running (deliveries stay `pending`) | `ddev exec supervisorctl status`; `ddev exec supervisorctl start 'webextradaemons:*'` or `ddev restart`. `ddev start` on an already-running project can skip them; `ddev demo-reset` starts them. |
 
@@ -431,7 +472,13 @@ production because:
    guard itself; its only other allowed environment is `testing` against
    the dedicated test database -- which `TestDatabaseGuard` already enforces
    at boot.
-4. Nothing in the demo bypasses authorization or RLS: data is created on
+4. **The login-page Demo accounts panel** (`App\Support\Demo\DemoLoginPanel`)
+   is decided server-side by the same `DemoEnvironmentGuard::assertLocalDdev()`;
+   in any other environment the page receives `demo: null`, so no demo
+   email or password is ever sent to the browser, and the compiled JS
+   bundle contains no credentials. It only prefills the normal form --
+   there is no auto-login route (`DemoLoginPanelTest` proves both).
+5. Nothing in the demo bypasses authorization or RLS: data is created on
    the NOBYPASSRLS runtime connection inside `TenantContext`, lifecycle
    records go through their Application services, and accounts receive
    capabilities only through real role assignments.

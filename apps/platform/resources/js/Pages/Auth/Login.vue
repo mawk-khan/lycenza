@@ -1,10 +1,48 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+
+interface DemoAccount {
+    persona: string;
+    email: string;
+    hint: string;
+    group: string;
+}
+
+// `demo` is provided by the server ONLY in a local DDEV demo environment
+// (App\Support\Demo\DemoLoginPanel); everywhere else it is null and the
+// panel below never renders. Shortcuts only prefill this form -- signing
+// in still goes through the normal POST /login.
+const props = defineProps<{
+    demo?: { password: string; accounts: DemoAccount[] } | null;
+}>();
 
 const form = useForm({
     email: '',
     password: '',
 });
+
+const submitButton = ref<HTMLButtonElement | null>(null);
+const selectedEmail = ref<string | null>(null);
+
+const demoGroups = computed(() => {
+    const groups = new Map<string, DemoAccount[]>();
+    for (const account of props.demo?.accounts ?? []) {
+        groups.set(account.group, [...(groups.get(account.group) ?? []), account]);
+    }
+    return [...groups.entries()];
+});
+
+function useDemoAccount(account: DemoAccount) {
+    if (!props.demo) {
+        return;
+    }
+    form.email = account.email;
+    form.password = props.demo.password;
+    form.clearErrors();
+    selectedEmail.value = account.email;
+    submitButton.value?.focus();
+}
 
 function submit() {
     form.post('/login');
@@ -42,12 +80,56 @@ function submit() {
             </div>
 
             <button
+                ref="submitButton"
                 type="submit"
                 :disabled="form.processing"
-                class="w-full rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+                class="w-full rounded bg-slate-900 px-3 py-2 text-white focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:outline-none disabled:opacity-50"
             >
                 Sign in
             </button>
         </form>
+
+        <section
+            v-if="demo && demo.accounts.length > 0"
+            class="mt-8 rounded border border-amber-300 bg-amber-50 p-4"
+            aria-labelledby="demo-accounts-heading"
+            data-testid="demo-accounts"
+        >
+            <h2 id="demo-accounts-heading" class="text-sm font-semibold text-amber-900">
+                Demo accounts
+            </h2>
+            <p class="mt-1 text-xs text-amber-900">
+                Local DDEV demo only. Choosing an account fills the form above; then press Sign in.
+            </p>
+
+            <div v-for="[group, accounts] in demoGroups" :key="group" class="mt-4">
+                <h3 class="text-xs font-medium tracking-wide text-amber-800 uppercase">
+                    {{ group }}
+                </h3>
+                <ul class="mt-2 space-y-2">
+                    <li v-for="account in accounts" :key="account.email">
+                        <button
+                            type="button"
+                            class="w-full rounded border bg-white px-3 py-2 text-left hover:border-amber-500"
+                            :class="
+                                selectedEmail === account.email
+                                    ? 'border-amber-500'
+                                    : 'border-amber-200'
+                            "
+                            :data-demo-email="account.email"
+                            @click="useDemoAccount(account)"
+                        >
+                            <span class="block text-sm font-medium text-slate-900">{{
+                                account.persona
+                            }}</span>
+                            <span class="block text-xs text-slate-600">{{ account.email }}</span>
+                            <span class="mt-1 block text-xs text-slate-500">{{
+                                account.hint
+                            }}</span>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </section>
     </main>
 </template>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\MfaChallengeService;
+use App\Support\Demo\DemoLoginPanel;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,9 +42,13 @@ use Inertia\Response;
  */
 class LoginController extends Controller
 {
-    public function create(): Response
+    public function create(DemoLoginPanel $demoPanel): Response
     {
-        return Inertia::render('Auth/Login');
+        // `demo` is null everywhere except a local DDEV demo environment
+        // (see DemoLoginPanel); it only prefills this same form.
+        return Inertia::render('Auth/Login', [
+            'demo' => $demoPanel->forCurrentEnvironment(),
+        ]);
     }
 
     public function store(Request $request, AuditRecorder $audit, MfaChallengeService $mfa): RedirectResponse

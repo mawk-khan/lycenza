@@ -11,6 +11,7 @@ use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use Database\Seeders\Demo\DemoAccountCatalog;
 use Database\Seeders\Demo\DemoBuildResult;
 use Database\Seeders\Demo\DemoDataBuilder;
 use Database\Seeders\Demo\DemoSeeder;
@@ -64,7 +65,11 @@ class DemoDataBuilderTest extends TestCase
             'platform.admin@example.test', 'school.admin@example.test', 'principal@example.test',
             'hr.payroll@example.test', 'multi.school@example.test', 'annexe.admin@example.test',
             'teacher@example.test', 'student@example.test', 'guardian01@example.test',
+            ...array_column(DemoAccountCatalog::OPERATIONS_DESK_ROLES, 'email'),
         ], $emails);
+
+        // Every login-page shortcut is a real seeded account (and vice versa).
+        $this->assertEqualsCanonicalizing($emails, array_column(DemoAccountCatalog::loginShortcuts(), 'email'));
 
         foreach ($emails as $email) {
             $this->assertStringEndsWith('.test', $email);
@@ -122,6 +127,17 @@ class DemoDataBuilderTest extends TestCase
         foreach (['teacher@example.test', 'student@example.test', 'guardian01@example.test'] as $email) {
             $this->assertSame([], $resolver->schoolCapabilities($this->user($email), $school), $email);
         }
+
+        // Operations desks: a demo-only, non-system role holding EXACTLY
+        // one existing capability family, in the Demo School only.
+        foreach (DemoAccountCatalog::OPERATIONS_DESK_ROLES as $key => $definition) {
+            $desk = $this->user($definition['email']);
+            $this->assertEqualsCanonicalizing($definition['capabilities'], $resolver->schoolCapabilities($desk, $school), $key);
+            $this->assertSame([], $resolver->schoolCapabilities($desk, $annexe), $key);
+            $this->assertFalse(Role::query()->where('key', $key)->firstOrFail()->is_system, $key);
+        }
+        $this->assertFalse($resolver->canInSchool($this->user('library.operator@example.test'), 'students.view', $school));
+        $this->assertFalse($resolver->canInSchool($this->user('finance.officer@example.test'), 'payroll.runs.view', $school));
 
         // --- Identity links ------------------------------------------------
         $context = app(TenantContext::class);
