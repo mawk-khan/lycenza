@@ -207,6 +207,11 @@ JS bundle contains no credentials. Only accounts that exist are listed
 (nothing before `ddev demo-reset`). The account list lives in
 `database/seeders/Demo/DemoAccountCatalog.php`.
 
+To switch persona, use **Log out** in the account bar at the top of every
+signed-in page (it shows the account's name and email, whether or not a
+School is selected; 403 pages carry their own Log out button). Signing
+out returns to the login page, where the shortcuts can be used again.
+
 The product's login limiter allows **6 sign-in attempts per minute per
 IP** -- switching accounts very quickly shows "Too Many Attempts"; wait a
 minute.
