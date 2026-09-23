@@ -52,6 +52,12 @@ REPO_ROOT="$(cd "${PLATFORM_DIR}/../.." && pwd)"
 # are the same inert local-dev-only values documented there and in
 # CLAUDE.md, not secrets (ADR 0016).
 DB_TEST_HOST="postgres"
+# The Compose service's in-network port (phpunit.xml forces the same
+# value). Passed explicitly because a developer's local .env may set a
+# different DB_PORT for host access (e.g. to coexist with another
+# PostgreSQL on 5432), and docker-compose.yml's env_file: turns it into
+# an ambient container variable the raw artisan commands would honour.
+DB_TEST_PORT="5432"
 DB_TEST_DATABASE="school_os_test"
 DB_TEST_USERNAME="school_os_app"
 DB_TEST_PASSWORD="school_os_app_local_only_password"
@@ -67,6 +73,7 @@ DB_ADMIN_PASSWORD="school_os"
 SAFE_ENV=(
   -e "APP_ENV=testing"
   -e "DB_HOST=${DB_TEST_HOST}"
+  -e "DB_PORT=${DB_TEST_PORT}"
   -e "DB_DATABASE=${DB_TEST_DATABASE}"
   -e "DB_USERNAME=${DB_TEST_USERNAME}"
   -e "DB_PASSWORD=${DB_TEST_PASSWORD}"

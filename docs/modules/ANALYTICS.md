@@ -300,12 +300,25 @@ Dimensions: School totals, grade level, Subject Offering, Section.
 Curriculum Coverage" when the actor holds `analytics.view`. No API, no
 export, no cache, no snapshot, no outbox consumer.
 
-**Residual consideration (not a blocker, recorded for review)**: a
-per-Section, per-subject coverage figure may in practice correspond to
-one teacher's classes. Curriculum Delivery stores no teacher identity
-(DATA-CLASSIFICATION.md), and the same Section-level detail is already
-visible to the same roles through `curriculum.delivery.view`, so the
-report adds no new disclosure — but joining it with the timetable
-outside the system would say something about a teacher's pace. If that
-is judged performance data about a person, the Section breakdown should
-be reviewed under the §6 rule.
+**Section-level coverage and teachers (verified 2026-09-23, regression
+checkpoint after 0L.2-1).** A per-Section, per-subject figure may in
+practice correspond to one teacher's classes. The current facts:
+- the report and its source contract carry **no teacher identity** (no
+  teacher, employee or user field in any `Coverage\*` DTO or report key
+  -- asserted by `CurriculumCoverageReadServiceTest` and
+  `CurriculumCoverageReadModelTest`);
+- `curriculum_deliveries` stores **no teacher identity** at all
+  (DATA-CLASSIFICATION.md "Curriculum delivery records";
+  `CurriculumDeliveryArchitectureGuardTest` pins the column set);
+- the roles holding `analytics.view` (School Admin, Principal) already
+  held `curriculum.delivery.view`, which shows the same Section-level
+  progress unit by unit on `/app/syllabus-delivery`;
+- the report adds **no teacher ranking or comparison**: rows are ordered
+  by grade, campus and subject code, never by coverage.
+
+**Any future change that connects Section coverage to a named teacher,
+to teacher performance, to a teacher ranking, or to individual staff
+evaluation must trigger a new privacy/data-classification review before
+it ships** -- it would make the metric information about a person, and
+may bring it under the §6 person/cohort policy (and re-tier Curriculum
+Delivery to Sensitive by DATA-CLASSIFICATION.md's Timetable reasoning).

@@ -8,6 +8,7 @@ use App\Support\Tenancy\TenantContext;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
 
 /**
@@ -24,7 +25,7 @@ use Tests\TestCase;
  */
 class HrEmployeeImportConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -124,15 +125,17 @@ class HrEmployeeImportConcurrencyTest extends TestCase
         $this->school = $this->createSchool();
         $actor = $this->fullHrActor($this->school);
 
+        // Forced, verified overlap (Tests\Concerns\ForcesConcurrentOverlap):
+        // two processes merely started together can run one after the
+        // other, and a SEQUENTIAL second import legitimately sees the
+        // first (committed) Employee and reports duplicate_potential.
+        // This test is about GENUINELY concurrent imports, so B is proven
+        // blocked on A's uncommitted employee-number allocation first.
         $script = __DIR__.'/../../Support/import-employee.php';
-        $process1 = new Process(['php', $script, $this->school->id, $actor->id, 'Same Name Person']);
-        $process2 = new Process(['php', $script, $this->school->id, $actor->id, 'Same Name Person']);
-        $process1->start();
-        $process2->start();
-        $process1->wait();
-        $process2->wait();
-
-        $outputs = [trim($process1->getOutput()), trim($process2->getOutput())];
+        $outputs = array_map('trim', $this->raceWithHeldHolder(
+            ['php', $script, $this->school->id, $actor->id, 'Same Name Person'],
+            ['php', $script, $this->school->id, $actor->id, 'Same Name Person'],
+        ));
 
         // No database uniqueness rule exists on full_name -- both
         // genuinely concurrent attempts may legitimately succeed

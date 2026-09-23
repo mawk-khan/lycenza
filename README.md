@@ -41,7 +41,7 @@ Requires Docker, PHP 8.3+, Node 22+, Python 3.12+.
 
 ```bash
 # Backend infrastructure
-docker compose up -d postgres redis minio
+docker compose up -d postgres redis minio minio-init
 
 # Laravel (apps/platform)
 cd apps/platform

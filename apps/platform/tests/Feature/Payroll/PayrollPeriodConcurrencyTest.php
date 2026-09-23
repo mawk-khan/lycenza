@@ -8,8 +8,8 @@ use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
-use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
 
 /**
@@ -28,7 +28,7 @@ use Tests\TestCase;
  */
 class PayrollPeriodConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -61,15 +61,17 @@ class PayrollPeriodConcurrencyTest extends TestCase
             fn () => app(PayrollPeriodService::class)->createPeriod($this->school, Carbon::parse('2026-09-01'), null, $preparer),
         );
 
+        // Forced, verified overlap (Tests\Concerns\ForcesConcurrentOverlap):
+        // two processes merely started together can run one after the
+        // other, and a SEQUENTIAL second open() fails its status
+        // pre-check with InvalidPeriodTransitionException instead. B must
+        // be proven blocked on A's uncommitted status update.
         $script = __DIR__.'/../../Support/open-payroll-period.php';
-        $processA = new Process(['php', $script, $this->school->id, $period->id, $preparer->id]);
-        $processB = new Process(['php', $script, $this->school->id, $period->id, $preparer->id]);
-        $processA->start();
-        $processB->start();
-        $processA->wait();
-        $processB->wait();
-
-        $outputs = [$processA->getOutput(), $processB->getOutput()];
+        $outputs = $this->raceWithHeldHolder(
+            ['php', $script, $this->school->id, $period->id, $preparer->id],
+            ['php', $script, $this->school->id, $period->id, $preparer->id],
+        );
+        $this->assertSame('opened', $outputs[0], 'The first (held) open() must succeed.');
         $openedCount = count(array_filter($outputs, fn ($o) => $o === 'opened'));
 
         $this->assertSame(1, $openedCount, 'Exactly one of the two concurrent open() calls must succeed.');

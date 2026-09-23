@@ -512,13 +512,43 @@ isolation.
 REAL S3-compatible endpoint rather than `Storage::fake()` (ADR 0011).
 They require a reachable MinIO whose `AWS_*` settings (endpoint,
 credentials, bucket) are supplied for the run -- the docker-compose
-`minio` service (`docker compose up -d minio`). They are **expected to
+`minio` service (`docker compose up -d minio minio-init`, or simply
+`apps/platform/bin/safe-test`, which starts both). They are **expected to
 fail** in any environment without one, including the DDEV review
 environment (which deliberately runs no MinIO; see
 `docs/development/DDEV-DEMO-REVIEW.md`). Such a failure means "MinIO
 not provisioned", not a Documents regression; they are not skipped
 automatically so that a missing object store can never masquerade as a
 passing storage proof.
+
+**Bucket provisioning (fixed 2026-09-23).** A fresh `minio_data` volume
+has no buckets, and nothing used to create `school-os-local`, so these
+tests (and the `s3` documents disk in local dev) only worked where
+someone had created the bucket by hand -- a fresh isolated
+`SAFE_TEST_ISOLATED=1` project failed all 5. docker-compose.yml's
+one-shot `minio-init` service now creates it idempotently (`mc mb
+--ignore-existing`), and `platform` waits for it to complete. The same
+checkpoint also made `bin/safe-test` pass `DB_PORT` explicitly: a local
+`.env` with a non-default `DB_PORT` (e.g. 25432 for host access) was
+reaching `platform:test-db-reset` through `env_file:` and making it
+connect to the wrong in-network port.
+
+**Compose `platform` parity with DDEV (fixed 2026-09-23).** The first
+full `SAFE_TEST_ISOLATED=1` run of that checkpoint also failed 29
+`*OpenApiCoverageTest`s and 2 readiness tests that pass in DDEV:
+- the container mounted only `apps/platform`, so the contract tests'
+  `base_path('../../packages/contracts/...')` (= `/var/packages/...`)
+  did not exist -- docker-compose.yml now mounts `./packages/contracts`
+  there read-only;
+- a local `.env` `REDIS_PORT` (like `DB_PORT` above) reached the
+  container through `env_file:` -- the `platform`/`queue` `environment:`
+  blocks now pin `DB_PORT: 5432` and `REDIS_PORT: 6379` next to the
+  already-pinned in-network hosts.
+Two real-process race tests (`PayrollPeriodConcurrencyTest`,
+`HrEmployeeImportConcurrencyTest`'s same-name case) still started two
+processes and hoped they overlapped; they now use
+`Tests\Concerns\ForcesConcurrentOverlap`, like the other converted
+races.
 
 ## Committed test data and the outbox (fixed)
 
