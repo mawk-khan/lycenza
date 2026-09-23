@@ -101,14 +101,16 @@ What it does, in order:
    drops and recreates schema `public` in DDEV database `db`, and re-grants
    default privileges.
 4. `php artisan migrate --database=pgsql_admin --force`.
-5. Empties DDEV's Mailpit (so only this run's invitation e-mails remain).
+5. Flushes this project's private Redis (stale sessions, caches and
+   queued jobs) and empties DDEV's Mailpit -- both **before** seeding, so
+   the jobs and invitation e-mails the seed produces survive.
 6. `php artisan db:seed` -- the canonical reference seed set
    (`DatabaseSeeder`: capability/role catalog, AI service identity,
    education boards, statutory rule versions).
 7. `php artisan db:seed --class=Database\Seeders\Demo\DemoSeeder` -- the
    demo School, demo data and demo accounts (prints the account table).
-8. Flushes this project's private Redis (stale sessions/caches),
-   `optimize:clear`, `queue:restart`.
+8. `optimize:clear`, `queue:restart` (the supervised worker restarts and
+   processes the seeded deliveries).
 9. Builds frontend assets if requested or missing, then prints the URL.
 
 ## 6. URLs
