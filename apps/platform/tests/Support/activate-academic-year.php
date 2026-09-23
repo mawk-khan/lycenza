@@ -5,6 +5,7 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for AcademicYearActivationConcurrencyTest:
 // run in a GENUINELY separate OS process (via Symfony\Process::start(),
@@ -29,7 +30,7 @@ $context->set($school);
 
 try {
     $year = AcademicYear::query()->findOrFail($academicYearId);
-    $app->make(AcademicYearService::class)->activate($year);
+    HeldTransaction::run(fn () => $app->make(AcademicYearService::class)->activate($year));
     echo 'activated';
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

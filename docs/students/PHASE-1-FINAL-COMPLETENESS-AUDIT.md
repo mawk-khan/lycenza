@@ -115,7 +115,7 @@ Classification legend: C=COMPLETE, ED=EXPLICITLY DEFERRED, SNR=SUPERSEDED/NOT RE
 | 1A-1 | Student identity (id/school_id/student_number/name/DOB/status) | STUDENT-GUARDIAN-IDENTITY.md schema | 1A.1 | `students` migration, `Student.php`, RLS test | C |
 | 1A-2 | Guardian identity | same | 1A.1 | `guardians` migration, `Guardian.php` | C |
 | 1A-3 | Student↔Guardian relationship (first-class, sibling reuse, primary invariant) | same §"Relationship architecture" | 1A.2 | `student_guardian_relationships`, partial unique index, `StudentGuardianRelationshipTest` | C |
-| 1A-4 | Guardian contact, searchable-encrypted PII | same §"Guardian contact" | 1A.3 | `guardian_contacts`, `ContactLookupHasher`, ADR 0028 | C |
+| 1A-4 | Guardian contact, searchable-encrypted PII | same §"Guardian contact" | 1A.3 | `guardian_contacts`, `ContactLookupHasher`, ADR 0041 (originally numbered 0028) | C |
 | 1A-5 | Student/Guardian capabilities + services | same §"Authorization"/"Application services" | 1A.4 | `students.*`/`guardians.*` in seeder, `StudentService`/`GuardianService` | C |
 | 1A-6 | Admin HTTP API (`/api/v1`) | same §"Administrative HTTP boundary" | 1A.5 | route inventory table, controllers | C |
 | 1A-7 | Admin Inertia UI | same §"Administrative UI" | 1A.6 | `Students/*.vue`, `Guardians/*.vue` | C |

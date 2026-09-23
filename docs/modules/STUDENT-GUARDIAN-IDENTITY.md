@@ -218,7 +218,7 @@ Guardian email/mobile contact information lives in a dedicated
 `guardian_contacts` table — never `email`/`phone`/`mobile`/
 `whatsapp_number` columns directly on `guardians`, since a Guardian may
 have several (personal email, work email, primary/secondary mobile).
-See ADR 0028 for the full architectural decision record; this section
+See ADR 0041 for the full architectural decision record; this section
 covers what it means for this module specifically.
 
 ### The privacy problem and its solution
@@ -249,7 +249,7 @@ information. The lookup key
 deliberately separate from `APP_KEY` so the two can rotate
 independently; `lookup_key_version` is stored per row for a future
 rotation to identify stale rows (no rotation workflow is implemented
-yet — see ADR 0028's "Future extraction/evolution path"). Fails closed:
+yet — see ADR 0041's "Future extraction/evolution path"). Fails closed:
 `ContactLookupHasher::hash()` throws
 `ContactLookupKeyNotConfiguredException` if the key is empty, rather
 than silently hashing with a predictable/missing key.
@@ -359,7 +359,7 @@ same digest may legitimately match multiple Guardians.
 any environment that creates/looks up Guardian contacts; the local-dev
 `.env.example` value is an inert placeholder, never a real secret (ADR
 0016). `CONTACT_LOOKUP_HMAC_KEY_VERSION` (default `1`) tracks which key
-produced existing digests, for a future rotation. See ADR 0028 for the
+produced existing digests, for a future rotation. See ADR 0041 for the
 full rotation design (not yet implemented).
 
 ### Audit
@@ -426,7 +426,7 @@ indexes" above and `tests/Feature/Postgres/GuardianContactIntegrityTest.php`.
 - **Contact lookup HMAC key rotation** — `lookup_key_version` exists so
   this is possible later without a schema change, but no rotation
   workflow (a backfill job re-hashing every row under a new key) is
-  implemented — see ADR 0028.
+  implemented — see ADR 0041.
 - **Public/mobile/parent-portal API** — the `/api/v1` surface added in
   Phase 1A.5 is the same *administrative* surface every other School
   OS module uses (Campus, Academic Year, ...), reached by authenticated

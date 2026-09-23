@@ -639,10 +639,12 @@ being the first genuinely unused number on fresh `main`, which tops
 out at 0033), and every one of the ~76 files referencing "ADR 0032" to
 mean Payroll was updated to "ADR 0034" (the OpenAPI-generated
 `school-os-api.ts` was regenerated, never hand-edited). This
-repository's other pre-existing, still-unresolved collision
+repository's other pre-existing collision
 (`0028-phase-8a-hr-sequencing-and-domain-foundation.md` vs
-`0028-searchable-encrypted-pii.md`, both already on `main`) is
-out of Phase 9's scope and was left untouched.
+`0028-searchable-encrypted-pii.md`, both already on `main`) was
+out of Phase 9's scope and was left untouched at the time; it was
+resolved on 2026-09-23 by renumbering the searchable-encrypted-PII ADR
+to `0041-searchable-encrypted-pii.md`.
 
 **Migration compatibility against current `main`.** Proven three ways
 against the reconciled branch's exact 185-migration history: (1) clean
@@ -812,7 +814,7 @@ with explicit publication permission — see the Phase 9 Final
 Publication Report. Checkpoint 9.6 below is a new, separately
 authorized post-publication initiative on its own branch.)
 
-## Phase 9.6 Checkpoints (Statutory Payroll, in progress)
+## Phase 9.6 Checkpoints (Statutory Payroll, published)
 
 Legal basis: `SCH/PAY/REG/2026-9.6` (effective 1 April 2026, Telangana
 jurisdiction), accepted subject to the binding correction addendum —
@@ -826,7 +828,7 @@ never rewritten by this work.
 |---|---|---|
 | 9.6A — Legal Addendum & Statutory Rule Contract | **[implemented]** | ADR 0036, this section |
 | 9.6B — Golden Statutory Fixtures | **[implemented]** | 51 red fixtures: `PfCalculationServiceTest` (PF-01..12), `EsiCalculationServiceTest` (ESI-01..11, ESI-12 skipped/deferred), `ProfessionalTaxAndLwfCalculationServiceTest` (PT + LWF), `IncomeTaxSlabCalculatorTest` (TDS-01..12, TDS-20), `TdsMonthlyDeductionServiceTest` (TDS-13..19). Pure calculation-engine stubs under `app/Domain/Payroll/Statutory/Calculation/` throw until Checkpoint 9.6D/9.6E implements each against its docblock-documented algorithm. |
-| 9.6C — Statutory Schema / Versioning / Privacy | **[implemented]** | 15 migrations: 7 platform reference tables (PF/ESI/LWF/PT+slabs/income-tax+slabs, no `school_id`, no RLS, matching `education_boards`), 8 School-owned RLS-enforced tables (component classifications, PF status, ESI coverage, tax profile, encrypted statutory identifiers, immutable calculation-result snapshots with a freeze trigger, statutory accounting configuration, LWF once-per-cycle charges). `StatutoryIdentifierLookupHasher` (its own HMAC key, ADR 0028's pattern). `StatutoryRuleVersionSeeder` seeds the 1-April-2026 rule versions matching the 9.6B golden fixtures' numbers exactly. |
+| 9.6C — Statutory Schema / Versioning / Privacy | **[implemented]** | 15 migrations: 7 platform reference tables (PF/ESI/LWF/PT+slabs/income-tax+slabs, no `school_id`, no RLS, matching `education_boards`), 8 School-owned RLS-enforced tables (component classifications, PF status, ESI coverage, tax profile, encrypted statutory identifiers, immutable calculation-result snapshots with a freeze trigger, statutory accounting configuration, LWF once-per-cycle charges). `StatutoryIdentifierLookupHasher` (its own HMAC key, ADR 0041's pattern). `StatutoryRuleVersionSeeder` seeds the 1-April-2026 rule versions matching the 9.6B golden fixtures' numbers exactly. |
 | 9.6D — PF / ESI / PT / LWF Calculation Engine | **[implemented]** | `PfCalculationService`, `EsiCoverageDeterminationService`/`EsiContributionCalculationService`, `ProfessionalTaxCalculationService`, `LwfCalculationService` -- all pure/stateless, all 42 PF/ESI/PT/LWF golden fixtures green (1 ESI case correctly skipped/deferred). PF whole-INR rounding is half-up (`Money::multiplyByRate`); ESI rounding is upward-to-next-rupee (a dedicated ceiling helper, deliberately not half-up). |
 | 9.6E — Annualized Salary TDS Engine | **[implemented]** | `IncomeTaxSlabCalculator` (annual liability: slabs, §87A rebate, marginal relief, table-driven surcharge with its own marginal relief, cess) and `TdsMonthlyDeductionService` (annualized spreading, prior-employer credit, over-withholding carry-forward, fail-closed insufficient-salary handling). All 20 TDS golden fixtures green, including the surcharge boundary (TDS-20). |
 | 9.6F — Statutory Finance Posting | **[implemented]** | `StatutoryPayrollCalculationService` (Application-layer orchestration: resolves active rule versions/employee facts, groups `payroll_run_result_lines` by `payroll_salary_component_statutory_classifications`, calls the 9.6D/9.6E pure engines, persists one immutable `payroll_statutory_calculation_results` row per `payroll_run_results` row; fails closed on missing PF/tax-profile facts or an unclassified earning component -- never infers). `StatutoryPayrollPostingService` posts the FULL statutory GL effect (employee-side withholding debited against the SAME shared salary-payable account the main payroll entry uses; employer-side PF/ESI/LWF contributions as pure additional expense; every one of the 12 statutory figures appears exactly once as a debit and once as a credit) as ONE additional journal entry via `LedgerService::post()`/`reverseById()` only, alongside (never merged into) `PayrollPostingService`'s own entry -- new `payroll_statutory_run_postings` table (mirrors `payroll_run_postings`' one-original/one-reversal partial-unique-index shape). `StatutoryAccountingConfigurationService` mirrors `PayrollAccountingConfigurationService`'s configure/resolveValidated shape for the 14-account `payroll_statutory_accounting_configurations` table (corrected in this checkpoint to add the previously-missing dedicated PF-admin-charge and EDLI expense accounts -- see the 2026_10_06_090100 migration's own docblock). Balance proven end-to-end by a hand-verified feature test (`StatutoryPayrollCalculationAndPostingTest`). |
@@ -837,9 +839,12 @@ never rewritten by this work.
 
 | 9.6J — Statutory Payslip Extension | **[implemented]** | Extends the existing on-demand `Payslip` DTO (Phase 9.10) with a new `PayslipStatutorySection` (PF/ESI/PT/LWF/TDS deduction figures, informational employer contributions, masked-only identifiers -- no reveal flow on a payslip). `PayslipReadService::render()` populates it ONLY from the already-frozen `payroll_statutory_calculation_results` row for the exact `PayrollRunResult` being rendered (never recalculated from current rule versions) AND only when the actor additionally holds `payroll.statutory.view` (layered on top of the existing `payroll.compensation.sensitive.view`) -- absent either condition, `statutory` is `null` and `statutoryDeductionsIncluded` is `false`, never fabricated. Folds into the SAME existing `payroll.payslip.viewed` audit event (a boolean flag only, never the values) rather than adding a second event. `esiDisabilityProvisionsEvaluated` is a permanent `false` disclosure -- this system collects no disability-status fact anywhere, so it can never determine whether ADR 0036's deferred ESI branch would apply to a specific Employee; both the API and the printable Vue view surface this as a standing notice. No blanket "legally compliant" language anywhere. Both `PayslipController`s (JSON API and Inertia) and `Payslips/Show.vue` updated; OpenAPI/`shared-types` regenerated. Tests prove: full statutory breakdown for an authorized viewer, section entirely absent without `.statutory.view`, no stored `Document` is ever created, a draft run still cannot produce a payslip, a reversed run's statutory figures remain the original immutable values, and the raw PAN never appears in the raw HTTP response body (masked only) for either transport. |
 
-**9.6 implementation is complete pending explicit publication
-permission.** The ESI disability special threshold (₹25,000) remains
+| 9.6K — Statutory Concurrency Matrix Completion | **[implemented]** | `StatutoryEsiCoverageMutationConcurrencyTest` -- the real two-process proof for ESI coverage-state mutation now that `EmployeeEsiCoverageAdminService::correct()` (9.6I) gives it a write path (commit `19d72cd`). Final matrix: duplicate statutory calculation, duplicate statutory posting, PF-status mutation and ESI coverage mutation proven; rule-version activation and exports not applicable by design. |
+
+**9.6 implementation is complete and was published to `main`
+(`a8916cd`, with explicit publication permission).** The ESI disability
+special threshold (₹25,000) remains
 `DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED` (ADR
-0035) -- this is a deliberate, disclosed legal gap, not an
+0036) -- this is a deliberate, disclosed legal gap, not an
 implementation gap. See the Phase 9.6 Final Readiness Report for the
 publication verdict.

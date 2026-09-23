@@ -26,7 +26,12 @@ class UserFactory extends Factory
     {
         return [
             'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
+            // fake()->unique() only de-duplicates within ONE process, but
+            // real-concurrency tests commit their Users, so a later run
+            // could regenerate an already-stored address
+            // (users_email_unique). The random suffix makes collisions
+            // across runs negligible.
+            'email' => Str::lower(Str::random(6)).'.'.fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),

@@ -205,8 +205,12 @@ class EnrollmentRolloverSubjectExecutionConcurrencyTest extends TestCase
                 $rolloverWins++;
                 $this->assertStringContainsString('ElectiveGroupConflictException', $directOutput, "iteration {$i} (rollover-first): the losing direct enroll() must be rejected with the stable group-conflict exception, got: {$directOutput}");
 
+                // Rollover's win is reported as `succeeded:` or, for this
+                // already-enrolled fixture, `reconciled:` (both counted as a
+                // win above); the persisted Item status must match exactly
+                // what the process reported.
                 $item = $context->withSchool($school, fn () => $item->fresh());
-                $this->assertSame('succeeded', $item->execution_status ?? null, "iteration {$i}");
+                $this->assertSame(strstr($rolloverOutput, ':', true), $item->execution_status ?? null, "iteration {$i}");
             } else {
                 $directWins++;
                 $item = $context->withSchool($school, fn () => $item->fresh());

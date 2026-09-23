@@ -42,7 +42,7 @@ return [
     | Member ID/ESIC IP Number) -- deliberately its OWN key, separate
     | from both APP_KEY and contact_lookup.hmac_key, so each secret can
     | be rotated independently and a compromise of one never implies
-    | the other. See ADR 0036 and ADR 0028's identical precedent.
+    | the other. See ADR 0036 and ADR 0041's identical precedent.
     |
     */
 

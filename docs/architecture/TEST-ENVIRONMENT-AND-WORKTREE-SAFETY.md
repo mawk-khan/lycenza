@@ -536,31 +536,47 @@ after every committing test, the outbox rows of Schools that no longer
 exist or that the test itself created. Pre-existing Schools are never
 touched.
 
-## Load-sensitive real-concurrency tests (known, not yet fixed)
+## Deterministic real-concurrency races (fixed 2026-09-23)
 
-These tests race two or more real OS processes and assume the processes
-genuinely overlap. Under full-suite load a process can finish before its
-rival starts, so an occasional single failure appears in a full run;
-each passes when re-run on its own. Observed during the 2026-09-23
-consolidation (one per full run, never the same twice in a row):
+Several multi-process tests used to start two OS processes "at the same
+time" and assume their transactions overlapped. Under full-suite load
+one process could boot, run and commit before the other began, and
+because each service legitimately accepts a SEQUENTIAL second call, the
+test then saw two successes (or the wrong exception) -- intermittent
+failures that were test artefacts, never product defects:
 
-- `Payroll/CompensationConcurrencyTest` scenario A -- root-caused:
-  `SalaryStructureService::activate()` legitimately supersedes an
-  already-active revision, so a SERIALIZED run activates both revisions
-  in turn (still exactly one active at the end) while the test asserts
-  exactly one `activated` output. Product behaviour is correct.
-- `Payroll/PayrollRunLifecycleConcurrencyTest`,
-  `AcademicStructure/AcademicYearActivationConcurrencyTest`,
-  `HR/PrimaryAssignmentConcurrencyTest`,
-  `Students/ProcessingAuthorization/ProcessingAuthorizationConcurrencyTest`
-  (lock-holder signal deadline of 10s), and
-  `StudentEnrollment/EnrollmentRolloverSubjectExecutionConcurrencyTest`
-  (reported `reconciled` instead of `succeeded` on one iteration) -- same
-  symptom class, not individually root-caused.
+| Test | Sequential outcome that broke it |
+|---|---|
+| `AcademicStructure/AcademicYearActivationConcurrencyTest` | second `activate()` closes the first year and succeeds |
+| `Payroll/CompensationConcurrencyTest` (scenario A) | second `activate()` supersedes the first revision |
+| `HR/PrimaryAssignmentConcurrencyTest` | second `setPrimary()` demotes the first and succeeds |
+| `Payroll/PayrollRunLifecycleConcurrencyTest` (scenario C) | second `approve()` fails its status pre-check (`InvalidRunTransitionException`), not the conflict exception |
 
-Recommended fix (not applied): a start barrier in each subprocess script
-(every process signals "booted" and waits until all have, then calls
-the service), and assertions that accept every outcome the product
-actually allows under serialization. Until then, re-run a single failing
-concurrency test in isolation before treating it as a regression.
+They now use a forced, VERIFIED interleaving
+(`Tests\Concerns\ForcesConcurrentOverlap` + `Tests\Support\Concurrency\HeldTransaction`):
+the holder performs its write inside a transaction it does not commit;
+the contender is started and positively observed in `pg_stat_activity`
+as blocked on a lock (the holder's uncommitted row or partial-unique-
+index entry); only then is the holder released. Each run therefore
+proves genuine overlap and asserts the exact expected result (holder
+succeeds, contender receives the domain concurrency exception). No
+product code changed, and no sleep or timeout was lengthened to hide a
+race -- deadlines only bound a broken run and fail with both processes'
+output.
+
+Two related fixes:
+
+- `Students/ProcessingAuthorization/ProcessingAuthorizationConcurrencyTest`
+  released the lock-holder and the terminate process from the SAME start
+  file; when terminate won, the grant was withdrawn before the
+  lock-holder could lock it, so it exited without signalling ("never
+  signalled within the 10s deadline"). Terminate now waits on the
+  lock-holder's own "lock acquired" signal.
+- `StudentEnrollment/EnrollmentRolloverSubjectExecutionConcurrencyTest`
+  counted a `reconciled:` rollover result as a win but then asserted the
+  Item status was strictly `succeeded`; it now asserts the persisted
+  status equals the outcome the process reported.
+
+Verified: all six tests, 10 consecutive runs each, while 16 CPU-bound
+busy loops saturated the container -- 60/60 passed.
 

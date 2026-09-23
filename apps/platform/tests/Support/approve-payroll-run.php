@@ -6,6 +6,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for PayrollRunLifecycleConcurrencyTest:
 // run in a GENUINELY separate OS process (via Symfony\Process::start(),
@@ -31,7 +32,7 @@ $context->set($school);
 try {
     $run = PayrollRun::query()->findOrFail($runId);
     $approver = User::query()->findOrFail($approverUserId);
-    $app->make(PayrollRunService::class)->approve($run, $approver);
+    HeldTransaction::run(fn () => $app->make(PayrollRunService::class)->approve($run, $approver));
     echo 'approved';
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

@@ -14,9 +14,11 @@ return new class extends Migration
      * (App\Support\Settings\SettingRegistry) before being written or
      * read back, so "typed schema" is an application-layer contract
      * on top of a flexible storage column, not "anything goes."
-     * Secrets/credentials must NEVER be stored here -- see
-     * docs/architecture/adr/0028-feature-flags-and-settings.md
-     * ("Secrets are not settings").
+     * Secrets/credentials must NEVER be stored here -- they belong in
+     * environment/secret configuration, see
+     * docs/architecture/adr/0016-secrets-configuration-strategy.md.
+     * (This comment previously cited a planned
+     * "0028-feature-flags-and-settings" ADR that was never written.)
      */
     public function up(): void
     {

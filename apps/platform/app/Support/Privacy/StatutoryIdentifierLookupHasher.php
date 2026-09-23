@@ -5,11 +5,11 @@ namespace App\Support\Privacy;
 use App\Support\Privacy\Exceptions\StatutoryIdentifierLookupKeyNotConfiguredException;
 
 /**
- * Checkpoint 9.6C (ADR 0036, ADR 0028's pattern) -- computes the
+ * Checkpoint 9.6C (ADR 0036, ADR 0041's pattern) -- computes the
  * keyed, tenant-separated exact-match digest stored in
  * `employee_statutory_identifiers.lookup_hash`. A genuinely new,
  * dedicated class rather than reusing `ContactLookupHasher` --
- * ADR 0028's own docblock explicitly anticipates exactly this: "if a
+ * ADR 0041's own docblock explicitly anticipates exactly this: "if a
  * second, unrelated exact-match-lookup need arises later... that is
  * the point to decide whether to generalize this class or give the
  * new need its own." Statutory identifiers (PAN/UAN/PF Member ID/

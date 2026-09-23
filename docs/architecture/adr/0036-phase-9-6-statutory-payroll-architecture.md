@@ -187,14 +187,14 @@ discipline).
 ### Statutory identifier privacy
 
 PAN, UAN, PF Member ID, and ESIC IP Number are stored using the same
-encrypted-value-plus-keyed-lookup-hash architecture ADR 0028 already
+encrypted-value-plus-keyed-lookup-hash architecture ADR 0041 already
 established for Guardian contact data (`encrypted` Eloquent cast for
 the real value, a keyed HMAC-SHA-256 lookup digest for exact-match
 duplicate detection where genuinely needed) — never bespoke
 cryptography. A new, dedicated hasher
 (`App\Support\Privacy\StatutoryIdentifierLookupHasher`) gets its own
 domain-separation prefix (`statutory-identifier`), following ADR
-0028's own explicit guidance that a second, unrelated exact-match-
+0041's own explicit guidance that a second, unrelated exact-match-
 lookup need should get its own class rather than overload
 `ContactLookupHasher`'s guardian-contact-specific one. Every read of a
 raw (unmasked) identifier requires a dedicated capability

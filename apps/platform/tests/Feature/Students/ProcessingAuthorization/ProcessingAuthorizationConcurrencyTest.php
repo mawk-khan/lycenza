@@ -177,7 +177,13 @@ class ProcessingAuthorizationConcurrencyTest extends TestCase
         $terminateScript = __DIR__.'/../../../Support/terminate-processing-authorization.php';
 
         $lockProcess = new Process(['php', $lockScript, $this->school->id, $student->id, $startBarrier, $lockAcquired, $release]);
-        $terminateProcess = new Process(['php', $terminateScript, $this->school->id, $grant->id, $actor->id, 'withdraw', $startBarrier]);
+        // The terminate process waits on the lock-holder's OWN "lock
+        // acquired" signal, not the shared start barrier: released
+        // together, the terminate side could withdraw the grant first,
+        // leaving the lock-holder nothing to lock (it then exits without
+        // ever signalling -- the intermittent "never signalled within
+        // the 10s deadline" failure). This forces the intended order.
+        $terminateProcess = new Process(['php', $terminateScript, $this->school->id, $grant->id, $actor->id, 'withdraw', $lockAcquired]);
 
         $lockProcess->start();
         $terminateProcess->start();
@@ -197,8 +203,8 @@ class ProcessingAuthorizationConcurrencyTest extends TestCase
             // returned.
             $deadline = microtime(true) + 10;
             while (! file_exists($lockAcquired)) {
-                if (microtime(true) > $deadline) {
-                    $this->fail('Lock-holder process never signalled lock acquisition within the 10s deadline.');
+                if (! $lockProcess->isRunning() || microtime(true) > $deadline) {
+                    $this->fail("Lock-holder process never signalled lock acquisition.\nOutput: ".$lockProcess->getOutput()."\nError: ".$lockProcess->getErrorOutput());
                 }
                 usleep(1_000);
             }

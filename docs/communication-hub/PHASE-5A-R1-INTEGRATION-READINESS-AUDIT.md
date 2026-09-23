@@ -146,7 +146,7 @@ possible short of no conflict at all.
 - A Guardian's email/mobile, but **not a plain column**:
   `encrypted_value` (Laravel `encrypted` cast, APP_KEY-based) +
   `lookup_hash` (keyed HMAC digest, `CONTACT_LOOKUP_HMAC_KEY`) for
-  exact-match search (ADR 0028, "searchable encrypted PII"). Both
+  exact-match search (ADR 0041 (originally numbered 0028), "searchable encrypted PII"). Both
   columns are `$hidden`. There is **no plaintext contact column
   anywhere**.
 - This is architecturally different from how Communication Hub

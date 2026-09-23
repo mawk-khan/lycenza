@@ -16,7 +16,7 @@ coherent fact underneath it.
 | Roadmap umbrella | **Examinations** (Phase 0H.4) |
 | First checkpoint | **Phase 0H.4A — Examination Foundation** (implemented) |
 | Second checkpoint | **Phase 0H.4B — ExaminationPaper / Scheduling** (implemented) |
-| Third checkpoint | **Phase 0H.4C — GradeScale / GradeBand mapping** (implemented; not yet merged to main) |
+| Third checkpoint | **Phase 0H.4C — GradeScale / GradeBand mapping** (implemented; published to main at `70e4a43`) |
 | Domain directory | `app/Domain/Examinations` |
 | Models / tables | `Examination` / `examinations`; `ExaminationPaper` / `examination_papers`; `GradeScale` / `grade_scales`; `GradeBand` / `grade_bands` |
 | Capability families | **`examinations.definitions.*`**; **`examinations.papers.*`**; **`examinations.grade_scales.*`** |
@@ -619,7 +619,7 @@ routes: index, store, update.
 Not registered in `WebhookEventRegistry`. No Timetable, Attendance, LMS,
 Lesson Planning, Communications, Notifications or Documents integration.
 
-## 19. Phase 0H.4C — GradeScale / GradeBand mapping (implemented; not yet published to main)
+## 19. Phase 0H.4C — GradeScale / GradeBand mapping (implemented; published)
 
 A named, School-owned mapping that converts a normalized percentage
 (0.00–100.00) into a discrete grade outcome through its ordered

@@ -6,6 +6,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for
 // SalaryStructureActivationConcurrencyTest: run in a GENUINELY separate
@@ -32,7 +33,7 @@ $context->set($school);
 try {
     $structure = SalaryStructure::query()->findOrFail($structureId);
     $actor = User::query()->findOrFail($actorUserId);
-    $app->make(SalaryStructureService::class)->activate($structure, $actor);
+    HeldTransaction::run(fn () => $app->make(SalaryStructureService::class)->activate($structure, $actor));
     echo 'activated';
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;
