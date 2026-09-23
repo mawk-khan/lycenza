@@ -13,6 +13,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use DateTimeZone;
 use Tests\Concerns\CreatesTenancyFixtures;
 
 /**
@@ -58,9 +59,16 @@ trait CreatesCurriculumDeliveryFixtures
         ];
     }
 
+    /**
+     * "Today" exactly as CurriculumDeliveryService evaluates it: in the
+     * School's own timezone (SchoolTimezone), not UTC. Every
+     * deliveryWorld() School uses SchoolFactory's default timezone; a
+     * UTC "today" disagreed with it for part of every day (e.g. 18:30-
+     * 24:00 UTC for Asia/Kolkata), making future-date assertions flaky.
+     */
     protected function today(): CarbonImmutable
     {
-        return CarbonImmutable::now()->startOfDay();
+        return CarbonImmutable::now(new DateTimeZone((string) School::factory()->make()->timezone))->startOfDay();
     }
 
     protected function createSyllabusUnitFor(SubjectOffering $offering, array $attributes = []): SyllabusUnit

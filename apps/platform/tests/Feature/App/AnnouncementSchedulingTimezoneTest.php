@@ -4,6 +4,7 @@ namespace Tests\Feature\App;
 
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -20,6 +21,19 @@ use Tests\TestCase;
 class AnnouncementSchedulingTimezoneTest extends TestCase
 {
     use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+
+    /**
+     * Every assertion below uses fixed wall-clock instants (2026-09-01,
+     * 2026-10-15, ...) and scheduling rejects a time in the past, so the
+     * clock is frozen before all of them -- otherwise this class starts
+     * failing the day those dates pass.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->travelTo(Carbon::parse('2026-08-01 00:00:00', 'UTC'));
+    }
 
     private function activate($user, $school): void
     {

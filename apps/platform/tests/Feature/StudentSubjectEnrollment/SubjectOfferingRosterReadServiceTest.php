@@ -133,7 +133,8 @@ class SubjectOfferingRosterReadServiceTest extends TestCase
         $sectionB = $this->createSection($year, $campus, $gradeB);
         $offering = $this->createSubjectOffering($year, $campus, $gradeA, $this->createSubject($school), ['is_required' => true]);
         $student = $this->createStudent($school, ['student_number' => 'S-1']);
-        $original = $this->createStudentEnrollment($student, $sectionA);
+        // Explicit start: the transfer below closes it on a fixed 2026-08-31.
+        $original = $this->createStudentEnrollment($student, $sectionA, ['starts_on' => '2026-04-01']);
 
         $this->assertSame([$student->id], $this->reads()->currentRosterStudentIds($offering));
 
@@ -169,7 +170,8 @@ class SubjectOfferingRosterReadServiceTest extends TestCase
         $sectionB = $this->createSection($year, $campus, $gradeB);
         $offering = $this->createSubjectOffering($year, $campus, $gradeA, $this->createSubject($school), ['is_required' => false]);
         $student = $this->createStudent($school, ['student_number' => 'S-1']);
-        $original = $this->createStudentEnrollment($student, $sectionA);
+        // Explicit start: the transfer below closes it on a fixed 2026-08-31.
+        $original = $this->createStudentEnrollment($student, $sectionA, ['starts_on' => '2026-04-01']);
         $membership = $this->writes()->enroll($student, $offering, '2026-06-01');
 
         app(TenantContext::class)->withSchool($school, function () use ($school, $original, $student, $sectionB) {
