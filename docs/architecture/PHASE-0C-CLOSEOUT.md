@@ -155,7 +155,8 @@ untouched; both prunes scheduled daily without overlap.
 
 ## 7. Publication
 
-Published to `main` via `integration/phase-0c-reliability-integration-closeout`.
-The publication (merge) SHA is recorded in the commit that publishes
-this document's closeout and in `git log --first-parent origin/main`
-("merge: publish Phase 0C reliability & integration closeout").
+Published to `main` on 2026-09-23 as merge commit **`fe5623e`**
+("merge: publish Phase 0C reliability & integration closeout", via
+`integration/phase-0c-reliability-integration-closeout`), containing
+`2552da0` (retention pruning + scheduling + tests) and `cda8ba9` (this
+report and the documentation reconciliation).
