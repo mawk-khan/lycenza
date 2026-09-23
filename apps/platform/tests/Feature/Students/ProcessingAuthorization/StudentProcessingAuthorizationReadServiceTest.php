@@ -7,6 +7,7 @@ use App\Domain\Students\Application\StudentProcessingAuthorizationReadService;
 use App\Domain\Students\Application\StudentProcessingAuthorizationService;
 use App\Domain\Students\Domain\ProcessingAuthorizationBasisType;
 use App\Domain\Students\Domain\ProcessingAuthorizationPurpose;
+use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentProcessingAuthorization;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -215,5 +216,82 @@ class StudentProcessingAuthorizationReadServiceTest extends TestCase
         );
 
         $this->assertSame($grant->id, $id);
+    }
+
+    /**
+     * Phase 0H.4D-P2 lock-freshness correction §7: the closure audit's
+     * confirmed defect -- lockQualifyingAuthorizationIdForProcessing()
+     * locked a fresh Student row but then discarded it, continuing to
+     * evaluate age against the CALLER's stale in-memory snapshot. This
+     * is fully deterministic and needs no multi-process machinery: the
+     * property under test ("does the method trust its own locked
+     * re-fetch, or the caller's stale handle") is observable within a
+     * single transaction by explicitly ordering the DOB correction
+     * BEFORE the call, using a Student variable fetched BEFORE that
+     * correction.
+     *
+     * Minor -> adult: a stale minor snapshot must not keep a
+     * guardian_consent grant qualifying once the authoritative row
+     * says adult; the method must instead surface the
+     * adult_student_consent grant, which only the fresh row's age
+     * makes eligible.
+     */
+    #[Test]
+    public function the_lock_seam_uses_the_freshly_locked_student_row_not_a_stale_caller_snapshot_when_dob_moves_minor_to_adult(): void
+    {
+        $school = $this->createSchool();
+        $student = $this->createStudent($school, ['date_of_birth' => '2012-01-01']); // minor
+        $guardian = $this->createGuardian($school);
+        $relationship = $this->createStudentGuardianRelationship($student, $guardian, ['is_legal_guardian' => true]);
+        $actor = $this->staffActor($school);
+
+        // Grants for BOTH bases exist in the ledger at all times --
+        // only current age determines which one currently qualifies.
+        $guardianGrant = $this->writeService()->recordGuardianConsent($school, $student, ProcessingAuthorizationPurpose::AcademicRecords, $relationship, $actor);
+        $adultGrant = $this->writeService()->recordAdultStudentConsent($school, $student, ProcessingAuthorizationPurpose::AcademicRecords, $actor);
+
+        // A STALE snapshot, fetched BEFORE the DOB correction below --
+        // this is the exact object the corrected method must NOT trust
+        // for the age decision.
+        $staleMinorSnapshot = app(TenantContext::class)->withSchool($school, fn () => Student::query()->findOrFail($student->id));
+
+        app(TenantContext::class)->withSchool($school, fn () => DB::table('students')->where('id', $student->id)->update(['date_of_birth' => '2000-01-01']));
+
+        $id = DB::transaction(
+            fn () => $this->readService()->lockQualifyingAuthorizationIdForProcessing($school, $staleMinorSnapshot, ProcessingAuthorizationPurpose::AcademicRecords),
+        );
+
+        $this->assertSame($adultGrant->id, $id, 'The lock seam must follow the freshly locked (now-adult) row, never the stale in-memory (minor) snapshot passed by the caller.');
+        $this->assertNotSame($guardianGrant->id, $id);
+    }
+
+    /**
+     * Inverse of the above: a stale ADULT snapshot must not keep an
+     * adult_student_consent grant qualifying once the authoritative
+     * row says minor; the method must surface the guardian_consent
+     * grant instead.
+     */
+    #[Test]
+    public function the_lock_seam_uses_the_freshly_locked_student_row_not_a_stale_caller_snapshot_when_dob_moves_adult_to_minor(): void
+    {
+        $school = $this->createSchool();
+        $student = $this->createStudent($school, ['date_of_birth' => '2000-01-01']); // adult
+        $guardian = $this->createGuardian($school);
+        $relationship = $this->createStudentGuardianRelationship($student, $guardian, ['is_legal_guardian' => true]);
+        $actor = $this->staffActor($school);
+
+        $guardianGrant = $this->writeService()->recordGuardianConsent($school, $student, ProcessingAuthorizationPurpose::AcademicRecords, $relationship, $actor);
+        $adultGrant = $this->writeService()->recordAdultStudentConsent($school, $student, ProcessingAuthorizationPurpose::AcademicRecords, $actor);
+
+        $staleAdultSnapshot = app(TenantContext::class)->withSchool($school, fn () => Student::query()->findOrFail($student->id));
+
+        app(TenantContext::class)->withSchool($school, fn () => DB::table('students')->where('id', $student->id)->update(['date_of_birth' => '2012-01-01']));
+
+        $id = DB::transaction(
+            fn () => $this->readService()->lockQualifyingAuthorizationIdForProcessing($school, $staleAdultSnapshot, ProcessingAuthorizationPurpose::AcademicRecords),
+        );
+
+        $this->assertSame($guardianGrant->id, $id, 'The lock seam must follow the freshly locked (now-minor) row, never the stale in-memory (adult) snapshot passed by the caller.');
+        $this->assertNotSame($adultGrant->id, $id);
     }
 }

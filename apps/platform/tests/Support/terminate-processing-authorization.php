@@ -8,6 +8,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
 
 // Standalone bootstrap script for ProcessingAuthorizationConcurrencyTest:
 // one terminal action (withdraw, revoke, or supersede) run in a
@@ -24,6 +25,17 @@ $kernel->bootstrap();
 
 [, $schoolId, $grantId, $actorId, $action] = $argv;
 $barrierFile = $argv[5] ?? null;
+
+// Named session so a parent test can positively confirm (via
+// pg_stat_activity), rather than infer from elapsed time, that this
+// process is genuinely blocked waiting on a lock held elsewhere.
+// PostgreSQL's SET does not accept a bind parameter -- $action is one
+// of the fixed literal values this script's own usage line documents
+// (withdraw|revoke|supersede), never arbitrary external input.
+if (! in_array($action, ['withdraw', 'revoke', 'supersede'], true)) {
+    throw new InvalidArgumentException('Unknown action: '.$action);
+}
+DB::connection()->statement('SET application_name TO '.DB::connection()->getPdo()->quote('spa_worker_'.$action));
 
 if ($barrierFile !== null) {
     while (! file_exists($barrierFile)) {
