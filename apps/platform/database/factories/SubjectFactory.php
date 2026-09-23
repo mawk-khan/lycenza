@@ -21,7 +21,11 @@ class SubjectFactory extends Factory
             'school_id' => School::factory(),
             'academic_department_id' => null,
             'name' => ucfirst($name),
-            'code' => strtoupper(substr($name, 0, 6)),
+            // A unique word does not give a unique 6-letter prefix
+            // ("consequatur"/"consequuntur" -> CONSEQ), which collided with
+            // subjects_school_id_code_unique intermittently; the numeric
+            // suffix keeps factory codes unique.
+            'code' => strtoupper(substr($name, 0, 6)).fake()->unique()->numberBetween(1, 999999),
             'short_name' => null,
             'subject_type' => 'core',
             'status' => 'active',

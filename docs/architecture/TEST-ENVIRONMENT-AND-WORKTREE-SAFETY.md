@@ -553,9 +553,10 @@ consolidation (one per full run, never the same twice in a row):
   `AcademicStructure/AcademicYearActivationConcurrencyTest`,
   `HR/PrimaryAssignmentConcurrencyTest`,
   `Students/ProcessingAuthorization/ProcessingAuthorizationConcurrencyTest`
-  (lock-holder signal deadline of 10s), and one
-  `StudentEnrollment/*ConcurrencyTest` -- same symptom class, not
-  individually root-caused.
+  (lock-holder signal deadline of 10s), and
+  `StudentEnrollment/EnrollmentRolloverSubjectExecutionConcurrencyTest`
+  (reported `reconciled` instead of `succeeded` on one iteration) -- same
+  symptom class, not individually root-caused.
 
 Recommended fix (not applied): a start barrier in each subprocess script
 (every process signals "booted" and waits until all have, then calls
