@@ -641,6 +641,75 @@ authoritative roadmap work changes that boundary.
 
 ## Phase 0I — LMS
 
+**Status: COMPLETE.** Active scope is Learning Content (0I.2) +
+Assignment (0I.3), both implemented. Submission was reviewed (0I.4) and
+then **cancelled as a product-scope decision on 2026-09-05** — see
+below. Phase 0I.4A (Submission legal decision incorporation) is **NOT
+REQUIRED — FEATURE CANCELLED**. No further Phase 0I checkpoint is
+planned.
+
+**Phase 0I.1 (2026-09-04): architecture contract frozen — complete.**
+See ADR 0037 (`docs/architecture/adr/0037-lms-domain-contract.md`) for
+the full decision record and `docs/modules/LMS.md` for the living
+operational reference.
+
+**Phase 0I.2 (2026-10-08): Learning Content Foundation implemented —
+complete.** `App\Domain\LMS` — `LearningContent`/`learning_content`
+(`draft→published→archived` lifecycle, `lms.content.view`/`.manage`
+capabilities, six `/api/v1` operations plus a session-authenticated
+Inertia surface at `/app/learning-content`), and the Documents module's
+fourth exclusive-arc owner column (`learning_content_id`, `internal`
+tier only) — see `docs/modules/LMS.md` §13 for the full as-built
+record.
+
+**Phase 0I.3 (2026-09-04): Assignments implemented — complete.** Same
+Confidential/staff-authored posture as Learning Content — six `/api/v1`
+operations (`draft→published→closed` lifecycle, `lms.assignments.view`/
+`.manage`), a session-authenticated Inertia surface at
+`/app/assignments`, and the Documents module's fifth exclusive-arc
+owner column (`assignment_id`, `internal` tier only).
+
+**Phase 0I.4 (2026-09-05): Submission legal-gate review conducted —
+completed as a governance review; gate never cleared.** A dedicated
+legal/data-governance review (`docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`)
+classified Submission Sensitive/`[LEGAL REVIEW REQUIRED]`, performed a
+detailed per-category data-inventory/classification exercise, and
+formally escalated an 18-question set to qualified legal counsel and
+product governance (`docs/security/LMS-SUBMISSION-LEGAL-REVIEW-REQUEST.md`).
+**No qualifying response was ever received.**
+
+**Submission capability — CANCELLED / OUT OF SCOPE (2026-09-05).** The
+product owner made a final scope decision that LMS student Submission
+functionality (coursework submission, Submission records/text/file
+uploads, revisions/resubmissions, teacher review of submitted
+coursework, Guardian-on-behalf or staff-on-behalf submission,
+Submission grading/scoring, the Submission Documents owner arm, and all
+Submission events/APIs/UI) is not required for the intended product
+(Indian school-system ERP market) and is intentionally cancelled. **This
+is a product-scope cancellation, not legal clearance** — the
+`[LEGAL REVIEW REQUIRED]` gate is retired because the underlying
+feature no longer exists, not because a qualified legal answer was ever
+obtained; the historical legal/data-governance concerns Phase 0I.4
+raised remain unresolved and must not be assumed settled if this scope
+is ever reopened. Both legal-review documents are retained, marked
+`CLOSED — FEATURE CANCELLED / OUT OF SCOPE`, as historical governance
+records (see `docs/architecture/adr/0037-lms-domain-contract.md`'s
+Submission cancellation addendum for the authoritative decision text).
+
+**Phase 0I.4A (Submission legal decision incorporation): NOT REQUIRED
+— FEATURE CANCELLED.** There is no legal decision to incorporate; the
+feature it would have gated no longer exists.
+
+**Proposed "Phase 0I.5 — Submission implementation": REMOVED /
+CANCELLED.** No such checkpoint will be scheduled. Reopening Submission
+in the future requires a fresh architecture and governance review from
+first principles, not a resumption of this cancelled scope.
+
+No external LMS integration or standard (Canvas, Moodle, Google
+Classroom, Microsoft Teams, OneRoster, LTI, QTI, SCORM, xAPI, Common
+Cartridge, Caliper) was ever authorized for Phase 0I and none is
+authorized now.
+
 ## Phase 0J — HR and Payroll
 
 Including the **[LEGAL REVIEW REQUIRED]** statutory-compliance

@@ -692,6 +692,40 @@ class CapabilityAndRoleSeeder extends Seeder
             // same as every other Examinations capability.
             ['key' => 'examinations.grade_scales.view', 'label' => 'View Grade Scales', 'namespace' => 'school'],
             ['key' => 'examinations.grade_scales.manage', 'label' => 'Manage Grade Scales', 'namespace' => 'school'],
+
+            // Phase 0I.2 (Learning Content Foundation -- the first
+            // concrete LMS fact, ADR 0037). Rooted at `lms.content.*`, a
+            // NEW module root with no collision in this catalog, and
+            // deliberately DEPTH-2 rather than a flat
+            // `lms.view`/`.manage`: this module will grow to
+            // `lms.assignments.*` and `lms.submissions.*` (ADR 0037
+            // decision 7 already froze that namespace shape), and a flat
+            // key would eventually grant Learning Content authoring and
+            // future Submission oversight with the same capability. Not
+            // `academics.*` (owned by Academic Structure) and never
+            // Academic Structure's own `academics.subjects.*`, even
+            // though the parent SubjectOffering belongs to that module
+            // -- the Canteen capability-boundary lesson, carried
+            // forward from every prior academic module. No
+            // `lms.content.teacher`: ADR 0037 decision 6 chose
+            // capability-only v1 because no teacher-to-Offering
+            // ownership record exists anywhere in this codebase yet --
+            // the identical gap Syllabus/Curriculum Delivery/
+            // Examinations already defer to.
+            ['key' => 'lms.content.view', 'label' => 'View Learning Content', 'namespace' => 'school'],
+            ['key' => 'lms.content.manage', 'label' => 'Manage Learning Content', 'namespace' => 'school'],
+
+            // Phase 0I.3 (Assignments -- the second concrete LMS fact,
+            // ADR 0037). The `lms.assignments.*` leaf the 0I.2 comment
+            // above already reserved. Deliberately separate from
+            // `lms.content.*`: authoring/publishing an Assignment is not
+            // the same right as authoring Learning Content, and folding
+            // them together would prevent a future School from granting
+            // one without the other. No `lms.assignments.teacher`: v1 is
+            // admin-only, same as `lms.content.*` and every other
+            // academic module.
+            ['key' => 'lms.assignments.view', 'label' => 'View Assignments', 'namespace' => 'school'],
+            ['key' => 'lms.assignments.manage', 'label' => 'Author, publish and close Assignments', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -941,6 +975,15 @@ class CapabilityAndRoleSeeder extends Seeder
                     // administration as defining the Examination window
                     // and scheduling its papers.
                     'examinations.grade_scales.view', 'examinations.grade_scales.manage',
+                    // Phase 0I.2: authoring and organizing a Subject
+                    // Offering's Learning Content is the same routine
+                    // academic administration as curating its syllabus
+                    // or defining its examinations, above.
+                    'lms.content.view', 'lms.content.manage',
+                    // Phase 0I.3: authoring, publishing and closing
+                    // Assignments is the same routine academic
+                    // administration as curating Learning Content, above.
+                    'lms.assignments.view', 'lms.assignments.manage',
                 ],
             ],
             'principal' => [
@@ -1089,6 +1132,13 @@ class CapabilityAndRoleSeeder extends Seeder
                     // administration as defining the Examination window
                     // and scheduling its papers.
                     'examinations.grade_scales.view', 'examinations.grade_scales.manage',
+                    // Phase 0I.2: same reasoning as school_admin above --
+                    // a Principal is the day-to-day operator of the
+                    // academic structure and its content, not merely a
+                    // viewer.
+                    'lms.content.view', 'lms.content.manage',
+                    // Phase 0I.3: same reasoning as school_admin above.
+                    'lms.assignments.view', 'lms.assignments.manage',
                 ],
             ],
         ];

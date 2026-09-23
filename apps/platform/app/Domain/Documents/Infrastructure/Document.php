@@ -4,6 +4,8 @@ namespace App\Domain\Documents\Infrastructure;
 
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\LMS\Infrastructure\Assignment;
+use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\User;
 use App\Support\Identifiers\GeneratesUuidV7;
@@ -32,6 +34,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $employee_id
  * @property string|null $student_id
  * @property string|null $guardian_id
+ * @property string|null $learning_content_id
+ * @property string|null $assignment_id
  * @property string $classification_tier public|internal|sensitive|highly_sensitive
  * @property string $storage_disk
  * @property string $storage_path
@@ -41,7 +45,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $uploaded_by_user_id
  * @property Carbon $uploaded_at
  * @property string $status active|archived
- * @property-read string $owner_type employee|student|guardian
+ * @property-read string $owner_type employee|student|guardian|learning_content|assignment
  */
 class Document extends Model
 {
@@ -54,6 +58,8 @@ class Document extends Model
         'employee_id',
         'student_id',
         'guardian_id',
+        'learning_content_id',
+        'assignment_id',
         'classification_tier',
         'storage_disk',
         'storage_path',
@@ -95,6 +101,18 @@ class Document extends Model
         return $this->belongsTo(Guardian::class);
     }
 
+    /** @return BelongsTo<LearningContent, $this> */
+    public function learningContent(): BelongsTo
+    {
+        return $this->belongsTo(LearningContent::class);
+    }
+
+    /** @return BelongsTo<Assignment, $this> */
+    public function assignment(): BelongsTo
+    {
+        return $this->belongsTo(Assignment::class);
+    }
+
     /** @return BelongsTo<User, $this> */
     public function uploadedBy(): BelongsTo
     {
@@ -119,6 +137,8 @@ class Document extends Model
                 $this->employee_id !== null => 'employee',
                 $this->student_id !== null => 'student',
                 $this->guardian_id !== null => 'guardian',
+                $this->learning_content_id !== null => 'learning_content',
+                $this->assignment_id !== null => 'assignment',
                 default => throw new \LogicException('Document has no owner set -- violates the exactly-one-owner database constraint.'),
             };
         });

@@ -7373,6 +7373,538 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  # Phase 0I.2 (Learning Content Foundation -- the first concrete LMS
+  # fact, ADR 0037). Exactly SIX operations: list/create nested under
+  # the owning SubjectOffering, show/update flat, publish/archive as
+  # dedicated action routes -- `status` moves ONLY through those two,
+  # never through the ordinary PATCH (the CurriculumDelivery-style
+  # split, not SyllabusUnit's plain-status-field one).
+  #
+  # No delete, no Assignment or Submission operation of any kind --
+  # those remain future, separately-gated checkpoints.
+  #
+  # Capabilities are rooted at `lms.content.*`, NOT `academics.*` -- see
+  # docs/modules/LMS.md for the module boundary.
+  #
+  # LearningContent is Confidential (docs/security/DATA-CLASSIFICATION.md):
+  # School instructional-resource content containing NO personal data.
+  # No Student, Guardian, Employee or teacher identity appears in any
+  # schema below, and no grading, marks, assignment or submission field
+  # exists anywhere.
+  /schools/{schoolId}/subject-offerings/{subjectOfferingId}/learning-content:
+    get:
+      operationId: listLearningContent
+      summary: >
+        Lists a SubjectOffering's Learning Content in display order
+        (sequence, then creation order). Requires lms.content.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/LearningContent" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.content.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SubjectOffering in this School.
+    post:
+      operationId: createLearningContent
+      summary: >
+        Adds one Learning Content resource to a SubjectOffering. Always
+        created `draft`. Requires lms.content.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LearningContentCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.content.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SubjectOffering in this School.
+        "422":
+          description: Validation failure -- missing/oversized title, oversized description, or a negative sequence.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/learning-content/{learningContentId}:
+    get:
+      operationId: getLearningContent
+      summary: One LearningContent resource. Requires lms.content.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.content.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such LearningContent in this School.
+    patch:
+      operationId: updateLearningContent
+      summary: >
+        Updates title, description and/or sequence -- ordinary field
+        edits ONLY, at any status. This is NOT how content is published
+        or archived; see the dedicated publish/archive operations
+        below. Requires lms.content.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LearningContentUpdateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.content.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such LearningContent in this School.
+        "422":
+          description: Validation failure -- oversized title/description or a negative sequence.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/learning-content/{learningContentId}/publish:
+    post:
+      operationId: publishLearningContent
+      summary: >
+        Makes this content the live/current one. Legal from `draft`
+        (first publication) or `archived` (reinstatement) only -- both
+        land on `published`. Requires lms.content.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Published.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.content.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such LearningContent in this School.
+        "422":
+          description: Illegal transition -- already `published`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/learning-content/{learningContentId}/archive:
+    post:
+      operationId: archiveLearningContent
+      summary: >
+        Retires this content. Legal from `published` only -- the row is
+        never deleted and can be published again later. Requires
+        lms.content.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Archived.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.content.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such LearningContent in this School.
+        "422":
+          description: Illegal transition -- not currently `published`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/learning-content/{learningContentId}/documents:
+    post:
+      operationId: uploadLearningContentDocument
+      summary: >
+        Attaches a file to a LearningContent resource, via the shared
+        Documents module's `learning_content` owner arm (ADR 0037
+        decision 8). `classification_tier` is fixed to `internal`
+        server-side and is not an accepted field -- a LearningContent
+        Document has exactly one valid tier. Requires lms.content.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Document" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.content.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such LearningContent in this School.
+        "422":
+          description: Missing file, disallowed type, or oversized file.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    get:
+      operationId: listLearningContentDocuments
+      summary: >
+        Lists Documents owned by one LearningContent resource. Requires
+        lms.content.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+        - { name: per_page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Document" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.content.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such LearningContent in this School.
+  # Phase 0I.3 (Assignments -- the second concrete LMS fact, ADR 0037).
+  # Exactly SIX operations, structurally identical to Learning Content's
+  # own shape: list/create nested under the owning SubjectOffering,
+  # show/update flat, publish/close as dedicated action routes --
+  # `status` moves ONLY through those two, never through the ordinary
+  # PATCH.
+  #
+  # No delete, no Submission operation of any kind -- Submission remains
+  # a future, separately legal-review-gated checkpoint (ADR 0037 §4).
+  #
+  # Capabilities are rooted at `lms.assignments.*`, NOT `academics.*` --
+  # see docs/modules/LMS.md for the module boundary.
+  #
+  # Assignment is Confidential (docs/security/DATA-CLASSIFICATION.md):
+  # staff-authored operational data containing NO personal data and NO
+  # mark/score/grade field of any kind.
+  /schools/{schoolId}/subject-offerings/{subjectOfferingId}/assignments:
+    get:
+      operationId: listAssignments
+      summary: >
+        Lists a SubjectOffering's Assignments in due-date order (nulls
+        first, then creation order). Requires lms.assignments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Assignment" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.assignments.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SubjectOffering in this School.
+    post:
+      operationId: createAssignment
+      summary: >
+        Adds one Assignment to a SubjectOffering. Always created
+        `draft`. `due_on`, if given, must fall inside the Offering's
+        AcademicYear range. Requires lms.assignments.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Assignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.assignments.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such SubjectOffering in this School.
+        "422":
+          description: Validation failure -- missing/oversized title, oversized instructions, or a due date outside the Offering's AcademicYear.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/assignments/{assignmentId}:
+    get:
+      operationId: getAssignment
+      summary: One Assignment. Requires lms.assignments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Assignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.assignments.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Assignment in this School.
+    patch:
+      operationId: updateAssignment
+      summary: >
+        Updates title, instructions and/or due date -- ordinary field
+        edits ONLY, at any status. This is NOT how an Assignment is
+        published or closed; see the dedicated publish/close operations
+        below. Requires lms.assignments.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentUpdateInput" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Assignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.assignments.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Assignment in this School.
+        "422":
+          description: Validation failure -- oversized title/instructions or a due date outside the Offering's AcademicYear.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/assignments/{assignmentId}/publish:
+    post:
+      operationId: publishAssignment
+      summary: >
+        Makes this Assignment the live/current one. Legal from `draft`
+        (first publication) or `closed` (reopening) only -- both land on
+        `published`. Requires a due date to already be set. Requires
+        lms.assignments.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Published.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Assignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.assignments.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Assignment in this School.
+        "422":
+          description: Illegal transition (already `published`), or no due date is set yet.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/assignments/{assignmentId}/close:
+    post:
+      operationId: closeAssignment
+      summary: >
+        Closes this Assignment. Legal from `published` only -- the row
+        is never deleted and can be published again later. Requires
+        lms.assignments.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Closed.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Assignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.assignments.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Assignment in this School.
+        "422":
+          description: Illegal transition -- not currently `published`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /schools/{schoolId}/assignments/{assignmentId}/documents:
+    post:
+      operationId: uploadAssignmentDocument
+      summary: >
+        Attaches a file to an Assignment, via the shared Documents
+        module's `assignment` owner arm (ADR 0037 decision 8).
+        `classification_tier` is fixed to `internal` server-side and is
+        not an accepted field -- an Assignment Document has exactly one
+        valid tier. Requires lms.assignments.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Document" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.assignments.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Assignment in this School.
+        "422":
+          description: Missing file, disallowed type, or oversized file.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    get:
+      operationId: listAssignmentDocuments
+      summary: >
+        Lists Documents owned by one Assignment. Requires
+        lms.assignments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+        - { name: per_page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Document" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking lms.assignments.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such Assignment in this School.
   /schools/{schoolId}/subject-offerings/{subjectOfferingId}/curriculum-deliveries:
     get:
       operationId: listCurriculumDeliveries
@@ -11212,6 +11744,114 @@ components:
         title: { type: string, maxLength: 255 }
         sequence: { type: integer, minimum: 0 }
         status: { $ref: "#/components/schemas/SyllabusUnitStatus" }
+    LearningContentStatus:
+      type: string
+      description: >
+        The complete, closed LearningContent state vocabulary, mirrored
+        by the database's own `learning_content_status_check` CHECK
+        constraint. Exactly three legal transitions:
+        draft->published, published->archived, archived->published --
+        never set directly via the update operation, only through the
+        dedicated publish/archive operations.
+      enum: [draft, published, archived]
+    LearningContent:
+      type: object
+      description: >
+        A School-authored instructional resource (a reading, a link, a
+        note, or an attached file via the Documents `learning_content`
+        owner arm) belonging to one SubjectOffering. It records nothing
+        about any Student, Assignment or Submission -- those belong to
+        future, separately-gated LMS checkpoints (ADR 0037).
+      required: [id, subjectOfferingId, title, sequence, status]
+      properties:
+        id: { type: string, format: uuid }
+        subjectOfferingId:
+          type: string
+          format: uuid
+          description: >
+            The single owning SubjectOffering, which already pins
+            AcademicYear, Campus, GradeLevel and Subject -- none of which
+            is duplicated onto this resource.
+        title: { type: string, maxLength: 255 }
+        description: { type: string, nullable: true, maxLength: 20000 }
+        sequence: { type: integer, minimum: 0, description: "Display order within the Offering. Deliberately NOT unique -- two resources may share a position mid-reorder." }
+        status: { $ref: "#/components/schemas/LearningContentStatus" }
+    LearningContentCreateInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, maxLength: 255 }
+        description: { type: string, nullable: true, maxLength: 20000 }
+        sequence: { type: integer, minimum: 0, description: "Defaults to 0 if omitted." }
+    LearningContentUpdateInput:
+      type: object
+      description: >
+        Partial update; every field is optional. Deliberately does NOT
+        accept `status` -- a lifecycle change always goes through the
+        dedicated publish/archive operations, never this one.
+      properties:
+        title: { type: string, maxLength: 255 }
+        description: { type: string, nullable: true, maxLength: 20000 }
+        sequence: { type: integer, minimum: 0 }
+    AssignmentStatus:
+      type: string
+      description: >
+        The complete, closed Assignment state vocabulary, mirrored by
+        the database's own `assignments_status_check` CHECK constraint.
+        Exactly three legal transitions: draft->published,
+        published->closed, closed->published -- never set directly via
+        the update operation, only through the dedicated publish/close
+        operations.
+      enum: [draft, published, closed]
+    Assignment:
+      type: object
+      description: >
+        A staff-authored unit of work -- title, instructions, an
+        optional due date, and a lifecycle -- that a SubjectOffering's
+        roster is expected to complete. Never itself grade-bearing --
+        no mark, score or grade field exists here or anywhere in LMS's
+        contract (ADR 0037). Submission (a Student's response to an
+        Assignment) remains a future, separately legal-review-gated
+        checkpoint.
+      required: [id, subjectOfferingId, title, status]
+      properties:
+        id: { type: string, format: uuid }
+        subjectOfferingId:
+          type: string
+          format: uuid
+          description: >
+            The single owning SubjectOffering, which already pins
+            AcademicYear, Campus, GradeLevel and Subject -- none of which
+            is duplicated onto this resource.
+        title: { type: string, maxLength: 255 }
+        instructions: { type: string, nullable: true, maxLength: 20000 }
+        dueOn:
+          type: string
+          format: date
+          nullable: true
+          description: >
+            School-local calendar date. Nullable while `draft`; required
+            before `publish()`. Informational/display-only in v1 -- not
+            a structural acceptance boundary for any future Submission
+            behavior.
+        status: { $ref: "#/components/schemas/AssignmentStatus" }
+    AssignmentCreateInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, maxLength: 255 }
+        instructions: { type: string, nullable: true, maxLength: 20000 }
+        due_on: { type: string, format: date, nullable: true }
+    AssignmentUpdateInput:
+      type: object
+      description: >
+        Partial update; every field is optional. Deliberately does NOT
+        accept `status` -- a lifecycle change always goes through the
+        dedicated publish/close operations, never this one.
+      properties:
+        title: { type: string, maxLength: 255 }
+        instructions: { type: string, nullable: true, maxLength: 20000 }
+        due_on: { type: string, format: date, nullable: true }
     CurriculumDeliveryStatus:
       type: string
       description: >
