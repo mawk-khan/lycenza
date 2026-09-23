@@ -726,6 +726,19 @@ class CapabilityAndRoleSeeder extends Seeder
             // academic module.
             ['key' => 'lms.assignments.view', 'label' => 'View Assignments', 'namespace' => 'school'],
             ['key' => 'lms.assignments.manage', 'label' => 'Author, publish and close Assignments', 'namespace' => 'school'],
+
+            // Phase 0L.2-1 (Analytics Foundation, ADR 0040 §5). The
+            // spelling ADR 0040 froze, seeded now that the first read
+            // model exists. `analytics.view` is deliberately independent
+            // of every source-module capability in both directions: it
+            // neither requires nor is implied by e.g.
+            // `curriculum.delivery.view`. `analytics.export` is seeded
+            // because ADR 0040 defines it as a distinct grant, but NO
+            // export exists and NO role receives it in this checkpoint.
+            // `analytics.platform.view` is NOT seeded: cross-School
+            // Analytics is deferred to its own ADR (ADR 0040 §4).
+            ['key' => 'analytics.view', 'label' => 'View Analytics reports', 'namespace' => 'school'],
+            ['key' => 'analytics.export', 'label' => 'Export Analytics reports', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -984,6 +997,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Assignments is the same routine academic
                     // administration as curating Learning Content, above.
                     'lms.assignments.view', 'lms.assignments.manage',
+                    // Phase 0L.2-1: the approved initial Analytics
+                    // audience is School Admin and Principal (docs/
+                    // modules/ANALYTICS.md §13). View only -- no role
+                    // receives `analytics.export` yet.
+                    'analytics.view',
                 ],
             ],
             'principal' => [
@@ -1139,6 +1157,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     'lms.content.view', 'lms.content.manage',
                     // Phase 0I.3: same reasoning as school_admin above.
                     'lms.assignments.view', 'lms.assignments.manage',
+                    // Phase 0L.2-1: same approved audience as
+                    // school_admin above; view only, no export.
+                    'analytics.view',
                 ],
             ],
         ];

@@ -983,6 +983,17 @@ size, suppression mode, policy scope, counsel review for Student-data
 sources, capability grants, first source); implementation does not
 start until they are recorded.
 
+**Phase 0L.2-1 — Analytics Foundation + Curriculum Coverage: COMPLETE
+(2026-09-23).** Owner-approved interim scope (ADR 0040 2026-09-23
+amendment): `App\Domain\Analytics` (read gate, read-model declaration,
+fail-closed person-cohort policy, registry), `analytics.view` for School
+Admin and Principal, `analytics.export` seeded but unused, and one
+non-person report — Curriculum Coverage (`/app/analytics/curriculum-coverage`)
+— reading Curriculum Delivery's new aggregate contract. **Person-counting
+Analytics remains BLOCKED** on gate decisions 7.1–7.4; no export; no
+cross-School Analytics. A full regression checkpoint is due before any
+further 0L.2 checkpoint.
+
 ## Phase 0M — AI Platform: Real Agents
 
 First real model-provider integration (ADR 0013, with the

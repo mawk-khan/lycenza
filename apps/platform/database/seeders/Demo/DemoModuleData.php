@@ -239,6 +239,26 @@ final class DemoModuleData
                         );
                     }
                 }
+
+                // Section B (Phase 0L.2-1, so the Curriculum Coverage
+                // Analytics report shows real variation): MATH ahead
+                // (4 completed), SCI behind (1 completed, 1 in
+                // progress), ENG not started.
+                [$completedB, $inProgressB] = ['MATH' => [4, 0], 'SCI' => [1, 1], 'ENG' => [0, 0]][$subjectCode];
+                $sectionB = $d->sections["{$gradeKey}-B"];
+                foreach (array_slice($created, 0, $completedB + $inProgressB) as $i => $unit) {
+                    $started = $delivery->start($d->school, $offering->id, $sectionB->id, $unit->id, Carbon::parse('2026-04-13')->addWeeks($i * 4)->toDateString(), $d->admin);
+                    if ($i < $completedB) {
+                        $delivery->transition(
+                            $d->school,
+                            $started->id,
+                            CurriculumDelivery::STATUS_IN_PROGRESS,
+                            CurriculumDelivery::STATUS_COMPLETED,
+                            Carbon::parse('2026-04-13')->addWeeks($i * 4 + 3)->toDateString(),
+                            $d->admin,
+                        );
+                    }
+                }
             }
         }
     }

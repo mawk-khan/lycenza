@@ -513,3 +513,44 @@ anticipation of them.
   wholly unscoped by this ADR and require their own future contracts.
 - No code, migration, route, or capability-catalog entry is introduced
   by this ADR.
+
+## Amendment — 2026-09-23 (Phase 0L.2-1, owner-approved interim scope)
+
+Recorded from the product owner's approved interim scope for Phase
+0L.2-1. It **amends decision 6's scope** and records the first
+implementation decisions. It does **not** set the minimum-cohort number,
+which remains an open **[LEGAL/PRODUCT/SECURITY REVIEW REQUIRED]** gate.
+
+1. **Scope of the cohort-size rule (clarifies decision 6).** Small-cohort
+   suppression applies wherever a cell value **or its denominator**
+   counts people, or could disclose information about people (Students,
+   Guardians, Employees, applicants, visitors, ...). **Pure non-person
+   object/process aggregates** — e.g. syllabus-unit coverage — are **not
+   subject to the minimum-cohort-size threshold**, but remain fully
+   subject to classification (tier inheritance), authorization
+   (`analytics.view`), tenancy (single-School, RLS) and, where the tier
+   requires it, access audit. Every read model declares which it is
+   (`ReadModelDeclaration::$countsPeople`).
+2. **Person-counting Analytics stays blocked.** No minimum person-cohort
+   size has been approved. Any read model whose cells or denominators
+   count people fails closed (HTTP 503, before any source data is read)
+   while `analytics.minimum_person_cohort_size` is unset
+   (`App\Domain\Analytics\Application\CohortSuppressionPolicy`), and
+   `Tests\Feature\Analytics\AnalyticsArchitectureGuardTest` refuses to
+   let any registered read model count people at all until the policy
+   (number and suppression mode) is decided.
+3. **First source**: Curriculum Delivery / Syllabus coverage, consumed
+   only through Curriculum Delivery's own aggregate read contract
+   (`App\Domain\CurriculumDelivery\Application\CurriculumCoverageReadService`),
+   per decision 3.
+4. **Capabilities (decision 5)**: `analytics.view` and `analytics.export`
+   are now seeded. `analytics.view` is granted to the `school_admin` and
+   `principal` system roles only. `analytics.export` is registered but
+   granted to no role, and **no export exists**. `analytics.platform.view`
+   remains unseeded; cross-School Analytics remains deferred (decision 4).
+5. **Student-data Analytics** remains outside implementation until the
+   separate privacy/legal decision (DATA-CLASSIFICATION.md, "Children's
+   data specifically") is completed.
+
+As built: `docs/modules/ANALYTICS.md` §13. Still-open decisions:
+`docs/security/ANALYTICS-SMALL-COHORT-POLICY-GATE.md` §7.

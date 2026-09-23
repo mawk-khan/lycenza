@@ -115,7 +115,7 @@ final class DemoAccountCatalog
     {
         $people = [
             ['School Admin', 'school.admin@example.test', 'Broad school administration: every module incl. Finance and Payroll administration.'],
-            ['Principal', 'principal@example.test', 'Academics, students, admissions, communications, operations; Finance and Payroll are 403.'],
+            ['Principal', 'principal@example.test', 'Academics, students, admissions, communications, operations, curriculum Analytics; Finance and Payroll are 403.'],
             ['HR & Payroll', 'hr.payroll@example.test', 'Demo role: HR incl. sensitive records, payroll runs, payslips, statutory screens.'],
             ['Multi-school Admin', 'multi.school@example.test', 'Principal at Demo School, School Admin at Annexe: School switching and tenant isolation.'],
             ['Annexe School Admin', 'annexe.admin@example.test', 'School Admin of the second School only: cannot see Demo School records.'],

@@ -156,6 +156,13 @@ boundaries, not Analytics alone; see ADR 0040 and
 `docs/modules/ANALYTICS.md` §5 for the concrete Analytics-specific
 capability namespace this principle was first applied to.
 
+As built in Phase 0L.2-1 (2026-09-23): `analytics.view` is held by the
+`school_admin` and `principal` system roles only, and the Curriculum
+Coverage report neither requires nor grants `curriculum.delivery.view`
+(tested both ways in `Tests\Feature\Analytics\AnalyticsReadGateTest`
+and `Tests\Feature\App\CurriculumCoverageAnalyticsUiTest`).
+`analytics.export` is seeded but granted to no role; there is no export.
+
 ## Multi-factor authentication (Phase 0H.4D-P1, ADR 0037)
 
 This is the "documented future path" `App\Http\Controllers\Auth\LoginController`'s
