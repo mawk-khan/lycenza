@@ -731,6 +731,25 @@ docs/roadmap             MASTER-ROADMAP.md
     exactly the situation where two worktrees might run tests
     concurrently.
 
+82. **Every unit of work is finished -- tested, committed, pushed and
+    published -- before the next one starts, and the full regression
+    suite runs on a fixed cadence.** Per phase/unit: focused domain
+    tests, the relevant integration/authorization tests, the static/
+    style/frontend gates (Pint, Larastan, vue-tsc, ESLint, Prettier,
+    build), a DDEV smoke/review (`ddev demo-reset`,
+    `docs/development/DDEV-DEMO-REVIEW.md`), then commit, push and
+    merge/publish through the normal `integration/*` gate. After every
+    4-5 completed units -- or sooner after any major cross-domain
+    integration -- run the COMPLETE suite (`ddev test --reset-db` or
+    `bin/safe-test`), investigate every failure, fix repository defects,
+    re-run the affected tests and then the full suite again, and publish
+    those corrections before continuing. Environment-specific tests
+    (e.g. the real-MinIO Documents tests,
+    `docs/architecture/TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md`) are
+    reported separately, never skipped to make a run green. Record in
+    each unit's report which unit it is since the last full-regression
+    checkpoint.
+
 ## Running things locally
 
 ```bash
