@@ -4,7 +4,7 @@ import { ref, watch } from 'vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
 
 /**
- * Phase 0I.3 — the administrative Assignment surface (ADR 0037).
+ * Phase 0I.3 — the administrative Assignment surface (ADR 0039).
  *
  * An Assignment is a staff-authored unit of work for one
  * SubjectOffering — title, instructions, an optional due date, and a

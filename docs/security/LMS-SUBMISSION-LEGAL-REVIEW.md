@@ -15,7 +15,7 @@
 > as a historical architecture/governance record — the 18-question
 > escalation and the analysis behind it remain intact as provenance for
 > whatever future checkpoint might reopen this scope from first
-> principles. See `docs/architecture/adr/0037-lms-domain-contract.md`'s
+> principles. See `docs/architecture/adr/0039-lms-domain-contract.md`'s
 > Submission cancellation addendum for the authoritative decision text.
 
 - Checkpoint: Phase 0I.4 (2026-09-05)
@@ -27,14 +27,14 @@
   legal advice.** It maps the proposed Submission feature against this
   repository's own classification framework and existing precedent, and
   produces a question set for qualified counsel/product governance. It
-  does not, and cannot, itself clear ADR 0037 §4's legal-review gate.
+  does not, and cannot, itself clear ADR 0039 §4's legal-review gate.
 - **No implementation accompanies this checkpoint.** No migration,
   model, service, controller, route, capability, UI, or Documents owner
   arm is introduced. See §21–22 below.
 
 ## 1. Purpose
 
-ADR 0037 §4 (`docs/architecture/adr/0037-lms-domain-contract.md`)
+ADR 0039 §4 (`docs/architecture/adr/0039-lms-domain-contract.md`)
 already classified Submission **Sensitive** and raised a
 `[LEGAL REVIEW REQUIRED]` gate at the *architecture-contract* stage
 (Phase 0I.1, 2026-09-04), before Learning Content or Assignment schema
@@ -43,8 +43,8 @@ existed. This checkpoint revisits that gate now that Learning Content
 re-verifying the gate is still correctly reasoned, has not been
 silently weakened, and remains blocked absent an actual recorded legal
 decision. It also performs the detailed data-inventory exercise ADR
-0037 did at a summary level, and produces the counsel-facing question
-set ADR 0037 itself does not contain.
+0039 did at a summary level, and produces the counsel-facing question
+set ADR 0039 itself does not contain.
 
 ## 2. Existing legal/privacy evidence — what the repository actually establishes
 
@@ -54,16 +54,16 @@ memory or another checkpoint's self-description.
 
 | Source | What it establishes |
 |---|---|
-| `docs/architecture/adr/0037-lms-domain-contract.md` §4 (lines 160–227) | Submission = Sensitive; independently triggers the children's-data `[LEGAL REVIEW REQUIRED]` gate (distinct from Examinations' `StudentMark` gate); the *entire* Submission entity is blocked, not just its free-text columns; release condition is "qualified legal review... or an explicit, user-approved scope-narrowing decision." |
-| `docs/architecture/adr/0037-lms-domain-contract.md` §5 (lines 229–325) | No Student authentication exists anywhere (`students.user_id` does not exist; no `student` role). A real Guardian self-service login exists (`AccountInvitationService`/`GuardianAccountActivationService`). No "act on behalf of" delegation model exists anywhere in the codebase. Who may submit is explicitly **unresolved**. |
+| `docs/architecture/adr/0039-lms-domain-contract.md` §4 (lines 160–227) | Submission = Sensitive; independently triggers the children's-data `[LEGAL REVIEW REQUIRED]` gate (distinct from Examinations' `StudentMark` gate); the *entire* Submission entity is blocked, not just its free-text columns; release condition is "qualified legal review... or an explicit, user-approved scope-narrowing decision." |
+| `docs/architecture/adr/0039-lms-domain-contract.md` §5 (lines 229–325) | No Student authentication exists anywhere (`students.user_id` does not exist; no `student` role). A real Guardian self-service login exists (`AccountInvitationService`/`GuardianAccountActivationService`). No "act on behalf of" delegation model exists anywhere in the codebase. Who may submit is explicitly **unresolved**. |
 | `docs/security/DATA-CLASSIFICATION.md` (lines 3–12) | Self-disclaimer: "written by engineering, not legal counsel, and makes no claim about compliance with any specific law or regulation" — the product "must not represent itself as compliant with... the DPDP Act... until a qualified legal review has actually happened." |
 | `docs/security/DATA-CLASSIFICATION.md` line 28 | "Children's data specifically" = Highly Sensitive, `[LEGAL REVIEW REQUIRED]` — DPDP Act obligations "must be reviewed by qualified counsel before any module processing student data ships to real schools." |
-| `docs/security/DATA-CLASSIFICATION.md` line 46 | "LMS Submission / Student Work Product" row: Sensitive baseline, `[LEGAL REVIEW REQUIRED]`, identical language to ADR 0037 §4. |
+| `docs/security/DATA-CLASSIFICATION.md` line 46 | "LMS Submission / Student Work Product" row: Sensitive baseline, `[LEGAL REVIEW REQUIRED]`, identical language to ADR 0039 §4. |
 | `docs/security/DATA-CLASSIFICATION.md` lines 69–73 | Retention periods per category are **repo-wide** `[LEGAL REVIEW REQUIRED]`, "not yet made" for any module — not a Submission-specific gap. |
 | `docs/modules/EXAMINATIONS.md` §20 (lines 663–672) | `StudentMark` is itself still "PROVISIONAL, GATED" on the same children's-data gate, on separate grounds (grade authority + free-text remark risk) — confirms two independent, still-open gates exist in this codebase today, not one. |
 | `docs/architecture/adr/0036-phase-9-6-statutory-payroll-architecture.md` + `docs/modules/PAYROLL.md` (lines 10–52) | The one precedent in this repository where a `[LEGAL REVIEW REQUIRED]` gate **was actually cleared**: a named, dated, jurisdiction-specific legal artifact (`SCH/PAY/REG/2026-9.6`, Telangana, effective 1 April 2026) is quoted verbatim in the ADR, with an explicit engineering "binding correction addendum" reconciling ambiguity, implemented on a separately-numbered branch. This is the evidentiary bar a Submission clearance would need to meet — see §19. |
 | `docs/communication-hub/PHASE-5D-2-GUARDIAN-STUDENT-PREFERENCES-CONSENT.md` | The only consent model implemented anywhere in this repository (Guardian email-channel preference + append-only consent-event history). Its own §29 states explicitly: recording a consent event "is **not** a claim that School OS thereby satisfies GDPR, COPPA, FERPA, or any other legal/regulatory regime." No student-coursework consent model exists. |
-| `docs/architecture/adr/0037-lms-domain-contract.md` §8 (lines 386–430); `apps/platform/database/migrations/2026_10_09_090100_add_assignment_owner_to_documents_table.php` (lines 19–25) | The `submission_id` Documents owner arm is explicitly *not* added yet, "exactly as `docs/modules/LMS.md` §9 anticipated" — confirming Phase 0I.3 correctly deferred to this checkpoint rather than pre-empting it. |
+| `docs/architecture/adr/0039-lms-domain-contract.md` §8 (lines 386–430); `apps/platform/database/migrations/2026_10_13_090300_add_assignment_owner_to_documents_table.php` (lines 19–25) | The `submission_id` Documents owner arm is explicitly *not* added yet, "exactly as `docs/modules/LMS.md` §9 anticipated" — confirming Phase 0I.3 correctly deferred to this checkpoint rather than pre-empting it. |
 | Repo-wide search | No hits anywhere for "erasure," "right to be forgotten," or "anonymiz(e/ation)." No hits for "data principal"/"data fiduciary" (DPDP's own statutory terms). No authoritative legal sign-off document, addendum, or counsel-reviewed policy exists for LMS/Submission specifically. |
 
 **Conclusion of this section:** the gate is real, current, correctly
@@ -80,7 +80,7 @@ submission/revision timestamps, status.
 
 ### Student-authored content
 Plain text responses, rich text, essays, comments, structured answers.
-Content and length are open-ended by nature of an Assignment (ADR 0037
+Content and length are open-ended by nature of an Assignment (ADR 0039
 §4: "a Submission's entire purpose is open-ended Student-authored
 content... whose actual content is unknowable in advance").
 
@@ -100,18 +100,18 @@ Filename (sanitized display copy only — storage key is a
 server-generated UUID, `DocumentService.php`), MIME type (server-sniffed,
 never trusted from the client), size, upload timestamp, checksum (not
 currently computed by Documents — a gap, see §13), attempt/revision
-number (not yet modeled — ADR 0037 §9 defers this to "if resubmission
+number (not yet modeled — ADR 0039 §9 defers this to "if resubmission
 is later approved").
 
 ### Teacher-created data associated with a Submission
 Feedback (free text), a returned/revision-requested status (provisional
-per ADR 0037 §9), review timestamps.
+per ADR 0039 §9), review timestamps.
 
 ### Confirmed exclusions
-Submission does not, and under ADR 0037 §3 must never, own: official
+Submission does not, and under ADR 0039 §3 must never, own: official
 marks, official grades, Examination results, report-card values, or
 transcript values. Numeric scoring of any kind remains deferred
-entirely (ADR 0037 §3) — this review changes nothing about that
+entirely (ADR 0039 §3) — this review changes nothing about that
 boundary and does not revisit it.
 
 ## 4. Data classification, per category
@@ -124,8 +124,8 @@ five-tier definitions (`DATA-CLASSIFICATION.md` lines 14–22).
 
 | Category | Recommended tier (pending legal clearance) | Reasoning |
 |---|---|---|
-| Submission row (identity/timestamps/status) | Sensitive | Structured personal data of an identifiable minor tied to a specific academic activity — same shape as `AttendanceRecord` (line 39), the baseline ADR 0037 §4 already anchors to. No free text in this shell alone. |
-| Student-authored text | Sensitive, with a **structural risk of Highly-Sensitive content** | Unbounded free text from a minor "could carry exactly the categories (health disclosure, safeguarding concern, family/home detail)" that would otherwise require the Health tier's own gate (ADR 0037 §4, quoting `ACADEMICS.md` §5's "audit-leakage and classification hazard" reasoning). This cannot be downgraded to a flat Sensitive tier without a content-inspection mechanism this checkpoint does not propose building (§14). |
+| Submission row (identity/timestamps/status) | Sensitive | Structured personal data of an identifiable minor tied to a specific academic activity — same shape as `AttendanceRecord` (line 39), the baseline ADR 0039 §4 already anchors to. No free text in this shell alone. |
+| Student-authored text | Sensitive, with a **structural risk of Highly-Sensitive content** | Unbounded free text from a minor "could carry exactly the categories (health disclosure, safeguarding concern, family/home detail)" that would otherwise require the Health tier's own gate (ADR 0039 §4, quoting `ACADEMICS.md` §5's "audit-leakage and classification hazard" reasoning). This cannot be downgraded to a flat Sensitive tier without a content-inspection mechanism this checkpoint does not propose building (§14). |
 | Coursework files | Sensitive floor; **classification inherited from actual content**, matching `DATA-CLASSIFICATION.md` line 50's "Documents/files" row verbatim ("a birth certificate scan is Highly Sensitive; a public event photo may be Public") | A restricted MIME allowlist (§3) narrows *format* risk but says nothing about *content* risk — a PDF or JPEG from a minor can contain anything a document or photo can contain. Treating every Submission file as uniformly `internal` (LearningContent/Assignment's existing tier) would be a materially incorrect default; `internal` is not proposed for Submission by this review. |
 | Teacher feedback | Sensitive | Personal data about an identifiable Student, authored by staff about that Student specifically — the same bar as the Submission text itself, not a lower one merely because staff wrote it. |
 | Assignment linkage / timestamps / history | Sensitive | Metadata revealing an identifiable Student's academic activity pattern; lower content-risk than free text but still personal data under the same tier as Student data generally (line 27). |
@@ -184,7 +184,7 @@ resolves a legal question by engineering judgment.
 ## 6. Submitting actor
 
 Re-verified directly against `feature/phase-0i3-assignments`'s own
-source (not carried over from ADR 0037's prose):
+source (not carried over from ADR 0039's prose):
 
 - **Student direct login: does not exist.** `config/auth.php` defines
   exactly one guard (`web`, backed by `User`); `students` has no
@@ -200,7 +200,7 @@ source (not carried over from ADR 0037's prose):
   mechanism.** `AccountLink` is explicit that linkage "never, by
   itself, authorizes" acting for the linked Student. This review does
   **not** infer permission from the login path's mere existence — ADR
-  0037 §5 already rejected that inference, and this review agrees:
+  0039 §5 already rejected that inference, and this review agrees:
   authentication capability is not the same question as product/legal
   authorization to act for a minor.
 - **Staff-on-behalf-of-Student: not evaluated by any existing document.**
@@ -215,7 +215,7 @@ source (not carried over from ADR 0037's prose):
   for whenever Submission is built, not a decision this review makes.
 
 **This review does not select a submitting-actor policy.** It remains
-exactly as unresolved as ADR 0037 §5 left it, and — per that ADR's own
+exactly as unresolved as ADR 0039 §5 left it, and — per that ADR's own
 observation — is moot until §18's legal gate clears in any case.
 
 ## 7. Consent and lawful-processing questions
@@ -254,7 +254,7 @@ authoritative repository document already answers it:
 
 ## 8. Purpose limitation
 
-**Intended, in-scope educational purposes** (consistent with ADR 0037's
+**Intended, in-scope educational purposes** (consistent with ADR 0039's
 own framing of what LMS is for): completing assigned coursework,
 teacher review, feedback, evidence of completion, academic-support
 processes.
@@ -309,7 +309,7 @@ module in this codebase currently carries.
 
 ## 10. Correction and version history
 
-ADR 0037 §9 already froze what can safely be decided at this stage,
+ADR 0039 §9 already froze what can safely be decided at this stage,
 and this review changes none of it:
 - `submitted` is the only committed Submission state.
 - A `returned`/`resubmitted` revision loop is explicitly **provisional**
@@ -326,7 +326,7 @@ and this review changes none of it:
   append-only-correction discipline applies, not a silent overwrite.
 
 No new decision is made here; this section exists only to confirm the
-frozen ADR 0037 §9 shape remains correct on re-review and to flag its
+frozen ADR 0039 §9 shape remains correct on re-review and to flag its
 retention-adjacent implications (§9 above) explicitly.
 
 ## 11. Data-access boundaries
@@ -344,9 +344,9 @@ and should not be silently inherited.
 Phase 0I.3 (`lms.assignments.manage`, granted School-wide to
 `school_admin`/`principal` only, never Teacher) was justified precisely
 *because* Assignment content is staff-authored administrative data with
-no Student identity in it (ADR 0037 §4's own Confidential
+no Student identity in it (ADR 0039 §4's own Confidential
 classification) — the same reasoning `SyllabusUnit`/`Examination`/
-`ExaminationPaper` already established, and ADR 0037 §6 is explicit
+`ExaminationPaper` already established, and ADR 0039 §6 is explicit
 that granting Teacher a School-wide `.manage` capability *would* be
 unsafe once a real ownership boundary matters ("would let any teacher
 manage any other teacher's Assignments").
@@ -368,7 +368,7 @@ silently:
    shape available today, absent an ownership model) is a materially
    larger exposure than Assignment ever created, because the content
    being exposed is now personally identifiable Student work rather
-   than staff-authored material. ADR 0037 §6 already names the missing
+   than staff-authored material. ADR 0039 §6 already names the missing
    prerequisite: "the platform's first ownership-based authorization
    model... does not exist." **This review classifies a
    teacher-to-Offering (or teacher-to-Section) ownership/scoping
@@ -443,7 +443,7 @@ capability-checked controller action).
 
 ## 14. Sensitive-content risk
 
-ADR 0037 §4 already names the core risk precisely: an open-ended
+ADR 0039 §4 already names the core risk precisely: an open-ended
 Student submission "could carry exactly the categories (health
 disclosure, safeguarding concern, family/home detail)" the Health
 tier's own separate gate exists to protect. This review adds no new
@@ -478,7 +478,7 @@ audit metadata carries `documentId`/`ownerType`/`classificationTier`/
 
 ## 16. Events
 
-ADR 0037 §10's illustrative names (`submission.created.v1`,
+ADR 0039 §10's illustrative names (`submission.created.v1`,
 `submission.resubmitted.v1`) remain **not implemented** by this
 checkpoint, exactly as before. If and when a future, legally-cleared
 checkpoint implements them, this review's finding is: a payload may
@@ -509,19 +509,19 @@ grants nor forecloses that, it only confirms no such access is implied
 by anything built so far (no AI/RAG layer exists in this codebase at
 all today, per `docs/ai/AI-PLATFORM.md`'s own component table).
 
-ADR 0037 decision 1 already excludes external LMS integration/standards
+ADR 0039 decision 1 already excludes external LMS integration/standards
 (Canvas, Moodle, Google Classroom, Microsoft Teams, OneRoster, LTI,
 QTI, SCORM, xAPI, Common Cartridge, Caliper) from Phase 0I entirely —
 this review changes nothing about that boundary. Any future integration
 that would transmit Submission content off-platform (including a
 third-party plagiarism-detection service, named explicitly in §7) would
 require its own dedicated privacy/security/legal review before design
-work begins — it is not pre-cleared by this document or by ADR 0037.
+work begins — it is not pre-cleared by this document or by ADR 0039.
 
 ## 18. Qualified legal-review requirement — determination
 
 **No authoritative recorded legal decision exists in this repository
-that satisfies ADR 0037 §4's requirement**, evaluated against the one
+that satisfies ADR 0039 §4's requirement**, evaluated against the one
 concrete precedent this repository already has for what that evidence
 looks like when it does exist (Payroll 9.6, §2 above: a named, dated,
 jurisdiction-specific legal document, quoted in an ADR, with an
@@ -529,7 +529,7 @@ engineering correction addendum, implemented on its own branch).
 Specifically:
 
 - No approved legal addendum exists for LMS/Submission.
-- No signed-off ADR/legal decision exists for LMS/Submission (ADR 0037
+- No signed-off ADR/legal decision exists for LMS/Submission (ADR 0039
   itself *raises* the gate; it does not, and does not claim to, clear
   it).
 - No counsel-reviewed policy exists for LMS/Submission.
@@ -629,18 +629,18 @@ Independent of legal clearance, classified as requested:
 | Malware/virus scanning for untrusted uploads | **Technical blocker** — must exist before opening a Submission file-upload surface, independent of the legal gate's outcome. |
 | Documents `classification_tier` for Submission | **Decision required** — `sensitive` floor recommended (§4); escalation-to-`highly_sensitive` policy not resolved. |
 | Retention policy | **Legal blocker** — repo-wide open gate, not Submission-specific, but Submission cannot ship without one existing. |
-| Submission-attempt/version (revision-history) model | **Ready as a frozen design decision** (ADR 0037 §9 — append-only, never overwrite) — not yet implemented, but not blocked on anything further. |
+| Submission-attempt/version (revision-history) model | **Ready as a frozen design decision** (ADR 0039 §9 — append-only, never overwrite) — not yet implemented, but not blocked on anything further. |
 | Audit design | **Ready** — the bounded-metadata pattern is proven and directly reusable (§15). |
 | RLS / composite FKs | **Ready** — standard, already-proven pattern (§12), no new mechanism needed. |
-| Assignment eligibility rules (only `published`, not `closed`, accepts new Submissions) | **Ready** — already defined by ADR 0037 §9's Assignment lifecycle, unchanged by Phase 0I.3. |
-| Due-date/closed-state semantics | **Ready** — inherited unchanged from Phase 0I.3, informational/display-only per ADR 0037 §9. |
+| Assignment eligibility rules (only `published`, not `closed`, accepts new Submissions) | **Ready** — already defined by ADR 0039 §9's Assignment lifecycle, unchanged by Phase 0I.3. |
+| Due-date/closed-state semantics | **Ready** — inherited unchanged from Phase 0I.3, informational/display-only per ADR 0039 §9. |
 | Content-sensitivity policy (prohibit/warn/rely-on-design/moderate) | **Product-policy blocker** (§14) — not an engineering decision. |
 | Data-localization/cross-border architecture, if legally required | **Not yet built** — would be new architecture, not an extension of an existing mechanism (§12/§19 Q14). |
 
 ## 21. Documentation changes made by this checkpoint
 
 - **New**: this document, `docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`.
-- **`docs/architecture/adr/0037-lms-domain-contract.md`**: appended a
+- **`docs/architecture/adr/0039-lms-domain-contract.md`**: appended a
   short, clearly-marked Phase 0I.4 review addendum recording that the
   gate was independently re-verified and remains unchanged (no decision
   in the ADR's frozen body is altered or weakened).

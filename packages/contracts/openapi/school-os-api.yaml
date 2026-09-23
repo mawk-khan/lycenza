@@ -7374,7 +7374,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
   # Phase 0I.2 (Learning Content Foundation -- the first concrete LMS
-  # fact, ADR 0037). Exactly SIX operations: list/create nested under
+  # fact, ADR 0039). Exactly SIX operations: list/create nested under
   # the owning SubjectOffering, show/update flat, publish/archive as
   # dedicated action routes -- `status` moves ONLY through those two,
   # never through the ordinary PATCH (the CurriculumDelivery-style
@@ -7574,7 +7574,7 @@ paths:
       operationId: uploadLearningContentDocument
       summary: >
         Attaches a file to a LearningContent resource, via the shared
-        Documents module's `learning_content` owner arm (ADR 0037
+        Documents module's `learning_content` owner arm (ADR 0039
         decision 8). `classification_tier` is fixed to `internal`
         server-side and is not an accepted field -- a LearningContent
         Document has exactly one valid tier. Requires lms.content.manage.
@@ -7639,7 +7639,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "404":
           description: No such LearningContent in this School.
-  # Phase 0I.3 (Assignments -- the second concrete LMS fact, ADR 0037).
+  # Phase 0I.3 (Assignments -- the second concrete LMS fact, ADR 0039).
   # Exactly SIX operations, structurally identical to Learning Content's
   # own shape: list/create nested under the owning SubjectOffering,
   # show/update flat, publish/close as dedicated action routes --
@@ -7647,7 +7647,7 @@ paths:
   # PATCH.
   #
   # No delete, no Submission operation of any kind -- Submission remains
-  # a future, separately legal-review-gated checkpoint (ADR 0037 §4).
+  # a future, separately legal-review-gated checkpoint (ADR 0039 §4).
   #
   # Capabilities are rooted at `lms.assignments.*`, NOT `academics.*` --
   # see docs/modules/LMS.md for the module boundary.
@@ -7840,7 +7840,7 @@ paths:
       operationId: uploadAssignmentDocument
       summary: >
         Attaches a file to an Assignment, via the shared Documents
-        module's `assignment` owner arm (ADR 0037 decision 8).
+        module's `assignment` owner arm (ADR 0039 decision 8).
         `classification_tier` is fixed to `internal` server-side and is
         not an accepted field -- an Assignment Document has exactly one
         valid tier. Requires lms.assignments.manage.
@@ -11761,7 +11761,7 @@ components:
         note, or an attached file via the Documents `learning_content`
         owner arm) belonging to one SubjectOffering. It records nothing
         about any Student, Assignment or Submission -- those belong to
-        future, separately-gated LMS checkpoints (ADR 0037).
+        future, separately-gated LMS checkpoints (ADR 0039).
       required: [id, subjectOfferingId, title, sequence, status]
       properties:
         id: { type: string, format: uuid }
@@ -11810,7 +11810,7 @@ components:
         optional due date, and a lifecycle -- that a SubjectOffering's
         roster is expected to complete. Never itself grade-bearing --
         no mark, score or grade field exists here or anywhere in LMS's
-        contract (ADR 0037). Submission (a Student's response to an
+        contract (ADR 0039). Submission (a Student's response to an
         Assignment) remains a future, separately legal-review-gated
         checkpoint.
       required: [id, subjectOfferingId, title, status]

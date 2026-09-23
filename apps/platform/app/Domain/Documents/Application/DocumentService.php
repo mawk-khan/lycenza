@@ -63,21 +63,21 @@ use Throwable;
  * either), not silently unsupported.
  *
  * Phase 0I.2 activates a SECOND owner type: LearningContent
- * (`lms.content.manage`, ADR 0037 decision 8). Unlike Employee's
+ * (`lms.content.manage`, ADR 0039 decision 8). Unlike Employee's
  * two-tier classification split (ordinary vs `highly_sensitive`), a
  * LearningContent resource file has exactly ONE valid classification --
  * `internal` (Confidential-tier operational content, never personal
  * data, so neither `sensitive` nor `highly_sensitive` can ever
  * legitimately apply, and `public` would bypass the capability-gated
- * access ADR 0037 requires). A caller requesting any other tier for
+ * access ADR 0039 requires). A caller requesting any other tier for
  * this owner type is rejected before any I/O, exactly like an
  * unsupported owner type is.
  *
  * Phase 0I.3 activates a THIRD owner type: Assignment
- * (`lms.assignments.manage`, ADR 0037 decision 8), identical in shape
+ * (`lms.assignments.manage`, ADR 0039 decision 8), identical in shape
  * to LearningContent -- a single fixed `internal` tier, no two-tier
  * split. `submission` is deliberately NOT activated: it remains
- * blocked on ADR 0037 §4's Submission legal-review gate (Phase 0I.4).
+ * blocked on ADR 0039 §4's Submission legal-review gate (Phase 0I.4).
  */
 class DocumentService
 {

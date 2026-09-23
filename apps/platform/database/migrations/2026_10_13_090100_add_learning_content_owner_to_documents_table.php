@@ -10,7 +10,7 @@ return new class extends Migration
     /**
      * Phase 0I.2 -- the first extension of the Documents module's
      * exclusive-arc owner arc since its 0E.1 foundation (ADR 0012, ADR
-     * 0037 decision 8, docs/modules/DOCUMENTS.md). Additive: a new
+     * 0039 decision 8, docs/modules/DOCUMENTS.md). Additive: a new
      * nullable `learning_content_id` owner column, its own composite FK
      * to `learning_content(id, school_id)`, and the existing
      * `documents_exactly_one_owner_check` widened to a fourth term.
@@ -27,7 +27,7 @@ return new class extends Migration
      * `learning_content_id` uses `cascadeOnDelete()`, matching
      * `employee_id`/`student_id`/`guardian_id` exactly -- even though, in
      * current application-layer reality, `learning_content` rows are
-     * never hard-deleted (status-based retirement only, ADR 0037
+     * never hard-deleted (status-based retirement only, ADR 0039
      * decision 9), the FK shape stays consistent with its three
      * siblings rather than silently diverging from the established
      * pattern for a row this checkpoint does not expect to ever fire.

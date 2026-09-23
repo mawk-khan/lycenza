@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 0I.3 -- the ONE sanctioned write path for `assignments` (ADR
- * 0037). Neither the API controller nor the Inertia controller writes
+ * 0039). Neither the API controller nor the Inertia controller writes
  * the model directly (proven by
  * Tests\Feature\LMS\AssignmentArchitectureGuardTest). Structurally
  * mirrors App\Domain\LMS\Application\LearningContentService exactly --
@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\DB;
  * split.
  *
  * LIFECYCLE. Exactly three legal transitions: draft->published,
- * published->closed, closed->published -- ADR 0037 §10's own frozen
+ * published->closed, closed->published -- ADR 0039 §10's own frozen
  * contract ("closed -> published reopening is an ordinary status
  * transition, not a one-way door"). `assertLegalTransition()` is the
  * single, uniform check for all nine (status, status) pairs; no
@@ -45,7 +45,7 @@ use Illuminate\Support\Facades\DB;
  * no not-in-the-past restriction, matching `Examination`'s own
  * "future dates permitted and expected" reasoning, since a due date is
  * inherently forward-looking. `due_on` may be changed by `update()` at
- * ANY status, including `published`/`closed` -- ADR 0037 §10's
+ * ANY status, including `published`/`closed` -- ADR 0039 §10's
  * explicit "no frozen-after-publish rule" for due date.
  *
  * EDITABILITY. Ordinary field edits (title/instructions/due_on) via
@@ -197,7 +197,7 @@ class AssignmentService
 
     /**
      * Closes the Assignment -- legal from `published` only. The row is
-     * never deleted (rule 73, ADR 0037 §10): a closed Assignment
+     * never deleted (rule 73, ADR 0039 §10): a closed Assignment
      * remains readable/correctable, and can be republished later.
      */
     public function close(School $school, Assignment $assignment, User $actor): Assignment

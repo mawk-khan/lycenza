@@ -9,7 +9,7 @@ return new class extends Migration
 {
     /**
      * Phase 0I.3 -- the second extension of the Documents module's
-     * exclusive-arc owner arc since 0E.1 (ADR 0012, ADR 0037 decision
+     * exclusive-arc owner arc since 0E.1 (ADR 0012, ADR 0039 decision
      * 8, docs/modules/LMS.md §9), and identical in shape to Phase
      * 0I.2's `learning_content_id` extension: a new nullable
      * `assignment_id` owner column, its own composite FK to
@@ -17,7 +17,7 @@ return new class extends Migration
      * `documents_exactly_one_owner_check` widened to a fifth term.
      *
      * `submission_id` is deliberately NOT added here -- it remains
-     * blocked on ADR 0037 §4's Submission legal-review gate (Phase
+     * blocked on ADR 0039 §4's Submission legal-review gate (Phase
      * 0I.4), exactly as `docs/modules/LMS.md` §9 anticipated. Adding a
      * dormant `submission_id` column now "for later" would be exactly
      * the speculative-schema pattern CLAUDE.md rule 2 forbids -- and

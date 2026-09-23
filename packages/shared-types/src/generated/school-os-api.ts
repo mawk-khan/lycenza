@@ -3548,7 +3548,7 @@ export interface paths {
         /** Lists Documents owned by one LearningContent resource. Requires lms.content.view. */
         get: operations["listLearningContentDocuments"];
         put?: never;
-        /** Attaches a file to a LearningContent resource, via the shared Documents module's `learning_content` owner arm (ADR 0037 decision 8). `classification_tier` is fixed to `internal` server-side and is not an accepted field -- a LearningContent Document has exactly one valid tier. Requires lms.content.manage. */
+        /** Attaches a file to a LearningContent resource, via the shared Documents module's `learning_content` owner arm (ADR 0039 decision 8). `classification_tier` is fixed to `internal` server-side and is not an accepted field -- a LearningContent Document has exactly one valid tier. Requires lms.content.manage. */
         post: operations["uploadLearningContentDocument"];
         delete?: never;
         options?: never;
@@ -3636,7 +3636,7 @@ export interface paths {
         /** Lists Documents owned by one Assignment. Requires lms.assignments.view. */
         get: operations["listAssignmentDocuments"];
         put?: never;
-        /** Attaches a file to an Assignment, via the shared Documents module's `assignment` owner arm (ADR 0037 decision 8). `classification_tier` is fixed to `internal` server-side and is not an accepted field -- an Assignment Document has exactly one valid tier. Requires lms.assignments.manage. */
+        /** Attaches a file to an Assignment, via the shared Documents module's `assignment` owner arm (ADR 0039 decision 8). `classification_tier` is fixed to `internal` server-side and is not an accepted field -- an Assignment Document has exactly one valid tier. Requires lms.assignments.manage. */
         post: operations["uploadAssignmentDocument"];
         delete?: never;
         options?: never;
@@ -6411,7 +6411,7 @@ export interface components {
          * @enum {string}
          */
         LearningContentStatus: "draft" | "published" | "archived";
-        /** @description A School-authored instructional resource (a reading, a link, a note, or an attached file via the Documents `learning_content` owner arm) belonging to one SubjectOffering. It records nothing about any Student, Assignment or Submission -- those belong to future, separately-gated LMS checkpoints (ADR 0037). */
+        /** @description A School-authored instructional resource (a reading, a link, a note, or an attached file via the Documents `learning_content` owner arm) belonging to one SubjectOffering. It records nothing about any Student, Assignment or Submission -- those belong to future, separately-gated LMS checkpoints (ADR 0039). */
         LearningContent: {
             /** Format: uuid */
             id: string;
@@ -6443,7 +6443,7 @@ export interface components {
          * @enum {string}
          */
         AssignmentStatus: "draft" | "published" | "closed";
-        /** @description A staff-authored unit of work -- title, instructions, an optional due date, and a lifecycle -- that a SubjectOffering's roster is expected to complete. Never itself grade-bearing -- no mark, score or grade field exists here or anywhere in LMS's contract (ADR 0037). Submission (a Student's response to an Assignment) remains a future, separately legal-review-gated checkpoint. */
+        /** @description A staff-authored unit of work -- title, instructions, an optional due date, and a lifecycle -- that a SubjectOffering's roster is expected to complete. Never itself grade-bearing -- no mark, score or grade field exists here or anywhere in LMS's contract (ADR 0039). Submission (a Student's response to an Assignment) remains a future, separately legal-review-gated checkpoint. */
         Assignment: {
             /** Format: uuid */
             id: string;

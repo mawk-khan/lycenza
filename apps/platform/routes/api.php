@@ -1701,7 +1701,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.syllabus-units.update');
 
             // Phase 0I.2 (Learning Content Foundation -- the first
-            // concrete LMS fact, ADR 0037). Exactly SIX operations:
+            // concrete LMS fact, ADR 0039). Exactly SIX operations:
             // list/create nested under the owning SubjectOffering,
             // show/update flat, publish/archive as dedicated action
             // routes -- the CurriculumDelivery-style split (PATCH never
@@ -1741,7 +1741,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.learning-content.archive');
 
             // Phase 0I.2 -- the LearningContent owner-type extension of
-            // the shared Documents module (ADR 0037 decision 8). Reuses
+            // the shared Documents module (ADR 0039 decision 8). Reuses
             // the EXACT same `DocumentController`/throttle/
             // `private-no-store` shape `employees/{employee}/documents`
             // above already established -- store/index are owner-type-
@@ -1758,7 +1758,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.learning-content.documents.index');
 
             // Phase 0I.3 (Assignments -- the second concrete LMS fact,
-            // ADR 0037). Exactly SIX operations, structurally identical
+            // ADR 0039). Exactly SIX operations, structurally identical
             // to Learning Content's own shape: list/create nested under
             // the owning SubjectOffering, show/update flat, publish/
             // close as dedicated action routes -- `status` moves ONLY
@@ -1766,7 +1766,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             //
             // Deliberately NO delete route and NO Submission operation
             // of any kind -- Submission remains a future, separately
-            // legal-review-gated checkpoint (ADR 0037 §4).
+            // legal-review-gated checkpoint (ADR 0039 §4).
             //
             // Gated by LMS's OWN capability family (`lms.assignments.*`)
             // -- never Academic Structure's `academics.subjects.*`, the
@@ -1791,7 +1791,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.assignments.close');
 
             // Phase 0I.3 -- the Assignment owner-type extension of the
-            // shared Documents module (ADR 0037 decision 8), reusing the
+            // shared Documents module (ADR 0039 decision 8), reusing the
             // EXACT same shape the Learning Content owner arm above
             // already established. The existing generic
             // `/documents/{document}` show/content/archive routes need

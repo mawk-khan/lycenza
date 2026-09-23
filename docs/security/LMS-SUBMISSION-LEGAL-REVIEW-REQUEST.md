@@ -10,13 +10,13 @@
 > by the cancellation. Further legal/product review is no longer
 > required while Submission remains out of scope; this is not legal
 > clearance of any of the processing described below. See
-> `docs/architecture/adr/0037-lms-domain-contract.md`'s Submission
+> `docs/architecture/adr/0039-lms-domain-contract.md`'s Submission
 > cancellation addendum and `docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`
 > for the full governance record.
 
 - Issued: 2026-09-05, following Phase 0I.4
 - Engineering source documents: `docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`,
-  `docs/architecture/adr/0037-lms-domain-contract.md` §4/§5
+  `docs/architecture/adr/0039-lms-domain-contract.md` §4/§5
 - Status: **CLOSED, unanswered — see banner above.** This document
   records the request as formally issued to qualified legal counsel and
   product governance outside this engineering repository. It was never
@@ -44,7 +44,7 @@ student coursework Submission.
 
 Engineering has completed Phase 0I.4 (Submission Legal-Gate Review).
 Repository decision record: `docs/security/LMS-SUBMISSION-LEGAL-REVIEW.md`.
-Related architecture decision: `docs/architecture/adr/0037-lms-domain-contract.md`.
+Related architecture decision: `docs/architecture/adr/0039-lms-domain-contract.md`.
 
 Phase 0I.4 concluded: **BLOCKED — SUBMISSIONS REQUIRE QUALIFIED LEGAL REVIEW.**
 Engineering has deliberately not created any Submission schema,

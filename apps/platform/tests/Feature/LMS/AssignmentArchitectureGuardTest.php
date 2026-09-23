@@ -71,11 +71,11 @@ class AssignmentArchitectureGuardTest extends TestCase
             'assessment_id', 'grade_scale_id', 'result_status', 'pass_fail',
             // Submission (future, separately legal-review-gated checkpoint).
             'submission_id', 'learning_content_id', 'sequence',
-            // External LMS integration -- unscoped by ADR 0037.
+            // External LMS integration -- unscoped by ADR 0039.
             'lti_id', 'oneroster_id', 'scorm_package_id', 'external_id', 'external_source',
         ] as $forbidden) {
             $this->assertNotContains($forbidden, $columns,
-                "`{$forbidden}` must never exist on assignments -- see ADR 0037 / docs/modules/LMS.md.");
+                "`{$forbidden}` must never exist on assignments -- see ADR 0039 / docs/modules/LMS.md.");
         }
     }
 
@@ -91,7 +91,7 @@ class AssignmentArchitectureGuardTest extends TestCase
             'lms_courses', 'courses', 'lms_sections', 'lms_rosters',
         ] as $forbidden) {
             $this->assertNotContains($forbidden, $tables,
-                "`{$forbidden}` must not exist -- Phase 0I.3 implements Assignments only (ADR 0037's Submission legal-review gate is not bypassed).");
+                "`{$forbidden}` must not exist -- Phase 0I.3 implements Assignments only (ADR 0039's Submission legal-review gate is not bypassed).");
         }
     }
 
@@ -105,7 +105,7 @@ class AssignmentArchitectureGuardTest extends TestCase
 
         $this->assertContains('assignment_id', $columns, 'The assignment owner arm must exist.');
         $this->assertNotContains('submission_id', $columns,
-            'submission_id must not exist on documents -- blocked on ADR 0037 §4\'s legal-review gate until Phase 0I.4.');
+            'submission_id must not exist on documents -- blocked on ADR 0039 §4\'s legal-review gate until Phase 0I.4.');
     }
 
     #[Test]
@@ -122,12 +122,12 @@ class AssignmentArchitectureGuardTest extends TestCase
                 'App\\Domain\\CurriculumDelivery',
             ] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code,
-                    basename($file).' must not reference '.$forbidden.' -- LMS depends outward on Academic Structure and Students/SIS only (ADR 0037).');
+                    basename($file).' must not reference '.$forbidden.' -- LMS depends outward on Academic Structure and Students/SIS only (ADR 0039).');
             }
 
             foreach (['LTI', 'OneRoster', 'SCORM', 'QTI', 'xAPI', 'CommonCartridge', 'Caliper', 'Canvas', 'Moodle'] as $standard) {
                 $this->assertStringNotContainsString($standard, $code,
-                    basename($file).' must not reference the external LMS standard/vendor '.$standard.' -- unscoped by ADR 0037.');
+                    basename($file).' must not reference the external LMS standard/vendor '.$standard.' -- unscoped by ADR 0039.');
             }
         }
     }
@@ -140,7 +140,7 @@ class AssignmentArchitectureGuardTest extends TestCase
 
             foreach (['Event::dispatch', '::dispatch(', 'DomainEvent', 'domain_event_outbox', 'WebhookEventRegistry'] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code,
-                    basename($file).' must emit ZERO domain events in this checkpoint -- ADR 0037 §11 events remain illustrative future work only.');
+                    basename($file).' must emit ZERO domain events in this checkpoint -- ADR 0039 §11 events remain illustrative future work only.');
             }
         }
     }

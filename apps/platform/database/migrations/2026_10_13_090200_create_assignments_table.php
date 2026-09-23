@@ -10,14 +10,14 @@ return new class extends Migration
 {
     /**
      * Phase 0I.3 (Assignments) -- the second concrete LMS fact (ADR
-     * 0037). A staff-authored unit of work -- title, instructions,
+     * 0039). A staff-authored unit of work -- title, instructions,
      * optional resource attachments (via the Documents `assignment_id`
      * owner arm, companion migration), a due date, and a lifecycle --
      * that a SubjectOffering's roster is expected to complete. Never
      * itself a grade-bearing record (docs/modules/LMS.md §4).
      *
      * ONE PARENT ONLY, mirroring `learning_content`'s own shape exactly
-     * (Phase 0I.2, ADR 0037 decision 2): an Assignment belongs to
+     * (Phase 0I.2, ADR 0039 decision 2): an Assignment belongs to
      * exactly one SubjectOffering, which already pins AcademicYear +
      * Campus + GradeLevel + Subject -- none of those is denormalized
      * here. `unique(id, school_id)` is kept for the Documents owner-arm
@@ -33,7 +33,7 @@ return new class extends Migration
      * rule 2).
      *
      * NO AUTHOR/OWNER COLUMN -- identical reasoning to
-     * `learning_content`'s own migration: ADR 0037 decision 6 (teacher
+     * `learning_content`'s own migration: ADR 0039 decision 6 (teacher
      * authorization capability-only for v1) is explicit that no
      * teacher-to-Offering ownership record exists yet in this
      * codebase; a `created_by_employee_id`-shaped column would be a de
@@ -56,13 +56,13 @@ return new class extends Migration
      * established for `active`). No time-of-day component: "due by the
      * end of this School-local calendar day" is sufficient for v1 and
      * avoids unneeded timezone/clock-comparison machinery (rule 2) --
-     * ADR 0037 §10 already commits due date to being
+     * ADR 0039 §10 already commits due date to being
      * informational/display-only, not a structural acceptance
      * boundary, so a coarser grain is not a functional gap.
      *
      * LIFECYCLE: `draft` | `published` | `closed`, exactly three legal
      * transitions (draft->published, published->closed,
-     * closed->published) -- ADR 0037 §10's own frozen contract
+     * closed->published) -- ADR 0039 §10's own frozen contract
      * ("closed -> published reopening is an ordinary status
      * transition, not a one-way door"), using the identical
      * closed-transition-map shape `learning_content`

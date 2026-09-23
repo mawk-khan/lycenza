@@ -10,14 +10,14 @@ return new class extends Migration
 {
     /**
      * Phase 0I.2 (Learning Content Foundation) -- the first concrete
-     * LMS fact (ADR 0037, docs/modules/LMS.md). A School-authored
+     * LMS fact (ADR 0039, docs/modules/LMS.md). A School-authored
      * instructional resource (a reading, a link, a note, an attached
      * file) belonging to one SubjectOffering -- the LMS counterpart to
      * `syllabus_units`' catalogue of expected content, but for actual
      * distributable material rather than a topic outline.
      *
      * ONE PARENT ONLY, mirroring `syllabus_units`' own shape exactly
-     * (docs/modules/ACADEMICS.md, ADR 0037 decision 2): a LearningContent
+     * (docs/modules/ACADEMICS.md, ADR 0039 decision 2): a LearningContent
      * belongs to exactly one SubjectOffering, which already pins
      * AcademicYear + Campus + GradeLevel + Subject -- none of those is
      * denormalized here. `unique(id, school_id)` is kept so a future
@@ -32,7 +32,7 @@ return new class extends Migration
      * title, e.g. two different "Introduction" readings for two
      * different chapters).
      *
-     * NO AUTHOR/OWNER COLUMN. ADR 0037 decision 6 (teacher authorization
+     * NO AUTHOR/OWNER COLUMN. ADR 0039 decision 6 (teacher authorization
      * capability-only for v1) is explicit that no teacher-to-Offering
      * ownership record exists yet in this codebase -- adding a
      * `created_by_employee_id`-shaped column here would be a de facto

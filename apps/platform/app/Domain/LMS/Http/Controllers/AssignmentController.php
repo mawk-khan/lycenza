@@ -20,7 +20,7 @@ use Illuminate\Http\Request;
  *
  * Deliberately NO delete route (status-based retirement only, rule 73)
  * and NO Submission route of any kind -- Submission remains a future,
- * separately-gated checkpoint (ADR 0037 §4).
+ * separately-gated checkpoint (ADR 0039 §4).
  *
  * Thin controller (CLAUDE.md rule 3): validates/resolves input, calls
  * `AssignmentService`, presents the response. Every write goes through

@@ -6,11 +6,11 @@ is complete as an active LMS scope of Learning Content + Assignment
 only.** Student Submission was reviewed (Phase 0I.4,
 2026-09-05) and never legally cleared, and was then **cancelled as a
 product-scope decision on 2026-09-05** — see §0 below and
-`docs/architecture/adr/0037-lms-domain-contract.md`'s Submission
+`docs/architecture/adr/0039-lms-domain-contract.md`'s Submission
 cancellation addendum. External LMS integration remains unscoped. This
 document is the living operational reference for the LMS bounded
-context; the decision record is ADR 0037
-(`docs/architecture/adr/0037-lms-domain-contract.md`) — read that first
+context; the decision record is ADR 0039
+(`docs/architecture/adr/0039-lms-domain-contract.md`) — read that first
 for the *why*, this document for the *what*, mirroring how
 `ACADEMIC-STRUCTURE.md`/`HR.md` relate to their own ADRs.
 
@@ -116,7 +116,7 @@ SubjectOffering (Academic Structure)
   to know which kind of Offering it targets. This mirrors
   `SyllabusUnit`/`ExaminationPaper` (both Offering-wide, "NOT
   Section-specific"), not `CurriculumDelivery`/`AttendanceRecord`
-  (genuinely Section-scoped cohort-activity entities). See ADR 0037 §2
+  (genuinely Section-scoped cohort-activity entities). See ADR 0039 §2
   for the full justification.
 - **AcademicYear/Campus/GradeLevel** are inherited as integrity pins
   through the `SubjectOffering` composite FK — never denormalized as
@@ -153,7 +153,7 @@ Examination marks, official grades, report-card values, transcript
 values, result-publication state.
 
 **No numeric score or rubric field is part of this contract.**
-Deferred entirely — see ADR 0037 §3 for the full reasoning
+Deferred entirely — see ADR 0039 §3 for the full reasoning
 (Examinations' own `StudentMark` is itself still "PROVISIONAL, GATED";
 this codebase has no structural mechanism yet to guarantee an
 LMS-side score can never be mistaken for an authoritative mark). Only
@@ -180,7 +180,7 @@ file content — every prior Sensitive-tier Student module
 `ExaminationPaper`) deliberately *excludes* free text for exactly this
 reason. That gate was distinct from Examinations' `StudentMark` flag
 (grade-authority concern) and was never waived merely because Documents
-storage already exists. Full historical reasoning: ADR 0037 §4.
+storage already exists. Full historical reasoning: ADR 0039 §4.
 
 **Phase 0I.4 (2026-09-05)** independently re-verified this gate after
 Learning Content and Assignment shipped, performed a detailed
@@ -236,7 +236,7 @@ written (file presence, not checkpoint-report prose alone):
 
 **Decision: unresolved for Student; a real dependency exists for
 Guardian, but the product-policy question is not decided here** (ADR
-0037 §5). For Student, the blocker is structural (no actor exists at
+0039 §5). For Student, the blocker is structural (no actor exists at
 all). For Guardian, an authenticated actor now genuinely exists and
 could technically reach a future submit action through the same
 AccountLink chain Communications already uses — but whether a School

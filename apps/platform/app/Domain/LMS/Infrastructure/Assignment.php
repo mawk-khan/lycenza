@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * Tenant-owned staff-authored unit of work -- Phase 0I.3, the second
- * concrete LMS fact (ADR 0037, docs/modules/LMS.md). Title,
+ * concrete LMS fact (ADR 0039, docs/modules/LMS.md). Title,
  * instructions, an optional due date, optional resource attachments
  * (via the Documents `assignment_id` owner arm), and a lifecycle that a
  * SubjectOffering's roster is expected to complete. Never itself a
@@ -34,7 +34,7 @@ use Illuminate\Support\Carbon;
  * record.
  *
  * NO AUTHOR COLUMN. No `created_by_employee_id` or `teacher_id` exists
- * here -- ADR 0037 decision 6 is explicit that no teacher-to-Offering
+ * here -- ADR 0039 decision 6 is explicit that no teacher-to-Offering
  * ownership record exists in this codebase yet; authorization is
  * capability-only in v1 (`lms.assignments.view`/`lms.assignments.manage`),
  * matching every sibling academic entity.

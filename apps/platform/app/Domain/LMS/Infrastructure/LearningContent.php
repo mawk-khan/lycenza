@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Tenant-owned School-authored instructional resource -- Phase 0I.2,
- * the first concrete LMS fact (ADR 0037, docs/modules/LMS.md). A
+ * the first concrete LMS fact (ADR 0039, docs/modules/LMS.md). A
  * reading, a link, a note, or an attached file (via the Documents
  * `learning_content` owner arm) belonging to one SubjectOffering.
  * Persistence + relationship only; App\Domain\LMS\Application\
@@ -28,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * records for the same single-parent shape.
  *
  * NO AUTHOR COLUMN. No `created_by_employee_id` or `teacher_id` exists
- * here -- ADR 0037 decision 6 is explicit that no teacher-to-Offering
+ * here -- ADR 0039 decision 6 is explicit that no teacher-to-Offering
  * ownership record exists in this codebase yet; authorization is
  * capability-only in v1 (`lms.content.view`/`lms.content.manage`),
  * matching SyllabusUnit/CurriculumDelivery/Examination/ExaminationPaper.

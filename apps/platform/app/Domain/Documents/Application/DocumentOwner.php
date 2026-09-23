@@ -14,7 +14,7 @@ namespace App\Domain\Documents\Application;
  * not already have a real column for.
  *
  * Phase 0I.2 adds `learningContent()` -- the first non-personal-data
- * owner arm (ADR 0037 decision 8). It is activated (unlike `student`/
+ * owner arm (ADR 0039 decision 8). It is activated (unlike `student`/
  * `guardian`, which remain deferred) because `lms.content.manage`/
  * `lms.content.view` are real, already-scoped capabilities, exactly the
  * gap that keeps Student/Guardian owner writes deferred (see
@@ -22,7 +22,7 @@ namespace App\Domain\Documents\Application;
  *
  * Phase 0I.3 adds `assignment()` -- the identical pattern, activated
  * behind `lms.assignments.manage`/`lms.assignments.view`. `submission()`
- * is deliberately NOT added: it remains blocked on ADR 0037 §4's
+ * is deliberately NOT added: it remains blocked on ADR 0039 §4's
  * Submission legal-review gate (Phase 0I.4).
  */
 final class DocumentOwner

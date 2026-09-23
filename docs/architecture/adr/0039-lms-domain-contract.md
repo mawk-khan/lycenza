@@ -1,4 +1,4 @@
-# ADR 0037: LMS Domain Contract (Phase 0I.1)
+# ADR 0039: LMS Domain Contract (Phase 0I.1)
 
 - Status: Accepted
 - Date: 2026-09-04 (Phase 0I.1)

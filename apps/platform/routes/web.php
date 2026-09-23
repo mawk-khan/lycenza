@@ -979,7 +979,7 @@ Route::middleware('auth')->group(function (): void {
     });
 
     // Phase 0I.2 -- the administrative Learning Content surface (ADR
-    // 0037). Capability checks live in the controller (the
+    // 0039). Capability checks live in the controller (the
     // AuthorizesCapability trait), matching every other App/* Inertia
     // controller in this codebase. No delete route: status-based
     // retirement only. `status` moves only through the dedicated
@@ -994,7 +994,7 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{learningContent}/archive', [LmsLearningContentController::class, 'archive'])->name('archive');
     });
 
-    // Phase 0I.3 -- the administrative Assignment surface (ADR 0037),
+    // Phase 0I.3 -- the administrative Assignment surface (ADR 0039),
     // structurally identical to the Learning Content group above. No
     // delete route: status-based retirement only. `status` moves only
     // through the dedicated publish/close routes, never through the

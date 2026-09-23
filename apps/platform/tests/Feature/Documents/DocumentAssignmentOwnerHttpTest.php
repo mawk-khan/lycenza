@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 /**
  * Phase 0I.3 -- HTTP contract proof for the `assignment` Documents
- * owner arm (ADR 0037 decision 8): `POST`/`GET
+ * owner arm (ADR 0039 decision 8): `POST`/`GET
  * /api/v1/schools/{school}/assignments/{assignment}/documents`. Mirrors
  * Tests\Feature\Documents\DocumentLearningContentOwnerHttpTest's exact
  * transport-proof shape.

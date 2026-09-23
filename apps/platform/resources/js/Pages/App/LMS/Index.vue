@@ -4,7 +4,7 @@ import { ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 
 /**
- * Phase 0I.2 — the administrative Learning Content surface (ADR 0037).
+ * Phase 0I.2 — the administrative Learning Content surface (ADR 0039).
  *
  * A LearningContent row is a School-authored instructional resource for
  * one SubjectOffering — a reading, a link, a note, or (via the shared

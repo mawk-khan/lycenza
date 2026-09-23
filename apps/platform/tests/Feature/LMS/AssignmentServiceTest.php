@@ -110,7 +110,7 @@ class AssignmentServiceTest extends TestCase
     #[Test]
     public function due_date_remains_editable_once_published(): void
     {
-        // No frozen-after-publish rule -- ADR 0037 §10's explicit
+        // No frozen-after-publish rule -- ADR 0039 §10's explicit
         // "Published Assignments MAY be edited... including the due
         // date."
         $w = $this->assignmentWorld();

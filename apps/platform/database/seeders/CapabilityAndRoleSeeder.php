@@ -694,11 +694,11 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'examinations.grade_scales.manage', 'label' => 'Manage Grade Scales', 'namespace' => 'school'],
 
             // Phase 0I.2 (Learning Content Foundation -- the first
-            // concrete LMS fact, ADR 0037). Rooted at `lms.content.*`, a
+            // concrete LMS fact, ADR 0039). Rooted at `lms.content.*`, a
             // NEW module root with no collision in this catalog, and
             // deliberately DEPTH-2 rather than a flat
             // `lms.view`/`.manage`: this module will grow to
-            // `lms.assignments.*` and `lms.submissions.*` (ADR 0037
+            // `lms.assignments.*` and `lms.submissions.*` (ADR 0039
             // decision 7 already froze that namespace shape), and a flat
             // key would eventually grant Learning Content authoring and
             // future Submission oversight with the same capability. Not
@@ -707,7 +707,7 @@ class CapabilityAndRoleSeeder extends Seeder
             // though the parent SubjectOffering belongs to that module
             // -- the Canteen capability-boundary lesson, carried
             // forward from every prior academic module. No
-            // `lms.content.teacher`: ADR 0037 decision 6 chose
+            // `lms.content.teacher`: ADR 0039 decision 6 chose
             // capability-only v1 because no teacher-to-Offering
             // ownership record exists anywhere in this codebase yet --
             // the identical gap Syllabus/Curriculum Delivery/
@@ -716,7 +716,7 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'lms.content.manage', 'label' => 'Manage Learning Content', 'namespace' => 'school'],
 
             // Phase 0I.3 (Assignments -- the second concrete LMS fact,
-            // ADR 0037). The `lms.assignments.*` leaf the 0I.2 comment
+            // ADR 0039). The `lms.assignments.*` leaf the 0I.2 comment
             // above already reserved. Deliberately separate from
             // `lms.content.*`: authoring/publishing an Assignment is not
             // the same right as authoring Learning Content, and folding

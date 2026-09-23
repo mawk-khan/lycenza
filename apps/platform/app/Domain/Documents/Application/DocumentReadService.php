@@ -41,7 +41,7 @@ use Throwable;
  * deferred their writes (see DocumentService's own docblock).
  *
  * Phase 0I.2 activates a SECOND owner type read path: LearningContent
- * (`lms.content.view`, ADR 0037 decision 8) -- a single capability, no
+ * (`lms.content.view`, ADR 0039 decision 8) -- a single capability, no
  * tier split, since a LearningContent-owned Document only ever carries
  * the one valid `internal` tier (see DocumentService's own docblock).
  *

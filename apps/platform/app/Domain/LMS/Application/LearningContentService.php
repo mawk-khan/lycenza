@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 0I.2 -- the ONE sanctioned write path for `learning_content`
- * (ADR 0037). Neither the API controller nor the Inertia controller
+ * (ADR 0039). Neither the API controller nor the Inertia controller
  * writes the model directly (proven by
  * Tests\Feature\LMS\LearningContentArchitectureGuardTest).
  *
@@ -163,7 +163,7 @@ class LearningContentService
 
     /**
      * Retires this content -- legal from `published` only. The row is
-     * never deleted (rule 73, ADR 0037 decision 9): archived content
+     * never deleted (rule 73, ADR 0039 decision 9): archived content
      * remains readable/correctable, and can be published again later.
      */
     public function archive(School $school, LearningContent $content, User $actor): LearningContent

@@ -597,7 +597,7 @@ children's-data **[LEGAL REVIEW REQUIRED]** gate in
 **Phase 0H as a whole is NOT complete** — Timetable, Attendance,
 Syllabus Foundation, Curriculum Delivery, Examination Foundation,
 ExaminationPaper/Scheduling and GradeScale/GradeBand mapping are done
-(GradeScale/GradeBand pending publication to `main`); Academics still
+(GradeScale/GradeBand published to `main`); Academics still
 lacks Lesson Planning, and Examinations still lacks marks, results,
 report cards and transcripts.
 
@@ -608,7 +608,8 @@ prerequisite identified by the StudentMark engineering-readiness audit
 — independent of StudentMark's own legal/compliance status.
 
 **Phase 0H.4D-P2 — Student Processing Authorization Registry — is
-implemented but not yet published to `main`** (ADR 0038): the second
+implemented and published to `main`** (ADR 0038; registry plus its
+locked-state revalidation correction): the second
 Students/SIS platform prerequisite — `StudentProcessingAuthorization`,
 an append-only, School/Student-scoped record of the processing basis
 (Guardian consent, adult Student consent, or statutory School purpose)
@@ -649,11 +650,11 @@ REQUIRED — FEATURE CANCELLED**. No further Phase 0I checkpoint is
 planned.
 
 **Phase 0I.1 (2026-09-04): architecture contract frozen — complete.**
-See ADR 0037 (`docs/architecture/adr/0037-lms-domain-contract.md`) for
+See ADR 0039 (`docs/architecture/adr/0039-lms-domain-contract.md`) for
 the full decision record and `docs/modules/LMS.md` for the living
 operational reference.
 
-**Phase 0I.2 (2026-10-08): Learning Content Foundation implemented —
+**Phase 0I.2 (2026-09-04): Learning Content Foundation implemented —
 complete.** `App\Domain\LMS` — `LearningContent`/`learning_content`
 (`draft→published→archived` lifecycle, `lms.content.view`/`.manage`
 capabilities, six `/api/v1` operations plus a session-authenticated
@@ -693,7 +694,7 @@ obtained; the historical legal/data-governance concerns Phase 0I.4
 raised remain unresolved and must not be assumed settled if this scope
 is ever reopened. Both legal-review documents are retained, marked
 `CLOSED — FEATURE CANCELLED / OUT OF SCOPE`, as historical governance
-records (see `docs/architecture/adr/0037-lms-domain-contract.md`'s
+records (see `docs/architecture/adr/0039-lms-domain-contract.md`'s
 Submission cancellation addendum for the authoritative decision text).
 
 **Phase 0I.4A (Submission legal decision incorporation): NOT REQUIRED

@@ -12,7 +12,7 @@ use Tests\TestCase;
 
 /**
  * Phase 0I.2 -- HTTP contract proof for the `learning_content` Documents
- * owner arm (ADR 0037 decision 8): `POST`/`GET
+ * owner arm (ADR 0039 decision 8): `POST`/`GET
  * /api/v1/schools/{school}/learning-content/{learningContent}/documents`.
  * Mirrors Tests\Feature\Documents\DocumentHttpUploadTest's exact
  * transport-proof shape for the Employee owner type, adapted for the
