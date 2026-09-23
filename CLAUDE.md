@@ -654,6 +654,76 @@ docs/roadmap             MASTER-ROADMAP.md
     `App\Support\Webhooks\WebhookEventRegistry` — never automatically
     because it exists in `domain_event_outbox` (rule 45).
 
+78. **Run tests through `apps/platform/bin/safe-test`
+    (`composer test:safe` from a host with Composer), not a
+    hand-typed `docker exec`/`vendor/bin/phpunit` invocation.** See
+    `docs/architecture/TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md`. It
+    validates resolved configuration via `platform:env-diagnostic`
+    before running anything, passes the full safe-environment override
+    set explicitly (defense-in-depth beyond rule 79's `force="true"`,
+    and the only protection a raw `artisan` command such as
+    `platform:test-db-reset` gets, since it never parses
+    `phpunit.xml`), and raises the PHP CLI `memory_limit` for the
+    `phpunit` subprocess (the default 128M reliably exhausts on this
+    repository's full suite). `composer test`/a raw `docker exec`
+    remain correct if you already know every override needed; the
+    runner exists so nobody has to reconstruct that list from memory.
+
+79. **`phpunit.xml`'s `<php>` block uses `force="true"` on every
+    entry, and this is load-bearing, not decorative.** Without it,
+    PHPUnit only defines a variable that is not already present in the
+    process environment — it never overrides one that is (see
+    `vendor/phpunit/phpunit/src/TextUI/Configuration/PhpHandler.php`).
+    `docker-compose.yml`'s `env_file:` makes every value in
+    `apps/platform/.env` (development defaults —
+    `CACHE_STORE=redis`, `QUEUE_CONNECTION=redis`, `MAIL_MAILER=log`,
+    `DB_DATABASE=school_os`, `APP_ENV=local`) a real ambient process
+    environment variable inside the `platform` container, which is
+    exactly the "already set" state a non-forced `<env>` respects.
+    This produced 44 unrelated-looking test failures during Phase 5
+    closure verification before the root cause was found. Never remove
+    `force="true"` from a safety-relevant entry, and never add a new
+    safety-relevant `<env>` entry without it.
+
+80. **A `force="true"` `<env>` alone is not sufficient — Laravel's
+    `env()`/`config()` can still resolve the ambient value even when
+    `getenv()` is correctly forced.** `vlucas/phpdotenv`'s
+    `RepositoryBuilder` reads `$_SERVER` (`ServerConstAdapter`) before
+    `$_ENV`/`getenv()`, and PHPUnit's `force="true"` never touches
+    `$_SERVER`. `tests/bootstrap.php` (phpunit.xml's `bootstrap=`
+    target) closes this by re-syncing `$_SERVER` from `$_ENV` once,
+    after PHPUnit applies its forced values and before Laravel boots —
+    do not change `phpunit.xml`'s `bootstrap=` back to
+    `vendor/autoload.php` directly, and do not assume a passing
+    `getenv()`-based check proves `config()` will agree with it; see
+    `docs/architecture/TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md` section
+    1 ("The `$_SERVER` gap") for the confirmed mechanism.
+
+81. **A bare `docker compose up`/`down`/`run` (no explicit `-p
+    <project>`) always targets the shared `school-os` project
+    (`docker-compose.yml`'s hardcoded `name: school-os`), regardless
+    of which worktree directory it is run from.** Running it from a
+    non-primary worktree recreates the shared `platform` container
+    bound to THAT worktree's code (`docker-compose.yml`'s
+    `./apps/platform:/var/www/app` bind mount is resolved relative to
+    the invoking directory); running a bare `down` from ANY worktree
+    stops and removes the shared project's containers, not whatever
+    the operator locally intended — reproduced directly during the
+    test-environment-hardening checkpoint itself (see
+    `docs/architecture/TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md`
+    section 17, "Failure examples"). Prefer
+    `apps/platform/bin/safe-test` (rule 78), which always passes an
+    explicit `-p` on every Compose invocation it makes. If you must run
+    a raw `docker compose` command directly, inspect
+    `docker compose config`/`docker ps` first and pass `-p` explicitly
+    once more than one Compose project might plausibly be in play —
+    never assume you are the only worktree using the shared project.
+    `SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test` runs against a
+    dedicated, deterministically-named, no-published-host-ports
+    Compose project derived from the current worktree path, for
+    exactly the situation where two worktrees might run tests
+    concurrently.
+
 ## Running things locally
 
 ```bash
@@ -699,9 +769,13 @@ npm run format:check    # Prettier
 # DB_DATABASE points at school_os_test (this project has no
 # .env.testing file; see App\Support\Testing\TestDatabaseGuard's
 # docblock for the exact incident this caused, Phase 0C.3A). Use the
-# canonical, fail-closed reset command instead, with the test
-# database's real credentials (see phpunit.xml for the exact values)
-# passed explicitly:
+# canonical, fail-closed reset command instead (see rule 78):
+#
+#   apps/platform/bin/safe-test --reset-db
+#
+# ...which passes the same explicit values documented below and
+# verified by TestDatabaseGuard -- do this by hand only if the script
+# is unavailable for some reason:
 #
 #   APP_ENV=testing \
 #   DB_HOST=... DB_DATABASE=school_os_test \
@@ -719,16 +793,22 @@ npm run format:check    # Prettier
 # silently breaks unrelated suites, e.g. every AI Gateway test needs
 # ServiceIdentitySeeder too).
 #
-# The canonical way to RUN the suite is `composer test`, whose
-# `php artisan test` step gets DB_DATABASE=school_os_test from
-# phpunit.xml's <env> block. Run it from a clean shell (or a
-# container/CI job) with no ambient DB_DATABASE already set --
-# PHPUnit's <env> only fills in variables that aren't ALREADY present
-# in the process environment, it does not override one; if something
-# upstream already exported DB_DATABASE=school_os, phpunit.xml's value
-# is silently ignored. TestDatabaseGuard (below) is what actually
-# catches that case: it now aborts `composer test` itself rather than
-# letting it quietly run against the development database.
+# The canonical way to RUN the suite is (see rule 78):
+apps/platform/bin/safe-test
+#   (or: composer test:safe, from a host with Composer installed)
+#
+# `composer test`/`php artisan test` remain correct too -- phpunit.xml's
+# <env ... force="true"/> block (rule 79) now makes DB_DATABASE=school_os_test
+# (and every other safety-relevant value) authoritative regardless of
+# ambient shell/container state, closing the exact "ambient
+# DB_DATABASE=school_os silently wins" class of incident this comment
+# used to warn about by hand. bin/safe-test is preferred anyway because
+# it also protects the raw artisan commands force="true" cannot reach
+# (platform:test-db-reset, platform:env-diagnostic), validates resolved
+# configuration before running anything, and raises the PHP CLI
+# memory_limit the full suite needs. See
+# docs/architecture/TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md for the
+# full incident history and mechanism.
 composer test
 
 # AI Gateway (services/ai)
