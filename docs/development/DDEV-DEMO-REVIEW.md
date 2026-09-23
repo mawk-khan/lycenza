@@ -370,11 +370,8 @@ closed: its forced `DB_HOST` is docker-compose's `postgres`, which does
 not resolve inside DDEV.
 
 `ddev test --reset-db` drops and recreates the DDEV-private
-`school_os_test` database before running `platform:test-db-reset`:
-`migrate:fresh` drops tables but not the PL/pgSQL functions some
-migrations create, so re-running it on an already-migrated database fails
-with `function ... already exists` (a limitation of the canonical reset
-command itself, outside DDEV).
+`school_os_test` database (a guaranteed-empty start) and then runs the
+canonical `platform:test-db-reset`.
 
 Known environment gaps inside DDEV: the MinIO integration tests
 (`DocumentMinioStorageTest`, `DocumentReadMinioIntegrationTest`,
