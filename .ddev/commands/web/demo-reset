@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+
+## Description: DESTRUCTIVE, LOCAL DDEV ONLY: wipe this project's DDEV database and reload the School OS demo dataset + demo accounts
+## Usage: demo-reset [--build]
+## Example: "ddev demo-reset" or "ddev demo-reset --build" (also rebuilds frontend assets)
+## Flags: [{"Name":"build","Usage":"Always rebuild frontend assets (npm run build), even if a build already exists"}]
+
+# Runs inside the DDEV web container. Refuses to do anything unless every
+# guard below proves it is talking to THIS project's own DDEV database
+# container -- never a shared, external, or production database.
+# See docs/development/DDEV-DEMO-REVIEW.md.
+
+set -euo pipefail
+
+fail() {
+    echo "demo-reset: REFUSING TO RUN -- $*" >&2
+    exit 1
+}
+
+build_assets=false
+for arg in "$@"; do
+    case "$arg" in
+        --build) build_assets=true ;;
+        *) fail "unknown argument '$arg' (only --build is accepted)" ;;
+    esac
+done
+
+# --- Guard 1: we are inside a DDEV web container for a DDEV project. ---
+[[ "${IS_DDEV_PROJECT:-}" == "true" ]] || fail "IS_DDEV_PROJECT is not 'true' (not running inside DDEV)."
+[[ -n "${DDEV_PROJECT:-}" ]] || fail "DDEV_PROJECT is not set."
+
+# --- Guard 2: connection settings point ONLY at DDEV's own db service. ---
+[[ "${DB_HOST:-}" == "db" ]] || fail "DB_HOST is '${DB_HOST:-}', expected DDEV's 'db' service."
+[[ "${DB_DATABASE:-}" == "db" ]] || fail "DB_DATABASE is '${DB_DATABASE:-}', expected DDEV's 'db' database."
+[[ "${DB_ADMIN_USERNAME:-}" == "db" ]] || fail "DB_ADMIN_USERNAME is '${DB_ADMIN_USERNAME:-}', expected DDEV's 'db' user."
+[[ -z "${DB_URL:-}" && -z "${DB_ADMIN_URL:-}" ]] || fail "DB_URL/DB_ADMIN_URL must be empty (they would override DB_HOST)."
+
+cd /var/www/html/apps/platform
+
+export PGPASSWORD="${DB_ADMIN_PASSWORD:-db}"
+psql_admin() {
+    psql -v ON_ERROR_STOP=1 -X -q -h db -U db -d db "$@"
+}
+
+# --- Guard 3: the database server answering is DDEV's db container. ---
+server_db="$(psql_admin -tAc 'SELECT current_database()')" || fail "cannot reach DDEV's db service."
+[[ "$server_db" == "db" ]] || fail "connected database is '$server_db', expected 'db'."
+server_addr="$(psql_admin -tAc 'SELECT host(inet_server_addr())')"
+resolved_addr="$(getent hosts db | awk '{print $1}' | head -n1)"
+[[ -n "$resolved_addr" && "$server_addr" == "$resolved_addr" ]] \
+    || fail "database server address ($server_addr) is not DDEV's db container ($resolved_addr)."
+
+# --- Application environment: .env supplies APP_ENV/APP_KEY only. ---
+if [[ ! -f .env ]]; then
+    echo "demo-reset: apps/platform/.env missing -- creating it from .env.example"
+    cp .env.example .env
+fi
+if ! grep -qE '^APP_KEY=base64:' .env; then
+    php artisan key:generate --force --no-interaction
+fi
+
+# --- Guard 4: Laravel itself resolves to the local environment. ---
+php artisan config:clear --no-interaction >/dev/null
+app_env="$(php -r '
+require "vendor/autoload.php";
+$app = require "bootstrap/app.php";
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+echo $app->environment();
+')"
+[[ "$app_env" == "local" ]] || fail "Laravel resolves APP_ENV='$app_env'; the demo requires 'local' (check apps/platform/.env)."
+
+echo "demo-reset: guards passed (DDEV project '${DDEV_PROJECT}', database 'db' on DDEV's db container, APP_ENV=local)"
+
+# --- Recreate the schema and the unprivileged runtime role (ADR 0021). ---
+# DROP SCHEMA also drops per-schema default privileges, so they are
+# re-granted every time. school_os_app is re-asserted NOSUPERUSER/
+# NOBYPASSRLS on every run so RLS always applies to runtime connections.
+echo "demo-reset: recreating schema 'public' in DDEV database 'db'"
+psql_admin <<'SQL'
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'school_os_app') THEN
+        CREATE ROLE school_os_app LOGIN PASSWORD 'school_os_app_local_only_password'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    END IF;
+END
+$$;
+ALTER ROLE school_os_app NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public AUTHORIZATION db;
+
+GRANT CONNECT ON DATABASE db TO school_os_app;
+GRANT USAGE ON SCHEMA public TO school_os_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE db IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO school_os_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE db IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO school_os_app;
+SQL
+
+echo "demo-reset: migrating (pgsql_admin)"
+php artisan migrate --database=pgsql_admin --force --no-interaction
+
+# Empty DDEV's local Mailpit so only this run's invitation e-mails (with
+# links valid for THIS dataset) are shown.
+curl -fsS -o /dev/null -X DELETE http://127.0.0.1:8025/api/v1/messages \
+    || echo "demo-reset: note -- could not clear Mailpit (continuing)"
+
+echo "demo-reset: seeding canonical reference data (DatabaseSeeder)"
+php artisan db:seed --force --no-interaction
+
+echo "demo-reset: seeding demo school and demo accounts (Demo\\DemoSeeder)"
+php artisan db:seed --class='Database\Seeders\Demo\DemoSeeder' --force --no-interaction
+
+# --- Caches, sessions, queue workers. ---
+# Flushes only this project's private DDEV Redis service (no host port,
+# unreachable from anything else): stale sessions/caches from a previous
+# dataset would otherwise point at rows that no longer exist.
+php -r '
+require "vendor/autoload.php";
+$app = require "bootstrap/app.php";
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+foreach (["default", "cache"] as $connection) {
+    Illuminate\Support\Facades\Redis::connection($connection)->flushdb();
+}
+'
+php artisan optimize:clear --no-interaction >/dev/null
+php artisan queue:restart --no-interaction >/dev/null
+
+# --- Frontend assets. ---
+if [[ "$build_assets" == "true" || ! -f public/build/manifest.json ]]; then
+    if [[ ! -d node_modules ]]; then
+        echo "demo-reset: installing frontend dependencies (npm ci)"
+        npm ci --no-audit --no-fund
+    fi
+    echo "demo-reset: building frontend assets (npm run build)"
+    npm run build
+fi
+
+echo
+echo "demo-reset: done."
+echo "  App:      ${DDEV_PRIMARY_URL:-https://${DDEV_HOSTNAME:-lycenza.ddev.site}}/login"
+echo "  Mailpit:  run 'ddev mailpit' (or 'ddev describe' for its URL)"
+echo "  Accounts: printed above -- LOCAL DEMO CREDENTIALS, NEVER USE IN PRODUCTION"

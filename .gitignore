@@ -5,3 +5,7 @@
 
 # Per-app ignores live in apps/platform/.gitignore, services/ai/.gitignore,
 # apps/mobile/.gitignore — this file only covers repo-root concerns.
+
+# Docker Compose override files are machine-local by Compose convention
+# (e.g. host port remaps for a machine with conflicting local services).
+docker-compose.override.yml

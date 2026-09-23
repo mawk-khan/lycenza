@@ -1,0 +1,107 @@
+# DDEV local demo / review environment for School OS (apps/platform).
+# Local development and review ONLY -- never a staging or production
+# environment. See docs/development/DDEV-DEMO-REVIEW.md.
+#
+# Versions mirror the stack CI verifies (.github/workflows/ci.yml) and
+# infrastructure/docker/platform.Dockerfile: PHP 8.3, PostgreSQL 16,
+# Valkey 8 (Redis protocol), Node 22.
+name: lycenza
+type: laravel
+docroot: apps/platform/public
+composer_root: apps/platform
+php_version: "8.3"
+webserver_type: nginx-fpm
+nodejs_version: "22"
+database:
+    type: postgres
+    version: "16"
+xdebug_enabled: false
+corepack_enable: false
+
+# DDEV's Laravel project type would otherwise rewrite
+# apps/platform/.env's DB_*/MAIL_* lines on every `ddev start`. That
+# file is shared with the docker-compose workflow, so DDEV must not
+# touch it -- DDEV-specific connection values are injected below as
+# real container environment variables instead, which Laravel's
+# immutable dotenv loader gives precedence over anything in .env.
+disable_settings_management: true
+
+working_dir:
+    web: /var/www/html/apps/platform
+
+# Every value below is an inert, local-only default that can only
+# ever reach services inside this DDEV project (ADR 0016) -- the same
+# class of value already committed in apps/platform/.env.example.
+#
+# APP_ENV and APP_KEY are deliberately NOT set here: they come from
+# apps/platform/.env (created from .env.example by `ddev demo-reset`
+# when missing). Keeping APP_ENV out of the container environment is a
+# safety property, not an omission: a raw `php artisan test` then gets
+# APP_ENV=testing from phpunit.xml while DB_DATABASE stays `db`, so
+# App\Support\Testing\TestDatabaseGuard refuses to boot instead of
+# silently running the suite against the demo database (CLAUDE.md
+# rules 50-53). Use `ddev test` to run the suite.
+web_environment:
+    - APP_URL=https://lycenza.ddev.site
+    # Runtime connection: the unprivileged, NOBYPASSRLS school_os_app
+    # role (ADR 0021), created inside the DDEV database by
+    # `ddev demo-reset`. Migrations use pgsql_admin = DDEV's `db`
+    # superuser, which exists only inside this project's db container.
+    - DB_CONNECTION=pgsql
+    - DB_HOST=db
+    - DB_PORT=5432
+    - DB_DATABASE=db
+    - DB_USERNAME=school_os_app
+    - DB_PASSWORD=school_os_app_local_only_password
+    - DB_ADMIN_USERNAME=db
+    - DB_ADMIN_PASSWORD=db
+    - DB_URL=
+    - DB_ADMIN_URL=
+    - REDIS_CLIENT=predis
+    - REDIS_HOST=redis
+    - REDIS_PORT=6379
+    - REDIS_PASSWORD=null
+    - CACHE_STORE=redis
+    - SESSION_DRIVER=redis
+    - QUEUE_CONNECTION=redis
+    # DDEV's built-in Mailpit captures every message; nothing leaves
+    # the machine. Communication Hub email stays disabled (its own
+    # gate, see .env.example).
+    - MAIL_MAILER=smtp
+    - MAIL_SCHEME=null
+    - MAIL_HOST=127.0.0.1
+    - MAIL_PORT=1025
+    - MAIL_USERNAME=null
+    - MAIL_PASSWORD=null
+    - COMMUNICATION_EMAIL_ENABLED=false
+    # Local disk storage -- Documents and Communication attachments
+    # already default to the `local` disk (config/documents.php,
+    # config/communications.php), so no MinIO/S3 service is needed.
+    - FILESYSTEM_DISK=local
+    - DOCUMENTS_DISK=local
+    - COMMUNICATION_ATTACHMENTS_DISK=local
+    # Inert local-only lookup-digest keys, identical to .env.example's
+    # values (guardian contact creation/search fails without them).
+    - CONTACT_LOOKUP_HMAC_KEY=dev-local-only-contact-lookup-hmac-key-change-me
+    - CONTACT_LOOKUP_HMAC_KEY_VERSION=1
+    - STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY=dev-local-only-statutory-identifier-lookup-hmac-key-change-me
+    - STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY_VERSION=1
+    - GUARDIAN_INVITATION_EXPIRY_DAYS=7
+    - AI_GATEWAY_BASE_URL=http://localhost:8100
+    - AI_GATEWAY_SERVICE_TOKEN=dev-local-only-token
+    - AI_GATEWAY_CONTEXT_SIGNING_KEY=dev-local-only-context-signing-key-change-me
+    - TENANCY_ALLOW_DEV_HEADER_OVERRIDE=false
+    - INERTIA_SSR_ENABLED=false
+    - INERTIA_DEVTOOLS_ENABLED=false
+
+# Queue worker and scheduler, supervised inside the web container.
+# Mirrors docker-compose.yml's `queue` service and routes/console.php's
+# every-minute schedule (outbox dispatch, webhook/communication
+# redispatch, scheduled announcements).
+web_extra_daemons:
+    - name: queue
+      command: php artisan queue:work --tries=3 --queue=notifications,default,integrations
+      directory: /var/www/html/apps/platform
+    - name: scheduler
+      command: php artisan schedule:work
+      directory: /var/www/html/apps/platform
