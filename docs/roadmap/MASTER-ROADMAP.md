@@ -933,8 +933,8 @@ everything built so far; deliberately sequenced after there's
 meaningful data/events for them to work with.
 
 **Phase 0L.1 (2026-09-05): Analytics Domain Contract frozen, zero
-implementation.** Analytics only — see ADR 0038
-(`docs/architecture/adr/0038-analytics-domain-contract.md`) for the
+implementation.** Analytics only — see ADR 0040
+(`docs/architecture/adr/0040-analytics-domain-contract.md`) for the
 full ten-decision record and `docs/modules/ANALYTICS.md` for the living
 operational reference. No migration, model, controller, service,
 route, or capability exists yet. Single-School (tenant-local) Analytics
@@ -951,7 +951,7 @@ contracts.
 
 **Recommended next checkpoint: Phase 0L.2 — Analytics Foundation**
 (one or two already-stable Layer 0–4 data sources, a real, minimal,
-capability-gated, single-School read surface, following ADR 0038
+capability-gated, single-School read surface, following ADR 0040
 exactly — no dashboard/API/schema exists yet).
 
 ## Phase 0M — AI Platform: Real Agents

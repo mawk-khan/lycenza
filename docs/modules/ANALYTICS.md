@@ -1,11 +1,11 @@
 # Analytics (Phase 0L.1)
 
-**Status: architecture contract frozen (ADR 0038, 2026-09-05); zero
+**Status: architecture contract frozen (ADR 0040, 2026-09-05); zero
 implementation.** No migration, model, controller, service, route,
 capability, dashboard, export, or projection exists yet. This document
 is the living operational reference for the Analytics bounded context;
-the decision record is ADR 0038
-(`docs/architecture/adr/0038-analytics-domain-contract.md`) — read that
+the decision record is ADR 0040
+(`docs/architecture/adr/0040-analytics-domain-contract.md`) — read that
 first for the *why*, this document for the *what*, mirroring how
 `ACADEMIC-STRUCTURE.md`/`HR.md`/`docs/modules/LMS.md` relate to their
 own ADRs.
@@ -18,7 +18,7 @@ Layer 0–4 module | Same rule as Compliance."* `docs/roadmap/
 MASTER-ROADMAP.md`'s Phase 0L groups Analytics with Compliance and
 Automation as "read-mostly consumers... deliberately sequenced after
 there's meaningful data/events for them to work with" — but each is a
-separate checkpoint. **This document and ADR 0038 cover Analytics
+separate checkpoint. **This document and ADR 0040 cover Analytics
 only.**
 
 | Layer | Name |
@@ -103,7 +103,7 @@ may be introduced under it without a fresh ADR.
 **Cross-School/platform-wide Analytics is explicitly deferred** to a
 separate future architecture checkpoint. `TENANCY.md` already states
 cross-tenant reporting is theoretically possible but "not implemented
-yet" — this contract changes nothing about that. See ADR 0038 §4 for
+yet" — this contract changes nothing about that. See ADR 0040 §4 for
 the full reasoning and what a future cross-School checkpoint would need
 to resolve.
 
@@ -149,7 +149,7 @@ Summary:
   not itself disclose Highly-Sensitive category membership.
 - **Minimum-cohort-size threshold: `[LEGAL/PRODUCT/SECURITY REVIEW
   REQUIRED]` — not yet set.** The suppression RULE (small cells must be
-  omitted, bucketed, or the grouping declined) is frozen by ADR 0038;
+  omitted, bucketed, or the grouping declined) is frozen by ADR 0040;
   the exact number is an explicit, open gate. **No Analytics read model
   capable of producing a small-cohort cell may ship until this is set.**
 - **Aggregation is never an implicit privacy bypass** — "it's just a
@@ -231,4 +231,4 @@ functionality · cross-School reporting.
 - **Compliance, Automation**: separate future Layer 5 checkpoints, each
   needing their own contract; not designed or scoped by this document.
 - **Cross-School/platform Analytics**: a separate future architecture
-  checkpoint per ADR 0038 §4.
+  checkpoint per ADR 0040 §4.

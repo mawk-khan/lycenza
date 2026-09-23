@@ -1,4 +1,4 @@
-# ADR 0038: Analytics Domain Contract (Phase 0L.1)
+# ADR 0040: Analytics Domain Contract (Phase 0L.1)
 
 - Status: Accepted
 - Date: 2026-09-05 (Phase 0L.1)
@@ -23,7 +23,7 @@ This ADR is Phase 0L.1: a documentation/architecture-only checkpoint
 that freezes the Analytics bounded-context contract before any
 migration, read model, API, dashboard, export, or projection is built
 — exactly as ADR 0028 did for HR, ADR 0032 did for Examinations, and
-ADR 0037 (LMS) did most recently, on the same repository. It makes no
+ADR 0039 (LMS) did most recently, on the same repository. It makes no
 code change. Ten questions had to be resolved: Analytics' own
 responsibility and boundary against Compliance/Automation;
 source-of-truth ownership; module-access rules and degraded-source
@@ -225,7 +225,7 @@ freezes the spelling of:
 
 **Not seeded in `CapabilityAndRoleSeeder` by this checkpoint** —
 capability catalog registration happens at implementation time (Phase
-0L.2), per every prior module's own precedent (LMS/ADR 0037 froze
+0L.2), per every prior module's own precedent (LMS/ADR 0039 froze
 `lms.*` the same way before Phase 0I.2 seeded it).
 
 **Explicit, load-bearing distinction — this ADR's own required
@@ -425,7 +425,7 @@ anticipation of them.
 - Freezing scope, boundary, classification, and read-model strategy
   before any migration is written follows the identical discipline
   every prior Layer/module contract in this codebase has used (ADR
-  0028, 0030, 0032, 0034, 0037) — a checkpoint that gets these wrong is
+  0028, 0030, 0032, 0034, 0039) — a checkpoint that gets these wrong is
   expensive to unwind once schema and API surface exist.
 - Extending `DATA-CLASSIFICATION.md`'s combinatorial-elevation
   reasoning (already proven for the Canteen Order row) to derived/
@@ -435,7 +435,7 @@ anticipation of them.
   still defining the architectural suppression RULE, follows the exact
   conservative posture this codebase already applies to retention
   periods (`DATA-CLASSIFICATION.md`'s own "not yet made" retention
-  flag) and to LMS Submission (ADR 0037) — a real, structurally-enforced
+  flag) and to LMS Submission (ADR 0039) — a real, structurally-enforced
   gap is recorded as a gap, not silently resolved by engineering
   judgment alone.
 - Deferring cross-School Analytics rather than building a "just this

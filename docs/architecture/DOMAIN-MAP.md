@@ -119,7 +119,7 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 | Module | Owns | Depends on | Notes |
 |---|---|---|---|
 | **Compliance** | Regulatory reporting, statutory record-keeping | Reads from any Layer 1–4 module via explicit read contracts/events | Must remain a consumer — no Layer 1–4 module may require Compliance to function. |
-| **Analytics** | Cross-module reporting, dashboards | Reads from any Layer 0–4 module | Same rule as Compliance. **Architecture contract frozen (Phase 0L.1, ADR 0038)**; zero implementation. Single-School v1 only, synchronous/on-demand read models, no cross-module Eloquent access — see `docs/modules/ANALYTICS.md`. |
+| **Analytics** | Cross-module reporting, dashboards | Reads from any Layer 0–4 module | Same rule as Compliance. **Architecture contract frozen (Phase 0L.1, ADR 0040)**; zero implementation. Single-School v1 only, synchronous/on-demand read models, no cross-module Eloquent access — see `docs/modules/ANALYTICS.md`. |
 | **Automation** | Rules/workflow engine reacting to domain events (ADR 0010) | Subscribes to events from any module; calls back only through modules' Application-layer contracts | Automation acting on a module is indistinguishable, from that module's perspective, from any other authorized caller — it does not get a special bypass. |
 
 ## Layer 6 — External-facing

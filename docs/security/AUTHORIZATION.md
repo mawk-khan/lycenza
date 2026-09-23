@@ -130,7 +130,7 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
-## Source-record access vs. derived/aggregate-view access are separate concepts (ADR 0038)
+## Source-record access vs. derived/aggregate-view access are separate concepts (ADR 0040)
 
 A capability that authorizes reading a module's own transactional
 records does not, by itself, authorize viewing a dashboard/report
@@ -152,7 +152,7 @@ another:
 
 This principle governs any future Layer 5 (Oversight — Compliance,
 Analytics, Automation) or Layer 6 module that reads across module
-boundaries, not Analytics alone; see ADR 0038 and
+boundaries, not Analytics alone; see ADR 0040 and
 `docs/modules/ANALYTICS.md` §5 for the concrete Analytics-specific
 capability namespace this principle was first applied to.
 
