@@ -212,6 +212,15 @@ all wait for the decisions above.
 
 ADR 0040 does not define sub-checkpoints; this breakdown is a proposal.
 
+> **Outcome (2026-09-23).** Phase 0L.2 is closed. The as-built 0L.2-1
+> delivered the proposed 0L.2-1, 0L.2-2 and 0L.2-3 together for the one
+> non-person source (Curriculum Coverage); 0L.2-4 (export) was not
+> chosen under 7.6; the closeout (proposed 0L.2-5) is
+> `docs/architecture/PHASE-0L2-ANALYTICS-FOUNDATION-CLOSEOUT.md`, with no
+> second source because 7.6 chose one. The rows below are therefore
+> historical. Decisions 7.1–7.4 remain open, and the first
+> person-counting read model is a new, separately gated checkpoint.
+
 | Checkpoint | Scope | Likely files | Migrations | Capabilities | Tests | DDEV | Depends on |
 |---|---|---|---|---|---|---|---|
 | **0L.2-1 Suppression policy & capabilities** | `config/analytics.php` (fail-closed), suppression component, read-model declaration contract + architecture guard; seed `analytics.view`/`.export` with the grants from 7.5 | `app/Domain/Analytics/Application`, `config`, `CapabilityAndRoleSeeder` | none | seed 2 | boundary, complementary, derived, fail-closed, guard | none visible | 7.1–7.3, 7.5, 7.7 |

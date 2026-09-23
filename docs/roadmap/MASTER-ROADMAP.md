@@ -991,8 +991,19 @@ Admin and Principal, `analytics.export` seeded but unused, and one
 non-person report — Curriculum Coverage (`/app/analytics/curriculum-coverage`)
 — reading Curriculum Delivery's new aggregate contract. **Person-counting
 Analytics remains BLOCKED** on gate decisions 7.1–7.4; no export; no
-cross-School Analytics. A full regression checkpoint is due before any
-further 0L.2 checkpoint.
+cross-School Analytics. The full regression checkpoint that followed it
+passed and was published at `8eb5b74`.
+
+**Phase 0L.2 — Analytics Foundation: COMPLETE (2026-09-23).** Closed
+with the one non-person source built in 0L.2-1 — ADR 0040 asks for "one
+or two already-stable Layer 0–4 sources", and export was optional and
+not chosen (gate decision 7.6). Completeness matrix and evidence:
+`docs/architecture/PHASE-0L2-ANALYTICS-FOUNDATION-CLOSEOUT.md`. This
+closes the non-person foundation only: **person-counting Analytics
+remains BLOCKED** on gate decisions 7.1–7.4 as a future, separately
+gated checkpoint, and Analytics export, cross-School Analytics,
+Compliance and Automation remain unscoped. No later Phase 0L checkpoint
+is defined or authorized by this closeout.
 
 ## Phase 0M — AI Platform: Real Agents
 

@@ -215,8 +215,8 @@ minute.
 
 | Persona | Email | Purpose | Main access | Known limitations |
 |---|---|---|---|---|
-| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (108 capabilities): all modules incl. Finance and Payroll administration | HR departments/positions/categories, payslips and statutory screens are 403 (no system role holds them) |
-| Principal | `principal@example.test` | Academic administration | `principal` system role (78): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403 |
+| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (109 capabilities): all modules incl. Finance and Payroll administration | HR departments/positions/categories, payslips and statutory screens are 403 (no system role holds them) |
+| Principal | `principal@example.test` | Academic administration | `principal` system role (79): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403 |
 | HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |

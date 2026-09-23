@@ -1,8 +1,12 @@
-# Analytics (Phase 0L.1)
+# Analytics (Phase 0L.1 contract; Phase 0L.2 foundation)
 
-**Status: architecture contract frozen (ADR 0040, 2026-09-05); zero
-implementation.** No migration, model, controller, service, route,
-capability, dashboard, export, or projection exists yet. This document
+**Status: Phase 0L.2 Analytics Foundation COMPLETE (2026-09-23)** — one
+non-person report (Curriculum Coverage) on the architecture contract
+frozen by ADR 0040 (2026-09-05); see §13 (as built) and
+`docs/architecture/PHASE-0L2-ANALYTICS-FOUNDATION-CLOSEOUT.md`.
+**Person-counting Analytics remains BLOCKED** (§6). Sections 1–11 are
+the Phase 0L.1 contract text; where they say something "does not exist
+yet", §13 records what Phase 0L.2 has since built. This document
 is the living operational reference for the Analytics bounded context;
 the decision record is ADR 0040
 (`docs/architecture/adr/0040-analytics-domain-contract.md`) — read that
@@ -25,7 +29,8 @@ only.**
 |---|---|
 | Roadmap umbrella | Phase 0L — Oversight |
 | This checkpoint | Phase 0L.1 — Analytics Domain Contract (architecture only) |
-| Domain directory (planned) | `App\Domain\Analytics` |
+| Foundation | Phase 0L.2 — Analytics Foundation (complete; §13, §14) |
+| Domain directory | `App\Domain\Analytics` |
 | Capability namespace | `analytics.*` — `.view`/`.export` seeded in Phase 0L.2-1 (§13); `.platform.view` not seeded |
 
 **In scope, eventually:** analytical reads, dashboards, reports,
@@ -115,9 +120,10 @@ to resolve.
 | `analytics.export` | Export Analytics output for one School | seeded Phase 0L.2-1; granted to no role; no export exists |
 | `analytics.platform.view` | Future cross-School/platform Analytics view | frozen (spelling only) — unusable until §4's cross-School deferral resolves |
 
-Depth-2 dotted convention, matching every other module. **Not seeded in
-`CapabilityAndRoleSeeder`** — registration happens at implementation
-time (Phase 0L.2), per every prior module's precedent.
+Depth-2 dotted convention, matching every other module. Registered in
+`CapabilityAndRoleSeeder` at implementation time (Phase 0L.2-1), per
+every prior module's precedent; `analytics.platform.view` is still not
+seeded.
 
 **Load-bearing distinction, never to be assumed either direction:**
 - Holding a source module's own `.view` capability does **not** grant
@@ -225,14 +231,18 @@ functionality · cross-School reporting.
 
 - **Phase 0L.2-1 — Analytics Foundation + Curriculum Coverage**: DONE
   (2026-09-23) — see §13. Person-counting Analytics remains blocked.
-- **Phase 0L.2 — Analytics Foundation**: the first real implementation
-  checkpoint — one or two already-stable Layer 0–4 sources, a
-  capability-gated single-School read surface, following every
-  decision recorded here. Blocked on §6's small-cohort threshold for
-  any read model that could produce a small-cohort cell. The readiness
-  gate (2026-09-23) and the exact owner decisions still needed are
-  recorded in `docs/security/ANALYTICS-SMALL-COHORT-POLICY-GATE.md`
-  — status BLOCKED; no threshold has been approved.
+- **Phase 0L.2 — Analytics Foundation**: COMPLETE (2026-09-23) with
+  one non-person source — see §14. The contract asked for "one or two
+  already-stable Layer 0–4 sources"; one satisfies it.
+- **Person-counting Analytics** (any read model whose cells or
+  denominators count people): BLOCKED — a future, separately gated
+  checkpoint, not part of Phase 0L.2. Needs gate decisions 7.1–7.3 (and
+  7.4 for Student data) in
+  `docs/security/ANALYTICS-SMALL-COHORT-POLICY-GATE.md`; no threshold
+  has been approved.
+- **Analytics export**: `analytics.export` is seeded and granted to no
+  role; no export exists. Optional in the contract, not chosen for the
+  foundation, not scheduled.
 - **Compliance, Automation**: separate future Layer 5 checkpoints, each
   needing their own contract; not designed or scoped by this document.
 - **Cross-School/platform Analytics**: a separate future architecture
@@ -322,3 +332,14 @@ evaluation must trigger a new privacy/data-classification review before
 it ships** -- it would make the metric information about a person, and
 may bring it under the §6 person/cohort policy (and re-tier Curriculum
 Delivery to Sensitive by DATA-CLASSIFICATION.md's Timetable reasoning).
+
+## 14. Phase 0L.2 closeout (2026-09-23)
+
+Phase 0L.2 — Analytics Foundation is **complete** with the one
+non-person source built in 0L.2-1. The completeness matrix, the answers
+on source count, export and person Analytics, and the open future gates
+are in `docs/architecture/PHASE-0L2-ANALYTICS-FOUNDATION-CLOSEOUT.md`.
+In short: one source satisfies "one or two"; export is optional and not
+built; person-counting Analytics is conditional in the contract, fails
+closed today, and stays blocked on gate decisions 7.1–7.4. Closing
+Phase 0L.2 does not unblock it.
