@@ -227,7 +227,10 @@ functionality · cross-School reporting.
   checkpoint — one or two already-stable Layer 0–4 sources, a
   capability-gated single-School read surface, following every
   decision recorded here. Blocked on §6's small-cohort threshold for
-  any read model that could produce a small-cohort cell.
+  any read model that could produce a small-cohort cell. The readiness
+  gate (2026-09-23) and the exact owner decisions still needed are
+  recorded in `docs/security/ANALYTICS-SMALL-COHORT-POLICY-GATE.md`
+  — status BLOCKED; no threshold has been approved.
 - **Compliance, Automation**: separate future Layer 5 checkpoints, each
   needing their own contract; not designed or scoped by this document.
 - **Cross-School/platform Analytics**: a separate future architecture

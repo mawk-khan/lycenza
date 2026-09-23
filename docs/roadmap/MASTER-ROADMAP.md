@@ -976,7 +976,12 @@ contracts.
 **Recommended next checkpoint: Phase 0L.2 — Analytics Foundation**
 (one or two already-stable Layer 0–4 data sources, a real, minimal,
 capability-gated, single-School read surface, following ADR 0040
-exactly — no dashboard/API/schema exists yet).
+exactly — no dashboard/API/schema exists yet). **Readiness gate
+recorded 2026-09-23 — still BLOCKED** on the owner decisions listed in
+`docs/security/ANALYTICS-SMALL-COHORT-POLICY-GATE.md` §7 (minimum cohort
+size, suppression mode, policy scope, counsel review for Student-data
+sources, capability grants, first source); implementation does not
+start until they are recorded.
 
 ## Phase 0M — AI Platform: Real Agents
 
