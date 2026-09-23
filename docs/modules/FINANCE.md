@@ -4345,6 +4345,10 @@ explicit authorization; `feature/phase-0g-finance-foundation` has not
 been pushed (`origin` still carries only through 0G.4); `main`/
 `origin/main` were not modified by any part of 0G.8.
 
+(Historical record as of 0G.8's own closure. Phase 0G was subsequently
+published to `main` as `c4652ca`, which merges
+`feature/phase-0g-finance-foundation` at `1413113`.)
+
 ## Roadmap relationship
 
 Implements `docs/roadmap/MASTER-ROADMAP.md`'s **Phase 0G — Finance and

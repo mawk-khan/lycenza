@@ -2,8 +2,9 @@
 
 This roadmap sequences future phases by dependency, not by business
 priority alone — a module cannot be built correctly before what it
-depends on exists (`docs/architecture/DOMAIN-MAP.md`). Every phase
-after 0B is **not started** as of this document; nothing here is a
+depends on exists (`docs/architecture/DOMAIN-MAP.md`). Each phase below
+records its own status; a phase with no recorded status or
+implementation notes has not been started. Nothing here is a
 commitment to timing, only to order and scope.
 
 ## Phase 0A — Architectural Foundation (complete)
@@ -209,7 +210,18 @@ Students/SIS, Guardians, Admissions. First real domain events
 `docs/architecture/EVENTS.md`) get real producers here, flowing through
 the Phase 0C outbox/consumer substrate rather than a bespoke mechanism.
 
-## Phase 0G — Finance and Fees (in progress)
+**Status: complete and published to `main`** — built as the separately
+numbered "Phase 1" initiative (1A–1H: Student/Guardian identity,
+enrollment and rollover, subject enrollment, admissions, lifecycle
+decision, electives, subject rollover, elective administration UI) and
+merged as `cfb2796` ("Merge final Phase 1 student foundation").
+`docs/students/PHASE-1-FINAL-COMPLETENESS-AUDIT.md` records zero missing
+or partial Phase 1 requirements; its two formatting-only closure
+blockers were resolved in `351f440`
+(`docs/students/PHASE-1-CLOSURE-QUALITY-CORRECTION.md`). Items that audit
+marks as explicitly deferred remain deferred.
+
+## Phase 0G — Finance and Fees (complete)
 
 Finance (core ledger), Fees, Payments — including the first real
 payment-gateway integration and inbound-webhook idempotency (ADR 0018,
@@ -391,9 +403,9 @@ spot-check, zero duplicate routes/capabilities, full application
 regression (3429 tests / 11305 assertions / 0 failures / 0 errors),
 and all frontend/static quality gates green. Full as-built detail:
 `docs/modules/FINANCE.md` ("0G.8 as-built"). Phase 0G's feature work
-(0G.0–0G.8) is complete; **publication** (pushing the feature branch
-and integrating into `main`) remains a separate, explicitly authorized
-gate — not yet performed.
+(0G.0–0G.8) is complete and **published to `main`** — `c4652ca`
+("Phase 0G.8: resolve Finance integration and close Phase 0G"), which
+merges `feature/phase-0g-finance-foundation` (`1413113`).
 
 ## Phase 0H — Academic Operations
 
@@ -631,10 +643,6 @@ itself constitute production approval; see
 `docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md` for the
 current classification and conditions.
 
-**"Phase 0H Attendance" remains Student class attendance only.** Staff/
-Employee attendance is untouched by Phase 0H.2 and stays a Phase 0J/HR
-concern.
-
 **"Phase 0H Attendance" means Student class attendance.** Staff/
 Employee attendance remains outside this Phase 0H checkpoint and
 belongs to the separately-scoped HR/Phase 0J concern, unless future
@@ -757,8 +765,18 @@ gated on the `[LEGAL REVIEW REQUIRED]` flag in
 `docs/security/DATA-CLASSIFICATION.md` — this Phase 0J entry is
 therefore **not** marked fully complete; it is "engineering
 implementation complete through non-statutory scope, statutory Payroll
-deferred." `feature/phase-9-payroll` has not been merged into `main`;
-that remains a separate, explicitly-authorized future step.
+deferred." (Historical as of that closure.)
+
+**Publication (2026-09-03):** Phase 9 non-statutory Payroll was published
+to `main` (`99cb641`, "merge: publish Phase 9 Payroll (non-statutory
+scope) into main"). Checkpoint 9.6 (statutory PF/ESI/PT/LWF/TDS,
+9.6A–9.6K) was then implemented under the accepted legal basis
+`SCH/PAY/REG/2026-9.6` (ADR 0036) and published (`a8916cd`, "merge:
+publish Phase 9.6 Statutory Payroll to main"). One statutory item
+remains deliberately deferred: the ESI disability special threshold
+(₹25,000), `DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED` (ADR
+0036). Phase 0J is therefore engineering-complete including statutory
+scope, with that single disclosed legal deferral.
 
 ## Phase 0K — Operational Modules
 
@@ -772,8 +790,8 @@ database-enforced single-active-loan-per-Copy invariant proven under
 real concurrency, `library.catalogue.*`/`library.circulation.*`
 capabilities, `/api/v1` administrative API, and a session-authenticated
 Inertia UI. Full design and closure record: `docs/modules/LIBRARY.md`.
-Deliberately excludes fines/Finance integration (Finance/Phase 0G is
-not on `main`), reservations/holds/renewals, Documents-module
+Deliberately excludes fines/Finance integration (Finance/Phase 0G was
+not yet on `main` when this checkpoint closed), reservations/holds/renewals, Documents-module
 integration, and any Guardian/Student-facing surface — all explicitly
 deferred, not gaps in this checkpoint's own closure.
 
@@ -790,7 +808,8 @@ Inertia UI. Full design and closure record: `docs/modules/TRANSPORT.md`.
 Deliberately excludes GPS/live-tracking (Student Transport location is
 Sensitive data — a dedicated privacy/architecture review is required
 before any future checkpoint attempts it), bus boarding/attendance,
-Transport fees/Finance integration (Finance/Phase 0G is not on `main`),
+Transport fees/Finance integration (Finance/Phase 0G was not yet on
+`main` when this checkpoint closed),
 Documents-module integration for vehicle/driver documents, and any
 Guardian/Student-facing surface — all explicitly deferred, not gaps in
 this checkpoint's own closure.

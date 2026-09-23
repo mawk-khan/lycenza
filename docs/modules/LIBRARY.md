@@ -286,7 +286,7 @@ public catalogue — all explicitly out of scope (§14).
 ## 14. Explicit non-scope (this checkpoint)
 
 - Fines, fine balances, payment tables, ledger postings, any Finance/Fees
-  integration (Finance is not on `main` yet regardless).
+  integration (Finance was not yet on `main` when this checkpoint closed).
 - Reservations, holds, waiting lists, renewals, recurring loans,
   inter-library transfers.
 - Documents module integration (no new owner arm added to the

@@ -639,7 +639,7 @@ being the first genuinely unused number on fresh `main`, which tops
 out at 0033), and every one of the ~76 files referencing "ADR 0032" to
 mean Payroll was updated to "ADR 0034" (the OpenAPI-generated
 `school-os-api.ts` was regenerated, never hand-edited). This
-repository's other pre-existing, still-unresolved collision
+repository's other pre-existing collision
 (`0028-phase-8a-hr-sequencing-and-domain-foundation.md` vs
 `0028-searchable-encrypted-pii.md`, both already on `main`) was
 out of Phase 9's scope and was left untouched at the time; it was
@@ -814,7 +814,7 @@ with explicit publication permission — see the Phase 9 Final
 Publication Report. Checkpoint 9.6 below is a new, separately
 authorized post-publication initiative on its own branch.)
 
-## Phase 9.6 Checkpoints (Statutory Payroll, in progress)
+## Phase 9.6 Checkpoints (Statutory Payroll, published)
 
 Legal basis: `SCH/PAY/REG/2026-9.6` (effective 1 April 2026, Telangana
 jurisdiction), accepted subject to the binding correction addendum —
@@ -839,9 +839,12 @@ never rewritten by this work.
 
 | 9.6J — Statutory Payslip Extension | **[implemented]** | Extends the existing on-demand `Payslip` DTO (Phase 9.10) with a new `PayslipStatutorySection` (PF/ESI/PT/LWF/TDS deduction figures, informational employer contributions, masked-only identifiers -- no reveal flow on a payslip). `PayslipReadService::render()` populates it ONLY from the already-frozen `payroll_statutory_calculation_results` row for the exact `PayrollRunResult` being rendered (never recalculated from current rule versions) AND only when the actor additionally holds `payroll.statutory.view` (layered on top of the existing `payroll.compensation.sensitive.view`) -- absent either condition, `statutory` is `null` and `statutoryDeductionsIncluded` is `false`, never fabricated. Folds into the SAME existing `payroll.payslip.viewed` audit event (a boolean flag only, never the values) rather than adding a second event. `esiDisabilityProvisionsEvaluated` is a permanent `false` disclosure -- this system collects no disability-status fact anywhere, so it can never determine whether ADR 0036's deferred ESI branch would apply to a specific Employee; both the API and the printable Vue view surface this as a standing notice. No blanket "legally compliant" language anywhere. Both `PayslipController`s (JSON API and Inertia) and `Payslips/Show.vue` updated; OpenAPI/`shared-types` regenerated. Tests prove: full statutory breakdown for an authorized viewer, section entirely absent without `.statutory.view`, no stored `Document` is ever created, a draft run still cannot produce a payslip, a reversed run's statutory figures remain the original immutable values, and the raw PAN never appears in the raw HTTP response body (masked only) for either transport. |
 
-**9.6 implementation is complete pending explicit publication
-permission.** The ESI disability special threshold (₹25,000) remains
+| 9.6K — Statutory Concurrency Matrix Completion | **[implemented]** | `StatutoryEsiCoverageMutationConcurrencyTest` -- the real two-process proof for ESI coverage-state mutation now that `EmployeeEsiCoverageAdminService::correct()` (9.6I) gives it a write path (commit `19d72cd`). Final matrix: duplicate statutory calculation, duplicate statutory posting, PF-status mutation and ESI coverage mutation proven; rule-version activation and exports not applicable by design. |
+
+**9.6 implementation is complete and was published to `main`
+(`a8916cd`, with explicit publication permission).** The ESI disability
+special threshold (₹25,000) remains
 `DEFERRED — ADDITIONAL LEGAL CLARIFICATION REQUIRED` (ADR
-0035) -- this is a deliberate, disclosed legal gap, not an
+0036) -- this is a deliberate, disclosed legal gap, not an
 implementation gap. See the Phase 9.6 Final Readiness Report for the
 publication verdict.
