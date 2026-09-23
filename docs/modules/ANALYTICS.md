@@ -26,7 +26,7 @@ only.**
 | Roadmap umbrella | Phase 0L — Oversight |
 | This checkpoint | Phase 0L.1 — Analytics Domain Contract (architecture only) |
 | Domain directory (planned) | `App\Domain\Analytics` |
-| Capability namespace (frozen, not seeded) | `analytics.*` |
+| Capability namespace | `analytics.*` — `.view`/`.export` seeded in Phase 0L.2-1 (§13); `.platform.view` not seeded |
 
 **In scope, eventually:** analytical reads, dashboards, reports,
 derived metrics (counts/totals/averages/percentages/trends/grouped
@@ -111,8 +111,8 @@ to resolve.
 
 | Capability | Scope | Status |
 |---|---|---|
-| `analytics.view` | View Analytics dashboards/reports for one School | frozen, not seeded |
-| `analytics.export` | Export Analytics output for one School | frozen, not seeded |
+| `analytics.view` | View Analytics dashboards/reports for one School | seeded Phase 0L.2-1; `school_admin`, `principal` |
+| `analytics.export` | Export Analytics output for one School | seeded Phase 0L.2-1; granted to no role; no export exists |
 | `analytics.platform.view` | Future cross-School/platform Analytics view | frozen (spelling only) — unusable until §4's cross-School deferral resolves |
 
 Depth-2 dotted convention, matching every other module. **Not seeded in
@@ -223,6 +223,8 @@ functionality · cross-School reporting.
 
 ## 12. Future
 
+- **Phase 0L.2-1 — Analytics Foundation + Curriculum Coverage**: DONE
+  (2026-09-23) — see §13. Person-counting Analytics remains blocked.
 - **Phase 0L.2 — Analytics Foundation**: the first real implementation
   checkpoint — one or two already-stable Layer 0–4 sources, a
   capability-gated single-School read surface, following every
@@ -235,3 +237,75 @@ functionality · cross-School reporting.
   needing their own contract; not designed or scoped by this document.
 - **Cross-School/platform Analytics**: a separate future architecture
   checkpoint per ADR 0040 §4.
+
+## 13. Phase 0L.2-1 — as built (2026-09-23)
+
+Owner-approved interim scope; recorded in ADR 0040's 2026-09-23
+amendment. **No minimum person-cohort size has been approved and none is
+recorded anywhere.**
+
+**Recorded decisions**
+- Person-counting Analytics is blocked while the minimum person-cohort
+  size is unset — enforced, not merely documented (below).
+- The cohort-size rule applies to cells or denominators that count
+  people or could disclose information about people. Pure object/process
+  aggregates (syllabus-unit coverage) are outside it, but still
+  classified, capability-gated, tenant-scoped and audited where the tier
+  requires.
+- First source: Curriculum Delivery / Syllabus coverage.
+- `analytics.view` → `school_admin`, `principal` only. `analytics.export`
+  is seeded but granted to nobody; there is no export.
+  `analytics.platform.view` is not seeded; no cross-School Analytics.
+- Student-data Analytics stays gated on the separate privacy/legal
+  decision.
+
+**Module (`app/Domain/Analytics/Application`)**
+
+| Piece | Role |
+|---|---|
+| `AnalyticsReadModel` | Interface: `declaration()` + `compute(School, filters)` |
+| `ReadModelDeclaration` | key, `ClassificationTier`, `countsPeople`, source modules, closed filter list |
+| `ClassificationTier` | Confidential / Sensitive / HighlySensitive; Sensitive+ reads are audited |
+| `CohortSuppressionPolicy` | Reads `config('analytics.minimum_person_cohort_size')` (env `ANALYTICS_MINIMUM_PERSON_COHORT_SIZE`, **no default**); anything but a positive whole number = unset; a person-counting declaration is refused while unset |
+| `AnalyticsReadGate::read()` | The only execution path: `analytics.view` (403) → cohort policy (503) → registry (503) → closed filters → `TenantContext::withSchool()` → compute → `analytics.report_viewed` audit for Sensitive/Highly Sensitive tiers (read model key + filters only) |
+| `AnalyticsReadModelRegistry` | Closed catalog of served read models |
+| `Exceptions\AnalyticsReportUnavailableException` | HTTP 503 fail-closed refusal |
+| `ReadModels\CurriculumCoverageReadModel` | `curriculum.coverage`: Confidential, `countsPeople: false`, filter `academic_year_id` only |
+
+Configuring a value is necessary but **not sufficient** for person
+Analytics: 0L.2-1 implements no per-cell/complementary suppression
+(the suppression mode is still undecided), and
+`Tests\Feature\Analytics\AnalyticsArchitectureGuardTest` fails if any
+registered read model counts people. The first person-counting read
+model must bring suppression with it, after gate decisions 7.1–7.4.
+
+**Source contract**: `App\Domain\CurriculumDelivery\Application\CurriculumCoverageReadService`
+(Curriculum Delivery's own module) returns unit counts only
+(`Coverage\*` DTOs): per required, active Subject Offering, its active
+syllabus-unit count and, per active Section in its context, completed /
+in-progress / not-started units — the same projection as the operational
+`/app/syllabus-delivery` page. No dates, no entity collections, no person
+field. It runs inside `withSchool()` and filters by School id; it does
+not re-check `curriculum.delivery.view` because analytics access is
+independent of source access (ADR 0040 §5) and the gate has already
+checked `analytics.view`.
+
+**Metrics**: planned = active units × active Sections; completed, in
+progress, not started; coverage % = completed / planned (integer
+arithmetic, one decimal, half up; `null` when nothing is planned).
+Dimensions: School totals, grade level, Subject Offering, Section.
+
+**Surface**: `GET /app/analytics/curriculum-coverage` (Inertia page
+`App/Analytics/CurriculumCoverage`), Dashboard link "Analytics:
+Curriculum Coverage" when the actor holds `analytics.view`. No API, no
+export, no cache, no snapshot, no outbox consumer.
+
+**Residual consideration (not a blocker, recorded for review)**: a
+per-Section, per-subject coverage figure may in practice correspond to
+one teacher's classes. Curriculum Delivery stores no teacher identity
+(DATA-CLASSIFICATION.md), and the same Section-level detail is already
+visible to the same roles through `curriculum.delivery.view`, so the
+report adds no new disclosure — but joining it with the timetable
+outside the system would say something about a teacher's pace. If that
+is judged performance data about a person, the Section breakdown should
+be reviewed under the §6 rule.

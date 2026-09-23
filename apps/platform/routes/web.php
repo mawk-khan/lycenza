@@ -17,6 +17,7 @@ use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\Account\AccountSecurityController;
 use App\Http\Controllers\App\Account\MfaAdminController;
 use App\Http\Controllers\App\AdmissionApplicationController;
+use App\Http\Controllers\App\Analytics\CurriculumCoverageController;
 use App\Http\Controllers\App\ApplicantController;
 use App\Http\Controllers\App\Attendance\AttendanceController;
 use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
@@ -977,6 +978,12 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])->name('update');
         Route::post('/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])->name('transition');
     });
+
+    // Phase 0L.2-1 -- Analytics (ADR 0040). One read-only report; the
+    // `analytics.view` check, the fail-closed cohort policy, tenancy
+    // and audit all live in App\Domain\Analytics\Application\AnalyticsReadGate.
+    // No export route (not in this checkpoint) and no API.
+    Route::get('/app/analytics/curriculum-coverage', [CurriculumCoverageController::class, 'index'])->name('app.analytics.curriculum-coverage');
 
     // Phase 0I.2 -- the administrative Learning Content surface (ADR
     // 0039). Capability checks live in the controller (the

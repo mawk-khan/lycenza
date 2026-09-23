@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Demo;
 
+use App\Domain\Analytics\Application\AnalyticsReadGate;
+use App\Domain\Analytics\Application\ReadModels\CurriculumCoverageReadModel;
 use App\Domain\Identity\Infrastructure\StudentGuardianAccountLink;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\PlatformRoleAssignment;
@@ -187,9 +189,36 @@ class DemoDataBuilderTest extends TestCase
             $this->assertPageStatus($email, $school, '/app/communications', 403);
         }
 
+        // Phase 0L.2-1: Curriculum Coverage Analytics -- School Admin and
+        // Principal only; desks and unlinked personas are refused.
+        $analytics = '/app/analytics/curriculum-coverage';
+        $this->assertPageStatus('school.admin@example.test', $school, $analytics, 200);
+        $this->assertPageStatus('principal@example.test', $school, $analytics, 200);
+        foreach (['hr.payroll@example.test', 'finance.officer@example.test', 'library.operator@example.test', 'teacher@example.test'] as $email) {
+            $this->assertPageStatus($email, $school, $analytics, 403);
+        }
+
         // Tenant isolation: the Annexe's admin cannot open a Demo School record.
         $this->assertPageStatus('annexe.admin@example.test', $annexe, '/app/students', 200);
         $this->assertPageStatus('annexe.admin@example.test', $annexe, "/app/students/{$demoStudent->id}", 404);
+    }
+
+    #[Test]
+    public function the_demo_curriculum_coverage_report_shows_real_variation_and_no_annexe_data(): void
+    {
+        $result = $this->build();
+        $readModel = app(CurriculumCoverageReadModel::class);
+        $gate = app(AnalyticsReadGate::class);
+
+        $report = $gate->read($readModel, $result->school, $this->user('principal@example.test'));
+        $this->assertGreaterThan(0, $report['totals']['completed']);
+        $this->assertGreaterThan(0, $report['totals']['inProgress']);
+        $this->assertGreaterThan(0, $report['totals']['notStarted']);
+        $percents = collect($report['offerings'])->pluck('coveragePercent')->filter()->unique();
+        $this->assertGreaterThan(1, $percents->count(), 'Demo coverage should differ between Subject Offerings.');
+
+        $annexe = $gate->read($readModel, $result->secondSchool, $this->user('annexe.admin@example.test'));
+        $this->assertSame(0, $annexe['totals']['planned']);
     }
 
     private function assertPageStatus(string $email, School $school, string $path, int $status): void

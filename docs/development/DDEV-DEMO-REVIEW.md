@@ -168,7 +168,7 @@ the dataset is 2026-09-22.
 | HR | 12 employees (8 teachers + accountant, librarian, driver, office assistant), departments, positions, categories, employment records, assignments |
 | Timetable | 5 periods, 150 entries (6 sections x 5 days x 5 periods, no teacher clashes) |
 | Attendance | 12 submitted first-period registers (Grade 6-A and 7-A, 14-21 Sept) with some absent/late marks |
-| Syllabus / delivery | 5 units each for English, Mathematics, Science per grade; Section A: 2 units completed, 1 in progress |
+| Syllabus / delivery | 5 units each for English, Mathematics, Science per grade; Section A: 2 units completed, 1 in progress; Section B: Mathematics 4 completed, Science 1 completed + 1 in progress, English not started (Hindi, Social Studies, Computer Science have no syllabus) |
 | Examinations | Unit Test 1 (July) and Term 1 Examination (28 Sept - 6 Oct), 30 papers each; active 8-band grade scale + a draft Pass/Fail scale |
 | Communications | 2 templates; 2 published announcements (school-wide; Grade 8 guardians) + 1 draft; 2 conversations (staff; guardian) |
 | Finance | 11 ledger accounts, opening and stationery journal entries, 36 Term-1 tuition charges, 30 payments (full and part), canteen charges |
@@ -269,8 +269,8 @@ Platform Admin (there is no platform UI to review).
 | Persona | Exists in code? | Login? | Tenant scope | Capabilities | Usable UI |
 |---|---|---|---|---|---|
 | Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 8 `platform.*` | **None** -- no platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
-| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 108 of the 143 catalog capabilities | Full admin UI |
-| Principal | Yes (system role `principal`) | Yes | One School | 78 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
+| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 109 of the 145 catalog capabilities | Full admin UI |
+| Principal | Yes (system role `principal`) | Yes | One School | 79 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
 | Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
 | School member, no role (teacher/staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
 | Guardian | Yes (Phase 5D.3 invitation -> membership + account link) | Yes | One School | None | Same as "no role" -- **no guardian portal** |
@@ -320,6 +320,21 @@ Platform Admin (there is no platform UI to review).
     you are signed in as a newly activated guardian.
 13. **platform.admin@example.test**: empty dashboard, no School -- the
     platform administration UI is not built yet.
+14. **Analytics** (Phase 0L.2-1): as **School Admin** or **Principal**,
+    Dashboard -> **Analytics: Curriculum Coverage**
+    (`/app/analytics/curriculum-coverage`). It shows, for the active
+    2026-27 year, syllabus coverage as completed / in progress / not
+    started syllabus units -- totals, by grade level, and by Subject
+    Offering (expand a row for its Sections). Every figure counts syllabus
+    units, never students or staff. Switch the year selector to 2025-26 to
+    see an empty report. Any other persona (HR & Payroll, the `demo.*`
+    desks, teacher/student/guardian) gets **403**; the Annexe's admin sees
+    only the Annexe's own (empty) coverage. **Student/person Analytics
+    (enrollment, attendance, admissions, results, fees, payroll, HR, ...)
+    is deliberately NOT available**: no minimum person-cohort size has
+    been approved, so any report that counts people fails closed
+    (`docs/security/ANALYTICS-SMALL-COHORT-POLICY-GATE.md`). There is no
+    export.
 
 ## 13. Interactive review map
 
@@ -345,6 +360,7 @@ Platform Admin (there is no platform UI to review).
 | Inventory | `/app/inventory-items`, `/-locations`, `/-stock` (no nav) | Admin, Principal | Yes | |
 | Canteen | Dashboard -> Canteen Outlets / Items / Orders / Settings | Admin (Principal: no settings) | Yes | |
 | LMS: Learning Content, Assignments | `/app/learning-content`, `/app/assignments` (no nav link) | Admin, Principal | Yes (empty -- not seeded) | Submission is cancelled and has no screen |
+| Analytics: Curriculum Coverage | Dashboard -> Analytics: Curriculum Coverage (`/app/analytics/curriculum-coverage`) | Admin, Principal | Yes | Counts syllabus units only; no person Analytics, no export (Phase 0L.2-1) |
 | Account security (MFA) | `/app/account/security` (no nav) | Any | Yes | MFA is opt-in; nothing requires it by default |
 | Guardian activation | Mailpit invitation link | (invitee) | Yes | |
 
@@ -384,14 +400,15 @@ Everything that was unpublished when this environment was first created
 has since been published to `main` (2026-09-23 consolidation): the
 Phase 0H.4D-P2 lock correction, Phase 0I LMS (ADR 0039: Learning Content
 and Assignments; Submission **cancelled / out of scope**), and the Phase
-0L.1 Analytics domain contract (ADR 0040, documentation only -- no
-Analytics code exists yet). The demo dataset does not seed any LMS
+0L.1 Analytics domain contract (ADR 0040). Phase 0L.2-1 has since added
+the first Analytics report (Curriculum Coverage, section 12 step 14). The demo dataset does not seed any LMS
 records; the LMS screens (section 13) start empty.
 
 Documented but not implemented on main: StudentMark / marks, results,
 report cards and transcripts (legally gated); Lesson Planning (deferred);
-Health and Safety (deferred, legally/security blocked); Analytics,
-Compliance, Automation (0L); real AI agents (0M); multi-school management
+Health and Safety (deferred, legally/security blocked); person-counting
+Analytics (blocked on the unapproved minimum cohort size), Analytics
+export, cross-School Analytics, Compliance, Automation (0L); real AI agents (0M); multi-school management
 UI (0N); external surface / production readiness (0O); portal logins.
 
 ## 16. Running tests inside DDEV

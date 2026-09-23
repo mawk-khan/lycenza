@@ -599,6 +599,15 @@ scales, exams · assignments, submissions, coursework, files, uploads,
 Documents · domain events, webhooks · a `Curriculum` entity · bulk or
 reorder operations · analytics/AI.
 
+**Later addition (Phase 0L.2-1, 2026-09-23):** Curriculum Delivery now
+exposes one read-only AGGREGATE contract,
+`App\Domain\CurriculumDelivery\Application\CurriculumCoverageReadService`,
+for Analytics (ADR 0040 §3): syllabus-unit counts per required Offering
+and Section (completed / in progress / not started), using this page's
+exact projection rules. It returns no dates, rows or person data and
+adds no write path, route or event to this module. See
+`docs/modules/ANALYTICS.md` §13.
+
 ## 19. Future
 
 - **Lesson Planning**: still deferred until a real requirement exists;

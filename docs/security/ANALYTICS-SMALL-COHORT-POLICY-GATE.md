@@ -1,7 +1,21 @@
 # Phase 0L.2 Analytics Foundation — Readiness & Small-Cohort Policy Gate
 
-**Status: BLOCKED — decision required.** Recorded 2026-09-23 on `main`
-at `f074c01`. This is a readiness and policy-gate record, not an
+**Status: PERSON-COUNTING ANALYTICS STILL BLOCKED — decision required.**
+Recorded 2026-09-23 on `main` at `f074c01`.
+
+> **Update 2026-09-23 (Phase 0L.2-1).** The owner approved an interim
+> scope that resolves decisions **7.5** (`analytics.view` for School
+> Admin and Principal only; `analytics.export` granted to nobody),
+> **7.6** (first source: Curriculum Delivery / Syllabus coverage; no
+> export in this checkpoint) and **7.7** (option (b): the cohort-size
+> gate applies to cells or denominators that count people or could
+> disclose information about people; pure object/process aggregates are
+> outside it but remain classified, authorized, tenant-scoped and
+> audited where their tier requires). **7.1 (the number), 7.2
+> (suppression mode), 7.3 (policy scope) and 7.4 (counsel review for
+> Student-data Analytics) remain OPEN**, so every person-counting report
+> remains blocked and fails closed. Recorded in ADR 0040's 2026-09-23
+> amendment; as built in `docs/modules/ANALYTICS.md` §13. This is a readiness and policy-gate record, not an
 implementation checkpoint: no Analytics code, migration, route,
 capability or configuration value exists or is introduced here.
 
@@ -216,3 +230,11 @@ security role(s)) for **7.1, 7.2, 7.3, 7.5, 7.6 and 7.7**, plus — for any
 Student-data source — the route chosen under **7.4**. Record it as an
 amendment to ADR 0040 §6 (and `DATA-CLASSIFICATION.md`'s Analytics row),
 then Phase 0L.2 checkpoint 0L.2-1 can start.
+
+**As of 2026-09-23 (after Phase 0L.2-1):** 7.5, 7.6 and 7.7 are recorded
+(see the status note at the top), which unblocked 0L.2-1 for the
+non-person Curriculum Coverage report only. **Person-counting Analytics
+still requires 7.1, 7.2 and 7.3**, and any Student-data source
+additionally requires 7.4. Until then the fail-closed guard shipped in
+0L.2-1 (`CohortSuppressionPolicy`, `AnalyticsArchitectureGuardTest`)
+refuses every person-counting report.
