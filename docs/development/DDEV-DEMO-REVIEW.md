@@ -259,7 +259,8 @@ same mechanism the test suite uses. It is **not** a product persona.
    `/app/transport/assignments`, `/app/visitor/directory`,
    `/app/visitor/visits`, `/app/hostels`, `/app/hostel-residency`,
    `/app/inventory-items`, `/app/inventory-locations`,
-   `/app/inventory-stock`, `/app/account/security`.
+   `/app/inventory-stock`, `/app/learning-content`, `/app/assignments`,
+   `/app/account/security`.
 8. Sign out; sign in as **principal@example.test**: same School, but no
    Finance/Payroll links, and `/app/finance/ledger-accounts` returns 403.
 9. **hr.payroll@example.test**: HR -> departments/positions/categories,
@@ -299,6 +300,7 @@ same mechanism the test suite uses. It is **not** a product persona.
 | Hostel | `/app/hostels`, `/app/hostel-residency` (no nav) | Admin, Principal | Yes | |
 | Inventory | `/app/inventory-items`, `/-locations`, `/-stock` (no nav) | Admin, Principal | Yes | |
 | Canteen | Dashboard -> Canteen Outlets / Items / Orders / Settings | Admin (Principal: no settings) | Yes | |
+| LMS: Learning Content, Assignments | `/app/learning-content`, `/app/assignments` (no nav link) | Admin, Principal | Yes (empty -- not seeded) | Submission is cancelled and has no screen |
 | Account security (MFA) | `/app/account/security` (no nav) | Any | Yes | MFA is opt-in; nothing requires it by default |
 | Guardian activation | Mailpit invitation link | (invitee) | Yes | |
 
@@ -322,8 +324,8 @@ same mechanism the test suite uses. It is **not** a product persona.
   configuration/identifiers are seeded, so they render empty.
 - **Domain-event outbox / webhooks fan-out**: runs in the background
   (scheduler + queue); no UI beyond webhook API.
-- **Student Processing Authorization registry** (Phase 0H.4D-P2, published
-  in `7419b8f`): JSON-only routes under
+- **Student Processing Authorization registry** (Phase 0H.4D-P2, registry
+  and its lock correction both published): JSON-only routes under
   `/app/students/{student}/processing-authorizations`, gated by
   `students.processing_authorizations.*` (School Admin, Principal) **and**
   the `mfa` middleware; its catalog feature flag
@@ -334,14 +336,13 @@ same mechanism the test suite uses. It is **not** a product persona.
 
 ## 15. Not implemented / deferred / unpublished
 
-Not part of this demo because they are **not in `origin/main`** at the
-time this environment was created (base `7419b8f`):
-
-- Phase 0H.4D-P2 **lock correction** (`a9a2a5d`, unmerged branch). The P2
-  registry itself (`7419b8f`) *is* published -- see section 14.
-- Phase 0I LMS -- Learning Content, Assignments (unmerged branches;
-  Submission is cancelled on those branches).
-- Phase 0L.1 Analytics domain contract (unmerged branch).
+Everything that was unpublished when this environment was first created
+has since been published to `main` (2026-09-23 consolidation): the
+Phase 0H.4D-P2 lock correction, Phase 0I LMS (ADR 0039: Learning Content
+and Assignments; Submission **cancelled / out of scope**), and the Phase
+0L.1 Analytics domain contract (ADR 0040, documentation only -- no
+Analytics code exists yet). The demo dataset does not seed any LMS
+records; the LMS screens (section 13) start empty.
 
 Documented but not implemented on main: StudentMark / marks, results,
 report cards and transcripts (legally gated); Lesson Planning (deferred);
