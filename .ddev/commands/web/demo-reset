@@ -130,6 +130,13 @@ php artisan db:seed --class='Database\Seeders\Demo\DemoSeeder' --force --no-inte
 php artisan optimize:clear --no-interaction >/dev/null
 php artisan queue:restart --no-interaction >/dev/null
 
+# Make sure the supervised queue worker and scheduler (.ddev/config.yaml
+# web_extra_daemons) are running: `ddev start` on an already-running
+# project can fail to start them ("supervisor.sock no such file"), which
+# would silently leave the seeded deliveries pending. Idempotent.
+supervisorctl start 'webextradaemons:*' >/dev/null 2>&1 \
+    || echo "demo-reset: note -- could not start queue/scheduler daemons; run 'ddev restart'"
+
 # --- Frontend assets. ---
 if [[ "$build_assets" == "true" || ! -f public/build/manifest.json ]]; then
     if [[ ! -d node_modules ]]; then
