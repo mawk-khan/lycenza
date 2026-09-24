@@ -21,7 +21,13 @@ amendment"): `platform.schools.elevate`, the `school_elevations` record,
 exact-target start with a fresh MFA re-verification, a fixed 30-minute
 lifetime, the banner, Exit, expiry and forced termination, and platform
 audit — with **zero** School routes accepting elevated context. It
-unblocks nothing else; the status above is unchanged. Phase 0M (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
+unblocks nothing else; the status above is unchanged. **Update (Phase
+0N.4, 2026-09-24):** the owner approved **D1** and **D18**; **ADR 0045
+(Group/Trust Governance Contract)** records a distinct Group scope,
+platform-governed Group membership and grants, and Group-derived entry
+through the same ADR 0044 elevation (nothing built). Still open: D11,
+D12, D13, D15, D16 — the status above is unchanged. Phase 0M
+(`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
 Sources: `docs/roadmap/MASTER-ROADMAP.md` ("Phase 0B", "Phase 0N — Multi-School
@@ -92,7 +98,7 @@ The repository treats these as separate; they must not be merged.
 | Cross-School record isolation | Yes | Yes | DDEV: multi.school with Annexe selected — own student 200, Demo School student 404; annexe.admin selecting Demo School — refused | — |
 | Behaviour before a School is selected | Yes (Phase 0N.1) | Yes | Was: 135 of 141 School page routes returned 500 (section 11). Now: `school-context` (`RequireSchoolContext`) on every School web route returns to `/app`; mutations/JSON get 409 `school_context_required` | — |
 | Platform Super Admin | Partly | Foundation only | Section 4 | Neutral `/app` landing (D9(a)); temporary elevation into one School (Phase 0N.3, ADR 0044) that opens no School page yet; no platform administration UI |
-| School Groups | Tables only | No | Section 1 | No behaviour at all |
+| School Groups | Tables only | No | Section 1 | No behaviour at all; governance contract in ADR 0045 (Phase 0N.4) |
 
 ## 4. Platform Super Admin today
 
@@ -492,7 +498,7 @@ owner puts it in 0N, these gates apply:
 
 | # | Decision | Repository evidence | Options | Approval needed | Blocks implementation? |
 |---|---|---|---|---|---|
-| D1 | Group/Trust admin principal | ADR 0004; `school_group_members` migration ("a future group-scoped role"); `roles.scope` ∈ {platform, school}, trigger-enforced | (a) new `group` scope + assignment table; (b) platform role limited to named groups; (c) no group admin — platform only | Product + security (ADR) | Yes — all group features |
+| D1 | Group/Trust admin principal | ADR 0004; `school_group_members` migration ("a future group-scoped role"); `roles.scope` ∈ {platform, school}, trigger-enforced | (a) new `group` scope + assignment table; (b) platform role limited to named groups; (c) no group admin — platform only | Product + security (ADR) | **Decided (a), ADR 0045** — distinct Group-scoped principal (`group` roles, `group_role_assignments`); grants no School capability; School entry only via ADR 0044 elevation |
 | D2 | May platform admins (not only group admins) enter a School? | ADR 0004 platform "audited path"; nothing authorises School data access | (a) yes, under D4–D8; (b) group admins only; (c) nobody — support via real membership | Product + security | **Decided (a), ADR 0044** — only through explicit temporary elevation |
 | D3 | Elevation vs ordinary membership | Switching needs a real membership | (a) elevation as its own mechanism; (b) grant a time-boxed real membership; (c) membership only, no elevation | Security | **Decided (a), ADR 0044** — elevation is its own mechanism; never membership |
 | D4 | Elevation controls | None specified | reason code and/or free text; confirmation; maximum duration; automatic exit; persistent banner | Security + product | **Decided, ADR 0044** — reason code (catalog TBD), confirmation, bounded lifetime (value TBD), banner, Exit, one School, no nesting |
@@ -509,7 +515,7 @@ owner puts it in 0N, these gates apply:
 | D15 | Group-level / cross-School reporting | ADR 0040 §4, ADR 0042, ADR 0043 | own ADR; or remove reporting from 0N | Product + security (+ legal) | Yes — reporting |
 | D16 | Platform audit review surface | ADR 0042 §13 item 2 | who may read `platform_audit_events`, with what metadata | Security | Yes — platform audit view |
 | D17 | Auditing denied selection / elevation | ADR 0017 ("worth auditing in later phases") | audit denials in `platform_audit_events` or not | Security | **Decided, ADR 0044** — denied elevation audited in the platform ledger (denied School selection unchanged) |
-| D18 | Group membership governance | None | who adds or removes a School from a group; does the School consent | Product + legal (data-sharing) | Yes — group features |
+| D18 | Group membership governance | None | who adds or removes a School from a group; does the School consent | Product + legal (data-sharing) | **Decided, ADR 0045** — platform-governed in v1; Group Admins cannot change membership, Groups or grants |
 
 ## 16. Readiness status
 

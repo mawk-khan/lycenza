@@ -332,6 +332,20 @@ accepting it**. For tenancy it means:
   internal APIs or AI context tokens; never derived from a verified
   domain or `X-School-Id`.
 
+## School Groups (ADR 0045 — contract, not built)
+
+A School Group is **never** tenant context. `TenantContext` stays one
+School; no Group request sets `app.current_school_id` or reads a tenant
+table. Group scope (ADR 0045) is a separate authorization scope over the
+platform tables `school_groups` / `school_group_members` / the future
+`group_role_assignments`, bound to a `{schoolGroup}` route parameter with
+no ambient "current Group". A Group administrator reaches one member
+School only through ADR 0044 elevation, which records the authorizing
+Group and grant and still grants no School capability; removing the
+School from the Group, revoking the grant or archiving the Group ends it
+immediately. A School may belong to several Groups; authority is never
+pooled across them.
+
 ## What is NOT yet implemented (Phase 0B honesty note)
 
 Real School/Campus/membership/role data model, RLS, application-layer
