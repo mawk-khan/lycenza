@@ -5,6 +5,9 @@
 import { useForm } from '@inertiajs/vue3';
 
 interface Props {
+    // Phase 0N.5: set when entering under ONE School Group's authority
+    // (the School then comes fixed from that Group's member list).
+    group: { id: string; name: string } | null;
     reasons: { value: string; label: string }[];
     mfaEnrolled: boolean;
     hasActiveElevation: boolean;
@@ -21,13 +24,20 @@ const form = useForm({
 });
 
 function submit() {
-    form.post('/app/platform/elevation/confirm');
+    form.post(
+        props.group
+            ? `/app/groups/${props.group.id}/elevation/confirm`
+            : '/app/platform/elevation/confirm',
+    );
 }
 </script>
 
 <template>
     <main class="mx-auto max-w-lg p-8 font-sans text-slate-900">
         <h1 class="text-xl font-semibold">Enter a School (elevated access)</h1>
+        <p v-if="group" class="mt-1 text-sm text-slate-600" data-testid="authority-group">
+            Under the authority of the School Group {{ group.name }}.
+        </p>
         <p class="mt-2 text-sm text-slate-600">
             Elevated access establishes one School's context for at most
             {{ maxMinutes }} minutes. It grants no School permissions, and every entry is recorded.
@@ -61,7 +71,8 @@ function submit() {
                     v-model="form.target"
                     autocomplete="off"
                     spellcheck="false"
-                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+                    :readonly="!!group"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 read-only:bg-slate-100"
                 />
                 <p v-if="errors.target" class="mt-1 text-sm text-red-700">{{ errors.target }}</p>
             </div>
@@ -89,7 +100,9 @@ function submit() {
                 >
                     Continue
                 </button>
-                <a class="text-sm underline" href="/app">Cancel</a>
+                <a class="text-sm underline" :href="group ? `/app/groups/${group.id}` : '/app'"
+                    >Cancel</a
+                >
             </div>
         </form>
     </main>

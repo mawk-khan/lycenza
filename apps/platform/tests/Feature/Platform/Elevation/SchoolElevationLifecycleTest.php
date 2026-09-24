@@ -61,7 +61,7 @@ class SchoolElevationLifecycleTest extends TestCase
         $this->assertTrue(session('inertia.clear_history'));
 
         [$ended] = $this->elevationEvents($admin, ElevationAudit::ENDED);
-        $this->assertEquals(['elevation_id' => $elevation->id, 'end_reason' => 'exited'], $ended->metadata);
+        $this->assertEquals(['elevation_id' => $elevation->id, 'end_reason' => 'exited', 'authority_type' => 'platform'], $ended->metadata);
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p
             ->where('elevation', null)
@@ -111,7 +111,7 @@ class SchoolElevationLifecycleTest extends TestCase
 
         $this->assertSame('expired', $elevation->refresh()->status);
         [$expired] = $this->elevationEvents($admin, ElevationAudit::EXPIRED);
-        $this->assertEquals(['elevation_id' => $elevation->id, 'expires_at' => $elevation->expires_at->toIso8601String()], $expired->metadata);
+        $this->assertEquals(['elevation_id' => $elevation->id, 'expires_at' => $elevation->expires_at->toIso8601String(), 'authority_type' => 'platform'], $expired->metadata);
 
         $this->withSession([ResolvePlatformElevation::SESSION_KEY => $elevation->id]);
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('elevation', null));
@@ -342,6 +342,6 @@ class SchoolElevationLifecycleTest extends TestCase
 
         $events = $this->elevationEvents($elevation->actor, ElevationAudit::TERMINATED);
         $this->assertCount(1, $events);
-        $this->assertEquals(['elevation_id' => $elevation->id, 'end_reason' => $reason], $events[0]->metadata);
+        $this->assertEquals(['elevation_id' => $elevation->id, 'end_reason' => $reason, 'authority_type' => 'platform'], $events[0]->metadata);
     }
 }

@@ -6,9 +6,11 @@ use App\Domain\Analytics\Application\AnalyticsReadGate;
 use App\Domain\Analytics\Application\ReadModels\CurriculumCoverageReadModel;
 use App\Domain\Identity\Infrastructure\StudentGuardianAccountLink;
 use App\Domain\Students\Infrastructure\Student;
+use App\Models\GroupRoleAssignment;
 use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
+use App\Models\SchoolGroup;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
@@ -66,7 +68,7 @@ class DemoDataBuilderTest extends TestCase
         $this->assertSame([
             'platform.admin@example.test', 'school.admin@example.test', 'principal@example.test',
             'hr.payroll@example.test', 'multi.school@example.test', 'annexe.admin@example.test',
-            'teacher@example.test', 'student@example.test', 'guardian01@example.test',
+            'group.admin@example.test', 'teacher@example.test', 'student@example.test', 'guardian01@example.test',
             ...array_column(DemoAccountCatalog::OPERATIONS_DESK_ROLES, 'email'),
         ], $emails);
 
@@ -85,6 +87,7 @@ class DemoDataBuilderTest extends TestCase
             ->pluck('school_id')->sort()->values()->all();
 
         $this->assertSame([], $memberships('platform.admin@example.test'));
+        $this->assertSame([], $memberships('group.admin@example.test'));
         $this->assertSame([$school->id], $memberships('school.admin@example.test'));
         $this->assertSame([$school->id], $memberships('principal@example.test'));
         $this->assertSame([$school->id], $memberships('hr.payroll@example.test'));
@@ -99,6 +102,16 @@ class DemoDataBuilderTest extends TestCase
         $this->assertTrue(PlatformRoleAssignment::query()->where('user_id', $platformAdmin->id)->exists());
         $this->assertTrue($resolver->canPlatform($platformAdmin, 'platform.schools.view'));
         $this->assertFalse($resolver->canInSchool($platformAdmin, 'students.view', $school));
+
+        // --- Phase 0N.5: one Group with both Schools; a Group-only admin ---
+        $group = SchoolGroup::query()->where('slug', DemoDataBuilder::SCHOOL_GROUP_SLUG)->firstOrFail();
+        $this->assertEqualsCanonicalizing([$school->id, $annexe->id], $group->schools()->pluck('schools.id')->all());
+        $groupAdmin = $this->user('group.admin@example.test');
+        $this->assertSame(['group.schools.elevate', 'group.schools.view'], $resolver->groupCapabilities($groupAdmin, $group));
+        $this->assertSame([], $resolver->platformCapabilities($groupAdmin));
+        $this->assertSame([], $resolver->schoolCapabilities($groupAdmin, $school));
+        $this->assertSame([], $resolver->groupCapabilities($platformAdmin, $group), 'Platform authority is not Group authority.');
+        $this->assertSame($platformAdmin->id, GroupRoleAssignment::query()->where('user_id', $groupAdmin->id)->value('granted_by_user_id'));
 
         // --- Capability separation (real seeded roles) --------------------
         $admin = $this->user('school.admin@example.test');

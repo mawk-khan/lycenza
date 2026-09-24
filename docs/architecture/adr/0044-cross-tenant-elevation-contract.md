@@ -3,8 +3,10 @@
 - Status: Accepted; substrate implemented in Phase 0N.3 (see
   "Implementation amendment" at the end — zero School routes opted in)
 - Date: 2026-09-24 (Phase 0N.2); amended 2026-09-24 (Phase 0N.3)
-- See also: ADR 0045 (Group-derived elevation will reuse this primitive,
-  recording an authority source; these invariants are unchanged)
+- See also: ADR 0045 (Group-derived elevation reuses this primitive; since
+  Phase 0N.5 every elevation records `authority_type` and, for Group
+  authority, its Group and grant, and three `terminated` end reasons were
+  added; these invariants are unchanged)
 
 ## Context
 

@@ -25,6 +25,17 @@ class CapabilityAndRoleSeeder extends Seeder
             // ONE School's context. Grants no School capability; deliberately
             // separate from platform.schools.manage.
             ['key' => 'platform.schools.elevate', 'label' => 'Enter a School via temporary elevation (platform)', 'namespace' => 'platform'],
+            // Phase 0N.5 (ADR 0045 section 5): platform governance of the
+            // School Group layer -- which Schools belong to a Group, and
+            // who holds Group authority. Never a Group or School capability.
+            ['key' => 'platform.school_groups.view', 'label' => 'View School Groups and their member Schools (platform)', 'namespace' => 'platform'],
+            ['key' => 'platform.school_groups.manage', 'label' => 'Create, rename and archive School Groups; add or remove member Schools (platform)', 'namespace' => 'platform'],
+            ['key' => 'platform.school_group_grants.manage', 'label' => 'Grant and revoke Group roles (platform)', 'namespace' => 'platform'],
+            // Phase 0N.5 (ADR 0045 section 4): the `group` scope -- held only
+            // through a Group grant (group_role_assignments) for ONE Group.
+            // Grants no School capability.
+            ['key' => 'group.schools.view', 'label' => 'View the assigned School Group and its member Schools', 'namespace' => 'group'],
+            ['key' => 'group.schools.elevate', 'label' => 'Enter a member School of the assigned Group via temporary elevation', 'namespace' => 'group'],
             ['key' => 'school.settings.view', 'label' => 'View school settings', 'namespace' => 'school'],
             ['key' => 'school.settings.manage', 'label' => 'Manage school settings', 'namespace' => 'school'],
             ['key' => 'school.members.view', 'label' => 'View school members', 'namespace' => 'school'],
@@ -770,6 +781,19 @@ class CapabilityAndRoleSeeder extends Seeder
                     'platform.operations.view',
                     'platform.users.mfa.reset',
                     'platform.schools.elevate',
+                    'platform.school_groups.view', 'platform.school_groups.manage',
+                    'platform.school_group_grants.manage',
+                ],
+            ],
+            // Phase 0N.5 (ADR 0045 section 4): the one Group-scope system
+            // role. Deliberately no *.manage capability: a Group Admin
+            // changes nothing about the Group, its Schools or its grants.
+            'group_admin' => [
+                'name' => 'Group Admin',
+                'scope' => 'group',
+                'capabilities' => [
+                    'group.schools.view',
+                    'group.schools.elevate',
                 ],
             ],
             'school_admin' => [

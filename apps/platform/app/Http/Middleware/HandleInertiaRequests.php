@@ -69,6 +69,8 @@ class HandleInertiaRequests extends Middleware
             'elevation' => $user !== null && $elevation !== null ? [
                 'schoolName' => $elevation->school?->name,
                 'expiresAt' => $elevation->expires_at->toIso8601String(),
+                // Phase 0N.5: the authorizing Group for a Group-derived one.
+                'groupName' => $elevation->isGroupDerived() ? $elevation->schoolGroup?->name : null,
             ] : null,
         ];
     }

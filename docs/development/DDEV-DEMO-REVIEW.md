@@ -246,7 +246,8 @@ minute.
 | HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
-| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (9 `platform.*` capabilities, incl. `platform.schools.elevate`) | No platform administration UI. `/app` shows a neutral "platform account, no School access" state and **Enter a School (elevated access)** (walkthrough step 13); School URLs return to `/app` without elevation and are 403 under it |
+| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (12 `platform.*` capabilities, incl. `platform.schools.elevate` and the three School Group governance ones) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13) and **School Groups (platform)** (step 13a); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
+| Group Admin | `group.admin@example.test` | Group scope: Lycenza Demo Trust | `group_admin` Group grant (`group.schools.view`, `group.schools.elevate`), granted by the Platform Admin | **Your School Groups** -> the Trust's two Schools (name, status); enter one through elevated access (needs MFA). No School membership or School permission; cannot change the Group |
 | Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
 | Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: same as Teacher |
 | Guardian | `guardian01@example.test` | Current parent experience | Member with no role, linked to Guardian Priya Sharma (activated via the real invitation flow) | **No parent/guardian portal exists**: same as Teacher |
@@ -300,8 +301,9 @@ Platform Admin (there is no platform UI to review).
 
 | Persona | Exists in code? | Login? | Tenant scope | Capabilities | Usable UI |
 |---|---|---|---|---|---|
-| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 9 `platform.*` | The neutral `/app` landing and platform elevation (enter one School for 30 minutes; opens no School page yet) -- no other platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
-| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 148 catalog capabilities | Full admin UI |
+| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 12 `platform.*` | The neutral `/app` landing, platform elevation (enter one School for 30 minutes; opens no School page yet) and School Group governance -- no other platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
+| Group admin | Yes (`group_role_assignments`, Phase 0N.5) | Yes | One School Group per grant | 2 `group.*` | Read-only Group view; Group-derived elevation (opens no School page yet) |
+| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 153 catalog capabilities | Full admin UI |
 | Principal | Yes (system role `principal`) | Yes | One School | 79 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
 | Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
 | School member, no role (teacher/staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
@@ -378,6 +380,26 @@ Platform Admin (there is no platform UI to review).
       It also ends after 30 minutes, on logout, or if the account loses
       the capability or its MFA factor. The start and confirm steps are
       rate-limited (8 per minute).
+13a. **School Groups** (Phase 0N.5, ADR 0045). The demo has one Group,
+    **Lycenza Demo Trust**, holding both Schools.
+    - As **platform.admin@example.test**: `/app` -> **School Groups
+      (platform)**. Create a Group (name + slug), add a School by its exact
+      id or verified domain (a name is refused -- there is no search),
+      grant **Group Admin** to a person by exact email (granting to
+      yourself is refused), revoke it, archive the Group (never deleted).
+      The Platform Admin is not a Group Admin: `/app/groups/...` is 404.
+    - As **group.admin@example.test** (enroll MFA at Account security
+      first, then sign in again): `/app` -> **Your School Groups** -> the
+      Trust shows its two Schools with name and status only. **Enter
+      (elevated access)** on one -> reason -> confirmation naming the School
+      and "School Group: Lycenza Demo Trust" -> tick, code -> the banner
+      reads "... (via Lycenza Demo Trust)". Every School page is still
+      403.
+    - While the Group Admin is elevated, the Platform Admin removing that
+      School from the Trust, or revoking the grant, ends it at once; the
+      Group Admin's next page says why. Re-add / re-grant afterwards (or
+      run `ddev demo-reset`).
+    - **multi.school@example.test** sees no School Groups at all.
 14. **Analytics** (Phase 0L.2-1): as **School Admin** or **Principal**,
     Dashboard -> **Analytics: Curriculum Coverage**
     (`/app/analytics/curriculum-coverage`). It shows, for the active
@@ -457,7 +479,7 @@ Platform Admin (there is no platform UI to review).
 
 - **Platform administration**: `platform.*` capabilities exist; the only
   platform pages are platform elevation (step 13 in section 12), which
-  opens no School page yet.
+  opens no School page yet, and School Group governance (step 13a).
   Operations status is `GET /api/internal/operations/status` (API only).
 - **API-only surfaces** (`/api/v1/schools/{school}/...`): academic terms,
   sections, academic departments, rooms, campus CRUD, subject-offering

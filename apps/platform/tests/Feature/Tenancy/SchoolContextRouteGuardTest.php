@@ -55,6 +55,20 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.platform.elevation.confirm.show',    // (ADR 0044) is how an
         'app.platform.elevation.store',           // elevated context begins
         'app.platform.elevation.exit',            // and ends
+        'app.platform.groups.index',              // Phase 0N.5: platform
+        'app.platform.groups.store',              // governance of School
+        'app.platform.groups.show',               // Groups (ADR 0045) --
+        'app.platform.groups.rename',             // platform scope, never
+        'app.platform.groups.archive',            // School context
+        'app.platform.groups.schools.store',
+        'app.platform.groups.schools.destroy',
+        'app.platform.groups.grants.store',
+        'app.platform.groups.grants.revoke',
+        'app.groups.index',                       // Phase 0N.5: the Group
+        'app.groups.show',                        // Admin's own Groups and
+        'app.groups.elevation.create',            // Group-derived entry --
+        'app.groups.elevation.confirm',           // Group scope, never
+        'app.groups.elevation.store',             // School context
     ];
 
     #[Test]

@@ -19,6 +19,10 @@ enum ElevationEndReason: string
     case SchoolIneligible = 'school_ineligible';
     case MembershipConflict = 'membership_conflict';
     case MfaFactorRevoked = 'mfa_factor_revoked';
+    // Phase 0N.5 (ADR 0045 section 10): Group-derived authority ended.
+    case SchoolLeftGroup = 'school_left_group';
+    case GroupAuthorityRevoked = 'group_authority_revoked';
+    case GroupInactive = 'group_inactive';
 
     public function status(): string
     {

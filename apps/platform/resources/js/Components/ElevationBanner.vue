@@ -10,6 +10,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 interface Elevation {
     schoolName: string | null;
+    groupName?: string | null;
     expiresAt: string;
 }
 
@@ -50,8 +51,10 @@ const expiresAtLabel = computed(() =>
         >
             <p class="min-w-0">
                 <span class="font-semibold">Elevated access:</span>
-                {{ elevation.schoolName }} — ends {{ expiresAtLabel }} ({{ minutesLeft }} min left).
-                Elevated School context — no School permissions are granted automatically.
+                {{ elevation.schoolName
+                }}<template v-if="elevation.groupName"> (via {{ elevation.groupName }})</template> —
+                ends {{ expiresAtLabel }} ({{ minutesLeft }} min left). Elevated School context — no
+                School permissions are granted automatically.
             </p>
             <Link
                 href="/app/platform/elevation/exit"

@@ -18,6 +18,9 @@ use Illuminate\Support\Carbon;
  * @property string $id UUIDv7 (ADR 0019).
  * @property string $actor_user_id
  * @property string $school_id
+ * @property string $authority_type `platform` or `group` (ADR 0045), fixed at start
+ * @property string|null $school_group_id the authorizing Group (group authority only)
+ * @property string|null $group_role_assignment_id the authorizing grant (group authority only)
  * @property string $reason_code
  * @property string $status
  * @property Carbon $started_at
@@ -38,10 +41,17 @@ class SchoolElevation extends Model
 
     public const STATUS_TERMINATED = 'terminated';
 
+    public const AUTHORITY_PLATFORM = 'platform';
+
+    public const AUTHORITY_GROUP = 'group';
+
     protected $fillable = [
-        'actor_user_id', 'school_id', 'reason_code', 'status',
+        'actor_user_id', 'school_id', 'authority_type', 'school_group_id',
+        'group_role_assignment_id', 'reason_code', 'status',
         'started_at', 'expires_at', 'start_request_id',
     ];
+
+    protected $attributes = ['authority_type' => self::AUTHORITY_PLATFORM];
 
     protected function casts(): array
     {
@@ -62,6 +72,23 @@ class SchoolElevation extends Model
     public function school(): BelongsTo
     {
         return $this->belongsTo(School::class);
+    }
+
+    /** @return BelongsTo<SchoolGroup, $this> */
+    public function schoolGroup(): BelongsTo
+    {
+        return $this->belongsTo(SchoolGroup::class);
+    }
+
+    /** @return BelongsTo<GroupRoleAssignment, $this> */
+    public function groupGrant(): BelongsTo
+    {
+        return $this->belongsTo(GroupRoleAssignment::class, 'group_role_assignment_id');
+    }
+
+    public function isGroupDerived(): bool
+    {
+        return $this->authority_type === self::AUTHORITY_GROUP;
     }
 
     public function isActive(): bool

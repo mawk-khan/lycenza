@@ -1,7 +1,8 @@
 # ADR 0045: Group/Trust Governance Contract (Phase 0N.4)
 
-- Status: Accepted (contract only — nothing described here is built)
-- Date: 2026-09-24 (Phase 0N.4)
+- Status: Accepted; foundation implemented in Phase 0N.5 (see
+  "Implementation amendment" at the end — zero School routes opted in)
+- Date: 2026-09-24 (Phase 0N.4); amended 2026-09-24 (Phase 0N.5)
 
 ## Context
 
@@ -440,3 +441,79 @@ to confirm):
    authority; multiple-Group attribution; no self-grant; a Group Admin
    refused every governance action; RLS raw-SQL proof unchanged; DDEV
    review.
+
+## Implementation amendment (Phase 0N.5, 2026-09-24)
+
+**Owner classification decisions (section 13a, approved for v1):** Group
+details **Confidential**; School-to-Group membership **Confidential**; human
+Group administrative grants **Sensitive**; member-School identity in the
+Group view **Confidential**. Group-derived elevation records and their
+audit evidence stay **Highly Sensitive**. These authorize only the
+platform/Group metadata below — no tenant record, people count, financial,
+HR/Payroll, Student, Analytics, Compliance, Automation or cross-School data.
+
+**Capability set verified before coding.** Section 5 and the proposed
+checkpoint both name the same three platform capabilities —
+`platform.school_groups.view`, `platform.school_groups.manage`,
+`platform.school_group_grants.manage` — and AUTHORIZATION.md's
+`platform.school_groups.*` covers the first two. No inconsistency; nothing
+invented. All three were seeded to `platform_super_admin`, as section 5
+recommended.
+
+**What was built** (no existing School route accepts elevated context):
+
+| Contract | Implementation |
+|---|---|
+| Scopes (§2) | `roles_scope_check` (`platform`/`school`/`group`; every existing row was `platform` or `school`); `capabilities_group_namespace_check` (a `group.*` key ⇔ namespace `group`); trigger `trg_role_capabilities_scope`: a role holds only its own scope's capabilities (all existing rows already did) |
+| Group role and capabilities (§4) | system role `group_admin` (scope `group`) with exactly `group.schools.view`, `group.schools.elevate` |
+| Grant (§3) | `group_role_assignments` (`App\Models\GroupRoleAssignment`), no RLS: `trg_group_role_assignments_guard` (role scope `group`; the Group must be active; not created already revoked; the only change is one revocation, after which the row is immutable), `group_role_assignments_no_self_grant`, `group_role_assignments_revocation_check`, partial unique `group_role_assignments_one_active`, `unique(id, school_group_id)` for the elevation FK, restrict-on-delete FKs, `DELETE` revoked |
+| Group lifecycle (§8, §13) | `school_groups.status` (`active`/`archived`, CHECK); `school_group_members.school_group_id` now RESTRICT; `DELETE` on `school_groups` revoked; the School-side cascade left for D11 |
+| Resolver (§4) | `CapabilityResolver::groupCapabilities()` / `canInGroup()` / `groupsWith()`; `can()` returns false for any `group.*` key |
+| Governance (§5) | `App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService` (create, rename, archive, add/remove School, grant/revoke); pages `/app/platform/groups…` (`SchoolGroupAdminController`) |
+| Group view (§12) | `/app/groups`, `/app/groups/{schoolGroup}` (`SchoolGroupController`): Group id/name/status and member Schools' id/name/status only |
+| Elevation provenance (§9) | `school_elevations.authority_type`, `school_group_id`, `group_role_assignment_id`; `school_elevations_authority_check`; composite FK `school_elevations_group_grant_fk` → `group_role_assignments(id, school_group_id)`; the ADR 0044 transition trigger now also freezes the authority columns; end reasons `school_left_group`, `group_authority_revoked`, `group_inactive` |
+| Group-derived start (§9) | `SchoolElevationService::start(…, ?SchoolGroup)` and `/app/groups/{schoolGroup}/elevation…` — the same record, pointer, context, banner (now naming the Group), audit, expiry, Exit and sweep |
+| Audit (§11) | the seven `platform.school_group*` events; `platform.school_elevation.*` metadata now always carries `authority_type`, plus `school_group_id` and `group_role_assignment_id` for Group authority |
+
+**Refinements made while implementing** (none widens access):
+
+1. **Group capabilities are fully uncached**, not only the grant, Group
+   and membership state (section 10 allowed a cached role capability with
+   cache-forgetting on change). One indexed join per check; a revoked
+   grant, an archived Group or a capability removed from the role stops
+   counting on the very next check, even for an out-of-band change.
+2. **Database-enforced start-time authority.** A BEFORE INSERT trigger on
+   `school_elevations` (`school_elevations_assert_group_authority`)
+   re-reads the Group (active), the grant (unrevoked, this actor's, this
+   Group's) and the membership row **FOR SHARE**. So a removal,
+   revocation or archive racing a start either waits for the start to
+   commit and then terminates it, or commits first and makes the start
+   fail — proven both ways with two real processes. The loser gets a 409
+   `group_authority_changed` refusal audited with the matching outcome.
+3. **Denial outcomes** as section 11: `group_grant_missing` (also for
+   anyone without a grant — an ordinary multi-School member, a Platform
+   Super Admin), `group_inactive`, `group_capability_missing`,
+   `school_not_in_group`; the last reads "That School cannot be entered."
+   like the other target refusals. A GET of a Group page or its start page
+   without authority is a 404, not audited (viewing is not an attempt).
+4. **Target selection** (section 6): the Group view lists the Group's own
+   member Schools; entering one passes its exact id, and the Group comes
+   from the route — the explicit choice when a School is in several of the
+   actor's Groups.
+5. **Grant visibility**: only holders of
+   `platform.school_group_grants.manage` see the grant list; a Group Admin
+   sees no grants (least privilege; grants are Sensitive).
+6. **Notice after an eager end**: when a governance action already ended
+   the elevation, the actor's next request shows that end reason rather
+   than a generic "ended".
+7. **Demo**: `group.admin@example.test` — a Group-only person with no School
+   membership (elevation is refused into a School the actor belongs to) —
+   holds `group_admin` in "Lycenza Demo Trust" (both demo Schools), granted
+   by the Platform Admin.
+
+**Bootstrap limitation (D12, unchanged):** the platform governance
+capabilities are held by `platform_super_admin`, which is assigned only by
+seeding; who may grant platform roles remains D12.
+
+CLAUDE.md rule 25 is amended accordingly (three role scopes, each
+database-enforced) and rule 84 records the Group-scope invariants.

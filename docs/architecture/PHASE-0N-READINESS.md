@@ -26,7 +26,13 @@ unblocks nothing else; the status above is unchanged. **Update (Phase
 (Group/Trust Governance Contract)** records a distinct Group scope,
 platform-governed Group membership and grants, and Group-derived entry
 through the same ADR 0044 elevation (nothing built). Still open: D11,
-D12, D13, D15, D16 — the status above is unchanged. Phase 0M
+D12, D13, D15, D16 — the status above is unchanged. **Update (Phase 0N.5,
+2026-09-24):** the Group authority foundation is implemented (ADR 0045
+"Implementation amendment"): the `group` scope, `group_admin`, Group
+grants, platform Group governance, the Group view, and Group-derived
+elevation with recorded provenance — still with **zero** School routes
+accepting elevated context, and with the owner's v1 classifications for
+Group records. It unblocks nothing else. Phase 0M
 (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
@@ -98,7 +104,7 @@ The repository treats these as separate; they must not be merged.
 | Cross-School record isolation | Yes | Yes | DDEV: multi.school with Annexe selected — own student 200, Demo School student 404; annexe.admin selecting Demo School — refused | — |
 | Behaviour before a School is selected | Yes (Phase 0N.1) | Yes | Was: 135 of 141 School page routes returned 500 (section 11). Now: `school-context` (`RequireSchoolContext`) on every School web route returns to `/app`; mutations/JSON get 409 `school_context_required` | — |
 | Platform Super Admin | Partly | Foundation only | Section 4 | Neutral `/app` landing (D9(a)); temporary elevation into one School (Phase 0N.3, ADR 0044) that opens no School page yet; no platform administration UI |
-| School Groups | Tables only | No | Section 1 | No behaviour at all; governance contract in ADR 0045 (Phase 0N.4) |
+| School Groups | Yes (Phase 0N.5) | Foundation | ADR 0045 and its implementation amendment | Platform-governed Groups, grants and membership; Group Admin view and Group-derived elevation; no Group reporting (D15), no School lifecycle (D11) |
 
 ## 4. Platform Super Admin today
 

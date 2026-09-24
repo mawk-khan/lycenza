@@ -4,6 +4,7 @@
 import { useForm } from '@inertiajs/vue3';
 
 interface Props {
+    group: { id: string; name: string } | null;
     target: string;
     schoolName: string;
     reason: { value: string; label: string };
@@ -22,7 +23,9 @@ const form = useForm({
 });
 
 function submit() {
-    form.post('/app/platform/elevation', { onFinish: () => form.reset('code') });
+    form.post(props.group ? `/app/groups/${props.group.id}/elevation` : '/app/platform/elevation', {
+        onFinish: () => form.reset('code'),
+    });
 }
 </script>
 
@@ -34,6 +37,12 @@ function submit() {
             <div>
                 <dt class="text-slate-500">School</dt>
                 <dd class="font-medium" data-testid="confirm-school">{{ schoolName }}</dd>
+            </div>
+            <div>
+                <dt class="text-slate-500">Authority</dt>
+                <dd data-testid="confirm-authority">
+                    {{ group ? `School Group: ${group.name}` : 'Platform' }}
+                </dd>
             </div>
             <div>
                 <dt class="text-slate-500">Reason</dt>
