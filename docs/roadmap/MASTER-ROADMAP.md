@@ -1192,6 +1192,22 @@ cross-School reporting. Proposed next: Phase 0N.5 Group Authority
 Foundation, gated on classifying Group records (ADR 0045 §13a). Phase 0N
 stays **BLOCKED** on D11, D12, D13, D15 and D16.
 
+**Phase 0N.5 — Group Authority Foundation (done, 2026-09-24).** Owner
+classifications: Group details, Group membership and member-School identity
+Confidential; human Group grants Sensitive. Built: exactly three role
+scopes enforced by the database (and roles may hold only their own scope's
+capabilities); the `group_admin` role (`group.schools.view`,
+`group.schools.elevate`); history-keeping, never-self-granted
+`group_role_assignments`; Groups archived, never deleted; platform
+governance (`platform.school_groups.view`/`.manage`,
+`platform.school_group_grants.manage`) with its seven audit events; the
+Group Admin's read-only Group view; and Group-derived ADR 0044 elevation
+recording the authorizing Group and grant, checked by the database at
+start and ended immediately by removal, revocation or archive (proven
+against real concurrent processes). A School may belong to several Groups.
+**Zero** School routes accept elevated context. Phase 0N stays **BLOCKED**
+on D11, D12, D13, D15 and D16.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,

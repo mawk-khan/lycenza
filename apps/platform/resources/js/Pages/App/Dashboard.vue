@@ -14,6 +14,9 @@ const elevationNotices: Record<string, string> = {
     membership_conflict:
         'Elevated access ended: you are a member of that School — select it from your School list instead.',
     mfa_factor_revoked: 'Elevated access ended: multi-factor authentication was removed.',
+    school_left_group: 'Elevated access ended: that School is no longer in the School Group.',
+    group_authority_revoked: 'Elevated access ended: your School Group authority was revoked.',
+    group_inactive: 'Elevated access ended: the School Group was archived.',
 };
 
 function endElevation() {
@@ -31,6 +34,7 @@ interface Props {
     // because no valid School was selected (RequireSchoolContext).
     schoolContextNotice: 'select' | 'not_saved' | null;
     platformAccount: boolean;
+    groups: { canViewOwn: boolean; canGovern: boolean };
     platformElevation: {
         canStart: boolean;
         isElevated: boolean;
@@ -125,6 +129,18 @@ function activate(schoolId: string) {
             <a class="mt-1 inline-block text-sm underline" href="/app/platform/elevation">
                 Enter a School (elevated access)
             </a>
+        </section>
+
+        <section v-if="groups.canViewOwn || groups.canGovern" class="mt-6" data-testid="groups">
+            <h2 class="text-sm font-medium text-slate-500">School Groups</h2>
+            <ul class="mt-1 space-y-1 text-sm">
+                <li v-if="groups.canViewOwn">
+                    <a class="underline" href="/app/groups">Your School Groups</a>
+                </li>
+                <li v-if="groups.canGovern">
+                    <a class="underline" href="/app/platform/groups">School Groups (platform)</a>
+                </li>
+            </ul>
         </section>
 
         <section class="mt-6">

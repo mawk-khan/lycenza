@@ -75,6 +75,14 @@ class DashboardController extends Controller
                 ] : null,
                 'notice' => is_string($elevationNotice) ? $elevationNotice : null,
             ],
+            // Phase 0N.5 (ADR 0045): two separate entry points -- the Group
+            // Admin's own Groups (from Group grants only) and platform Group
+            // governance (from the platform capability only). Neither implies
+            // the other.
+            'groups' => [
+                'canViewOwn' => $capabilities->groupsWith($user, 'group.schools.view')->isNotEmpty(),
+                'canGovern' => $capabilities->canPlatform($user, 'platform.school_groups.view'),
+            ],
             'activeSchool' => $school ? [
                 'id' => $school->id,
                 'name' => $school->name,

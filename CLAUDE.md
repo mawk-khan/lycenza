@@ -201,8 +201,13 @@ docs/roadmap             MASTER-ROADMAP.md
     database-enforced, not just conventional.** `membership_role_assignments`
     only accepts `scope='school'` roles; `platform_role_assignments`
     only accepts `scope='platform'` roles — both via a Postgres trigger
-    (see those tables' migrations). Do not add an application-level-only
-    check that could be bypassed by a direct write.
+    (see those tables' migrations). Since Phase 0N.5 there are exactly
+    three scopes (`roles_scope_check`: `platform`, `school`, `group`):
+    `group_role_assignments` only accepts `scope='group'` roles, and
+    `trg_role_capabilities_scope` lets a role hold only capabilities of
+    its own scope's namespace, so no role of one scope can carry another
+    scope's capability. Do not add an application-level-only check that
+    could be bypassed by a direct write.
 
 26. **Platform admins do not receive database RLS bypass.** The
     `school_os_app` runtime role (used by every request/queue
@@ -768,6 +773,21 @@ docs/roadmap             MASTER-ROADMAP.md
     membership for an elevated actor, never extend or reactivate an
     elevation (fixed 30 minutes, database-checked), and never resolve
     elevation on `/api/*` or for AI context tokens.
+
+84. **School Group authority is its own scope and never School
+    authority.** Group capabilities (`group.*`) come only from an
+    unrevoked `group_role_assignments` grant for one explicitly named
+    School Group and are resolved only through
+    `CapabilityResolver::canInGroup()`/`groupCapabilities()` — never
+    through `can()`, never cached, never read by the platform or School
+    side. A Group never enters `TenantContext`, a Group page reads only
+    platform tables, and a Group grant never creates or implies a School
+    membership or School capability. Which Schools belong to a Group and
+    who holds Group authority are platform-governed
+    (`SchoolGroupGovernanceService`; no self-grants; Groups are archived,
+    never deleted). Group-derived School entry is ADR 0044 elevation
+    recording its authorizing Group and grant; losing that authority ends
+    it, with no fallback to any other authority (ADR 0045).
 
 ## Running things locally
 

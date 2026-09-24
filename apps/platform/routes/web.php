@@ -40,6 +40,7 @@ use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
 use App\Http\Controllers\App\Finance\PaymentController as FinancePaymentController;
+use App\Http\Controllers\App\Groups\SchoolGroupController;
 use App\Http\Controllers\App\GuardianAccountInvitationController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianCommunicationPreferenceController;
@@ -84,6 +85,7 @@ use App\Http\Controllers\App\Payroll\Statutory\StatutoryController as StatutoryP
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryEmployeeController;
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryExportController as StatutoryPayrollExportController;
 use App\Http\Controllers\App\Platform\SchoolElevationController;
+use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
@@ -231,6 +233,42 @@ Route::middleware('auth')->group(function (): void {
             ->middleware('throttle:platform-elevation')
             ->name('store');
         Route::post('/exit', [SchoolElevationController::class, 'exit'])->name('exit');
+    });
+
+    // Phase 0N.5 (ADR 0045 section 5): platform governance of School
+    // Groups -- which Schools belong to a Group and who holds Group
+    // authority. Reads need platform.school_groups.view; every change is
+    // re-checked (manage / grants.manage) and audited inside
+    // SchoolGroupGovernanceService. Separate from the Group Admin pages.
+    Route::prefix('app/platform/groups')->name('app.platform.groups.')
+        ->middleware('capability:platform.school_groups.view,platform')
+        ->group(function (): void {
+            Route::get('/', [SchoolGroupAdminController::class, 'index'])->name('index');
+            Route::post('/', [SchoolGroupAdminController::class, 'store'])->name('store');
+            Route::get('/{schoolGroup}', [SchoolGroupAdminController::class, 'show'])->name('show');
+            Route::put('/{schoolGroup}', [SchoolGroupAdminController::class, 'rename'])->name('rename');
+            Route::post('/{schoolGroup}/archive', [SchoolGroupAdminController::class, 'archive'])->name('archive');
+            Route::post('/{schoolGroup}/schools', [SchoolGroupAdminController::class, 'addSchool'])->name('schools.store');
+            Route::delete('/{schoolGroup}/schools/{school}', [SchoolGroupAdminController::class, 'removeSchool'])->name('schools.destroy');
+            Route::post('/{schoolGroup}/grants', [SchoolGroupAdminController::class, 'grant'])->name('grants.store');
+            Route::post('/{schoolGroup}/grants/{grant}/revoke', [SchoolGroupAdminController::class, 'revoke'])->name('grants.revoke');
+        });
+
+    // Phase 0N.5 (ADR 0045 sections 9, 12): the Group Admin surface -- the
+    // Groups the actor holds a grant in (read-only metadata), and entering
+    // one member School through the ADR 0044 elevation flow under that ONE
+    // Group's authority. Authorized per request from {schoolGroup}; never
+    // School context.
+    Route::prefix('app/groups')->name('app.groups.')->group(function (): void {
+        Route::get('/', [SchoolGroupController::class, 'index'])->name('index');
+        Route::get('/{schoolGroup}', [SchoolGroupController::class, 'show'])->name('show');
+        Route::get('/{schoolGroup}/elevation', [SchoolElevationController::class, 'createForGroup'])->name('elevation.create');
+        Route::post('/{schoolGroup}/elevation/confirm', [SchoolElevationController::class, 'confirmForGroup'])
+            ->middleware('throttle:platform-elevation')
+            ->name('elevation.confirm');
+        Route::post('/{schoolGroup}/elevation', [SchoolElevationController::class, 'storeForGroup'])
+            ->middleware('throttle:platform-elevation')
+            ->name('elevation.store');
     });
 });
 

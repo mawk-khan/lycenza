@@ -34,14 +34,17 @@ use App\Domain\Students\Application\StudentSubjectEnrollmentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\Campus;
 use App\Models\FeatureFlagSchoolOverride;
+use App\Models\GroupRoleAssignment;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
+use App\Models\SchoolGroup;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\FeatureFlags\FeatureFlagResolver;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Str;
 
 /**
  * Builds the "Lycenza Demo School" local review dataset through the
@@ -61,6 +64,8 @@ final class DemoDataBuilder
     public const SCHOOL_SLUG = 'lycenza-demo';
 
     public const SECOND_SCHOOL_SLUG = 'lycenza-demo-annexe';
+
+    public const SCHOOL_GROUP_SLUG = 'lycenza-demo-trust';
 
     /**
      * Custom, non-system role created ONLY for the demo: no seeded
@@ -250,7 +255,7 @@ final class DemoDataBuilder
             'user_id' => $platformAdmin->id,
             'role_id' => $this->role('platform_super_admin', 'platform')->id,
         ]);
-        $this->account('Platform Super Admin', $platformAdmin, '(none -- platform scope)', 'Platform capabilities only; there is no platform web UI yet');
+        $this->account('Platform Super Admin', $platformAdmin, '(none -- platform scope)', 'Platform capabilities: School elevation (no School page opens) and School Group governance');
 
         $this->admin = $this->user('Asha Rao (School Admin)', 'school.admin@example.test');
         $this->assignSchoolRole($this->member($this->admin, $this->school), 'school_admin');
@@ -280,7 +285,35 @@ final class DemoDataBuilder
         $this->assignSchoolRole($this->member($annexeAdmin, $this->secondSchool), 'school_admin');
         $this->account('School Admin (second school)', $annexeAdmin, $this->secondSchool->name, 'school_admin at the Annexe only -- tenant-isolation check');
 
+        $this->buildSchoolGroup($platformAdmin);
+
         $this->buildSecondSchool();
+    }
+
+    /**
+     * Phase 0N.5 (ADR 0045): one School Group containing both demo Schools,
+     * and a Group-only person holding `group_admin` in it -- granted by the
+     * Platform Admin (never a self-grant). The Group Admin deliberately has
+     * NO School membership: elevation is refused into a School the actor
+     * belongs to (ADR 0044), so a Group-only person is what can show
+     * Group-derived entry. Nothing here grants any School capability.
+     */
+    private function buildSchoolGroup(User $platformAdmin): void
+    {
+        $group = SchoolGroup::query()->create(['name' => 'Lycenza Demo Trust', 'slug' => self::SCHOOL_GROUP_SLUG]);
+        foreach ([$this->school, $this->secondSchool] as $member) {
+            $group->schools()->attach($member->id, ['id' => (string) Str::uuid7()]);
+        }
+
+        $groupAdmin = $this->user('Nisha Kapoor (Group Admin)', 'group.admin@example.test');
+        GroupRoleAssignment::query()->create([
+            'user_id' => $groupAdmin->id,
+            'school_group_id' => $group->id,
+            'role_id' => $this->role('group_admin', 'group')->id,
+            'granted_by_user_id' => $platformAdmin->id,
+            'granted_at' => now(),
+        ]);
+        $this->account('Group Admin', $groupAdmin, '(none -- Group scope: Lycenza Demo Trust)', 'group_admin for both demo Schools\' Group: Group view and Group-derived elevation; no School permission');
     }
 
     private function buildSecondSchool(): void

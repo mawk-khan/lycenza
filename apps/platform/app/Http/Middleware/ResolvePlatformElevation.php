@@ -89,8 +89,9 @@ class ResolvePlatformElevation
 
         if (! $elevation->isActive()) {
             // Already finished elsewhere (exit from another session, the
-            // sweep, a hook) -- its end was audited then.
-            $this->drop($request, 'ended');
+            // sweep, a hook, a Group removal/revocation/archive) -- its end
+            // was audited then; this session only learns why.
+            $this->drop($request, $elevation->end_reason ?? 'ended');
 
             return $next($request);
         }

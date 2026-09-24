@@ -332,14 +332,16 @@ accepting it**. For tenancy it means:
   internal APIs or AI context tokens; never derived from a verified
   domain or `X-School-Id`.
 
-## School Groups (ADR 0045 — contract, not built)
+## School Groups (ADR 0045 — foundation implemented in Phase 0N.5)
 
 A School Group is **never** tenant context. `TenantContext` stays one
 School; no Group request sets `app.current_school_id` or reads a tenant
 table. Group scope (ADR 0045) is a separate authorization scope over the
-platform tables `school_groups` / `school_group_members` / the future
-`group_role_assignments`, bound to a `{schoolGroup}` route parameter with
-no ambient "current Group". A Group administrator reaches one member
+platform tables `school_groups` / `school_group_members` /
+`group_role_assignments` (no RLS: platform-owned, like
+`school_memberships`), bound to a `{schoolGroup}` route parameter with no
+ambient "current Group". Groups are archived, never deleted (the runtime
+role cannot `DELETE` one, and membership no longer cascades from it). A Group administrator reaches one member
 School only through ADR 0044 elevation, which records the authorizing
 Group and grant and still grants no School capability; removing the
 School from the Group, revoking the grant or archiving the Group ends it

@@ -47,6 +47,7 @@ class SchoolElevationStartTest extends TestCase
             'elevation_id' => $elevation->id,
             'reason_code' => 'operational_support',
             'expires_at' => $elevation->expires_at->toIso8601String(),
+            'authority_type' => 'platform',
         ], $started->metadata);
         $this->assertNotNull($started->ip_address);
 
@@ -114,7 +115,7 @@ class SchoolElevationStartTest extends TestCase
                 ->missing('schoolName')
             );
             $denial = $this->assertDenied($admin, $outcome);
-            $this->assertEquals(['outcome_code' => $outcome, 'reason_code' => 'operational_support'], $denial->metadata);
+            $this->assertEquals(['outcome_code' => $outcome, 'reason_code' => 'operational_support', 'authority_type' => 'platform'], $denial->metadata);
         }
     }
 
