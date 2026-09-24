@@ -104,6 +104,8 @@ class DashboardController extends Controller
                 'canViewAnalytics' => $school !== null && $capabilities->canInSchool($user, 'analytics.view', $school),
                 // Phase 0L.4: Compliance -- School audit-log review.
                 'canViewAuditLog' => $school !== null && $capabilities->canInSchool($user, 'school.audit.view', $school),
+                // Phase 0L.6: Automation (Academic year set-up review rule).
+                'canViewAutomation' => $school !== null && $capabilities->canInSchool($user, 'automation.view', $school),
             ],
         ]);
     }

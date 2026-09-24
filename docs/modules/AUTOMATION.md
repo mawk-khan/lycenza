@@ -1,11 +1,11 @@
-# Automation (Phase 0L.5 contract)
+# Automation (Phase 0L.5 contract; Phase 0L.6 foundation)
 
-Status: **domain contract only — nothing is implemented.** Decision
-record: ADR 0043 (`docs/architecture/adr/0043-automation-domain-contract.md`).
-This document is the living reference: what exists today, the open
-decisions, the first-implementation candidates and the plan. No
-migration, model, service, job, schedule entry, route, capability seed or
-page exists for Automation.
+Status: **one rule is implemented — Academic year set-up review (Phase
+0L.6, §9).** It proves one trigger, one tier 0 effect, School scope,
+per-execution authority re-verification, idempotency and auditability;
+it is not general Automation. Decision record: ADR 0043
+(`docs/architecture/adr/0043-automation-domain-contract.md`, with its
+Phase 0L.6 amendment).
 
 ## 1. Scope in one paragraph
 
@@ -88,12 +88,12 @@ opt-in.
 
 | Decision | Options / evidence | Approval needed | Blocks the foundation? |
 |---|---|---|---|
-| First rule type | §6 candidates | Product owner | **Yes** |
-| First trigger type | Event (outbox, 41 types) or schedule — follows from the first rule type | Product owner | **Yes** (implied by the rule type) |
-| First action type | Tier 0 review item recommended by the contract; tier 1 needs the notification decision | Product owner | **Yes** |
-| Authority model | ADR 0043 §5: delegated owner authority, re-verified per execution, intersected with the action capability; service identity rejected for v1 | Security review confirms | **Yes** |
-| Who may view / manage | `automation.view` / `automation.manage` — e.g. School Admin; Principal? | Product owner | **Yes** |
-| Per-School opt-in | Existing `FeatureFlagResolver` (flag default off) or always available | Product owner | Yes |
+| First rule type | §6 candidates | Product owner | **Decided 2026-09-24**: academic year set-up review |
+| First trigger type | Event (outbox, 41 types) or schedule — follows from the first rule type | Product owner | **Decided**: event (`academic_year.activated.v1`) |
+| First action type | Tier 0 review item recommended by the contract; tier 1 needs the notification decision | Product owner | **Decided**: tier 0 only |
+| Authority model | ADR 0043 §5: delegated owner authority, re-verified per execution, intersected with the action capability; service identity rejected for v1 | Security review confirms | **Approved 2026-09-24** |
+| Who may view / manage | `automation.view` / `automation.manage` | Product owner | **Decided**: School Admin view + manage; Principal view |
+| Per-School opt-in | Existing `FeatureFlagResolver` (flag default off) or always available | Product owner | **Decided**: `automation.rules`, default off |
 | Internal notifications (tier 1) | Communications requires a User author and applies approval policy; announcements authored "by" the rule owner vs a new system-originated path in Communications | Product + Communications owner | No (only for tier 1) |
 | High-impact actions (tier 3/4) | Prohibited in v1; would need a human-approval design (shared with Phase 0M) | Product + security, per action | No |
 | Execution-log retention | Repository-wide retention gate | Legal | No (nothing deleted) |
@@ -113,7 +113,7 @@ touches no Payroll/Finance mutation or legal decision.
 | **Abandoned webhook deliveries → integration review item** | Schedule | New bounded read method in `App\Support\Webhooks` for recently abandoned deliveries (`WebhookDeliveryService` has only `redeliver()` today) | Confidential integration metadata; no person | That read contract; action capability `integrations.webhooks.view` |
 | **Expired, unaccepted Guardian invitations → review item** | Schedule | New Identity read contract for expired pending invitations (`AccountInvitationService` exposes only `currentPendingInvitation()` per Guardian) | Sensitive (Guardian identity) — review item stores the invitation id only | That read contract; action capabilities `guardians.manage` + `school.members.manage`; classification review of the review-item surface |
 
-## 7. Proposed next implementation checkpoint (number assigned by the owner)
+## 7. Automation Foundation checkpoint — delivered as Phase 0L.6 (§9)
 
 **Automation Foundation** — the smallest checkpoint proving the whole
 contract with one rule type:
@@ -163,3 +163,86 @@ Observed during the audit; owned elsewhere; none blocks the contract.
   wording, the unchecked `students.processing_authorizations` flag
   (`COMPLIANCE.md` §7), the JSON `fetch()` session-expiry UX
   (`AUTHORIZATION.md`), and the open Compliance gates.
+
+## 9. Phase 0L.6 — Automation Foundation: Academic Year Setup Review (as built, 2026-09-24)
+
+Owner decisions and implementation choices: ADR 0043 amendment.
+
+### Flow
+
+`AcademicYearService::activate()` → `academic_year.activated.v1` in the
+outbox (same transaction) → `platform:outbox-dispatch` →
+`ProcessOutboxEventJob` → `AutomationTriggerConsumer` (via
+`IdempotentConsumerGuard`) → `automation_executions` row (pending) →
+`RunAutomationExecutionJob` (after commit) → `AutomationExecutionService`
+→ one `automation_review_items` row.
+
+The consumer skips: no School; `metadata.automationExecutionId` present
+(loop guard); School flag `automation.rules` off; no enabled instance, or
+one enabled after the event occurred; a payload without a valid
+`academicYearId`; the 24-hour cap (suspends). The job re-checks the flag
+and rule status (skip) and re-verifies the owner (skip + suspend) before
+creating the item.
+
+### Code
+
+| Piece | Where |
+|---|---|
+| Rule catalog | `App\Domain\Automation\Application\Catalog\AutomationRuleCatalog`, `AcademicYearSetupReviewRule` (`academic_year.setup_review`, tier 0, needs `automation.manage` + `academics.years.view`, cap 20/day) |
+| Configuration | `AutomationRuleService` (`enable`, `disable`, `takeOwnership`, `suspend`) |
+| Authority | `OwnerAuthorityVerifier` (fresh `CapabilityResolver` read; codes `owner_missing`, `owner_disabled`, `owner_no_school_authority`, `owner_capability_missing`) |
+| School opt-in | `AutomationFeatureGate` (`automation.rules`) |
+| Trigger | `AutomationTriggerConsumer` (`automation-trigger`), registered in `PlatformServiceProvider` |
+| Execution | `AutomationExecutionService`, `App\Jobs\RunAutomationExecutionJob`, `automation:executions-redispatch` (every minute) |
+| Read model | `AutomationReadService` (`automation.view`) |
+| HTTP/UI | `App\Http\Controllers\App\Automation\AutomationController`; `GET /app/automation`, `POST /app/automation/rules/{ruleType}/enable|disable|take-ownership`; page `App/Automation/Index`; Dashboard link `nav.canViewAutomation` |
+| Tables | `automation_rule_instances`, `automation_executions`, `automation_execution_attempts` (append-only), `automation_review_items` (append-only); flag seeded by migration |
+
+Records hold identifiers, codes, statuses and timestamps only. The review
+item stores `subject_type = academic_year` and the year's id (from the
+School's own outbox event; no foreign key into Academic Structure). The
+page shows the id and a link to School setup; it never shows an event
+payload and never claims anything was set up automatically.
+
+### Tests
+
+- `Tests\Feature\Automation\AutomationExecutionPipelineTest` — real
+  activation events → exactly one execution and item each; duplicate
+  delivery (receipt, bypassed receipt, repeated job) → one item; flag
+  off / other School's flag / rule disabled → nothing; never
+  retroactive; flag switched off between trigger and run → skipped, not
+  suspended; owner disabled / membership inactive / capability revoked
+  → skipped + suspended + audited once, then re-enabled by another
+  manager; loop guard; interrupted attempt + redispatch → one item;
+  unexpected failures → backoff, then abandoned after 3 attempts; daily
+  cap → suspended.
+- `Tests\Feature\Automation\AutomationExecutionConcurrencyTest` — two
+  real OS processes, verified overlap: one acts, one item, one attempt.
+- `Tests\Feature\Automation\AutomationManagementTest` — grants (only
+  `school_admin`/`principal`), School Admin manages, Principal views
+  only, every other persona and Platform Admin refused, guests, unknown
+  rule type 404, audit once per change with ids/codes, owner
+  eligibility, flag grants nothing, cross-School and multi-School.
+- `Tests\Feature\Automation\AutomationArchitectureGuardTest` — allowed
+  imports only, no sending/foreign tables/service identity/platform
+  path, no other domain depends on Automation, only the registered tier 0
+  rule type.
+- `Tests\Feature\Postgres\AutomationRlsIsolationTest` — RLS enabled and
+  forced on all four tables, per-School raw reads, nothing without
+  context, composite FKs refuse cross-School references, append-only.
+- `Tests\Feature\FeatureFlags\FeatureFlagResolverWorkerScopeTest` — the
+  long-running-worker regression (below).
+
+### Findings fixed on the way
+
+- **`FeatureFlagResolver` singleton vs scoped `TenantContext`** (real
+  defect, found in DDEV): in a long-running queue worker the second and
+  later jobs got a stale context from the resolver, and its
+  `withSchool()` reset the RLS session variable, so the consumer silently
+  saw no rule instance. Now `scoped`; the consumer resolves
+  tenant-dependent collaborators per event.
+- **Column-set guard tests** queried `information_schema.columns` without
+  `ORDER BY` and asserted order; adding four tables changed the catalog
+  plan and made them fail. They now `order by ordinal_position` (the
+  pattern `GradeScalesRlsIsolationTest` already used).
+

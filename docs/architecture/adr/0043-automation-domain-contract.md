@@ -353,3 +353,72 @@ platform/cross-School scope and exports stay deferred.
   classification and no-payload rule.
 - `MASTER-ROADMAP.md` gains the Phase 0L.5 entry.
 - No code, migration, route, capability seed or configuration change.
+
+## Amendment — 2026-09-24 (Phase 0L.6, owner decisions and implementation)
+
+The product owner resolved the §12 decisions that blocked the foundation
+and named the checkpoint **"Phase 0L.6 — Automation Foundation: Academic
+Year Setup Review"**. As built: `docs/modules/AUTOMATION.md` §9.
+
+**Owner decisions**
+
+1. **First rule type**: `academic_year.setup_review` — the existing
+   `academic_year.activated.v1` event creates an Automation-owned set-up
+   review item. No second activation event.
+2. **First action**: tier 0 only (review item in Automation's own
+   table). No tier 1–4 action is authorized; Communications integration
+   remains future work.
+3. **Authority model**: §5 approved as written — accountable human owner,
+   re-verified at every execution (active account, active membership in
+   the School, `automation.manage`, and the rule type's own capability).
+   No service identity.
+4. **Grants**: `school_admin` gets `automation.view` and
+   `automation.manage`; `principal` gets `automation.view` only; no other
+   system or demo role. `automation.platform.view` stays unseeded.
+5. **School opt-in**: the existing feature-flag infrastructure, key
+   `automation.rules` (the `<module>.<feature>` convention of
+   `students.processing_authorizations`), default OFF. Flag OFF → nothing
+   executes; flag ON + rule disabled → nothing; flag ON + rule enabled →
+   eligible. The DDEV Demo School enables it; the Annexe does not.
+
+**Implementation decisions**
+
+- **Ownership is accepted, not assigned**: enabling (or re-enabling) a
+  rule, or "take ownership", makes the *acting* manager the owner. No one
+  can be made accountable without acting. Assignment requires the actor
+  to hold every capability the rule type declares
+  (`automation.manage` + `academics.years.view` for this rule).
+- **Never retroactive**: an enabled rule reacts only to events whose
+  `occurred_at` is not earlier than its `enabled_at`.
+- **Tables** (tenant-owned, RLS, composite `(id, school_id)` foreign
+  keys): `automation_rule_instances` (one per School and rule type),
+  `automation_executions` (UNIQUE `(school_id, rule_instance_id,
+  trigger_key)`; trigger key = outbox event id),
+  `automation_execution_attempts` (append-only, UNIQUE
+  `(execution_id, attempt_number)`), `automation_review_items`
+  (append-only, UNIQUE `execution_id`, subject by type + id only).
+- **Execution**: `RunAutomationExecutionJob` (`tries = 1`, 30 s timeout)
+  claims the row with a conditional UPDATE and a 60 s lease; the School
+  flag and rule status are re-checked before acting; the effect, the
+  execution result and its attempt row commit together. At most 3
+  attempts with 60 s / 300 s backoff, driven by
+  `automation:executions-redispatch` (every minute, also recovers expired
+  leases and records them as `interrupted`), then `abandoned`.
+- **Suspension codes**: `owner_missing`, `owner_disabled`,
+  `owner_no_school_authority`, `owner_capability_missing`,
+  `execution_cap_exceeded` (20 executions per rule per 24 h). A
+  suspension is audited with no human actor; a manager re-enables.
+- **Loop guard**: events marked `metadata.automationExecutionId`
+  (`AutomationOrigin`) are ignored by the consumer. v1's action emits no
+  event, so nothing carries the marker yet.
+- **Audit**: `automation.rule.created`, `.enabled`, `.disabled`,
+  `.owner_changed` (actor = the manager) and `.suspended` (no actor);
+  ids and codes only.
+- **Infrastructure fix found on the way**: `FeatureFlagResolver` was a
+  container singleton holding the job-scoped `TenantContext`; in a
+  long-running queue worker, a flag check in any job after the first
+  restored a stale context and reset the RLS session variable. It is now
+  `scoped`, and the Automation consumer (built once by the singleton
+  `EventConsumerRegistry`) resolves tenant-dependent collaborators per
+  event. Regression: `Tests\Feature\FeatureFlags\FeatureFlagResolverWorkerScopeTest`.
+

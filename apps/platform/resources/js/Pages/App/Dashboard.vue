@@ -31,6 +31,7 @@ interface Props {
         canViewPayroll: boolean;
         canViewAnalytics: boolean;
         canViewAuditLog: boolean;
+        canViewAutomation: boolean;
     };
 }
 
@@ -129,6 +130,9 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewAuditLog">
                     <a class="underline" href="/app/compliance/audit-log">Compliance: Audit log</a>
+                </li>
+                <li v-if="nav.canViewAutomation">
+                    <a class="underline" href="/app/automation">Automation</a>
                 </li>
             </ul>
         </nav>

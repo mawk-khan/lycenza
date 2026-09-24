@@ -53,6 +53,14 @@ Schedule::command('communications:publish-scheduled')
     ->withoutOverlapping()
     ->name('communications-publish-scheduled');
 
+// Phase 0L.6 (ADR 0043 §7): Automation execution retries and crashed-lease
+// recovery. RunAutomationExecutionJob's own lease claim is the correctness
+// guarantee; withoutOverlapping() is an efficiency safeguard only.
+Schedule::command('automation:executions-redispatch')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('automation-executions-redispatch');
+
 // Phase 0C closeout: the two retention prunes run daily. Neither records
 // a scheduler heartbeat -- OperationalStatusService judges heartbeats
 // against one minute-scale staleness threshold, which a daily task would

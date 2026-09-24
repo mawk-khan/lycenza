@@ -1058,6 +1058,19 @@ seeded; execution-log retention **[LEGAL/POLICY REVIEW REQUIRED]**.
 Foundation**, blocked on the owner decisions in `AUTOMATION.md` §5 (first
 rule type, roles, authority-model confirmation, opt-in).
 
+**Phase 0L.6 — Automation Foundation: Academic Year Setup Review:
+COMPLETE (2026-09-24).** Owner decisions (ADR 0043 amendment): the one
+rule `academic_year.setup_review` (existing `academic_year.activated.v1`
+event → tier 0 review item in Automation's own table), accountable-owner
+authority re-verified per execution, `automation.view` for School Admin
+and Principal and `automation.manage` for School Admin only, School
+opt-in flag `automation.rules` default off (Demo School on, Annexe off).
+Proves one trigger, one tier 0 effect, School scope, authority
+re-check/suspension, idempotency (unique execution, lease claim, bounded
+domain retry) and audit — not general Automation. Also fixed a latent
+`FeatureFlagResolver` worker-scope defect. **A full regression
+checkpoint is required before the next development unit.**
+
 ## Phase 0M — AI Platform: Real Agents
 
 First real model-provider integration (ADR 0013, with the

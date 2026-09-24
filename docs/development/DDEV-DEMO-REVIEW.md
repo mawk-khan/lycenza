@@ -241,8 +241,8 @@ minute.
 
 | Persona | Email | Purpose | Main access | Known limitations |
 |---|---|---|---|---|
-| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (109 capabilities): all modules incl. Finance and Payroll administration | HR departments/positions/categories, payslips and statutory screens are 403 (no system role holds them) |
-| Principal | `principal@example.test` | Academic administration | `principal` system role (79): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403 |
+| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (111 capabilities): all modules incl. Finance and Payroll administration | HR departments/positions/categories, payslips and statutory screens are 403 (no system role holds them) |
+| Principal | `principal@example.test` | Academic administration | `principal` system role (80): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403 |
 | HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
@@ -295,7 +295,7 @@ Platform Admin (there is no platform UI to review).
 | Persona | Exists in code? | Login? | Tenant scope | Capabilities | Usable UI |
 |---|---|---|---|---|---|
 | Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 8 `platform.*` | **None** -- no platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
-| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 109 of the 145 catalog capabilities | Full admin UI |
+| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 147 catalog capabilities | Full admin UI |
 | Principal | Yes (system role `principal`) | Yes | One School | 79 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
 | Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
 | School member, no role (teacher/staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
@@ -374,6 +374,22 @@ Platform Admin (there is no platform UI to review).
     none but their own reviews); `multi.school` sees whichever School is
     selected. The page records what happened -- it does not certify legal
     compliance.
+16. **Automation** (Phase 0L.6): as **School Admin**, Dashboard ->
+    **Automation** (`/app/automation`). The Demo School has Automation
+    switched on and the one rule, **Academic year set-up review**, enabled
+    with the School Admin as accountable owner. `demo-reset` activates two
+    academic years *after* enabling it, so once the queue worker has run
+    (about a minute) the page shows **2 review items** and 2 succeeded
+    executions -- produced by the real event path (activation event ->
+    outbox -> Automation consumer -> execution job), not seeded. To trigger
+    it yourself: School setup -> Academic years -> **Activate** 2027-28
+    (this closes 2026-27 and changes the active year for every other
+    review step until the next `demo-reset`); within a minute a third
+    review item appears. A review item only points at the year to review;
+    nothing is set up or sent. Disable / Re-enable are audited
+    (`automation.rule.*`). **Principal** sees the page without controls;
+    every other persona gets **403**. The **Annexe** has Automation
+    switched off (no rule runs there) as the negative control.
 
 ## 13. Interactive review map
 
@@ -401,6 +417,7 @@ Platform Admin (there is no platform UI to review).
 | LMS: Learning Content, Assignments | `/app/learning-content`, `/app/assignments` (no nav link) | Admin, Principal | Yes (empty -- not seeded) | Submission is cancelled and has no screen |
 | Analytics: Curriculum Coverage | Dashboard -> Analytics: Curriculum Coverage (`/app/analytics/curriculum-coverage`) | Admin, Principal | Yes | Counts syllabus units only; no person Analytics, no export (Phase 0L.2-1) |
 | Compliance: Audit log | Dashboard -> Compliance: Audit log (`/app/compliance/audit-log`) | Admin, Principal | Yes | Envelope fields only, no metadata; each visit is itself audited (Phase 0L.4) |
+| Automation | Dashboard -> Automation (`/app/automation`) | Admin (manage), Principal (view) | Yes | One rule (academic year set-up review), tier 0 review items only; Demo School on, Annexe off (Phase 0L.6) |
 | Account security (MFA) | `/app/account/security` (no nav) | Any | Yes | MFA is opt-in; nothing requires it by default |
 | Guardian activation | Mailpit invitation link | (invitee) | Yes | |
 
@@ -448,7 +465,7 @@ Documented but not implemented on main: StudentMark / marks, results,
 report cards and transcripts (legally gated); Lesson Planning (deferred);
 Health and Safety (deferred, legally/security blocked); person-counting
 Analytics (blocked on the unapproved minimum cohort size), Analytics
-export, cross-School Analytics, Compliance beyond the School audit log (0L.4), Automation (0L); real AI agents (0M); multi-school management
+export, cross-School Analytics, Compliance beyond the School audit log (0L.4), Automation beyond the one academic-year review rule (0L.6); real AI agents (0M); multi-school management
 UI (0N); external surface / production readiness (0O); portal logins.
 
 ## 16. Running tests inside DDEV

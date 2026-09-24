@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Domain\Automation\Application\AutomationTriggerConsumer;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\GradeAudienceResolver;
 use App\Domain\Communications\Application\Audience\GuardianAudienceResolver;
@@ -43,7 +44,14 @@ class PlatformServiceProvider extends ServiceProvider
         $this->app->singleton(SettingRegistry::class);
         $this->app->singleton(SsrfSafeUrlValidator::class);
         $this->app->singleton(WebhookSigner::class);
-        $this->app->singleton(FeatureFlagResolver::class);
+        // Scoped, not singleton: it holds the (scoped) TenantContext, and a
+        // long-running queue worker rebuilds scoped instances between jobs
+        // (forgetScopedInstances). A singleton kept the FIRST job's context,
+        // so withSchool() in a later job restored that stale context and
+        // reset the RLS session variable for the rest of the job -- found by
+        // Phase 0L.6, the first production caller in a worker
+        // (FeatureFlagResolverWorkerScopeTest).
+        $this->app->scoped(FeatureFlagResolver::class);
 
         $this->app->singleton(NotificationDispatcher::class, function () {
             $dispatcher = new NotificationDispatcher;
@@ -82,6 +90,9 @@ class PlatformServiceProvider extends ServiceProvider
             $registry = new EventConsumerRegistry;
             $registry->register($app->make(NotifyActorOfSettingChangeConsumer::class));
             $registry->register($app->make(WebhookFanoutConsumer::class));
+            // Phase 0L.6 (ADR 0043): the single Automation consumer; it
+            // handles only the rule catalog's trigger event types.
+            $registry->register($app->make(AutomationTriggerConsumer::class));
 
             return $registry;
         });

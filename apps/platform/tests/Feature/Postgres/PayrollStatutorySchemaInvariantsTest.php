@@ -101,7 +101,7 @@ class PayrollStatutorySchemaInvariantsTest extends TestCase
     public function statutory_identifiers_never_store_a_plaintext_column(): void
     {
         $columns = $this->admin()->select(
-            'select column_name from information_schema.columns where table_name = ?',
+            'select column_name from information_schema.columns where table_name = ? order by ordinal_position',
             ['employee_statutory_identifiers'],
         );
         $columnNames = array_map(fn ($c) => $c->column_name, $columns);
@@ -156,7 +156,7 @@ class PayrollStatutorySchemaInvariantsTest extends TestCase
     public function statutory_accounting_configuration_has_dedicated_pf_admin_and_edli_expense_accounts(): void
     {
         $columns = $this->admin()->select(
-            'select column_name from information_schema.columns where table_name = ?',
+            'select column_name from information_schema.columns where table_name = ? order by ordinal_position',
             ['payroll_statutory_accounting_configurations'],
         );
         $columnNames = array_map(fn ($c) => $c->column_name, $columns);
