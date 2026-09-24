@@ -110,8 +110,15 @@ use Illuminate\Support\Facades\Route;
 // Unauthenticated Phase 0A primitive -- unchanged.
 Route::get('/', [SystemStatusController::class, 'index'])->name('system.status');
 
+// `private-no-store` on the three guest pages that can turn into a
+// signed-in page without a full reload (Inertia sign-in on /login and
+// /login/mfa, invitation acceptance): the browser must not keep that
+// document for back/forward restore once someone has signed in on it
+// and then logged out. Signed-in pages get the same header from
+// PreventAuthenticatedPageCaching. See docs/security/AUTHORIZATION.md
+// ("After logout").
 Route::middleware('guest')->group(function (): void {
-    Route::get('/login', [LoginController::class, 'create'])->name('login');
+    Route::get('/login', [LoginController::class, 'create'])->middleware('private-no-store')->name('login');
     Route::post('/login', [LoginController::class, 'store'])
         ->middleware('throttle:login')
         ->name('login.store');
@@ -125,7 +132,7 @@ Route::middleware('guest')->group(function (): void {
     // User is known) is applied inside the controller, not here,
     // since the limiter key needs the pending user id from the
     // session, unavailable at route-middleware-declaration time.
-    Route::get('/login/mfa', [MfaChallengeController::class, 'create'])->name('login.mfa');
+    Route::get('/login/mfa', [MfaChallengeController::class, 'create'])->middleware('private-no-store')->name('login.mfa');
     Route::post('/login/mfa', [MfaChallengeController::class, 'store'])
         ->middleware('throttle:mfa-challenge')
         ->name('login.mfa.store');
@@ -139,7 +146,7 @@ Route::middleware('guest')->group(function (): void {
 // how tenant context is resolved for an RLS-protected lookup without
 // either.
 Route::middleware('throttle:guardian-invitation-accept')->group(function (): void {
-    Route::get('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'show'])->name('invitations.show');
+    Route::get('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'show'])->middleware('private-no-store')->name('invitations.show');
     Route::post('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'store'])->name('invitations.store');
 });
 

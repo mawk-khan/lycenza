@@ -8,6 +8,7 @@ use App\Http\Middleware\DevOnlySchoolHeaderResolver;
 use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureIdempotent;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\PreventAuthenticatedPageCaching;
 use App\Http\Middleware\RequireMfa;
 use App\Http\Middleware\ResolveSchoolContext;
 use App\Http\Middleware\VerifyAiGatewayServiceToken;
@@ -54,8 +55,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // pin the relative order explicitly via the priority list
         // instead of prepend/append position. See
         // docs/architecture/TENANCY.md and ADR 0022.
+        // PreventAuthenticatedPageCaching: signed-in HTML/Inertia pages
+        // are `no-store, private` so Back after logout cannot restore
+        // them from the HTTP or back/forward cache (see its docblock).
         $middleware->web(
-            append: [ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, HandleInertiaRequests::class],
+            append: [ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, HandleInertiaRequests::class, PreventAuthenticatedPageCaching::class],
         );
 
         $middleware->api(

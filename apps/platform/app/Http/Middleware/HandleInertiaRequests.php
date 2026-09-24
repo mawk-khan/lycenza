@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use Closure;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -15,6 +17,22 @@ class HandleInertiaRequests extends Middleware
      * @var string
      */
     protected $rootView = 'app';
+
+    /**
+     * Every page rendered for a signed-in user is stored in the
+     * browser's history encrypted (Inertia history encryption); logout
+     * clears the key (LoginController::destroy()), so Back cannot redraw
+     * a signed-in page. Guest pages (login, MFA challenge) stay
+     * unencrypted. Set explicitly both ways per request: the Inertia
+     * response factory is a singleton. See docs/security/AUTHORIZATION.md
+     * ("After logout").
+     */
+    public function handle(Request $request, Closure $next)
+    {
+        Inertia::encryptHistory($request->user() !== null);
+
+        return parent::handle($request, $next);
+    }
 
     /**
      * Determines the current asset version.
