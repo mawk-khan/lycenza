@@ -174,6 +174,18 @@ roles only (no desk, teacher, student, guardian or platform role), shows
 envelope fields only, and audits every review
 (`Tests\Feature\Compliance\AuditLogReviewTest`).
 
+Automation (ADR 0043, Phase 0L.5 contract, not implemented) reserves
+`automation.view`, `automation.manage` and `automation.platform.view`
+(unseeded; no `automation.execute`). **Configuring a rule grants
+nothing.** An execution acts as the rule instance's accountable owner —
+a School member who held `automation.manage` when enabling it — and
+before every action Automation re-verifies the owner's active account,
+active membership, `automation.manage`, and the action's own declared
+capability; the effective authority is that intersection, never the
+owner's full capability set. A failed check skips the execution and
+suspends the rule. No service identity or other non-User principal acts
+inside a School.
+
 ## Multi-factor authentication (Phase 0H.4D-P1, ADR 0037)
 
 This is the "documented future path" `App\Http\Controllers\Auth\LoginController`'s
