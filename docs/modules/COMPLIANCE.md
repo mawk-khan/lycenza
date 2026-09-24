@@ -1,10 +1,11 @@
-# Compliance (Phase 0L.3 contract)
+# Compliance (Phase 0L.3 contract; Phase 0L.4 School audit-log review)
 
-Status: **domain contract only — nothing is implemented.** Decision
-record: ADR 0042 (`docs/architecture/adr/0042-compliance-domain-contract.md`).
-This document is the living reference: what exists today, the boundary
-in detail, the open gates and the implementation plan. No migration,
-model, service, route, capability seed or page exists for Compliance.
+Status: **one read-only surface is implemented — the School audit-log
+review (Phase 0L.4, §8).** Decision record: ADR 0042
+(`docs/architecture/adr/0042-compliance-domain-contract.md`, including
+its 2026-09-24 Phase 0L.4 amendment). This document is the living
+reference: what exists, the boundary in detail, the open gates and the
+plan. Compliance owns no table, migration or capability seed.
 
 ## 1. Scope in one paragraph
 
@@ -66,8 +67,8 @@ question. Nothing below is decided by ADR 0042.
 
 | Decision | Existing evidence | Approval needed | Can engineering proceed without it? |
 |---|---|---|---|
-| Tier of audit records; metadata keys each audience may see | ADR 0017 ("audit data itself is sensitive… must be classified"); no row in `DATA-CLASSIFICATION.md` | Product + security | The contract, yes. The audit-log view only with the interim Highly Sensitive treatment and an approved allowlist (v1 plan shows no metadata) |
-| Confirm `school.audit.view` grant | Seeded for `school_admin`, `principal`; never exercised | Product owner | No, for the audit-log view |
+| Tier of audit records; metadata keys each audience may see | ADR 0017 ("audit data itself is sensitive… must be classified") | Product + security | **Decided for v1 (2026-09-24)**: Highly Sensitive, conservatively, for the School audit-log review; metadata allowlist **empty**. A broader, permanent classification of every audit event type remains open |
+| Confirm `school.audit.view` grant | Seeded for `school_admin`, `principal` | Product owner | **Decided (2026-09-24)**: School Admin and Principal only |
 | Platform audit review audience | `platform_audit_events` unread; auth/MFA events there | Product + security | Yes; nothing platform-level built |
 | Retention periods per category, incl. audit ledgers and statutory records | `DATA-CLASSIFICATION.md` "Retention"; `INTEGRATIONS.md`; `PHASE-0C-CLOSEOUT.md`; ADR 0038 ("indefinite by default") | Legal | Yes; nothing is deleted |
 | Audit evidence surviving School deletion; legal holds | `school_audit_events` cascade; legal hold asked in `DOCUMENTS.md` and LMS legal review, never decided | Legal | Yes; behaviour unchanged |
@@ -83,7 +84,7 @@ Compliance view may claim conformity with any law.
 
 ## 6. Implementation plan (proposed; each checkpoint needs its own go-ahead)
 
-### Phase 0L.4 — Compliance Foundation: School Audit-Log Review (proposed next)
+### Phase 0L.4 — Compliance Foundation: School Audit-Log Review — COMPLETE (2026-09-24, as built in §8)
 
 - **Objective**: accountable staff can review one School's audit
   evidence, safely. The smallest real Compliance surface; it closes the
@@ -141,8 +142,8 @@ is not a Compliance checkpoint; it waits for the Automation contract.
 Owned by other modules; listed so they are not lost. None blocks the
 contract.
 
-- `school.audit.view` is seeded and granted but enforced nowhere (closed
-  by Phase 0L.4 when built).
+- ~~`school.audit.view` is seeded and granted but enforced nowhere~~ —
+  closed by Phase 0L.4.
 - Lockout (`Illuminate\Auth\Events\Lockout`) and denied-access decisions
   are not audited (ADR 0017's carried-forward requirement).
 - Role/capability grants have no runtime write path; when one is built,
@@ -158,3 +159,93 @@ contract.
 - JSON `fetch()` helpers after a session ends: already recorded in
   `docs/security/AUTHORIZATION.md` ("When a session ends without
   logout", remaining limits).
+
+## 8. Phase 0L.4 — School audit-log review (as built, 2026-09-24)
+
+Owner-approved decisions (ADR 0042 amendment): the School audit ledger is
+treated as **Highly Sensitive** for this surface (a conservative v1
+treatment, not a permanent classification of every event type); the
+metadata allowlist is **empty**; only first-class envelope columns are
+shown; `school.audit.view` is held by School Admin and Principal only; no
+platform or cross-School access; every review is audited; Compliance is
+read-only.
+
+### Envelope fields (`school_audit_events`)
+
+| Field | First-class column? | Classification concern | Shown in v1? | Reason |
+|---|---|---|---|---|
+| `id` | Yes (UUIDv7) | None — opaque | **Yes** (`id`) | Identifies the event; ties evidence to one row |
+| `occurred_at` | Yes | None | **Yes** (`occurredAt`, ISO 8601) | When it happened |
+| `event_type` | Yes | Names the action (a code, not data) | **Yes** (`eventType`) | What happened |
+| `actor_user_id` | Yes (nullable) | An id, not a name | **Yes** (`actorUserId`; null shown as "system") | Who acted. The actor's **name is not shown**: it is not a ledger column, and actors include Guardians and Students |
+| `subject_type` | Yes (nullable) | Reveals only the record category | **Yes** (`subjectType`, class basename only) | What kind of record; the internal class path is never sent |
+| `subject_id` | Yes (nullable) | Opaque id; resolving it needs the source module's own capability | **Yes** (`subjectId`) | Which record |
+| `request_id` | Yes (nullable) | Diagnostic correlation id, never used for authorization | **Yes** (`requestId`) | Groups events from one request |
+| `school_id` | Yes | Server-derived tenant key | No | Never exposed; the School is the trusted session context |
+| `metadata` | Yes (jsonb) | Arbitrary per-event detail, may hold Sensitive/Highly Sensitive values | **No — never selected** | Allowlist is empty in v1 |
+| `created_at` | Yes | None | No | Insert time; `occurred_at` is the event time |
+
+### Architecture
+
+- **Read contract** (Platform audit primitives, next to `AuditRecorder`):
+  `App\Support\Audit\SchoolAuditEventReader::page(School, ?cursor)` returns a
+  `SchoolAuditEventPage` of `SchoolAuditEventEntry` DTOs (the closed field
+  list `SchoolAuditEventEntry::FIELDS`). It runs inside
+  `TenantContext::withSchool()` on the normal runtime connection (SchoolScope
+  + RLS + an explicit `school_id` predicate), selects only the envelope
+  columns (`metadata` is never loaded), and never reads
+  `platform_audit_events`.
+- **Compliance** (`App\Domain\Compliance\Application\AuditLogReviewService`):
+  checks `school.audit.view` for the actor in the School, reads one page,
+  then records one `compliance.audit_log.viewed` School audit event
+  (metadata `paged`, `resultCount` only — nothing from the rows shown). That
+  event is Compliance's only write; it is recorded after the read, so it
+  appears on the next review, never recursively.
+- **HTTP**: `GET /app/compliance/audit-log` (`app.compliance.audit-log`),
+  `App\Http\Controllers\App\Compliance\AuditLogController` — thin; the only
+  accepted parameter is an opaque `cursor` (validated); no School selected
+  -> 403. Page `resources/js/Pages/App/Compliance/AuditLog.vue`; Dashboard
+  link `nav.canViewAuditLog`. Signed-in pages are already `no-store, private`.
+- **Pagination**: newest first by `occurred_at DESC, id DESC`; keyset cursor
+  over `(occurred_at, id)`; fixed 50 rows per page (+1 look-ahead). Offset
+  pagination was rejected: each review appends an event, which would shift
+  every offset and repeat rows. A forged or foreign cursor is either
+  rejected (validation) or positions within the selected School only.
+- **Query plan** (DDEV demo data, 2026-09-24): the existing
+  `school_audit_events_occurred_at_index` is scanned backward with an
+  incremental sort — about 85 rows read for a 51-row page, 0.14 ms. No
+  migration was added. Trigger to revisit: many large Schools, where the
+  School filter would discard many rows per page — then add
+  `(school_id, occurred_at, id)`.
+- **MFA**: not required. MFA is opt-in per route in this repository and is
+  used only by the processing-authorization routes and platform operations;
+  other Highly Sensitive reads (payslips, statutory identifier reveal,
+  Highly Sensitive documents) use capability + access audit, which this
+  surface matches. The envelope carries no source record's data.
+
+Not in v1 (deliberately): filters, search, metadata display, actor-name
+resolution, export, JSON API/OpenAPI, platform ledger, cross-School view,
+retention or deletion controls.
+
+### Tests
+
+- `Tests\Feature\Compliance\AuditLogReviewTest` — School Admin and Principal
+  allowed; teacher, student, guardian, HR & Payroll, every demo desk and
+  Platform Super Admin (with or without a School) refused with no access
+  event; only `school_admin`/`principal` roles hold `school.audit.view`;
+  guest and no-School cases; Demo School/Annexe/multi-School isolation;
+  exact field list and a leak canary for metadata values and class paths;
+  exactly one access event per review, none recursive, no viewed content;
+  120-event paging stable under appended reviews; foreign and forged
+  cursors; Dashboard link.
+- `Tests\Feature\Compliance\ComplianceArchitectureGuardTest` — allowed imports
+  only, no writes/ledger models/jobs/notifications in Compliance, no other
+  module depends on it, the reader never selects `metadata` or touches the
+  platform ledger.
+- `Tests\Feature\Postgres\SchoolAuditEventsRlsIsolationTest` — RLS enabled and
+  forced; raw reads isolated per School and empty without context; the
+  reader ignores an ambient context for another School.
+
+Negative controls: removing the capability check fails the refusal test;
+removing the access audit fails the exactly-one-event test.
+

@@ -24,6 +24,7 @@ use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
 use App\Http\Controllers\App\Canteen\CanteenItemController;
 use App\Http\Controllers\App\Canteen\CanteenOrderController;
 use App\Http\Controllers\App\Canteen\CanteenOutletController;
+use App\Http\Controllers\App\Compliance\AuditLogController;
 use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
@@ -991,6 +992,12 @@ Route::middleware('auth')->group(function (): void {
     // and audit all live in App\Domain\Analytics\Application\AnalyticsReadGate.
     // No export route (not in this checkpoint) and no API.
     Route::get('/app/analytics/curriculum-coverage', [CurriculumCoverageController::class, 'index'])->name('app.analytics.curriculum-coverage');
+
+    // Phase 0L.4 -- Compliance (ADR 0042): the School audit-log review.
+    // Read-only; `school.audit.view`, the ledger read contract and the
+    // access audit all live in App\Domain\Compliance\Application\AuditLogReviewService.
+    // No filters, export or API in this checkpoint.
+    Route::get('/app/compliance/audit-log', [AuditLogController::class, 'index'])->name('app.compliance.audit-log');
 
     // Phase 0I.2 -- the administrative Learning Content surface (ADR
     // 0039). Capability checks live in the controller (the

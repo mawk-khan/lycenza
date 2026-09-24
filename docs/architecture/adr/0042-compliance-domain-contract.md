@@ -349,3 +349,39 @@ is set by this ADR. India is the assumed market
 - `AUTHORIZATION.md` notes the reserved `compliance.*` keys and the
   "never wider than the source" rule; `ANALYTICS.md` points here.
 - No code, migration, route, capability seed or configuration change.
+
+## Amendment — 2026-09-24 (Phase 0L.4, owner-approved decisions)
+
+Recorded from the product owner's approval for Phase 0L.4 — Compliance
+Foundation: School Audit-Log Review. It resolves §13 items 1 and 3 **for
+this surface only** and records how §10 was built. As built:
+`docs/modules/COMPLIANCE.md` §8.
+
+1. **Classification (§5, §13 item 1).** School audit records are treated
+   as **Highly Sensitive** for the audit-log review. This is a
+   conservative v1 treatment pending a broader decision; it is not a
+   claim that every audit event type is permanently Highly Sensitive.
+2. **Metadata allowlist: empty.** No metadata, nested payload,
+   before/after value, request body, source-domain payload or event
+   context is exposed. `metadata` is not even selected by the read
+   contract.
+3. **Envelope only.** v1 shows exactly the first-class columns `id`,
+   `occurred_at`, `event_type`, `actor_user_id`, `subject_type` (class
+   basename only), `subject_id` and `request_id`. `school_id`,
+   `created_at` and `metadata` are not exposed, and no actor or subject
+   name is resolved (not a ledger column).
+4. **Authorization (§4, §13 item 3).** `school.audit.view` is confirmed for
+   `school_admin` and `principal` only — not teachers, students,
+   guardians, operations desks or Platform Super Admin. No implicit
+   platform or cross-School access.
+5. **Access audit (§6).** Each successful review records one
+   `compliance.audit_log.viewed` event (metadata `paged`, `resultCount`),
+   after the read, so it appears on the next review and never recurses.
+6. **Scope narrowed from §10.** §10 listed filters (event type, date
+   range, actor, subject type); v1 ships **without filters or search**.
+   Pagination is keyset over `(occurred_at, id)`, 50 per page, because
+   every review appends an event and offset pages would shift. MFA is not
+   required: in this repository MFA is opt-in per route, and the
+   surface's controls (capability, tenancy, access audit, `no-store`)
+   match the other Highly Sensitive reads.
+
