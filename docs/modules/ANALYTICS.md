@@ -4,7 +4,9 @@
 non-person report (Curriculum Coverage) on the architecture contract
 frozen by ADR 0040 (2026-09-05); see §13 (as built) and
 `docs/architecture/PHASE-0L2-ANALYTICS-FOUNDATION-CLOSEOUT.md`.
-**Person-counting Analytics remains BLOCKED** (§6). Sections 1–11 are
+**Person-counting Analytics remains BLOCKED** (§6). Phase 0L as a
+whole closed on 2026-09-24 (`docs/architecture/PHASE-0L-CLOSEOUT.md`);
+no further Analytics checkpoint is scheduled. Sections 1–11 are
 the Phase 0L.1 contract text; where they say something "does not exist
 yet", §13 records what Phase 0L.2 has since built. This document
 is the living operational reference for the Analytics bounded context;

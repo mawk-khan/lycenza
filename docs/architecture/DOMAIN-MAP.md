@@ -116,6 +116,10 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 
 ## Layer 5 — Oversight (read-mostly; consumers, never dependencies)
 
+Phase 0L delivered a contract and a foundation for all three modules and
+is complete (2026-09-24); remaining capabilities are gated —
+`docs/architecture/PHASE-0L-CLOSEOUT.md`.
+
 | Module | Owns | Depends on | Notes |
 |---|---|---|---|
 | **Compliance** | Regulatory reporting, statutory record-keeping | Reads from any Layer 1–4 module via explicit read contracts/events | Must remain a consumer — no Layer 1–4 module may require Compliance to function. **Domain contract frozen (Phase 0L.3, ADR 0042); Phase 0L.4 School audit-log review implemented (2026-09-24)** — `/app/compliance/audit-log`, envelope fields only, `school.audit.view`: read-only evidence and regulatory-reporting views only — owns no source record, calculates/files/deletes nothing (Payroll keeps statutory calculation and exports, ADR 0034/0036), single-School, `compliance.*` reserved; audit-log review reads Platform's audit primitives through a read contract under `school.audit.view`. See `docs/modules/COMPLIANCE.md`. |

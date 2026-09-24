@@ -5,7 +5,9 @@ Status: **one rule is implemented — Academic year set-up review (Phase
 per-execution authority re-verification, idempotency and auditability;
 it is not general Automation. Decision record: ADR 0043
 (`docs/architecture/adr/0043-automation-domain-contract.md`, with its
-Phase 0L.6 amendment).
+Phase 0L.6 amendment). Phase 0L closed on 2026-09-24
+(`docs/architecture/PHASE-0L-CLOSEOUT.md`); tiers 1–3, retention,
+cross-School scope and exports remain gated and unscheduled.
 
 ## 1. Scope in one paragraph
 
