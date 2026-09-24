@@ -107,7 +107,10 @@ no cross-tenant capability grant in this model.
   legal/contractual concern to evaluate before integrating any real
   provider — **flagged here as requiring legal/compliance review before
   a real provider handling real school/student data is selected**, not
-  a decision made in this document.
+  a decision made in this document. The questions that review must
+  answer, the approval form it must take, and the Phase 0M decisions
+  that follow are in `docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`
+  (status: BLOCKED).
 
 ## Phase 0B: the tenant-binding half (ADR 0023)
 

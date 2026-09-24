@@ -1096,6 +1096,18 @@ by design), first real human-approval workflow for financial/
 irreversible actions. AI Gateway-side durable audit is no longer an
 open item here -- Phase 0C's audit write-back already closed it.
 
+**Readiness gate recorded 2026-09-24 — BLOCKED.**
+`docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md` sets out the
+reusable per-provider review matrix, the data that could reach a
+provider (none may before approval), the fail-closed state today (only
+`NullProvider`; no production caller of `AiGatewayClient`), four gaps to
+close before any real provider (`/v1/complete` without a context token,
+model calls not durably audited, response bodies in gateway logs/errors,
+no off-by-default provider switch), and the provider/legal, product and
+security decisions that must be recorded before implementation. No
+provider is selected. (Clarifies the audit note above: tool calls are
+written through durably; model calls are not yet.)
+
 ## Phase 0N — Multi-School Management
 
 Group/Trust cross-school administration and reporting, building on

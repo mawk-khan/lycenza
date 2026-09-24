@@ -211,3 +211,6 @@ write one — the decision request that sets out what the legal/compliance
 review must answer before any provider is integrated (in the style of
 `ANALYTICS-SMALL-COHORT-POLICY-GATE.md` and
 `LMS-SUBMISSION-LEGAL-REVIEW-REQUEST.md`) — not to start Phase 0M.
+*(Follow-up: written the same day as
+`docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`; Phase 0M remains
+BLOCKED.)*
