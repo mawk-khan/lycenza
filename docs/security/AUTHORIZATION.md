@@ -235,13 +235,9 @@ already a navigation.
 
 Known limits, deliberately not addressed by these controls:
 
-- **Natural session expiry.** A session that expires without an
-  explicit logout never sends `clearHistory`, so the tab keeps its
-  history key: Back within that tab can still decrypt and redraw pages
-  the user saw, without contacting the server, until some server
-  interaction (a visit, a form, a reload) detects the expired session
-  and redirects to `/login`. Signing out is the supported way to leave a
-  shared device; handling expiry is a separate, not-yet-started unit.
+- **A session that ends without logout** is covered separately, below
+  ("When a session ends without logout"): until the page's next server
+  interaction, the browser has no way to know.
 - **Browser-internal retention.** With Chrome's back/forward cache
   enabled, Chrome may keep the previous signed-in document in memory
   after the logout navigation even though it is `no-store`. It is never
@@ -255,6 +251,68 @@ Known limits, deliberately not addressed by these controls:
 
 Tests: `tests/Feature/Auth/PostLogoutHistoryPrivacyTest.php`; the real
 browser check is in `docs/development/DDEV-DEMO-REVIEW.md`.
+
+## When a session ends without logout
+
+Explicit logout and a session that ends on its own are different events:
+
+| | Explicit logout | Session ended without logout |
+|---|---|---|
+| Cause | The user presses **Log out** (`POST /logout`). | The session expired in the session store (`SESSION_LIFETIME`, 120 minutes of inactivity by default; the Redis entry's TTL and the session cookie's lifetime), or it was ended from somewhere else (signed out in another tab, session removed server-side). |
+| When the server acts | Immediately, in the logout request. | Only when the open page next makes a request -- the server cannot push anything to a page it no longer has a session for. |
+| What the browser shows before that | -- | The page that was already on screen stays on screen, and Back/Forward inside that tab can still redraw pages the user saw there (Inertia decrypts them locally with the key the tab still holds). Nothing on the server can retract what the browser has already been given; leaving a shared device means signing out. |
+| What happens next | Fresh `/login` document, Inertia history key discarded. | The same: fresh `/login` document, Inertia history key discarded, plus a one-time "Your session has ended. Please sign in again." when the request came from an open signed-in page. |
+
+**How the server handles it** (`App\Support\Auth\SessionEndedResponder`,
+registered once in `bootstrap/app.php`'s exception configuration -- no
+controller changes). The next request from the open page reaches a route
+that requires sign-in with no signed-in user:
+
+- The `auth` middleware throws `AuthenticationException`. For a web
+  (non-JSON) request the responder sets Inertia's clear-history flag in
+  the new session and answers with `Inertia::location()` to `/login`
+  (intended URL remembered): an Inertia visit, filter or form gets
+  `409` + `X-Inertia-Location` and the client does a real top-level load
+  of a fresh guest `/login` document; a plain browser request gets the
+  same `302` to `/login` as before. The `/login` page then carries
+  `clearHistory`, the client deletes the history key, and Back/Forward to
+  an encrypted signed-in entry can no longer decrypt it -- Inertia
+  re-requests the URL and the server sends the guest to `/login`.
+- A mutation from a client that relies on the CSRF token (no
+  `Sec-Fetch-Site: same-origin` header -- plain HTTP, older browsers)
+  fails CSRF first, because the token lived in the ended session. That
+  `419` is treated the same way **only** when the matched route requires
+  sign-in (`auth`) and the request has no signed-in user -- the `auth`
+  middleware would reject it anyway once CSRF passed. A token mismatch
+  for a signed-in user, or on a guest route (`/login`, `/login/mfa`,
+  invitation acceptance), keeps its `419`. Current HTTPS browsers send
+  `Sec-Fetch-Site`, which Laravel's `PreventRequestForgery` accepts in
+  place of the token, so for them the ended session always surfaces as
+  the `auth` case above.
+
+Before this, the next Inertia request followed the `302` inside the
+same document: the signed-in page JSON stayed in `<script data-page>`,
+the history key stayed in `sessionStorage`, and Back redrew the
+signed-in page (reproduced in Chromium for School Admin, Student,
+Guardian, HR & Payroll, a no-School session and Platform Admin; the HR
+employee list JSON stayed in the document after a filter).
+
+**Unchanged:** JSON and `/api/*` requests keep `401` (and `419`) with
+their existing bodies; `403` authorization denials, `422`, `429` and
+`5xx` are untouched; guests still get a `302` to `/login`. The server
+cannot tell an ended session from no session, so every unauthenticated
+web request carries the clear-history flag -- for a real guest there is
+no key to clear. A plain page load (`<a href>`, a bookmark) gets no
+"session ended" notice, since it may not come from an open page.
+
+Remaining limits: the page stays as it was until its next request (see
+the table); in-page `fetch()` helpers that call JSON endpoints show
+their own error on `401`/`419`, and the next Inertia navigation then
+performs the transition; the "Browser-internal retention" note above
+applies equally here.
+
+Tests: `tests/Feature/Auth/SessionEndedHistoryPrivacyTest.php`; the
+real browser check is in `docs/development/DDEV-DEMO-REVIEW.md`.
 
 ## What is NOT yet implemented
 

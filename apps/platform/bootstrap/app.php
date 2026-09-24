@@ -12,6 +12,7 @@ use App\Http\Middleware\PreventAuthenticatedPageCaching;
 use App\Http\Middleware\RequireMfa;
 use App\Http\Middleware\ResolveSchoolContext;
 use App\Http\Middleware\VerifyAiGatewayServiceToken;
+use App\Support\Auth\SessionEndedResponder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -134,4 +135,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 ],
             ], $status, $headers);
         });
+
+        // A signed-in browser page whose session ended without logout
+        // (expired, or signed out elsewhere): hard navigation to a fresh
+        // /login document with Inertia history cleared, like an explicit
+        // logout. Web (non-JSON) requests only; see its docblock.
+        $exceptions->render(fn (Throwable $e, Request $request) => app(SessionEndedResponder::class)->render($e, $request));
     })->create();

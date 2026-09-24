@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\MfaChallengeService;
+use App\Support\Auth\SessionEndedResponder;
 use App\Support\Demo\DemoLoginPanel;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
@@ -43,12 +44,15 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
  */
 class LoginController extends Controller
 {
-    public function create(DemoLoginPanel $demoPanel): Response
+    public function create(Request $request, DemoLoginPanel $demoPanel): Response
     {
         // `demo` is null everywhere except a local DDEV demo environment
         // (see DemoLoginPanel); it only prefills this same form.
+        // `sessionEnded` is a one-request flash set when an open signed-in
+        // page found its session gone (SessionEndedResponder).
         return Inertia::render('Auth/Login', [
             'demo' => $demoPanel->forCurrentEnvironment(),
+            'sessionEnded' => $request->session()->get(SessionEndedResponder::FLASH_KEY) === true,
         ]);
     }
 
