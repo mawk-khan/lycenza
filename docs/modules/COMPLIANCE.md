@@ -5,7 +5,9 @@ review (Phase 0L.4, §8).** Decision record: ADR 0042
 (`docs/architecture/adr/0042-compliance-domain-contract.md`, including
 its 2026-09-24 Phase 0L.4 amendment). This document is the living
 reference: what exists, the boundary in detail, the open gates and the
-plan. Compliance owns no table, migration or capability seed.
+plan. Compliance owns no table, migration or capability seed. Phase 0L
+closed on 2026-09-24 (`docs/architecture/PHASE-0L-CLOSEOUT.md`); the §6
+candidates remain gated and unscheduled.
 
 ## 1. Scope in one paragraph
 

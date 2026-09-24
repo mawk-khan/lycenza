@@ -1071,6 +1071,19 @@ domain retry) and audit — not general Automation. Also fixed a latent
 `FeatureFlagResolver` worker-scope defect. **A full regression
 checkpoint is required before the next development unit.**
 
+**Phase 0L — Oversight: COMPLETE (2026-09-24).** Each Layer 5 module has
+a published contract and foundation: Analytics (0L.1/0L.2), Compliance
+(0L.3/0L.4), Automation (0L.5/0L.6). The full regression after 0L.6
+passed at `8a9825f` (5,457 tests, 0 failures, only the ESI-12 legal
+skip). Everything not built is optional future scope or blocked on a
+recorded decision — person-counting Analytics (gate 7.1–7.4), Compliance
+retention/legal holds/data-subject requests/statutory reporting, and
+Automation tiers 1–3 among them — and none is scheduled. Closeout,
+matrix, gates and known debt:
+`docs/architecture/PHASE-0L-CLOSEOUT.md`. Next dependency: Phase 0M,
+gated on the provider data-handling legal/compliance review; its
+readiness-gate document is the next task, not Phase 0M itself.
+
 ## Phase 0M — AI Platform: Real Agents
 
 First real model-provider integration (ADR 0013, with the
