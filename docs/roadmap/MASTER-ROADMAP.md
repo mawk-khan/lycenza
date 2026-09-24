@@ -1208,6 +1208,20 @@ against real concurrent processes). A School may belong to several Groups.
 **Zero** School routes accept elevated context. Phase 0N stays **BLOCKED**
 on D11, D12, D13, D15 and D16.
 
+**Phase 0N.6 — Platform Authority & Audit Governance Contract (done,
+2026-09-24, documentation only).** The owner approved D12 and D16;
+**ADR 0046** records: `platform_super_admin` as the root/bootstrap role,
+never granted or revoked in-app; School creation root-only (its meaning
+stays D11); runtime-assignable, code-approved non-root platform roles
+only — v1 `platform_auditor` — with no self-grant and root-reserved
+capabilities (`platform.role_grants.manage`, `platform.schools.manage`);
+history-keeping platform role grants; and the platform audit review
+(`platform.audit.view`, context-neutral, Highly Sensitive, seven envelope
+fields, empty metadata allowlist, keyset paging, one
+`platform.audit_log.viewed` event per review, no export). Proposed next:
+Phase 0N.7 Platform Authority & Audit Foundation. Phase 0N stays
+**BLOCKED** on D11, D13 and D15.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,

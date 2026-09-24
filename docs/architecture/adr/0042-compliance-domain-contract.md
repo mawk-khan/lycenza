@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-24 (Phase 0L.3)
+- See also: ADR 0046 (resolves §13 item 2 — platform audit review: `platform.audit.view`, a separate platform-ledger viewer; `compliance.platform.view` stays reserved for §13 item 9)
 
 ## Context
 
