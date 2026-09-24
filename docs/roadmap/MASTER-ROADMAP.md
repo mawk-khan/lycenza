@@ -1038,6 +1038,26 @@ or cross-School view. The page does not assert legal compliance. No
 further Compliance checkpoint is scheduled: the remaining candidates
 (`COMPLIANCE.md` §6) are each blocked on their own gates.
 
+**Phase 0L.5 (2026-09-24): Automation Domain Contract frozen, zero
+implementation.** The product owner set the number and title; ADR 0043
+(`docs/architecture/adr/0043-automation-domain-contract.md`) is the
+decision record and `docs/modules/AUTOMATION.md` the living reference.
+Automation runs code-catalogued, School-scoped rules (one domain-event or
+schedule trigger, one fixed condition over source read contracts, one
+action through an approved Application-layer entry point); Schools
+enable and own rule instances but never author rules. Executions act as
+the rule's accountable owner, re-verified every run and limited to the
+action's declared capability — no new principal, no service identity.
+Only informational review items are allowed in v1; internal
+notifications and automation-safe source commands are gated;
+approval-required actions are out of v1; financial, payroll,
+student/employee status, grants, deletion, consent, external or
+Emergency communications are prohibited. `automation.*` reserved, not
+seeded; execution-log retention **[LEGAL/POLICY REVIEW REQUIRED]**.
+**Proposed next (not started, number to be assigned): Automation
+Foundation**, blocked on the owner decisions in `AUTOMATION.md` §5 (first
+rule type, roles, authority-model confirmation, opt-in).
+
 ## Phase 0M — AI Platform: Real Agents
 
 First real model-provider integration (ADR 0013, with the
