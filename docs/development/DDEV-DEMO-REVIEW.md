@@ -224,6 +224,15 @@ logout, `no-store` on signed-in pages). The check needs HTTPS
 (`https://lycenza.ddev.site`); Inertia's history encryption is
 unavailable on a plain-HTTP origin.
 
+**When a session ends without Log out** (it expired after
+`SESSION_LIFETIME` minutes of inactivity, or was signed out in another
+tab), the open page stays as it is until it next talks to the server.
+The next click, filter or form then loads a fresh login screen that says
+"Your session has ended. Please sign in again.", and Back/Forward must
+not reveal the previous account's page. To review this without waiting
+two hours, sign in in one tab, sign out in a second tab of the same
+browser, then use the first tab.
+
 The product's login limiter allows **6 sign-in attempts per minute per
 IP** -- switching accounts very quickly shows "Too Many Attempts"; wait a
 minute.

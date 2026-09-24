@@ -233,9 +233,12 @@ class PostLogoutHistoryPrivacyTest extends TestCase
     public function a_guest_logout_request_is_unchanged(): void
     {
         // Not signed in: the `auth` middleware answers before the
-        // controller runs -- no hard navigation, no audit, no flag.
+        // controller runs -- the same plain redirect, no audit. Like every
+        // unauthenticated web request it carries Inertia's clear-history
+        // flag (SessionEndedResponder: the server cannot tell an ended
+        // session from none; for a real guest there is no key to clear).
         $this->post('/logout')->assertRedirect('/login');
-        $this->assertNull(session(SessionKey::CLEAR_HISTORY));
+        $this->assertTrue(session(SessionKey::CLEAR_HISTORY));
         $this->assertSame(0, PlatformAuditEvent::query()->where('event_type', 'auth.logout')->count());
     }
 

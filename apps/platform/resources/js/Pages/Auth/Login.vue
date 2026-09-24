@@ -15,6 +15,9 @@ interface DemoAccount {
 // in still goes through the normal POST /login.
 const props = defineProps<{
     demo?: { password: string; accounts: DemoAccount[] } | null;
+    // True for one page load after an open signed-in page found its
+    // session gone (expired, or signed out elsewhere).
+    sessionEnded?: boolean;
 }>();
 
 const form = useForm({
@@ -52,6 +55,15 @@ function submit() {
 <template>
     <main class="mx-auto max-w-sm p-8 font-sans text-slate-900">
         <h1 class="text-xl font-semibold">Sign in</h1>
+
+        <p
+            v-if="sessionEnded"
+            role="status"
+            class="mt-4 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700"
+            data-testid="session-ended"
+        >
+            Your session has ended. Please sign in again.
+        </p>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
