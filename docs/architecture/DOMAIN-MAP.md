@@ -131,7 +131,7 @@ is complete (2026-09-24); remaining capabilities are gated —
 | Module | Owns | Depends on | Notes |
 |---|---|---|---|
 | **Integrations** | Third-party adapters (payment gateways, SMS/WhatsApp providers, government/board systems) — ADR 0018 | Calls into the owning module's Infrastructure-layer adapter (e.g. Payments' gateway adapter), never bypasses it | |
-| **AI Platform** | AI Gateway, agents, tools (ADR 0013, 0014) — lives in `services/ai`, outside the Laravel monolith entirely | Calls Laravel only through explicitly exposed AI-tool contracts | The one module that is architecturally a separate service, not a Laravel module. |
+| **AI Platform** | AI Gateway, agents, tools (ADR 0013, 0014) — lives in `services/ai`, outside the Laravel monolith entirely | Calls Laravel only through explicitly exposed AI-tool contracts | The one module that is architecturally a separate service, not a Laravel module. Only the offline `NullProvider` exists; Phase 0M (real provider, real agent) is **BLOCKED** on the decisions in `docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`. |
 | **Multi-School Management** | Group/Trust entities, cross-school administration, group-level reporting | Schools, Identity & Access (for the explicit elevated-access grants ADR 0004 describes) | Sits "above" the tenant boundary, not inside it. |
 
 ## Rules this map enforces
