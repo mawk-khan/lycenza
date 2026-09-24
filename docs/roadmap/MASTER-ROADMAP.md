@@ -1178,6 +1178,20 @@ routes accept elevated context: an elevated Platform Admin gets 403 on
 every School page and API route. Phase 0N stays **BLOCKED** on D1, D11,
 D12, D13, D15, D16 and D18.
 
+**Phase 0N.4 — Group/Trust Governance Contract (done, 2026-09-24,
+documentation only).** The owner approved D1 and D18; **ADR 0045**
+records a distinct Group scope (`group` roles, `group.*` capabilities, a
+new `group_role_assignments` grant — never a platform role, School role or
+membership), Group authority that grants no School capability,
+platform-governed Group membership and grants (a Group Admin changes
+neither; no self-grants), multiple Groups per School with single-Group
+attribution, Group archive instead of deletion, and Group-derived School
+entry only through ADR 0044 elevation recording the authorizing Group and
+grant, ended immediately by removal, revocation or archive. No
+cross-School reporting. Proposed next: Phase 0N.5 Group Authority
+Foundation, gated on classifying Group records (ADR 0045 §13a). Phase 0N
+stays **BLOCKED** on D11, D12, D13, D15 and D16.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,

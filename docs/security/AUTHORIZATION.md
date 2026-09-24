@@ -28,7 +28,7 @@ builds it (`docs/architecture/DOMAIN-MAP.md` Layer 0).
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|
 | Platform Super Admin | Human, platform staff | Cross-tenant | Operates through a dedicated, audited administrative path (`docs/architecture/TENANCY.md`) — not a permanent "bypass tenant scoping" flag in normal application code. Entering one School is a temporary, explicit elevation that grants no School capability (ADR 0044; substrate built in Phase 0N.3, no School page opens under it yet). |
-| School Group Admin | Human | One School Group's member schools | Cross-school access within a group is an explicit, granted, audited elevation (ADR 0004) — not automatic from group membership alone. |
+| School Group Admin | Human | One School Group's member schools | Cross-school access within a group is an explicit, granted, audited elevation (ADR 0004) — not automatic from group membership alone. Contracted in ADR 0045 (not built): a distinct Group scope with its own grant (`group_role_assignments`) and `group.*` capabilities, granting no School capability; School entry only through ADR 0044 elevation; Group membership and grants are platform-governed. |
 | School Admin | Human | One School (all campuses) | |
 | Principal / Vice Principal | Human | One School (or one Campus, per school configuration) | |
 | Academic Coordinator | Human | One School/Campus, academic-domain capabilities | |
@@ -368,6 +368,21 @@ School pages are gated by membership or context rather than by a
 capability. Start, end, expiry, forced termination and denied attempts
 are audited in the platform ledger. Web session only; never `/api/v1`.
 See ADR 0044 for the full contract.
+
+## Group/Trust scope (ADR 0045 — contract, not built)
+
+A third authorization scope beside platform and School: `group`-scoped
+roles held through `group_role_assignments` (one Group per grant, never
+self-granted, revocation kept as history) and `group.*` capabilities —
+v1 has only `group.schools.view` and `group.schools.elevate`. A Group
+grant never satisfies a platform or School capability check, and
+`CapabilityResolver`'s platform and School sides never read it. Changing
+which Schools belong to a Group, and who holds Group authority, is
+platform-governed (`platform.school_groups.*`,
+`platform.school_group_grants.manage`, not seeded); a Group Admin can
+change neither. Platform Super Admin is not implicitly a Group Admin. An
+ordinary member of several Schools holds no Group authority. See
+ADR 0045.
 
 ## What is NOT yet implemented
 
