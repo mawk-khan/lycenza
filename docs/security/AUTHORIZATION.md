@@ -200,6 +200,38 @@ able to falsely establish or destroy the basis that gates a future
 StudentMark checkpoint's processing. Full detail in ADR 0038 and
 `docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md`.
 
+## After logout: no signed-in page is redrawn from the browser
+
+`POST /logout` (`LoginController::destroy()`) destroys the server
+session (audit `auth.logout`, logout, session invalidation, CSRF token
+regeneration, redirect to `/login`). That alone does not stop the
+browser from redrawing a page it already holds, so three separate
+browser mechanisms are closed as well:
+
+| Mechanism | What kept the old page | Control |
+|---|---|---|
+| Inertia history state | Inertia stores each visited page's props in `history.state`; Back within the same document redraws them without a request. | Every Inertia response for a signed-in user sets `encryptHistory` (`HandleInertiaRequests::handle()`, Inertia's documented history encryption; the key lives in the tab's `sessionStorage`). `destroy()` calls `Inertia::clearHistory()` **after** `session()->invalidate()` so the flag survives into the new session; the `/login` response carries `clearHistory`, the client deletes the key, and Back/Forward to an encrypted entry fails to decrypt and re-requests the URL, which the server redirects to `/login`. Guest pages are not encrypted. |
+| Back/forward cache | Chrome restored earlier full documents (`pageshow` with `persisted`) with the account bar still rendered -- including a document that *started* as the guest login page and became the signed-in app through Inertia's in-page sign-in. | `App\Http\Middleware\PreventAuthenticatedPageCaching` (web group) sends `Cache-Control: no-store, private` on HTML and Inertia page responses for a signed-in user; the three guest pages a sign-in happens on (`/login`, `/login/mfa`, `/invitations/{school}/{token}`) use the existing `private-no-store` route middleware. Chrome then refuses the restore (`MainResourceHasCacheControlNoStore`, `CacheControlNoStoreHTTPOnlyCookieModified`). Inertia's own `pageshow` re-validation is a second line. |
+| HTTP cache | Laravel's default `no-cache, private` still allows a browser to store the document (with its embedded page props) on disk. | Same `no-store, private` header. Every other guest page, redirects, file downloads and plain JSON keep the framework default. |
+
+Web 403 pages are Blade, not Inertia, and show the account's email: they
+are covered by the same `no-store` header, and Chrome does not
+back/forward-cache a non-2xx document. The history encryption requires a
+secure context (HTTPS; `window.crypto.subtle`), which every non-local
+deployment has.
+
+Not covered: a session that simply expires (no logout) leaves the tab's
+history key in place, so Back in that tab can still redraw pages the
+user saw; signing out is the supported way to leave a shared device.
+Logout stays an ordinary redirect, so the tab's current document lives
+on (now showing `/login`): its initial Inertia page JSON (the
+`<script data-page>` element of the first page loaded in that document)
+is not displayed but remains readable in developer tools until the tab
+navigates with a full page load.
+
+Tests: `tests/Feature/Auth/PostLogoutHistoryPrivacyTest.php`; the real
+browser check is in `docs/development/DDEV-DEMO-REVIEW.md`.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles, a UI for managing role assignments (only the data

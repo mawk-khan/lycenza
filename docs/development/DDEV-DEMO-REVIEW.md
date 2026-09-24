@@ -210,7 +210,18 @@ JS bundle contains no credentials. Only accounts that exist are listed
 To switch persona, use **Log out** in the account bar at the top of every
 signed-in page (it shows the account's name and email, whether or not a
 School is selected; 403 pages carry their own Log out button). Signing
-out returns to the login page, where the shortcuts can be used again.
+out returns to the login page, where the shortcuts can be used again:
+
+Log out → login screen → browser **Back** must not reveal the previous
+account's page (it lands on the login screen again; Forward likewise) →
+choose another demo persona.
+
+If Back ever shows the previous name/email or page data after logout,
+that is a privacy defect, not a demo quirk: see "After logout" in
+`docs/security/AUTHORIZATION.md` (encrypted Inertia history cleared on
+logout, `no-store` on signed-in pages). The check needs HTTPS
+(`https://lycenza.ddev.site`); Inertia's history encryption is
+unavailable on a plain-HTTP origin.
 
 The product's login limiter allows **6 sign-in attempts per minute per
 IP** -- switching accounts very quickly shows "Too Many Attempts"; wait a

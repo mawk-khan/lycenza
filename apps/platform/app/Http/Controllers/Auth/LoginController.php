@@ -126,6 +126,12 @@ class LoginController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
+        // After invalidate(), so the flag lands in the NEW session: the
+        // /login page this redirects to tells Inertia to drop its history
+        // encryption key, and Back can no longer decrypt (redraw) any
+        // signed-in page (HandleInertiaRequests encrypts them).
+        Inertia::clearHistory();
+
         return redirect('/login');
     }
 }
