@@ -37,8 +37,14 @@ use Tests\TestCase;
  *   pages a sign-in happens on (whose document then holds signed-in
  *   state) use the existing `private-no-store` route middleware.
  *
- * Browser Back itself cannot be simulated here; it is verified with a
- * real Chromium run (docs/development/DDEV-DEMO-REVIEW.md).
+ * - The signed-in document itself: an Inertia logout is a hard
+ *   navigation (Inertia::location(), 409 + X-Inertia-Location), so the
+ *   browser loads a fresh guest /login document and the old one -- its
+ *   initial page JSON and JavaScript memory -- is discarded.
+ *
+ * Browser Back and document/memory disposal cannot be simulated here;
+ * they are verified with a real Chromium run
+ * (docs/development/DDEV-DEMO-REVIEW.md).
  */
 class PostLogoutHistoryPrivacyTest extends TestCase
 {
@@ -167,19 +173,70 @@ class PostLogoutHistoryPrivacyTest extends TestCase
     }
 
     #[Test]
-    public function an_inertia_logout_lands_on_a_login_page_that_clears_history(): void
+    public function an_inertia_logout_is_a_hard_navigation_to_a_fresh_login_document(): void
     {
         $this->build();
 
-        $this->actingAs($this->user('hr.payroll@example.test'));
-        $this->post('/logout', [], $this->inertiaHeaders())->assertRedirect('/login');
-        $this->assertGuest();
+        $this->post('/login', ['email' => 'hr.payroll@example.test', 'password' => DemoDataBuilder::DEMO_PASSWORD])
+            ->assertRedirect('/app');
+        $user = $this->user('hr.payroll@example.test');
+        $tokenBefore = session()->token();
+        $sessionBefore = session()->getId();
 
-        $login = $this->get('/login', $this->inertiaHeaders())->assertOk();
-        $this->assertSame('Auth/Login', $login->json('component'));
-        $this->assertTrue($login->json('clearHistory'));
-        $this->assertNull($login->json('encryptHistory'));
-        $this->assertNull($login->json('props.auth.user'));
+        // Inertia's hard-navigation response: the client replaces the
+        // signed-in document with a real top-level load of /login
+        // (window.location), instead of swapping the page in place.
+        $response = $this->post('/logout', [], $this->inertiaHeaders())
+            ->assertStatus(409)
+            ->assertHeader('X-Inertia-Location', url('/login'))
+            ->assertHeaderMissing('Location');
+        $this->assertSame('', $response->getContent());
+
+        // Every existing logout guarantee still holds.
+        $this->assertGuest();
+        $this->assertNotSame($tokenBefore, session()->token());
+        $this->assertNotSame($sessionBefore, session()->getId());
+        $this->assertSame(1, PlatformAuditEvent::query()->where('event_type', 'auth.logout')->where('actor_user_id', $user->id)->count());
+        $this->assertTrue(session(SessionKey::CLEAR_HISTORY));
+
+        // The browser's top-level load of /login (not an Inertia XHR) is a
+        // fresh guest document that tells Inertia to clear history.
+        $login = $this->get('/login')->assertOk();
+        $this->assertSame('Auth/Login', $this->page($login)['component']);
+        $this->assertTrue($this->page($login)['clearHistory'] ?? false);
+        $this->assertArrayNotHasKey('encryptHistory', $this->page($login));
+        $this->assertNull($this->page($login)['props']['auth']['user']);
+        $this->assertNoStore($login);
+
+        $this->get('/app')->assertRedirect('/login');
+    }
+
+    #[Test]
+    public function an_ordinary_form_logout_is_still_a_plain_redirect_to_login(): void
+    {
+        $this->build();
+        $student = $this->user('student@example.test');
+
+        // No X-Inertia header: the Blade 403 page's form, or any browser
+        // without JavaScript. The form submission is itself a navigation.
+        $this->actingAs($student)->post('/logout')
+            ->assertStatus(302)
+            ->assertRedirect('/login')
+            ->assertHeaderMissing('X-Inertia-Location');
+
+        $this->assertGuest();
+        $this->assertSame(1, PlatformAuditEvent::query()->where('event_type', 'auth.logout')->where('actor_user_id', $student->id)->count());
+        $this->assertTrue($this->page($this->get('/login')->assertOk())['clearHistory'] ?? false);
+    }
+
+    #[Test]
+    public function a_guest_logout_request_is_unchanged(): void
+    {
+        // Not signed in: the `auth` middleware answers before the
+        // controller runs -- no hard navigation, no audit, no flag.
+        $this->post('/logout')->assertRedirect('/login');
+        $this->assertNull(session(SessionKey::CLEAR_HISTORY));
+        $this->assertSame(0, PlatformAuditEvent::query()->where('event_type', 'auth.logout')->count());
     }
 
     #[Test]

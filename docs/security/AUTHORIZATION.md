@@ -220,14 +220,38 @@ back/forward-cache a non-2xx document. The history encryption requires a
 secure context (HTTPS; `window.crypto.subtle`), which every non-local
 deployment has.
 
-Not covered: a session that simply expires (no logout) leaves the tab's
-history key in place, so Back in that tab can still redraw pages the
-user saw; signing out is the supported way to leave a shared device.
-Logout stays an ordinary redirect, so the tab's current document lives
-on (now showing `/login`): its initial Inertia page JSON (the
-`<script data-page>` element of the first page loaded in that document)
-is not displayed but remains readable in developer tools until the tab
-navigates with a full page load.
+**The signed-in document itself is replaced.** A normal redirect would
+let Inertia swap `/login` into the *same* document, which then kept the
+first page's JSON in its `<script data-page>` element and the page
+objects in JavaScript memory -- invisible, but readable in developer
+tools (verified: user id, name, student numbers/names, employee numbers
+after logging out from `/app/students` and `/app/hr/employees`). So
+`destroy()` returns `Inertia::location(redirect('/login'))`: an Inertia
+logout gets `409` + `X-Inertia-Location`, the client sets
+`window.location` and the browser does a real top-level load of a fresh
+guest `/login` document. A non-Inertia form logout (the Blade 403 page,
+no JavaScript) still gets the same plain `302` to `/login`, which is
+already a navigation.
+
+Known limits, deliberately not addressed by these controls:
+
+- **Natural session expiry.** A session that expires without an
+  explicit logout never sends `clearHistory`, so the tab keeps its
+  history key: Back within that tab can still decrypt and redraw pages
+  the user saw, without contacting the server, until some server
+  interaction (a visit, a form, a reload) detects the expired session
+  and redirects to `/login`. Signing out is the supported way to leave a
+  shared device; handling expiry is a separate, not-yet-started unit.
+- **Browser-internal retention.** With Chrome's back/forward cache
+  enabled, Chrome may keep the previous signed-in document in memory
+  after the logout navigation even though it is `no-store`. It is never
+  the active document, page JavaScript cannot reach it, and Chrome
+  refuses to restore it (`CacheControlNoStoreHTTPOnlyCookieModified`),
+  evicting it at the first Back/Forward attempt (or on its own timeout).
+  Until then its strings are visible only in a developer-tools heap
+  snapshot of the renderer. `Clear-Site-Data: "cache"` on the post-logout
+  `/login` load was tried and does not evict it; there is no
+  server-side control for this.
 
 Tests: `tests/Feature/Auth/PostLogoutHistoryPrivacyTest.php`; the real
 browser check is in `docs/development/DDEV-DEMO-REVIEW.md`.
