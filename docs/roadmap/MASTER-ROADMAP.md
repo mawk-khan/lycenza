@@ -1125,6 +1125,17 @@ foundation (`school_groups`, `school_group_members`) — the actual
 still unbuilt after Phase 0B, deliberately (see that phase's own
 summary above).
 
+**Readiness audit recorded 2026-09-24 — BLOCKED.**
+`docs/architecture/PHASE-0N-READINESS.md` records what exists (multi-School
+membership and switching, RLS with no runtime bypass, a Platform Super
+Admin with capabilities but no School scope and no UI, group tables with
+no behaviour), that the elevation workflow, group principal model and
+group reporting are unspecified, and the architecture, product and
+security decisions required first. It also records a prerequisite found
+during the audit: with no School selected — every user after sign-in —
+135 of 141 School pages return 500. The proposed first checkpoint fixes
+that and adds a platform-scope landing, without elevation. Not started.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,
