@@ -1,0 +1,491 @@
+# Phase 0N — Multi-School Management: Readiness Audit
+
+**Status: BLOCKED — ARCHITECTURE / PRODUCT / SECURITY DECISIONS REQUIRED
+(recorded 2026-09-24, baseline `0d4fc9a`).** No elevation into a School,
+group/trust administration, cross-School reporting or platform School
+management may be built until the decisions in section 15 are recorded.
+This document states what exists and what must be decided; it decides
+nothing and changes no code. Phase 0M (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
+is independent and remains BLOCKED.
+
+Sources: `docs/roadmap/MASTER-ROADMAP.md` ("Phase 0B", "Phase 0N — Multi-School
+Management"), `docs/architecture/DOMAIN-MAP.md` (Layer 6 "Multi-School
+Management"), ADR 0004 (tenant isolation), ADR 0017 (audit), ADR 0020,
+ADR 0021 (runtime vs migration roles), ADR 0022 (context propagation),
+ADR 0037 (MFA), ADR 0040/0042/0043 (Layer 5 cross-School deferrals),
+`docs/architecture/TENANCY.md`, `docs/security/AUTHORIZATION.md`,
+`docs/security/DATA-CLASSIFICATION.md`, `docs/modules/ORGANIZATION.md`,
+`docs/modules/HR.md` ("Platform / privileged actor"),
+`docs/architecture/PHASE-0L-CLOSEOUT.md`, `docs/development/DDEV-DEMO-REVIEW.md`.
+Every "current state" claim below was checked against code, the schema
+and a running DDEV instance (section 18).
+
+## 1. Title and repository-defined scope
+
+**Exact title** (roadmap): *Phase 0N — Multi-School Management.*
+
+**Exact scope** (roadmap, verbatim): *"Group/Trust cross-school
+administration and reporting, building on Phase 0B's explicit-elevation
+model (ADR 0004) and its structural foundation (`school_groups`,
+`school_group_members`) — the actual 'enter a member School's context as
+a group/platform admin' workflow is still unbuilt after Phase 0B,
+deliberately."*
+
+DOMAIN-MAP (Layer 6): owns *"Group/Trust entities, cross-school
+administration, group-level reporting"*; depends on Schools and Identity
+& Access *"for the explicit elevated-access grants ADR 0004 describes"*;
+*"Sits 'above' the tenant boundary, not inside it."*
+
+| Requirement | Repository source | Current state | Missing work / blocker |
+|---|---|---|---|
+| Group/Trust entities | ADR 0004; DOMAIN-MAP; Phase 0B | `school_groups`, `school_group_members` tables and `App\Models\SchoolGroup` exist; no service, route, capability, UI or seed data (0 rows in DDEV) | Group administration model (D1, D18) |
+| Cross-school administration by a group admin | ADR 0004 ("explicit, granted, audited elevation, never a default"); AUTHORIZATION.md actor table ("School Group Admin") | No group-scoped principal exists. `roles.scope` is `platform` or `school` only, enforced by database triggers on both assignment tables | Principal and grant model (D1); elevation design (D2–D8) |
+| "Enter a member School's context as a group/platform admin" | Roadmap Phase 0B and 0N; TENANCY.md "What is NOT yet implemented"; AUTHORIZATION.md "What is NOT yet implemented" | Deliberately unbuilt. `CapabilityResolverTest::platform_capability_grant_does_not_imply_school_capability` proves the absence | Elevation controls are not specified anywhere (section 5) |
+| Group-level reporting | Roadmap; DOMAIN-MAP | None. ADR 0040 §4, ADR 0042 and ADR 0043 each defer cross-School reads to their own future ADR | A cross-School read ADR (D15) |
+| Platform Super Admin "dedicated, audited administrative path" | ADR 0004; TENANCY.md; AUTHORIZATION.md | Capabilities only; two platform actions exist (section 4) | Landing and scope of platform administration (D9, D11–D13) |
+| School tenant lifecycle as a platform action | ORGANIZATION.md (`schools.status` is "a platform-administration concern … not built") | `active`/`suspended`/`archived` column; no code writes it | Lifecycle semantics (D11) — not named in the 0N roadmap entry, but it is the only home ORGANIZATION.md gives it |
+
+The roadmap does not put School creation, a platform School directory,
+platform membership administration or School deletion in Phase 0N by
+name. Section 13–14 record where they would belong if the owner adds them.
+
+## 2. Four different things
+
+The repository treats these as separate; they must not be merged.
+
+| | What it is | Exists today | In Phase 0N? |
+|---|---|---|---|
+| **A. Multi-School membership** | A person is a real member of several Schools and selects one | Yes (section 3) | No — already built in Phase 0B. Its no-School failure (section 11) is the prerequisite fix. |
+| **B. Platform administration** | A platform operator manages Schools and platform settings without being a School member | Capabilities and two actions only | Partly: the roadmap says the "dedicated, audited administrative path" is the one elevation builds on. Which platform operations belong in 0N is D9/D11–D13. |
+| **C. Cross-School reporting** | Reading data from more than one School at once | No (only operational counters, section 6) | Named by the roadmap ("group-level reporting"), but every Layer 5 ADR requires its own cross-School ADR first (D15). |
+| **D. Elevation / entering a School** | Temporarily acting inside a School's context under explicit privileged authority | No | Yes — the roadmap's core item. Fully unspecified (section 5). |
+
+## 3. Existing multi-School behaviour
+
+| Capability / behaviour | Exists? | Production-ready? | Evidence | Limitation |
+|---|---|---|---|---|
+| A User in several Schools | Yes | Yes | `school_memberships` (central, `unique(user_id, school_id)`, status `invited`/`active`/`suspended`); DDEV `multi.school@example.test` is `principal` at Demo School and `school_admin` at Annexe | No staff membership administration exists (section 14) |
+| School roles per membership | Yes | Yes | `membership_role_assignments` (RLS, composite FK to the membership, trigger rejects non-`school` roles) | System roles only; no role UI |
+| Selecting the active School (web) | Yes | Yes | `POST /app/schools/{school}/activate` (`app.schools.activate`, `SchoolSwitchController`): requires an active membership and an active School, regenerates the session, audits `school_context.activated` in `platform_audit_events` | A refused selection is not audited (validation error only) |
+| Session School context | Yes | Yes | `ResolveSchoolContext` re-validates `session('active_school_id')` against an active membership and `School::isActive()` on every request; a stale value resolves to no School | Nothing selects a School at login (every user starts with none) |
+| Verified-domain School resolution | Yes | Yes | `school_domains` with `verified_at` | No domains in DDEV |
+| API School context | Yes | Yes | `/api/v1/schools/{school}/…` with `school-membership` (`EnsureSchoolMembershipContext`): non-member or inactive School → 404 | — |
+| School selection dashboard | Yes | Minimal | `/app` (`DashboardController`, `App/Dashboard.vue`) lists active memberships and activates one | Deliberately a Phase 0B primitive |
+| `TenantContext` | Yes | Yes | One School (+ optional Campus) per unit of work; `set()` issues `set_config('app.current_school_id', …)`; `requireSchool()` throws `TenantContextRequiredException` | Single School by design (section 6) |
+| RLS | Yes | Yes | 144 tables with RLS enabled and forced; runtime role `school_os_app` is `NOSUPERUSER NOBYPASSRLS` (checked in DDEV and by `RawIsolationTest`) | — |
+| Cross-School record isolation | Yes | Yes | DDEV: multi.school with Annexe selected — own student 200, Demo School student 404; annexe.admin selecting Demo School — refused | — |
+| Behaviour before a School is selected | Broken | **No** | 135 of 141 School page routes return 500 (section 11) | Prerequisite fix |
+| Platform Super Admin | Partly | Foundation only | Section 4 | No landing, no School scope |
+| School Groups | Tables only | No | Section 1 | No behaviour at all |
+
+## 4. Platform Super Admin today
+
+- **Meaning.** A `platform`-scoped role (`platform_super_admin`) in
+  `platform_role_assignments` holding the eight `platform.*`
+  capabilities: `platform.schools.view`, `platform.schools.manage`,
+  `platform.feature_flags.view`/`.manage`,
+  `platform.service_identities.view`/`.manage`,
+  `platform.operations.view`, `platform.users.mfa.reset`.
+- **What uses them.** Only two: `platform.operations.view`
+  (`GET /api/internal/operations/status`, plus the local/testing-only
+  `/internal/mfa-demo/ping`) and `platform.users.mfa.reset`
+  (`POST /app/account/admin/users/{targetUser}/mfa/reset`, no page).
+  `platform.schools.manage` feeds only an unused dashboard nav flag
+  (`canManagePlatformSchools`, never rendered). The other five are held
+  by no route.
+- **UI.** None. `/app` shows "None selected" and no School list;
+  `/app/account/security` works.
+- **School membership.** None (DDEV `platform.admin@example.test`).
+  `CapabilityResolver` resolves platform and School capabilities
+  separately and never merges them; `can()` returns false for any
+  non-`platform.*` capability without a School.
+- **Entering a School.** Not possible. `SchoolSwitchController` requires
+  a membership; DDEV: platform admin posting activate for Demo School →
+  refused, still no School. There is no elevation mechanism.
+- **Database privilege.** None. The runtime role has no `BYPASSRLS` and
+  no superuser (ADR 0021, CLAUDE.md rule 26); platform admin is an
+  application-layer capability only.
+- **Ordinary School routes.** 135 of 141 return **500**, 3 return 403
+  (section 11) — the known behaviour recorded in `DDEV-DEMO-REVIEW.md`.
+- **MFA.** No platform action requires MFA assurance (only the
+  local-only demo route composes `mfa`).
+- **Belongs in 0N?** Yes, as its first step: the roadmap builds
+  elevation on the Platform Super Admin's "dedicated, audited
+  administrative path", which does not exist yet. A platform-scope
+  landing is part of making platform and School contexts explicit
+  (section 17). The 500 itself is not platform-specific (section 11).
+
+## 5. The cross-School elevation prerequisite
+
+**Where it is defined.** ADR 0004 (group admin's cross-school access is
+"an explicit, granted, audited elevation, never a default"; Platform
+Super Admin is "a separate, explicitly audited path (not a 'bypass RLS'
+flag …)"); TENANCY.md tenant model and "What is NOT yet implemented";
+AUTHORIZATION.md actor table and "What is NOT yet implemented"; roadmap
+Phase 0B ("no invisible cross-tenant bypass") and Phase 0N; the
+`school_group_members` migration ("grants no access by itself …
+platform_role_assignments / a future group-scoped role"); HR.md,
+ADR 0042 §3 and ADR 0043 (each confirms no module invented its own
+bypass and "entering a School's context remains the unbuilt, audited
+elevation path").
+
+**Why School switching is not enough.** Switching requires a real, active
+membership with School roles and gives exactly that membership's
+capabilities. A platform or group operator has no membership, so there is
+nothing to switch to — and giving them one silently would be the
+"invisible cross-tenant bypass" the Phase 0B brief forbade.
+
+**What the repository specifies vs leaves open.**
+
+| Property | Repository says | Status |
+|---|---|---|
+| Explicit (never implicit, never a default) | ADR 0004, TENANCY.md, AUTHORIZATION.md | **Required** |
+| Granted (a real grant, not inferred from group membership or platform role) | ADR 0004; `school_group_members` migration | **Required**; the grant model is open (D1) |
+| Audited | ADR 0004; ADR 0017 (permission grants always audited) | **Required**; event set open (section 8) |
+| No RLS bypass, no superuser, no `pgsql_admin` use | ADR 0021; CLAUDE.md rule 26; ADR 0040 §4 | **Required** |
+| Capability-gated | AUTHORIZATION.md (every protected operation) | **Required**; capability names open (section 7) |
+| Whether platform admins (not only group admins) may elevate | ADR 0004/TENANCY.md imply a platform path exists; nothing states it may reach School data | **Open** (D2) |
+| Reason / reason code | — | **Open** (D4) |
+| Explicit confirmation step | — | **Open** (D4) |
+| Time limit and automatic exit | — | **Open** (D4) |
+| MFA | ADR 0037 built MFA as a prerequisite for Highly Sensitive capabilities; no rule for platform actions | **Open** (D5) |
+| Second-person approval | — | **Open** (D6) |
+| Banner / visible indication | — | **Open** (D4) |
+| Prohibited or restricted domains | AUTHORIZATION.md: derived access never implies source access; each module's own capability rules | **Open** (D7) |
+| Effective capabilities while elevated | — | **Open** (D8) |
+
+No privileged impersonation design exists in the repository, so none is
+proposed here.
+
+## 6. RLS and tenancy boundary
+
+- **School-scoped tables.** 149 tables carry `school_id`; 144 have RLS
+  enabled and forced (`TenantRls::enable()`, policy on
+  `app.current_school_id`). The 5 with `school_id` and no RLS are
+  deliberate central tables: `school_memberships` (must be readable
+  before a School is chosen), `school_domains` (resolved before any
+  context), `school_group_members` (structural), `domain_event_outbox`
+  and `event_consumer_receipts` (ADR 0025 exception).
+- **Platform tables (no RLS).** `schools`, `school_groups`,
+  `school_group_members`, `school_domains`, `school_memberships`,
+  `users`, `roles`, `capabilities`, `role_capabilities`,
+  `platform_role_assignments`, `platform_audit_events` (append-only),
+  `service_identities`, `feature_flags`, `user_mfa_factors`,
+  `education_boards`, statutory Payroll rule tables, framework tables.
+- **Runtime role.** `school_os_app`: `NOSUPERUSER NOBYPASSRLS`.
+  `pgsql_admin` is migration-only.
+- **How context reaches PostgreSQL.** `TenantContext::set()` →
+  session-level `set_config('app.current_school_id', …, false)`;
+  cleared with `RESET` at the end of the request or job. Missing
+  context → the policy matches nothing.
+- **More than one School per request.** Not possible: the GUC holds one
+  id. Code may run School after School sequentially with
+  `TenantContext::withSchool()`; the existing privileged example is
+  `OperationalStatusService::webhooks()` (non-personal counters under
+  `platform.operations.view`), and the scheduled commands that walk every
+  School.
+- **Cross-School aggregation.** Not prohibited outright (ADR 0004: "must
+  go through code paths that are intentionally tenant-unscoped and are
+  treated as privileged, audited operations"), but ADR 0040 §4, ADR 0042
+  and ADR 0043 each require a new ADR before any cross-School business
+  read.
+
+**Cannot be built under the current RLS model** (and must not be made
+possible by weakening it):
+
+1. A single query returning rows from several Schools. A group view
+   must iterate Schools one context at a time, or read only
+   non-RLS platform data.
+2. A "see every tenant" mode for a platform or group operator.
+3. Elevation that does not pass through `TenantContext::set()` for
+   exactly one School — i.e. any implementation granting database
+   privilege rather than an application-layer capability.
+
+## 7. Authorization model
+
+- **Existing capabilities relevant to 0N:** the eight `platform.*`
+  above; School-side `school.members.view`/`.manage`,
+  `school.roles.view`/`.manage`, `school.audit.view`,
+  `school.settings.*`, `school.profile.*`. `school.members.view` and
+  `school.roles.*` are held by roles but gate no route;
+  `school.members.manage` gates only Guardian account invitations.
+- **Separation.** Platform and School roles stay strictly separate:
+  database triggers on `platform_role_assignments` and
+  `membership_role_assignments` reject a wrong-scope role (CLAUDE.md
+  rule 25, `RoleScopeTriggerTest`). There is no third scope.
+- **Likely needs** (names not proposed or seeded; following the
+  existing dotted `namespace.resource.action` convention):
+
+| Need | Existing capability? | Note |
+|---|---|---|
+| School directory / list | `platform.schools.view` exists, unused | Classification of School metadata first (D14) |
+| School create / configure | `platform.schools.manage` exists, unused | In scope only if the owner adds it (D11) |
+| School activate / suspend | Could reuse `platform.schools.manage` or need its own | Suspension semantics open (D11) |
+| Membership administration | School-side `school.members.manage` exists | Platform-side need open (D13) |
+| Platform role grants | None | Who may grant `platform_super_admin` (D12) |
+| Elevation into a School | None | Separate capability; never implied by `platform_super_admin` alone (D2) |
+| Group administration | None; no group scope | D1 |
+| Platform audit view | None (`compliance.platform.view` reserved) | ADR 0042 §13 item 2 (D16) |
+
+## 8. Audit requirements
+
+ADR 0017 makes permission grants and significant state changes always
+audited, append-only, with actor, tenant, time, entity and before/after;
+denied access to Sensitive data is "worth auditing in later phases". The
+existing pattern: platform-level events go to `platform_audit_events`
+via `AuditRecorder::platform()` (e.g. `school_context.activated`,
+`auth.*`, MFA reset); School events go to `school_audit_events` via
+`AuditRecorder::school()`.
+
+Events any Phase 0N implementation would need (names and ledger
+placement to be decided with the design):
+
+| Event | Minimum content | Open question |
+|---|---|---|
+| School created / profile or lifecycle changed | actor, School, before/after status | Both ledgers? (a suspended School's own ledger records its suspension) |
+| Group created / School added or removed | actor, group, School | — |
+| Membership or role changed by a platform actor | actor, School, target user, role | Also in the School's ledger? |
+| Platform role granted / revoked | actor, target user, role | Two-person? (D12) |
+| Elevation requested / approved / started / ended / expired | human actor, target School, reason code, duration, approver | Both ledgers (the School should see who entered) — D4/D6 |
+| Action performed while elevated | normal module audit plus an elevation reference | How the module's own audit carries it |
+| Denied elevation or School selection | actor, target School, reason code | Today a refused selection is not audited (D17) |
+
+No source-domain content (student, employee, financial data) belongs in
+these records; identifiers and codes only, the same rule the School
+audit-log review applies (metadata allowlist empty).
+
+## 9. Data classification
+
+`DATA-CLASSIFICATION.md` has **no row** for any 0N record. Proposed
+starting points for the review (engineering view, not a decision):
+
+| Record | Contents | Starting point | Why |
+|---|---|---|---|
+| School metadata (`schools`) | name, slug, status, legal name, contact email/phone, address, board | Confidential at least | Organisational, not personal; across Schools a directory is commercially sensitive |
+| School configuration / settings / feature flags | settings values, flags | Confidential | Operational; may reveal security posture |
+| Membership information | which user belongs to which School, status | Sensitive | Links an identifiable person to a School; for Student/Guardian members it reveals a child's School (children's-data gate) |
+| Platform role information | who holds platform roles | Sensitive; security-relevant | Identifies privileged staff |
+| Elevation records | who entered which School, when, why | Highly Sensitive (fail-safe, as audit records) | They are audit records |
+| Platform audit events | sign-in, IP, user agent, MFA events | Highly Sensitive (existing v1 audit treatment) | Contains IP and user-agent personal data; no review surface exists |
+
+Decision D14 records the actual tiers.
+
+## 10. Sensitive-domain boundaries
+
+Repository policy, per module: every Documents, HR, Payroll, Finance,
+Students, Guardians, Compliance, Analytics, Automation and LMS action
+checks its own School capability (and, for Student processing
+authorizations, the `mfa` middleware). HR.md states it explicitly: *"No
+HR-specific superadmin bypass exists … A Platform Super Admin who needs
+HR access gets it the same way anyone does: a real membership and an
+HR-capable role."* ADR 0042 and ADR 0043 say the same for Compliance and
+Automation; AUTHORIZATION.md's Layer 5 principle says derived access never
+implies source access.
+
+Therefore an elevated actor must **not** gain any module's access
+implicitly. Whether elevation carries any School capability at all, a
+fixed limited set, or read-only access — and which domains are excluded
+entirely (Highly Sensitive: HR sensitive records, Payroll, Finance,
+Student processing authorizations, Documents, the audit log) — is D7/D8.
+Any access granted must still pass each module's own check and MFA rule.
+
+## 11. The no-School failure mode
+
+**Observed (DDEV, 2026-09-24).** Signed in with no School selected,
+across all 141 parameterless `GET /app…` routes:
+
+| Result | Count | Routes |
+|---|---|---|
+| 200 | 2 | `/app`, `/app/account/security` |
+| 403 | 3 | `/app/settings`, `/app/automation`, `/app/compliance/audit-log` (the capability check runs before any `requireSchool()` — `capability:` route middleware for settings, the controller's own check for the other two — and `can()` is false without a School) |
+| 500 | 135 | every other School page: `TenantContextRequiredException` ("No School tenant context is set for this operation.") |
+
+The result is **identical** for `platform.admin@example.test` and for
+`multi.school@example.test` before choosing a School. Every user reaches
+this state after every sign-in, because login never selects a School
+(`LoginController::store()` → `/app`) and `DashboardController` does
+not either.
+
+**Why.** Most School controllers call `$context->requireSchool()` (359
+calls in 83 controllers) before or while authorizing; nothing in the web
+pipeline requires a School before a School-scoped controller runs.
+`requireSchool()` failing closed is correct (no data is exposed); the
+defect is that a normal, expected user state surfaces as a server error.
+
+**Is this expected?** The fail-closed part is; the 500 is not — it is a
+Phase 0B pipeline gap, not something a Phase 0B document intended. The
+Platform Admin's 500 is one manifestation; any member hits the same path
+before choosing a School. The `/api/v1` surface is unaffected (the School
+is in the path and verified by `school-membership`).
+
+**Architectural home.** The tenancy web pipeline (Layer 0, alongside
+`ResolveSchoolContext`): a single "School context required" step on
+School-scoped web routes that sends a no-School request to School
+selection (and an explicit refusal for JSON) before any controller runs,
+plus a platform-scope landing on `/app` for actors with platform
+capabilities and no School. It should not be a per-controller fix, and
+it should come with a guard test that every School-scoped route carries
+the step, so future modules cannot regress it. It belongs at the start
+of Phase 0N because making platform and School contexts explicit is the
+precondition for elevation; it needs none of the elevation decisions.
+Any new middleware should use the `try`/`catch` restore pattern from
+TENANCY.md ("TenantContext cleanup"), not a bare `finally`.
+
+## 12. Cross-School features that stay outside Phase 0N
+
+Phase 0N must not create a generic cross-School query path. These keep
+their own gates:
+
+- **Cross-School Analytics** — ADR 0040 §4 (own ADR; how the read path
+  works without `BYPASSRLS`, which capability, cross-tenant
+  classification; `analytics.platform.view` unseeded).
+- **Cross-School / platform Compliance and platform audit review** —
+  ADR 0042 §3 and §13; `compliance.platform.view` unseeded.
+- **Cross-School / platform Automation** — ADR 0043;
+  `automation.platform.view` unseeded.
+- **AI across Schools** — ADR 0023 binds one School per context token;
+  Phase 0M is BLOCKED and excludes cross-School AI.
+
+"Group-level reporting" in the 0N roadmap entry is therefore blocked on
+the same kind of ADR (D15); elevation into one School at a time does not
+satisfy it and must not be stretched to.
+
+## 13. School lifecycle
+
+The roadmap's 0N entry does not name School lifecycle.
+`docs/modules/ORGANIZATION.md` says the `schools.status` change is a
+platform-administered action, not built, with no phase assigned. If the
+owner puts it in 0N, these gates apply:
+
+- **Create / initial setup.** No School-creation code exists; Schools
+  come from seeders. Creating one needs its first School Admin
+  membership — which is membership administration (section 14).
+- **Activate / suspend.** Enforcement today is partial: `ResolveSchoolContext`,
+  `SchoolSwitchController` and the API middleware refuse a non-active
+  School, but queued jobs (`SetTenantContextForJob` loads the School by
+  id only), outbox consumers and the scheduled commands that walk every
+  School (webhook, communications and automation redispatch,
+  announcement publishing, pruning) do not check status. What
+  "suspended" must stop (web, API, jobs, webhooks, communications,
+  payment callbacks, scheduled work) is undecided (D11).
+- **Archive / delete.** Must not be built without the legal gates.
+  All 147 foreign keys referencing `schools` are `ON DELETE CASCADE`,
+  including `school_audit_events`, `journal_entries`, `students` and
+  `school_memberships`, and the runtime role holds `DELETE` on `schools`
+  (checked in DDEV; no code deletes a School). Deleting a School row
+  would therefore remove its audit evidence and financial ledger with it.
+  PHASE-0L-CLOSEOUT §6.2 already lists "legal holds and audit evidence
+  surviving School deletion" and retention as **[LEGAL REVIEW
+  REQUIRED]**; Finance (ADR 0030), HR/Payroll and Student records carry
+  their own retention obligations. Recorded here, not changed.
+
+## 14. Membership administration
+
+- **Today.** Memberships are created only by seeders and by the Guardian
+  invitation/activation flow (`GuardianAccountActivationService`, gated by
+  `guardians.manage` + `school.members.manage`). There is no staff
+  membership or role-assignment surface in any module;
+  AUTHORIZATION.md lists "a UI for managing role assignments" as not
+  implemented.
+- **Ownership.** Membership and role assignment inside a School belong
+  to the School (`school.members.*`, `school.roles.*` exist for that).
+  The roadmap does not put platform-level membership administration in
+  Phase 0N, so a platform module should not duplicate it; the School-side
+  surface is its own future unit.
+- **Where 0N touches it.** Creating a School needs a first School Admin;
+  and "give the operator a real membership" is one possible alternative
+  to elevation (D3). Both are decisions, not assumptions.
+
+## 15. Decision matrix
+
+| # | Decision | Repository evidence | Options | Approval needed | Blocks implementation? |
+|---|---|---|---|---|---|
+| D1 | Group/Trust admin principal | ADR 0004; `school_group_members` migration ("a future group-scoped role"); `roles.scope` ∈ {platform, school}, trigger-enforced | (a) new `group` scope + assignment table; (b) platform role limited to named groups; (c) no group admin — platform only | Product + security (ADR) | Yes — all group features |
+| D2 | May platform admins (not only group admins) enter a School? | ADR 0004 platform "audited path"; nothing authorises School data access | (a) yes, under D4–D8; (b) group admins only; (c) nobody — support via real membership | Product + security | Yes — elevation |
+| D3 | Elevation vs ordinary membership | Switching needs a real membership | (a) elevation as its own mechanism; (b) grant a time-boxed real membership; (c) membership only, no elevation | Security | Yes — elevation |
+| D4 | Elevation controls | None specified | reason code and/or free text; confirmation; maximum duration; automatic exit; persistent banner | Security + product | Yes — elevation |
+| D5 | MFA for platform actions and elevation | ADR 0037 (MFA for Highly Sensitive capabilities); no platform rule | (a) `mfa` on every platform action; (b) on elevation only; (c) none | Security | Yes — elevation; advisable for all platform actions |
+| D6 | Second-person approval for elevation | None | none / by another platform admin / by the School's own admin | Product + security | Yes — elevation |
+| D7 | Domains excluded or restricted while elevated | HR.md, ADR 0042/0043, AUTHORIZATION.md Layer 5 principle | read-only; exclude Highly Sensitive modules; per-module opt-in | Security (+ legal for children's data) | Yes — elevation |
+| D8 | Effective capabilities while elevated | None | fixed "support" capability set; copy of a School role; nothing beyond School setup | Security | Yes — elevation |
+| D9 | Platform-admin landing | DDEV-DEMO-REVIEW ("no platform UI") | (a) platform-scope landing showing no tenant data; (b) School directory (needs D14) | Product | No, if (a) is accepted |
+| D10 | No-School behaviour on School routes | Section 11 | (a) redirect to School selection, no auto-select; (b) also auto-select a single active membership | Product | No, if (a) is accepted |
+| D11 | School lifecycle in 0N, and what suspension stops | ORGANIZATION.md; section 13 | include create/activate/suspend; defer archive; delete excluded | Product + legal (archive/delete, retention) | Yes — lifecycle |
+| D12 | Who may create Schools and grant platform roles | No platform-role administration exists | platform_super_admin only; two-person rule; CLI-only | Security | Yes — those features |
+| D13 | Platform-level membership administration | Section 14 | out of 0N (School-owned); first School Admin at creation only | Product | Yes — School creation |
+| D14 | Classification of School metadata, memberships, platform roles, elevation records, platform audit | No rows in DATA-CLASSIFICATION.md (section 9) | tiers per section 9 or stricter | Security / privacy | Yes — any directory or elevation surface |
+| D15 | Group-level / cross-School reporting | ADR 0040 §4, ADR 0042, ADR 0043 | own ADR; or remove reporting from 0N | Product + security (+ legal) | Yes — reporting |
+| D16 | Platform audit review surface | ADR 0042 §13 item 2 | who may read `platform_audit_events`, with what metadata | Security | Yes — platform audit view |
+| D17 | Auditing denied selection / elevation | ADR 0017 ("worth auditing in later phases") | audit denials in `platform_audit_events` or not | Security | No for D9/D10; yes for elevation |
+| D18 | Group membership governance | None | who adds or removes a School from a group; does the School consent | Product + legal (data-sharing) | Yes — group features |
+
+## 16. Readiness status
+
+**BLOCKED — ARCHITECTURE / PRODUCT / SECURITY DECISIONS REQUIRED.**
+
+Partial School switching existing does not make Phase 0N ready: its core
+items — elevation, group administration, group reporting — have no
+specified design, principal model or controls (D1–D8, D15, D18), and
+each needs a new ADR. Engineering prerequisites:
+
+| Prerequisite | Status |
+|---|---|
+| No-School web requests handled without a 500 | **Missing** (section 11) — does not need the blocked decisions |
+| Platform-scope landing | **Missing** — does not need the blocked decisions (D9a) |
+| Classification rows for 0N records | **Missing** (D14) |
+| Suspension enforced beyond web/API | **Missing** (section 13, D11) |
+| School deletion safe for audit/finance evidence | **Not safe** (cascade FKs, section 13); only matters if deletion is ever in scope |
+| RLS, runtime role, platform/School role separation | Present and verified |
+
+## 17. First implementation checkpoint (proposed, not started)
+
+**School context and platform landing foundation** (number to be set by
+the owner). Needs only D9(a) and D10(a) confirmed; no elevation, group or
+reporting decision.
+
+1. One named web middleware, applied to every School-scoped web route,
+   that requires a resolved School before the controller runs: a web
+   request with none goes to School selection on `/app` with a message
+   (Inertia-safe redirect); a JSON request gets a stable refusal
+   (a 4xx code), never a 500. Capability checks stay where they are,
+   after it. No auto-selection.
+2. `/app` for an actor with platform capabilities and no membership:
+   a platform-scope landing that states the account has no School
+   context and shows no tenant data, School list or counts.
+3. A guard test asserting every School-scoped `app/*` web route carries
+   the middleware (explicit allowlist: `/app`, School activation, account
+   security, logout, platform MFA reset).
+4. Tests: platform admin, multi-School user before and after selection,
+   suspended membership, suspended School, a stale session School, and
+   the three currently-403 routes; no route returns 500 without a
+   School; switching and isolation unchanged; no new capability, no
+   migration, no audit change (D17 stays open).
+5. Update `DDEV-DEMO-REVIEW.md` (the "500 until you select a School"
+   note) and this document.
+
+Out of this checkpoint: elevation, School directory, School lifecycle,
+groups, membership administration, any cross-School read.
+
+## 18. How this was verified
+
+- Baseline `origin/main` = `0d4fc9a`, single worktree.
+- Roadmap, DOMAIN-MAP, ADR 0004/0017/0021/0022/0037/0040/0042/0043,
+  TENANCY.md, AUTHORIZATION.md, DATA-CLASSIFICATION.md, ORGANIZATION.md,
+  HR.md, PHASE-0L-CLOSEOUT.md and DDEV-DEMO-REVIEW.md read; searches for
+  Phase 0N, multi-/cross-School, elevation, platform admin, `BYPASSRLS`,
+  School context and group terms across `docs/` and `apps/platform/`.
+- Code: `ResolveSchoolContext`, `SchoolSwitchController`,
+  `DashboardController`, `LoginController`, `EnsureCapability`,
+  `AuthorizesCapability`, `CapabilityResolver`, `TenantContext`,
+  `SetTenantContextForJob`, `EnsureSchoolMembershipContext`,
+  `OperationalStatusService`, `CapabilityAndRoleSeeder`, the Phase 0B
+  tenancy migrations, `DemoDataBuilder`.
+- DDEV (read-only observation; database `db`, runtime role
+  `school_os_app` with `rolbypassrls = false`): route matrix for
+  platform admin and multi.school with no School; multi.school with
+  Annexe selected (own student 200, Demo student 404); annexe.admin and
+  platform admin refused Demo School; memberships and roles; 0 School
+  groups; RLS and FK catalog queries; `DELETE` grant on `schools`.
+  Side effect: the sign-ins and one School selection added
+  `auth.login_succeeded` and `school_context.activated` rows to the
+  DDEV demo's `platform_audit_events`; no other data changed.
