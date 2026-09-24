@@ -44,7 +44,7 @@ class GradeScaleArchitectureGuardTest extends TestCase
     public function the_grade_scales_table_carries_no_forbidden_column(): void
     {
         $columns = collect(DB::connection('pgsql_admin')->select(
-            'select column_name from information_schema.columns where table_name = ?',
+            'select column_name from information_schema.columns where table_name = ? order by ordinal_position',
             ['grade_scales'],
         ))->pluck('column_name')->all();
 
@@ -64,7 +64,7 @@ class GradeScaleArchitectureGuardTest extends TestCase
     public function the_grade_bands_table_carries_no_forbidden_column(): void
     {
         $columns = collect(DB::connection('pgsql_admin')->select(
-            'select column_name from information_schema.columns where table_name = ?',
+            'select column_name from information_schema.columns where table_name = ? order by ordinal_position',
             ['grade_bands'],
         ))->pluck('column_name')->all();
 

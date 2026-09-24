@@ -50,7 +50,7 @@ class AssignmentArchitectureGuardTest extends TestCase
     public function the_table_carries_no_person_grading_or_external_lms_column(): void
     {
         $columns = collect(DB::connection('pgsql_admin')->select(
-            'select column_name from information_schema.columns where table_name = ?',
+            'select column_name from information_schema.columns where table_name = ? order by ordinal_position',
             ['assignments'],
         ))->pluck('column_name')->all();
 
@@ -99,7 +99,7 @@ class AssignmentArchitectureGuardTest extends TestCase
     public function the_documents_table_carries_no_submission_owner_column(): void
     {
         $columns = collect(DB::connection('pgsql_admin')->select(
-            'select column_name from information_schema.columns where table_name = ?',
+            'select column_name from information_schema.columns where table_name = ? order by ordinal_position',
             ['documents'],
         ))->pluck('column_name')->all();
 

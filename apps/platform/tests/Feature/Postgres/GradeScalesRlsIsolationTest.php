@@ -360,7 +360,7 @@ class GradeScalesRlsIsolationTest extends TestCase
     public function no_range_type_or_exclusion_constraint_is_used(): void
     {
         $columns = collect(DB::connection('pgsql_admin')->select(
-            'select data_type from information_schema.columns where table_name = ?',
+            'select data_type from information_schema.columns where table_name = ? order by ordinal_position',
             ['grade_bands'],
         ))->pluck('data_type')->all();
 

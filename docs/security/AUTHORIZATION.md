@@ -174,9 +174,11 @@ roles only (no desk, teacher, student, guardian or platform role), shows
 envelope fields only, and audits every review
 (`Tests\Feature\Compliance\AuditLogReviewTest`).
 
-Automation (ADR 0043, Phase 0L.5 contract, not implemented) reserves
-`automation.view`, `automation.manage` and `automation.platform.view`
-(unseeded; no `automation.execute`). **Configuring a rule grants
+Automation (ADR 0043) uses `automation.view` and `automation.manage`
+(`automation.platform.view` reserved, unseeded; no `automation.execute`).
+As built in Phase 0L.6: `school_admin` holds both, `principal` holds
+`automation.view` only, no other role holds either, and the School
+opt-in flag `automation.rules` grants nothing. **Configuring a rule grants
 nothing.** An execution acts as the rule instance's accountable owner —
 a School member who held `automation.manage` when enabling it — and
 before every action Automation re-verifies the owner's active account,

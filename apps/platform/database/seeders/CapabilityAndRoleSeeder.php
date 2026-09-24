@@ -739,6 +739,16 @@ class CapabilityAndRoleSeeder extends Seeder
             // Analytics is deferred to its own ADR (ADR 0040 §4).
             ['key' => 'analytics.view', 'label' => 'View Analytics reports', 'namespace' => 'school'],
             ['key' => 'analytics.export', 'label' => 'Export Analytics reports', 'namespace' => 'school'],
+
+            // Phase 0L.6 (Automation Foundation, ADR 0043 §6). `automation.view`
+            // sees rules, executions and review items; `automation.manage`
+            // enables/disables a rule and makes the acting manager its
+            // accountable owner. Configuring grants no authority: each
+            // execution re-verifies the owner. `automation.platform.view` is
+            // NOT seeded (cross-School Automation is deferred, ADR 0043 §4),
+            // and there is no `automation.execute`.
+            ['key' => 'automation.view', 'label' => 'View Automation rules, executions and review items', 'namespace' => 'school'],
+            ['key' => 'automation.manage', 'label' => 'Enable, disable and own Automation rules', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -1002,6 +1012,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // modules/ANALYTICS.md §13). View only -- no role
                     // receives `analytics.export` yet.
                     'analytics.view',
+                    // Phase 0L.6 (owner decision 2026-09-24): School Admin
+                    // may view and manage Automation.
+                    'automation.view', 'automation.manage',
                 ],
             ],
             'principal' => [
@@ -1160,6 +1173,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Phase 0L.2-1: same approved audience as
                     // school_admin above; view only, no export.
                     'analytics.view',
+                    // Phase 0L.6 (owner decision 2026-09-24): Principal may
+                    // review Automation but not configure or own a rule.
+                    'automation.view',
                 ],
             ],
         ];

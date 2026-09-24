@@ -214,7 +214,7 @@ class ExaminationPapersRlsIsolationTest extends TestCase
     public function all_composite_fk_components_are_not_null(): void
     {
         $columns = collect(DB::connection('pgsql_admin')->select(
-            'select column_name, is_nullable from information_schema.columns where table_name = ?',
+            'select column_name, is_nullable from information_schema.columns where table_name = ? order by ordinal_position',
             ['examination_papers'],
         ))->pluck('is_nullable', 'column_name');
 
@@ -465,7 +465,7 @@ class ExaminationPapersRlsIsolationTest extends TestCase
     public function the_table_carries_no_person_teacher_room_or_marks_column(): void
     {
         $columns = collect(DB::connection('pgsql_admin')->select(
-            'select column_name from information_schema.columns where table_name = ?',
+            'select column_name from information_schema.columns where table_name = ? order by ordinal_position',
             ['examination_papers'],
         ))->pluck('column_name')->all();
 

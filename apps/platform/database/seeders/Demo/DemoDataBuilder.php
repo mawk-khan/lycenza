@@ -12,6 +12,9 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Automation\Application\AutomationFeatureGate;
+use App\Domain\Automation\Application\AutomationRuleService;
+use App\Domain\Automation\Application\Catalog\AcademicYearSetupReviewRule;
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
@@ -30,12 +33,14 @@ use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentSubjectEnrollmentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\Campus;
+use App\Models\FeatureFlagSchoolOverride;
 use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
+use App\Support\FeatureFlags\FeatureFlagResolver;
 use App\Support\Tenancy\TenantContext;
 
 /**
@@ -170,6 +175,9 @@ final class DemoDataBuilder
         fake()->seed(20260922);
 
         $this->buildSchoolsAndStaffAccounts();
+        // Before the academic years are activated, so their real
+        // `academic_year.activated.v1` events reach the Automation rule.
+        $this->buildAutomation();
         $this->buildAcademicStructure();
         $this->buildStudentsAndGuardians();
         $this->buildHr();
@@ -297,6 +305,33 @@ final class DemoDataBuilder
                 ]);
             }
         }, $this->secondSchool);
+    }
+
+    // ------------------------------------------------------------------
+    // Automation (Phase 0L.6, ADR 0043)
+    // ------------------------------------------------------------------
+
+    /**
+     * The Demo School opts in to Automation (`automation.rules` override)
+     * and its School Admin enables the Academic Year set-up review rule
+     * through the normal AutomationRuleService, becoming its accountable
+     * owner. The Annexe stays off (no override) as the negative control.
+     * No execution or review item is fabricated: they are produced by the
+     * real activation events below once the queue worker processes the
+     * outbox.
+     */
+    private function buildAutomation(): void
+    {
+        $this->inSchool(fn () => FeatureFlagSchoolOverride::query()->create([
+            'school_id' => $this->school->id,
+            'feature_flag_key' => AutomationFeatureGate::FLAG,
+            'enabled' => true,
+        ]));
+        app(FeatureFlagResolver::class)->forgetCache(AutomationFeatureGate::FLAG, $this->school);
+
+        app(AutomationRuleService::class)->enable($this->school, AcademicYearSetupReviewRule::KEY, $this->admin);
+
+        $this->note('Automation: on for the Demo School (off for the Annexe); the Academic Year set-up review rule is enabled with the School Admin as owner.');
     }
 
     // ------------------------------------------------------------------

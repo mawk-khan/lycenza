@@ -20,6 +20,7 @@ use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\Analytics\CurriculumCoverageController;
 use App\Http\Controllers\App\ApplicantController;
 use App\Http\Controllers\App\Attendance\AttendanceController;
+use App\Http\Controllers\App\Automation\AutomationController;
 use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
 use App\Http\Controllers\App\Canteen\CanteenItemController;
 use App\Http\Controllers\App\Canteen\CanteenOrderController;
@@ -998,6 +999,14 @@ Route::middleware('auth')->group(function (): void {
     // access audit all live in App\Domain\Compliance\Application\AuditLogReviewService.
     // No filters, export or API in this checkpoint.
     Route::get('/app/compliance/audit-log', [AuditLogController::class, 'index'])->name('app.compliance.audit-log');
+
+    // Phase 0L.6 -- Automation (ADR 0043): one catalog rule type, School
+    // opt-in, accountable owner. `automation.view`/`automation.manage` are
+    // enforced in the Automation Application services. No manual run.
+    Route::get('/app/automation', [AutomationController::class, 'index'])->name('app.automation');
+    Route::post('/app/automation/rules/{ruleType}/enable', [AutomationController::class, 'enable'])->name('app.automation.rules.enable');
+    Route::post('/app/automation/rules/{ruleType}/disable', [AutomationController::class, 'disable'])->name('app.automation.rules.disable');
+    Route::post('/app/automation/rules/{ruleType}/take-ownership', [AutomationController::class, 'takeOwnership'])->name('app.automation.rules.take-ownership');
 
     // Phase 0I.2 -- the administrative Learning Content surface (ADR
     // 0039). Capability checks live in the controller (the
