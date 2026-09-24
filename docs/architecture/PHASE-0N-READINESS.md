@@ -32,7 +32,12 @@ D12, D13, D15, D16 — the status above is unchanged. **Update (Phase 0N.5,
 grants, platform Group governance, the Group view, and Group-derived
 elevation with recorded provenance — still with **zero** School routes
 accepting elevated context, and with the owner's v1 classifications for
-Group records. It unblocks nothing else. Phase 0M
+Group records. It unblocks nothing else. **Update (Phase 0N.6,
+2026-09-24):** the owner approved **D12** and **D16**; **ADR 0046
+(Platform Authority & Audit Governance Contract)** records the root role,
+runtime-assignable non-root platform roles, `platform_auditor`, and the
+platform audit review contract (nothing built). Still open: D11, D13,
+D15. Phase 0M
 (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
@@ -515,11 +520,11 @@ owner puts it in 0N, these gates apply:
 | D9 | Platform-admin landing | DDEV-DEMO-REVIEW ("no platform UI") | (a) platform-scope landing showing no tenant data; (b) School directory (needs D14) | Product | **Approved (a) and implemented, Phase 0N.1** |
 | D10 | No-School behaviour on School routes | Section 11 | (a) redirect to School selection, no auto-select; (b) also auto-select a single active membership | Product | **Approved (a) and implemented, Phase 0N.1** |
 | D11 | School lifecycle in 0N, and what suspension stops | ORGANIZATION.md; section 13 | include create/activate/suspend; defer archive; delete excluded | Product + legal (archive/delete, retention) | Yes — lifecycle |
-| D12 | Who may create Schools and grant platform roles | No platform-role administration exists | platform_super_admin only; two-person rule; CLI-only | Security | Yes — those features |
+| D12 | Who may create Schools and grant platform roles | No platform-role administration exists | platform_super_admin only; two-person rule; CLI-only | Security | **Decided, ADR 0046** — `platform_super_admin` is root/bootstrap (never runtime-granted); School creation root-only (what it means stays D11); root grants only code-approved non-root roles (v1: `platform_auditor`); no self-grant |
 | D13 | Platform-level membership administration | Section 14 | out of 0N (School-owned); first School Admin at creation only | Product | Yes — School creation |
 | D14 | Classification of School metadata, memberships, platform roles, elevation records, platform audit | No rows in DATA-CLASSIFICATION.md (section 9) | tiers per section 9 or stricter | Security / privacy | **Decided for elevation records only, ADR 0044** — Highly Sensitive (v1); School metadata, memberships, platform roles, directory still open |
 | D15 | Group-level / cross-School reporting | ADR 0040 §4, ADR 0042, ADR 0043 | own ADR; or remove reporting from 0N | Product + security (+ legal) | Yes — reporting |
-| D16 | Platform audit review surface | ADR 0042 §13 item 2 | who may read `platform_audit_events`, with what metadata | Security | Yes — platform audit view |
+| D16 | Platform audit review surface | ADR 0042 §13 item 2 | who may read `platform_audit_events`, with what metadata | Security | **Decided, ADR 0046** — `platform.audit.view` (root + `platform_auditor`); context-neutral, Highly Sensitive, empty metadata allowlist, access audited; Schools see no elevation events in v1 |
 | D17 | Auditing denied selection / elevation | ADR 0017 ("worth auditing in later phases") | audit denials in `platform_audit_events` or not | Security | **Decided, ADR 0044** — denied elevation audited in the platform ledger (denied School selection unchanged) |
 | D18 | Group membership governance | None | who adds or removes a School from a group; does the School consent | Product + legal (data-sharing) | **Decided, ADR 0045** — platform-governed in v1; Group Admins cannot change membership, Groups or grants |
 

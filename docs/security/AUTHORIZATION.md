@@ -27,6 +27,7 @@ builds it (`docs/architecture/DOMAIN-MAP.md` Layer 0).
 
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|
+| Platform Auditor | Human, platform staff | Platform audit ledger only | Contracted in ADR 0046 (not built): `platform_auditor` holds only `platform.audit.view`; granted and revoked by a Platform Super Admin; no School, Group, elevation or governance power. |
 | Platform Super Admin | Human, platform staff | Cross-tenant | Operates through a dedicated, audited administrative path (`docs/architecture/TENANCY.md`) — not a permanent "bypass tenant scoping" flag in normal application code. Entering one School is a temporary, explicit elevation that grants no School capability (ADR 0044; substrate built in Phase 0N.3, no School page opens under it yet). |
 | School Group Admin | Human | One School Group's member schools | Cross-school access within a group is an explicit, granted, audited elevation (ADR 0004) — not automatic from group membership alone. ADR 0045, foundation built in Phase 0N.5: a distinct Group scope with its own grant (`group_role_assignments`) and `group.*` capabilities, granting no School capability; School entry only through ADR 0044 elevation; Group membership and grants are platform-governed. |
 | School Admin | Human | One School (all campuses) | |
@@ -388,6 +389,28 @@ records its Group and grant, is re-verified by the database at start, and
 ends the moment that authority goes (no fallback to platform authority). Platform Super Admin is not implicitly a Group Admin. An
 ordinary member of several Schools holds no Group authority. See
 ADR 0045.
+
+## Platform authority and platform audit review (ADR 0046 — contract, not built)
+
+- `platform_super_admin` is the **root / bootstrap** role: provisioned
+  only by trusted, out-of-application means, never granted or revoked
+  through the ERP application; losing every root account is recovered
+  the same way.
+- Runtime platform-role governance covers only **code-approved,
+  `runtime_assignable`, non-root** roles (v1: `platform_auditor`), through
+  the root-reserved `platform.role_grants.manage` — no role builder, no
+  self-grant or self-revoke, no delegation chain. Root-reserved
+  capabilities (`platform.role_grants.manage`, `platform.schools.manage` —
+  School creation, root-only) are never held by a runtime-assignable role.
+  Grants keep history; the database refuses a runtime grant of the root
+  role.
+- **Platform audit review** needs `platform.audit.view` (root and
+  `platform_auditor`; no School or Group role). It reads only
+  `platform_audit_events`, establishes no School context, shows seven
+  envelope fields and never metadata, IP or user agent, pages by keyset,
+  and writes one `platform.audit_log.viewed` event per review. It is
+  separate from the School audit-log review (`school.audit.view`); Schools
+  see no elevation events in v1. See ADR 0046.
 
 ## What is NOT yet implemented
 
