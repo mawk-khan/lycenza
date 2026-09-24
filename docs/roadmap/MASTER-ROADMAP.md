@@ -1005,6 +1005,27 @@ gated checkpoint, and Analytics export, cross-School Analytics,
 Compliance and Automation remain unscoped. No later Phase 0L checkpoint
 is defined or authorized by this closeout.
 
+**Phase 0L.3 (2026-09-24): Compliance Domain Contract frozen, zero
+implementation.** The product owner chose Compliance ahead of
+Automation and named this checkpoint. ADR 0042
+(`docs/architecture/adr/0042-compliance-domain-contract.md`) is the
+decision record and `docs/modules/COMPLIANCE.md` the living reference
+(inventory, gates, plan). Compliance owns read-only evidence and
+regulatory-reporting views over records other modules keep; it owns no
+source record, calculates and files nothing (Payroll keeps statutory
+calculation and its data-preparation exports — ADR 0034/0036, which
+also supersede the Phase 0J line above about "Compliance module
+involvement"), deletes nothing, sets no retention and claims no legal
+compliance. Single-School only; `compliance.*` reserved, not seeded;
+audit-log review uses the existing `school.audit.view`. Retention,
+legal holds, data-subject requests and statutory-reporting scope remain
+**[LEGAL REVIEW REQUIRED]**. **Proposed next (not started, needs its
+own go-ahead): Phase 0L.4 — Compliance Foundation: School Audit-Log
+Review**, gated on the audit-record classification/metadata decision
+and confirmation of the `school.audit.view` grant
+(`COMPLIANCE.md` §5–§6). Automation remains unscoped and needs its own
+contract.
+
 ## Phase 0M — AI Platform: Real Agents
 
 First real model-provider integration (ADR 0013, with the

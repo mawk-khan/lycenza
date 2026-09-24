@@ -41,7 +41,8 @@ all synchronous/on-demand.
 **Explicitly out of scope for Phase 0L.1, and for Phase 0L generally
 absent their own future contracts:**
 - Compliance (regulatory reporting, statutory record-keeping) — a
-  separate Layer 5 module, its own future ADR.
+  separate Layer 5 module, its own ADR (ADR 0042, Phase 0L.3; it does
+  not consume Analytics).
 - Automation (rules/workflow engine reacting to domain events) — a
   separate Layer 5 module, its own future ADR.
 - Any migration, model, controller, service, route, capability seed,

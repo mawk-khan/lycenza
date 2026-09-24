@@ -163,6 +163,13 @@ Coverage report neither requires nor grants `curriculum.delivery.view`
 and `Tests\Feature\App\CurriculumCoverageAnalyticsUiTest`).
 `analytics.export` is seeded but granted to no role; there is no export.
 
+Compliance (ADR 0042, Phase 0L.3 contract, not implemented) applies the
+same principle: `compliance.view`/`compliance.export`/`compliance.platform.view`
+are reserved and unseeded, audit-log review will use the existing
+`school.audit.view`, and no Compliance surface may show more, or require
+less (capability, MFA, access audit), than the source module does for
+the same data.
+
 ## Multi-factor authentication (Phase 0H.4D-P1, ADR 0037)
 
 This is the "documented future path" `App\Http\Controllers\Auth\LoginController`'s
