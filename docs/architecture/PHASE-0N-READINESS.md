@@ -10,7 +10,12 @@ itself decided nothing and changed no code. **Update (Phase 0N.1,
 section 17 checkpoint implemented them (section 11, "Resolution"). That
 removes the no-School 500 and gives `/app` a neutral state; it is a
 tenancy-safety prerequisite only and does **not** unblock Phase 0N —
-D1–D8 and D11–D18 remain open and the status above is unchanged. Phase 0M (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
+D1–D8 and D11–D18 remain open and the status above is unchanged.
+**Update (Phase 0N.2, 2026-09-24):** the owner approved **D2–D8, D14 and
+D17**; **ADR 0044 (Cross-Tenant Elevation Contract)** records them as an
+implementation contract for temporary platform elevation into one School
+(nothing built). D1, D11, D12, D13, D15, D16 and D18 remain open and the
+status above is unchanged. Phase 0M (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
 Sources: `docs/roadmap/MASTER-ROADMAP.md` ("Phase 0B", "Phase 0N — Multi-School
@@ -152,15 +157,15 @@ nothing to switch to — and giving them one silently would be the
 | Audited | ADR 0004; ADR 0017 (permission grants always audited) | **Required**; event set open (section 8) |
 | No RLS bypass, no superuser, no `pgsql_admin` use | ADR 0021; CLAUDE.md rule 26; ADR 0040 §4 | **Required** |
 | Capability-gated | AUTHORIZATION.md (every protected operation) | **Required**; capability names open (section 7) |
-| Whether platform admins (not only group admins) may elevate | ADR 0004/TENANCY.md imply a platform path exists; nothing states it may reach School data | **Open** (D2) |
-| Reason / reason code | — | **Open** (D4) |
-| Explicit confirmation step | — | **Open** (D4) |
-| Time limit and automatic exit | — | **Open** (D4) |
-| MFA | ADR 0037 built MFA as a prerequisite for Highly Sensitive capabilities; no rule for platform actions | **Open** (D5) |
-| Second-person approval | — | **Open** (D6) |
-| Banner / visible indication | — | **Open** (D4) |
-| Prohibited or restricted domains | AUTHORIZATION.md: derived access never implies source access; each module's own capability rules | **Open** (D7) |
-| Effective capabilities while elevated | — | **Open** (D8) |
+| Whether platform admins (not only group admins) may elevate | ADR 0004/TENANCY.md imply a platform path exists; nothing states it may reach School data | **Decided** (D2, ADR 0044) |
+| Reason / reason code | — | **Decided**: required closed reason code; catalog values still to choose (D4, ADR 0044 §5) |
+| Explicit confirmation step | — | **Decided** (D4, ADR 0044 §6) |
+| Time limit and automatic exit | — | **Decided**: bounded, absolute, no extension; duration value still to choose (D4, ADR 0044 §5) |
+| MFA | ADR 0037 built MFA as a prerequisite for Highly Sensitive capabilities; no rule for platform actions | **Decided**: required to start (D5, ADR 0044 §9) |
+| Second-person approval | — | **Decided**: not for establishing context in v1 (D6) |
+| Banner / visible indication | — | **Decided** (D4, ADR 0044 §12) |
+| Prohibited or restricted domains | AUTHORIZATION.md: derived access never implies source access; each module's own capability rules | **Decided**: zero modules by elevation alone (D7, ADR 0044 §§7–8) |
+| Effective capabilities while elevated | — | **Decided**: none (D8, ADR 0044 §7) |
 
 No privileged impersonation design exists in the repository, so none is
 proposed here.
@@ -481,22 +486,22 @@ owner puts it in 0N, these gates apply:
 | # | Decision | Repository evidence | Options | Approval needed | Blocks implementation? |
 |---|---|---|---|---|---|
 | D1 | Group/Trust admin principal | ADR 0004; `school_group_members` migration ("a future group-scoped role"); `roles.scope` ∈ {platform, school}, trigger-enforced | (a) new `group` scope + assignment table; (b) platform role limited to named groups; (c) no group admin — platform only | Product + security (ADR) | Yes — all group features |
-| D2 | May platform admins (not only group admins) enter a School? | ADR 0004 platform "audited path"; nothing authorises School data access | (a) yes, under D4–D8; (b) group admins only; (c) nobody — support via real membership | Product + security | Yes — elevation |
-| D3 | Elevation vs ordinary membership | Switching needs a real membership | (a) elevation as its own mechanism; (b) grant a time-boxed real membership; (c) membership only, no elevation | Security | Yes — elevation |
-| D4 | Elevation controls | None specified | reason code and/or free text; confirmation; maximum duration; automatic exit; persistent banner | Security + product | Yes — elevation |
-| D5 | MFA for platform actions and elevation | ADR 0037 (MFA for Highly Sensitive capabilities); no platform rule | (a) `mfa` on every platform action; (b) on elevation only; (c) none | Security | Yes — elevation; advisable for all platform actions |
-| D6 | Second-person approval for elevation | None | none / by another platform admin / by the School's own admin | Product + security | Yes — elevation |
-| D7 | Domains excluded or restricted while elevated | HR.md, ADR 0042/0043, AUTHORIZATION.md Layer 5 principle | read-only; exclude Highly Sensitive modules; per-module opt-in | Security (+ legal for children's data) | Yes — elevation |
-| D8 | Effective capabilities while elevated | None | fixed "support" capability set; copy of a School role; nothing beyond School setup | Security | Yes — elevation |
+| D2 | May platform admins (not only group admins) enter a School? | ADR 0004 platform "audited path"; nothing authorises School data access | (a) yes, under D4–D8; (b) group admins only; (c) nobody — support via real membership | Product + security | **Decided (a), ADR 0044** — only through explicit temporary elevation |
+| D3 | Elevation vs ordinary membership | Switching needs a real membership | (a) elevation as its own mechanism; (b) grant a time-boxed real membership; (c) membership only, no elevation | Security | **Decided (a), ADR 0044** — elevation is its own mechanism; never membership |
+| D4 | Elevation controls | None specified | reason code and/or free text; confirmation; maximum duration; automatic exit; persistent banner | Security + product | **Decided, ADR 0044** — reason code (catalog TBD), confirmation, bounded lifetime (value TBD), banner, Exit, one School, no nesting |
+| D5 | MFA for platform actions and elevation | ADR 0037 (MFA for Highly Sensitive capabilities); no platform rule | (a) `mfa` on every platform action; (b) on elevation only; (c) none | Security | **Decided for elevation, ADR 0044** — existing MFA required to start elevation; MFA for other platform actions not decided |
+| D6 | Second-person approval for elevation | None | none / by another platform admin / by the School's own admin | Product + security | **Decided (none in v1), ADR 0044** — later ADR may require it per elevated operation |
+| D7 | Domains excluded or restricted while elevated | HR.md, ADR 0042/0043, AUTHORIZATION.md Layer 5 principle | read-only; exclude Highly Sensitive modules; per-module opt-in | Security (+ legal for children's data) | **Decided, ADR 0044** — elevation alone authorizes zero source modules; per-operation opt-in only |
+| D8 | Effective capabilities while elevated | None | fixed "support" capability set; copy of a School role; nothing beyond School setup | Security | **Decided, ADR 0044** — elevation establishes context, grants no School capability |
 | D9 | Platform-admin landing | DDEV-DEMO-REVIEW ("no platform UI") | (a) platform-scope landing showing no tenant data; (b) School directory (needs D14) | Product | **Approved (a) and implemented, Phase 0N.1** |
 | D10 | No-School behaviour on School routes | Section 11 | (a) redirect to School selection, no auto-select; (b) also auto-select a single active membership | Product | **Approved (a) and implemented, Phase 0N.1** |
 | D11 | School lifecycle in 0N, and what suspension stops | ORGANIZATION.md; section 13 | include create/activate/suspend; defer archive; delete excluded | Product + legal (archive/delete, retention) | Yes — lifecycle |
 | D12 | Who may create Schools and grant platform roles | No platform-role administration exists | platform_super_admin only; two-person rule; CLI-only | Security | Yes — those features |
 | D13 | Platform-level membership administration | Section 14 | out of 0N (School-owned); first School Admin at creation only | Product | Yes — School creation |
-| D14 | Classification of School metadata, memberships, platform roles, elevation records, platform audit | No rows in DATA-CLASSIFICATION.md (section 9) | tiers per section 9 or stricter | Security / privacy | Yes — any directory or elevation surface |
+| D14 | Classification of School metadata, memberships, platform roles, elevation records, platform audit | No rows in DATA-CLASSIFICATION.md (section 9) | tiers per section 9 or stricter | Security / privacy | **Decided for elevation records only, ADR 0044** — Highly Sensitive (v1); School metadata, memberships, platform roles, directory still open |
 | D15 | Group-level / cross-School reporting | ADR 0040 §4, ADR 0042, ADR 0043 | own ADR; or remove reporting from 0N | Product + security (+ legal) | Yes — reporting |
 | D16 | Platform audit review surface | ADR 0042 §13 item 2 | who may read `platform_audit_events`, with what metadata | Security | Yes — platform audit view |
-| D17 | Auditing denied selection / elevation | ADR 0017 ("worth auditing in later phases") | audit denials in `platform_audit_events` or not | Security | No for D9/D10; yes for elevation |
+| D17 | Auditing denied selection / elevation | ADR 0017 ("worth auditing in later phases") | audit denials in `platform_audit_events` or not | Security | **Decided, ADR 0044** — denied elevation audited in the platform ledger (denied School selection unchanged) |
 | D18 | Group membership governance | None | who adds or removes a School from a group; does the School consent | Product + legal (data-sharing) | Yes — group features |
 
 ## 16. Readiness status
@@ -506,13 +511,20 @@ owner puts it in 0N, these gates apply:
 Partial School switching existing does not make Phase 0N ready: its core
 items — elevation, group administration, group reporting — have no
 specified design, principal model or controls (D1–D8, D15, D18), and
-each needs a new ADR. Engineering prerequisites:
+each needs a new ADR. *(Phase 0N.2: elevation now has its contract,
+ADR 0044, and may proceed to its substrate checkpoint once the owner
+records the implementation-time values listed there — elevation
+duration, reason-code catalog, MFA re-verification vs. re-login, target
+selection. Group administration, group reporting, School lifecycle,
+platform role grants, platform membership administration and platform
+audit review remain blocked on D1, D11–D13, D15, D16, D18.)*
+Engineering prerequisites:
 
 | Prerequisite | Status |
 |---|---|
 | No-School web requests handled without a 500 | **Done** (Phase 0N.1, D10(a); section 11 "Resolution") |
 | Platform-scope landing | **Done** as the neutral `/app` state (Phase 0N.1, D9(a)); no platform administration UI |
-| Classification rows for 0N records | **Missing** (D14) |
+| Classification rows for 0N records | **Elevation records done** (D14, ADR 0044, DATA-CLASSIFICATION.md); School metadata / memberships / platform roles / directory still missing |
 | Suspension enforced beyond web/API | **Missing** (section 13, D11) |
 | School deletion safe for audit/finance evidence | **Not safe** (cascade FKs, section 13); only matters if deletion is ever in scope |
 | RLS, runtime role, platform/School role separation | Present and verified |
