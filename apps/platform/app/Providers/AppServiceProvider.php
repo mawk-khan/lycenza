@@ -13,6 +13,7 @@ use App\Support\Observability\LogMetricsRecorder;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Privacy\ContactLookupHasher;
 use App\Support\Privacy\StatutoryIdentifierLookupHasher;
+use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\TestDatabaseGuard;
 use Illuminate\Queue\Events\JobFailed;
@@ -41,6 +42,10 @@ class AppServiceProvider extends ServiceProvider
         // this checkpoint actually tests, not this binding alone. See
         // docs/architecture/adr/0022-tenant-context-propagation.md.
         $this->app->scoped(TenantContext::class);
+
+        // Phase 0N.3 (ADR 0044): the request-scoped platform elevation
+        // reference -- scoped for the same reason as TenantContext.
+        $this->app->scoped(ElevationContext::class);
 
         $this->app->singleton(AiContextTokenService::class, fn () => new AiContextTokenService(
             (string) config('services.ai_gateway.context_signing_key'),

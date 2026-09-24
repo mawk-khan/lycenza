@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Domain\Platform\Application\Elevation\ElevationEndReason;
+use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\MfaChallengeService;
 use App\Support\Auth\SessionEndedResponder;
 use App\Support\Demo\DemoLoginPanel;
+use App\Support\Tenancy\ElevationContext;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -118,9 +121,15 @@ class LoginController extends Controller
         return redirect()->intended('/app');
     }
 
-    public function destroy(Request $request, AuditRecorder $audit): SymfonyResponse
+    public function destroy(Request $request, AuditRecorder $audit, ElevationContext $elevation, SchoolElevationService $elevations): SymfonyResponse
     {
         $user = Auth::user();
+
+        // Phase 0N.3 (ADR 0044 section 11): logout ends this session's
+        // platform elevation (audited) before the session is invalidated.
+        if ($elevation->elevation() !== null) {
+            $elevations->finish($elevation->elevation(), ElevationEndReason::Logout);
+        }
 
         Auth::guard('web')->logout();
 

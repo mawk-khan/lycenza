@@ -7,8 +7,12 @@
 // login/MFA pages) see nothing extra. Log out goes through the existing
 // POST /logout (LoginController::destroy(), CSRF-protected via the
 // XSRF-TOKEN cookie like every other Inertia form); no new endpoint.
+//
+// Phase 0N.3: the elevated-access banner is its own component, rendered
+// after the account bar; it never gates the account bar or Log out.
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import ElevationBanner from '../Components/ElevationBanner.vue';
 
 interface AuthUser {
     id: string;
@@ -45,5 +49,6 @@ const user = computed(() => page.props.auth?.user ?? null);
             </Link>
         </div>
     </header>
+    <ElevationBanner v-if="user" />
     <slot />
 </template>

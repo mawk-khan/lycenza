@@ -1,7 +1,8 @@
 # ADR 0044: Cross-Tenant Elevation Contract (Phase 0N.2)
 
-- Status: Accepted (contract only — nothing described here is built)
-- Date: 2026-09-24 (Phase 0N.2)
+- Status: Accepted; substrate implemented in Phase 0N.3 (see
+  "Implementation amendment" at the end — zero School routes opted in)
+- Date: 2026-09-24 (Phase 0N.2); amended 2026-09-24 (Phase 0N.3)
 
 ## Context
 
@@ -672,3 +673,85 @@ elevated permissions:
     request sees exactly one School; `/api/v1` unchanged (404); a
     Platform Admin without elevation and ordinary users unchanged from
     Phase 0N.1; DDEV browser review of start, banner, exit, expiry.
+
+## Implementation amendment (Phase 0N.3, 2026-09-24)
+
+**Owner implementation values (approved for Phase 0N.3):** a fixed
+**30-minute** maximum lifetime; **every** start requires a fresh in-session
+MFA re-verification (login-time assurance alone is not accepted); the
+closed reason-code catalog `operational_support`, `security_investigation`,
+`configuration_assistance`, `incident_response`; and exact-target
+selection with no School directory, search, list or suggestion.
+
+**What was built** (all of it platform substrate — no School route
+accepts elevated context):
+
+| Contract | Implementation |
+|---|---|
+| Capability (§6) | `platform.schools.elevate`, seeded to `platform_super_admin` only; no School role holds any `platform.*` capability |
+| Record (§4) | `school_elevations` (`App\Models\SchoolElevation`): no RLS (platform-owned); partial unique index `school_elevations_one_active_per_actor`; CHECK constraints for the reason catalog, the four statuses, the status/end-reason pairing and **`expires_at <= started_at + 30 minutes`**; trigger `school_elevations_guard_update` (active → ended/expired/terminated once; finished rows immutable; actor, School, reason, start and expiry never change); `DELETE` revoked from the runtime role; School and User FKs restrict delete |
+| Service (§6, §10) | `App\Domain\Platform\Application\Elevation\SchoolElevationService` (start, per-request validity, finish, sweep), `ElevationReason`, `ElevationEndReason`, `ElevationTargetResolver`, `ElevationAudit`, `ElevationDeniedException` |
+| MFA (§9) | `App\Support\Auth\Mfa\MfaReverificationService`: the same factor and code paths as login stage 2 (`MfaChallengeService::verifyTotp()` with its row-locked step claim, or a single-use recovery code) and, on success, the same `establishAssurance()`. No challenge state is stored, so nothing can be replayed. `expires_at` = start + 30 minutes, capped at the refreshed assurance's end (never reached: 30 < 60) |
+| Request context (§2) | `App\Support\Tenancy\ElevationContext` (scoped, cleared at the start and end of every request), separate from `TenantContext` |
+| Resolution (§3, §4) | `App\Http\Middleware\ResolvePlatformElevation` (web group only; after `DevOnlySchoolHeaderResolver`, before `school-context`) validates the session pointer `platform_elevation_id` on every request |
+| Default-deny (§7) | `RequireSchoolContext`: an elevated request gets **403** (`school_elevation_not_permitted` for JSON) on every School route unless the route declares `school-context:elevated`; **no production route does** (`SchoolContextRouteGuardTest`) |
+| Audit (§13) | the five `platform.school_elevation.*` events; `school_audit_events.elevation_id` (nullable FK), filled by `AuditRecorder::school()` from `ElevationContext` and not shown by the School audit-log review |
+| UI (§12) | `/app` entry point for holders of the capability; `App/Platform/EnterSchool` → `App/Platform/ConfirmEnterSchool`; `Components/ElevationBanner.vue` on every signed-in page (via `AccountLayout.vue`); Exit (`POST /app/platform/elevation/exit`) |
+| Expiry (§10) | on request, plus `platform:expire-school-elevations` every minute |
+| Hooks (§11) | logout (`logout`); `MfaAdminResetService::reset()` and `MfaFactorService::disable()` (`mfa_factor_revoked`); per-request checks for everything else |
+
+**Refinements made while implementing** (each keeps the contract's
+intent; none widens access):
+
+1. **Target identifiers.** Two exact identifiers: a **verified School
+   domain** through `App\Support\Tenancy\VerifiedSchoolDomain` — now also
+   used by `ResolveSchoolContext`, one exact lookup — and the **School
+   UUID**, the identifier the platform already uses for a School
+   (`/api/v1/schools/{school}/…`, `POST /app/schools/{school}/activate`,
+   `/invitations/{school}/…`). The UUID is needed because verified domains
+   are optional: no demo School has one and nothing manages them yet, so a
+   domain-only flow could reach almost no School. No partial, name or
+   pattern match exists.
+2. **Start order.** Account state is checked **before** the capability:
+   `CapabilityResolver` already returns no capability for a disabled
+   account, so the other order could never record `actor_disabled`.
+   Otherwise the order is §6's, with reason and confirmation validated
+   after the target checks and MFA last.
+3. **MFA outcome codes.** With re-verification on every start, §15's
+   `mfa_assurance_required` became `mfa_verification_failed` (wrong,
+   replayed or missing-factor code). A missing or empty code is input
+   validation (not audited). No factor enrolled is `403
+   mfa_required_not_enrolled`, audited as `mfa_not_enrolled`.
+4. **Refusal rendering.** The web flow re-renders its own page with the
+   message (no redirect back, so no pending target is ever kept in the
+   session); JSON callers get `{"error": {…, "code"}}` with 403
+   (`forbidden`, `mfa_required_not_enrolled`), 409 (`already_elevated`) or
+   422 (`target_unavailable`, `actor_is_member`, `mfa_verification_failed`).
+   Unknown, malformed and inactive targets all read "That School cannot be
+   entered."
+5. **Stale pointers.** A pointer to a record the same actor already
+   finished (exit in another session, the sweep, a hook) is cleared
+   silently — its end was already audited. A pointer that is not a UUID,
+   names no record, or names **another** actor's record is audited as
+   `elevation_reference_invalid` (§15).
+6. **Ordinary context alongside elevation.** The resolver ends an
+   elevation whose session also holds `active_school_id`, or whose actor
+   became a member of the target, as `membership_conflict`, and clears
+   both. It discards any School a verified domain or `X-School-Id` set for
+   the request; if that School differs from the target, no School context
+   can be established that request (fail closed), but the elevation is not
+   ended — the host is not the actor's choice.
+7. **TenantContext only on opted-in routes.** A valid elevation sets
+   `ElevationContext` only; the target School enters `TenantContext` only
+   inside `RequireSchoolContext` for a route that opted in. `/app` and the
+   other context-neutral pages never run with the target School's GUC.
+8. **Another session.** Exit ends the actor's active elevation wherever it
+   is held, so `/app` in a new session shows an elevation held elsewhere
+   and can end it (§10).
+9. **Rate limit.** A named, actor-keyed `platform-elevation` limiter (8 per
+   minute, the signed-in MFA limiters' bound) on the confirm and start
+   steps.
+
+CLAUDE.md rule 20 is amended accordingly (a third trusted source of web
+School context, re-validated per request), and rule 83 records the
+zero-opt-in default.

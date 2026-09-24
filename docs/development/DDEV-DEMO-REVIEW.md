@@ -246,7 +246,7 @@ minute.
 | HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
-| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (8 `platform.*` capabilities) | **No platform UI exists**: `/app` shows a neutral "platform account, no School access" state; it has no School context by design, and School URLs return to `/app` |
+| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (9 `platform.*` capabilities, incl. `platform.schools.elevate`) | No platform administration UI. `/app` shows a neutral "platform account, no School access" state and **Enter a School (elevated access)** (walkthrough step 13); School URLs return to `/app` without elevation and are 403 under it |
 | Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
 | Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: same as Teacher |
 | Guardian | `guardian01@example.test` | Current parent experience | Member with no role, linked to Guardian Priya Sharma (activated via the real invitation flow) | **No parent/guardian portal exists**: same as Teacher |
@@ -300,8 +300,8 @@ Platform Admin (there is no platform UI to review).
 
 | Persona | Exists in code? | Login? | Tenant scope | Capabilities | Usable UI |
 |---|---|---|---|---|---|
-| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 8 `platform.*` | **None** beyond the neutral `/app` landing -- no platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
-| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 147 catalog capabilities | Full admin UI |
+| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 9 `platform.*` | The neutral `/app` landing and platform elevation (enter one School for 30 minutes; opens no School page yet) -- no other platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
+| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 148 catalog capabilities | Full admin UI |
 | Principal | Yes (system role `principal`) | Yes | One School | 79 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
 | Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
 | School member, no role (teacher/staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
@@ -350,12 +350,34 @@ Platform Admin (there is no platform UI to review).
 12. Open **Mailpit** -> "You're invited to Lycenza Demo School" for
     `guardian02@example.test` -> follow the link -> set a password ->
     you are signed in as a newly activated guardian.
-13. **platform.admin@example.test**: `/app` says this is a platform
-    account with no School access, and shows no School data; typing a
-    School URL (for example `/app/students`) returns to `/app`. It stays
-    without School context on purpose -- there is no way to enter a
-    School (Phase 0N elevation is not built) and no platform
-    administration UI.
+13. **platform.admin@example.test** (Phase 0N.3 platform elevation,
+    ADR 0044): `/app` says this is a platform account with no School
+    access and shows no School data; typing a School URL (for example
+    `/app/students`) returns to `/app`. To review elevation:
+    - The demo Platform Admin has **no MFA factor**, and every elevation
+      needs a fresh MFA code. Enroll one first at **Account security**
+      (`/app/account/security`) with any authenticator app, then sign out
+      and in again.
+    - There is **no School directory** by design; the target must be
+      named exactly -- a verified School domain (the demo has none) or
+      the School's id:
+      `ddev exec 'psql -h db -U db -d db -At -c "select id from schools where name = \$\$Lycenza Demo School\$\$"'`.
+    - `/app` -> **Enter a School (elevated access)** -> paste the id,
+      pick a reason (operational support, security investigation,
+      configuration assistance, incident response) -> **Continue** -> the
+      confirmation page names the School -> tick the confirmation, enter
+      a current code -> **Enter School**.
+    - Every page now shows the amber **Elevated access** banner (School,
+      end time, minutes left, "no School permissions are granted
+      automatically", **Exit elevated access**). Elevation grants no
+      School permissions and no School page accepts it yet, so
+      `/app/school-setup`, `/app/students`, `/app/finance` and every other
+      School page return **403** -- that is the intended Phase 0N.3
+      state, not a defect.
+    - **Exit elevated access** returns to `/app` with no School context.
+      It also ends after 30 minutes, on logout, or if the account loses
+      the capability or its MFA factor. The start and confirm steps are
+      rate-limited (8 per minute).
 14. **Analytics** (Phase 0L.2-1): as **School Admin** or **Principal**,
     Dashboard -> **Analytics: Curriculum Coverage**
     (`/app/analytics/curriculum-coverage`). It shows, for the active
@@ -433,7 +455,9 @@ Platform Admin (there is no platform UI to review).
 
 ## 14. Implemented but not reviewable in the browser
 
-- **Platform administration**: `platform.*` capabilities exist; no pages.
+- **Platform administration**: `platform.*` capabilities exist; the only
+  platform pages are platform elevation (step 13 in section 12), which
+  opens no School page yet.
   Operations status is `GET /api/internal/operations/status` (API only).
 - **API-only surfaces** (`/api/v1/schools/{school}/...`): academic terms,
   sections, academic departments, rooms, campus CRUD, subject-offering

@@ -50,6 +50,11 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.account.security.mfa.disable',
         'app.account.admin.mfa.reset',            // platform-scoped action
         'internal.mfa-demo.ping',                 // platform-scoped, local/testing only
+        'app.platform.elevation.create',          // Phase 0N.3: entering and
+        'app.platform.elevation.confirm',         // exiting platform elevation
+        'app.platform.elevation.confirm.show',    // (ADR 0044) is how an
+        'app.platform.elevation.store',           // elevated context begins
+        'app.platform.elevation.exit',            // and ends
     ];
 
     #[Test]
@@ -76,6 +81,28 @@ class SchoolContextRouteGuardTest extends TestCase
         }
 
         $this->assertSame([], $missing, "School-scoped web routes without 'auth' + 'school-context' -- move them into routes/web.php's School group:\n".implode("\n", $missing));
+    }
+
+    /**
+     * Phase 0N.3 (ADR 0044 sections 7-8): elevation is refused on every
+     * School route unless the route opts in with `school-context:elevated`,
+     * and each opt-in needs its own ADR. None exists yet -- so no route may
+     * carry it, and none may accept elevation any other way.
+     */
+    #[Test]
+    public function no_route_accepts_platform_elevation_in_phase_0n3(): void
+    {
+        $optedIn = [];
+
+        foreach (app(Router::class)->getRoutes()->getRoutes() as $route) {
+            foreach ($route->gatherMiddleware() as $middleware) {
+                if (is_string($middleware) && str_starts_with($middleware, 'school-context:')) {
+                    $optedIn[] = $route->uri().' ['.$middleware.']';
+                }
+            }
+        }
+
+        $this->assertSame([], $optedIn, 'A route opted in to platform elevation without its own ADR (ADR 0044 section 8).');
     }
 
     #[Test]

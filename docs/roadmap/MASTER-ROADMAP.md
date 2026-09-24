@@ -1163,6 +1163,21 @@ the elevation duration, the reason-code catalog, MFA re-verification vs.
 re-login and target selection. Phase 0N stays **BLOCKED** on D1, D11,
 D12, D13, D15, D16 and D18.
 
+**Phase 0N.3 — Platform Elevation Substrate (done, 2026-09-24).** Owner
+values: fixed 30 minutes; a fresh in-session MFA re-verification on every
+start; reason codes `operational_support`, `security_investigation`,
+`configuration_assistance`, `incident_response`; exact target (verified
+School domain or School UUID), no directory. Built: the
+`platform.schools.elevate` capability (Platform Super Admin only), the
+database-guarded `school_elevations` record (one active per actor, 30-
+minute CHECK, no reactivation, undeletable), start/confirm/exit, the
+elevated-access banner, per-request validation with forced termination,
+an expiry sweep, the five platform audit events and
+`school_audit_events.elevation_id`. **Zero** School or source-module
+routes accept elevated context: an elevated Platform Admin gets 403 on
+every School page and API route. Phase 0N stays **BLOCKED** on D1, D11,
+D12, D13, D15, D16 and D18.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,

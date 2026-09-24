@@ -1,6 +1,25 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 
+// Phase 0N.3: why the last platform elevation ended (one-request flash).
+const elevationNotices: Record<string, string> = {
+    started: 'Elevated access started.',
+    exited: 'Elevated access ended.',
+    logout: 'Elevated access ended.',
+    ended: 'Elevated access has already ended.',
+    expired: 'Elevated access expired.',
+    actor_disabled: 'Elevated access ended: this account is disabled.',
+    capability_revoked: 'Elevated access ended: this account may no longer enter Schools.',
+    school_ineligible: 'Elevated access ended: that School is no longer available.',
+    membership_conflict:
+        'Elevated access ended: you are a member of that School — select it from your School list instead.',
+    mfa_factor_revoked: 'Elevated access ended: multi-factor authentication was removed.',
+};
+
+function endElevation() {
+    router.post('/app/platform/elevation/exit');
+}
+
 interface Membership {
     schoolId: string;
     schoolName: string;
@@ -12,6 +31,12 @@ interface Props {
     // because no valid School was selected (RequireSchoolContext).
     schoolContextNotice: 'select' | 'not_saved' | null;
     platformAccount: boolean;
+    platformElevation: {
+        canStart: boolean;
+        isElevated: boolean;
+        activeElsewhere: { schoolName: string; expiresAt: string } | null;
+        notice: string | null;
+    };
     activeSchool: { id: string; name: string } | null;
     memberships: Membership[];
     nav: {
@@ -63,6 +88,45 @@ function activate(schoolId: string) {
             <template v-else>That page belongs to a School, and this account has none.</template>
         </p>
 
+        <p
+            v-if="platformElevation.notice && elevationNotices[platformElevation.notice]"
+            role="status"
+            class="mt-6 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm"
+            data-testid="elevation-notice"
+        >
+            {{ elevationNotices[platformElevation.notice] }}
+        </p>
+
+        <section v-if="platformElevation.isElevated" class="mt-6" data-testid="elevated-state">
+            <h2 class="text-sm font-medium text-slate-500">Elevated access</h2>
+            <p class="mt-1 text-sm">
+                Elevated access is active (see the banner above). It grants no School permissions,
+                and no School page is available under elevated access yet. Exit elevated access
+                before selecting one of your own Schools.
+            </p>
+        </section>
+
+        <section
+            v-else-if="platformElevation.activeElsewhere"
+            class="mt-6"
+            data-testid="elevated-elsewhere"
+        >
+            <h2 class="text-sm font-medium text-slate-500">Elevated access</h2>
+            <p class="mt-1 text-sm">
+                Elevated access into {{ platformElevation.activeElsewhere.schoolName }} is active in
+                another session until
+                {{ new Date(platformElevation.activeElsewhere.expiresAt).toLocaleTimeString() }}.
+            </p>
+            <button class="mt-2 text-sm underline" @click="endElevation">End it now</button>
+        </section>
+
+        <section v-else-if="platformElevation.canStart" class="mt-6" data-testid="enter-school">
+            <h2 class="text-sm font-medium text-slate-500">Platform</h2>
+            <a class="mt-1 inline-block text-sm underline" href="/app/platform/elevation">
+                Enter a School (elevated access)
+            </a>
+        </section>
+
         <section class="mt-6">
             <h2 class="text-sm font-medium text-slate-500">Active School</h2>
             <p class="mt-1" data-testid="active-school">
@@ -81,7 +145,10 @@ function activate(schoolId: string) {
             </p>
         </section>
 
-        <section v-else-if="memberships.length > 1 || !activeSchool" class="mt-6">
+        <section
+            v-else-if="!platformElevation.isElevated && (memberships.length > 1 || !activeSchool)"
+            class="mt-6"
+        >
             <h2 class="text-sm font-medium text-slate-500">
                 {{ activeSchool ? 'Switch School' : 'Select a School' }}
             </h2>

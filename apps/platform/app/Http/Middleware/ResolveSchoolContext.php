@@ -3,9 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Models\School;
-use App\Models\SchoolDomain;
 use App\Models\SchoolMembership;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Tenancy\VerifiedSchoolDomain;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -63,12 +63,7 @@ class ResolveSchoolContext
 
     private function resolveViaVerifiedDomain(Request $request): ?School
     {
-        $domain = SchoolDomain::query()
-            ->where('domain', $request->getHost())
-            ->whereNotNull('verified_at')
-            ->first();
-
-        return $domain?->school;
+        return VerifiedSchoolDomain::schoolFor($request->getHost());
     }
 
     private function resolveViaActiveSession(Request $request): ?School

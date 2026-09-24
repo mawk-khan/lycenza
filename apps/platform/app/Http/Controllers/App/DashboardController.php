@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\RequireSchoolContext;
+use App\Http\Middleware\ResolvePlatformElevation;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -26,7 +29,7 @@ use Inertia\Response;
  */
 class DashboardController extends Controller
 {
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, ElevationContext $elevated, SchoolElevationService $elevations): Response
     {
         $user = $request->user();
 
@@ -48,6 +51,11 @@ class DashboardController extends Controller
         }
 
         $notice = $request->session()->get(RequireSchoolContext::FLASH_KEY);
+        $elevationNotice = $request->session()->get(ResolvePlatformElevation::FLASH_KEY);
+        $canElevate = $capabilities->canPlatform($user, SchoolElevationService::CAPABILITY);
+        // An active elevation held by ANOTHER session of this actor (the
+        // one-per-actor slot is taken until it is exited or expires).
+        $elsewhere = ! $elevated->isElevated() && $canElevate ? $elevations->activeFor($user) : null;
 
         return Inertia::render('App/Dashboard', [
             'schoolContextNotice' => in_array($notice, ['select', 'not_saved'], true) ? $notice : null,
@@ -56,6 +64,17 @@ class DashboardController extends Controller
             // is. Platform capabilities never grant School access
             // (CapabilityResolver keeps the two apart).
             'platformAccount' => $capabilities->platformCapabilities($user) !== [],
+            // Phase 0N.3 (ADR 0044): platform elevation. The banner itself
+            // is the shared `elevation` prop (HandleInertiaRequests).
+            'platformElevation' => [
+                'canStart' => $canElevate && ! $elevated->isElevated() && $elsewhere === null,
+                'isElevated' => $elevated->isElevated(),
+                'activeElsewhere' => $elsewhere ? [
+                    'schoolName' => $elsewhere->school->name,
+                    'expiresAt' => $elsewhere->expires_at->toIso8601String(),
+                ] : null,
+                'notice' => is_string($elevationNotice) ? $elevationNotice : null,
+            ],
             'activeSchool' => $school ? [
                 'id' => $school->id,
                 'name' => $school->name,

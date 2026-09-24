@@ -28,7 +28,7 @@ class SchoolAuditEvent extends Model
 
     protected $fillable = [
         'school_id', 'occurred_at', 'actor_user_id', 'event_type',
-        'subject_type', 'subject_id', 'request_id', 'metadata',
+        'subject_type', 'subject_id', 'request_id', 'elevation_id', 'metadata',
     ];
 
     protected function casts(): array

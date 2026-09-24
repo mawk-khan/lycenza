@@ -159,8 +159,13 @@ docs/roadmap             MASTER-ROADMAP.md
     tenant resolution is verified domain routing
     (`school_domains`) or a session-stored active-School selection
     re-validated against a real membership on every request
-    (`App\Http\Middleware\ResolveSchoolContext`) — never a raw
-    client-supplied header. `X-School-Id` is honoured ONLY by
+    (`App\Http\Middleware\ResolveSchoolContext`) — or, for a platform
+    actor, a session-stored elevation pointer re-validated against an
+    active `school_elevations` record on every request
+    (`App\Http\Middleware\ResolvePlatformElevation`, ADR 0044), which
+    establishes the School only on a route that explicitly opted in
+    (rule 83) — never a raw client-supplied header. `X-School-Id` is
+    honoured ONLY by
     `App\Http\Middleware\DevOnlySchoolHeaderResolver`, which is
     double-guarded (config flag AND `environment(['local','testing'])`)
     and must stay that way.
@@ -749,6 +754,20 @@ docs/roadmap             MASTER-ROADMAP.md
     reported separately, never skipped to make a run green. Record in
     each unit's report which unit it is since the last full-regression
     checkpoint.
+
+83. **Platform elevation grants tenant context, never School authority,
+    and no School route accepts it by default.** An elevated request
+    (`App\Support\Tenancy\ElevationContext`) is refused with 403 on
+    every School route unless that route declares
+    `school-context:elevated`, and adding that declaration to any route
+    requires its own ADR naming the operation, a narrow `platform.*`
+    capability checked alongside the elevation, and allow/deny tests
+    (ADR 0044 section 8). No route declares it as of Phase 0N.3
+    (`Tests\Feature\Tenancy\SchoolContextRouteGuardTest`). Never map a
+    platform role to School capabilities, never create or reuse a School
+    membership for an elevated actor, never extend or reactivate an
+    elevation (fixed 30 minutes, database-checked), and never resolve
+    elevation on `/api/*` or for AI context tokens.
 
 ## Running things locally
 

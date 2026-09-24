@@ -2,6 +2,8 @@
 
 namespace App\Support\Auth\Mfa;
 
+use App\Domain\Platform\Application\Elevation\ElevationEndReason;
+use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Models\User;
 use App\Models\UserMfaRecoveryCode;
 use App\Support\Audit\AuditRecorder;
@@ -22,6 +24,7 @@ class MfaFactorService
         private readonly MfaChallengeService $challenge,
         private readonly MfaRecoveryCodeService $recoveryCodes,
         private readonly AuditRecorder $audit,
+        private readonly SchoolElevationService $elevations,
     ) {}
 
     /**
@@ -50,5 +53,8 @@ class MfaFactorService
         });
 
         $this->audit->platform(MfaAuditActions::DISABLED, actor: $user, subject: $factor);
+
+        // Phase 0N.3 (ADR 0044 section 11): see MfaAdminResetService.
+        $this->elevations->finishActiveFor($user, ElevationEndReason::MfaFactorRevoked);
     }
 }
