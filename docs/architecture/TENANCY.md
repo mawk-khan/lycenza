@@ -267,6 +267,40 @@ applying the same `try`/`catch` pattern to the remaining sites is
 recommended before relying on this guarantee universally in
 production.
 
+## School-scoped web routes (Phase 0N.1)
+
+Every signed-in web route that reads or writes one School's data lives in
+`routes/web.php`'s School group, `Route::middleware(['auth',
+'school-context'])`. `school-context` (`App\Http\Middleware\RequireSchoolContext`)
+is the single School-context prerequisite for the web surface:
+
+- It consumes the School `ResolveSchoolContext` established (verified
+  domain, or the session selection re-validated against an active
+  membership and an active School) and additionally requires an active
+  membership in that School and an account that is not disabled. It
+  never selects a School and never falls back to another membership.
+- Without a valid School the controller never runs: a GET/HEAD page
+  request returns to the `/app` landing ("Select a School to continue");
+  a JSON request or any mutation gets `409` with code
+  `school_context_required` (Inertia mutations: `409` +
+  `X-Inertia-Location: /app`). A stale session School is removed and the
+  Inertia history key rotated.
+- It is priority-pinned after the School resolvers and `auth`, and
+  before `SubstituteBindings` — School-scoped route model binding never
+  runs without a validated School — and before `capability:`/`mfa`.
+- A controller in the School group may rely on
+  `TenantContext::requireSchool()`. `TenantContextRequiredException`
+  remains the fail-closed invariant for jobs, commands and services; on a
+  School-group route it indicates a bug.
+- The context-neutral signed-in routes (`/app`, School activation,
+  account security, logout, platform-scoped actions) are an explicit
+  allowlist in `Tests\Feature\Tenancy\SchoolContextRouteGuardTest`,
+  which fails for any new signed-in web route that is in neither.
+- `/api/v1` is untouched: the School is in the URL and
+  `school-membership` (`EnsureSchoolMembershipContext`) verifies it.
+
+See `docs/architecture/PHASE-0N-READINESS.md` section 11 ("Resolution").
+
 ## What is NOT yet implemented (Phase 0B honesty note)
 
 Real School/Campus/membership/role data model, RLS, application-layer

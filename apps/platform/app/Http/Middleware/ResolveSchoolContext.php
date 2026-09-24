@@ -8,6 +8,7 @@ use App\Models\SchoolMembership;
 use App\Support\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -75,7 +76,10 @@ class ResolveSchoolContext
         $user = $request->user();
         $schoolId = $request->hasSession() ? $request->session()->get('active_school_id') : null;
 
-        if ($user === null || $schoolId === null) {
+        // A value that is not a UUID can never name a School; querying the
+        // uuid column with it would be a PostgreSQL error (a 500), not "no
+        // School". Treated as stale -- RequireSchoolContext clears it.
+        if ($user === null || ! is_string($schoolId) || ! Str::isUuid($schoolId)) {
             return null;
         }
 

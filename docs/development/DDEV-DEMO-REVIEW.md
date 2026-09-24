@@ -246,7 +246,7 @@ minute.
 | HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
-| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (8 `platform.*` capabilities) | **No platform UI exists**: empty dashboard, no School; module URLs return 500 (no tenant) |
+| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (8 `platform.*` capabilities) | **No platform UI exists**: `/app` shows a neutral "platform account, no School access" state; it has no School context by design, and School URLs return to `/app` |
 | Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
 | Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: same as Teacher |
 | Guardian | `guardian01@example.test` | Current parent experience | Member with no role, linked to Guardian Priya Sharma (activated via the real invitation flow) | **No parent/guardian portal exists**: same as Teacher |
@@ -263,11 +263,17 @@ minute.
 `test@example.com` / `password` (no School membership). It is not part of
 the demo and not in the login panel.
 
-**Selecting a School is required after every login.** The application does
-not auto-select a School: the dashboard lists your memberships -- click
-the School. Until you do, every module URL returns **500**
-(`TenantContextRequiredException`) -- existing application behaviour, not a
-demo defect.
+**Selecting a School is required after every login.** Sign-in lands on
+the context-neutral `/app` page, and the application never selects a
+School for you: `/app` lists your memberships under "Select a School" --
+click one. Until you do, a School page (a menu link, a bookmark or a
+typed URL) sends you back to `/app` with "Select a School to continue"
+instead of opening, and a form submitted without a School is refused
+(409, nothing saved). The same happens if the selected School stops being
+usable (membership suspended or removed, School suspended): the selection
+is cleared and you choose again. An account with no School membership --
+including the Platform Admin -- gets a neutral `/app` with no School data.
+Phase 0N.1; see `docs/architecture/PHASE-0N-READINESS.md` section 11.
 
 ### About the demo-only roles
 
@@ -294,7 +300,7 @@ Platform Admin (there is no platform UI to review).
 
 | Persona | Exists in code? | Login? | Tenant scope | Capabilities | Usable UI |
 |---|---|---|---|---|---|
-| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 8 `platform.*` | **None** -- no platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
+| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 8 `platform.*` | **None** beyond the neutral `/app` landing -- no platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
 | School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 147 catalog capabilities | Full admin UI |
 | Principal | Yes (system role `principal`) | Yes | One School | 79 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
 | Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
@@ -344,8 +350,12 @@ Platform Admin (there is no platform UI to review).
 12. Open **Mailpit** -> "You're invited to Lycenza Demo School" for
     `guardian02@example.test` -> follow the link -> set a password ->
     you are signed in as a newly activated guardian.
-13. **platform.admin@example.test**: empty dashboard, no School -- the
-    platform administration UI is not built yet.
+13. **platform.admin@example.test**: `/app` says this is a platform
+    account with no School access, and shows no School data; typing a
+    School URL (for example `/app/students`) returns to `/app`. It stays
+    without School context on purpose -- there is no way to enter a
+    School (Phase 0N elevation is not built) and no platform
+    administration UI.
 14. **Analytics** (Phase 0L.2-1): as **School Admin** or **Principal**,
     Dashboard -> **Analytics: Curriculum Coverage**
     (`/app/analytics/curriculum-coverage`). It shows, for the active
@@ -501,7 +511,7 @@ run -- use the docker-compose `minio` service for those.
 
 | Symptom | Fix |
 |---|---|
-| 500 on every module page after login | Select the School on the dashboard (see section 10). |
+| Every module page returns to `/app` ("Select a School to continue") | No School is selected yet, or the selection became invalid: select the School on `/app` (see section 10). A 500 on a School page is now a bug -- report it. |
 | 500 on login: `Target class [...] does not exist` | `vendor/` is out of date for this branch: `ddev composer install`. |
 | Blank page / missing assets | `ddev exec npm ci && ddev exec npm run build` (or `ddev demo-reset --build`). |
 | `ddev npm ...` cannot find `package.json` | Use `ddev exec npm ...` or run from `apps/platform`. |

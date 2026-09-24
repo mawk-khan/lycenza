@@ -1134,7 +1134,18 @@ group reporting are unspecified, and the architecture, product and
 security decisions required first. It also records a prerequisite found
 during the audit: with no School selected — every user after sign-in —
 135 of 141 School pages return 500. The proposed first checkpoint fixes
-that and adds a platform-scope landing, without elevation. Not started.
+that and adds a platform-scope landing, without elevation.
+
+**Phase 0N.1 — Safe School Context & Platform Landing (done, 2026-09-24).**
+D9(a) and D10(a) approved and implemented: every School-scoped web route
+requires a valid selected School before anything School-scoped runs
+(`school-context`, `RequireSchoolContext`; pages return to `/app`,
+mutations/JSON get 409 `school_context_required`), stale selections are
+cleared, `/app` is a context-neutral landing (explicit selection, or a
+neutral state for accounts with no School, including the Platform Super
+Admin), and a route guard test keeps new School pages inside the
+boundary. No elevation, group, reporting or platform-management work.
+Phase 0N itself stays **BLOCKED** on D1–D8 and D11–D18.
 
 ## Phase 0O — External Surface and Production Readiness
 
