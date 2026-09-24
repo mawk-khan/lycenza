@@ -27,7 +27,7 @@ builds it (`docs/architecture/DOMAIN-MAP.md` Layer 0).
 
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|
-| Platform Super Admin | Human, platform staff | Cross-tenant | Operates through a dedicated, audited administrative path (`docs/architecture/TENANCY.md`) — not a permanent "bypass tenant scoping" flag in normal application code. |
+| Platform Super Admin | Human, platform staff | Cross-tenant | Operates through a dedicated, audited administrative path (`docs/architecture/TENANCY.md`) — not a permanent "bypass tenant scoping" flag in normal application code. Entering one School is a temporary, explicit elevation that grants no School capability (ADR 0044, contract only). |
 | School Group Admin | Human | One School Group's member schools | Cross-school access within a group is an explicit, granted, audited elevation (ADR 0004) — not automatic from group membership alone. |
 | School Admin | Human | One School (all campuses) | |
 | Principal / Vice Principal | Human | One School (or one Campus, per school configuration) | |
@@ -339,6 +339,32 @@ applies equally here.
 Tests: `tests/Feature/Auth/SessionEndedHistoryPrivacyTest.php`; the
 real browser check is in `docs/development/DDEV-DEMO-REVIEW.md`.
 
+## Platform elevation into a School (ADR 0044 — contract, not built)
+
+The contract for a platform actor temporarily entering one School
+(Phase 0N.2) keeps two questions separate:
+
+1. **May this actor start and keep an elevation?** A dedicated platform
+   capability, `platform.schools.elevate` (recommended; not seeded), plus
+   MFA through the existing `MfaChallengeService` checks (ADR 0037), a
+   reason code and explicit confirmation — re-checked on every elevated
+   request. `platform.schools.manage` is deliberately not reused.
+2. **May an elevated actor perform this operation?** Only if the
+   operation has opted in through its own ADR and an explicit check
+   requiring a valid elevation for this School **and** a narrow
+   `platform.*` capability for that operation, with the module's own
+   validation, MFA, legal gates and audit unchanged.
+
+Elevation establishes tenant context and **grants no School
+capability**: `CapabilityResolver::schoolCapabilities()` stays
+membership-only, no membership or role row is created, and platform
+roles never map to School roles. School routes refuse elevated context
+(403) unless they explicitly opt in — none do initially — because some
+School pages are gated by membership or context rather than by a
+capability. Start, end, expiry, forced termination and denied attempts
+are audited in the platform ledger. Web session only; never `/api/v1`.
+See ADR 0044 for the full contract.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles, a UI for managing role assignments (only the data
@@ -346,6 +372,6 @@ model + a seeded system catalog exist), a real "platform admin enters a
 specific School's context" elevation workflow (the brief in section 12
 deliberately asked for only the *foundation*, proven by denial — see
 `CapabilityResolverTest::platform_capability_grant_does_not_imply_school_capability`
-— not the workflow itself), and any actor-category-specific UI beyond
+— not the workflow itself; its contract is now ADR 0044, still unbuilt), and any actor-category-specific UI beyond
 the minimal login/dashboard/settings pages proving the architecture
 (`docs/architecture/ARCHITECTURE.md`).

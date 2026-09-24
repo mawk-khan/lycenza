@@ -301,6 +301,29 @@ is the single School-context prerequisite for the web surface:
 
 See `docs/architecture/PHASE-0N-READINESS.md` section 11 ("Resolution").
 
+## Platform elevation (ADR 0044 — contract, not built)
+
+ADR 0044 fixes how a platform actor will temporarily establish one
+School's context; none of it exists yet. For tenancy it means:
+
+- Elevation uses the existing `TenantContext::set()` for exactly one
+  School — same GUC, same `SchoolScope`, same forced RLS. No second
+  context system, no multi-School context, no `BYPASSRLS`.
+- It will be a third trusted source of **web** School context: a session
+  pointer to a persistent elevation record, re-validated on every request
+  (active, unexpired, same actor, actor not disabled, still holding
+  `platform.schools.elevate`, School active, actor not a member). The
+  implementation amends CLAUDE.md rule 20 and this document at that time.
+- The elevation record is platform-owned and read before any School
+  context exists, so it has no RLS — a deliberate exception like
+  `school_memberships`; no School route or School capability reads it.
+- `RequireSchoolContext` will admit an elevated context only on routes
+  that explicitly opt in; every other School route refuses it (403)
+  before binding and the controller. None opt in initially.
+- Never on `/api/v1` (`school-membership` stays membership-only),
+  internal APIs or AI context tokens; never derived from a verified
+  domain or `X-School-Id`.
+
 ## What is NOT yet implemented (Phase 0B honesty note)
 
 Real School/Campus/membership/role data model, RLS, application-layer

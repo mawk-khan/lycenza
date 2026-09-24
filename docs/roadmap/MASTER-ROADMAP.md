@@ -1147,6 +1147,22 @@ Admin), and a route guard test keeps new School pages inside the
 boundary. No elevation, group, reporting or platform-management work.
 Phase 0N itself stays **BLOCKED** on D1–D8 and D11–D18.
 
+**Phase 0N.2 — Cross-Tenant Elevation Contract (done, 2026-09-24,
+documentation only).** The owner approved D2–D8, D14 and D17;
+**ADR 0044** freezes the contract for a platform actor temporarily
+establishing one School's context: explicit, confirmed, reason-coded,
+MFA-assured, bounded, visible, audited; a persistent elevation record
+(one active per actor, no reactivation); elevation establishes tenant
+context but grants **no** School capability and authorizes **zero**
+source modules — School routes refuse elevated context unless an
+operation opts in through its own ADR; web session only, never
+`/api/v1`, internal APIs or AI; not cross-School reporting, group
+administration or School lifecycle. Nothing is built. Before the
+proposed substrate checkpoint (Phase 0N.3, ADR 0044) the owner must set
+the elevation duration, the reason-code catalog, MFA re-verification vs.
+re-login and target selection. Phase 0N stays **BLOCKED** on D1, D11,
+D12, D13, D15, D16 and D18.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,
