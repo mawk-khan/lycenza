@@ -212,9 +212,10 @@ signed-in page (it shows the account's name and email, whether or not a
 School is selected; 403 pages carry their own Log out button). Signing
 out returns to the login page, where the shortcuts can be used again:
 
-Log out → login screen → browser **Back** must not reveal the previous
-account's page (it lands on the login screen again; Forward likewise) →
-choose another demo persona.
+Log out → a freshly loaded login screen (a full page load, not an
+in-place swap) → browser **Back** must not reveal the previous account's
+page (it lands on the login screen again; Forward likewise) → choose
+another demo persona.
 
 If Back ever shows the previous name/email or page data after logout,
 that is a privacy defect, not a demo quirk: see "After logout" in

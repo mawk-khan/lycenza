@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Phase 0B auth foundation (section 15): Laravel's built-in session
@@ -113,7 +114,7 @@ class LoginController extends Controller
         return redirect()->intended('/app');
     }
 
-    public function destroy(Request $request, AuditRecorder $audit): RedirectResponse
+    public function destroy(Request $request, AuditRecorder $audit): SymfonyResponse
     {
         $user = Auth::user();
 
@@ -132,6 +133,14 @@ class LoginController extends Controller
         // signed-in page (HandleInertiaRequests encrypts them).
         Inertia::clearHistory();
 
-        return redirect('/login');
+        // An Inertia (XHR) logout gets Inertia's hard-navigation response
+        // (409 + X-Inertia-Location), so the client does a real top-level
+        // load of /login: the tab's active document becomes a fresh guest
+        // one, instead of the signed-in document (its initial page JSON
+        // and JavaScript page objects) living on behind a client-side swap
+        // to the login page. A plain form logout (the Blade 403 page)
+        // already navigates, and Inertia::location() hands it this same
+        // ordinary redirect. See docs/security/AUTHORIZATION.md.
+        return Inertia::location(redirect('/login'));
     }
 }
