@@ -84,4 +84,52 @@ class AiGatewayClient
 
         return $response->json('result') ?? [];
     }
+
+    /**
+     * A model completion through the AI Gateway, under exactly the same rule
+     * as invokeTool(): the actor must hold `$capability` in `$school` BEFORE
+     * a context token is minted, and the token carries only that
+     * capability. The gateway then has Laravel verify the token
+     * (AiCompletionAuthorizationController) before any provider runs, and
+     * audits the call durably. No production code calls this yet: Phase 0M
+     * is BLOCKED (docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md), and
+     * the gateway only has the offline NullProvider.
+     *
+     * @return array{text: string, provider: string, model: string}
+     */
+    public function complete(User $actor, School $school, string $capability, string $agent, string $prompt): array
+    {
+        if (! $this->capabilities->canInSchool($actor, $capability, $school)) {
+            throw new AiGatewayAuthorizationException(
+                "User {$actor->id} does not hold capability '{$capability}' in School {$school->id}; refusing to mint an AI context token."
+            );
+        }
+
+        $contextToken = $this->tokens->issue($school, $actor, [$capability], $this->context->requestId());
+
+        $currentTraceId = $this->context->traceId();
+        $childSpan = $currentTraceId !== null
+            ? TraceContext::forTraceId($currentTraceId)
+            : TraceContext::start();
+
+        $response = Http::withHeaders([
+            'X-Service-Token' => (string) config('services.ai_gateway.service_token'),
+            'traceparent' => $childSpan->toHeader(),
+        ])
+            ->baseUrl((string) config('services.ai_gateway.base_url'))
+            ->timeout(10)
+            ->post('/v1/complete', [
+                'agent' => $agent,
+                'context_token' => $contextToken,
+                'prompt' => $prompt,
+            ]);
+
+        $response->throw();
+
+        return [
+            'text' => (string) $response->json('text'),
+            'provider' => (string) $response->json('provider'),
+            'model' => (string) $response->json('model'),
+        ];
+    }
 }

@@ -93,6 +93,7 @@ use App\Domain\Transport\Http\Controllers\TransportVehicleController;
 use App\Domain\Visitor\Http\Controllers\VisitorController;
 use App\Domain\Visitor\Http\Controllers\VisitorVisitController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
+use App\Http\Controllers\Api\Internal\AiCompletionAuthorizationController;
 use App\Http\Controllers\Api\Internal\AiToolController;
 use App\Http\Controllers\Api\Internal\HealthController;
 use App\Http\Controllers\Api\Internal\OperationsController;
@@ -2030,4 +2031,12 @@ Route::prefix('internal/ai')->group(function (): void {
     Route::post('/audit', [AiAuditController::class, 'store'])
         ->middleware(['ai-service:ai.audit.write', 'throttle:internal-service'])
         ->name('api.internal.ai.audit.store');
+
+    // Gap G1 (AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md): the gateway must have
+    // Laravel verify a signed context token before running ANY model
+    // completion. Same service capability as tool invocation -- both are
+    // the gateway acting for a verified human in one School.
+    Route::post('/completions/authorize', [AiCompletionAuthorizationController::class, 'authorizeCompletion'])
+        ->middleware(['ai-service:ai.tools.invoke', 'throttle:internal-service'])
+        ->name('api.internal.ai.completions.authorize');
 });

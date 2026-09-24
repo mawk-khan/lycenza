@@ -24,5 +24,18 @@ class Settings(BaseSettings):
     # other Laravel route, and must never touch the database directly.
     erp_contract_base_url: str = "http://platform:8000/api/internal/ai"
 
+    # Gap G4 (docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md): the
+    # off-by-default switch for any EXTERNAL model provider. Kept as raw
+    # text so that a missing, empty or malformed value can never switch it
+    # on or stop the service booting: only the exact word "true" (any case)
+    # enables it. Turning it on is only permitted after the recorded
+    # legal/compliance approvals that gate requires -- and no external
+    # provider exists in this codebase either way.
+    real_providers_enabled: str = ""
+
+    @property
+    def real_providers_allowed(self) -> bool:
+        return self.real_providers_enabled.strip().lower() == "true"
+
 
 settings = Settings()

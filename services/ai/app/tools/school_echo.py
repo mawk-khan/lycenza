@@ -24,10 +24,10 @@ async def handle(payload: dict) -> dict:
             headers={"Authorization": f"Bearer {settings.service_token}"},
         )
 
+    # Gap G3: the status code only -- a response body never reaches the
+    # error message, the 502 detail or a log line.
     if response.status_code != 200:
-        raise ToolExecutionError(
-            f"ERP tool contract returned {response.status_code}: {response.text}"
-        )
+        raise ToolExecutionError(f"ERP tool contract returned {response.status_code}.")
 
     body = response.json()
     return body.get("result", {})

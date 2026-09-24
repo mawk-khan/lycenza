@@ -1,4 +1,8 @@
-from fastapi import Depends, FastAPI, Header, Request
+import logging
+import time
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -8,7 +12,8 @@ from app.audit.ledger import AuditEntry, audit_ledger
 from app.core.health import router as health_router
 from app.core.security import require_service_token
 from app.core.trace import TraceContext
-from app.gateway.router import model_router
+from app.gateway.completion_auth import CompletionAuthorizationError, authorize_completion
+from app.gateway.router import ProviderNotAllowedError, UnknownProviderError, model_router
 from app.providers.base import CompletionRequest
 from app.tools import school_echo
 from app.tools.registry import (
@@ -18,8 +23,31 @@ from app.tools.registry import (
     tool_registry,
 )
 
+logger = logging.getLogger(__name__)
+
+# Gap G4: refuse to start if an external provider is registered while the
+# real-provider switch is off (the router also refuses at registration and
+# selection time).
+model_router.assert_fail_closed()
+
 app = FastAPI(title="School OS AI Gateway", version="0.0.1-phase-0b")
 app.include_router(health_router)
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+    """Gap G3: FastAPI's default 422 echoes the offending input, which could
+    be a prompt or a context token. Report only where and what kind of
+    problem -- never the value."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": [
+                {"loc": list(error.get("loc", ())), "type": error.get("type")}
+                for error in exc.errors()
+            ]
+        },
+    )
 
 
 @app.exception_handler(ToolAuthorizationError)
@@ -30,6 +58,7 @@ async def handle_tool_authorization_error(_: Request, exc: ToolAuthorizationErro
 @app.exception_handler(ToolExecutionError)
 async def handle_tool_execution_error(_: Request, exc: ToolExecutionError) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": str(exc)})
+
 
 # Phase 0B primitive: proves the full Agent -> Capability -> Tool ->
 # Authorization -> Domain service -> Audit chain (ADR 0014, ADR 0023)
@@ -48,15 +77,21 @@ agent_registry.register(
     AgentDefinition(
         name="phase0b-proof-agent",
         granted_capabilities=frozenset({"school.echo.invoke"}),
+        # Gap G1 proof path: reuses the capability the proof tool already
+        # relies on -- no new, future production permission is invented.
+        completion_capability="school.settings.view",
     )
 )
 
 
 class CompletionApiRequest(BaseModel):
-    school_id: str
     agent: str
+    context_token: str
     prompt: str
     provider: str | None = None
+    # Optional and never trusted: if present it must match the School in
+    # the verified context token, which is the only authoritative source.
+    school_id: str | None = None
 
 
 class CompletionApiResponse(BaseModel):
@@ -65,28 +100,106 @@ class CompletionApiResponse(BaseModel):
     model: str
 
 
+def _refuse(status_code: int, code: str) -> HTTPException:
+    return HTTPException(status_code=status_code, detail=code)
+
+
 @app.post(
     "/v1/complete",
     response_model=CompletionApiResponse,
     dependencies=[Depends(require_service_token)],
 )
-async def complete(request: CompletionApiRequest) -> CompletionApiResponse:
-    """Phase 0A primitive proving the AI Gateway boundary end to end:
-    an authenticated internal caller -> model router -> provider
-    interface -> audit ledger. Only the offline NullProvider is wired
-    up; no real model provider call happens in this checkpoint.
+async def complete(
+    request: CompletionApiRequest, traceparent: str | None = Header(default=None)
+) -> CompletionApiResponse:
+    """A model completion, fail-closed (gaps G1-G4,
+    docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md):
+
+    1. the agent must declare a completion capability (else 403);
+    2. the provider must be selectable -- an external provider is refused
+       while the real-provider switch is off;
+    3. Laravel verifies the signed context token and that the actor still
+       holds the agent's capability, and returns the only authoritative
+       School/actor -- all BEFORE the provider is called;
+    4. the provider runs (only the offline NullProvider exists);
+    5. the call is audited durably in Laravel (identifiers and numbers
+       only). If that audit cannot be written, the output is withheld
+       (503): no model output leaves without its audit record.
+
+    Errors carry stable codes only -- never a prompt, output or body.
     """
-    provider = model_router.resolve(request.provider)
-    result = await provider.complete(CompletionRequest(prompt=request.prompt))
+    try:
+        agent = agent_registry.get(request.agent)
+    except KeyError:
+        raise _refuse(403, "agent_not_allowed") from None
+    if agent.completion_capability is None:
+        raise _refuse(403, "agent_not_allowed")
+
+    try:
+        provider = model_router.resolve(request.provider)
+    except (ProviderNotAllowedError, UnknownProviderError):
+        raise _refuse(403, "provider_not_allowed") from None
+
+    try:
+        authorization = await authorize_completion(
+            context_token=request.context_token,
+            capability=agent.completion_capability,
+            school_id=request.school_id,
+        )
+    except CompletionAuthorizationError as exc:
+        raise _refuse(exc.status_code, exc.code) from None
+
+    if request.school_id is not None and request.school_id != authorization.school_id:
+        raise _refuse(422, "context_mismatch")
+
+    started = time.monotonic()
+    try:
+        result = await provider.complete(CompletionRequest(prompt=request.prompt))
+        outcome, provider_error = "succeeded", None
+    except Exception as exc:  # noqa: BLE001 -- any provider failure is normalized
+        result, outcome, provider_error = None, "provider_error", type(exc).__name__
+    latency_ms = int((time.monotonic() - started) * 1000)
 
     audit_ledger.record(
         AuditEntry(
-            school_id=request.school_id,
+            school_id=authorization.school_id,
             agent=request.agent,
             tool=None,
             action="model.complete",
         )
     )
+    durable = await laravel_audit.write_through(
+        school_id=authorization.school_id,
+        agent=request.agent,
+        tool=None,
+        action="model.complete",
+        context_token=request.context_token,
+        trace=TraceContext.from_header(traceparent),
+        provider=provider.name,
+        model=result.model if result is not None else None,
+        outcome=outcome,
+        latency_ms=latency_ms,
+        input_tokens=result.input_tokens if result is not None else None,
+        output_tokens=result.output_tokens if result is not None else None,
+    )
+
+    logger.info(
+        "ai.complete",
+        extra={
+            "school_id": authorization.school_id,
+            "agent": request.agent,
+            "provider": provider.name,
+            "outcome": outcome,
+            "latency_ms": latency_ms,
+            "audited": durable is not None,
+            "provider_error": provider_error,
+        },
+    )
+
+    if result is None:
+        raise _refuse(502, "provider_error")
+    if durable is None:
+        raise _refuse(503, "audit_unavailable")
 
     return CompletionApiResponse(text=result.text, provider=result.provider, model=result.model)
 

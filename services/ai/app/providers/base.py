@@ -30,5 +30,11 @@ class ModelProvider(ABC):
 
     name: str
 
+    # Gap G4: every provider is treated as EXTERNAL (it could send data off
+    # the platform) unless it explicitly declares otherwise. Only the
+    # offline NullProvider does. A provider that forgets to set this is
+    # therefore gated by ModelRouter, never silently allowed.
+    external: bool = True
+
     @abstractmethod
     async def complete(self, request: CompletionRequest) -> CompletionResult: ...

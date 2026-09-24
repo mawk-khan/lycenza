@@ -137,6 +137,22 @@ different School or a capability the original actor didn't hold. This
 is the concrete implementation of "no cross-tenant data exposure
 through a shared agent process" from this document's threat model.
 
+## Model completions fail closed (2026-09-24)
+
+`/v1/complete` now follows the same rule as tools: the invoking human's
+capability is checked before a context token is minted
+(`AiGatewayClient::complete()`), the gateway has Laravel verify that
+token and re-check the capability before the provider is called
+(`/api/internal/ai/completions/authorize`), the School always comes from
+the verified token, every model call is audited durably with
+identifiers and numbers only, and no output is returned if that audit
+cannot be written. Gateway logs and errors never carry prompts, outputs
+or bodies, and an external provider stays off unless
+`REAL_PROVIDERS_ENABLED` is exactly `true` — which is only permitted
+after the recorded approvals in
+`docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`. Only the offline
+`NullProvider` exists; Phase 0M remains BLOCKED.
+
 ## What Phase 0B proves vs. what remains to be built
 
 **Proven now** (passing tests — `services/ai/tests/`,

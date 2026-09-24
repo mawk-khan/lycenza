@@ -16,6 +16,10 @@ class AgentDefinition:
     name: str
     tenant_scoped: bool = True
     granted_capabilities: frozenset[str] = field(default_factory=frozenset)
+    # Gap G1: the Laravel capability the invoking human must hold (and the
+    # signed context token must carry) for this agent to run a model
+    # completion at all. None means the agent cannot use /v1/complete.
+    completion_capability: str | None = None
 
 
 class AgentRegistry:
