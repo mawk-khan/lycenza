@@ -6,6 +6,7 @@ use App\Models\PlatformAuditEvent;
 use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 
@@ -55,6 +56,10 @@ class AuditRecorder
             'subject_type' => $subject ? $subject::class : null,
             'subject_id' => $subject?->getKey(),
             'request_id' => $this->context->requestId(),
+            // Phase 0N.3 (ADR 0044 section 13): stamped automatically --
+            // never by module code -- when the row is written under a
+            // platform elevation; NULL for every ordinary School action.
+            'elevation_id' => app(ElevationContext::class)->elevationId(),
             'metadata' => $metadata,
         ]);
     }

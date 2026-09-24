@@ -83,6 +83,7 @@ use App\Http\Controllers\App\Payroll\Statutory\StatutoryAccountingConfigurationC
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryController as StatutoryPayrollController;
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryEmployeeController;
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryExportController as StatutoryPayrollExportController;
+use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
@@ -155,7 +156,8 @@ Route::middleware('throttle:guardian-invitation-accept')->group(function (): voi
 // Signed-in routes that need NO School context (Phase 0N.1, D9(a)/D10(a)):
 // the /app landing (School selection, or the neutral state for an
 // account with no School), School activation itself, the User's own
-// account security, logout and the platform-scoped actions. This list is
+// account security, logout and the platform-scoped actions (including
+// entering and exiting platform elevation, Phase 0N.3). This list is
 // deliberately small and mirrored by the explicit allowlist in
 // Tests\Feature\Tenancy\SchoolContextRouteGuardTest -- anything that
 // reads or writes one School's data belongs in the School group below.
@@ -210,6 +212,26 @@ Route::middleware('auth')->group(function (): void {
     // School-scoped route.
     Route::post('/app/account/admin/users/{targetUser}/mfa/reset', [MfaAdminController::class, 'reset'])
         ->name('app.account.admin.mfa.reset');
+
+    // Phase 0N.3 (ADR 0044): platform elevation into ONE School -- exact
+    // target, confirmation, fresh MFA, 30 minutes, audited. Context-neutral
+    // by design (it is how an elevated context begins and ends). The form
+    // page requires the capability; the POSTs check it inside
+    // SchoolElevationService so a refusal is audited. Exit needs no
+    // capability: an actor must always be able to leave.
+    Route::prefix('app/platform/elevation')->name('app.platform.elevation.')->group(function (): void {
+        Route::get('/', [SchoolElevationController::class, 'create'])
+            ->middleware('capability:platform.schools.elevate,platform')
+            ->name('create');
+        Route::post('/confirm', [SchoolElevationController::class, 'confirm'])
+            ->middleware('throttle:platform-elevation')
+            ->name('confirm');
+        Route::get('/confirm', fn () => redirect()->route('app.platform.elevation.create'))->name('confirm.show');
+        Route::post('/', [SchoolElevationController::class, 'store'])
+            ->middleware('throttle:platform-elevation')
+            ->name('store');
+        Route::post('/exit', [SchoolElevationController::class, 'exit'])->name('exit');
+    });
 });
 
 // Every School-scoped web route (Phase 0N.1, D10(a)). `school-context`

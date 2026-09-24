@@ -61,6 +61,15 @@ Schedule::command('automation:executions-redispatch')
     ->withoutOverlapping()
     ->name('automation-executions-redispatch');
 
+// Phase 0N.3 (ADR 0044 section 10): record expiry of platform School
+// elevations whose session went away without another request. The
+// conditional finish in SchoolElevationService is the correctness
+// guarantee; withoutOverlapping() is an efficiency safeguard only.
+Schedule::command('platform:expire-school-elevations')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('expire-school-elevations');
+
 // Phase 0C closeout: the two retention prunes run daily. Neither records
 // a scheduler heartbeat -- OperationalStatusService judges heartbeats
 // against one minute-scale staleness threshold, which a daily task would

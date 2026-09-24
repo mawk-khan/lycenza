@@ -21,6 +21,10 @@ class CapabilityAndRoleSeeder extends Seeder
         $capabilities = [
             ['key' => 'platform.schools.view', 'label' => 'View schools (platform)', 'namespace' => 'platform'],
             ['key' => 'platform.schools.manage', 'label' => 'Manage schools (platform)', 'namespace' => 'platform'],
+            // Phase 0N.3 (ADR 0044): start a temporary, audited elevation into
+            // ONE School's context. Grants no School capability; deliberately
+            // separate from platform.schools.manage.
+            ['key' => 'platform.schools.elevate', 'label' => 'Enter a School via temporary elevation (platform)', 'namespace' => 'platform'],
             ['key' => 'school.settings.view', 'label' => 'View school settings', 'namespace' => 'school'],
             ['key' => 'school.settings.manage', 'label' => 'Manage school settings', 'namespace' => 'school'],
             ['key' => 'school.members.view', 'label' => 'View school members', 'namespace' => 'school'],
@@ -765,6 +769,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'platform.service_identities.view', 'platform.service_identities.manage',
                     'platform.operations.view',
                     'platform.users.mfa.reset',
+                    'platform.schools.elevate',
                 ],
             ],
             'school_admin' => [

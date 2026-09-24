@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\SchoolMembership;
+use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Auth\AuthenticationException;
@@ -46,6 +47,12 @@ use Symfony\Component\HttpFoundation\Response;
  * no 404 is produced for it) before the School context is known --
  * and before every `capability:`/`mfa` route middleware. /api/v1 does
  * not use it: the School is in the URL there (`school-membership`).
+ *
+ * Phase 0N.3: a request carrying a valid platform elevation
+ * (ElevationContext) never takes the membership path below -- it is
+ * refused with 403 `school_elevation_not_permitted` unless the route
+ * explicitly opted in with `school-context:elevated` (none does yet).
+ * A request is membership context or elevated context, never both.
  * See docs/architecture/TENANCY.md ("School-scoped web routes").
  */
 class RequireSchoolContext
@@ -59,12 +66,28 @@ class RequireSchoolContext
 
     public const SESSION_KEY = 'active_school_id';
 
-    public function handle(Request $request, Closure $next): Response
+    /**
+     * Route parameter (`school-context:elevated`) by which a School route
+     * explicitly accepts a platform-elevated request. No production route
+     * uses it in Phase 0N.3 (SchoolContextRouteGuardTest); each future use
+     * needs its own ADR (ADR 0044 section 8).
+     */
+    public const MODE_ELEVATED = 'elevated';
+
+    public const ELEVATION_NOT_PERMITTED = 'school_elevation_not_permitted';
+
+    public function handle(Request $request, Closure $next, ?string $mode = null): Response
     {
         $user = $request->user();
 
         if ($user === null) {
             throw new AuthenticationException;
+        }
+
+        $elevation = app(ElevationContext::class);
+
+        if ($elevation->isElevated()) {
+            return $this->handleElevated($request, $next, $elevation, $mode === self::MODE_ELEVATED);
         }
 
         $school = app(TenantContext::class)->school();
@@ -83,6 +106,41 @@ class RequireSchoolContext
         }
 
         return $this->refuse($request);
+    }
+
+    /**
+     * Phase 0N.3 (ADR 0044 section 7): a platform-elevated request. It is
+     * refused (403) on every School route that has not explicitly opted in
+     * with `school-context:elevated` -- the default for every existing
+     * School route -- because elevation grants no School capability and
+     * some School pages are gated by membership or context alone. On an
+     * opted-in route the elevation's ONE School is established through the
+     * ordinary TenantContext (same GUC, same RLS), unless a verified domain
+     * or the local header resolved a different School for this request.
+     */
+    private function handleElevated(Request $request, Closure $next, ElevationContext $elevation, bool $optedIn): Response
+    {
+        $record = $elevation->elevation();
+
+        if (! $optedIn || $elevation->hasTargetConflict() || $record === null || $record->school === null) {
+            if ($request->expectsJson() && $request->header('X-Inertia') !== 'true') {
+                return response()->json([
+                    'error' => [
+                        'message' => 'Elevated access does not grant access to this School page.',
+                        'status' => 403,
+                        'code' => self::ELEVATION_NOT_PERMITTED,
+                        'requestId' => $request->attributes->get('request_id'),
+                        'errors' => null,
+                    ],
+                ], 403);
+            }
+
+            abort(403, 'Elevated access does not grant access to this School page.');
+        }
+
+        app(TenantContext::class)->set($record->school);
+
+        return $next($request);
     }
 
     /**

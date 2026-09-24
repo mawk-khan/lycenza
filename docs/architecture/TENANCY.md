@@ -301,25 +301,33 @@ is the single School-context prerequisite for the web surface:
 
 See `docs/architecture/PHASE-0N-READINESS.md` section 11 ("Resolution").
 
-## Platform elevation (ADR 0044 — contract, not built)
+## Platform elevation (ADR 0044 — substrate implemented in Phase 0N.3)
 
-ADR 0044 fixes how a platform actor will temporarily establish one
-School's context; none of it exists yet. For tenancy it means:
+ADR 0044 fixes how a platform actor temporarily establishes one
+School's context; Phase 0N.3 built the substrate with **no School route
+accepting it**. For tenancy it means:
 
 - Elevation uses the existing `TenantContext::set()` for exactly one
   School — same GUC, same `SchoolScope`, same forced RLS. No second
   context system, no multi-School context, no `BYPASSRLS`.
-- It will be a third trusted source of **web** School context: a session
-  pointer to a persistent elevation record, re-validated on every request
+- It is a third trusted source of **web** School context (CLAUDE.md rule
+  20): the session pointer `platform_elevation_id`, re-validated by
+  `App\Http\Middleware\ResolvePlatformElevation` on every request
   (active, unexpired, same actor, actor not disabled, still holding
-  `platform.schools.elevate`, School active, actor not a member). The
-  implementation amends CLAUDE.md rule 20 and this document at that time.
-- The elevation record is platform-owned and read before any School
-  context exists, so it has no RLS — a deliberate exception like
+  `platform.schools.elevate`, School active, actor not a member, MFA
+  factor still active, no `active_school_id` beside it). A valid one sets
+  the request-scoped `App\Support\Tenancy\ElevationContext` only; any
+  School a domain or header resolved is discarded, and a different one
+  blocks School context for that request.
+- The record, `school_elevations`, is platform-owned and read before any
+  School context exists, so it has no RLS — a deliberate exception like
   `school_memberships`; no School route or School capability reads it.
-- `RequireSchoolContext` will admit an elevated context only on routes
-  that explicitly opt in; every other School route refuses it (403)
-  before binding and the controller. None opt in initially.
+  It is database-guarded: one active row per actor, a 30-minute CHECK,
+  finished rows immutable, `DELETE` revoked from the runtime role.
+- `RequireSchoolContext` admits an elevated context only on a route
+  declaring `school-context:elevated` — none does (CLAUDE.md rule 83) —
+  and only then puts the target School into `TenantContext`; every other
+  School route refuses it (403) before binding and the controller.
 - Never on `/api/v1` (`school-membership` stays membership-only),
   internal APIs or AI context tokens; never derived from a verified
   domain or `X-School-Id`.

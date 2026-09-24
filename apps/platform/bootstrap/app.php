@@ -11,6 +11,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventAuthenticatedPageCaching;
 use App\Http\Middleware\RequireMfa;
 use App\Http\Middleware\RequireSchoolContext;
+use App\Http\Middleware\ResolvePlatformElevation;
 use App\Http\Middleware\ResolveSchoolContext;
 use App\Http\Middleware\VerifyAiGatewayServiceToken;
 use App\Support\Auth\SessionEndedResponder;
@@ -66,7 +67,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // are `no-store, private` so Back after logout cannot restore
         // them from the HTTP or back/forward cache (see its docblock).
         $middleware->web(
-            append: [ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, HandleInertiaRequests::class, PreventAuthenticatedPageCaching::class],
+            append: [ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, ResolvePlatformElevation::class, HandleInertiaRequests::class, PreventAuthenticatedPageCaching::class],
         );
 
         $middleware->api(
@@ -88,6 +89,20 @@ return Application::configure(basePath: dirname(__DIR__))
             prepend: DevOnlySchoolHeaderResolver::class,
         );
 
+        // Phase 0N.3 (ADR 0044): the session elevation pointer is resolved
+        // after every ordinary School resolver (so it can discard and
+        // detect a School they set) and before `school-context`. Web group
+        // only -- the `api` group has no session and never resolves it.
+        // A single `after:` entry on purpose: DevOnlySchoolHeaderResolver
+        // already sits after ResolveSchoolContext, and the framework's
+        // "after the last of several" insertion is not reliable when the
+        // listed entries are adjacent (asserted by
+        // Tests\Feature\Platform\Elevation\ElevationArchitectureGuardTest).
+        $middleware->appendToPriorityList(
+            after: DevOnlySchoolHeaderResolver::class,
+            append: ResolvePlatformElevation::class,
+        );
+
         // `school-context` is route middleware, so without a priority
         // entry it would run AFTER SubstituteBindings: a School-scoped
         // route model would be bound (and 404) with no School context
@@ -97,7 +112,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // `mfa` route middleware and the controller (asserted by
         // Tests\Feature\Tenancy\SchoolContextRouteGuardTest).
         $middleware->appendToPriorityList(
-            after: [AuthenticatesRequests::class, ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class],
+            after: [AuthenticatesRequests::class, ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, ResolvePlatformElevation::class],
             append: RequireSchoolContext::class,
         );
     })

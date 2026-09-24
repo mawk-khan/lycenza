@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\ElevationContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -21,9 +22,17 @@ use Illuminate\Validation\ValidationException;
  */
 class SchoolSwitchController extends Controller
 {
-    public function store(Request $request, School $school, AuditRecorder $audit): RedirectResponse
+    public function store(Request $request, School $school, AuditRecorder $audit, ElevationContext $elevation): RedirectResponse
     {
         $user = $request->user();
+
+        // Phase 0N.3 (ADR 0044 section 12): ordinary selection never
+        // silently ends or replaces a platform elevation -- Exit first.
+        if ($elevation->isElevated()) {
+            throw ValidationException::withMessages([
+                'school' => 'Exit elevated access before selecting a School.',
+            ]);
+        }
 
         $membership = SchoolMembership::query()
             ->where('user_id', $user->id)

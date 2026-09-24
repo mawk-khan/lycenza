@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Tenancy\ElevationContext;
 use Closure;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -54,12 +55,21 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
+        $elevation = app(ElevationContext::class)->elevation();
 
         return [
             ...parent::share($request),
             'auth' => [
                 'user' => $user ? ['id' => $user->id, 'name' => $user->name, 'email' => $user->email] : null,
             ],
+            // Phase 0N.3 (ADR 0044 section 12): drives the persistent
+            // elevated-access banner on every signed-in page. Only the
+            // target School's name and the fixed expiry -- no other School
+            // data, and nothing that implies a School permission.
+            'elevation' => $user !== null && $elevation !== null ? [
+                'schoolName' => $elevation->school?->name,
+                'expiresAt' => $elevation->expires_at->toIso8601String(),
+            ] : null,
         ];
     }
 }

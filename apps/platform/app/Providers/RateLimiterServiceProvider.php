@@ -168,6 +168,12 @@ class RateLimiterServiceProvider extends ServiceProvider
         RateLimiter::for('mfa-recovery-code', fn (Request $request) => Limit::perMinute(8)
             ->by($request->user()->id));
 
+        // Phase 0N.3 (ADR 0044): the platform elevation confirm/start
+        // steps -- the start carries an MFA code, so the same actor-keyed
+        // bound as the other signed-in MFA code limiters.
+        RateLimiter::for('platform-elevation', fn (Request $request) => Limit::perMinute(8)
+            ->by($request->user()->id));
+
         RateLimiter::for('mfa-password-confirmation', fn (Request $request) => Limit::perMinute(6)
             ->by($request->user()->id));
 

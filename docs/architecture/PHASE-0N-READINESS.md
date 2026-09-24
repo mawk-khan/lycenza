@@ -15,7 +15,13 @@ D1–D8 and D11–D18 remain open and the status above is unchanged.
 D17**; **ADR 0044 (Cross-Tenant Elevation Contract)** records them as an
 implementation contract for temporary platform elevation into one School
 (nothing built). D1, D11, D12, D13, D15, D16 and D18 remain open and the
-status above is unchanged. Phase 0M (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
+status above is unchanged. **Update (Phase 0N.3, 2026-09-24):** the
+elevation **substrate** is implemented (ADR 0044 "Implementation
+amendment"): `platform.schools.elevate`, the `school_elevations` record,
+exact-target start with a fresh MFA re-verification, a fixed 30-minute
+lifetime, the banner, Exit, expiry and forced termination, and platform
+audit — with **zero** School routes accepting elevated context. It
+unblocks nothing else; the status above is unchanged. Phase 0M (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
 Sources: `docs/roadmap/MASTER-ROADMAP.md` ("Phase 0B", "Phase 0N — Multi-School
@@ -85,13 +91,14 @@ The repository treats these as separate; they must not be merged.
 | RLS | Yes | Yes | 144 tables with RLS enabled and forced; runtime role `school_os_app` is `NOSUPERUSER NOBYPASSRLS` (checked in DDEV and by `RawIsolationTest`) | — |
 | Cross-School record isolation | Yes | Yes | DDEV: multi.school with Annexe selected — own student 200, Demo School student 404; annexe.admin selecting Demo School — refused | — |
 | Behaviour before a School is selected | Yes (Phase 0N.1) | Yes | Was: 135 of 141 School page routes returned 500 (section 11). Now: `school-context` (`RequireSchoolContext`) on every School web route returns to `/app`; mutations/JSON get 409 `school_context_required` | — |
-| Platform Super Admin | Partly | Foundation only | Section 4 | Neutral `/app` landing only (D9(a)); no School scope, no platform UI |
+| Platform Super Admin | Partly | Foundation only | Section 4 | Neutral `/app` landing (D9(a)); temporary elevation into one School (Phase 0N.3, ADR 0044) that opens no School page yet; no platform administration UI |
 | School Groups | Tables only | No | Section 1 | No behaviour at all |
 
 ## 4. Platform Super Admin today
 
 - **Meaning.** A `platform`-scoped role (`platform_super_admin`) in
-  `platform_role_assignments` holding the eight `platform.*`
+  `platform_role_assignments` holding the eight `platform.*` (nine since
+  Phase 0N.3, which added `platform.schools.elevate`)
   capabilities: `platform.schools.view`, `platform.schools.manage`,
   `platform.feature_flags.view`/`.manage`,
   `platform.service_identities.view`/`.manage`,
@@ -524,6 +531,7 @@ Engineering prerequisites:
 |---|---|
 | No-School web requests handled without a 500 | **Done** (Phase 0N.1, D10(a); section 11 "Resolution") |
 | Platform-scope landing | **Done** as the neutral `/app` state (Phase 0N.1, D9(a)); no platform administration UI |
+| Elevation substrate | **Done** (Phase 0N.3, ADR 0044 amendment); no School route opted in |
 | Classification rows for 0N records | **Elevation records done** (D14, ADR 0044, DATA-CLASSIFICATION.md); School metadata / memberships / platform roles / directory still missing |
 | Suspension enforced beyond web/API | **Missing** (section 13, D11) |
 | School deletion safe for audit/finance evidence | **Not safe** (cascade FKs, section 13); only matters if deletion is ever in scope |

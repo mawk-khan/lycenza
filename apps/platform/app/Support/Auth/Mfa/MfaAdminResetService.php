@@ -2,6 +2,8 @@
 
 namespace App\Support\Auth\Mfa;
 
+use App\Domain\Platform\Application\Elevation\ElevationEndReason;
+use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Models\User;
 use App\Models\UserMfaRecoveryCode;
 use App\Support\Audit\AuditRecorder;
@@ -21,7 +23,10 @@ use Illuminate\Support\Facades\DB;
  */
 class MfaAdminResetService
 {
-    public function __construct(private readonly AuditRecorder $audit) {}
+    public function __construct(
+        private readonly AuditRecorder $audit,
+        private readonly SchoolElevationService $elevations,
+    ) {}
 
     public function reset(User $actor, User $target): void
     {
@@ -36,5 +41,9 @@ class MfaAdminResetService
         });
 
         $this->audit->platform(MfaAuditActions::RESET_BY_ADMIN, actor: $actor, subject: $target);
+
+        // Phase 0N.3 (ADR 0044 section 11): an elevation was started under
+        // this MFA factor; with the factor gone it ends now.
+        $this->elevations->finishActiveFor($target, ElevationEndReason::MfaFactorRevoked);
     }
 }
