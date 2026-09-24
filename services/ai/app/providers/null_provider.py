@@ -10,9 +10,10 @@ class NullProvider(ModelProvider):
     """
 
     name = "null"
+    external = False
 
     async def complete(self, request: CompletionRequest) -> CompletionResult:
-        echoed = request.prompt[:request.max_tokens]
+        echoed = request.prompt[: request.max_tokens]
         return CompletionResult(
             text=f"[null-provider stub response] {echoed}",
             provider=self.name,

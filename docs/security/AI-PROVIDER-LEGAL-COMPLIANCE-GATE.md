@@ -8,6 +8,12 @@ nothing. It is written by engineering, not legal counsel, and makes no
 claim that any provider, contract or configuration satisfies any law
 (`docs/security/DATA-CLASSIFICATION.md`, opening note).
 
+**Update 2026-09-24:** the four engineering gaps G1–G4 (section 3) are
+**ENGINEERING HARDENING COMPLETE** — with the offline `NullProvider`
+only; no provider, SDK or credential was added. That does not unblock
+Phase 0M: every provider/legal and product decision in section 18 is
+still open, and the status below is unchanged.
+
 Sources: `docs/roadmap/MASTER-ROADMAP.md` ("Phase 0M — AI Platform: Real
 Agents"), ADR 0013 (provider-independent AI Gateway), ADR 0014
 (capability-gated tool/action boundary), ADR 0023 (signed context
@@ -41,7 +47,7 @@ Class: **A** production-ready substrate · **B** test/mock-only ·
 | `NullProvider` (offline echo, no network) | `services/ai/app/providers/null_provider.py` | B |
 | Real provider adapter (any vendor) | — | **D** |
 | `ModelRouter` (registry; only `null` registered; unknown name raises) | `services/ai/app/gateway/router.py` | A (mechanism) |
-| `/v1/complete` (service token only; caller-supplied `school_id`; in-process audit only) | `services/ai/app/main.py` | C — must be hardened before a real provider (section 3) |
+| `/v1/complete` — since the G1–G4 hardening: Laravel-verified context token and agent completion capability, durable audit, sanitized errors, provider switch | `services/ai/app/main.py`, `app/gateway/completion_auth.py`; Laravel `AiCompletionAuthorizationController` | A (NullProvider only) |
 | `/v1/tools/invoke` + `ToolRegistry.invoke()` capability check | `services/ai/app/main.py`, `app/tools/registry.py` | A |
 | `school.echo` tool → Laravel `POST /api/internal/ai/tools/school-echo` | `app/tools/school_echo.py`, `App\Http\Controllers\Api\Internal\AiToolController` | B (proof, read-only) |
 | Agent registry with `phase0b-proof-agent` | `app/agents/registry.py` | B (proof) |
@@ -67,9 +73,10 @@ Evidence that no School data can reach an external model today:
   nothing in the running ERP sends a request to the gateway.
 - Laravel never holds provider credentials (ADR 0013).
 
-Gaps that are harmless while only `NullProvider` exists but **must be
-closed before any real provider is registered** (recorded, not fixed by
-this checkpoint):
+Gaps that were harmless while only `NullProvider` existed but had to be
+closed before any real provider is registered. **All four were closed on
+2026-09-24 (engineering hardening, NullProvider only)** — see "As
+hardened" below the table.
 
 | # | Gap | Why it matters with a real provider |
 |---|---|---|
@@ -77,6 +84,51 @@ this checkpoint):
 | G2 | Model calls are recorded only in the in-process ledger; only tool calls are written through to Laravel | "Every model call ... is written to the AI Audit Log" (ADR 0014) would not hold durably |
 | G3 | `laravel_audit.write_through` logs a rejected response `body`; `school_echo` puts the Laravel response text into `ToolExecutionError` (returned as the 502 detail) | Response bodies must never reach logs or callers once real data flows (section 8) |
 | G4 | No provider enable switch exists | A real provider must be off by default and enabled per environment and per School only after approval (18B/18C) |
+
+**As hardened (2026-09-24):**
+
+- **G1** — `/v1/complete` requires, besides the service token, a signed
+  context token and an agent that declares a `completion_capability`
+  (the proof agent reuses `school.settings.view`; no new permission).
+  Before the provider is called, the gateway asks Laravel
+  (`POST /api/internal/ai/completions/authorize`,
+  `App\Http\Controllers\Api\Internal\AiCompletionAuthorizationController`,
+  service capability `ai.tools.invoke`) to verify signature, expiry and
+  capability claim, match an optional `school_id`, and re-check that the
+  actor still holds the capability in that School now. Laravel returns
+  the only authoritative School and actor. Refusals are stable codes
+  (`context_invalid`, `capability_denied`, `context_mismatch`,
+  `authorization_unavailable`, `agent_not_allowed`).
+  `App\Support\Ai\AiGatewayClient::complete()` mirrors `invokeTool()`
+  (capability check before minting); it has no production caller.
+- **G2** — every completion that reaches the provider is written through
+  to `school_audit_events` (`ai.gateway_action_recorded`, action
+  `model.complete`) with provider, model, outcome, latency and numeric
+  token counts only; `AiAuditController` now accepts identifiers and
+  bounded numbers only. **No output is released without its durable
+  audit**: if the write-back fails the caller gets 503
+  `audit_unavailable`; a provider failure is 502 `provider_error` and is
+  audited as such when possible. A refused request is not audited as a
+  model call (no model ran).
+- **G3** — gateway logs carry status codes and exception class names,
+  never response bodies; tool-relay errors carry the status code only;
+  request-validation errors report location and type, never the input
+  (FastAPI's default 422 echoes the body, which could hold a prompt or
+  token); provider exceptions are normalized.
+- **G4** — `REAL_PROVIDERS_ENABLED` (gateway setting
+  `real_providers_enabled`) is off unless it is exactly `true`; missing,
+  empty or malformed values are off and never stop the service booting.
+  Every `ModelProvider` counts as external unless it declares
+  `external = False` (only `NullProvider` does). `ModelRouter` refuses an
+  external provider at registration, at selection, and at startup
+  (`assert_fail_closed`). Turning the switch on is only permitted after
+  the section 18/20 approvals, and no external provider exists anyway.
+
+Tests: `services/ai/tests/test_complete_fail_closed.py` (refusals before
+the provider, audit semantics, canaries in prompt/output/error bodies
+absent from logs/responses/audit, switch, dependency and no-network
+guards); Laravel `Tests\Feature\Api\Internal\AiCompletionAuthorizationTest`,
+`AiAuditControllerTest`, `Tests\Feature\Ai\AiGatewayClientTest`.
 
 ## 4. Data that could reach a provider
 
@@ -180,7 +232,8 @@ latency, token counts, outcome code, correlation/trace ids. They must
 results, HTTP request/response bodies to or from the provider or Laravel,
 provider error bodies, API keys or tokens (including context tokens).
 Metrics labels carry none of the high-cardinality ids (CLAUDE.md
-rule 63). Gap G3 is the current deviation to close.
+rule 63). Gap G3 was closed on 2026-09-24 (section 3); a general
+redaction layer on the gateway is still not built.
 
 ## 9. Secrets and provider credentials
 
@@ -249,7 +302,7 @@ identifiers and codes only — no prompts or outputs) recording: invoking
 human, School, agent, tool, capability exercised, provider and model,
 proposal made, approval requested / granted / refused (and by whom),
 write executed (by the source module's own audit), and outcome. Model
-calls must be written through durably (gap G2).
+calls are written through durably since the G2 hardening (section 3).
 
 ## 14. Relationship to Automation, Analytics and Compliance
 
@@ -329,10 +382,10 @@ made here.
 | Decision | Options / evidence | Approver | Blocks what? |
 |---|---|---|---|
 | Confirm authority model (invoking human ∩ agent capabilities, context token) | Section 10; ADR 0014/0023 | Security | Real agent |
-| Close G1 (`/v1/complete` without context token) | Section 3 | Security | Real provider |
-| Close G2 (durable model-call audit) | Section 13 | Security | Real provider |
-| Close G3 (bodies in logs/errors) | Section 8 | Security | Real provider |
-| Provider enable switch, off by default (G4) | Section 15 | Security + product | Real provider |
+| ~~Close G1~~ — **done 2026-09-24** (engineering; section 3) | Section 3 | Security | — |
+| ~~Close G2~~ — **done 2026-09-24** | Section 13 | Security | — |
+| ~~Close G3~~ — **done 2026-09-24** | Section 8 | Security | — |
+| ~~Provider enable switch, off by default (G4)~~ — **done 2026-09-24**; turning it on still needs the approvals | Section 15 | Security + product | — |
 | Provider-key custody and rotation | Section 9; ADR 0016 | Security | Any environment with a real key |
 | Prompt Registry / output validation for the first agent | Sections 6, 16 | Security | Real agent |
 
@@ -375,7 +428,8 @@ leaves the platform, and no real agent or AI write tool is built.**
 **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS REQUIRED.**
 Unresolved blocking decisions: every row of 18A, the first-agent,
 first-tool, approval-workflow, invoker-capability and opt-in rows of
-18B, and every row of 18C. Provider-neutral hardening that uses only
-`NullProvider` (G1–G4) could be scheduled as its own unit if the owner
-chooses; it does not unblock Phase 0M, which is about a real provider
-and a real agent.
+18B, and the open rows of 18C (authority-model confirmation,
+provider-key custody and rotation, Prompt Registry and output
+validation). The provider-neutral hardening G1–G4 is complete
+(2026-09-24); it does not unblock Phase 0M, which is about a real
+provider and a real agent.

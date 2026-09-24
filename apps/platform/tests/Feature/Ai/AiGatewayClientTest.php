@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Ai;
 
+use App\Support\Ai\AiContextTokenService;
 use App\Support\Ai\AiGatewayAuthorizationException;
 use App\Support\Ai\AiGatewayClient;
 use Illuminate\Support\Facades\Http;
@@ -127,5 +128,40 @@ class AiGatewayClientTest extends TestCase
         Http::fake(['*/v1/tools/invoke' => Http::response(['result' => []], 200)]);
         app(AiGatewayClient::class)->invokeTool($user, $schoolA, 'school.settings.view', 'phase0b-proof-agent', 'school.echo');
         Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function a_completion_mints_a_token_for_exactly_that_capability_and_sends_no_school_id(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+        Http::fake(['*/v1/complete' => Http::response(['text' => 'ok', 'provider' => 'null', 'model' => 'null-echo-1'], 200)]);
+
+        $result = app(AiGatewayClient::class)->complete($user, $school, 'school.settings.view', 'phase0b-proof-agent', 'hello');
+
+        $this->assertSame(['text' => 'ok', 'provider' => 'null', 'model' => 'null-echo-1'], $result);
+        Http::assertSent(function ($request) use ($school, $user) {
+            $claims = app(AiContextTokenService::class)->verify($request['context_token']);
+
+            return array_keys($request->data()) === ['agent', 'context_token', 'prompt']
+                && $request->hasHeader('X-Service-Token', 'dev-local-only-token')
+                && $claims?->schoolId === $school->id
+                && $claims->actorId === $user->id
+                && $claims->capabilities === ['school.settings.view'];
+        });
+    }
+
+    #[Test]
+    public function a_completion_is_refused_before_any_token_or_request_without_the_capability(): void
+    {
+        $user = $this->createUser();
+        $school = $this->createSchool();
+        Http::fake();
+
+        try {
+            app(AiGatewayClient::class)->complete($user, $school, 'school.settings.view', 'phase0b-proof-agent', 'hello');
+            $this->fail('Expected refusal.');
+        } catch (AiGatewayAuthorizationException) {
+            Http::assertNothingSent();
+        }
     }
 }

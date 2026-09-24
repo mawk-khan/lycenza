@@ -130,4 +130,58 @@ class AiAuditControllerTest extends TestCase
         // Context must not leak past this request.
         $this->assertFalse(app(TenantContext::class)->hasSchool());
     }
+
+    #[Test]
+    public function a_model_call_is_audited_with_identifiers_and_numbers_only(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+        $token = app(AiContextTokenService::class)->issue($school, $user, ['school.settings.view'], 'req-model-1');
+
+        $this->withToken(self::SERVICE_TOKEN)->postJson('/api/internal/ai/audit', [
+            'context_token' => $token,
+            'school_id' => $school->id,
+            'agent' => 'phase0b-proof-agent',
+            'tool' => null,
+            'action' => 'model.complete',
+            'provider' => 'null',
+            'model' => 'null-echo-1',
+            'outcome' => 'succeeded',
+            'latency_ms' => 3,
+            'input_tokens' => 4,
+            'output_tokens' => 5,
+        ])->assertOk();
+
+        $event = app(TenantContext::class)->withSchool($school, fn () => SchoolAuditEvent::query()->where('event_type', 'ai.gateway_action_recorded')->firstOrFail());
+
+        $this->assertSame($user->id, $event->actor_user_id);
+        $this->assertSame('req-model-1', $event->request_id);
+        // jsonb does not keep key order; compare as a set of pairs.
+        $this->assertEquals([
+            'agent' => 'phase0b-proof-agent', 'tool' => null, 'action' => 'model.complete',
+            'provider' => 'null', 'model' => 'null-echo-1', 'outcome' => 'succeeded',
+            'latencyMs' => 3, 'inputTokens' => 4, 'outputTokens' => 5,
+        ], $event->metadata);
+    }
+
+    #[Test]
+    public function free_text_or_bad_numbers_can_never_reach_audit_metadata(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+        $token = app(AiContextTokenService::class)->issue($school, $user, ['school.settings.view']);
+        $base = ['context_token' => $token, 'agent' => 'phase0b-proof-agent', 'action' => 'model.complete'];
+
+        foreach ([
+            ['agent' => 'a prompt SHOULD-NOT-APPEAR-IN-LOG with spaces'],
+            ['action' => str_repeat('a', 101)],
+            ['provider' => 'SHOULD-NOT-APPEAR-IN-LOG output text'],
+            ['model' => "line\nbreak"],
+            ['outcome' => 'ok; drop'],
+            ['latency_ms' => -1],
+            ['input_tokens' => 'many'],
+        ] as $bad) {
+            $this->withToken(self::SERVICE_TOKEN)->postJson('/api/internal/ai/audit', [...$base, ...$bad])->assertUnprocessable();
+        }
+
+        $this->assertSame(0, app(TenantContext::class)->withSchool($school, fn () => SchoolAuditEvent::query()->where('event_type', 'ai.gateway_action_recorded')->count()));
+    }
 }

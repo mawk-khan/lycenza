@@ -30,9 +30,28 @@ use Illuminate\Http\Request;
  */
 class AiAuditController extends Controller
 {
+    /** Agent, tool, action, provider, model and outcome are identifiers, never text. */
+    private const IDENTIFIER = '/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/';
+
     public function store(Request $request, AiContextTokenService $tokens, TenantContext $context, AuditRecorder $audit): JsonResponse
     {
-        $claims = $tokens->verify($request->string('context_token')->toString());
+        // Identifiers and numbers only (gaps G2/G3): free text can never be
+        // smuggled into audit metadata -- no prompt, output, argument or
+        // provider body reaches this ledger.
+        $validated = $request->validate([
+            'context_token' => ['required', 'string', 'max:4096'],
+            'agent' => ['required', 'string', 'regex:'.self::IDENTIFIER],
+            'tool' => ['sometimes', 'nullable', 'string', 'regex:'.self::IDENTIFIER],
+            'action' => ['required', 'string', 'regex:'.self::IDENTIFIER],
+            'provider' => ['sometimes', 'nullable', 'string', 'regex:'.self::IDENTIFIER],
+            'model' => ['sometimes', 'nullable', 'string', 'regex:'.self::IDENTIFIER],
+            'outcome' => ['sometimes', 'nullable', 'string', 'regex:'.self::IDENTIFIER],
+            'latency_ms' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:600000'],
+            'input_tokens' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:10000000'],
+            'output_tokens' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:10000000'],
+        ]);
+
+        $claims = $tokens->verify($validated['context_token']);
 
         if ($claims === null) {
             return response()->json(['error' => ['message' => 'Invalid or expired AI context token.']], 401);
@@ -60,11 +79,18 @@ class AiAuditController extends Controller
             $context->setActor($actor);
             $context->setRequestId($claims->requestId);
 
-            $event = $audit->school($school, 'ai.gateway_action_recorded', actor: $actor, metadata: [
-                'agent' => $request->string('agent')->toString(),
-                'tool' => $request->string('tool')->toString() ?: null,
-                'action' => $request->string('action')->toString(),
-            ]);
+            $event = $audit->school($school, 'ai.gateway_action_recorded', actor: $actor, metadata: array_merge([
+                'agent' => $validated['agent'],
+                'tool' => ($validated['tool'] ?? null) ?: null,
+                'action' => $validated['action'],
+            ], array_filter([
+                'provider' => $validated['provider'] ?? null,
+                'model' => $validated['model'] ?? null,
+                'outcome' => $validated['outcome'] ?? null,
+                'latencyMs' => $validated['latency_ms'] ?? null,
+                'inputTokens' => $validated['input_tokens'] ?? null,
+                'outputTokens' => $validated['output_tokens'] ?? null,
+            ], fn ($value) => $value !== null)));
 
             return response()->json(['audit' => [
                 'id' => $event->id,

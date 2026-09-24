@@ -20,17 +20,11 @@ def test_readiness_returns_ok_when_configuration_is_valid() -> None:
 def test_complete_requires_service_token() -> None:
     response = client.post(
         "/v1/complete",
-        json={"school_id": "t1", "agent": "test-agent", "prompt": "hello"},
+        json={"agent": "phase0b-proof-agent", "context_token": "t", "prompt": "hello"},
     )
     assert response.status_code == 401
 
 
-def test_complete_with_valid_token_uses_null_provider() -> None:
-    response = client.post(
-        "/v1/complete",
-        json={"school_id": "t1", "agent": "test-agent", "prompt": "hello"},
-        headers={"X-Service-Token": "dev-local-only-token"},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["provider"] == "null"
+# The old "service token alone is enough" test is gone on purpose: that was
+# gap G1. Completions now need a Laravel-verified context token -- see
+# tests/test_complete_fail_closed.py.

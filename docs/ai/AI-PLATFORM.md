@@ -27,8 +27,8 @@ core ERP function.
 
 | Component | Location | Status |
 |---|---|---|
-| **AI Gateway** (HTTP entrypoint) | `services/ai/app/main.py` | Implemented: `/health/live`, `/health/ready` (Phase 0C.4, unauthenticated — see `docs/architecture/OBSERVABILITY.md`), `/v1/complete`, `/v1/tools/invoke` (Phase 0B, service-token authenticated). |
-| **Model Provider Registry / Router** | `services/ai/app/gateway/router.py` | Implemented, with one registered provider. |
+| **AI Gateway** (HTTP entrypoint) | `services/ai/app/main.py` | Implemented: `/health/live`, `/health/ready` (Phase 0C.4, unauthenticated — see `docs/architecture/OBSERVABILITY.md`), `/v1/complete`, `/v1/tools/invoke` (Phase 0B, service-token authenticated). Since the 2026-09-24 fail-closed hardening `/v1/complete` additionally requires a Laravel-verified context token and an agent `completion_capability`, audits every model call durably (no output without its audit), and never echoes input or bodies in errors — see `docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md` §3. |
+| **Model Provider Registry / Router** | `services/ai/app/gateway/router.py` | Implemented, with one registered provider. Fail-closed: an external provider (any `ModelProvider` not declaring `external = False`) can be neither registered nor selected, and the app will not start with one, while `REAL_PROVIDERS_ENABLED` is off (the default). |
 | **Provider interface** | `services/ai/app/providers/base.py` | Implemented (`ModelProvider` ABC). |
 | **Offline provider** | `services/ai/app/providers/null_provider.py` | Implemented — deterministic, no network call, used for dev/tests. **No real model provider is integrated yet.** |
 | **Agent Registry** | `services/ai/app/agents/registry.py` | Implemented; one demo registration (`phase0b-proof-agent`, capability `school.echo.invoke`) proving the mechanism — not a real agent. |

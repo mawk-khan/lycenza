@@ -1108,6 +1108,14 @@ security decisions that must be recorded before implementation. No
 provider is selected. (Clarifies the audit note above: tool calls are
 written through durably; model calls are not yet.)
 
+**AI Gateway fail-closed hardening (2026-09-24, NullProvider only):**
+the four gaps are closed — completions need a Laravel-verified context
+token, every model call is audited durably (no output without its
+audit), gateway logs and errors carry no bodies, and an external
+provider can be neither registered nor selected while
+`REAL_PROVIDERS_ENABLED` is off (its default). Phase 0M remains
+**BLOCKED** on the provider/legal and product decisions.
+
 ## Phase 0N — Multi-School Management
 
 Group/Trust cross-school administration and reporting, building on

@@ -16,6 +16,12 @@ async def write_through(
     action: str,
     context_token: str,
     trace: TraceContext | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    outcome: str | None = None,
+    latency_ms: int | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
 ) -> dict | None:
     """Writes a durable audit entry into Laravel's authoritative
     SchoolAuditEvent store (Phase 0C section 58/69) -- resolves the
@@ -33,7 +39,13 @@ async def write_through(
     request over an audit-plumbing problem. The failure is logged
     locally (and the in-process AuditLedger still records the action)
     so it is visible in this service's own logs, but it never surfaces
-    as a 5xx to the agent/caller.
+    as a 5xx to the agent/caller. (Model completions are stricter: the
+    caller withholds the output when this returns None -- see
+    app.main.complete.)
+
+    Gaps G2/G3: identifiers and numbers only are sent (no prompt, output,
+    argument or result), and a failure is logged with its status code or
+    exception class only -- never a response body.
     """
     # Section 43: propagate a CHILD span of whatever trace this call
     # arrived under (e.g. the one Laravel started for the original
@@ -55,20 +67,34 @@ async def write_through(
                     "agent": agent,
                     "tool": tool,
                     "action": action,
+                    **{
+                        key: value
+                        for key, value in {
+                            "provider": provider,
+                            "model": model,
+                            "outcome": outcome,
+                            "latency_ms": latency_ms,
+                            "input_tokens": input_tokens,
+                            "output_tokens": output_tokens,
+                        }.items()
+                        if value is not None
+                    },
                 },
                 headers={
                     "Authorization": f"Bearer {settings.service_token}",
                     "traceparent": child.to_header(),
                 },
             )
-    except httpx.HTTPError:
-        logger.warning("laravel_audit.write_through_failed", exc_info=True)
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "laravel_audit.write_through_failed", extra={"exception": type(exc).__name__}
+        )
         return None
 
     if response.status_code != 200:
         logger.warning(
             "laravel_audit.write_through_rejected",
-            extra={"status_code": response.status_code, "body": response.text},
+            extra={"status_code": response.status_code},
         )
         return None
 
