@@ -102,6 +102,8 @@ class DashboardController extends Controller
                         || $capabilities->canInSchool($user, 'payroll.accounting.manage', $school)),
                 // Phase 0L.2-1: Analytics (Curriculum Coverage report).
                 'canViewAnalytics' => $school !== null && $capabilities->canInSchool($user, 'analytics.view', $school),
+                // Phase 0L.4: Compliance -- School audit-log review.
+                'canViewAuditLog' => $school !== null && $capabilities->canInSchool($user, 'school.audit.view', $school),
             ],
         ]);
     }

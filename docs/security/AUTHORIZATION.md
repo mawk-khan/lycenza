@@ -163,12 +163,16 @@ Coverage report neither requires nor grants `curriculum.delivery.view`
 and `Tests\Feature\App\CurriculumCoverageAnalyticsUiTest`).
 `analytics.export` is seeded but granted to no role; there is no export.
 
-Compliance (ADR 0042, Phase 0L.3 contract, not implemented) applies the
-same principle: `compliance.view`/`compliance.export`/`compliance.platform.view`
-are reserved and unseeded, audit-log review will use the existing
-`school.audit.view`, and no Compliance surface may show more, or require
-less (capability, MFA, access audit), than the source module does for
-the same data.
+Compliance (ADR 0042) applies the same principle:
+`compliance.view`/`compliance.export`/`compliance.platform.view` are
+reserved and unseeded, and no Compliance surface may show more, or
+require less (capability, MFA, access audit), than the source module does
+for the same data. As built in Phase 0L.4 (2026-09-24): the School
+audit-log review (`/app/compliance/audit-log`) requires
+`school.audit.view`, held by the `school_admin` and `principal` system
+roles only (no desk, teacher, student, guardian or platform role), shows
+envelope fields only, and audits every review
+(`Tests\Feature\Compliance\AuditLogReviewTest`).
 
 ## Multi-factor authentication (Phase 0H.4D-P1, ADR 0037)
 

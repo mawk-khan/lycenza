@@ -361,6 +361,19 @@ Platform Admin (there is no platform UI to review).
     been approved, so any report that counts people fails closed
     (`docs/security/ANALYTICS-SMALL-COHORT-POLICY-GATE.md`). There is no
     export.
+15. **Compliance: Audit log** (Phase 0L.4): as **School Admin** or
+    **Principal**, Dashboard -> **Compliance: Audit log**
+    (`/app/compliance/audit-log`). It lists the School's audit events,
+    newest first, 50 per page ("Older events ->"), showing only the event
+    envelope -- time, event type, actor user id, subject type and id,
+    request id, event id. Event details (metadata) are never shown. Each
+    visit adds one `compliance.audit_log.viewed` event, which appears at
+    the top on the next visit. Every other persona (teacher, HR & Payroll,
+    the `demo.*` desks, student, guardian, platform admin) gets **403** and
+    has no link. The Annexe's admin sees only Annexe events (initially
+    none but their own reviews); `multi.school` sees whichever School is
+    selected. The page records what happened -- it does not certify legal
+    compliance.
 
 ## 13. Interactive review map
 
@@ -387,6 +400,7 @@ Platform Admin (there is no platform UI to review).
 | Canteen | Dashboard -> Canteen Outlets / Items / Orders / Settings | Admin (Principal: no settings) | Yes | |
 | LMS: Learning Content, Assignments | `/app/learning-content`, `/app/assignments` (no nav link) | Admin, Principal | Yes (empty -- not seeded) | Submission is cancelled and has no screen |
 | Analytics: Curriculum Coverage | Dashboard -> Analytics: Curriculum Coverage (`/app/analytics/curriculum-coverage`) | Admin, Principal | Yes | Counts syllabus units only; no person Analytics, no export (Phase 0L.2-1) |
+| Compliance: Audit log | Dashboard -> Compliance: Audit log (`/app/compliance/audit-log`) | Admin, Principal | Yes | Envelope fields only, no metadata; each visit is itself audited (Phase 0L.4) |
 | Account security (MFA) | `/app/account/security` (no nav) | Any | Yes | MFA is opt-in; nothing requires it by default |
 | Guardian activation | Mailpit invitation link | (invitee) | Yes | |
 
@@ -434,7 +448,7 @@ Documented but not implemented on main: StudentMark / marks, results,
 report cards and transcripts (legally gated); Lesson Planning (deferred);
 Health and Safety (deferred, legally/security blocked); person-counting
 Analytics (blocked on the unapproved minimum cohort size), Analytics
-export, cross-School Analytics, Compliance, Automation (0L); real AI agents (0M); multi-school management
+export, cross-School Analytics, Compliance beyond the School audit log (0L.4), Automation (0L); real AI agents (0M); multi-school management
 UI (0N); external surface / production readiness (0O); portal logins.
 
 ## 16. Running tests inside DDEV

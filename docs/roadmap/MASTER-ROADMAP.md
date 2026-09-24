@@ -1026,6 +1026,18 @@ and confirmation of the `school.audit.view` grant
 (`COMPLIANCE.md` §5–§6). Automation remains unscoped and needs its own
 contract.
 
+**Phase 0L.4 — Compliance Foundation: School Audit-Log Review: COMPLETE
+(2026-09-24).** Owner-approved decisions (ADR 0042 amendment): School
+audit records Highly Sensitive for this surface (conservative v1), empty
+metadata allowlist, `school.audit.view` for School Admin and Principal
+only. `App\Domain\Compliance` (read-only) plus the ledger's read contract
+`App\Support\Audit\SchoolAuditEventReader`; `/app/compliance/audit-log`
+shows envelope fields only, newest first, keyset-paginated, and audits
+each review. No migration, capability seed, filter, export, API, platform
+or cross-School view. The page does not assert legal compliance. No
+further Compliance checkpoint is scheduled: the remaining candidates
+(`COMPLIANCE.md` §6) are each blocked on their own gates.
+
 ## Phase 0M — AI Platform: Real Agents
 
 First real model-provider integration (ADR 0013, with the
