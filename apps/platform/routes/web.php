@@ -152,6 +152,13 @@ Route::middleware('throttle:guardian-invitation-accept')->group(function (): voi
     Route::post('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'store'])->name('invitations.store');
 });
 
+// Signed-in routes that need NO School context (Phase 0N.1, D9(a)/D10(a)):
+// the /app landing (School selection, or the neutral state for an
+// account with no School), School activation itself, the User's own
+// account security, logout and the platform-scoped actions. This list is
+// deliberately small and mirrored by the explicit allowlist in
+// Tests\Feature\Tenancy\SchoolContextRouteGuardTest -- anything that
+// reads or writes one School's data belongs in the School group below.
 Route::middleware('auth')->group(function (): void {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
@@ -159,10 +166,6 @@ Route::middleware('auth')->group(function (): void {
 
     Route::post('/app/schools/{school}/activate', [SchoolSwitchController::class, 'store'])
         ->name('app.schools.activate');
-
-    Route::get('/app/settings', [SchoolSettingsController::class, 'show'])
-        ->middleware('capability:school.settings.view')
-        ->name('app.settings.show');
 
     // Phase 0H.4D-P1 section 17: User-level "Account Security" --
     // deliberately NOT under app/settings or app/school-setup (those
@@ -207,6 +210,19 @@ Route::middleware('auth')->group(function (): void {
     // School-scoped route.
     Route::post('/app/account/admin/users/{targetUser}/mfa/reset', [MfaAdminController::class, 'reset'])
         ->name('app.account.admin.mfa.reset');
+});
+
+// Every School-scoped web route (Phase 0N.1, D10(a)). `school-context`
+// (App\Http\Middleware\RequireSchoolContext) requires a valid selected
+// School -- active School, active membership, not a disabled account --
+// before route model binding, capability checks or the controller run:
+// a page request without one goes back to the /app landing, a mutation
+// or JSON request gets a 409 `school_context_required`. It never selects
+// a School. Controllers here may rely on TenantContext::requireSchool().
+Route::middleware(['auth', 'school-context'])->group(function (): void {
+    Route::get('/app/settings', [SchoolSettingsController::class, 'show'])
+        ->middleware('capability:school.settings.view')
+        ->name('app.settings.show');
 
     // Authorization for this action is enforced inside the controller
     // via the AuthorizesCapability trait, not route middleware -- see

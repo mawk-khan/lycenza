@@ -107,10 +107,11 @@ class AuditLogReviewTest extends TestCase
         }
 
         // Platform Super Admin: no implicit School access, with or without
-        // naming a School.
+        // naming a School -- it never has a School context, so the page
+        // returns it to the /app landing (Phase 0N.1, RequireSchoolContext).
         $platformAdmin = $this->user('platform.admin@example.test');
-        $this->as($platformAdmin, null)->get(self::URL)->assertForbidden();
-        $this->as($platformAdmin, $result->school)->get(self::URL)->assertForbidden();
+        $this->as($platformAdmin, null)->get(self::URL)->assertRedirect('/app');
+        $this->as($platformAdmin, $result->school)->get(self::URL)->assertRedirect('/app');
 
         $this->assertSame($before, $this->countIn($result->school, AuditLogReviewService::ACCESS_EVENT));
     }
@@ -139,8 +140,9 @@ class AuditLogReviewTest extends TestCase
 
         $this->get(self::URL)->assertRedirect('/login');
 
-        // Has the capability once a School is selected, but none is.
-        $this->as($this->user('school.admin@example.test'), null)->get(self::URL)->assertForbidden();
+        // Has the capability once a School is selected, but none is: back
+        // to the /app landing to select one (Phase 0N.1), never the page.
+        $this->as($this->user('school.admin@example.test'), null)->get(self::URL)->assertRedirect('/app');
     }
 
     #[Test]
@@ -166,8 +168,9 @@ class AuditLogReviewTest extends TestCase
         $this->assertContains('test.marker.annexe', $types($second));
         $this->assertNotContains('test.marker.demo_school', $types($second));
 
-        // The Demo School's own admin cannot reach the Annexe by naming it.
-        $this->as($this->user('school.admin@example.test'), $result->secondSchool)->get(self::URL)->assertForbidden();
+        // The Demo School's own admin cannot reach the Annexe by naming it:
+        // naming a School is not membership, so there is no School context.
+        $this->as($this->user('school.admin@example.test'), $result->secondSchool)->get(self::URL)->assertRedirect('/app');
     }
 
     #[Test]

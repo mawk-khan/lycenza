@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\RequireSchoolContext;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
@@ -14,6 +15,14 @@ use Inertia\Response;
  * Phase 0B primitive (section 39): proves authenticated session ->
  * active School context -> permission-aware navigation rendering.
  * Deliberately not a real dashboard -- no business data, no widgets.
+ *
+ * Phase 0N.1 (D9(a)): also the context-neutral signed-in landing. It is
+ * outside the `school-context` route group and must render with no
+ * School selected: it lists only the User's own active memberships for
+ * an explicit choice (never selecting one), and for an account with no
+ * membership -- including a Platform Super Admin -- shows a neutral
+ * state with no School data. `schoolContextNotice` is the one-request
+ * flash RequireSchoolContext sets when it sent a request back here.
  */
 class DashboardController extends Controller
 {
@@ -34,7 +43,19 @@ class DashboardController extends Controller
 
         $school = $context->school();
 
+        if ($school === null) {
+            RequireSchoolContext::forgetSelection($request);
+        }
+
+        $notice = $request->session()->get(RequireSchoolContext::FLASH_KEY);
+
         return Inertia::render('App/Dashboard', [
+            'schoolContextNotice' => in_array($notice, ['select', 'not_saved'], true) ? $notice : null,
+            // Whether the account holds any platform capability -- only
+            // so the no-School state can say what kind of account this
+            // is. Platform capabilities never grant School access
+            // (CapabilityResolver keeps the two apart).
+            'platformAccount' => $capabilities->platformCapabilities($user) !== [],
             'activeSchool' => $school ? [
                 'id' => $school->id,
                 'name' => $school->name,

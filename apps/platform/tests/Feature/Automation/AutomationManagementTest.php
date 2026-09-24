@@ -126,10 +126,13 @@ class AutomationManagementTest extends TestCase
                 ->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewAutomation', false));
         }
 
+        // Platform Super Admin never has a School context: pages return to
+        // the /app landing, mutations are refused with 409 before the
+        // controller (Phase 0N.1, RequireSchoolContext).
         $platform = $this->user('platform.admin@example.test');
-        $this->as($platform, null)->get(self::URL)->assertForbidden();
-        $this->as($platform, $w->school)->get(self::URL)->assertForbidden();
-        $this->as($platform, $w->school)->post($this->ruleUrl('disable'))->assertForbidden();
+        $this->as($platform, null)->get(self::URL)->assertRedirect('/app');
+        $this->as($platform, $w->school)->get(self::URL)->assertRedirect('/app');
+        $this->as($platform, $w->school)->post($this->ruleUrl('disable'))->assertStatus(409);
 
         $this->assertSame(AutomationRuleInstance::STATUS_ENABLED, $this->ruleInstance($w->school)->status);
 
@@ -227,8 +230,9 @@ class AutomationManagementTest extends TestCase
         $w = $this->build();
         $annexeAdmin = $this->user('annexe.admin@example.test');
 
-        // Naming the Demo School is not membership: no context, refused.
-        $this->as($annexeAdmin, $w->school)->post($this->ruleUrl('disable'))->assertForbidden();
+        // Naming the Demo School is not membership: no context, refused
+        // (409 school_context_required) before the controller runs.
+        $this->as($annexeAdmin, $w->school)->post($this->ruleUrl('disable'))->assertStatus(409);
         $this->assertSame(AutomationRuleInstance::STATUS_ENABLED, $this->ruleInstance($w->school)->status);
 
         // Multi-School member: Principal at the Demo School (view only),

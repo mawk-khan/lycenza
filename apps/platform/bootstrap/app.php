@@ -10,11 +10,13 @@ use App\Http\Middleware\EnsureIdempotent;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventAuthenticatedPageCaching;
 use App\Http\Middleware\RequireMfa;
+use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolveSchoolContext;
 use App\Http\Middleware\VerifyAiGatewayServiceToken;
 use App\Support\Auth\SessionEndedResponder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -44,6 +46,10 @@ return Application::configure(basePath: dirname(__DIR__))
             // never global -- see App\Http\Middleware\RequireMfa's
             // docblock.
             'mfa' => RequireMfa::class,
+            // Phase 0N.1: the School-context prerequisite for every
+            // School-scoped web route (routes/web.php's School group) --
+            // see App\Http\Middleware\RequireSchoolContext.
+            'school-context' => RequireSchoolContext::class,
         ]);
 
         // Tenant resolution needs the session already started (so
@@ -80,6 +86,19 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prependToPriorityList(
             before: SubstituteBindings::class,
             prepend: DevOnlySchoolHeaderResolver::class,
+        );
+
+        // `school-context` is route middleware, so without a priority
+        // entry it would run AFTER SubstituteBindings: a School-scoped
+        // route model would be bound (and 404) with no School context
+        // before the prerequisite ever ran. Pinned after the user and
+        // every School resolver; that lands it before ThrottleRequests
+        // and SubstituteBindings, and so before every `capability:`/
+        // `mfa` route middleware and the controller (asserted by
+        // Tests\Feature\Tenancy\SchoolContextRouteGuardTest).
+        $middleware->appendToPriorityList(
+            after: [AuthenticatesRequests::class, ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class],
+            append: RequireSchoolContext::class,
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {

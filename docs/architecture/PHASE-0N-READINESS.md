@@ -4,8 +4,13 @@
 (recorded 2026-09-24, baseline `0d4fc9a`).** No elevation into a School,
 group/trust administration, cross-School reporting or platform School
 management may be built until the decisions in section 15 are recorded.
-This document states what exists and what must be decided; it decides
-nothing and changes no code. Phase 0M (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
+This document states what exists and what must be decided; the audit
+itself decided nothing and changed no code. **Update (Phase 0N.1,
+2026-09-24):** the owner approved **D9(a)** and **D10(a)** and the
+section 17 checkpoint implemented them (section 11, "Resolution"). That
+removes the no-School 500 and gives `/app` a neutral state; it is a
+tenancy-safety prerequisite only and does **not** unblock Phase 0N —
+D1–D8 and D11–D18 remain open and the status above is unchanged. Phase 0M (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
 Sources: `docs/roadmap/MASTER-ROADMAP.md` ("Phase 0B", "Phase 0N — Multi-School
@@ -74,8 +79,8 @@ The repository treats these as separate; they must not be merged.
 | `TenantContext` | Yes | Yes | One School (+ optional Campus) per unit of work; `set()` issues `set_config('app.current_school_id', …)`; `requireSchool()` throws `TenantContextRequiredException` | Single School by design (section 6) |
 | RLS | Yes | Yes | 144 tables with RLS enabled and forced; runtime role `school_os_app` is `NOSUPERUSER NOBYPASSRLS` (checked in DDEV and by `RawIsolationTest`) | — |
 | Cross-School record isolation | Yes | Yes | DDEV: multi.school with Annexe selected — own student 200, Demo School student 404; annexe.admin selecting Demo School — refused | — |
-| Behaviour before a School is selected | Broken | **No** | 135 of 141 School page routes return 500 (section 11) | Prerequisite fix |
-| Platform Super Admin | Partly | Foundation only | Section 4 | No landing, no School scope |
+| Behaviour before a School is selected | Yes (Phase 0N.1) | Yes | Was: 135 of 141 School page routes returned 500 (section 11). Now: `school-context` (`RequireSchoolContext`) on every School web route returns to `/app`; mutations/JSON get 409 `school_context_required` | — |
+| Platform Super Admin | Partly | Foundation only | Section 4 | Neutral `/app` landing only (D9(a)); no School scope, no platform UI |
 | School Groups | Tables only | No | Section 1 | No behaviour at all |
 
 ## 4. Platform Super Admin today
@@ -94,7 +99,8 @@ The repository treats these as separate; they must not be merged.
   (`canManagePlatformSchools`, never rendered). The other five are held
   by no route.
 - **UI.** None. `/app` shows "None selected" and no School list;
-  `/app/account/security` works.
+  `/app/account/security` works. *(Phase 0N.1: `/app` now states it is a
+  platform account with no School access; still no platform UI.)*
 - **School membership.** None (DDEV `platform.admin@example.test`).
   `CapabilityResolver` resolves platform and School capabilities
   separately and never merges them; `can()` returns false for any
@@ -107,6 +113,8 @@ The repository treats these as separate; they must not be merged.
   application-layer capability only.
 - **Ordinary School routes.** 135 of 141 return **500**, 3 return 403
   (section 11) — the known behaviour recorded in `DDEV-DEMO-REVIEW.md`.
+  *(Phase 0N.1: every one now returns to `/app`; the account still never
+  enters a School.)*
 - **MFA.** No platform action requires MFA assurance (only the
   local-only demo route composes `mfa`).
 - **Belongs in 0N?** Yes, as its first step: the roadmap builds
@@ -331,6 +339,78 @@ precondition for elevation; it needs none of the elevation decisions.
 Any new middleware should use the `try`/`catch` restore pattern from
 TENANCY.md ("TenantContext cleanup"), not a bare `finally`.
 
+**Resolution (Phase 0N.1, D9(a) + D10(a) approved).**
+
+- **Route model.** `routes/web.php` has two signed-in groups. The
+  context-neutral group (`auth` only) is exactly: `/logout`, `/app`,
+  `POST /app/schools/{school}/activate`, the six
+  `/app/account/security…` routes, the platform-scoped MFA reset
+  (`/app/account/admin/users/{targetUser}/mfa/reset`) and the
+  local/testing-only `/internal/mfa-demo/ping`. Every other signed-in web
+  route is in the School group (`auth` + `school-context`).
+- **The step.** `App\Http\Middleware\RequireSchoolContext` (alias
+  `school-context`) does not resolve a School — `ResolveSchoolContext`
+  still does, from the verified domain or the session selection
+  re-validated against an active membership and an active School. It
+  requires that a School was resolved, that it is active, that the
+  account is not disabled and that the account holds an active membership
+  in it; otherwise the controller never runs. It establishes nothing
+  itself, so no context cleanup is needed there. It is pinned in the
+  priority list after `StartSession`, `ResolveSchoolContext`,
+  `DevOnlySchoolHeaderResolver` and `Authenticate`, and before
+  `ThrottleRequests` and `SubstituteBindings` — so no School-scoped route
+  model is bound (or 404s) before the check — and therefore before every
+  `capability:`/`mfa` route middleware.
+- **GET/HEAD without a valid School:** 302 to `/app`, which shows
+  "Select a School to continue" once (session flash
+  `school_context.required`). Inertia visits follow the same redirect.
+- **Mutations and JSON without a valid School:** never a success-looking
+  redirect. JSON (any method): `409` with
+  `{"error": {"message", "status": 409, "code": "school_context_required", "requestId", "errors": null}}`.
+  An Inertia mutation: `409` + `X-Inertia-Location: /app` (a hard visit
+  to the landing, which says nothing was saved). A plain form post:
+  `409` text. No repository convention existed for this; 409 was chosen
+  because 403 must keep meaning an authorization denial and 404 resource
+  isolation.
+- **Stale context.** A session School that no longer resolves
+  (membership suspended or removed, School suspended/archived or gone, a
+  non-UUID value, a disabled account) is removed from the session and
+  Inertia's history key is rotated; the User must select again. There is
+  no fallback to another membership. `/app` clears a stale selection
+  too, so a reactivated membership never re-selects its School on its
+  own. `ResolveSchoolContext` now treats a non-UUID session value as no
+  School (it previously reached PostgreSQL as an invalid-uuid error).
+- **`/app`.** Renders with no School: memberships for explicit selection
+  (never auto-selected), or — with none, including the Platform Super
+  Admin — a neutral "no School access" state (plus "platform account" when
+  the account holds any platform capability). No School data, no School
+  list beyond the User's own memberships, no counts.
+- **Unchanged.** `SchoolSwitchController` (membership + active School,
+  session regeneration, `school_context.activated`); `/api/v1`
+  (`school-membership`, School in the URL, non-member 404);
+  `TenantContextRequiredException` stays the fail-closed invariant — on a
+  School-group route it now indicates a bug; RLS, the runtime role, and
+  audit (D17 stays open: denials are not audited). No migration, no new
+  capability.
+- **Guard.** `Tests\Feature\Tenancy\SchoolContextRouteGuardTest`
+  fails if any signed-in web route (or any `app*` URI) lacks
+  `school-context` without being on the explicit allowlist, if the
+  allowlist names a missing route, if the step is ordered after binding,
+  throttling, `capability:` or `mfa`, or if any School GET route (all of
+  them, parameterised ones with a random id) does not return to `/app`
+  without a School — for a member and for a Platform Super Admin.
+  Behaviour: `Tests\Feature\Tenancy\SchoolContextRequiredTest`.
+- **Re-probe (DDEV, 2026-09-24, after the change).** The same 141
+  parameterless `GET /app…` routes, signed in with no School, for
+  platform.admin, multi.school, school.admin, principal, teacher,
+  student, guardian01, finance.officer, hr.payroll and reception: every
+  account **200 × 2** (`/app`, `/app/account/security`) and **302 → `/app`
+  × 139**; **0 × 500** (was 135) and **0 × 403** (the three former 403s
+  now return to `/app` before their capability check). After selecting a
+  School, genuine denials are still 403 (teacher/student/guardian on
+  `/app/students`) and cross-School records still 404 (multi.school, both
+  directions).
+
 ## 12. Cross-School features that stay outside Phase 0N
 
 Phase 0N must not create a generic cross-School query path. These keep
@@ -408,8 +488,8 @@ owner puts it in 0N, these gates apply:
 | D6 | Second-person approval for elevation | None | none / by another platform admin / by the School's own admin | Product + security | Yes — elevation |
 | D7 | Domains excluded or restricted while elevated | HR.md, ADR 0042/0043, AUTHORIZATION.md Layer 5 principle | read-only; exclude Highly Sensitive modules; per-module opt-in | Security (+ legal for children's data) | Yes — elevation |
 | D8 | Effective capabilities while elevated | None | fixed "support" capability set; copy of a School role; nothing beyond School setup | Security | Yes — elevation |
-| D9 | Platform-admin landing | DDEV-DEMO-REVIEW ("no platform UI") | (a) platform-scope landing showing no tenant data; (b) School directory (needs D14) | Product | No, if (a) is accepted |
-| D10 | No-School behaviour on School routes | Section 11 | (a) redirect to School selection, no auto-select; (b) also auto-select a single active membership | Product | No, if (a) is accepted |
+| D9 | Platform-admin landing | DDEV-DEMO-REVIEW ("no platform UI") | (a) platform-scope landing showing no tenant data; (b) School directory (needs D14) | Product | **Approved (a) and implemented, Phase 0N.1** |
+| D10 | No-School behaviour on School routes | Section 11 | (a) redirect to School selection, no auto-select; (b) also auto-select a single active membership | Product | **Approved (a) and implemented, Phase 0N.1** |
 | D11 | School lifecycle in 0N, and what suspension stops | ORGANIZATION.md; section 13 | include create/activate/suspend; defer archive; delete excluded | Product + legal (archive/delete, retention) | Yes — lifecycle |
 | D12 | Who may create Schools and grant platform roles | No platform-role administration exists | platform_super_admin only; two-person rule; CLI-only | Security | Yes — those features |
 | D13 | Platform-level membership administration | Section 14 | out of 0N (School-owned); first School Admin at creation only | Product | Yes — School creation |
@@ -430,18 +510,22 @@ each needs a new ADR. Engineering prerequisites:
 
 | Prerequisite | Status |
 |---|---|
-| No-School web requests handled without a 500 | **Missing** (section 11) — does not need the blocked decisions |
-| Platform-scope landing | **Missing** — does not need the blocked decisions (D9a) |
+| No-School web requests handled without a 500 | **Done** (Phase 0N.1, D10(a); section 11 "Resolution") |
+| Platform-scope landing | **Done** as the neutral `/app` state (Phase 0N.1, D9(a)); no platform administration UI |
 | Classification rows for 0N records | **Missing** (D14) |
 | Suspension enforced beyond web/API | **Missing** (section 13, D11) |
 | School deletion safe for audit/finance evidence | **Not safe** (cascade FKs, section 13); only matters if deletion is ever in scope |
 | RLS, runtime role, platform/School role separation | Present and verified |
 
-## 17. First implementation checkpoint (proposed, not started)
+## 17. First implementation checkpoint (implemented as Phase 0N.1)
 
-**School context and platform landing foundation** (number to be set by
-the owner). Needs only D9(a) and D10(a) confirmed; no elevation, group or
-reporting decision.
+**School context and platform landing foundation** — implemented as
+**Phase 0N.1 — Safe School Context & Platform Landing** after the owner
+approved D9(a) and D10(a); section 11 "Resolution" records what was
+built and how it differs in detail from the proposal below (the JSON and
+mutation refusal is 409 `school_context_required`; the landing's neutral
+state applies to every account without a membership, not only platform
+accounts). The proposal as written in the audit:
 
 1. One named web middleware, applied to every School-scoped web route,
    that requires a resolved School before the controller runs: a web

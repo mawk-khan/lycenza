@@ -8,6 +8,10 @@ interface Membership {
 }
 
 interface Props {
+    // Set for one request when a School page sent the User back here
+    // because no valid School was selected (RequireSchoolContext).
+    schoolContextNotice: 'select' | 'not_saved' | null;
+    platformAccount: boolean;
     activeSchool: { id: string; name: string } | null;
     memberships: Membership[];
     nav: {
@@ -46,13 +50,41 @@ function activate(schoolId: string) {
     <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
         <h1 class="text-xl font-semibold">School OS — Phase 0B</h1>
 
+        <p
+            v-if="schoolContextNotice && !activeSchool"
+            role="status"
+            class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm"
+            data-testid="school-context-notice"
+        >
+            <template v-if="schoolContextNotice === 'not_saved'"
+                >Nothing was saved: no School is selected.
+            </template>
+            <template v-if="memberships.length > 0">Select a School to continue.</template>
+            <template v-else>That page belongs to a School, and this account has none.</template>
+        </p>
+
         <section class="mt-6">
             <h2 class="text-sm font-medium text-slate-500">Active School</h2>
-            <p class="mt-1">{{ activeSchool ? activeSchool.name : 'None selected' }}</p>
+            <p class="mt-1" data-testid="active-school">
+                {{ activeSchool ? activeSchool.name : 'None selected' }}
+            </p>
         </section>
 
-        <section v-if="memberships.length > 1 || !activeSchool" class="mt-6">
-            <h2 class="text-sm font-medium text-slate-500">Switch School</h2>
+        <section v-if="memberships.length === 0" class="mt-6" data-testid="no-school-state">
+            <h2 class="text-sm font-medium text-slate-500">No School access</h2>
+            <p class="mt-1 text-sm">
+                This account is not an active member of any School, so no School pages or School
+                data are available to it.
+            </p>
+            <p v-if="platformAccount" class="mt-2 text-sm" data-testid="platform-account">
+                This is a platform account. Platform access does not include access to any School.
+            </p>
+        </section>
+
+        <section v-else-if="memberships.length > 1 || !activeSchool" class="mt-6">
+            <h2 class="text-sm font-medium text-slate-500">
+                {{ activeSchool ? 'Switch School' : 'Select a School' }}
+            </h2>
             <ul class="mt-2 space-y-1">
                 <li v-for="m in memberships" :key="m.schoolId">
                     <button
