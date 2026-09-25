@@ -105,7 +105,10 @@ names the database it is about to touch first (rule 54).
    which itself refuses outside `local`/`testing`. `DemoSeeder` refuses
    anywhere but a developer's DDEV (`DemoEnvironmentGuard`).
 8. **Operator-only, first release only:**
-   - `php artisan platform:provision-root <exact email or user id>` (§5);
+   - `php artisan platform:bootstrap-root` — interactive, creates the first
+     platform account and provisions root (§5); later root accounts use
+     `php artisan platform:provision-root <exact email or user id>` for an
+     account that already exists;
    - `php artisan platform:service-identity-issue ai-gateway
      --capability=ai.tools.invoke --capability=ai.audit.write` — prints the
      credential once; the operator installs it as both
@@ -138,11 +141,17 @@ corrected forward, never rolled back (ARCHITECTURE.md §10).
   `DB_ADMIN_PASSWORD` explicitly — without them the admin connection falls
   back to the runtime credentials, and root provisioning refuses to run.
 - No platform role ever receives a database privilege (rule 26).
+- **The runtime role must never be a member of (or inherit) the owner
+  role.** Since Phase 0O.1A the database accepts an out-of-band platform
+  grant — how root arrives — only from a role holding the table owner's
+  privileges; membership would hand root provisioning to every web
+  request.
 
 ## 5. Operator console commands (Phase 0O.1)
 
 | Command | Connection | Effect | Audit |
 |---|---|---|---|
+| `platform:bootstrap-root` | `pgsql_admin` | First boot only (no active root): creates one enabled account — name, email, password through two hidden prompts (no visible fallback, never an argument), `Password::defaults()` — and provisions root, in one transaction; interactive only; no School membership or Group grant | `platform.role_grant.provisioned` (actor null, `method: console`); never the password or its hash |
 | `platform:provision-root {user} [--force]` | `pgsql_admin` | Grants the root platform role to one existing, enabled account named by exact email or id; interactive confirmation (type the account's email) unless `--force`; idempotent | `platform.role_grant.provisioned` (actor null, subject the assignment, `role_key`, `user_id`, `method: console`) |
 | `platform:service-identity-issue {slug} --capability=… [--name=] [--force]` | runtime | New identity; capabilities limited to `ai.tools.invoke`, `ai.audit.write`; credential shown once, stored only as a hash; existing slug refused (no rotation — O5) | `platform.service_identity.issued` (slug, capabilities; never the credential) |
 | `platform:service-identity-disable {slug} [--force]` | runtime | Disables an identity; its calls fail at once; idempotent | `platform.service_identity.disabled` |
@@ -150,11 +159,11 @@ corrected forward, never rolled back (ARCHITECTURE.md §10).
 None has an HTTP route or UI. A non-interactive run without `--force`
 refuses; `--force` is for trusted operator automation only.
 
-**Prerequisite not provided by 0O.1:** root provisioning needs an existing
-account, and production has no way to create a first platform account
-(accounts arrive through School flows such as Guardian activation). How the
-first operator account is created is an open item for the owner (it
-touches O14, password reset).
+Both root commands write through the migration/admin connection because
+the database refuses a grantor-less grant from anything else (Phase
+0O.1A). First-account bootstrap is not password reset: O14 (reset and
+account recovery) stays open, so an operator who loses the first
+account's password has no in-app recovery yet.
 
 ## 6. Seeding: production-safe versus demo
 

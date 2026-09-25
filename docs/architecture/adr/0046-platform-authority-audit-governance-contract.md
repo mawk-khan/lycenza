@@ -472,12 +472,46 @@ command `php artisan platform:provision-root {user} [--force]`
   is not runtime-assignable and holds `platform.role_grants.manage`), so
   the rule-85 guard against naming it in application code still holds.
 
-No trigger was changed or bypassed. **Residual, recorded honestly:** the
-database distinguishes a runtime grant only by a non-NULL grantor, so a
-NULL-grantor insert of the root role is still accepted from any
-connection, including the runtime role (test fixtures rely on this). The
-application's only code path that writes one is this console service
-(guard-tested); a stronger database-level separation would need the
-fixtures and the runtime role's grants reworked and is not part of 0O.1.
-Creating the first platform account in production is also outside this
-command (`docs/architecture/PRODUCTION-RELEASE.md` §5).
+No trigger was changed or bypassed. **Residual found at 0O.1 publication
+(`214d095`):** the database distinguished a runtime grant only by a
+non-NULL grantor, so a NULL-grantor insert of the root role was still
+accepted from any connection, including the runtime role (test fixtures
+relied on this); and production had no way to create the first platform
+account. Both are corrected by Phase 0O.1A below.
+
+## Amendment (Phase 0O.1A, 2026-09-25) — root bootstrap boundary
+
+- **Database-enforced out-of-band boundary.** Migration
+  `2026_10_19_090000_enforce_platform_out_of_band_grant_boundary` replaces
+  `assert_platform_role_assignment_governance()`: a grant **without a
+  grantor** (out of band) is accepted only when the writing role holds the
+  privileges of the table's owner — `pg_has_role(current_user, owner,
+  'USAGE')`, true for the migration/admin role, a member inheriting it, or
+  a superuser. `current_user` cannot be forged by a client, the runtime
+  role is never a member of the owner, and no role name is hard-coded (O6
+  stays open). The runtime role is refused by Eloquent, the query builder
+  and raw SQL alike; a forged grantor still cannot make the root role
+  grantable (a named grantor still requires a runtime-assignable role, for
+  every connection). The trigger stays enabled; nothing is disabled,
+  dropped or bypassed; `runtime_assignable` is unchanged.
+- **Runtime governance unchanged:** `PlatformRoleGovernanceService` still
+  grants and revokes `platform_auditor` on the runtime role, always naming
+  a grantor.
+- **First-boot bootstrap:** `php artisan platform:bootstrap-root` —
+  interactive operator console only, allowed only while no active root
+  assignment exists; creates one enabled account (name, email, a password
+  read twice through hidden prompts with no visible fallback, checked
+  against `Password::defaults()`, hashed by the application hasher, never
+  an argument, never printed, logged or audited), grants root and writes
+  `platform.role_grant.provisioned` (actor null, `method: console`) in one
+  administrative transaction. No School membership, no Group grant, no
+  HTTP route. Concurrent first boots are serialized on the root role row
+  (`FOR NO KEY UPDATE`); a two-process race test proves one root.
+- **Existing-account provisioning** (`platform:provision-root`) keeps its
+  contract and now takes the same row lock.
+- **Demo:** the DDEV demo's Platform Admin is created and provisioned on
+  the admin connection through the same service (`method: demo_seed`).
+- **Tests:** root fixtures are committed through the administrative test
+  connection (`CreatesTenancyFixtures::createPlatformRoot()`) and purged
+  after each test; `Tests\Feature\Postgres\PlatformRootBoundaryTest` proves
+  the boundary on the real runtime role.

@@ -59,11 +59,19 @@ abstract class TestCase extends BaseTestCase
     /** Wall-clock start of this test, for committing-test cleanup below. */
     private ?CarbonImmutable $testStartedAt = null;
 
+    /** @var array<string, mixed>|null the two connections' configuration as the test began (verified by TestDatabaseGuard at boot) */
+    private ?array $bootConnections = null;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->testStartedAt = CarbonImmutable::now()->subSecond();
+        $this->bootConnections = config()->array('database.connections');
+
+        // Registered after DatabaseTransactions' own rollback callback, so
+        // it runs once this test's uncommitted rows are gone.
+        $this->beforeApplicationDestroyed(fn () => $this->purgeCommittedPlatformRoleFixtures());
     }
 
     protected function tearDown(): void
@@ -91,6 +99,47 @@ abstract class TestCase extends BaseTestCase
         DB::connection('pgsql_admin')->table('schools')
             ->where('id', $school instanceof School ? $school->id : $school)
             ->delete();
+    }
+
+    /**
+     * Phase 0O.1A: a root platform grant can only be provisioned across the
+     * administrative database boundary, so root fixtures
+     * (CreatesTenancyFixtures::createPlatformRoot(), and the demo builder's
+     * Platform Admin) are COMMITTED through `pgsql_admin`. The test database
+     * holds no platform role grant at rest, so after this test's rollback
+     * any grant still visible is such a fixture: it is removed with its
+     * provisioning audit event and its user. A committing test's own
+     * tearDown() has already removed what it created.
+     */
+    private function purgeCommittedPlatformRoleFixtures(): void
+    {
+        // Never delete anything through a connection a test repointed
+        // (several tests swap hosts/databases to prove guards): only the
+        // unchanged, boot-verified connections, and only when the admin
+        // connection positively reports the test database (CLAUDE.md rule 50).
+        $connections = config()->array('database.connections');
+        foreach (['pgsql', 'pgsql_admin'] as $name) {
+            if (($connections[$name] ?? null) !== ($this->bootConnections[$name] ?? false)) {
+                return;
+            }
+        }
+
+        if (! DB::table('platform_role_assignments')->exists()) {
+            return;
+        }
+
+        $admin = DB::connection('pgsql_admin');
+        if ($admin->selectOne('select current_database() as db')->db !== config('database.testing_database')) {
+            return;
+        }
+
+        $grants = $admin->table('platform_role_assignments')->get(['id', 'user_id', 'granted_by_user_id', 'revoked_by_user_id']);
+        $users = $grants->pluck('user_id')->merge($grants->pluck('granted_by_user_id'))->merge($grants->pluck('revoked_by_user_id'))->filter()->unique()->values()->all();
+
+        $admin->table('platform_audit_events')->whereIn('subject_id', $grants->pluck('id')->all())->delete();
+        $admin->table('platform_audit_events')->whereIn('actor_user_id', $users)->delete();
+        $admin->table('platform_role_assignments')->delete();
+        $admin->table('users')->whereIn('id', $users)->delete();
     }
 
     /**

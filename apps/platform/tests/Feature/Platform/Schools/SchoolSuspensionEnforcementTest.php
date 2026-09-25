@@ -354,8 +354,7 @@ class SchoolSuspensionEnforcementTest extends TestCase
     #[Test]
     public function platform_safety_work_continues_for_a_suspended_school(): void
     {
-        $root = $this->createUser();
-        $this->assignPlatformRole($root, 'platform_super_admin');
+        $root = $this->createPlatformRoot();
         [$member, $school] = $this->createSchoolAdmin('school_admin');
         $elevation = SchoolElevation::query()->create([
             'actor_user_id' => $root->id, 'school_id' => $school->id, 'authority_type' => 'platform',

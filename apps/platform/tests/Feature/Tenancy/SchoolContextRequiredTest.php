@@ -90,8 +90,7 @@ class SchoolContextRequiredTest extends TestCase
     public function a_platform_super_admin_gets_a_neutral_landing_with_no_school_and_no_school_data(): void
     {
         $this->createSchool(['name' => 'Someone Else School']);
-        $admin = $this->createUser();
-        $this->assignPlatformRole($admin, 'platform_super_admin');
+        $admin = $this->createPlatformRoot();
 
         $response = $this->actingAs($admin)->get('/app');
 
@@ -365,8 +364,7 @@ class SchoolContextRequiredTest extends TestCase
     {
         $school = $this->createSchool();
         $student = $this->createStudent($school);
-        $admin = $this->createUser();
-        $this->assignPlatformRole($admin, 'platform_super_admin');
+        $admin = $this->createPlatformRoot();
         $this->actingAs($admin);
 
         $this->get('/app/students')->assertRedirect('/app');

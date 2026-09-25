@@ -66,7 +66,9 @@ use App\Models\Role;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
+use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -119,14 +121,68 @@ trait CreatesTenancyFixtures
         );
     }
 
-    protected function assignPlatformRole(User $user, string $roleKey): PlatformRoleAssignment
+    /**
+     * A platform role grant for a fixture user.
+     *
+     * - A runtime-assignable role (v1 `platform_auditor`) is granted the way
+     *   the application grants it: on the runtime connection, inside the
+     *   test transaction, naming a grantor (a fresh fixture user unless one
+     *   is given) -- the database refuses a grantor-less runtime grant.
+     * - Any other platform role (the root) can only be provisioned out of
+     *   band across the administrative database boundary (Phase 0O.1A), so
+     *   it is written on `pgsql_admin` and COMMITTED -- the user must
+     *   already be committed too (a non-transactional test's user). For a
+     *   fresh root user in an ordinary test use createPlatformRoot().
+     *   TestCase purges committed platform-role fixtures after each test.
+     */
+    protected function assignPlatformRole(User $user, string $roleKey, ?User $grantedBy = null): PlatformRoleAssignment
     {
         $role = Role::query()->where('key', $roleKey)->where('scope', 'platform')->firstOrFail();
 
-        return PlatformRoleAssignment::query()->create([
+        if ($role->runtime_assignable) {
+            return PlatformRoleAssignment::query()->create([
+                'user_id' => $user->id,
+                'role_id' => $role->id,
+                'granted_by_user_id' => ($grantedBy ?? $this->createUser())->id,
+                'granted_at' => now(),
+            ]);
+        }
+
+        $admin = DB::connection('pgsql_admin');
+        if (! $admin->table('users')->where('id', $user->id)->exists()) {
+            throw new \LogicException('A root platform grant is provisioned across the administrative boundary and needs a committed user: use createPlatformRoot().');
+        }
+
+        $id = (string) Str::uuid7();
+        $admin->table('platform_role_assignments')->insert([
+            'id' => $id,
             'user_id' => $user->id,
             'role_id' => $role->id,
+            'granted_by_user_id' => null,
+            'granted_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
+        app(CapabilityResolver::class)->forgetCache($user);
+
+        return PlatformRoleAssignment::query()->findOrFail($id);
+    }
+
+    /**
+     * Phase 0O.1A: a NEW user holding the root platform role, both committed
+     * through the administrative test connection (the runtime role cannot
+     * provision root, and the admin connection cannot see this test's
+     * uncommitted rows). Purged by TestCase after the test.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function createPlatformRoot(array $attributes = []): User
+    {
+        $committed = User::factory()->connection('pgsql_admin')->create($attributes);
+        $user = User::query()->findOrFail($committed->id);
+        $this->assignPlatformRole($user, 'platform_super_admin');
+
+        return $user;
     }
 
     /**

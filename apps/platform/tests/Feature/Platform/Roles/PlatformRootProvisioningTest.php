@@ -242,6 +242,21 @@ class PlatformRootProvisioningTest extends TestCase
             'Domain/Platform/Application/Roles/PlatformRootProvisioningService.php',
         ], $writers);
 
+        // Seeders: only the local demo writes a platform grant directly, and
+        // only a runtime-assignable one naming a grantor; its root account
+        // goes through the provisioning service (Phase 0O.1A).
+        $seederWriters = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(database_path('seeders'))) as $file) {
+            if ($file->isFile() && $file->getExtension() === 'php' && str_contains((string) file_get_contents($file->getPathname()), 'PlatformRoleAssignment::')) {
+                $seederWriters[] = basename($file->getPathname());
+            }
+        }
+        $this->assertSame(['DemoDataBuilder.php'], $seederWriters);
+        $demo = (string) file_get_contents(database_path('seeders/Demo/DemoDataBuilder.php'));
+        $this->assertSame(1, substr_count($demo, 'PlatformRoleAssignment::query()->create('));
+        $this->assertStringContainsString("->provision(\$platformAdmin, 'demo_seed')", $demo);
+        $this->assertMatchesRegularExpression("/PlatformRoleAssignment::query\\(\\)->create\\(\\[[^\\]]*'platform_auditor'[^\\]]*'granted_by_user_id' => \\\$platformAdmin->id/s", $demo);
+
         // The runtime governance service always names a grantor, so only the
         // console provisioner writes a grantor-less (out-of-band) grant.
         $governance = (string) file_get_contents(app_path('Domain/Platform/Application/Roles/PlatformRoleGovernanceService.php'));

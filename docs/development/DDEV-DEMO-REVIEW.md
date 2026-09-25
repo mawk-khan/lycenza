@@ -677,7 +677,10 @@ production because:
    (`docs/architecture/PRODUCTION-RELEASE.md` §2). DDEV runs `local`, so
    none of this applies here and nothing changes for the demo;
    `ServiceIdentitySeeder` still seeds the development `ai-gateway`
-   identity locally and refuses anywhere else.
+   identity locally and refuses anywhere else. Since Phase 0O.1A the
+   demo Platform Admin's root grant is provisioned through the admin
+   connection (the runtime role can no longer write one), audited as
+   `platform.role_grant.provisioned` with method `demo_seed`.
 6. Nothing in the demo bypasses authorization or RLS: data is created on
    the NOBYPASSRLS runtime connection inside `TenantContext`, lifecycle
    records go through their Application services, and accounts receive

@@ -128,8 +128,7 @@ class AiCompletionAuthorizationTest extends TestCase
     public function platform_admin_has_no_implicit_school_completion_authority(): void
     {
         $school = $this->createSchool();
-        $platformAdmin = $this->createUser();
-        $this->assignPlatformRole($platformAdmin, 'platform_super_admin');
+        $platformAdmin = $this->createPlatformRoot();
         // Even a token that claims the capability (as a compromised minter
         // might) is refused: the actor holds nothing in that School.
         $token = app(AiContextTokenService::class)->issue($school, $platformAdmin, [self::CAPABILITY]);

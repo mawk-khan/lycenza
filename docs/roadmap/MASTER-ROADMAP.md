@@ -1364,6 +1364,15 @@ process and release contract (`docs/architecture/PRODUCTION-RELEASE.md`).
 Phase 0O stays PARTIALLY READY; decisions O1–O16 remain open
 (`PHASE-0O-READINESS.md` §13).
 
+**0O.1A — Root Bootstrap Boundary Correction (2026-09-25).** 0O.1 was
+first published with a residual: the runtime database role could insert a
+grantor-less root assignment, and production had no first-account path.
+The database now accepts an out-of-band platform grant only from the
+administrative (table-owner) role, and `platform:bootstrap-root` creates the
+first platform account on a fresh installation (interactive, hidden
+password, first boot only). 0O.1 is COMPLETE; O14 password reset stays
+open (`PHASE-0O-READINESS.md` §14).
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

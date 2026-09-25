@@ -208,8 +208,7 @@ class SchoolContextRouteGuardTest extends TestCase
     {
         $member = $this->createUser();
         $this->createMembership($member, $this->createSchool());
-        $platformAdmin = $this->createUser();
-        $this->assignPlatformRole($platformAdmin, 'platform_super_admin');
+        $platformAdmin = $this->createPlatformRoot();
 
         $probed = 0;
 

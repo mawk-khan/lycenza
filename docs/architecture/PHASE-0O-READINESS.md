@@ -11,8 +11,11 @@ provisioned nothing and handled no secret values.
 Every "current state" claim below was checked against code, configuration,
 CI and a running DDEV instance on `f8e4b07` (section 12).
 
-**Update 2026-09-25 — 0O.1 COMPLETE.** Production Bootstrap & Fail-Closed
-Configuration Foundation is built (section 13). The phase status is
+**Update 2026-09-25 — 0O.1 COMPLETE (after the 0O.1A correction).**
+Production Bootstrap & Fail-Closed Configuration Foundation is built
+(section 13). It was first published at `214d095` with a residual root
+database bypass and no first-account path; Phase 0O.1A corrected both
+(section 14). The phase status is
 unchanged: **PARTIALLY READY — SOME CHECKPOINTS MAY START**; decisions
 O2–O16 are all still open, and O1 (the phase's definition of done) is not
 resolved by 0O.1. Sections 4–9 below describe the pre-0O.1 baseline;
@@ -301,7 +304,7 @@ No vendor or provider is chosen by this audit.
 | S2 Real observability backend | Instrumentation only; no exporter; plain logs; sanitizer unused | BLOCKED (backend) / PARTIAL (in-repo prep) | JSON logs, sanitizer wiring, ops-status resilience, exporter wiring | O12, O3 |
 | S3 Production secrets | Env-only; unsafe AI fallbacks; no validation; no rotation for service identities or signing key | PARTIAL | Fail-closed checks (0O.1); secrets manager integration | O4, O5 |
 | S3 Production infrastructure | No production image, no IaC, no runbook, no backup | BLOCKED + DEPLOY-GATED | Hosting model, images, runbook, backup | O3, O8, O10, rule 16 |
-| S3 Root provisioning (ADR 0046 §2) | Fully specified; built in 0O.1 (`platform:provision-root`) | **DONE (0O.1)** | First-account creation in production (section 13) | none |
+| S3 Root provisioning (ADR 0046 §2) | Built in 0O.1 (`platform:provision-root`); database-enforced boundary and first-boot `platform:bootstrap-root` in 0O.1A | **DONE (0O.1 + 0O.1A)** | — | none |
 | S4 Broader third-party integrations | Outbound webhooks production-grade; no inbound provider endpoint; no provider chosen | BLOCKED | Provider choice and integration list | O2, O13, O15, legal |
 
 ## 10. Proposed sequence (not started)
@@ -396,14 +399,42 @@ Still open after 0O.1: **O1–O16 all remain open** (O1 is not resolved by
 this checkpoint); O6 in particular — the runtime role name `school_os_app`
 is fixed by the implementation and documented as such, not generalized.
 
-Residuals recorded by 0O.1:
+Residuals recorded by 0O.1 at `214d095` (both corrected by 0O.1A,
+section 14):
 
-- The database accepts a grantor-less (out-of-band) grant of the root role
-  from any connection; only the console provisioner writes one (guard
-  test). Tightening it needs fixture and grant rework (ADR 0046
-  cross-reference).
-- Production has no way to create the first platform account that
-  `platform:provision-root` needs (touches O14).
+- The database accepted a grantor-less (out-of-band) grant of the root
+  role from any connection, including the runtime role.
+- Production had no way to create the first platform account that
+  `platform:provision-root` needs.
+
+Other residuals:
+
 - Signing-key and service-token rotation stay deferred (ADR 0023, O5).
 - `docker-compose.yml`'s local worker still works only `default` (local
   development; unchanged).
+
+## 14. Phase 0O.1A — root bootstrap boundary correction (2026-09-25)
+
+**Why:** 0O.1 was published (`214d095`, full regression green) with two
+bootstrap-boundary defects: (1) the runtime role could insert a root
+platform assignment by raw SQL when the grant named no grantor — the
+governance trigger treated a NULL grantor as "out of band" without
+checking who wrote it (reproduced on the real `school_os_app` role before
+the fix); (2) a fresh installation had no approved way to create the first
+platform account.
+
+**Correction:**
+
+| Item | Result |
+|---|---|
+| Root database boundary | A grantor-less platform grant is accepted only from a role holding the table owner's privileges (`pg_has_role(current_user, owner, 'USAGE')`); the runtime role is refused by Eloquent, the query builder and raw SQL; a forged grantor stays refused; the trigger stays enabled; no role name hard-coded (O6 open) |
+| Runtime auditor governance | Unchanged and proven: `PlatformRoleGovernanceService` still grants `platform_auditor` on the runtime role |
+| First production account | **Resolved as a repository bootstrap concern** (not O14): `php artisan platform:bootstrap-root`, interactive only, first boot only (no active root), hidden password prompts with no visible fallback, `Password::defaults()`, one administrative transaction for account + root grant + `platform.role_grant.provisioned`; no School membership, no Group grant, no HTTP route |
+| Existing-account provisioning | `platform:provision-root` unchanged in contract; now serialized with bootstrap on the root role row |
+| Fixtures and demo | Root fixtures committed through the admin test connection and purged after each test; the DDEV demo's Platform Admin is provisioned through the service (`method: demo_seed`) |
+| Production smoke | Throwaway database, fake values, production mode: migrate, production seed (no identity, user or root), `config:cache`/`route:cache`, `bootstrap-root` through a real pty, sign-in with the chosen password, one root + one audit event, runtime raw root insert refused, `provision-root` for a second existing account, second bootstrap refused, no HTTP route |
+
+**O14 (password reset / account recovery) stays OPEN** — first-account
+bootstrap sets an initial password only; it resets nothing. O1 and O2–O16
+remain open. With this correction **0O.1 is COMPLETE**; Phase 0O stays
+**PARTIALLY READY — SOME CHECKPOINTS MAY START**.

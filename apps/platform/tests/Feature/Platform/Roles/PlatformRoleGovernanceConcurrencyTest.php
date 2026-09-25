@@ -42,8 +42,7 @@ class PlatformRoleGovernanceConcurrencyTest extends TestCase
     /** @return array{0: User, 1: User} */
     private function world(): array
     {
-        $root = $this->createUser();
-        $this->assignPlatformRole($root, 'platform_super_admin');
+        $root = $this->createPlatformRoot();
         $target = $this->createUser(['email' => 'race.'.bin2hex(random_bytes(4)).'@example.test']);
         $this->users = [$root, $target];
 

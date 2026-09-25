@@ -55,12 +55,15 @@ class PlatformRoleAssignmentInvariantsTest extends TestCase
     #[Test]
     public function the_root_role_is_never_granted_or_revoked_at_runtime_and_nobody_acts_on_themselves(): void
     {
-        $root = $this->createUser();
         $grantor = $this->createUser();
         $target = $this->createUser();
 
-        // Provisioned (no grantor): allowed -- the out-of-band path.
-        $provisioned = $this->insertAssignment($root->id, 'platform_super_admin');
+        // Provisioned (no grantor) is the out-of-band path, and since Phase
+        // 0O.1A only the administrative boundary may take it
+        // (PlatformRootBoundaryTest): the runtime role is refused.
+        $this->assertRejected(fn () => $this->insertAssignment($target->id, 'platform_super_admin'), 'only the trusted administrative database role may provision');
+        $root = $this->createPlatformRoot();
+        $provisioned = (string) DB::table('platform_role_assignments')->where('user_id', $root->id)->value('id');
 
         $this->assertRejected(fn () => $this->insertAssignment($target->id, 'platform_super_admin', $grantor->id), 'only a runtime-assignable role can be granted at runtime');
         $this->assertRejected(fn () => DB::table('platform_role_assignments')->where('id', $provisioned)->update(['revoked_at' => now(), 'revoked_by_user_id' => $grantor->id]), 'only a runtime-assignable role can be revoked at runtime');
