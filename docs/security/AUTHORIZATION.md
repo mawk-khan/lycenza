@@ -27,7 +27,7 @@ builds it (`docs/architecture/DOMAIN-MAP.md` Layer 0).
 
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|
-| Platform Auditor | Human, platform staff | Platform audit ledger only | Contracted in ADR 0046 (not built): `platform_auditor` holds only `platform.audit.view`; granted and revoked by a Platform Super Admin; no School, Group, elevation or governance power. |
+| Platform Auditor | Human, platform staff | Platform audit ledger only | ADR 0046, built in Phase 0N.7: `platform_auditor` holds only `platform.audit.view`; granted and revoked by a Platform Super Admin; no School, Group, elevation or governance power. |
 | Platform Super Admin | Human, platform staff | Cross-tenant | Operates through a dedicated, audited administrative path (`docs/architecture/TENANCY.md`) — not a permanent "bypass tenant scoping" flag in normal application code. Entering one School is a temporary, explicit elevation that grants no School capability (ADR 0044; substrate built in Phase 0N.3, no School page opens under it yet). |
 | School Group Admin | Human | One School Group's member schools | Cross-school access within a group is an explicit, granted, audited elevation (ADR 0004) — not automatic from group membership alone. ADR 0045, foundation built in Phase 0N.5: a distinct Group scope with its own grant (`group_role_assignments`) and `group.*` capabilities, granting no School capability; School entry only through ADR 0044 elevation; Group membership and grants are platform-governed. |
 | School Admin | Human | One School (all campuses) | |
@@ -390,7 +390,7 @@ ends the moment that authority goes (no fallback to platform authority). Platfor
 ordinary member of several Schools holds no Group authority. See
 ADR 0045.
 
-## Platform authority and platform audit review (ADR 0046 — contract, not built)
+## Platform authority and platform audit review (ADR 0046 — built in Phase 0N.7)
 
 - `platform_super_admin` is the **root / bootstrap** role: provisioned
   only by trusted, out-of-application means, never granted or revoked
@@ -402,10 +402,14 @@ ADR 0045.
   self-grant or self-revoke, no delegation chain. Root-reserved
   capabilities (`platform.role_grants.manage`, `platform.schools.manage` —
   School creation, root-only) are never held by a runtime-assignable role.
-  Grants keep history; the database refuses a runtime grant of the root
-  role.
+  Grants keep history; the database refuses a runtime grant or revocation
+  of the root role (`roles.runtime_assignable`,
+  `trg_platform_role_assignments_governance`). Every refused grant or
+  revoke is audited as `platform.role_grant.denied`.
 - **Platform audit review** needs `platform.audit.view` (root and
-  `platform_auditor`; no School or Group role). It reads only
+  `platform_auditor`; no School or Group role) **and current MFA
+  assurance** (an enrolled factor and a sign-in code within the assurance
+  window — no fresh code per page). It reads only
   `platform_audit_events`, establishes no School context, shows seven
   envelope fields and never metadata, IP or user agent, pages by keyset,
   and writes one `platform.audit_log.viewed` event per review. It is

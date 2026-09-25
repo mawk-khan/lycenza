@@ -67,7 +67,7 @@ class LogoutAccessTest extends TestCase
         $this->build();
 
         $emails = array_column(DemoAccountCatalog::loginShortcuts(), 'email');
-        $this->assertCount(17, $emails);
+        $this->assertCount(18, $emails);
         $this->assertContains('platform.admin@example.test', $emails);
         $this->assertContains('group.admin@example.test', $emails);
 

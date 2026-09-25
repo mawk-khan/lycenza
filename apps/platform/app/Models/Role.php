@@ -22,11 +22,14 @@ class Role extends Model
 {
     use GeneratesUuidV7;
 
-    protected $fillable = ['key', 'name', 'scope', 'is_system'];
+    protected $fillable = ['key', 'name', 'scope', 'is_system', 'runtime_assignable'];
 
     protected function casts(): array
     {
-        return ['is_system' => 'boolean'];
+        // runtime_assignable (Phase 0N.7, ADR 0046): set only from the code
+        // catalog; database-guarded (system platform roles only, never the
+        // root role, never with a root-reserved capability).
+        return ['is_system' => 'boolean', 'runtime_assignable' => 'boolean'];
     }
 
     /** @return BelongsToMany<Capability, $this> */

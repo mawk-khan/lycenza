@@ -79,6 +79,12 @@ class DashboardController extends Controller
             // Admin's own Groups (from Group grants only) and platform Group
             // governance (from the platform capability only). Neither implies
             // the other.
+            // Phase 0N.7 (ADR 0046): platform audit review and platform-role
+            // governance -- capabilities only, never a role name.
+            'platform' => [
+                'canViewAuditLog' => $capabilities->canPlatform($user, 'platform.audit.view'),
+                'canGovernRoles' => $capabilities->canPlatform($user, 'platform.role_grants.manage'),
+            ],
             'groups' => [
                 'canViewOwn' => $capabilities->groupsWith($user, 'group.schools.view')->isNotEmpty(),
                 'canGovern' => $capabilities->canPlatform($user, 'platform.school_groups.view'),

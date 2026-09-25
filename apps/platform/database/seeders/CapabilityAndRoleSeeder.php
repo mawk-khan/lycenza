@@ -31,6 +31,12 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'platform.school_groups.view', 'label' => 'View School Groups and their member Schools (platform)', 'namespace' => 'platform'],
             ['key' => 'platform.school_groups.manage', 'label' => 'Create, rename and archive School Groups; add or remove member Schools (platform)', 'namespace' => 'platform'],
             ['key' => 'platform.school_group_grants.manage', 'label' => 'Grant and revoke Group roles (platform)', 'namespace' => 'platform'],
+            // Phase 0N.7 (ADR 0046): platform audit review (Highly
+            // Sensitive; also requires MFA assurance) and platform-role
+            // governance -- the latter ROOT-RESERVED: never held by a
+            // runtime-assignable role (database trigger).
+            ['key' => 'platform.audit.view', 'label' => 'Review the platform audit log (platform)', 'namespace' => 'platform'],
+            ['key' => 'platform.role_grants.manage', 'label' => 'Grant and revoke runtime-assignable platform roles (platform)', 'namespace' => 'platform'],
             // Phase 0N.5 (ADR 0045 section 4): the `group` scope -- held only
             // through a Group grant (group_role_assignments) for ONE Group.
             // Grants no School capability.
@@ -783,6 +789,20 @@ class CapabilityAndRoleSeeder extends Seeder
                     'platform.schools.elevate',
                     'platform.school_groups.view', 'platform.school_groups.manage',
                     'platform.school_group_grants.manage',
+                    'platform.audit.view',
+                    'platform.role_grants.manage',
+                ],
+            ],
+            // Phase 0N.7 (ADR 0046 section 5): review the platform audit
+            // ledger and nothing else. The only runtime-assignable role in
+            // v1 -- granted and revoked by a Platform Super Admin through
+            // PlatformRoleGovernanceService.
+            'platform_auditor' => [
+                'name' => 'Platform Auditor',
+                'scope' => 'platform',
+                'runtime_assignable' => true,
+                'capabilities' => [
+                    'platform.audit.view',
                 ],
             ],
             // Phase 0N.5 (ADR 0045 section 4): the one Group-scope system
@@ -1212,7 +1232,12 @@ class CapabilityAndRoleSeeder extends Seeder
         foreach ($roles as $key => $definition) {
             $role = Role::query()->updateOrCreate(
                 ['key' => $key],
-                ['name' => $definition['name'], 'scope' => $definition['scope'], 'is_system' => true],
+                [
+                    'name' => $definition['name'],
+                    'scope' => $definition['scope'],
+                    'is_system' => true,
+                    'runtime_assignable' => $definition['runtime_assignable'] ?? false,
+                ],
             );
 
             $role->capabilities()->sync($definition['capabilities']);

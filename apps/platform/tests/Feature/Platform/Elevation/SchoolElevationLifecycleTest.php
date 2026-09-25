@@ -5,13 +5,13 @@ namespace Tests\Feature\Platform\Elevation;
 use App\Domain\Platform\Application\Elevation\ElevationAudit;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
-use App\Models\PlatformRoleAssignment;
 use App\Models\SchoolElevation;
 use App\Support\Auth\Mfa\MfaAdminResetService;
 use App\Support\Auth\Mfa\MfaFactorService;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\ElevationContext;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
@@ -159,7 +159,9 @@ class SchoolElevationLifecycleTest extends TestCase
         $admin = $this->platformAdmin();
         $elevation = $this->elevate($admin, $this->createSchool());
 
-        PlatformRoleAssignment::query()->where('user_id', $admin->id)->delete();
+        // The root role cannot be revoked at runtime (ADR 0046); the
+        // capability is removed from the role instead.
+        $this->removeElevateCapabilityFromRoot();
 
         // Still inside CapabilityResolver's documented 60-second cache.
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('platformElevation.isElevated', true));
@@ -178,7 +180,9 @@ class SchoolElevationLifecycleTest extends TestCase
         $admin = $this->platformAdmin();
         $elevation = $this->elevate($admin, $this->createSchool());
 
-        PlatformRoleAssignment::query()->where('user_id', $admin->id)->delete();
+        // The root role cannot be revoked at runtime (ADR 0046); the
+        // capability is removed from the role instead.
+        $this->removeElevateCapabilityFromRoot();
         app(CapabilityResolver::class)->forgetCache($admin);
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('elevation', null));
@@ -332,6 +336,14 @@ class SchoolElevationLifecycleTest extends TestCase
         $this->post('/app/platform/elevation/exit');
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('platformElevation.isElevated', false));
         $this->assertFalse(app(ElevationContext::class)->isElevated());
+    }
+
+    private function removeElevateCapabilityFromRoot(): void
+    {
+        DB::table('role_capabilities')
+            ->where('role_id', DB::table('roles')->where('key', 'platform_super_admin')->value('id'))
+            ->where('capability_key', 'platform.schools.elevate')
+            ->delete();
     }
 
     private function assertTerminated(SchoolElevation $elevation, string $reason): void

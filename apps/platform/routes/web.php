@@ -84,6 +84,8 @@ use App\Http\Controllers\App\Payroll\Statutory\StatutoryAccountingConfigurationC
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryController as StatutoryPayrollController;
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryEmployeeController;
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryExportController as StatutoryPayrollExportController;
+use App\Http\Controllers\App\Platform\PlatformAuditLogController;
+use App\Http\Controllers\App\Platform\PlatformRoleAdminController;
 use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -253,6 +255,28 @@ Route::middleware('auth')->group(function (): void {
             Route::post('/{schoolGroup}/grants', [SchoolGroupAdminController::class, 'grant'])->name('grants.store');
             Route::post('/{schoolGroup}/grants/{grant}/revoke', [SchoolGroupAdminController::class, 'revoke'])->name('grants.revoke');
         });
+
+    // Phase 0N.7 (ADR 0046 sections 7-9): platform audit review --
+    // context-neutral, Highly Sensitive; the capability here and again in
+    // PlatformAuditLogReviewService, which also requires current MFA
+    // assurance and writes one platform.audit_log.viewed per review.
+    Route::get('/app/platform/audit-log', [PlatformAuditLogController::class, 'index'])
+        ->middleware('capability:platform.audit.view,platform')
+        ->name('app.platform.audit-log');
+
+    // Phase 0N.7 (ADR 0046 sections 3-4): grant/revoke the one runtime-
+    // assignable platform role (platform_auditor). The root role is never
+    // grantable or revocable here; PlatformRoleGovernanceService re-checks
+    // the root-reserved capability and audits every refusal.
+    // The POSTs carry no capability middleware on purpose: a refusal must
+    // reach the service to be audited (platform.role_grant.denied).
+    Route::prefix('app/platform/roles')->name('app.platform.roles.')->group(function (): void {
+        Route::get('/', [PlatformRoleAdminController::class, 'index'])
+            ->middleware('capability:platform.role_grants.manage,platform')
+            ->name('index');
+        Route::post('/grants', [PlatformRoleAdminController::class, 'grant'])->name('grants.store');
+        Route::post('/grants/{assignment}/revoke', [PlatformRoleAdminController::class, 'revoke'])->name('grants.revoke');
+    });
 
     // Phase 0N.5 (ADR 0045 sections 9, 12): the Group Admin surface -- the
     // Groups the actor holds a grant in (read-only metadata), and entering

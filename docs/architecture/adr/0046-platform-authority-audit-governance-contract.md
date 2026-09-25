@@ -1,7 +1,8 @@
 # ADR 0046: Platform Authority & Audit Governance Contract (Phase 0N.6)
 
-- Status: Accepted (contract only — nothing described here is built)
-- Date: 2026-09-24 (Phase 0N.6)
+- Status: Accepted; foundation implemented in Phase 0N.7 (see
+  "Implementation amendment" at the end)
+- Date: 2026-09-24 (Phase 0N.6); amended 2026-09-25 (Phase 0N.7)
 
 ## Context
 
@@ -385,3 +386,58 @@ the owner to confirm):
 
 Not in it: School creation (D11), the production provisioning command
 (Phase 0O), metadata allowlists, MFA on review unless the owner decides it.
+
+## Implementation amendment (Phase 0N.7, 2026-09-25)
+
+**Owner implementation decisions:** platform audit review **requires the
+existing MFA** — an enrolled factor and current assurance
+(`mfa_verified_at` within `mfa.assurance_window_minutes`) — but **no fresh
+code per page, cursor or refresh** (unlike starting an elevation, this is a
+read). The metadata allowlist stays **empty** (no denial reason codes).
+`platform_super_admin` stays out-of-band only; the provisioning console
+command is not built. `platform_auditor` (exactly `platform.audit.view`)
+is the only runtime-assignable role, and `platform.role_grants.manage`
+(root only) grants and revokes it.
+
+**What was built:**
+
+| Contract | Implementation |
+|---|---|
+| Catalog (§4–5) | `platform.audit.view` (root + `platform_auditor`), `platform.role_grants.manage` (root only); system role `platform_auditor`; `platform_super_admin` now holds 14 capabilities; catalog 155 |
+| Runtime-assignable marker (§3) | `roles.runtime_assignable` (default false; seeded from the code catalog); `roles_runtime_assignable_check` (system platform roles only, never `platform_super_admin`); triggers `trg_role_capabilities_root_reserved` and `trg_roles_runtime_assignable_root_reserved` keep `platform.role_grants.manage` and `platform.schools.manage` off any runtime-assignable role |
+| History-keeping grants (§4) | `platform_role_assignments.revoked_at` / `revoked_by_user_id`; partial unique `platform_role_assignments_one_active`; `platform_role_assignments_no_self_grant`, `_no_self_revoke`, `_revocation_check`; trigger `trg_platform_role_assignments_governance` (a grant with a grantor, and any revocation, must name a runtime-assignable role; not created revoked; revocation the only change; revoked rows immutable); `DELETE` revoked from the runtime role; user/role/grantor FKs RESTRICT. `CapabilityResolver::platformCapabilities()` ignores revoked grants |
+| Governance (§4, §6) | `App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService` (grant/revoke; code allowlist `RUNTIME_ASSIGNABLE = ['platform_auditor']`; forgets the target's capability cache so a change takes effect at once); `/app/platform/roles` (`PlatformRoleAdminController`, auditor only, exact email or id); events `platform.role_grant.granted/revoked/denied` |
+| Audit review (§7–9) | `App\Support\Audit\PlatformAuditEventReader` (+ `PlatformAuditEventEntry`, `PlatformAuditEventPage`), `App\Domain\Platform\Application\Audit\PlatformAuditLogReviewService`, `/app/platform/audit-log` (`PlatformAuditLogController`), access event `platform.audit_log.viewed` |
+
+**Refinements made while implementing:**
+
+1. **MFA check placement.** The review service checks the capability, then
+   `MfaChallengeService::userHasActiveFactor()` / `hasValidAssurance()` —
+   the exact calls `RequireMfa` makes — and throws RequireMfa's own
+   exceptions, so the codes and statuses are unchanged (`403
+   mfa_required_not_enrolled`, `401 mfa_step_up_required`). JSON callers get
+   RequireMfa's JSON body; a browser gets an `App/Platform/MfaRequired` page
+   with the same status instead of raw JSON (RequireMfa itself is
+   unchanged). Assurance is re-established only by signing in with a code.
+2. **Refused grant/revoke requests reach the service** (no capability
+   middleware on the two POST routes) so that every refusal — including
+   `capability_missing` — is audited as `platform.role_grant.denied`; the
+   GET page keeps the route middleware. Outcome codes: `capability_missing`,
+   `self_grant`, `self_revoke`, `role_not_assignable`, `already_granted`;
+   `role_key` is recorded only for an existing platform role (never free
+   input). An unknown or disabled person is a plain validation error.
+3. **The page cannot choose a role**: the controller always grants
+   `platform_auditor`; a client-sent `role` is ignored.
+4. **Database refusal ordering**: marking the root role runtime-assignable
+   is refused by the root-reserved-capability trigger before the CHECK
+   (either refuses).
+5. **Rollback** of the history migration keeps only active grants (the old
+   total unique cannot hold revoked history) — a deliberate, documented
+   loss on `down()` only.
+6. **Demo**: `platform.auditor@example.test` holds `platform_auditor`,
+   granted by the Platform Admin (a real runtime grant); like every demo
+   account it has no MFA factor until enrolled.
+7. **Index**: none added. DDEV holds a few dozen rows; the existing
+   `occurred_at` index serves the keyset order.
+
+CLAUDE.md rule 85 records the platform authority invariants.

@@ -52,7 +52,9 @@ class CapabilityResolver
         return Cache::remember(
             "platform:capabilities:user:{$actor->id}",
             self::CACHE_TTL_SECONDS,
+            // Revoked grants are history, never authority (ADR 0046).
             fn () => $actor->platformRoleAssignments()
+                ->whereNull('revoked_at')
                 ->with('role.capabilities')
                 ->get()
                 ->flatMap(fn ($assignment) => $assignment->role->capabilities->pluck('key'))

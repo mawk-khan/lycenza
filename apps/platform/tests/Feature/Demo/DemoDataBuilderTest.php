@@ -66,7 +66,7 @@ class DemoDataBuilderTest extends TestCase
 
         $emails = array_column($result->accounts, 'email');
         $this->assertSame([
-            'platform.admin@example.test', 'school.admin@example.test', 'principal@example.test',
+            'platform.admin@example.test', 'platform.auditor@example.test', 'school.admin@example.test', 'principal@example.test',
             'hr.payroll@example.test', 'multi.school@example.test', 'annexe.admin@example.test',
             'group.admin@example.test', 'teacher@example.test', 'student@example.test', 'guardian01@example.test',
             ...array_column(DemoAccountCatalog::OPERATIONS_DESK_ROLES, 'email'),
@@ -88,6 +88,8 @@ class DemoDataBuilderTest extends TestCase
 
         $this->assertSame([], $memberships('platform.admin@example.test'));
         $this->assertSame([], $memberships('group.admin@example.test'));
+        $this->assertSame([], $memberships('platform.auditor@example.test'));
+        $this->assertSame(['platform.audit.view'], $resolver->platformCapabilities($this->user('platform.auditor@example.test')));
         $this->assertSame([$school->id], $memberships('school.admin@example.test'));
         $this->assertSame([$school->id], $memberships('principal@example.test'));
         $this->assertSame([$school->id], $memberships('hr.payroll@example.test'));

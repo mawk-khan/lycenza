@@ -246,7 +246,8 @@ minute.
 | HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
-| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (12 `platform.*` capabilities, incl. `platform.schools.elevate` and the three School Group governance ones) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13) and **School Groups (platform)** (step 13a); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
+| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (14 `platform.*` capabilities, incl. `platform.schools.elevate`, School Group governance, `platform.audit.view`, `platform.role_grants.manage`) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13), **School Groups (platform)** (step 13a), **Platform audit log** and **Platform roles** (step 13b); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
+| Platform Auditor | `platform.auditor@example.test` | Platform scope, review only | `platform_auditor` (`platform.audit.view` only), granted by the Platform Admin | **Platform audit log** only (needs MFA; step 13b). No School, Group, elevation or governance action |
 | Group Admin | `group.admin@example.test` | Group scope: Lycenza Demo Trust | `group_admin` Group grant (`group.schools.view`, `group.schools.elevate`), granted by the Platform Admin | **Your School Groups** -> the Trust's two Schools (name, status); enter one through elevated access (needs MFA). No School membership or School permission; cannot change the Group |
 | Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
 | Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: same as Teacher |
@@ -301,9 +302,10 @@ Platform Admin (there is no platform UI to review).
 
 | Persona | Exists in code? | Login? | Tenant scope | Capabilities | Usable UI |
 |---|---|---|---|---|---|
-| Platform super admin | Yes (`platform_role_assignments`) | Yes | Platform | 12 `platform.*` | The neutral `/app` landing, platform elevation (enter one School for 30 minutes; opens no School page yet) and School Group governance -- no other platform pages; MFA-reset is a POST-only endpoint; operations status is API-only |
+| Platform super admin | Yes (`platform_role_assignments`, provisioned) | Yes | Platform | 14 `platform.*` | The neutral `/app` landing, platform elevation (enter one School for 30 minutes; opens no School page yet), School Group governance, the platform audit log and Platform Auditor grants; MFA-reset is a POST-only endpoint; operations status is API-only |
+| Platform auditor | Yes (`platform_role_assignments`, runtime grant, Phase 0N.7) | Yes | Platform | `platform.audit.view` | The platform audit log (MFA required) |
 | Group admin | Yes (`group_role_assignments`, Phase 0N.5) | Yes | One School Group per grant | 2 `group.*` | Read-only Group view; Group-derived elevation (opens no School page yet) |
-| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 153 catalog capabilities | Full admin UI |
+| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 155 catalog capabilities | Full admin UI |
 | Principal | Yes (system role `principal`) | Yes | One School | 79 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
 | Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
 | School member, no role (teacher/staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
@@ -400,6 +402,22 @@ Platform Admin (there is no platform UI to review).
       Group Admin's next page says why. Re-add / re-grant afterwards (or
       run `ddev demo-reset`).
     - **multi.school@example.test** sees no School Groups at all.
+13b. **Platform audit log and platform roles** (Phase 0N.7, ADR 0046).
+    Both platform accounts need MFA for the audit log: enroll a factor at
+    **Account security**, then sign out and sign in again with a code.
+    - As **platform.admin@example.test**: `/app` -> **Platform audit log**
+      shows the platform ledger, newest first, 50 per page ("Older
+      events"), seven columns only -- never event details, IP address or
+      browser. Each page view adds one `platform.audit_log.viewed` row.
+      Without a factor (or after the assurance window lapses) the page
+      explains that MFA is required instead.
+    - `/app` -> **Platform roles**: grant **Platform Auditor** to a person
+      by exact email (granting yourself is refused and recorded), revoke
+      it; revoked grants are kept as history. Platform Super Admin is never
+      offered: it is provisioned outside the application.
+    - As **platform.auditor@example.test**: only the audit log; Platform
+      roles, School Groups, elevation and every School page are refused.
+      Revoking the auditor's grant removes access on the next page.
 14. **Analytics** (Phase 0L.2-1): as **School Admin** or **Principal**,
     Dashboard -> **Analytics: Curriculum Coverage**
     (`/app/analytics/curriculum-coverage`). It shows, for the active
@@ -479,7 +497,8 @@ Platform Admin (there is no platform UI to review).
 
 - **Platform administration**: `platform.*` capabilities exist; the only
   platform pages are platform elevation (step 13 in section 12), which
-  opens no School page yet, and School Group governance (step 13a).
+  opens no School page yet, School Group governance (step 13a), and the
+  platform audit log and Platform Auditor grants (step 13b).
   Operations status is `GET /api/internal/operations/status` (API only).
 - **API-only surfaces** (`/api/v1/schools/{school}/...`): academic terms,
   sections, academic departments, rooms, campus CRUD, subject-offering
