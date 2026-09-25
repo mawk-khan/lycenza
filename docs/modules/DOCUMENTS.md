@@ -377,6 +377,18 @@ characters stripped, length-capped) DISPLAY metadata — never used to
 build the storage key, defeating path traversal via a crafted
 filename.
 
+### Production storage policy (ADR 0050, O8)
+
+Production uses a dedicated private S3-compatible bucket per environment
+(never the local `school-os-local` bucket), public access blocked,
+provider encryption at rest, **versioning enabled** and TLS; downloads stay
+application-mediated (no public or signed URLs), keys stay
+`schools/{school_id}/…`. Versioning keeps prior versions after the
+compensating and attachment-removal deletes — it is recovery support, not
+backup and not legal retention; no lifecycle rule may expire objects or
+versions while retention is unresolved. Backups: an independent encrypted
+copy (RPO ≤ 24 h, RTO ≤ 8 h), restored quarterly in isolation.
+
 ### Upload sequence and storage/database compensation
 
 PostgreSQL transactions cannot atomically cover a MinIO/S3 object

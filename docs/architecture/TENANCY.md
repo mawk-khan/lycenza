@@ -381,6 +381,18 @@ the School row FOR SHARE inside each claim transaction, the lifecycle
 services lock it FOR UPDATE, so a claim either commits before a
 suspension (in-flight work the suspension waits for) or sees it.
 
+## Runtime role name in production (ADR 0050, O6)
+
+`school_os_app` is the **fixed v1 production runtime role name** — a
+contract, not an accident: `TenantRls::makeAppendOnly()`/`revokeDelete()`
+default to it (44 migration calls) and three migrations grant to it by
+name. The production database must contain a login role with exactly that
+name, NOSUPERUSER/NOBYPASSRLS, never a member of the migration role, and
+granted `ALTER DEFAULT PRIVILEGES FOR ROLE <migration role>` table and
+sequence privileges (the local init scripts do this for `school_os`).
+RLS policies and the Phase 0O.1A root boundary are role-name-independent.
+A future ADR may generalize the name.
+
 ## What is NOT yet implemented (Phase 0B honesty note)
 
 Real School/Campus/membership/role data model, RLS, application-layer

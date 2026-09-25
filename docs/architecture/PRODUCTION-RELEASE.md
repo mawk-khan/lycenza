@@ -1,6 +1,8 @@
 # Production process and release contract
 
-**Status: repository contract (Phase 0O.1, 2026-09-25).** This document
+**Status: repository contract (Phase 0O.1, 2026-09-25; hosting, secrets,
+storage and recovery decided by ADR 0050, Phase 0O.4 — this document stays
+the process and release runbook).** This document
 states what a production deployment of `apps/platform` and `services/ai`
 must run, in what order a release happens, and which invariants every
 release keeps. It is **not** a runbook for a specific host: the hosting
@@ -83,6 +85,23 @@ proxy". Partner API credentials exist, but no partner route is enabled.
 One service-token value is used in three places (decision O5 may change
 this): Laravel `AI_GATEWAY_SERVICE_TOKEN`, the Gateway `SERVICE_TOKEN`, and
 the hashed `ai-gateway` row in `service_identities`.
+
+### Decided by ADR 0050 (Phase 0O.4)
+
+- Provider-neutral containers behind a TLS-terminating proxy that is the
+  only public entry; explicit `TRUSTED_PROXIES` (0O.4A; never `*`).
+- Secrets from an external managed store, injected before the boot check
+  and `config:cache`; **`DB_ADMIN_*` only in the release step and the
+  operator console**, never in web/worker/scheduler processes.
+- v1 releases are **single-version with a maintenance window**: rolling
+  mixed-version deploys are unproven (no expand/contract policy).
+- A Redis loss currently strands queued work (`dispatched` outbox rows,
+  `pending` webhook and Communication deliveries): until 0O.4A adds
+  reconciliation, run Redis with persistence or re-queue them after a
+  Redis restore.
+- Backups: PostgreSQL PITR (RPO 15 min, RTO 4 h, 35-day window); object
+  storage versioning + independent copy (RPO 24 h, RTO 8 h); quarterly
+  isolated restore drills.
 
 ## 3. Release order
 
