@@ -308,6 +308,12 @@ ADR 0049 §8 (Phase 0O.2) freezes this interaction for the external API
 hardening: the new partner authentication is a framework auth guard so it
 runs before `ThrottleRequests` and the limiter can key by client; partner
 idempotency scope adds the actor type `api_client`; nothing is reordered.
+Built in Phase 0O.3: `api-read`/`api-mutation`/`api-sensitive-read`
+defaults on every `/api/v1` route, `ThrottleFailedApiAuthentication`
+prepended before authentication and `EnforceApiCredentialScope` appended
+after `ThrottleRequests` in the priority list (guard-tested in
+`Tests\Feature\Api\Hardening\ApiRouteThrottleCoverageTest`). No partner
+mutation exists yet, so no `api_client` idempotency actor type was added.
 
 ### Payment and webhook readiness
 

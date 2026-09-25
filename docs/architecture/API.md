@@ -32,8 +32,16 @@ OpenAPI spec for the full request/response shapes.
   platform or Group authority; **partner API clients** are separate,
   School-bound, non-human credentials on an explicitly registered
   `/api/v1/partner` surface (deny by default, no `{school}` parameter).
-  Until 0O.3 ships, tokens have no issuance surface, no expiry and no
-  scopes.
+  **Built in Phase 0O.3:** tokens are issued at **Account > API tokens**
+  (`/app/account/api-tokens`, fresh MFA code, shown once, 30 days by
+  default, at most 90; format `<id>|lyc_pat_…`), carry `api.read` and/or
+  `api.write` (method-based, no implication, 403 `API_SCOPE_INSUFFICIENT`
+  otherwise), stop working when revoked, expired or the account is
+  disabled (generic 401), and never exercise platform or Group
+  capabilities (so `/api/internal/operations/status` refuses bearer
+  tokens). Partner credentials (`lyc_pk_<key_id>.<secret>`) are managed
+  under School **Integrations > API clients**; **no partner route is
+  enabled in production** (the only one is a local/testing probe).
 - Service-to-service (Laravel ↔ AI Gateway): a separate mechanism, not
   this bearer scheme — see ADR 0013, ADR 0016, ADR 0023 (now
   implemented: a shared service token for "is this the trusted
@@ -117,16 +125,21 @@ Summary: `login` (6/min, IP-keyed), `public-api` (120/min, IP-keyed),
 identity-keyed), `internal-diagnostics` (12/min, user-keyed).
 `/api/health/live` and `/api/health/ready` are deliberately exempt.
 
-ADR 0049 §7 (0O.3) makes throttling universal on `/api/v1` — today 140 of
-380 production routes are unthrottled — with the classes `api-read`
-(120/min), `api-mutation` (60/min), `api-sensitive-read` (20/min) and
-`api-auth-failure` (20/min, IP), keyed by the principal (School+user, or
-partner client), never by IP alone for authenticated traffic. The Phase
-0C.2 ordering and replay semantics below are unchanged.
+**Phase 0O.3 (ADR 0049 §7): every `/api/v1` route is throttled.** A route
+without its own limiter gets `api-read` (120/min, safe methods) or
+`api-mutation` (60/min), keyed by (School, user) or (School, partner
+client) — never IP alone for authenticated traffic;
+`guardian-candidates` uses `api-sensitive-read` (20/min); 20 failed
+authentications per minute for one (IP, credential id) are refused with
+429 before authentication (`api-auth-failure`). Responses carry
+`X-RateLimit-Limit`/`X-RateLimit-Remaining`; a 429 carries `Retry-After`.
+The Phase 0C.2 ordering and replay semantics are unchanged.
 
-**CORS and browser headers:** ADR 0049 §10–11 (0O.3) — exact-origin CORS
-allowlist, empty by default, no credentials; today the framework default
-still allows any origin on `api/*`.
+**CORS and browser headers (Phase 0O.3, ADR 0049 §10–11):** cross-origin
+browser access only from the exact origins in `CORS_ALLOWED_ORIGINS`
+(empty by default = none; never `*`, never credentials). API responses
+carry `X-Content-Type-Options: nosniff` and
+`Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; sandbox`.
 
 ## Health & internal diagnostics
 

@@ -15,6 +15,7 @@ use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Communications\Http\Controllers\CommunicationTemplateController;
 use App\Http\Controllers\App\Account\AccountSecurityController;
+use App\Http\Controllers\App\Account\ApiTokenController;
 use App\Http\Controllers\App\Account\MfaAdminController;
 use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\Analytics\CurriculumCoverageController;
@@ -65,6 +66,7 @@ use App\Http\Controllers\App\HR\HrEmployeePersonalDetailController;
 use App\Http\Controllers\App\HR\HrEmployeeQualificationController;
 use App\Http\Controllers\App\HR\HrEmploymentController;
 use App\Http\Controllers\App\HR\HrPositionController;
+use App\Http\Controllers\App\Integrations\ApiClientController;
 use App\Http\Controllers\App\InventoryItemController;
 use App\Http\Controllers\App\InventoryLocationController;
 use App\Http\Controllers\App\InventoryStockController;
@@ -201,6 +203,21 @@ Route::middleware('auth')->group(function (): void {
             ->name('mfa.disable');
     });
 
+    // Phase 0O.3 (ADR 0049 section 2): the person's OWN human API tokens --
+    // Account/Security area, no School context (a token represents the
+    // person; each API request re-checks their School access). Issue needs
+    // an enrolled factor and a fresh code (inside the controller);
+    // revoking needs only the session.
+    Route::prefix('app/account/api-tokens')->name('app.account.api-tokens.')->group(function (): void {
+        Route::get('/', [ApiTokenController::class, 'index'])->name('index');
+        Route::post('/', [ApiTokenController::class, 'store'])
+            ->middleware('throttle:credential-management')
+            ->name('store');
+        Route::delete('/{token}', [ApiTokenController::class, 'destroy'])
+            ->middleware('throttle:credential-management')
+            ->name('destroy');
+    });
+
     // Phase 0H.4D-P1: a tiny infrastructure-only demonstration route
     // proving the `mfa` middleware composes with `capability:` rather
     // than substituting for it -- see MfaDemoController's docblock.
@@ -334,6 +351,23 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     Route::get('/app/settings', [SchoolSettingsController::class, 'show'])
         ->middleware('capability:school.settings.view')
         ->name('app.settings.show');
+
+    // Phase 0O.3 (ADR 0049 section 3): School Integrations -- partner API
+    // clients of the SELECTED School only. View: capability + current MFA
+    // assurance; issue/rotate/revoke: `.manage` + a fresh MFA code (both
+    // checked in ApiClientController).
+    Route::prefix('app/integrations/api-clients')->name('app.integrations.api-clients.')->group(function (): void {
+        Route::get('/', [ApiClientController::class, 'index'])->name('index');
+        Route::post('/', [ApiClientController::class, 'store'])
+            ->middleware('throttle:credential-management')
+            ->name('store');
+        Route::post('/{client}/rotate', [ApiClientController::class, 'rotate'])
+            ->middleware('throttle:credential-management')
+            ->name('rotate');
+        Route::post('/{client}/revoke', [ApiClientController::class, 'revoke'])
+            ->middleware('throttle:credential-management')
+            ->name('revoke');
+    });
 
     // Authorization for this action is enforced inside the controller
     // via the AuthorizesCapability trait, not route middleware -- see

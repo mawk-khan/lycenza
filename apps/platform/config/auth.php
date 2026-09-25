@@ -42,6 +42,15 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Phase 0O.3 (ADR 0049 section 3): partner API clients -- a request
+        // guard (App\Support\ApiClients\PartnerCredentialAuthenticator,
+        // registered in AppServiceProvider). Used only as `auth:partner` on
+        // the `/api/v1/partner` group; its principal is an ApiClient, never
+        // a User.
+        'partner' => [
+            'driver' => 'partner-credential',
+        ],
     ],
 
     /*

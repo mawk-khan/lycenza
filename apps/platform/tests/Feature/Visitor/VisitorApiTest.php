@@ -276,7 +276,8 @@ class VisitorApiTest extends TestCase
         $user->forceFill(['is_disabled' => true])->save();
         Auth::forgetGuards();
 
-        $client->postJson("/api/v1/schools/{$school->id}/visitor-visits", $payload)->assertForbidden();
+        // Phase 0O.3 (ADR 0049 section 2): a disabled account's token no longer authenticates at all -- 401, still before idempotency.
+        $client->postJson("/api/v1/schools/{$school->id}/visitor-visits", $payload)->assertUnauthorized();
     }
 
     // --- Check-out: no idempotency middleware, atomic state transition -----

@@ -644,3 +644,62 @@ current capability; "Partner" is the v1 partner position.
 | `webhook-endpoints` | 2 | 6 | 2 GET | webhook-admin | `api.read` / `api.write` | No | api-read; existing stricter mutation limiters kept |
 
 Totals (production route table): 150 GET, 230 mutations, 74 families.
+
+## Implementation amendment (Phase 0O.3, 2026-09-25)
+
+**Owner values (approved 2026-09-25), now frozen:**
+
+| # | Value | Implemented as |
+|---|---|---|
+| V1 | Human token default lifetime **30 days** | `App\Support\Api\HumanApiTokenLifetime::DEFAULT_DAYS` |
+| V2 | Human token maximum **90 days** | `HumanApiTokenLifetime::MAX_DAYS`; `sanctum.expiration` = 90 days (backstop from `created_at`) |
+| V3 | Partner credential default **90 days** | `ApiClientService::DEFAULT_LIFETIME_DAYS` |
+| V4 | Partner credential maximum **365 days** | `ApiClientService::MAX_LIFETIME_DAYS`; database CHECK `expires_at <= issued_at + 365 days` |
+| V5 | HSTS `max-age` **31,536,000** | `ApplySecurityHeaders::HSTS` (`max-age=31536000`, no `includeSubDomains`, no `preload`) |
+
+Rotation overlap stays **at most 24 hours** (database CHECK
+`expires_at <= superseded_at + 24 hours`).
+
+**Owner decision — first partner surface:** `academic_structure.read` is
+**not** enabled. The production partner scope catalog
+(`PartnerScopeRegistry::PRODUCTION`) is **empty**, so production has
+**no partner route**. The substrate is proven against the probe scope
+`partner.probe.read` and route `GET /api/v1/partner/probe`, registered
+only in `local`/`testing` (never in a production route cache). Enabling
+any partner scope needs an approved O15/integration decision or an
+amendment of this ADR.
+
+**What was built:**
+
+| Contract | Implementation |
+|---|---|
+| Human tokens (§2) | Sanctum, reused. `User::createToken()` is overridden to be safe by construction (catalog scopes only, never `*`; 30-day default, 90-day ceiling; no non-expiring path). `Sanctum::authenticateAccessTokensUsing()` refuses a token with no expiry, a non-catalog/wildcard ability, or a disabled owner (generic 401). `EnforceApiCredentialScope` (API group, after throttling): `api.read` for safe methods, `api.write` otherwise, no implication (403 `API_SCOPE_INSUFFICIENT`). `CapabilityResolver::isBearerAuthenticated()` makes platform and Group capabilities empty for any bearer-authenticated actor, so `/api/internal/operations/status` refuses every bearer token (403); the `platform:operations-status` CLI remains. Account page `/app/account/api-tokens` (list; issue with enrolled factor + fresh code; revoke with the session), `HumanApiTokenService`, events `auth.api_token.issued` / `.revoked` (platform ledger; token id, scopes, expiry — never the token, hash or free-text name). Token prefix `lyc_pat_`. |
+| Partner substrate (§3–5) | `api_clients`, `api_client_credentials` (migration `2026_10_20_090000`): platform-resolvable bootstrap records, **no RLS** (the documented exception, guard-tested), immutable `school_id` (triggers + composite FK), revocation final, no runtime `DELETE`, SHA-256 hash only (CHECK), one current credential (partial unique index), expiry required and ≤ 365 days, only shortened, overlap ≤ 24 h, no credential for a revoked client, no `*` scope. `ApiClient` (Authenticatable principal), `ApiClientCredential`. Credential format `lyc_pk_<16 hex key id>.<43-char base64url 256-bit secret>`. `auth:partner` request guard (`PartnerCredentialAuthenticator`: key id → constant-time hash check → not revoked, not expired, client active; generic 401), `partner-context` (`EstablishPartnerContext`: the bound School only, non-disclosing 404 when not active, context cleared in `finally`), `partner-scope:<scope>` (`RequirePartnerScope`, fail closed). `ApiClientService` (issue/rotate/revoke under a client row lock; `integrations.api_clients.view`/`.manage` seeded to `school_admin`, like the webhook pair); School page `/app/integrations/api-clients` (view: capability + current MFA assurance; issue/rotate/revoke: `.manage` + fresh code). Events `integrations.api_client.issued`, `.credential_rotated`, `.revoked`, `.authentication_denied` (known key id only; actor null). |
+| Rate limits (§7) | `api-read` 120/min, `api-mutation` 60/min, `api-sensitive-read` 20/min keyed by (School, user) or (School, client); every unthrottled `/api/v1` route receives the default for its method when the route table is built (`routes/api.php`, part of the route cache); `guardian-candidates` → `api-sensitive-read`; `api-auth-failure` 20/min per (IP, presented credential id) — counted when an `/api/v1` 401 is rendered and enforced before authentication by `ThrottleFailedApiAuthentication` (never on health or internal AI routes); `credential-management` 8/min per user on the credential pages. Existing stricter limiters unchanged. |
+| Ordering (§8) | Unchanged: authentication (incl. `auth:partner`) → `ThrottleRequests` → scope/capability → idempotency; `ThrottleFailedApiAuthentication` is prepended before authentication, `EnforceApiCredentialScope` appended after `ThrottleRequests` in the priority list. Replay accounting unchanged. No production partner mutation exists, so no `api_client` idempotency actor type was added yet. |
+| CORS (§10) | `config/cors.php`: `api/*` only; `CORS_ALLOWED_ORIGINS` parsed by `App\Support\Http\CorsOriginList` (exact `https://host[:port]`, http only for loopback; wildcard, path, pattern or credentials make configuration loading fail); patterns `[]`; methods `GET, HEAD, POST, PUT, PATCH, DELETE`; headers `Authorization, Content-Type, Accept, Idempotency-Key, X-Request-Id`; exposed `X-Request-Id, Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining`; `max_age` 600; credentials false. |
+| Headers (§11) | `ApplySecurityHeaders` (global): nosniff, `strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, the Permissions-Policy of §11 on every response; the exact enforced CSP on HTML pages; `default-src 'none'; frame-ancestors 'none'; sandbox` on API/Inertia JSON and on every `attachment` download; HSTS production + HTTPS only. Existing headers are never overwritten. Local-only exception: the Vite dev-server origin while `public/hot` exists. Inertia's progress CSS: `progress.includeCSS: false` + the same rules in `resources/css/app.css`. |
+
+**Refinements made while implementing:**
+
+1. **Debug error pages.** With `APP_DEBUG` on (never in production —
+   `ProductionConfigurationGuard`), a 5xx debug page keeps its own inline
+   assets, so no CSP is added to it. Production error pages get the CSP:
+   the framework's error views now extend an app-owned
+   `resources/views/errors/minimal.blade.php` that loads the built
+   stylesheet (the stock layout inlines `<style>`), and the 403 view's
+   inline `style=` attributes became classes -- a browser run through the
+   core DDEV flows showed no CSP violation.
+2. **Inertia error dialog.** Inertia's dialog for a non-Inertia response
+   injects a small `<style>` that the CSP blocks — cosmetic only.
+3. **`api.write` and POST lookups.** Scope follows the HTTP method, so the
+   read-only `POST …/guardian-candidates` lookup needs `api.write`.
+4. **Revocation of a human token deletes its row** (Sanctum convention);
+   the `auth.api_token.revoked` event is the history. Partner rows are
+   never deleted.
+5. **`/api/internal/operations/status`** stays registered but refuses every
+   bearer token (there is no session on `/api`), per §2; no new
+   authentication model was invented for it.
+6. **Legacy tokens.** No token was ever issued in production; any row
+   without an expiry or with a wildcard ability simply stops
+   authenticating (tests prove it) — no migration needed.

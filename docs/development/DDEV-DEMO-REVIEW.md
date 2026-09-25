@@ -681,7 +681,16 @@ production because:
    demo Platform Admin's root grant is provisioned through the admin
    connection (the runtime role can no longer write one), audited as
    `platform.role_grant.provisioned` with method `demo_seed`.
-6. Nothing in the demo bypasses authorization or RLS: data is created on
+6. **Phase 0O.3 API and browser hardening:** every page carries the
+   enforced CSP and security headers (DDEV serves the built assets; with
+   `npm run dev` the Vite dev-server origin is added in `local` only).
+   Human API tokens are at **API tokens** in the account bar (enrol MFA
+   first); School Admins see **Integrations: API clients** on the
+   dashboard, where the local-only probe scope `partner.probe.read` can be
+   issued and exercised against `GET /api/v1/partner/probe` — production
+   has no partner route. CORS allows no cross-origin browser access unless
+   `CORS_ALLOWED_ORIGINS` is set.
+7. Nothing in the demo bypasses authorization or RLS: data is created on
    the NOBYPASSRLS runtime connection inside `TenantContext`, lifecycle
    records go through their Application services, and accounts receive
    capabilities only through real role assignments.

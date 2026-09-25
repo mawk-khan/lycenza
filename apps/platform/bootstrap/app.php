@@ -1,7 +1,12 @@
 <?php
 
+use App\Http\Middleware\Api\EnforceApiCredentialScope;
 use App\Http\Middleware\Api\EnsurePrivateNoStoreResponse;
 use App\Http\Middleware\Api\EnsureSchoolMembershipContext;
+use App\Http\Middleware\Api\EstablishPartnerContext;
+use App\Http\Middleware\Api\RequirePartnerScope;
+use App\Http\Middleware\Api\ThrottleFailedApiAuthentication;
+use App\Http\Middleware\ApplySecurityHeaders;
 use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\AssignTraceContext;
 use App\Http\Middleware\DevOnlySchoolHeaderResolver;
@@ -14,6 +19,7 @@ use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
 use App\Http\Middleware\ResolveSchoolContext;
 use App\Http\Middleware\VerifyAiGatewayServiceToken;
+use App\Support\Api\ApiAuthFailureLimiter;
 use App\Support\Auth\SessionEndedResponder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -23,6 +29,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Validation\ValidationException;
 
@@ -36,6 +43,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(AssignRequestId::class);
         $middleware->append(AssignTraceContext::class);
+        // Phase 0O.3 (ADR 0049 section 11): the browser security header
+        // baseline on every response, alongside the existing no-store,
+        // history-privacy and logout headers.
+        $middleware->append(ApplySecurityHeaders::class);
 
         $middleware->alias([
             'capability' => EnsureCapability::class,
@@ -51,6 +62,8 @@ return Application::configure(basePath: dirname(__DIR__))
             // School-scoped web route (routes/web.php's School group) --
             // see App\Http\Middleware\RequireSchoolContext.
             'school-context' => RequireSchoolContext::class,
+            'partner-context' => EstablishPartnerContext::class,
+            'partner-scope' => RequirePartnerScope::class,
         ]);
 
         // Tenant resolution needs the session already started (so
@@ -71,7 +84,24 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->api(
-            append: [ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class],
+            append: [ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, ThrottleFailedApiAuthentication::class, EnforceApiCredentialScope::class],
+        );
+
+        // Phase 0O.3 (ADR 0049 sections 7-8), without reordering Phase
+        // 0C.2: a (client, credential) pair that keeps failing
+        // authentication is refused BEFORE authentication runs, and a human
+        // token's scope is checked AFTER authentication and throttling --
+        // the same slot as a capability check. Authentication itself
+        // (including `auth:partner`) stays framework-prioritized ahead of
+        // ThrottleRequests, so limiters can key by principal.
+        $middleware->prependToPriorityList(
+            before: AuthenticatesRequests::class,
+            prepend: ThrottleFailedApiAuthentication::class,
+        );
+
+        $middleware->appendToPriorityList(
+            after: ThrottleRequests::class,
+            append: EnforceApiCredentialScope::class,
         );
 
         $middleware->appendToPriorityList(
@@ -136,6 +166,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 default => 500,
             };
             $errors = $e instanceof ValidationException ? $e->errors() : null;
+
+            // Phase 0O.3 (ADR 0049 section 7): every failed API
+            // authentication counts toward `api-auth-failure`.
+            if ($e instanceof AuthenticationException && $request->is('api/v1/*')) {
+                app(ApiAuthFailureLimiter::class)->hit($request);
+            }
 
             // Section 40 (Phase 0C.2): extends the existing envelope
             // with an optional stable machine `code` -- present only

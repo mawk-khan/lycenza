@@ -3859,7 +3859,7 @@ export interface components {
             error: {
                 message: string;
                 status: number;
-                /** @description Stable machine-readable error code (e.g. IDEMPOTENCY_KEY_CONFLICT), present only for exceptions that define one. null otherwise -- see docs/architecture/API.md ("Error format"). */
+                /** @description Stable machine-readable error code (e.g. IDEMPOTENCY_KEY_CONFLICT, API_SCOPE_INSUFFICIENT), present only for exceptions that define one. null otherwise -- see docs/architecture/API.md ("Error format"). */
                 code?: string | null;
                 /** Format: uuid */
                 requestId: string | null;
@@ -6779,10 +6779,39 @@ export interface components {
         };
     };
     responses: {
-        /** @description Phase 8A.15 -- the caller's School+actor-scoped rate limit (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for the sensitive-documents endpoint) has been exceeded. The same global error envelope as every other `/api/v1` error; never a cross-School/Highly-Sensitive existence signal. */
+        /** @description The caller's own rate limit has been exceeded. Every `/api/v1` route is limited per principal (School + user, or partner client; never IP alone once authenticated) -- by default `api-read` 120/min, `api-mutation` 60/min, `api-sensitive-read` 20/min, or a stricter route limiter (`hr-api-*`, `documents-*`, `webhook-admin`); 20 failed authentications per minute for one credential id and client IP are refused before authentication. An idempotent replay consumes quota. The same global error envelope as every other error; describes only the caller's own bucket. */
         TooManyRequests: {
             headers: {
                 "Retry-After": components["headers"]["RetryAfter"];
+                "X-RateLimit-Limit": components["headers"]["RateLimitLimit"];
+                "X-RateLimit-Remaining": components["headers"]["RateLimitRemaining"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Missing, malformed, unknown, expired or revoked credential, or a disabled account. One generic body ("Unauthenticated."); never says which. */
+        Unauthenticated: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Authenticated, but the credential's scope does not cover this operation (`code: API_SCOPE_INSUFFICIENT`), or the user lacks the route's capability (`code: null`). */
+        ScopeInsufficient: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description No such School, no active membership in it, or the School is not active -- indistinguishable from nonexistence. */
+        NotFoundNonDisclosing: {
+            headers: {
                 [name: string]: unknown;
             };
             content: {
@@ -6865,6 +6894,10 @@ export interface components {
     };
     requestBodies: never;
     headers: {
+        /** @description The caller's own request budget for the current window. */
+        RateLimitLimit: number;
+        /** @description Requests left in the caller's own current window. */
+        RateLimitRemaining: number;
         /** @description Correlates this response with server-side logs/audit entries. */
         XRequestId: string;
         /** @description Present and "true" only when this response is a replay of a previously completed request with the same Idempotency-Key (docs/architecture/API.md, "Idempotency"); absent on a request's first, freshly-executed response. */

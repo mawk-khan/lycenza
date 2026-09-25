@@ -58,6 +58,9 @@ class AcademicStructureRateLimitingTest extends TestCase
             'login', 'public-api', 'school-api-mutations', 'webhook-admin', 'internal-service', 'internal-diagnostics',
             'hr-api-reads', 'hr-api-sensitive-reads',
             'documents-reads', 'documents-sensitive-reads', 'documents-content', 'documents-writes',
+            // Phase 0O.3 (ADR 0049 section 7): the shared default classes
+            // every otherwise-unthrottled /api/v1 route now carries.
+            'api-read', 'api-mutation', 'api-sensitive-read',
         ];
 
         foreach (Route::getRoutes() as $route) {

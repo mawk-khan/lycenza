@@ -260,7 +260,8 @@ class TransportApiTest extends TestCase
         $user->forceFill(['is_disabled' => true])->save();
         Auth::forgetGuards();
 
-        $client->postJson("/api/v1/schools/{$school->id}/transport-student-assignments", $payload)->assertForbidden();
+        // Phase 0O.3 (ADR 0049 section 2): a disabled account's token no longer authenticates at all -- 401, still before idempotency.
+        $client->postJson("/api/v1/schools/{$school->id}/transport-student-assignments", $payload)->assertUnauthorized();
     }
 
     // --- Idempotency: Route operational assignment ---------------------------

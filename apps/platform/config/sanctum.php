@@ -50,7 +50,12 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Phase 0O.3 (ADR 0049 section 2, owner value V2): a backstop ceiling of
+    // 90 days from creation. Every token also carries its own absolute
+    // `expires_at` (30 days by default, never more than 90 --
+    // App\Models\User::createToken()); the Sanctum guard refuses a token
+    // without one (App\Providers\AppServiceProvider).
+    'expiration' => 60 * 24 * 90,
 
     /*
     |--------------------------------------------------------------------------
@@ -65,7 +70,9 @@ return [
     |
     */
 
-    'token_prefix' => env('SANCTUM_TOKEN_PREFIX', ''),
+    // Phase 0O.3 (ADR 0049 section 5): a fixed, non-secret prefix so a
+    // leaked human token is recognisable (partner keys use `lyc_pk_`).
+    'token_prefix' => 'lyc_pat_',
 
     /*
     |--------------------------------------------------------------------------

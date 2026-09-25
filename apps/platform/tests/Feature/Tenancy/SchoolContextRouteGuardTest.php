@@ -47,6 +47,9 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.account.security.mfa.begin',
         'app.account.security.mfa.confirm',
         'app.account.security.mfa.recovery-codes.regenerate',
+        'app.account.api-tokens.index',           // Phase 0O.3: the User's own API tokens (ADR 0049)
+        'app.account.api-tokens.store',
+        'app.account.api-tokens.destroy',
         'app.account.security.mfa.disable',
         'app.account.admin.mfa.reset',            // platform-scoped action
         'internal.mfa-demo.ping',                 // platform-scoped, local/testing only

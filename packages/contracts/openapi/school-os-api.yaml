@@ -10,12 +10,32 @@ info:
     docs/architecture/API.md for the full architecture (auth, pagination,
     idempotency, rate limiting, webhooks, error format).
 
+    Phase 0O.3 hardening (ADR 0049): every credential expires and carries
+    closed scopes; every `/api/v1` route is rate limited per principal
+    (429 with Retry-After); cross-origin browser access is denied unless
+    an exact origin is configured (never `*`, never credentials); API
+    responses carry `X-Content-Type-Options: nosniff` and a sandboxed
+    Content-Security-Policy. No partner (third-party) business route is
+    enabled yet -- see `partnerKey` and `x-api-scopes`.
+
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development
 
 security:
   - bearerAuth: []
+
+x-api-scopes:
+  human:
+    api.read: Safe methods (GET/HEAD) on routes the token's user may already use. Implies nothing else.
+    api.write: Mutations on routes the token's user may already use. Implies nothing else (not even api.read).
+  partner: {}
+  notes: >
+    Closed, code-defined catalogs (App\Support\Api\ApiScope,
+    App\Support\Api\PartnerScopeRegistry); no wildcard. A scope never
+    grants a capability: the user's current School capability is still
+    required on every request. The production partner catalog is empty --
+    no partner integration is approved (ADR 0049 section 6.4, O15).
 
 paths:
   /system/status:
@@ -8651,10 +8671,29 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: >
-        Opaque personal-access token (web/mobile) or partner API key
-        (third-party integrations). See docs/architecture/API.md
-        ("Authentication").
+      bearerFormat: "<id>|lyc_pat_<random>"
+      description: >
+        Human API token (Laravel Sanctum personal access token), issued by
+        the person themselves under Account > API tokens with a fresh MFA
+        code and shown once. Scopes `api.read` / `api.write`
+        (x-api-scopes.human); always expires -- 30 days by default, at
+        most 90; revocable, effective on the next request. It acts as its
+        user: every request re-checks the enabled account, active
+        membership, active School and the route's capability. It never
+        exercises platform or School Group authority. See
+        docs/architecture/API.md ("Authentication") and ADR 0049.
+    partnerKey:
+      type: http
+      scheme: bearer
+      bearerFormat: "lyc_pk_<key_id>.<secret>"
+      description: >
+        Partner API credential of a non-human integration bound to exactly
+        one School (immutable). Used only on `/api/v1/partner/*` routes,
+        which take no School parameter -- the School is the credential's
+        binding. 90 days by default, at most 365; rotation keeps the
+        previous credential for at most 24 hours; revocation is immediate.
+        No partner route or scope is enabled in production yet (ADR 0049
+        section 6.4).
 
   parameters:
     Page:
@@ -8962,6 +9001,12 @@ components:
       required: true
       schema: { type: string, format: uuid }
   headers:
+    RateLimitLimit:
+      description: The caller's own request budget for the current window.
+      schema: { type: integer }
+    RateLimitRemaining:
+      description: Requests left in the caller's own current window.
+      schema: { type: integer }
     XRequestId:
       description: Correlates this response with server-side logs/audit entries.
       schema: { type: string, format: uuid }
@@ -9011,7 +9056,7 @@ components:
               nullable: true
               description: >
                 Stable machine-readable error code (e.g.
-                IDEMPOTENCY_KEY_CONFLICT), present only for exceptions
+                IDEMPOTENCY_KEY_CONFLICT, API_SCOPE_INSUFFICIENT), present only for exceptions
                 that define one. null otherwise -- see
                 docs/architecture/API.md ("Error format").
             requestId: { type: string, format: uuid, nullable: true }
@@ -12235,13 +12280,43 @@ components:
   responses:
     TooManyRequests:
       description: >
-        Phase 8A.15 -- the caller's School+actor-scoped rate limit
-        (`hr-api-reads` 120/min, or `hr-api-sensitive-reads` 20/min for
-        the sensitive-documents endpoint) has been exceeded. The same
-        global error envelope as every other `/api/v1` error; never a
-        cross-School/Highly-Sensitive existence signal.
+        The caller's own rate limit has been exceeded. Every `/api/v1`
+        route is limited per principal (School + user, or partner client;
+        never IP alone once authenticated) -- by default `api-read`
+        120/min, `api-mutation` 60/min, `api-sensitive-read` 20/min, or a
+        stricter route limiter (`hr-api-*`, `documents-*`,
+        `webhook-admin`); 20 failed authentications per minute for one
+        credential id and client IP are refused before authentication.
+        An idempotent replay consumes quota. The same global error
+        envelope as every other error; describes only the caller's own
+        bucket.
       headers:
         Retry-After: { $ref: "#/components/headers/RetryAfter" }
+        X-RateLimit-Limit: { $ref: "#/components/headers/RateLimitLimit" }
+        X-RateLimit-Remaining: { $ref: "#/components/headers/RateLimitRemaining" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthenticated:
+      description: >
+        Missing, malformed, unknown, expired or revoked credential, or a
+        disabled account. One generic body ("Unauthenticated."); never says
+        which.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ScopeInsufficient:
+      description: >
+        Authenticated, but the credential's scope does not cover this
+        operation (`code: API_SCOPE_INSUFFICIENT`), or the user lacks the
+        route's capability (`code: null`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFoundNonDisclosing:
+      description: >
+        No such School, no active membership in it, or the School is not
+        active -- indistinguishable from nonexistence.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * The single authoritative service computing effective capabilities.
@@ -45,7 +46,7 @@ class CapabilityResolver
      */
     public function platformCapabilities(User $actor): array
     {
-        if ($actor->isDisabled()) {
+        if ($actor->isDisabled() || self::isBearerAuthenticated($actor)) {
             return [];
         }
 
@@ -127,7 +128,7 @@ class CapabilityResolver
      */
     public function groupCapabilitiesById(User $actor, string $groupId): array
     {
-        if ($actor->isDisabled()) {
+        if ($actor->isDisabled() || self::isBearerAuthenticated($actor)) {
             return [];
         }
 
@@ -162,7 +163,7 @@ class CapabilityResolver
      */
     public function groupsWith(User $actor, string $capability): Collection
     {
-        if ($actor->isDisabled()) {
+        if ($actor->isDisabled() || self::isBearerAuthenticated($actor)) {
             return new Collection;
         }
 
@@ -177,6 +178,22 @@ class CapabilityResolver
             ->orderBy('name')
             ->get()
             ->toBase();
+    }
+
+    /**
+     * Phase 0O.3 (ADR 0049 section 2, invariant 24): an actor authenticated
+     * by a human API token (a Sanctum PersonalAccessToken -- a browser
+     * session carries none, or a TransientToken) never exercises platform
+     * or Group authority: that authority is bound to interactive MFA (ADR
+     * 0044-0046), which a bearer token cannot carry. School capabilities
+     * are unaffected.
+     */
+    public static function isBearerAuthenticated(User $actor): bool
+    {
+        /** @var mixed $token null, a TransientToken (session) or a PersonalAccessToken (bearer) */
+        $token = $actor->currentAccessToken();
+
+        return $token instanceof PersonalAccessToken;
     }
 
     public function canPlatform(User $actor, string $capability): bool

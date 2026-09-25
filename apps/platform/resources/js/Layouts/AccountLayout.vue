@@ -38,6 +38,7 @@ const user = computed(() => page.props.auth?.user ?? null);
                 <span class="ml-1 text-slate-500">{{ user.email }}</span>
             </span>
             <a class="underline" href="/app/account/security">Account security</a>
+            <a class="underline" href="/app/account/api-tokens">API tokens</a>
             <Link
                 href="/logout"
                 method="post"

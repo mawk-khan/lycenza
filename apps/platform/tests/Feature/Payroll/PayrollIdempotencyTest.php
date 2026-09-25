@@ -210,7 +210,8 @@ class PayrollIdempotencyTest extends TestCase
         $replayAttempt = $this->as($f['approverToken'])->withHeader('Idempotency-Key', 'revoked-approve-key')
             ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve");
 
-        $replayAttempt->assertForbidden();
+        // Phase 0O.3 (ADR 0049 section 2): a disabled account's token no longer authenticates at all -- 401, still before idempotency.
+        $replayAttempt->assertUnauthorized();
         $this->assertNull($replayAttempt->headers->get('Idempotency-Replayed'), 'a denied actor must never receive a replayed body.');
     }
 

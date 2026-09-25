@@ -58,6 +58,11 @@ class CapabilityAndRoleSeeder extends Seeder
             // fees.*, ...) are NOT seeded here.
             ['key' => 'integrations.webhooks.view', 'label' => 'View webhook endpoints', 'namespace' => 'school'],
             ['key' => 'integrations.webhooks.manage', 'label' => 'Manage webhook endpoints', 'namespace' => 'school'],
+            // Phase 0O.3 (ADR 0049 section 3): partner API clients -- School-
+            // owned integrations, named like the webhook pair above. Issue,
+            // rotate and revoke additionally need a fresh MFA code.
+            ['key' => 'integrations.api_clients.view', 'label' => 'View partner API clients', 'namespace' => 'school'],
+            ['key' => 'integrations.api_clients.manage', 'label' => 'Issue, rotate and revoke partner API clients', 'namespace' => 'school'],
             ['key' => 'platform.feature_flags.view', 'label' => 'View feature flags (platform)', 'namespace' => 'platform'],
             ['key' => 'platform.feature_flags.manage', 'label' => 'Manage feature flags (platform)', 'namespace' => 'platform'],
             ['key' => 'platform.service_identities.view', 'label' => 'View service identities (platform)', 'namespace' => 'platform'],
@@ -830,6 +835,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'school.roles.view', 'school.roles.manage',
                     'school.audit.view',
                     'integrations.webhooks.view', 'integrations.webhooks.manage',
+                    'integrations.api_clients.view', 'integrations.api_clients.manage',
                     'school.profile.view', 'school.profile.manage',
                     'school.campuses.view', 'school.campuses.manage',
                     'academics.structure.view', 'academics.structure.manage',

@@ -158,11 +158,42 @@ class ProductionBootSmokeTest extends TestCase
             $this->assertStringNotContainsString('demo', (string) $name);
         }
 
+        // Phase 0O.3 (ADR 0049): no partner route at all (the probe is
+        // local/testing only and no production partner scope exists), and
+        // every /api/v1 route carries a throttle.
+        $this->assertSame([], array_values(array_filter($uris, fn ($uri) => str_starts_with((string) $uri, 'api/v1/partner'))));
+        $verbose = json_decode($this->runArtisan(['route:list', '--json', '-v', '--path=api/v1'], $env)->getOutput(), true);
+        $this->assertIsArray($verbose);
+        $this->assertGreaterThan(300, count($verbose));
+        foreach ($verbose as $route) {
+            $throttled = collect($route['middleware'])->contains(fn ($m) => str_contains($m, 'ThrottleRequests'));
+            $this->assertTrue($throttled, $route['method'].' '.$route['uri'].' is unthrottled');
+        }
+
+        // The cached production configuration keeps CORS closed.
+        $config = require $this->dir.'/config.php';
+        $this->assertSame([], $config['cors']['allowed_origins']);
+        $this->assertFalse($config['cors']['supports_credentials']);
+        $this->assertSame(60 * 24 * 90, $config['sanctum']['expiration']);
+
         // The same route table built locally does contain them (the check above is not vacuous).
         $localUris = implode(' ', array_map(fn ($route) => $route->uri(), app('router')->getRoutes()->getRoutes()));
         foreach (['internal/mfa-demo/ping', 'idempotency-demo', 'webhook-test-events'] as $local) {
             $this->assertStringContainsString($local, $localUris);
         }
+    }
+
+    #[Test]
+    public function a_wildcard_or_malformed_cors_origin_refuses_to_boot(): void
+    {
+        foreach (['*', 'https://*.example.com', 'http://partner.example.com'] as $origin) {
+            $process = $this->runArtisan(['about'], $this->productionEnv(['CORS_ALLOWED_ORIGINS' => $origin]));
+            $this->assertNotSame(0, $process->getExitCode(), "CORS_ALLOWED_ORIGINS={$origin} must refuse to boot");
+        }
+
+        $ok = $this->runArtisan(['config:cache'], $this->productionEnv(['CORS_ALLOWED_ORIGINS' => 'https://partner.example.com']));
+        $this->assertSame(0, $ok->getExitCode(), $ok->getErrorOutput());
+        $this->assertSame(['https://partner.example.com'], (require $this->dir.'/config.php')['cors']['allowed_origins']);
     }
 
     #[Test]
