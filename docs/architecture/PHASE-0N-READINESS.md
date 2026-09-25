@@ -1,6 +1,11 @@
 # Phase 0N — Multi-School Management: Readiness Audit
 
-**Status: BLOCKED — ARCHITECTURE / PRODUCT / SECURITY DECISIONS REQUIRED
+> **Phase 0N — Multi-School Management: COMPLETE (2026-09-25).** Every
+> decision below was resolved and every roadmap item built; see
+> `docs/architecture/PHASE-0N-CLOSEOUT.md`. The text below is the original
+> audit and its dated updates, kept as history.
+
+**Status (original audit): BLOCKED — ARCHITECTURE / PRODUCT / SECURITY DECISIONS REQUIRED
 (recorded 2026-09-24, baseline `0d4fc9a`).** No elevation into a School,
 group/trust administration, cross-School reporting or platform School
 management may be built until the decisions in section 15 are recorded.
@@ -590,7 +595,9 @@ role loses `DELETE` on `schools` in 0N.9.
 
 ## 16. Readiness status
 
-**BLOCKED — ARCHITECTURE / PRODUCT / SECURITY DECISIONS REQUIRED.**
+**BLOCKED — ARCHITECTURE / PRODUCT / SECURITY DECISIONS REQUIRED** (as
+recorded 2026-09-24). *Superseded: all decisions were resolved and Phase
+0N closed COMPLETE on 2026-09-25 (`PHASE-0N-CLOSEOUT.md`).*
 
 Partial School switching existing does not make Phase 0N ready: its core
 items — elevation, group administration, group reporting — have no

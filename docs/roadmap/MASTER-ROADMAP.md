@@ -1306,6 +1306,25 @@ with current MFA assurance; no export, cache or persistence; real
 two-process race and raw-SQL RLS proofs. **Phase 0N implementation
 complete — ready for the Phase 0N closeout audit.**
 
+**Phase 0N — Multi-School Management: COMPLETE (2026-09-25).** Every
+roadmap item is built and every readiness decision (D1–D18) has a recorded
+disposition: the safe no-School landing (0N.1), explicit temporary
+platform elevation granting no School capability and accepted by no School
+route (ADR 0044, 0N.3), Group/Trust authority with Group-derived elevation
+(ADR 0045, 0N.5), platform authority and the MFA-protected platform audit
+review (ADR 0046, 0N.7), School lifecycle with bootstrap administration and
+execution-time suspension (ADR 0047, 0N.9), and the first Group
+cross-School report, Curriculum Coverage (ADR 0048, 0N.11). The full
+regression passed at `fc6d799` (5,685 tests, 0 failures, only the ESI-12
+legal skip). Everything not built is future scope deferred by an ADR or
+gated on a recorded decision — School archive/delete, break-glass
+recovery, further Group reports and export, cross-School Compliance,
+Automation and AI, person-counting Analytics among them — and none is
+scheduled. Closeout, ledger, decision matrix and deferred register:
+`docs/architecture/PHASE-0N-CLOSEOUT.md`. Next roadmap phase: Phase 0O,
+which has no readiness audit yet; Phase 0M remains BLOCKED on its
+legal/compliance gate.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,
