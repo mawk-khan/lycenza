@@ -167,7 +167,11 @@ secrets and from internal service identities: School-bound, 256-bit random
 secrets stored only as hashes and shown once, always expiring, rotated with
 at most a 24-hour overlap (the same precedent as webhook secret rotation),
 revoked immediately. A partner key is never derived from, or shared with,
-a webhook secret, `APP_KEY` or the AI service token.
+a webhook secret, `APP_KEY` or the AI service token. Built in Phase 0O.3:
+`api_clients` / `api_client_credentials` (hash CHECK, 365-day ceiling,
+24-hour overlap, one current credential, no runtime `DELETE`), managed at
+School **Integrations > API clients**; no partner route is enabled in
+production.
 
 ## What this document does not cover
 

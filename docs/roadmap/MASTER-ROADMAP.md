@@ -1382,6 +1382,15 @@ enforced CSP, security headers, production-only HSTS), and defines Phase
 (token/credential lifetimes, HSTS `max-age`) are owner values required
 before 0O.3.
 
+**0O.3 — External API & Browser Hardening Foundation: COMPLETE
+(2026-09-25).** Owner values 30/90-day human tokens, 90/365-day partner
+credentials, HSTS 31,536,000 s. Human API tokens (Account page, fresh MFA,
+scoped, re-checked per request, no platform/Group authority), the partner
+API-client substrate (School-bound, hashed, rotating, revocable; no
+production partner route — O15 open), universal `/api/v1` throttling,
+exact-origin CORS, enforced CSP and the security-header baseline. Phase 0O
+stays PARTIALLY READY (`PHASE-0O-READINESS.md` §16).
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

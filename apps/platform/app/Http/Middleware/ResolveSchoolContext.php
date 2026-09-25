@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\School;
 use App\Models\SchoolMembership;
+use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\VerifiedSchoolDomain;
 use Closure;
@@ -43,7 +44,10 @@ class ResolveSchoolContext
         // never mints a new one.
         $context->setCorrelationId($requestId);
 
-        if ($user = $request->user()) {
+        // Only a human actor: a partner API client (Phase 0O.3) is never a
+        // TenantContext actor, and its School comes from its credential.
+        $user = $request->user();
+        if ($user instanceof User) {
             $context->setActor($user);
         }
 
@@ -74,7 +78,7 @@ class ResolveSchoolContext
         // A value that is not a UUID can never name a School; querying the
         // uuid column with it would be a PostgreSQL error (a 500), not "no
         // School". Treated as stale -- RequireSchoolContext clears it.
-        if ($user === null || ! is_string($schoolId) || ! Str::isUuid($schoolId)) {
+        if (! $user instanceof User || ! is_string($schoolId) || ! Str::isUuid($schoolId)) {
             return null;
         }
 

@@ -68,9 +68,10 @@ class WebhookEndpointApiTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $user->forceFill(['is_disabled' => true])->save();
 
+        // Phase 0O.3 (ADR 0049 section 2): a disabled account's token no longer authenticates at all -- 401, still before idempotency.
         $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->getJson("/api/v1/schools/{$school->id}/webhook-endpoints")
-            ->assertForbidden();
+            ->assertUnauthorized();
     }
 
     #[Test]

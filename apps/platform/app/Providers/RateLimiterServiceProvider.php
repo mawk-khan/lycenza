@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\ApiClient;
 use App\Models\School;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -59,6 +60,22 @@ class RateLimiterServiceProvider extends ServiceProvider
         // legitimate use never starves a different actor in the SAME
         // School.
         RateLimiter::for('school-api-mutations', fn (Request $request) => Limit::perMinute(60)->by($this->tenantKey($request)));
+
+        // Phase 0O.3 (ADR 0049 section 7): the default `/api/v1` classes.
+        // Every production `/api/v1` route carries one of these or a
+        // stricter named limiter (Tests\Feature\Api\ApiRouteThrottleCoverageTest).
+        // Keyed by the principal -- (School, user) for a human, (School,
+        // client) for a partner -- never by IP alone for authenticated
+        // traffic. `api-mutation` equals `school-api-mutations` above.
+        RateLimiter::for('api-read', fn (Request $request) => Limit::perMinute(120)->by($this->principalKey($request)));
+        RateLimiter::for('api-mutation', fn (Request $request) => Limit::perMinute(60)->by($this->principalKey($request)));
+        RateLimiter::for('api-sensitive-read', fn (Request $request) => Limit::perMinute(20)->by($this->principalKey($request)));
+
+        // Phase 0O.3 (ADR 0049 section 7): issuing, rotating and revoking
+        // API credentials on the web pages -- the same 8/min per user as the
+        // other MFA-gated credential actions (`mfa-*`, `platform-*`).
+        RateLimiter::for('credential-management', fn (Request $request) => Limit::perMinute(8)
+            ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
 
         // Webhook administration specifically (section 31): tighter
         // than general School mutations -- creating an endpoint,
@@ -208,6 +225,24 @@ class RateLimiterServiceProvider extends ServiceProvider
      * remains `school-membership`'s job); an invalid/forged School id
      * here only ever produces a harmless, separate bucket.
      */
+    /**
+     * Phase 0O.3 (ADR 0049 section 7): the School + principal key. A partner
+     * client is keyed by its OWN bound School and client id (partner routes
+     * carry no School parameter), so a rotation overlap never doubles its
+     * quota; a human falls back to tenantKey() -- School + user, so extra
+     * tokens never multiply quota either.
+     */
+    private function principalKey(Request $request): string
+    {
+        $principal = ApiClient::fromRequest($request);
+
+        if ($principal !== null) {
+            return 'partner:'.$principal->school_id.':'.$principal->id;
+        }
+
+        return $this->tenantKey($request);
+    }
+
     private function tenantKey(Request $request): string
     {
         $routeSchool = $request->route('school');

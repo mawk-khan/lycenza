@@ -48,7 +48,8 @@ class IdempotencyDemoEndpointTest extends TestCase
         $token = $user->createToken('test-device')->plainTextToken;
         $user->forceFill(['is_disabled' => true])->save();
 
-        $this->increment($token, $school->id, 'test-key-002')->assertForbidden();
+        // Phase 0O.3 (ADR 0049 section 2): a disabled account's token no longer authenticates at all -- 401, still before idempotency.
+        $this->increment($token, $school->id, 'test-key-002')->assertUnauthorized();
     }
 
     #[Test]
@@ -191,7 +192,8 @@ class IdempotencyDemoEndpointTest extends TestCase
         // silently reuse the PRE-disable in-memory User object.
         Auth::forgetGuards();
 
-        $this->increment($token, $school->id, 'now-revoked-key')->assertForbidden();
+        // Phase 0O.3 (ADR 0049 section 2): a disabled account's token no longer authenticates at all -- 401, still before idempotency.
+        $this->increment($token, $school->id, 'now-revoked-key')->assertUnauthorized();
     }
 
     #[Test]

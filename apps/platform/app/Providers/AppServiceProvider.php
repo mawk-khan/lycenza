@@ -6,6 +6,8 @@ use App\Listeners\RecordQueueHeartbeat;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
+use App\Support\Api\ApiScope;
+use App\Support\ApiClients\PartnerCredentialAuthenticator;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Configuration\ProductionConfigurationException;
 use App\Support\Configuration\ProductionConfigurationGuard;
@@ -18,11 +20,15 @@ use App\Support\Privacy\StatutoryIdentifierLookupHasher;
 use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\TestDatabaseGuard;
+use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Sanctum\PersonalAccessToken;
+use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -100,6 +106,20 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Phase 0O.3 (ADR 0049 section 2): on every bearer request, a human
+        // API token is valid only if Sanctum's own checks pass AND it has a
+        // finite expiry, only catalog scopes (never `*`), and an enabled
+        // owner -- a disabled account's token is a generic 401, not an
+        // authenticated request with no capabilities.
+        Sanctum::authenticateAccessTokensUsing(fn (PersonalAccessToken $token, bool $isValid): bool => $isValid
+            && $token->expires_at !== null
+            && ApiScope::isValidHumanSet((array) $token->abilities)
+            && $token->tokenable instanceof User
+            && ! $token->tokenable->isDisabled());
+
+        // Phase 0O.3 (ADR 0049 section 3): the `auth:partner` guard.
+        Auth::viaRequest('partner-credential', fn (Request $request) => app(PartnerCredentialAuthenticator::class)->authenticate($request));
+
         // Capability-based authorization (docs/security/AUTHORIZATION.md).
         // Usage: Gate::authorize('capability', ['school.settings.manage', $school]);
         // or the AuthorizesCapability controller trait's authorizeCapability().

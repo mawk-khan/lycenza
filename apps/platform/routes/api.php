@@ -101,6 +101,7 @@ use App\Http\Controllers\Api\V1\CampusController;
 use App\Http\Controllers\Api\V1\EducationBoardController;
 use App\Http\Controllers\Api\V1\Internal\IdempotencyDemoController;
 use App\Http\Controllers\Api\V1\Internal\WebhookTestEventController;
+use App\Http\Controllers\Api\V1\Partner\PartnerProbeController;
 use App\Http\Controllers\Api\V1\SchoolContextController;
 use App\Http\Controllers\Api\V1\SchoolProfileController;
 use App\Http\Controllers\Api\V1\SystemStatusController;
@@ -109,6 +110,7 @@ use App\Http\Controllers\Api\V1\WebhookEndpointController;
 use App\Http\Controllers\Api\V1\WebhookSubscriptionController;
 use App\Http\Middleware\DevOnlySchoolHeaderResolver;
 use App\Http\Middleware\ResolveSchoolContext;
+use App\Support\Api\PartnerScopeRegistry;
 use Illuminate\Support\Facades\Route;
 
 // All public/partner API routes are versioned under /api/v1. See
@@ -408,7 +410,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // `guardian-candidates` path rather than nesting under
             // `/guardians`. guardians.view only (read-only candidate
             // detection, never a mutation).
+            // Phase 0O.3 (ADR 0049 section 7): a person lookup, so the
+            // stricter `api-sensitive-read` class (it was unthrottled).
             Route::post('/guardian-candidates', [GuardianController::class, 'candidates'])
+                ->middleware('throttle:api-sensitive-read')
                 ->name('schools.guardian-candidates');
             Route::get('/guardians/{guardian}', [GuardianController::class, 'show'])
                 ->name('schools.guardians.show');
@@ -1980,6 +1985,24 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:examinations.grade_scales.manage', 'throttle:school-api-mutations'])
                 ->name('schools.grade-scales.bands.destroy');
         });
+
+    // Phase 0O.3 (ADR 0049 sections 3 and 6.4): the PARTNER surface. Deny by
+    // default: a route exists here only when registered with a scope from
+    // App\Support\Api\PartnerScopeRegistry, and no production partner
+    // scope is approved (owner decision, O15 open) -- so production has NO
+    // partner route. Partner routes take no `{school}` parameter: the
+    // School is the credential's own immutable binding (`partner-context`).
+    // `auth:partner` is framework-prioritized ahead of ThrottleRequests, so
+    // `api-read` keys by (School, client).
+    Route::prefix('partner')->name('partner.')->middleware(['auth:partner', 'partner-context'])->group(function (): void {
+        // The substrate's proof, `local`/`testing` only -- never registered
+        // (and so never route-cached) in production.
+        if (PartnerScopeRegistry::probeEnabled()) {
+            Route::get('/probe', [PartnerProbeController::class, 'show'])
+                ->middleware(['partner-scope:'.PartnerScopeRegistry::PROBE, 'throttle:api-read'])
+                ->name('probe');
+        }
+    });
 });
 
 // Phase 0C.4 sections 5-9: liveness/readiness. Deliberately top-level,
@@ -2040,3 +2063,23 @@ Route::prefix('internal/ai')->group(function (): void {
         ->middleware(['ai-service:ai.tools.invoke', 'throttle:internal-service'])
         ->name('api.internal.ai.completions.authorize');
 });
+
+// Phase 0O.3 (ADR 0049 section 7): no unthrottled `/api/v1` route. A route
+// without its own named limiter gets the default class for its method --
+// `api-read` for safe methods, `api-mutation` otherwise -- keyed by the
+// principal. Routes that already declare a limiter keep it (the existing
+// stricter ones stay). Registered here, at route-definition time, so it is
+// part of the route cache; guarded by
+// Tests\Feature\Api\ApiRouteThrottleCoverageTest.
+foreach (Route::getRoutes()->getRoutes() as $route) {
+    if (! str_starts_with($route->uri(), 'api/v1/')) {
+        continue;
+    }
+
+    $throttled = collect($route->middleware())->contains(fn ($m) => is_string($m) && str_starts_with($m, 'throttle:'));
+
+    if (! $throttled) {
+        $safe = array_diff($route->methods(), ['GET', 'HEAD', 'OPTIONS']) === [];
+        $route->middleware($safe ? 'throttle:api-read' : 'throttle:api-mutation');
+    }
+}

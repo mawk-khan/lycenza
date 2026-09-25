@@ -488,7 +488,7 @@ ADR 0045.
   limiter `platform-school-lifecycle`; refusals audited as
   `platform.school.lifecycle_denied` (operation + outcome code).
 
-## External API credentials (ADR 0049 — contract, Phase 0O.2; not yet implemented)
+## External API credentials (ADR 0049 — contract Phase 0O.2, built Phase 0O.3)
 
 - **Human API tokens** represent one User and never freeze authority: every
   request re-checks the enabled account, active membership, active School
@@ -502,6 +502,11 @@ ADR 0045.
   client-supplied School. Managed under `integrations.api_clients.view` /
   `.manage` (fresh MFA for issue, rotate, revoke); Platform Super Admin has
   no partner-secret access.
+- **As built (0O.3):** human tokens at `/app/account/api-tokens` (30/90
+  days); `CapabilityResolver::isBearerAuthenticated()` empties platform and
+  Group capabilities for bearer actors; `integrations.api_clients.view` /
+  `.manage` are held by `school_admin` only; the partner surface has **no
+  production route** (the production scope catalog is empty, O15).
 
 ## What is NOT yet implemented
 

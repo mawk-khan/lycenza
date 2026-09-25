@@ -25,6 +25,11 @@ section 13 records what changed.
 ADR 0049 (External API & Browser Hardening Contract, section 15); Phase
 0O.3 implements it once the owner supplies the five numeric values V1–V5.
 
+**Update 2026-09-25 — 0O.3 COMPLETE.** The External API & Browser
+Hardening Foundation is built with the owner values (30/90-day human
+tokens, 90/365-day partner credentials, HSTS 31,536,000 s) — section 16.
+No production partner route is enabled.
+
 ## 1. Title and repository-defined scope
 
 `docs/roadmap/MASTER-ROADMAP.md`, "Phase 0O — External Surface and
@@ -476,3 +481,25 @@ changed.
 - Still open: O1 (0O.2 records only the API/browser component, ADR 0049
   §20), O2–O6, O8–O10, O12–O16. Next: Phase 0O.3 — External API & Browser
   Hardening Foundation.
+
+## 16. Phase 0O.3 — External API & Browser Hardening Foundation (COMPLETE, 2026-09-25)
+
+Implements ADR 0049 (see its implementation amendment). Owner values:
+human token 30 days default / 90 maximum, partner credential 90 / 365,
+HSTS `max-age=31536000` (no subdomains, no preload), rotation overlap ≤ 24
+hours. Owner decision: `academic_structure.read` is **not** enabled — the
+production partner scope catalog is empty and **no production partner
+route exists**; the substrate is proven with a local/testing-only probe.
+
+| Item | Result |
+|---|---|
+| Human tokens | Sanctum; safe-by-construction `createToken()`; per-request refusal of unexpiring, wildcard or disabled-owner tokens (401); `api.read`/`api.write` enforcement (403); Account page with fresh-MFA issuance; revocation effective on the next request; no platform/Group authority by bearer (operations-status API refuses tokens) |
+| Partner clients | `api_clients` / `api_client_credentials` (documented no-RLS bootstrap records, immutable School, database-enforced lifecycle); `auth:partner` guard; bound-School TenantContext and RLS; generic 401s; bounded denial audit; School Integrations page with fresh MFA; `integrations.api_clients.*` on `school_admin` |
+| Rate limits | Every `/api/v1` route throttled (was 140 unthrottled); `api-read` / `api-mutation` / `api-sensitive-read` / `api-auth-failure` / `credential-management`; ordering unchanged |
+| CORS | Exact-origin allowlist from `CORS_ALLOWED_ORIGINS`, empty by default, never `*`, no credentials; malformed configuration refuses to boot |
+| Browser headers | Enforced self-only CSP (no `unsafe-*`, Inertia progress CSS moved into the bundle), nosniff, referrer policy, frame denial, Permissions-Policy, sandboxed API/download policy, production-only HSTS |
+
+Still open: O1 (overall definition of done), O2–O6, O8–O10, O12–O16. O7
+and O11 stay resolved. Trusted-proxy configuration (needed for correct
+client IPs and HTTPS detection behind a proxy) remains with O3; custom
+School domains with O9.

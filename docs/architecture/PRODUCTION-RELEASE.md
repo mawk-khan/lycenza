@@ -70,6 +70,16 @@ environment, or with the public development token unless `ENVIRONMENT` is
 exactly `local` or `testing`. `ENVIRONMENT` defaults to `production` and
 `SERVICE_TOKEN` has no default.
 
+**External API and browser hardening (Phase 0O.3, ADR 0049):**
+`CORS_ALLOWED_ORIGINS` lists exact `https://` origins allowed to call the
+API from a browser — empty by default (none); a wildcard or malformed
+value makes the application refuse to boot. Responses carry the security
+header baseline and an enforced CSP. **HSTS** (`max-age=31536000`, no
+subdomains, no preload) is emitted only when Laravel knows the request is
+HTTPS; behind a TLS-terminating proxy that needs the trusted-proxy
+configuration decided with the hosting model (O3) — never "trust every
+proxy". Partner API credentials exist, but no partner route is enabled.
+
 One service-token value is used in three places (decision O5 may change
 this): Laravel `AI_GATEWAY_SERVICE_TOKEN`, the Gateway `SERVICE_TOKEN`, and
 the hashed `ai-gateway` row in `service_identities`.

@@ -3,15 +3,20 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\Api\ApiScope;
+use App\Support\Api\HumanApiTokenLifetime;
 use App\Support\Identifiers\GeneratesUuidV7;
 use Database\Factories\UserFactory;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use InvalidArgumentException;
 use Laravel\Sanctum\HasApiTokens;
+use Laravel\Sanctum\NewAccessToken;
 
 /**
  * Central/platform data: authentication identity only
@@ -77,5 +82,35 @@ class User extends Authenticatable
     public function isDisabled(): bool
     {
         return (bool) $this->is_disabled;
+    }
+
+    /**
+     * Phase 0O.3 (ADR 0049 section 2): Sanctum's createToken(), made safe by
+     * construction -- the ONLY way a human API token is minted. Abilities
+     * must be a non-empty set from the closed catalog (App\Support\Api\
+     * ApiScope; never `*`), and every token expires: 30 days by default,
+     * never more than 90 days after issue. There is no non-expiring path.
+     * The authorization checks that decide WHO may mint one live in
+     * App\Support\Api\HumanApiTokenService (fresh MFA, own account only).
+     *
+     * @param  array<int, string>  $abilities
+     */
+    public function createToken(string $name, array $abilities = [ApiScope::READ, ApiScope::WRITE], ?DateTimeInterface $expiresAt = null): NewAccessToken
+    {
+        if (! ApiScope::isValidHumanSet($abilities)) {
+            throw new InvalidArgumentException('An API token needs at least one approved scope and no wildcard.');
+        }
+
+        $expiresAt = HumanApiTokenLifetime::expiryFor($expiresAt);
+        $plainTextToken = $this->generateTokenString();
+
+        $token = $this->tokens()->create([
+            'name' => $name,
+            'token' => hash('sha256', $plainTextToken),
+            'abilities' => array_values(array_unique($abilities)),
+            'expires_at' => $expiresAt,
+        ]);
+
+        return new NewAccessToken($token, $token->getKey().'|'.$plainTextToken);
     }
 }

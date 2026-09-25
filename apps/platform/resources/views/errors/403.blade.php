@@ -11,10 +11,11 @@
 @section('message')
     {{ __($exception->getMessage() ?: 'Forbidden') }}
     @auth
-        <form method="POST" action="{{ route('logout') }}" style="margin-top: 0.75rem; font-size: 0.875rem;">
+        {{-- Phase 0O.3: classes, not inline styles (enforced CSP, style-src 'self'). --}}
+        <form method="POST" action="{{ route('logout') }}" class="mt-3 text-sm">
             @csrf
-            <span style="color: #6b7280;">Signed in as {{ auth()->user()->email }}.</span>
-            <button type="submit" data-testid="logout" style="margin-left: 0.5rem; text-decoration: underline; cursor: pointer; background: none; border: 0; padding: 0; font: inherit;">Log out</button>
+            <span class="text-gray-500">Signed in as {{ auth()->user()->email }}.</span>
+            <button type="submit" data-testid="logout" class="ml-2 cursor-pointer border-0 bg-transparent p-0 underline">Log out</button>
         </form>
     @endauth
 @endsection
