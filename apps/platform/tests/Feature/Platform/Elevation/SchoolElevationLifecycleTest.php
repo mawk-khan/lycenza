@@ -196,10 +196,13 @@ class SchoolElevationLifecycleTest extends TestCase
         $admin = $this->platformAdmin();
         $elevation = $this->elevate($admin, $school);
 
+        // A raw status change (not the lifecycle service, which ends it
+        // eagerly): the per-request backstop names the lifecycle reason
+        // (Phase 0N.9, ADR 0047 section 8).
         $school->update(['status' => 'suspended']);
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('elevation', null));
-        $this->assertTerminated($elevation, 'school_ineligible');
+        $this->assertTerminated($elevation, 'school_suspended');
     }
 
     #[Test]

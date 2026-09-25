@@ -47,7 +47,7 @@ class VisitorVisitCheckInConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades visitors/visitor_visits
+            $this->deleteSchoolAsAdmin($this->school); // cascades visitors/visitor_visits
         }
 
         parent::tearDown();

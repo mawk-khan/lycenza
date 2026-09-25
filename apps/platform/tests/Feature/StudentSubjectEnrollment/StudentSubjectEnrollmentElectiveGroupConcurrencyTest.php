@@ -35,7 +35,7 @@ class StudentSubjectEnrollmentElectiveGroupConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades campuses/years/grades/subjects/offerings/groups/students/enrollments
+            $this->deleteSchoolAsAdmin($this->school); // cascades campuses/years/grades/subjects/offerings/groups/students/enrollments
         }
 
         parent::tearDown();

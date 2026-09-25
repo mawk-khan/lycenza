@@ -11,6 +11,7 @@ use App\Models\DomainEventOutbox;
 use App\Models\School;
 use App\Support\Events\EventConsumer;
 use App\Support\Observability\QueueName;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -70,7 +71,9 @@ class AutomationTriggerConsumer implements EventConsumer
 
         $school = School::query()->find($event->school_id);
 
-        if ($school === null || ! app(AutomationFeatureGate::class)->isEnabledFor($school)) {
+        // Phase 0N.9 (ADR 0047 section 8): no new execution for a School
+        // that is not active; the outbox row stays recorded as dispatched.
+        if ($school === null || ! $school->isActive() || ! app(AutomationFeatureGate::class)->isEnabledFor($school)) {
             return;
         }
 
@@ -115,7 +118,7 @@ class AutomationTriggerConsumer implements EventConsumer
         }
 
         try {
-            $execution = DB::transaction(fn () => AutomationExecution::query()->create([
+            $execution = DB::transaction(fn () => ! app(SchoolOperationalGuard::class)->holdOperational($school->id) ? null : AutomationExecution::query()->create([
                 'school_id' => $school->id,
                 'rule_instance_id' => $instance->id,
                 'trigger_key' => $event->id,
@@ -128,6 +131,10 @@ class AutomationTriggerConsumer implements EventConsumer
             ]));
         } catch (UniqueConstraintViolationException) {
             return; // this occurrence already has its execution
+        }
+
+        if ($execution === null) {
+            return; // suspended while the trigger was being evaluated
         }
 
         RunAutomationExecutionJob::dispatch($school->id, $execution->id)

@@ -277,14 +277,25 @@ class SchoolContextRequiredTest extends TestCase
     }
 
     #[Test]
-    public function a_selection_whose_school_was_suspended_or_archived_is_cleared_and_not_entered(): void
+    public function a_selection_whose_school_was_suspended_or_is_not_active_is_cleared_and_not_entered(): void
     {
-        foreach (['suspended', 'archived'] as $status) {
-            [$user, $school] = $this->selectedMember();
+        [$user, $school] = $this->selectedMember();
 
-            $school->update(['status' => $status]);
+        $school->update(['status' => 'suspended']);
 
-            $this->assertStaleSelectionHandled($user);
+        $this->assertStaleSelectionHandled($user);
+
+        // Phase 0N.9 (ADR 0047): no transition leads from `active` to
+        // `archived` or back to `provisioning`, but a session naming such a
+        // School is just as stale and never entered.
+        foreach (['archived', 'provisioning'] as $status) {
+            $member = $this->createUser();
+            $other = $this->createSchool(['status' => $status]);
+            $this->createMembership($member, $other);
+
+            $this->actingAs($member)->withSession(['active_school_id' => $other->id]);
+
+            $this->assertStaleSelectionHandled($member);
         }
     }
 

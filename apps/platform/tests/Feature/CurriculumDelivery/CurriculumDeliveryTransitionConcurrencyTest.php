@@ -43,7 +43,7 @@ class CurriculumDeliveryTransitionConcurrencyTest extends TestCase
         if ($this->school !== null) {
             // Cascades through school_id; every other parent FK is
             // RESTRICT, so the delivery row must go with its School.
-            $this->school->delete();
+            $this->deleteSchoolAsAdmin($this->school);
         }
 
         parent::tearDown();

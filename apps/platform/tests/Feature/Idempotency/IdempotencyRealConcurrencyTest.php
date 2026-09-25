@@ -60,7 +60,7 @@ class IdempotencyRealConcurrencyTest extends TestCase
         // School delete cascades memberships/role assignments/audit
         // events/idempotency records/the demo counter (all school_id
         // foreign keys are cascadeOnDelete). See each table's migration.
-        $this->school?->delete();
+        $this->deleteSchoolAsAdmin($this->school);
         $this->user?->delete();
 
         parent::tearDown();

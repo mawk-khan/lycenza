@@ -806,6 +806,27 @@ docs/roadmap             MASTER-ROADMAP.md
     context, and records one `platform.audit_log.viewed` per review; it is
     never merged with the School audit-log review (ADR 0046).
 
+86. **A School operates only while `schools.status = 'active'`, and the
+    lifecycle is database-enforced.** `provisioning -> active ->
+    suspended -> active` is the only permitted path
+    (`trg_schools_status_transition`, every role); `archived` has no
+    application transition; the default is `provisioning`; the runtime
+    role cannot `DELETE` a School (tests clean up through
+    `TestCase::deleteSchoolAsAdmin()`). Only
+    `App\Domain\Platform\Application\Schools\SchoolLifecycleService`
+    creates a School or changes its status, and only
+    `SchoolBootstrapAdministrationService` writes School memberships from
+    the platform side -- the bootstrap School Administrator, while the
+    School is `provisioning`, never afterwards (no platform membership
+    administration). Every lifecycle change needs
+    `platform.schools.manage`, explicit confirmation and a fresh MFA
+    re-verification. Every School business effect re-checks the School
+    at EXECUTION time through `App\Support\Tenancy\SchoolOperationalGuard`
+    (FOR SHARE inside its claim transaction) -- never a blanket check in
+    `SetTenantContextForJob` -- and a new queued job or School-walking
+    command must decide its suspended-School behaviour
+    (`SchoolLifecycleArchitectureGuardTest`, ADR 0047).
+
 ## Running things locally
 
 ```bash

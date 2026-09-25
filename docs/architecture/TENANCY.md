@@ -348,7 +348,7 @@ School from the Group, revoking the grant or archiving the Group ends it
 immediately. A School may belong to several Groups; authority is never
 pooled across them.
 
-## School lifecycle and tenant operation (ADR 0047 — contract only, Phase 0N.8)
+## School lifecycle and tenant operation (ADR 0047 — built in Phase 0N.9)
 
 A tenant is operational only while `schools.status = 'active'`
 (`School::isActive()`); `provisioning` (created, never activated) and
@@ -356,9 +356,9 @@ A tenant is operational only while `schools.status = 'active'`
 `ResolveSchoolContext` sets no context for a non-active School (session
 and verified-domain paths), `RequireSchoolContext` then clears the stale
 `active_school_id`, and the API returns a non-disclosing 404 — so
-suspension needs no session enumeration. Background work does **not**
-check it today: `SetTenantContextForJob` loads the School by id only, and
-the redispatch/publish commands walk every School. ADR 0047 §8 makes
+suspension needs no session enumeration. Background work used not to
+check it (`SetTenantContextForJob` loads the School by id only, and the
+redispatch/publish commands walked every School). ADR 0047 §8 makes
 **execution time authoritative** without a blanket refusal in
 `SetTenantContextForJob` (it also carries safety work): each business job,
 consumer and School-walking command re-checks the School when it runs and
@@ -367,8 +367,13 @@ defers (webhooks, communications — existing `retrying`/`queued` +
 Schools), skips (automation, terminal `skipped`) or creates nothing;
 AI context tokens are never minted for a non-active School. Platform
 safety work — elevation expiry, audit, pruning, heartbeats — continues.
-The runtime role will lose `DELETE` on `schools` (147 cascading foreign
-keys; no application School delete). Built in the proposed Phase 0N.9.
+The runtime role has no `DELETE` on `schools` (147 cascading foreign
+keys; no application School delete); committing tests clean up through
+`TestCase::deleteSchoolAsAdmin()`. As built (Phase 0N.9):
+`App\Support\Tenancy\SchoolOperationalGuard::holdOperational()` reads
+the School row FOR SHARE inside each claim transaction, the lifecycle
+services lock it FOR UPDATE, so a claim either commits before a
+suspension (in-flight work the suspension waits for) or sees it.
 
 ## What is NOT yet implemented (Phase 0B honesty note)
 

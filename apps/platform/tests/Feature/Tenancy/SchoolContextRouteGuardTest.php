@@ -73,6 +73,12 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.platform.roles.index',               // audit review and
         'app.platform.roles.grants.store',        // platform-role
         'app.platform.roles.grants.revoke',       // governance (ADR 0046)
+        'app.platform.schools.index',             // Phase 0N.9: School
+        'app.platform.schools.create',            // lifecycle (ADR 0047) --
+        'app.platform.schools.store',             // platform scope, never
+        'app.platform.schools.show',              // School context
+        'app.platform.schools.review',
+        'app.platform.schools.perform',
     ];
 
     #[Test]

@@ -416,7 +416,7 @@ ADR 0045.
   separate from the School audit-log review (`school.audit.view`); Schools
   see no elevation events in v1. See ADR 0046.
 
-## School lifecycle and bootstrap administration (ADR 0047 — contract only, Phase 0N.8)
+## School lifecycle and bootstrap administration (ADR 0047 — built in Phase 0N.9)
 
 - CREATE, bootstrap School Admin assign/replace, ACTIVATE, SUSPEND and
   RESUME all require `platform.schools.manage` (root-reserved, so only
@@ -438,10 +438,14 @@ ADR 0045.
   loses every admin awaits a future break-glass decision.
 - A suspended or provisioning School must grant nothing through any
   path: membership-derived capabilities still resolve, so every entry
-  point has to refuse a non-`active` School — web, API and elevation
-  already do; AI token minting and the internal AI endpoints, Guardian
-  invitation acceptance and background business work do not yet and are
-  Phase 0N.9 scope. See ADR 0047.
+  point refuses a non-`active` School — web, API and elevation (per
+  request), and since Phase 0N.9 AI token minting and the internal AI
+  endpoints, Guardian invitation acceptance and background business work
+  (`SchoolOperationalGuard`, at execution time). See ADR 0047.
+- As built: `SchoolLifecycleService` / `SchoolBootstrapAdministrationService`
+  (`App\Domain\Platform\Application\Schools`), `/app/platform/schools`,
+  limiter `platform-school-lifecycle`; refusals audited as
+  `platform.school.lifecycle_denied` (operation + outcome code).
 
 ## What is NOT yet implemented
 

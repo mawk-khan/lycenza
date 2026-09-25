@@ -45,7 +45,7 @@ class ChargeCancellationInterlockTest extends TestCase
             // test's own rows for DispatchOutboxEvents' fixed --batch
             // window.
             DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
-            $this->school->delete();
+            $this->deleteSchoolAsAdmin($this->school);
         }
 
         parent::tearDown();

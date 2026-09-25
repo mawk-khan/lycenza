@@ -1,8 +1,8 @@
 # ADR 0047: School Lifecycle & Bootstrap Administration Contract (Phase 0N.8)
 
-- Status: Accepted (contract only — nothing built; implementation is the
-  proposed Phase 0N.9, section 16)
-- Date: 2026-09-25
+- Status: Accepted; foundation implemented in Phase 0N.9 (see
+  "Implementation amendment" at the end)
+- Date: 2026-09-25 (Phase 0N.8); amended 2026-09-25 (Phase 0N.9)
 
 ## Context
 
@@ -646,3 +646,68 @@ ADR 0037, ADR 0043, ADR 0044, ADR 0045, ADR 0046;
 `docs/architecture/TENANCY.md`; `docs/security/AUTHORIZATION.md`;
 `docs/security/DATA-CLASSIFICATION.md`; CLAUDE.md rules 21, 24, 25, 29,
 34, 39, 48, 59, 83–85.
+
+## Implementation amendment (Phase 0N.9, 2026-09-25)
+
+Implemented as specified; archive, delete, break-glass recovery and
+platform membership administration beyond the bootstrap exception are
+not built.
+
+| Contract | Implementation |
+|---|---|
+| Lifecycle (§2) | `App\Support\Tenancy\SchoolStatus` (enum); `School::isActive()` / `isProvisioning()` / `isSuspended()` / `lifecycleStatus()`; migration `2026_10_18_090000_add_school_lifecycle_constraints`: `schools_status_check`, default `provisioning`, trigger `trg_schools_status_transition` (only provisioning→active, active→suspended, suspended→active, for every role) |
+| Delete safety (§12) | `REVOKE DELETE ON schools` from `school_os_app`; the 55 test files that tore down Schools on the runtime connection use `TestCase::deleteSchoolAsAdmin()` (the admin connection) |
+| Services (§3–8, §10) | `App\Domain\Platform\Application\Schools\`: `SchoolLifecycleService` (create, activate, suspend, resume), `SchoolBootstrapAdministrationService` (establish, replace; the only platform code writing School memberships), `SchoolLifecycleAuthority` (shared checks, MFA, denial audit), `SchoolSuspensionReason`, `SchoolLifecycleOperation`, `SchoolLifecycleAudit`, `SchoolLifecycleDeniedException` |
+| Surface (§7, §16) | `/app/platform/schools` (`PlatformSchoolAdminController`; pages `App/Platform/Schools/{Index,Create,Show,Action}`), limiter `platform-school-lifecycle` (8/min per actor); Dashboard link and "unavailable" Schools |
+| Elevation (§8) | end reason `school_suspended` (`ElevationEndReason`, `school_elevations_end_check`); eager termination in the suspension transaction; trigger `school_elevations_assert_school_active` (target School read FOR SHARE at INSERT) |
+| Execution-time enforcement (§8) | `App\Support\Tenancy\SchoolOperationalGuard` (`isOperational()`, `holdOperational()` FOR SHARE, `requireOperational()`); `SchoolNotOperationalException` (a non-disclosing 404 if it ever surfaces in a request) |
+
+**Refinements made while implementing:**
+
+1. **The linearization point is the School row.** Lifecycle changes lock
+   it FOR UPDATE; every business effect's claim reads it FOR SHARE inside
+   its own claim transaction (`holdOperational()`), never across an
+   external call. A claim that commits before a suspension is in-flight
+   work the suspension waits for; a claim after it sees `suspended`.
+   Proven with two real processes (`SchoolLifecycleConcurrencyTest`).
+   Web and API requests are admitted by the existing per-request check:
+   a request admitted before a suspension commits finishes (and any
+   delivery, automation or AI effect it starts is still refused by the
+   checks above); every later request is refused.
+2. **Per-substrate outcomes, as built:** webhook and communication
+   claims defer (`retrying` / `queued`, `next_attempt_at = now`, lease
+   cleared, `attempts` unchanged, no attempt row); their redispatchers
+   and the announcement publisher walk only `active` Schools;
+   `CommunicationDeliveryFactory` refuses a new delivery (the publish or
+   approval rolls back; a held announcement keeps its schedule, no
+   backoff); `AutomationTriggerConsumer` creates no execution and an
+   execution reaching run time becomes `skipped` / `school_suspended`;
+   `NotifyActorOfSettingChangeConsumer` sends nothing; the Guardian
+   invitation is unusable (show and accept) and left intact; AI tokens
+   are not minted (`AiGatewayClient`) and both internal AI endpoints
+   answer `403 school_unavailable`. `WebhookFanoutConsumer` is unchanged:
+   it records the delivery rows and the delivery job defers them.
+3. **The MFA form field is `mfa_code`** (a School also has a `code`).
+   A missing factor is shown on the form (and audited
+   `mfa_not_enrolled`); `capability_missing` and `actor_disabled` are 403.
+4. **Denial outcome codes:** `actor_disabled`, `capability_missing`,
+   `invalid_transition`, `admin_missing`, `bootstrap_closed`,
+   `bootstrap_target_conflict` (the named account already administers
+   the provisioning School), `self_nomination`, `mfa_not_enrolled`,
+   `mfa_verification_failed`; metadata `operation` + `outcome_code` only.
+5. **Replacement** suspends every active membership of the provisioning
+   School (in practice exactly one) and records the first as
+   `previous_user_id`; re-nominating an earlier administrator reactivates
+   their one membership row.
+6. **Transitions are refused for every database role**, the admin
+   connection included: `archived` is reachable only by insert (fixtures)
+   until the legal decision says otherwise. A test that needs an archived
+   or provisioning School creates it that way.
+7. **The column default is `provisioning`**; `SchoolFactory`,
+   `DemoDataBuilder` and the one raw test insert already set `active`
+   explicitly, and `SchoolFactory::provisioning()` exists for lifecycle
+   tests. DDEV demo Schools stay `active`.
+8. **Viewing** the lifecycle pages needs `platform.schools.manage` only
+   (Confidential metadata; the bootstrap administrator, Sensitive, is
+   shown only while `provisioning`) -- like the Group pages, no MFA
+   assurance for reads; every change needs a fresh code.

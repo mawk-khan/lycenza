@@ -13,6 +13,7 @@ use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -47,6 +48,13 @@ class GuardianAccountActivationService
 
     public function resolveUsableInvitation(School $school, string $plaintextToken): ?GuardianAccountInvitation
     {
+        // Phase 0N.9 (ADR 0047 section 8): an invitation into a School that
+        // is not active is simply unusable -- the same non-disclosing
+        // "no longer valid" answer, the invitation itself left intact.
+        if (! $school->isActive()) {
+            return null;
+        }
+
         return $this->context->withSchool($school, function () use ($school, $plaintextToken) {
             $invitation = GuardianAccountInvitation::query()
                 ->where('school_id', $school->id)
@@ -90,6 +98,13 @@ class GuardianAccountActivationService
     {
         return $this->context->withSchool($school, function () use ($school, $invitation, $authenticatedUser, $newPassword) {
             return DB::transaction(function () use ($school, $invitation, $authenticatedUser, $newPassword) {
+                // Phase 0N.9: re-checked at acceptance, FOR SHARE, so no
+                // account, membership or link is created once a suspension
+                // has committed.
+                if (! app(SchoolOperationalGuard::class)->holdOperational($school->id)) {
+                    throw new InvitationNotUsableException;
+                }
+
                 $fresh = GuardianAccountInvitation::query()->whereKey($invitation->id)->lockForUpdate()->first();
 
                 if ($fresh === null || ! $this->isCurrentlyUsable($fresh)) {

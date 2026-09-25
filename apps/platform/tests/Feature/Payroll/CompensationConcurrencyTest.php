@@ -46,7 +46,7 @@ class CompensationConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades everything Payroll/HR this test creates
+            $this->deleteSchoolAsAdmin($this->school); // cascades everything Payroll/HR this test creates
         }
 
         parent::tearDown();

@@ -39,7 +39,7 @@ class EmployeeNumberConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades employees, hr_employee_number_counters
+            $this->deleteSchoolAsAdmin($this->school); // cascades employees, hr_employee_number_counters
         }
 
         parent::tearDown();

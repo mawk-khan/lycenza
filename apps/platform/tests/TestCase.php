@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
@@ -73,6 +74,23 @@ abstract class TestCase extends BaseTestCase
         }
 
         parent::tearDown();
+    }
+
+    /**
+     * Phase 0N.9 (ADR 0047 section 12): the runtime role cannot DELETE a
+     * School (147 foreign keys cascade from it), so a committing test
+     * cleans up its School through the administrative connection -- the
+     * one sanctioned test-only path. Never available to application code.
+     */
+    protected function deleteSchoolAsAdmin(School|string|null $school): void
+    {
+        if ($school === null) {
+            return;
+        }
+
+        DB::connection('pgsql_admin')->table('schools')
+            ->where('id', $school instanceof School ? $school->id : $school)
+            ->delete();
     }
 
     /**

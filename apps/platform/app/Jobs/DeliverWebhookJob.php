@@ -6,6 +6,7 @@ use App\Models\DomainEventOutbox;
 use App\Models\School;
 use App\Models\WebhookDelivery;
 use App\Models\WebhookDeliveryAttempt;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Webhooks\SsrfRejectedException;
 use App\Support\Webhooks\SsrfSafeUrlValidator;
@@ -17,6 +18,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -195,23 +197,38 @@ class DeliverWebhookJob implements ShouldQueue
     {
         $leaseSeconds = (int) config('webhooks.processing_lease_seconds');
 
-        $claimed = WebhookDelivery::query()
-            ->where('id', $this->deliveryId)
-            ->whereIn('status', ['pending', 'retrying', 'delivering'])
-            ->where(function ($query) {
-                $query->whereNull('processing_lease_expires_at')
-                    ->orWhere('processing_lease_expires_at', '<', now());
-            })
-            ->update([
+        // Phase 0N.9 (ADR 0047 section 8): the School must be active when
+        // the delivery is claimed -- read FOR SHARE in the same
+        // transaction as the claim, so a suspension either commits first
+        // (and this delivery is deferred) or waits until this claim has
+        // committed (in-flight work). The HTTP call itself runs after
+        // commit, never under the lock.
+        return DB::transaction(function () use ($leaseSeconds): ?WebhookDelivery {
+            $claimable = WebhookDelivery::query()
+                ->where('id', $this->deliveryId)
+                ->whereIn('status', ['pending', 'retrying', 'delivering'])
+                ->where(function ($query) {
+                    $query->whereNull('processing_lease_expires_at')
+                        ->orWhere('processing_lease_expires_at', '<', now());
+                });
+
+            if (! app(SchoolOperationalGuard::class)->holdOperational($this->schoolId)) {
+                // Deferred, not attempted: kept as `retrying`, due again at
+                // once -- the redispatcher skips non-active Schools, so it
+                // is picked up only after RESUME. No attempt is consumed
+                // and no attempt row is written.
+                $claimable->update(['status' => 'retrying', 'next_attempt_at' => now(), 'processing_lease_expires_at' => null]);
+
+                return null;
+            }
+
+            $claimed = $claimable->update([
                 'status' => 'delivering',
                 'processing_lease_expires_at' => now()->addSeconds($leaseSeconds),
             ]);
 
-        if ($claimed === 0) {
-            return null;
-        }
-
-        return WebhookDelivery::query()->find($this->deliveryId);
+            return $claimed === 0 ? null : WebhookDelivery::query()->find($this->deliveryId);
+        });
     }
 
     private function handleResponse(WebhookDelivery $delivery, int $attemptNumber, Carbon $startedAt, float $start, $response): void

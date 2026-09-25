@@ -8,7 +8,8 @@ use Illuminate\Http\Request;
 /**
  * Phase 0N.3 (ADR 0044 section 9, owner decision 2): in-session MFA
  * re-verification for a sensitive signed-in action -- first used to start
- * a platform elevation, and applied to nothing else yet.
+ * a platform elevation; since Phase 0N.9 (ADR 0047 section 7) also every
+ * School lifecycle and bootstrap-administrator change.
  *
  * Not a second MFA implementation: it verifies the SAME enrolled factor
  * with the SAME code paths the login challenge uses

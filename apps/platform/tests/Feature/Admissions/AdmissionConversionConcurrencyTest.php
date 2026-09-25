@@ -49,7 +49,7 @@ class AdmissionConversionConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades applicants/admission_applications/students/...
+            $this->deleteSchoolAsAdmin($this->school); // cascades applicants/admission_applications/students/...
         }
 
         parent::tearDown();

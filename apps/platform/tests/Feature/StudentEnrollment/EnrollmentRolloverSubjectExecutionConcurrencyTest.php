@@ -48,7 +48,7 @@ class EnrollmentRolloverSubjectExecutionConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         foreach ($this->schools as $school) {
-            $school->delete();
+            $this->deleteSchoolAsAdmin($school);
         }
 
         parent::tearDown();

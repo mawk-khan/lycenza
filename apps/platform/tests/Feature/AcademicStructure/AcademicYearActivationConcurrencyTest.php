@@ -38,7 +38,7 @@ class AcademicYearActivationConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades academic_years
+            $this->deleteSchoolAsAdmin($this->school); // cascades academic_years
         }
 
         parent::tearDown();

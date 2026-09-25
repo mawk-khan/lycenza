@@ -7,6 +7,7 @@ use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPoli
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Models\School;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -14,6 +15,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 5A.1 §2.9 -- ONE delivery attempt per invocation, mirroring
@@ -186,23 +188,36 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
      */
     private function claim(): ?CommunicationDelivery
     {
-        $claimed = CommunicationDelivery::query()
-            ->where('id', $this->deliveryId)
-            ->whereIn('status', ['pending', 'queued'])
-            ->where(function ($query) {
-                $query->whereNull('processing_lease_expires_at')
-                    ->orWhere('processing_lease_expires_at', '<', now());
-            })
-            ->update([
+        // Phase 0N.9 (ADR 0047 section 8): the School must be active when
+        // the delivery is claimed -- read FOR SHARE in the claim's own
+        // transaction, so a suspension either commits first (this
+        // delivery is deferred) or waits for the claim (in-flight work).
+        // The provider call runs after commit, never under the lock.
+        return DB::transaction(function (): ?CommunicationDelivery {
+            $claimable = CommunicationDelivery::query()
+                ->where('id', $this->deliveryId)
+                ->whereIn('status', ['pending', 'queued'])
+                ->where(function ($query) {
+                    $query->whereNull('processing_lease_expires_at')
+                        ->orWhere('processing_lease_expires_at', '<', now());
+                });
+
+            if (! app(SchoolOperationalGuard::class)->holdOperational($this->schoolId)) {
+                // Deferred exactly like scheduleRetry(), minus the attempt:
+                // `queued`, due again at once; the redispatcher skips
+                // non-active Schools, so it resumes only after RESUME.
+                $claimable->update(['status' => 'queued', 'next_attempt_at' => now(), 'processing_lease_expires_at' => null]);
+
+                return null;
+            }
+
+            $claimed = $claimable->update([
                 'status' => 'sending',
                 'processing_lease_expires_at' => now()->addSeconds((int) config('communications.delivery.processing_lease_seconds')),
             ]);
 
-        if ($claimed === 0) {
-            return null;
-        }
-
-        return CommunicationDelivery::query()->find($this->deliveryId);
+            return $claimed === 0 ? null : CommunicationDelivery::query()->find($this->deliveryId);
+        });
     }
 
     private function recordAttempt(

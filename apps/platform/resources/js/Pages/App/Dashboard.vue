@@ -17,6 +17,7 @@ const elevationNotices: Record<string, string> = {
     school_left_group: 'Elevated access ended: that School is no longer in the School Group.',
     group_authority_revoked: 'Elevated access ended: your School Group authority was revoked.',
     group_inactive: 'Elevated access ended: the School Group was archived.',
+    school_suspended: 'Elevated access ended: that School was suspended.',
 };
 
 function endElevation() {
@@ -27,6 +28,7 @@ interface Membership {
     schoolId: string;
     schoolName: string;
     isActive: boolean;
+    available: boolean;
 }
 
 interface Props {
@@ -34,7 +36,7 @@ interface Props {
     // because no valid School was selected (RequireSchoolContext).
     schoolContextNotice: 'select' | 'not_saved' | null;
     platformAccount: boolean;
-    platform: { canViewAuditLog: boolean; canGovernRoles: boolean };
+    platform: { canViewAuditLog: boolean; canGovernRoles: boolean; canManageSchools: boolean };
     groups: { canViewOwn: boolean; canGovern: boolean };
     platformElevation: {
         canStart: boolean;
@@ -133,12 +135,15 @@ function activate(schoolId: string) {
         </section>
 
         <section
-            v-if="platform.canViewAuditLog || platform.canGovernRoles"
+            v-if="platform.canViewAuditLog || platform.canGovernRoles || platform.canManageSchools"
             class="mt-6"
             data-testid="platform-admin"
         >
             <h2 class="text-sm font-medium text-slate-500">Platform administration</h2>
             <ul class="mt-1 space-y-1 text-sm">
+                <li v-if="platform.canManageSchools">
+                    <a class="underline" href="/app/platform/schools">Schools (platform)</a>
+                </li>
                 <li v-if="platform.canViewAuditLog">
                     <a class="underline" href="/app/platform/audit-log">Platform audit log</a>
                 </li>
@@ -189,10 +194,13 @@ function activate(schoolId: string) {
                 <li v-for="m in memberships" :key="m.schoolId">
                     <button
                         class="text-sm underline disabled:no-underline disabled:text-slate-400"
-                        :disabled="m.isActive"
+                        :disabled="m.isActive || !m.available"
                         @click="activate(m.schoolId)"
                     >
-                        {{ m.schoolName }}<span v-if="m.isActive"> (active)</span>
+                        {{ m.schoolName }}<span v-if="m.isActive"> (active)</span
+                        ><span v-else-if="!m.available" data-testid="school-unavailable">
+                            (unavailable)</span
+                        >
                     </button>
                 </li>
             </ul>

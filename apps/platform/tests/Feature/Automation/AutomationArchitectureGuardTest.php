@@ -33,6 +33,9 @@ class AutomationArchitectureGuardTest extends TestCase
         'App\\Support\\Identifiers\\GeneratesUuidV7',
         'App\\Support\\Observability\\QueueName',
         'App\\Support\\Tenancy\\BelongsToSchool',
+        // Phase 0N.9 (ADR 0047 section 8): the execution-time School
+        // lifecycle check -- tenancy infrastructure, not another module.
+        'App\\Support\\Tenancy\\SchoolOperationalGuard',
         'App\\Support\\Tenancy\\TenantContext',
     ];
 

@@ -6,6 +6,8 @@ use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Models\School;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
+use App\Support\Tenancy\SchoolNotOperationalException;
+use App\Support\Tenancy\SchoolStatus;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -44,7 +46,10 @@ class PublishScheduledAnnouncements extends Command
         $totalFailed = 0;
 
         try {
-            School::query()->orderBy('id')->chunk(100, function ($schools) use ($announcements, $batchSize, &$totalPublished, &$totalFailed): void {
+            // Phase 0N.9 (ADR 0047 section 8): a non-active School's due
+            // announcements stay `scheduled` (held) and are published by a
+            // normal run after RESUME -- nothing is replayed.
+            School::query()->where('status', SchoolStatus::Active->value)->orderBy('id')->chunk(100, function ($schools) use ($announcements, $batchSize, &$totalPublished, &$totalFailed): void {
                 foreach ($schools as $school) {
                     app(TenantContext::class)->withSchool($school, function () use ($announcements, $school, $batchSize, &$totalPublished, &$totalFailed): void {
                         [$published, $failed] = $this->publishDueForSchool($announcements, $school, $batchSize);
@@ -107,6 +112,17 @@ class PublishScheduledAnnouncements extends Command
                     'school_id' => $school->id,
                     'announcement_id' => $announcement->id,
                 ]);
+            } catch (SchoolNotOperationalException) {
+                // Suspended between the School walk and the publish: the
+                // publish rolled back and the announcement stays
+                // `scheduled` (held) with its schedule untouched -- no
+                // backoff, it is published by a normal run after RESUME.
+                Log::info('communications.scheduled_publish.held', [
+                    'school_id' => $school->id,
+                    'announcement_id' => $announcement->id,
+                ]);
+
+                return [$publishedCount, $failedCount];
             } catch (Throwable $e) {
                 $failedCount++;
                 $this->backOff($announcement);
