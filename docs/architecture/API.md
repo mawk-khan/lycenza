@@ -25,9 +25,15 @@ OpenAPI spec for the full request/response shapes.
 - Mobile, third-party integrations, future public developer API: Bearer
   token via **Laravel Sanctum** personal access tokens
   (`$user->createToken(...)`, `auth:sanctum` route middleware) —
-  implemented in Phase 0B for the mobile-facing chain above. Partner
-  API keys for third-party integrations follow the same `bearerAuth`
-  scheme but are not implemented yet.
+  implemented in Phase 0B for the mobile-facing chain above. **ADR 0049
+  (Phase 0O.2 contract, implemented by Phase 0O.3)** fixes the external
+  credential model: human tokens always expire, carry closed scopes
+  (`api.read`/`api.write`), are issued with fresh MFA and never carry
+  platform or Group authority; **partner API clients** are separate,
+  School-bound, non-human credentials on an explicitly registered
+  `/api/v1/partner` surface (deny by default, no `{school}` parameter).
+  Until 0O.3 ships, tokens have no issuance surface, no expiry and no
+  scopes.
 - Service-to-service (Laravel ↔ AI Gateway): a separate mechanism, not
   this bearer scheme — see ADR 0013, ADR 0016, ADR 0023 (now
   implemented: a shared service token for "is this the trusted
@@ -111,6 +117,17 @@ Summary: `login` (6/min, IP-keyed), `public-api` (120/min, IP-keyed),
 identity-keyed), `internal-diagnostics` (12/min, user-keyed).
 `/api/health/live` and `/api/health/ready` are deliberately exempt.
 
+ADR 0049 §7 (0O.3) makes throttling universal on `/api/v1` — today 140 of
+380 production routes are unthrottled — with the classes `api-read`
+(120/min), `api-mutation` (60/min), `api-sensitive-read` (20/min) and
+`api-auth-failure` (20/min, IP), keyed by the principal (School+user, or
+partner client), never by IP alone for authenticated traffic. The Phase
+0C.2 ordering and replay semantics below are unchanged.
+
+**CORS and browser headers:** ADR 0049 §10–11 (0O.3) — exact-origin CORS
+allowlist, empty by default, no credentials; today the framework default
+still allows any origin on `api/*`.
+
 ## Health & internal diagnostics
 
 `GET /api/health/live` and `GET /api/health/ready` — unauthenticated,
@@ -181,11 +198,12 @@ handling, per ADR 0018; no such integration exists yet.
 
 ## API audit
 
-Every API request is already covered by the standard audit
-requirements in ADR 0017 once authenticated endpoints exist: actor
-(user or integration/API key), tenant, endpoint, and outcome. This is
-the API-specific instance of that general audit architecture, not a
-separate mechanism.
+Amended by ADR 0049 §15: API calls are **not** audited per request (that
+was never built). Request ids, each module's own access audits (e.g.
+Documents' Highly Sensitive reads) and credential `last_used_at` apply;
+credential issuance, rotation, revocation and security-significant
+authentication denials are audited (`auth.api_token.*`,
+`integrations.api_client.*`), identifiers and codes only.
 
 ## OpenAPI generation
 

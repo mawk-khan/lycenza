@@ -488,6 +488,21 @@ ADR 0045.
   limiter `platform-school-lifecycle`; refusals audited as
   `platform.school.lifecycle_denied` (operation + outcome code).
 
+## External API credentials (ADR 0049 — contract, Phase 0O.2; not yet implemented)
+
+- **Human API tokens** represent one User and never freeze authority: every
+  request re-checks the enabled account, active membership, active School
+  and the route's capability, then the token's closed scope (`api.read`,
+  `api.write`). Tokens always expire, are issued only with a fresh MFA code
+  from the Account/Security area and never exercise `platform.*` or
+  `group.*` capabilities.
+- **Partner API clients** are non-human and bound to exactly one School
+  (immutable). They reach only explicitly registered `/api/v1/partner`
+  routes through their approved scopes — never the human routes, never a
+  client-supplied School. Managed under `integrations.api_clients.view` /
+  `.manage` (fresh MFA for issue, rotate, revoke); Platform Super Admin has
+  no partner-secret access.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles, a UI for managing role assignments (only the data

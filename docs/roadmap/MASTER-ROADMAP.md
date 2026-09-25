@@ -1373,6 +1373,15 @@ first platform account on a fresh installation (interactive, hidden
 password, first boot only). 0O.1 is COMPLETE; O14 password reset stays
 open (`PHASE-0O-READINESS.md` §14).
 
+**0O.2 — External API & Browser Hardening Contract (2026-09-25).** ADR 0049
+resolves O7 (human API tokens and School-bound partner API clients:
+expiring, scoped, re-checked per request, MFA-protected management,
+deny-by-default partner surface) and O11 (exact-origin CORS allowlist,
+enforced CSP, security headers, production-only HSTS), and defines Phase
+0O.3 — External API & Browser Hardening Foundation. Five numeric values
+(token/credential lifetimes, HSTS `max-age`) are owner values required
+before 0O.3.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on
