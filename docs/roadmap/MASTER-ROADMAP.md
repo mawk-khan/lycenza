@@ -1236,6 +1236,27 @@ and `/app/platform/audit-log` — seven envelope fields, keyset pages of 50,
 one `platform.audit_log.viewed` per review, no School context. Phase 0N
 stays **BLOCKED** on D11, D13 and D15.
 
+**Phase 0N.8 — School Lifecycle & Bootstrap Administration Contract
+(done, 2026-09-25, documentation only).** The owner decided D11 and D13
+for v1; **ADR 0047** records: the existing `schools.status` as the
+lifecycle (new `provisioning` value; `provisioning → active → suspended →
+active`; `archived` kept with no transition; database-enforced
+transitions); root-only CREATE with a mandatory bootstrap School Admin (a
+real ordinary membership and `school_admin` assignment for an exact,
+existing, enabled user, established or replaced only while
+`provisioning`, closed permanently at first activation); explicit
+ACTIVATE requiring a qualifying active admin; SUSPEND with closed reason
+codes, eager elevation termination (`school_suspended`) and
+execution-time enforcement per substrate (webhooks/communications
+deferred, automation skipped, announcements held, AI and invitation
+acceptance refused, platform safety work continuing); RESUME with no
+global replay; `platform.schools.manage` plus fresh MFA re-verification
+and confirmation for every lifecycle action; platform-ledger-only audit;
+no ongoing platform membership administration; no application School
+delete and a revoked runtime `DELETE` on `schools`; archive/delete behind
+a retention/legal decision. Proposed next: Phase 0N.9 School Lifecycle
+Foundation. Phase 0N stays **BLOCKED** on D15 only.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,

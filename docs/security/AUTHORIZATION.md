@@ -416,6 +416,33 @@ ADR 0045.
   separate from the School audit-log review (`school.audit.view`); Schools
   see no elevation events in v1. See ADR 0046.
 
+## School lifecycle and bootstrap administration (ADR 0047 — contract only, Phase 0N.8)
+
+- CREATE, bootstrap School Admin assign/replace, ACTIVATE, SUSPEND and
+  RESUME all require `platform.schools.manage` (root-reserved, so only
+  the Platform Super Admin holds it; checked as a capability, never by
+  role name), a **fresh in-session MFA re-verification**
+  (`MfaReverificationService`) immediately before the action, and an
+  explicit confirmation step. No narrower lifecycle capability is seeded.
+- The **bootstrap exception** is the only platform path that writes School
+  memberships: while a School is `provisioning`, the root may give an
+  exact, existing, enabled user (never themselves) a real, ordinary
+  membership and `school_admin` assignment, or replace that user. The
+  path closes permanently at first activation. Activation needs a
+  non-disabled user whose active membership grants
+  `school.members.manage` and `school.roles.manage` in that School.
+- **No ongoing platform membership administration in v1**: after
+  activation, adding/removing members and granting/revoking School roles
+  stay with the School (`school.members.*`, `school.roles.*`). Creating a
+  School never makes its creator a School member; a School that later
+  loses every admin awaits a future break-glass decision.
+- A suspended or provisioning School must grant nothing through any
+  path: membership-derived capabilities still resolve, so every entry
+  point has to refuse a non-`active` School — web, API and elevation
+  already do; AI token minting and the internal AI endpoints, Guardian
+  invitation acceptance and background business work do not yet and are
+  Phase 0N.9 scope. See ADR 0047.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles, a UI for managing role assignments (only the data

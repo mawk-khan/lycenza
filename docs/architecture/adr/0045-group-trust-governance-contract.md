@@ -3,6 +3,9 @@
 - Status: Accepted; foundation implemented in Phase 0N.5 (see
   "Implementation amendment" at the end — zero School routes opted in)
 - Date: 2026-09-24 (Phase 0N.4); amended 2026-09-24 (Phase 0N.5)
+- See also: ADR 0047 (School lifecycle: creating a School adds it to no
+  Group; suspending one never changes its Group membership, the Group view
+  may still show its status, and Group-derived elevation into it is refused)
 
 ## Context
 

@@ -33,6 +33,16 @@ in this checkpoint — no UI or API exists yet for platform staff to
 change a School's lifecycle state beyond what Phase 0B already
 established).
 
+**Phase 0N.8 (ADR 0047, contract only):** the lifecycle is
+`provisioning → active → suspended → active` on this same column (a new
+`provisioning` value for a created, never-activated School; `archived`
+kept with no application transition until a retention/legal decision).
+CREATE, ACTIVATE, SUSPEND and RESUME are platform actions under
+`platform.schools.manage` with fresh MFA; the profile fields above stay
+School-owned and are not part of creation beyond `name`, `slug` and an
+optional `code`. The `status` exclusion from every profile whitelist is
+unchanged.
+
 `name` (Phase 0B) continues to serve as the School's **display name**;
 `legal_name` was added as the distinct formal/registered name, rather
 than introducing a redundant `display_name` column duplicating `name`.
