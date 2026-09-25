@@ -423,7 +423,13 @@ ADR 0045.
   `platform.role_grant.provisioned` (actor null, `method: console`). It
   identifies the root role structurally (the non-runtime-assignable system
   platform role holding `platform.role_grants.manage`), never by name. See
-  `docs/architecture/PRODUCTION-RELEASE.md` §5.
+  `docs/architecture/PRODUCTION-RELEASE.md` §5. **Phase 0O.1A:** the
+  database itself refuses a grantor-less (out-of-band) platform grant from
+  any role that does not hold the table owner's privileges — the runtime
+  role cannot mint root by any path — and a fresh installation's first
+  platform account is created by `php artisan platform:bootstrap-root`
+  (interactive, first boot only, hidden password prompts, no School or
+  Group authority).
 - Runtime platform-role governance covers only **code-approved,
   `runtime_assignable`, non-root** roles (v1: `platform_auditor`), through
   the root-reserved `platform.role_grants.manage` — no role builder, no

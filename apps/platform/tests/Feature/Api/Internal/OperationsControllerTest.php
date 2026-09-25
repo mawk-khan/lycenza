@@ -51,8 +51,7 @@ class OperationsControllerTest extends TestCase
     #[Test]
     public function a_platform_super_admin_can_view_operational_status(): void
     {
-        $user = $this->createUser();
-        $this->assignPlatformRole($user, 'platform_super_admin');
+        $user = $this->createPlatformRoot();
 
         $response = $this->actingAs($user)->getJson('/api/internal/operations/status');
 

@@ -23,8 +23,7 @@ class MfaMiddlewareTest extends TestCase
 
     private function authorizedUser(): User
     {
-        $user = User::factory()->create();
-        $this->assignPlatformRole($user, 'platform_super_admin');
+        $user = $this->createPlatformRoot();
 
         return $user;
     }

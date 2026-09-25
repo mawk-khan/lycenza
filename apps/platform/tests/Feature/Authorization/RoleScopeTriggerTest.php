@@ -56,11 +56,16 @@ class RoleScopeTriggerTest extends TestCase
     public function platform_role_assignments_accepts_a_platform_scoped_role(): void
     {
         $user = $this->createUser();
-        $platformRole = Role::query()->where('key', 'platform_super_admin')->firstOrFail();
+        $platformRole = Role::query()->where('key', 'platform_auditor')->firstOrFail();
 
+        // A runtime grant (named grantor, runtime-assignable role) -- the
+        // root role is provisioned only across the administrative boundary
+        // (Phase 0O.1A, Postgres\PlatformRootBoundaryTest).
         $assignment = PlatformRoleAssignment::query()->create([
             'user_id' => $user->id,
             'role_id' => $platformRole->id,
+            'granted_by_user_id' => $this->createUser()->id,
+            'granted_at' => now(),
         ]);
 
         $this->assertNotNull($assignment->id);

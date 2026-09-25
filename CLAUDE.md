@@ -801,7 +801,13 @@ docs/roadmap             MASTER-ROADMAP.md
     `platform_super_admin` is provisioned out of band only and is never
     granted or revoked through the application (the database refuses a
     runtime grant or revocation of any role not marked
-    `roles.runtime_assignable`). Only code-approved, runtime-assignable,
+    `roles.runtime_assignable`, and — since Phase 0O.1A — refuses any
+    grantor-less (out-of-band) grant from a role that does not hold the
+    `platform_role_assignments` owner's privileges, so the runtime role
+    can never mint root; never make the runtime role a member of the owner
+    role). Root arrives only through `platform:bootstrap-root` (first boot)
+    or `platform:provision-root` (existing account) on the admin
+    connection; tests use `createPlatformRoot()`. Only code-approved, runtime-assignable,
     non-root roles are granted at runtime — v1 `platform_auditor` alone,
     through `PlatformRoleGovernanceService` and the root-reserved
     `platform.role_grants.manage` — never to or by oneself, with history

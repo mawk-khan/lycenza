@@ -45,12 +45,11 @@ class MfaMultiSchoolIdentityTest extends TestCase
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
-        $user = $this->createUser();
+        $user = $this->createPlatformRoot();
         $membershipA = $this->createMembership($user, $schoolA);
         $this->assignSchoolRole($membershipA, 'school_admin');
         $membershipB = $this->createMembership($user, $schoolB);
         $this->assignSchoolRole($membershipB, 'school_admin');
-        $this->assignPlatformRole($user, 'platform_super_admin');
 
         $this->enrollActiveMfaFactor($user);
         $this->actingAs($user);

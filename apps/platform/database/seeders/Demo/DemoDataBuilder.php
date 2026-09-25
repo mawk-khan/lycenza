@@ -29,6 +29,7 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Domain\Identity\Application\AccountInvitationService;
 use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Identity\Application\GuardianAccountActivationService;
+use App\Domain\Platform\Application\Roles\PlatformRootProvisioningService;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentSubjectEnrollmentService;
 use App\Domain\Students\Infrastructure\Student;
@@ -250,11 +251,13 @@ final class DemoDataBuilder
             'status' => 'active',
         ]));
 
-        $platformAdmin = $this->user('Platform Admin (Demo)', 'platform.admin@example.test');
-        PlatformRoleAssignment::query()->create([
-            'user_id' => $platformAdmin->id,
-            'role_id' => $this->role('platform_super_admin', 'platform')->id,
-        ]);
+        // Phase 0O.1A: the root role is provisioned only across the
+        // administrative database boundary, so the demo Platform Admin (and
+        // only it) is created and provisioned through the root provisioning
+        // service on `pgsql_admin` -- committed, audited as
+        // `platform.role_grant.provisioned` with method `demo_seed`.
+        $platformAdmin = $this->user('Platform Admin (Demo)', 'platform.admin@example.test', PlatformRootProvisioningService::CONNECTION);
+        app(PlatformRootProvisioningService::class)->provision($platformAdmin, 'demo_seed');
         $this->account('Platform Super Admin', $platformAdmin, '(none -- platform scope)', 'Platform capabilities: School elevation (no School page opens), School Group governance, platform audit review, Platform Auditor grants');
 
         // Phase 0N.7 (ADR 0046): the one runtime-assignable platform role,
@@ -725,16 +728,16 @@ final class DemoDataBuilder
     // helpers
     // ------------------------------------------------------------------
 
-    private function user(string $name, string $email): User
+    private function user(string $name, string $email, ?string $connection = null): User
     {
-        $user = User::query()->create([
+        $user = User::on($connection)->create([
             'name' => $name,
             'email' => $email,
             'password' => self::DEMO_PASSWORD,
         ]);
         $user->forceFill(['email_verified_at' => now()])->save();
 
-        return $user;
+        return $connection === null ? $user : User::query()->findOrFail($user->id);
     }
 
     private function member(User $user, School $school): SchoolMembership

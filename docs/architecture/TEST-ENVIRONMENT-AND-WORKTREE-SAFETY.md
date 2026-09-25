@@ -610,3 +610,18 @@ Two related fixes:
 Verified: all six tests, 10 consecutive runs each, while 16 CPU-bound
 busy loops saturated the container -- 60/60 passed.
 
+
+## Committed platform-root fixtures (Phase 0O.1A)
+
+The database refuses a grantor-less platform grant from the runtime role,
+and the administrative connection cannot see a test transaction's
+uncommitted rows, so a root fixture cannot be created inside the test
+transaction. `CreatesTenancyFixtures::createPlatformRoot()` therefore
+creates the user AND the root grant through `pgsql_admin`, committed;
+`assignPlatformRole()` refuses a root grant for an uncommitted user and
+grants runtime-assignable roles the application way (with a grantor, in
+the transaction). `Tests\TestCase` purges committed platform-role
+fixtures after every test (after the rollback) — the test database holds
+no platform grant at rest — and only through the unchanged, boot-verified
+connections after the admin connection positively reports the test
+database. The demo builder's Platform Admin is committed the same way.

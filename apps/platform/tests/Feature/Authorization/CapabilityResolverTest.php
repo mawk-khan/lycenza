@@ -81,8 +81,7 @@ class CapabilityResolverTest extends TestCase
     #[Test]
     public function platform_capability_grant_does_not_imply_school_capability(): void
     {
-        $user = $this->createUser();
-        $this->assignPlatformRole($user, 'platform_super_admin');
+        $user = $this->createPlatformRoot();
         $school = $this->createSchool();
 
         $resolver = app(CapabilityResolver::class);
@@ -106,8 +105,7 @@ class CapabilityResolverTest extends TestCase
     public function the_generic_can_method_dispatches_by_capability_namespace(): void
     {
         [$user, $school] = $this->createSchoolAdmin('school_admin');
-        $platformUser = $this->createUser();
-        $this->assignPlatformRole($platformUser, 'platform_super_admin');
+        $platformUser = $this->createPlatformRoot();
 
         $resolver = app(CapabilityResolver::class);
 

@@ -25,8 +25,7 @@ trait ElevationTestHelpers
 
     protected function platformAdmin(bool $withMfa = true): User
     {
-        $admin = $this->createUser();
-        $this->assignPlatformRole($admin, 'platform_super_admin');
+        $admin = $this->createPlatformRoot();
 
         if ($withMfa) {
             $secret = app(Google2FA::class)->generateSecretKey();

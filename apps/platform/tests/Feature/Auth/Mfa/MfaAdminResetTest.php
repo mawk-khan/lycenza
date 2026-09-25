@@ -25,8 +25,7 @@ class MfaAdminResetTest extends TestCase
     #[Test]
     public function a_platform_super_admin_can_reset_another_users_mfa(): void
     {
-        $admin = User::factory()->create();
-        $this->assignPlatformRole($admin, 'platform_super_admin');
+        $admin = $this->createPlatformRoot();
 
         $target = User::factory()->create();
         $factor = $this->enrollActiveMfaFactor($target);
