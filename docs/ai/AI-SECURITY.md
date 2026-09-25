@@ -130,6 +130,13 @@ never decode, alter, or construct one. Laravel's inbound AI-tool-contract
 endpoints (`App\Http\Controllers\Api\Internal\AiToolController`) verify
 the signature and capability claim before doing anything.
 
+**Phase 0O.1: the signing key fails closed in every environment.** With
+`AI_GATEWAY_CONTEXT_SIGNING_KEY` unset or blank the service neither issues
+nor verifies a token (`AiContextSigningKeyNotConfiguredException`) —
+before, a missing key became an empty HMAC key that anyone could use to
+forge a token. Production additionally refuses to boot with the committed
+placeholder values. Rotation and a key id stay deferred (ADR 0023).
+
 Consequence: even a fully compromised `services/ai` process can, at
 worst, replay a token Laravel already issued for an already-authorized
 action within its 60-second window — it cannot mint a new one for a

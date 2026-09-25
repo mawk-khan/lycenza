@@ -13,13 +13,19 @@ class DatabaseSeeder extends Seeder
     // events here would silently break seeded UUIDs.
     public function run(): void
     {
+        // Production-safe reference catalogs (Phase 0O.1 release contract:
+        // docs/architecture/PRODUCTION-RELEASE.md) -- idempotent, no accounts,
+        // no credentials, no School data.
         $this->call(CapabilityAndRoleSeeder::class);
-        $this->call(ServiceIdentitySeeder::class);
         $this->call(EducationBoardSeeder::class);
         $this->call(StatutoryRuleVersionSeeder::class);
 
-        // Local development convenience only -- not real school data.
+        // Local development / test conveniences only -- never in a real
+        // deployment: the development AI Gateway identity (from the public
+        // dev token) and a test user.
         if (app()->environment(['local', 'testing'])) {
+            $this->call(ServiceIdentitySeeder::class);
+
             User::factory()->create([
                 'name' => 'Test User',
                 'email' => 'test@example.com',

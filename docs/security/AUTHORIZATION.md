@@ -415,7 +415,15 @@ ADR 0045.
 - `platform_super_admin` is the **root / bootstrap** role: provisioned
   only by trusted, out-of-application means, never granted or revoked
   through the ERP application; losing every root account is recovered
-  the same way.
+  the same way. **Production provisioning path (Phase 0O.1):** the
+  operator console command `php artisan platform:provision-root` —
+  console only, on the migration/admin connection, one existing enabled
+  account by exact email or id, typed confirmation (or `--force` for
+  trusted automation), idempotent, audited as
+  `platform.role_grant.provisioned` (actor null, `method: console`). It
+  identifies the root role structurally (the non-runtime-assignable system
+  platform role holding `platform.role_grants.manage`), never by name. See
+  `docs/architecture/PRODUCTION-RELEASE.md` §5.
 - Runtime platform-role governance covers only **code-approved,
   `runtime_assignable`, non-root** roles (v1: `platform_auditor`), through
   the root-reserved `platform.role_grants.manage` — no role builder, no
@@ -435,6 +443,13 @@ ADR 0045.
   and writes one `platform.audit_log.viewed` event per review. It is
   separate from the School audit-log review (`school.audit.view`); Schools
   see no elevation events in v1. See ADR 0046.
+- **Service identities (Phase 0O.1):** issued and disabled by operators
+  only, through `php artisan platform:service-identity-issue` (capabilities
+  limited to `ai.tools.invoke`, `ai.audit.write`; the credential is shown
+  once and stored only as a hash) and `platform:service-identity-disable`.
+  `ServiceIdentitySeeder` (the development token) refuses outside
+  `local`/`testing`. No HTTP or UI, no rotation or expiry yet (decision
+  O5).
 
 ## School lifecycle and bootstrap administration (ADR 0047 — built in Phase 0N.9)
 

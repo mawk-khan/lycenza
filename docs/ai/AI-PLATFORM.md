@@ -53,8 +53,15 @@ change to anything that calls the router. See ADR 0013.
 
 1. Laravel authenticates to the AI Gateway using the shared service
    token (`AI_GATEWAY_SERVICE_TOKEN`, header `X-Service-Token` —
-   checked by `services/ai/app/core/security.py`). This proves "the
-   caller is the trusted platform," nothing more.
+   checked by `services/ai/app/core/security.py`, constant-time). This
+   proves "the caller is the trusted platform," nothing more. Since Phase
+   0O.1 the Gateway has **no default token**: it refuses to start (and
+   `/health/ready` returns 503) without `SERVICE_TOKEN`, or with the
+   public `dev-local-only-token` unless `ENVIRONMENT` is exactly `local`
+   or `testing` (`ENVIRONMENT` defaults to `production`;
+   `services/ai/app/core/startup.py`). Laravel refuses to boot in
+   production with that development token or without a real context
+   signing key (`docs/architecture/PRODUCTION-RELEASE.md` §2).
 2. For `/v1/tools/invoke` (ADR 0023), `App\Support\Ai\AiGatewayClient`
    first verifies the calling actor actually holds the required
    capability in the target School (via `CapabilityResolver`) — **before**

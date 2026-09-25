@@ -445,3 +445,39 @@ is the only runtime-assignable role, and `platform.role_grants.manage`
    `occurred_at` index serves the keyset order.
 
 CLAUDE.md rule 85 records the platform authority invariants.
+
+## Implementation cross-reference (Phase 0O.1, 2026-09-25)
+
+Section 2's production provisioning path is built as the operator console
+command `php artisan platform:provision-root {user} [--force]`
+(`App\Console\Commands\ProvisionPlatformRoot`,
+`App\Domain\Platform\Application\Roles\PlatformRootProvisioningService`):
+
+- console only — no HTTP route or UI (guard-tested);
+- one existing, enabled account by exact email or id; unknown, disabled
+  and malformed identifiers are refused without echoing them; no account
+  is created;
+- the operator types the account's email to confirm; a non-interactive
+  run needs `--force` (trusted automation only);
+- runs on the migration/admin connection (`pgsql_admin`) and refuses when
+  that connection is the runtime role;
+- one transaction writes the assignment (grantor NULL) and
+  `platform.role_grant.provisioned` (actor null, subject the assignment,
+  metadata `role_key`, `user_id`, `method: console`);
+- idempotent: an existing active root assignment is reported as already
+  provisioned with no row or event; concurrent runs are settled by the
+  partial unique index `platform_role_assignments_one_active` (a
+  two-process race test proves one row and one event);
+- the root role is identified structurally (the system platform role that
+  is not runtime-assignable and holds `platform.role_grants.manage`), so
+  the rule-85 guard against naming it in application code still holds.
+
+No trigger was changed or bypassed. **Residual, recorded honestly:** the
+database distinguishes a runtime grant only by a non-NULL grantor, so a
+NULL-grantor insert of the root role is still accepted from any
+connection, including the runtime role (test fixtures rely on this). The
+application's only code path that writes one is this console service
+(guard-tested); a stronger database-level separation would need the
+fixtures and the runtime role's grants reworked and is not part of 0O.1.
+Creating the first platform account in production is also outside this
+command (`docs/architecture/PRODUCTION-RELEASE.md` §5).

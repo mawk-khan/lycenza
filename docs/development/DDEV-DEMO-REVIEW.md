@@ -105,8 +105,9 @@ What it does, in order:
    queued jobs) and empties DDEV's Mailpit -- both **before** seeding, so
    the jobs and invitation e-mails the seed produces survive.
 6. `php artisan db:seed` -- the canonical reference seed set
-   (`DatabaseSeeder`: capability/role catalog, AI service identity,
-   education boards, statutory rule versions).
+   (`DatabaseSeeder`: capability/role catalog, education boards,
+   statutory rule versions, and -- in `local`/`testing` only -- the
+   development AI service identity).
 7. `php artisan db:seed --class=Database\Seeders\Demo\DemoSeeder` -- the
    demo School, demo data and demo accounts (prints the account table).
 8. `optimize:clear`, `queue:restart`, and ensures the supervised queue
@@ -669,7 +670,15 @@ production because:
    email or password is ever sent to the browser, and the compiled JS
    bundle contains no credentials. It only prefills the normal form --
    there is no auto-login route (`DemoLoginPanelTest` proves both).
-5. Nothing in the demo bypasses authorization or RLS: data is created on
+5. **Phase 0O.1 production boot check:** with `APP_ENV=production` the
+   application refuses to boot on debug, a missing/invalid `APP_KEY`, a
+   non-Secure session cookie, the committed AI signing-key placeholders or
+   the development service token
+   (`docs/architecture/PRODUCTION-RELEASE.md` §2). DDEV runs `local`, so
+   none of this applies here and nothing changes for the demo;
+   `ServiceIdentitySeeder` still seeds the development `ai-gateway`
+   identity locally and refuses anywhere else.
+6. Nothing in the demo bypasses authorization or RLS: data is created on
    the NOBYPASSRLS runtime connection inside `TenantContext`, lifecycle
    records go through their Application services, and accounts receive
    capabilities only through real role assignments.

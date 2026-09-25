@@ -128,4 +128,32 @@ class AiToolControllerTest extends TestCase
         $response->assertJsonPath('result.schoolId', $schoolA->id);
         $this->assertNotSame($schoolB->id, $response->json('result.schoolId'));
     }
+
+    /**
+     * Phase 0O.1: with no signing key configured, a token HMAC-signed with
+     * an empty key (which anyone can compute) is never accepted -- the
+     * tool fails closed and nothing is audited.
+     */
+    #[Test]
+    public function a_missing_signing_key_fails_closed_instead_of_accepting_an_empty_key_token(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+        $payload = rtrim(strtr(base64_encode((string) json_encode([
+            'school_id' => $school->id, 'actor_id' => $user->id,
+            'capabilities' => ['school.settings.view'], 'request_id' => null, 'exp' => now()->addMinute()->timestamp,
+        ])), '+/', '-_'), '=');
+        $forged = $payload.'.'.rtrim(strtr(base64_encode(hash_hmac('sha256', $payload, '', true)), '+/', '-_'), '=');
+
+        config(['services.ai_gateway.context_signing_key' => null]);
+        $this->app->forgetInstance(AiContextTokenService::class);
+
+        $this->withToken(self::SERVICE_TOKEN)
+            ->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $forged])
+            ->assertStatus(500);
+
+        $this->assertSame(0, app(TenantContext::class)->withSchool(
+            $school,
+            fn () => SchoolAuditEvent::query()->where('event_type', 'ai.tool_invoked')->count(),
+        ));
+    }
 }

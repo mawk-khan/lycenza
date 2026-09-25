@@ -7,6 +7,8 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Configuration\ProductionConfigurationException;
+use App\Support\Configuration\ProductionConfigurationGuard;
 use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\LogErrorReporter;
 use App\Support\Observability\LogMetricsRecorder;
@@ -35,6 +37,23 @@ class AppServiceProvider extends ServiceProvider
         // could reach a destructive database call.
         (new TestDatabaseGuard)->assertSafe();
 
+        // Phase 0O.1: production refuses to boot with an unsafe
+        // configuration (debug on, no usable app key, non-Secure session
+        // cookie, missing/placeholder AI signing key, the development
+        // service token). Same placement and reason as the guard above:
+        // before anything can serve a request or run a command. The
+        // refusal is rendered with debug OFF, so a misconfigured production
+        // host never serves a debug error page (source, trace, request).
+        if ($this->app->isProduction()) {
+            try {
+                (new ProductionConfigurationGuard($this->app->make('config')))->assertSafe();
+            } catch (ProductionConfigurationException $e) {
+                $this->app->make('config')->set('app.debug', false);
+
+                throw $e;
+            }
+        }
+
         // scoped(): fresh per HTTP request AND per queue job (Laravel's
         // container flushes scoped bindings after each). This is a
         // defense-in-depth safety net -- the explicit job middleware
@@ -47,12 +66,14 @@ class AppServiceProvider extends ServiceProvider
         // reference -- scoped for the same reason as TenantContext.
         $this->app->scoped(ElevationContext::class);
 
+        // Phase 0O.1: no (string) cast -- a missing key stays missing and
+        // AiContextTokenService refuses to sign or verify with it.
         $this->app->singleton(AiContextTokenService::class, fn () => new AiContextTokenService(
-            (string) config('services.ai_gateway.context_signing_key'),
+            config('services.ai_gateway.context_signing_key'),
         ));
 
-        // Phase 1A.3: unlike AiContextTokenService above, this
-        // deliberately does NOT cast a missing key to an empty string
+        // Phase 1A.3: like AiContextTokenService above (since Phase
+        // 0O.1), this does NOT cast a missing key to an empty string
         // -- ContactLookupHasher::hash() fails closed (throws
         // ContactLookupKeyNotConfiguredException) the first time it is
         // actually used with no key configured, rather than silently

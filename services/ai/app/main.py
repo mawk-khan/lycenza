@@ -9,8 +9,10 @@ from pydantic import BaseModel
 from app.agents.registry import AgentDefinition, agent_registry
 from app.audit import laravel_audit
 from app.audit.ledger import AuditEntry, audit_ledger
+from app.core.config import settings
 from app.core.health import router as health_router
 from app.core.security import require_service_token
+from app.core.startup import assert_safe_configuration
 from app.core.trace import TraceContext
 from app.gateway.completion_auth import CompletionAuthorizationError, authorize_completion
 from app.gateway.router import ProviderNotAllowedError, UnknownProviderError, model_router
@@ -29,6 +31,10 @@ logger = logging.getLogger(__name__)
 # real-provider switch is off (the router also refuses at registration and
 # selection time).
 model_router.assert_fail_closed()
+
+# Phase 0O.1: refuse to start without a service token, or with the public
+# development token outside local/testing (app.core.startup).
+assert_safe_configuration(settings)
 
 app = FastAPI(title="School OS AI Gateway", version="0.0.1-phase-0b")
 app.include_router(health_router)

@@ -14,6 +14,13 @@ use Illuminate\Support\Str;
  */
 class ServiceIdentityIssuer
 {
+    /**
+     * Phase 0O.1: the capabilities a service identity may be issued with
+     * from the operator console -- exactly the ones an internal-service
+     * route checks (`ai-service:` middleware). Nothing else.
+     */
+    public const ISSUABLE_CAPABILITIES = ['ai.tools.invoke', 'ai.audit.write'];
+
     public function __construct(private readonly AuditRecorder $audit) {}
 
     /**

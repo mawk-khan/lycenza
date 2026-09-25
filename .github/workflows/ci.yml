@@ -34,15 +34,19 @@ jobs:
       # below, mirroring infrastructure/docker/postgres/init/*.sql
       # exactly, so CI re-verifies the same role separation local dev
       # runs under, not a weaker CI-only shortcut.
+      # Same bootstrap database as docker-compose (school_os); the test
+      # database is created by 02-create-test-database.sh below, in the
+      # same order the local init scripts run (Phase 0O.1: 01-roles.sql
+      # grants on school_os, which previously did not exist here).
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: school_os_test
+          POSTGRES_DB: school_os
           POSTGRES_USER: school_os
           POSTGRES_PASSWORD: school_os
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U school_os -d school_os_test"
+          --health-cmd "pg_isready -U school_os -d school_os"
           --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: valkey/valkey:8-alpine
@@ -73,12 +77,18 @@ jobs:
       - run: cp .env.example .env
       - run: php artisan key:generate
 
-      - name: Provision database roles (ADR 0021)
+      - name: Provision database roles and the test database (ADR 0021, ADR 0024)
         env:
+          PGHOST: 127.0.0.1
           PGPASSWORD: school_os
+          POSTGRES_USER: school_os
+          POSTGRES_DB: school_os
         run: |
-          psql -h 127.0.0.1 -U school_os -d school_os_test -v ON_ERROR_STOP=1 \
+          psql -U school_os -d school_os -v ON_ERROR_STOP=1 \
             -f ../../infrastructure/docker/postgres/init/01-roles.sql
+          bash ../../infrastructure/docker/postgres/init/02-create-test-database.sh
+          psql -U school_os -d school_os -v ON_ERROR_STOP=1 \
+            -f ../../infrastructure/docker/postgres/init/03-test-database-roles.sql
 
       - name: Migrate test database via the admin connection
         env:
