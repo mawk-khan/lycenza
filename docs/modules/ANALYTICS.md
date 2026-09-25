@@ -346,3 +346,29 @@ In short: one source satisfies "one or two"; export is optional and not
 built; person-counting Analytics is conditional in the contract, fails
 closed today, and stays blocked on gate decisions 7.1–7.4. Closing
 Phase 0L.2 does not unblock it.
+
+## 15. Group cross-School reporting (ADR 0048, Phase 0N.10 — contract only)
+
+The first and only cross-School Analytics decision: Group reporting of
+`curriculum.coverage` for holders of the Group capability
+`group.reporting.view` (v1 `group_admin`), per ADR 0048. Analytics owns:
+
+- a separate, closed **Group-safe report registry** (only
+  `curriculum.coverage`; no person-counting entry, ever, while the cohort
+  gate is open) — registration in `AnalyticsReadModelRegistry` alone never
+  makes a report cross-School;
+- a **Group-safe gate** that takes a Group-layer authorization value,
+  re-checks `group.reporting.view` through `CapabilityResolver::canInGroup()`,
+  holds the School FOR SHARE (active only), computes inside
+  `TenantContext::withSchool()` for that one School and returns only a
+  **Group-safe summary**: whether the School has an active academic year,
+  that year's name/code, and the School-level `planned`, `completed`,
+  `inProgress`, `notStarted`, `offerings`, `offeringsWithoutSyllabus` for
+  the active year (no fallback year, no ids, no names below School level);
+- the **aggregation**: sums of those counts; Group `coveragePercent` =
+  `CurriculumCoverageReadModel::percent(Σ completed, Σ planned)` — never an
+  average of per-School percentages.
+
+`analytics.view`, `AnalyticsReadGate::read()` and the School page are
+unchanged; `analytics.platform.view` stays unseeded; no export, no cache,
+no persistence. Built in the proposed Phase 0N.11.

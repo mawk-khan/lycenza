@@ -390,6 +390,26 @@ ends the moment that authority goes (no fallback to platform authority). Platfor
 ordinary member of several Schools holds no Group authority. See
 ADR 0045.
 
+## Group cross-School reporting (ADR 0048 — contract only, Phase 0N.10)
+
+- A Group report needs the Group capability **`group.reporting.view`** on
+  an unrevoked grant in the one named, active Group (v1: held by
+  `group_admin`, alongside `group.schools.view` and
+  `group.schools.elevate`; not seeded until Phase 0N.11), plus current MFA
+  assurance. One Group per request; grants in several Groups never pool.
+- It is **never** implied by `platform_super_admin` or any `platform.*`
+  capability (a root needs a real Group grant, from another root), by
+  `platform.audit.view`, by School roles or `analytics.view` in any number
+  of Schools, by multi-School membership, or by an active elevation.
+- Per School, the Group layer re-checks the grant, the Group and the
+  membership FOR SHARE, and Analytics re-checks the capability and the
+  School's `active` status; the actor needs **no** School membership or
+  School capability — this is the Group-safe path, not
+  `AnalyticsReadGate::read()`.
+- Only Analytics-registered Group-safe reports (v1 `curriculum.coverage`)
+  exist on it; no Compliance, Automation or AI cross-School access; no
+  export. See ADR 0048.
+
 ## Platform authority and platform audit review (ADR 0046 — built in Phase 0N.7)
 
 - `platform_super_admin` is the **root / bootstrap** role: provisioned

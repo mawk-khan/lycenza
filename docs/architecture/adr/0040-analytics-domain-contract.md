@@ -554,3 +554,20 @@ which remains an open **[LEGAL/PRODUCT/SECURITY REVIEW REQUIRED]** gate.
 
 As built: `docs/modules/ANALYTICS.md` §13. Still-open decisions:
 `docs/security/ANALYTICS-SMALL-COHORT-POLICY-GATE.md` §7.
+
+## Amendment — 2026-09-25 (Phase 0N.10, ADR 0048)
+
+Decision 4's cross-School deferral is resolved **for exactly one report**:
+ADR 0048 (Group Cross-School Reporting Contract) is the separate ADR
+decision 4 requires, for `curriculum.coverage` under Group authority only.
+Its answers to decision 4's three questions: the read path is a bounded
+sequence of ordinary single-School reads (one `TenantContext::withSchool()`
+per active member School, no RLS change, no `BYPASSRLS`); the gate is the
+Group capability `group.reporting.view` (not `analytics.view`, not
+`analytics.platform.view`, which stays unseeded); classification stays the
+strictest source tier (Confidential for this report — aggregation lowers
+nothing). Analytics owns a separate Group-safe report registry, the
+Group-safe summary and the aggregation math (sums of counts; percentage
+recomputed from sums). Every other report, platform-wide Analytics,
+person-counting Analytics and export remain governed by this ADR unchanged.
+Nothing is built until Phase 0N.11.

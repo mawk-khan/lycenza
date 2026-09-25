@@ -55,7 +55,16 @@ bootstrap School Administrator, activation, suspension (eager elevation
 termination, execution-time enforcement in every business substrate) and
 resume, fresh MFA for every change, no runtime `DELETE` on `schools`. No
 archive, delete, break-glass or platform membership administration. It
-unblocks nothing else; D15 remains. Phase 0M
+unblocks nothing else; D15 remains. **Update (Phase 0N.10, 2026-09-25):**
+the owner decided **D15**; **ADR 0048 (Group Cross-School Reporting
+Contract)** authorizes exactly one narrow cross-School read — the
+`curriculum.coverage` report, under a new Group capability
+`group.reporting.view`, executed one School at a time through an
+Analytics-owned Group-safe path with no RLS change (nothing built; proposed
+Phase 0N.11). **All Phase 0N decisions (D1–D18) are now recorded:
+architecture decisions complete — the first cross-School report
+implementation remains**, and Phase 0N stays in progress until it is built
+(the roadmap scopes 0N as "administration and reporting"). Phase 0M
 (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
@@ -477,6 +486,12 @@ their own gates:
 the same kind of ADR (D15); elevation into one School at a time does not
 satisfy it and must not be stretched to.
 
+**Resolution (Phase 0N.10, ADR 0048).** D15 is that ADR, and it doubles as
+ADR 0040 §4's required cross-School Analytics ADR for exactly one report,
+`curriculum.coverage`, under Group authority. Compliance, Automation and AI
+cross-School access remain **not authorized**; `analytics.platform.view`,
+`compliance.platform.view` and `automation.platform.view` remain unseeded.
+
 ## 13. School lifecycle
 
 The roadmap's 0N entry does not name School lifecycle.
@@ -559,7 +574,7 @@ role loses `DELETE` on `schools` in 0N.9.
 | D12 | Who may create Schools and grant platform roles | No platform-role administration exists | platform_super_admin only; two-person rule; CLI-only | Security | **Decided, ADR 0046** — `platform_super_admin` is root/bootstrap (never runtime-granted); School creation root-only (what it means stays D11); root grants only code-approved non-root roles (v1: `platform_auditor`); no self-grant |
 | D13 | Platform-level membership administration | Section 14 | out of 0N (School-owned); first School Admin at creation only | Product | **Decided for v1, ADR 0047** — bootstrap School Admin before first activation only; no ongoing platform membership administration; break-glass recovery a future decision |
 | D14 | Classification of School metadata, memberships, platform roles, elevation records, platform audit | No rows in DATA-CLASSIFICATION.md (section 9) | tiers per section 9 or stricter | Security / privacy | **Decided for elevation records only, ADR 0044** — Highly Sensitive (v1); *ADR 0045 (Group records), ADR 0046 (platform audit, platform role assignments) and ADR 0047 (School metadata/lifecycle Confidential, bootstrap relationship Sensitive, lifecycle audit Highly Sensitive) added rows*; ordinary School memberships beyond the bootstrap relationship still unclassified |
-| D15 | Group-level / cross-School reporting | ADR 0040 §4, ADR 0042, ADR 0043 | own ADR; or remove reporting from 0N | Product + security (+ legal) | Yes — reporting |
+| D15 | Group-level / cross-School reporting | ADR 0040 §4, ADR 0042, ADR 0043 | own ADR; or remove reporting from 0N | Product + security (+ legal) | **Decided, ADR 0048** — Group-scoped `group.reporting.view` (v1: `group_admin`); only Analytics-registered Group-safe reports (v1: `curriculum.coverage`); per-School execution, one TenantContext at a time, active member Schools only; source-defined aggregation; current MFA; platform-ledger audit; no persistence, export, Compliance, Automation or AI cross-School access; implementation is Phase 0N.11 |
 | D16 | Platform audit review surface | ADR 0042 §13 item 2 | who may read `platform_audit_events`, with what metadata | Security | **Decided, ADR 0046** — `platform.audit.view` (root + `platform_auditor`); context-neutral, Highly Sensitive, empty metadata allowlist, access audited; Schools see no elevation events in v1 |
 | D17 | Auditing denied selection / elevation | ADR 0017 ("worth auditing in later phases") | audit denials in `platform_audit_events` or not | Security | **Decided, ADR 0044** — denied elevation audited in the platform ledger (denied School selection unchanged) |
 | D18 | Group membership governance | None | who adds or removes a School from a group; does the School consent | Product + legal (data-sharing) | **Decided, ADR 0045** — platform-governed in v1; Group Admins cannot change membership, Groups or grants |

@@ -5,7 +5,11 @@
 - Date: 2026-09-24 (Phase 0N.4); amended 2026-09-24 (Phase 0N.5)
 - See also: ADR 0047 (School lifecycle: creating a School adds it to no
   Group; suspending one never changes its Group membership, the Group view
-  may still show its status, and Group-derived elevation into it is refused)
+  may still show its status, and Group-derived elevation into it is refused);
+  ADR 0048 (D15: amends §4 with a third Group capability,
+  `group.reporting.view`, for `group_admin`, and §14 with exactly one
+  Group-safe cross-School report, `curriculum.coverage`, read one School at
+  a time through Analytics)
 
 ## Context
 
