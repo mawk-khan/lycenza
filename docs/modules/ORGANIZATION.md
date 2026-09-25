@@ -33,7 +33,7 @@ in this checkpoint — no UI or API exists yet for platform staff to
 change a School's lifecycle state beyond what Phase 0B already
 established).
 
-**Phase 0N.8 (ADR 0047, contract only):** the lifecycle is
+**Phase 0N.8/0N.9 (ADR 0047, built in 0N.9):** the lifecycle is
 `provisioning → active → suspended → active` on this same column (a new
 `provisioning` value for a created, never-activated School; `archived`
 kept with no application transition until a retention/legal decision).

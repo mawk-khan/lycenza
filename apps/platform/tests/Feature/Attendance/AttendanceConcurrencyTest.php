@@ -41,7 +41,7 @@ class AttendanceConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         foreach ($this->schools as $school) {
-            $school->delete(); // cascades every tenant-owned row
+            $this->deleteSchoolAsAdmin($school); // cascades every tenant-owned row
         }
         $this->schools = [];
 

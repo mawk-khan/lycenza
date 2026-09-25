@@ -180,7 +180,10 @@ class SchoolElevationService
                 // For Group authority the database re-verifies the grant, the
                 // Group and the membership at INSERT, holding them FOR SHARE,
                 // so a concurrent removal/revocation/archive waits for this
-                // row and then terminates it (fail closed).
+                // row and then terminates it (fail closed). Phase 0N.9: the
+                // same for the target School itself -- a concurrent
+                // suspension either waits and then terminates this row, or
+                // wins and the INSERT is refused.
                 $elevation = SchoolElevation::create([
                     'actor_user_id' => $actor->id,
                     'school_id' => $school->id,
@@ -213,8 +216,13 @@ class SchoolElevationService
                 str_contains($e->getMessage(), 'School Group is not active') => 'group_inactive',
                 str_contains($e->getMessage(), 'Group grant is not an active grant') => 'group_grant_missing',
                 str_contains($e->getMessage(), 'not a member of the authorizing School Group') => 'school_not_in_group',
+                str_contains($e->getMessage(), 'the target School is not active') => 'target_inactive',
                 default => throw $e,
             };
+
+            if ($outcome === 'target_inactive') {
+                $this->deny($request, $actor, $school, $outcome, $validReason->value, 422, 'target_unavailable', 'target', self::UNAVAILABLE, $authority);
+            }
 
             $this->deny($request, $actor, $school, $outcome, $validReason->value, 409, 'group_authority_changed', 'target', 'Your Group authority for that School changed. Start again.', $authority);
         }
@@ -241,6 +249,7 @@ class SchoolElevationService
     private function commonInvalidity(SchoolElevation $elevation, User $actor): ?ElevationEndReason
     {
         return match (true) {
+            $elevation->school?->isSuspended() === true => ElevationEndReason::SchoolSuspended,
             $elevation->school === null || ! $elevation->school->isActive() => ElevationEndReason::SchoolIneligible,
             $this->isMember($actor, $elevation->school) => ElevationEndReason::MembershipConflict,
             ! $this->mfa->hasActiveFactor($actor) => ElevationEndReason::MfaFactorRevoked,

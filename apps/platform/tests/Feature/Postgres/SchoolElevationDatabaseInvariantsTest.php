@@ -70,7 +70,12 @@ class SchoolElevationDatabaseInvariantsTest extends TestCase
         $id = $this->insertElevation($actor->id, $school->id);
 
         $this->assertRejected(fn () => DB::table('school_elevations')->where('id', $id)->delete(), 'permission denied');
-        $this->assertRejected(fn () => DB::table('schools')->where('id', $school->id)->delete(), 'school_elevations');
+        // Phase 0N.9 (ADR 0047 section 12): the runtime role cannot delete
+        // any School at all now; the RESTRICT from school_elevations still
+        // protects this history from the administrative connection too.
+        $this->assertRejected(fn () => DB::table('schools')->where('id', $school->id)->delete(), 'permission denied for table schools');
+        $fk = DB::connection('pgsql_admin')->selectOne("select confdeltype from pg_constraint where conname = 'school_elevations_school_id_foreign'");
+        $this->assertSame('r', $fk->confdeltype);
         $this->assertTrue(DB::table('school_elevations')->where('id', $id)->exists());
     }
 

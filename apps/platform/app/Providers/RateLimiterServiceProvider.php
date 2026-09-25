@@ -174,6 +174,11 @@ class RateLimiterServiceProvider extends ServiceProvider
         RateLimiter::for('platform-elevation', fn (Request $request) => Limit::perMinute(8)
             ->by($request->user()->id));
 
+        // Phase 0N.9 (ADR 0047 section 7): every School lifecycle change
+        // re-verifies MFA -- bound the code guesses per actor.
+        RateLimiter::for('platform-school-lifecycle', fn (Request $request) => Limit::perMinute(8)
+            ->by($request->user()->id));
+
         RateLimiter::for('mfa-password-confirmation', fn (Request $request) => Limit::perMinute(6)
             ->by($request->user()->id));
 

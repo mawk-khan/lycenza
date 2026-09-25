@@ -42,6 +42,11 @@ class DashboardController extends Controller
                 'schoolId' => $m->school_id,
                 'schoolName' => $m->school->name,
                 'isActive' => $context->schoolId() === $m->school_id,
+                // Phase 0N.9 (ADR 0047): a provisioning, suspended or
+                // archived School is listed as unavailable (never why),
+                // and cannot be selected (SchoolSwitchController refuses
+                // it anyway).
+                'available' => $m->school->isActive(),
             ]);
 
         $school = $context->school();
@@ -84,6 +89,8 @@ class DashboardController extends Controller
             'platform' => [
                 'canViewAuditLog' => $capabilities->canPlatform($user, 'platform.audit.view'),
                 'canGovernRoles' => $capabilities->canPlatform($user, 'platform.role_grants.manage'),
+                // Phase 0N.9 (ADR 0047): the School lifecycle surface.
+                'canManageSchools' => $capabilities->canPlatform($user, 'platform.schools.manage'),
             ],
             'groups' => [
                 'canViewOwn' => $capabilities->groupsWith($user, 'group.schools.view')->isNotEmpty(),

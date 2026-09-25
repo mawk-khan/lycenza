@@ -39,7 +39,7 @@ class OppositeDirectionTransferConcurrencyTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->school?->delete();
+        $this->deleteSchoolAsAdmin($this->school);
         $this->school = null;
 
         parent::tearDown();

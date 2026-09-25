@@ -6,6 +6,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Observability\TraceContext;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Http;
 
@@ -27,6 +28,7 @@ class AiGatewayClient
         private readonly AiContextTokenService $tokens,
         private readonly CapabilityResolver $capabilities,
         private readonly TenantContext $context,
+        private readonly SchoolOperationalGuard $operational,
     ) {}
 
     /**
@@ -35,11 +37,7 @@ class AiGatewayClient
      */
     public function invokeTool(User $actor, School $school, string $capability, string $agent, string $tool, array $payload = []): array
     {
-        if (! $this->capabilities->canInSchool($actor, $capability, $school)) {
-            throw new AiGatewayAuthorizationException(
-                "User {$actor->id} does not hold capability '{$capability}' in School {$school->id}; refusing to mint an AI context token."
-            );
-        }
+        $this->assertMintable($actor, $school, $capability);
 
         $contextToken = $this->tokens->issue($school, $actor, [$capability], $this->context->requestId());
 
@@ -99,11 +97,7 @@ class AiGatewayClient
      */
     public function complete(User $actor, School $school, string $capability, string $agent, string $prompt): array
     {
-        if (! $this->capabilities->canInSchool($actor, $capability, $school)) {
-            throw new AiGatewayAuthorizationException(
-                "User {$actor->id} does not hold capability '{$capability}' in School {$school->id}; refusing to mint an AI context token."
-            );
-        }
+        $this->assertMintable($actor, $school, $capability);
 
         $contextToken = $this->tokens->issue($school, $actor, [$capability], $this->context->requestId());
 
@@ -131,5 +125,28 @@ class AiGatewayClient
             'provider' => (string) $response->json('provider'),
             'model' => (string) $response->json('model'),
         ];
+    }
+
+    /**
+     * Checked BEFORE any context token is minted: the actor holds the
+     * capability in that School, and (Phase 0N.9, ADR 0047 section 8) the
+     * School is `active` right now -- read fresh from the database, never
+     * from the passed model -- so a provisioning, suspended or archived
+     * School gets no AI context at all. Elevation never reaches here
+     * (tokens resolve no elevated context, CLAUDE.md rule 83).
+     */
+    private function assertMintable(User $actor, School $school, string $capability): void
+    {
+        if (! $this->operational->isOperational($school->id)) {
+            throw new AiGatewayAuthorizationException(
+                "School {$school->id} is not active; refusing to mint an AI context token."
+            );
+        }
+
+        if (! $this->capabilities->canInSchool($actor, $capability, $school)) {
+            throw new AiGatewayAuthorizationException(
+                "User {$actor->id} does not hold capability '{$capability}' in School {$school->id}; refusing to mint an AI context token."
+            );
+        }
     }
 }

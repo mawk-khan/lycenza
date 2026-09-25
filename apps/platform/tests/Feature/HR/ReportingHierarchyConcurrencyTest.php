@@ -43,7 +43,7 @@ class ReportingHierarchyConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades employees, employment_records, employee_assignments
+            $this->deleteSchoolAsAdmin($this->school); // cascades employees, employment_records, employee_assignments
         }
 
         parent::tearDown();

@@ -384,6 +384,21 @@ invalidating the documented backoff/jitter schedule. Any future job
 that owns its own domain-level retry state must follow this same
 `tries=1` pattern.
 
+### School lifecycle at execution time (Phase 0N.9, ADR 0047)
+
+A School business job re-checks the School when it RUNS, never trusting
+the state at dispatch: `App\Support\Tenancy\SchoolOperationalGuard::holdOperational()`
+reads the School row FOR SHARE inside the job's own claim transaction
+(the lifecycle services lock it FOR UPDATE), so a suspension and a claim
+serialize. Outcomes per substrate: webhook and communication deliveries
+are deferred without consuming an attempt (`retrying` / `queued`), their
+redispatchers skip non-active Schools (no loop), automation executions
+become terminal `skipped`, scheduled announcements stay `scheduled`.
+`SetTenantContextForJob` deliberately has no blanket check -- platform
+safety work (audit, elevation expiry, pruning) keeps running for a
+suspended School. `SchoolLifecycleArchitectureGuardTest` fails on a new
+queued job or School-walking command that has not decided this.
+
 ### Security boundary honesty
 
 Stored `response_body`/`response_headers` are ordinary PostgreSQL

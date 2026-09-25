@@ -82,7 +82,7 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
         // and only cascading the School away removes that row first.
         if ($this->school !== null) {
             try {
-                $this->school->delete();
+                $this->deleteSchoolAsAdmin($this->school);
             } catch (\Throwable) {
                 // Best-effort only, same rationale as
                 // PayrollRunLifecycleConcurrencyTest::tearDown(): the

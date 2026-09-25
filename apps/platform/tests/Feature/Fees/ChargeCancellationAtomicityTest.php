@@ -49,7 +49,7 @@ class ChargeCancellationAtomicityTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades charges/ledger_accounts/journal_entries/journal_lines
+            $this->deleteSchoolAsAdmin($this->school); // cascades charges/ledger_accounts/journal_entries/journal_lines
         }
 
         parent::tearDown();

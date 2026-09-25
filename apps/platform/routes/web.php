@@ -86,6 +86,7 @@ use App\Http\Controllers\App\Payroll\Statutory\StatutoryEmployeeController;
 use App\Http\Controllers\App\Payroll\Statutory\StatutoryExportController as StatutoryPayrollExportController;
 use App\Http\Controllers\App\Platform\PlatformAuditLogController;
 use App\Http\Controllers\App\Platform\PlatformRoleAdminController;
+use App\Http\Controllers\App\Platform\PlatformSchoolAdminController;
 use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\SchoolSettingsController;
@@ -276,6 +277,27 @@ Route::middleware('auth')->group(function (): void {
             ->name('index');
         Route::post('/grants', [PlatformRoleAdminController::class, 'grant'])->name('grants.store');
         Route::post('/grants/{assignment}/revoke', [PlatformRoleAdminController::class, 'revoke'])->name('grants.revoke');
+    });
+
+    // Phase 0N.9 (ADR 0047): School lifecycle -- create (with the bootstrap
+    // School Administrator), replace that administrator while
+    // `provisioning`, activate, suspend, resume. Context-neutral; no
+    // archive or delete route exists. Reads need platform.schools.manage;
+    // the POSTs carry no capability middleware on purpose so a refusal
+    // reaches the service and is audited (platform.school.lifecycle_denied).
+    Route::prefix('app/platform/schools')->name('app.platform.schools.')->group(function (): void {
+        Route::middleware('capability:platform.schools.manage,platform')->group(function (): void {
+            Route::get('/', [PlatformSchoolAdminController::class, 'index'])->name('index');
+            Route::get('/create', [PlatformSchoolAdminController::class, 'create'])->name('create');
+            Route::get('/{school}', [PlatformSchoolAdminController::class, 'show'])->whereUuid('school')->name('show');
+            Route::get('/{school}/{action}', [PlatformSchoolAdminController::class, 'review'])
+                ->whereUuid('school')->whereIn('action', ['activate', 'suspend', 'resume', 'bootstrap-admin'])->name('review');
+        });
+        Route::post('/', [PlatformSchoolAdminController::class, 'store'])
+            ->middleware('throttle:platform-school-lifecycle')->name('store');
+        Route::post('/{school}/{action}', [PlatformSchoolAdminController::class, 'perform'])
+            ->whereUuid('school')->whereIn('action', ['activate', 'suspend', 'resume', 'bootstrap-admin'])
+            ->middleware('throttle:platform-school-lifecycle')->name('perform');
     });
 
     // Phase 0N.5 (ADR 0045 sections 9, 12): the Group Admin surface -- the

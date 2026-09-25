@@ -9,6 +9,7 @@ use App\Domain\Automation\Infrastructure\AutomationReviewItem;
 use App\Domain\Automation\Infrastructure\AutomationRuleInstance;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -47,6 +48,7 @@ class AutomationExecutionService
         private readonly AutomationFeatureGate $gate,
         private readonly OwnerAuthorityVerifier $authority,
         private readonly AutomationRuleService $rules,
+        private readonly SchoolOperationalGuard $lifecycle,
     ) {}
 
     /** @return bool whether this call claimed the execution and ran it */
@@ -92,6 +94,14 @@ class AutomationExecutionService
      */
     private function evaluate(School $school, AutomationExecution $execution): array
     {
+        // Phase 0N.9 (ADR 0047 section 8): a School that is not active
+        // when the execution runs gets no effect -- terminal `skipped`
+        // (never retried, never replayed on RESUME). Read FOR SHARE inside
+        // this transaction, so a suspension and the effect serialize.
+        if (! $this->lifecycle->holdOperational($school->id)) {
+            return [AutomationExecution::STATUS_SKIPPED, 'school_suspended'];
+        }
+
         $instance = AutomationRuleInstance::query()->whereKey($execution->rule_instance_id)->lockForUpdate()->first();
         $ruleType = $instance === null ? null : $this->catalog->find($instance->rule_type);
 

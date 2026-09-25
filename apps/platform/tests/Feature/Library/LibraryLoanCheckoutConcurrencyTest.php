@@ -56,7 +56,7 @@ class LibraryLoanCheckoutConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades library_titles/copies/loans/students
+            $this->deleteSchoolAsAdmin($this->school); // cascades library_titles/copies/loans/students
         }
 
         parent::tearDown();

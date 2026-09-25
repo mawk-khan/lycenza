@@ -1257,6 +1257,22 @@ delete and a revoked runtime `DELETE` on `schools`; archive/delete behind
 a retention/legal decision. Proposed next: Phase 0N.9 School Lifecycle
 Foundation. Phase 0N stays **BLOCKED** on D15 only.
 
+**Phase 0N.9 — School Lifecycle Foundation (done, 2026-09-25).** Built
+ADR 0047: `schools.status` CHECK, default `provisioning` and a transition
+trigger; `REVOKE DELETE ON schools` from the runtime role (test teardowns
+moved to the admin connection); `SchoolLifecycleService` and
+`SchoolBootstrapAdministrationService` behind `platform.schools.manage`,
+explicit confirmation and a fresh MFA code, with audited refusals;
+`/app/platform/schools` (create, bootstrap administrator while
+provisioning, activate, suspend with reason code, resume); eager
+termination of elevations (`school_suspended`) and an elevation INSERT
+guard; `SchoolOperationalGuard` execution-time checks (webhooks and
+communications deferred without consuming attempts, automation skipped,
+announcements held, AI minting and internal AI endpoints refused, Guardian
+invitations unusable); real two-process race proofs. No archive, delete,
+break-glass or platform membership administration. Next: Phase 0N.10
+Cross-School Reporting Contract (D15). Phase 0N stays **BLOCKED** on D15.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,

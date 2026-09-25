@@ -47,7 +47,7 @@ class PayrollRunLifecycleConcurrencyTest extends TestCase
     {
         if ($this->school !== null) {
             try {
-                $this->school->delete();
+                $this->deleteSchoolAsAdmin($this->school);
             } catch (\Throwable) {
                 // Best-effort only: once a scenario reaches `approved`,
                 // the freeze triggers on payroll_run_results/_lines

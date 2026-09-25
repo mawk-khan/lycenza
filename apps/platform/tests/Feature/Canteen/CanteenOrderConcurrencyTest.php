@@ -38,7 +38,7 @@ class CanteenOrderConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades canteen_*/inventory_*/charges/journal_entries
+            $this->deleteSchoolAsAdmin($this->school); // cascades canteen_*/inventory_*/charges/journal_entries
         }
 
         parent::tearDown();

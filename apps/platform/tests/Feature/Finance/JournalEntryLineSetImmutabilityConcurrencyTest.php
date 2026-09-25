@@ -33,7 +33,7 @@ class JournalEntryLineSetImmutabilityConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete();
+            $this->deleteSchoolAsAdmin($this->school);
         }
 
         parent::tearDown();

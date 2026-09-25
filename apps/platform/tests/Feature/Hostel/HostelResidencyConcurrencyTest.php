@@ -41,7 +41,7 @@ class HostelResidencyConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades hostels/hostel_rooms/hostel_beds/students/hostel_residency_assignments
+            $this->deleteSchoolAsAdmin($this->school); // cascades hostels/hostel_rooms/hostel_beds/students/hostel_residency_assignments
         }
 
         parent::tearDown();

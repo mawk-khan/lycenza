@@ -37,7 +37,9 @@ class NotifyActorOfSettingChangeConsumer implements EventConsumer
         $school = School::query()->find($event->school_id);
         $actor = User::query()->find($event->actor_id);
 
-        if ($school === null || $actor === null) {
+        // Phase 0N.9 (ADR 0047 section 8): no notice for a School that is
+        // not active -- returning normally, so the outbox does not retry.
+        if ($school === null || $actor === null || ! $school->isActive()) {
             return;
         }
 

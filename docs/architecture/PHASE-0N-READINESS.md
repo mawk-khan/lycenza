@@ -47,7 +47,15 @@ behind a legal gate) and **D13** for v1 (bootstrap School Admin before
 first activation only; no ongoing platform membership administration);
 **ADR 0047 (School Lifecycle & Bootstrap Administration Contract)**
 records them (nothing built; proposed Phase 0N.9). **The only remaining
-Phase 0N decision is D15** (Group / cross-School reporting). Phase 0M
+Phase 0N decision is D15** (Group / cross-School reporting). **Update
+(Phase 0N.9, 2026-09-25):** the School lifecycle foundation is implemented
+(ADR 0047 "Implementation amendment"): database-enforced lifecycle on
+`schools.status` (`provisioning` default), root-only creation with the
+bootstrap School Administrator, activation, suspension (eager elevation
+termination, execution-time enforcement in every business substrate) and
+resume, fresh MFA for every change, no runtime `DELETE` on `schools`. No
+archive, delete, break-glass or platform membership administration. It
+unblocks nothing else; D15 remains. Phase 0M
 (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
@@ -578,8 +586,8 @@ Engineering prerequisites:
 | Platform-scope landing | **Done** as the neutral `/app` state (Phase 0N.1, D9(a)); no platform administration UI |
 | Elevation substrate | **Done** (Phase 0N.3, ADR 0044 amendment); no School route opted in |
 | Classification rows for 0N records | **Elevation records done** (D14, ADR 0044, DATA-CLASSIFICATION.md); Group records (ADR 0045), platform audit/roles (ADR 0046), School metadata/lifecycle and the bootstrap relationship (ADR 0047) added; ordinary memberships still missing |
-| Suspension enforced beyond web/API | **Missing** (section 13); contract decided (ADR 0047 §8), built in the proposed Phase 0N.9 |
-| School deletion safe for audit/finance evidence | **Not safe** (cascade FKs, section 13); no delete in v1; ADR 0047 §12 revokes runtime `DELETE` on `schools` in 0N.9; archive/delete need a legal decision |
+| Suspension enforced beyond web/API | **Done** (Phase 0N.9, ADR 0047 amendment): execution-time checks in webhook, communication, announcement, automation, AI and invitation paths |
+| School deletion safe for audit/finance evidence | **Guarded, not solved** (Phase 0N.9): the runtime role cannot `DELETE` a School; the cascade FKs remain, and archive/delete need a retention/legal decision |
 | RLS, runtime role, platform/School role separation | Present and verified |
 
 ## 17. First implementation checkpoint (implemented as Phase 0N.1)

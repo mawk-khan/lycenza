@@ -6,6 +6,7 @@ use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Models\School;
 use App\Support\Observability\QueueName;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
+use App\Support\Tenancy\SchoolStatus;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +41,10 @@ class RedispatchDueCommunicationDeliveries extends Command
         $totalDispatched = 0;
 
         try {
-            School::query()->orderBy('id')->chunk(100, function ($schools) use ($batchSize, &$totalDispatched): void {
+            // Phase 0N.9 (ADR 0047 section 8): only operational Schools. A
+            // suspended School's deferred rows wait, untouched, until RESUME
+            // -- skipping here is what keeps a deferral from looping.
+            School::query()->where('status', SchoolStatus::Active->value)->orderBy('id')->chunk(100, function ($schools) use ($batchSize, &$totalDispatched): void {
                 foreach ($schools as $school) {
                     $totalDispatched += app(TenantContext::class)->withSchool($school, function () use ($school, $batchSize) {
                         return $this->redispatchForSchool($school, $batchSize);

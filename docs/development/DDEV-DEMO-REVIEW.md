@@ -246,7 +246,7 @@ minute.
 | HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
-| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (14 `platform.*` capabilities, incl. `platform.schools.elevate`, School Group governance, `platform.audit.view`, `platform.role_grants.manage`) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13), **School Groups (platform)** (step 13a), **Platform audit log** and **Platform roles** (step 13b); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
+| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (14 `platform.*` capabilities, incl. `platform.schools.elevate`, School Group governance, `platform.audit.view`, `platform.role_grants.manage`) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13), **School Groups (platform)** (step 13a), **Platform audit log** and **Platform roles** (step 13b), **Schools (platform)** (step 13c); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
 | Platform Auditor | `platform.auditor@example.test` | Platform scope, review only | `platform_auditor` (`platform.audit.view` only), granted by the Platform Admin | **Platform audit log** only (needs MFA; step 13b). No School, Group, elevation or governance action |
 | Group Admin | `group.admin@example.test` | Group scope: Lycenza Demo Trust | `group_admin` Group grant (`group.schools.view`, `group.schools.elevate`), granted by the Platform Admin | **Your School Groups** -> the Trust's two Schools (name, status); enter one through elevated access (needs MFA). No School membership or School permission; cannot change the Group |
 | Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
@@ -418,6 +418,27 @@ Platform Admin (there is no platform UI to review).
     - As **platform.auditor@example.test**: only the audit log; Platform
       roles, School Groups, elevation and every School page are refused.
       Revoking the auditor's grant removes access on the next page.
+13c. **School lifecycle** (Phase 0N.9, ADR 0047). The Platform Admin needs
+    an MFA factor (every change asks for a fresh code).
+    - `/app` -> **Schools (platform)** lists the two demo Schools (name,
+      slug, code, status only). **Create a School**: name, slug, and an
+      existing person's exact email as its first School Administrator
+      (e.g. `teacher@example.test`; your own email is refused). It starts
+      **provisioning**: that person sees it on their `/app` as
+      *unavailable* and cannot open it; the Platform Admin gets no
+      membership.
+    - On the School's page: **Replace the bootstrap School
+      Administrator…** (provisioning only; the previous membership is
+      kept as history), then **Activate…** -- the administrator can now
+      select and use the School. The replace action is gone for good.
+    - **Suspend…** with a reason: the administrator's next School page
+      returns to `/app`, the School shows as unavailable, an active
+      elevation into it ends ("that School was suspended"), and messages
+      and webhooks wait. **Resume…**: the School must be selected again;
+      held work continues; nothing is replayed.
+    - There is no archive or delete, and no membership administration.
+      Every change and refusal appears in the **Platform audit log**
+      (event types only). `ddev demo-reset` removes the review School.
 14. **Analytics** (Phase 0L.2-1): as **School Admin** or **Principal**,
     Dashboard -> **Analytics: Curriculum Coverage**
     (`/app/analytics/curriculum-coverage`). It shows, for the active
@@ -540,8 +561,9 @@ Documented but not implemented on main: StudentMark / marks, results,
 report cards and transcripts (legally gated); Lesson Planning (deferred);
 Health and Safety (deferred, legally/security blocked); person-counting
 Analytics (blocked on the unapproved minimum cohort size), Analytics
-export, cross-School Analytics, Compliance beyond the School audit log (0L.4), Automation beyond the one academic-year review rule (0L.6); real AI agents (0M); multi-school management
-UI (0N); external surface / production readiness (0O); portal logins.
+export, cross-School Analytics, Compliance beyond the School audit log (0L.4), Automation beyond the one academic-year review rule (0L.6); real AI agents (0M); cross-School / Group
+reporting (0N, D15), School archive/delete and break-glass administrative
+recovery; external surface / production readiness (0O); portal logins.
 
 ## 16. Running tests inside DDEV
 

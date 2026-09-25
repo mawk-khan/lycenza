@@ -42,7 +42,7 @@ class TransportStudentAssignmentConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades transport_routes/students/student_assignments
+            $this->deleteSchoolAsAdmin($this->school); // cascades transport_routes/students/student_assignments
         }
 
         parent::tearDown();

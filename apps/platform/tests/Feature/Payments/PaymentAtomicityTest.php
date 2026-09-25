@@ -53,7 +53,7 @@ class PaymentAtomicityTest extends TestCase
             // tests' own rows for App\Console\Commands\DispatchOutboxEvents'
             // fixed --batch window.
             DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
-            $this->school->delete();
+            $this->deleteSchoolAsAdmin($this->school);
         }
 
         parent::tearDown();

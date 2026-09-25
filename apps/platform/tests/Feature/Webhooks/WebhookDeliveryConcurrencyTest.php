@@ -51,7 +51,7 @@ class WebhookDeliveryConcurrencyTest extends TestCase
 
         if ($this->school !== null) {
             DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
-            $this->school->delete(); // cascades endpoint/subscription/delivery/attempts
+            $this->deleteSchoolAsAdmin($this->school); // cascades endpoint/subscription/delivery/attempts
         }
         $this->user?->delete();
 

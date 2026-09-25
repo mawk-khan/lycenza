@@ -35,6 +35,10 @@ class RedispatchDueAutomationExecutions extends Command
         $total = 0;
 
         try {
+            // Every School, suspended ones included (ADR 0047 section 8): a
+            // pending execution of a suspended School is dispatched once and
+            // RunAutomationExecutionJob records it `skipped`
+            // (`school_suspended`) -- terminal, so this never loops.
             School::query()->orderBy('id')->chunk(100, function ($schools) use ($batchSize, &$total): void {
                 foreach ($schools as $school) {
                     $total += app(TenantContext::class)->withSchool($school, fn () => $this->redispatchForSchool($school, $batchSize));

@@ -197,6 +197,18 @@ how many times the underlying domain event consumer is redelivered
 event tests). "At-least-once" describes the **external HTTP contract**,
 not School OS's own internal state.
 
+## A suspended School (Phase 0N.9, ADR 0047)
+
+While a School is not `active` (`provisioning`, `suspended`), no
+outbound webhook HTTP request is made for it. The fanout still records
+the delivery row (evidence of what was due); `DeliverWebhookJob` re-checks
+the School when it claims the delivery (reading the School row FOR SHARE
+in the claim transaction) and, if it is not active, leaves the row
+`retrying` with `next_attempt_at` set -- no attempt row, `attempts`
+unchanged -- and `platform:webhook-deliveries-redispatch` skips non-active
+Schools, so nothing loops. After RESUME the normal redispatch delivers it:
+possibly late, and still at-least-once. Retention pruning continues.
+
 ## Manual redelivery
 
 `WebhookDeliveryService::redeliver()` only accepts a **terminal**

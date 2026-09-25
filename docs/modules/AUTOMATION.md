@@ -248,3 +248,15 @@ payload and never claims anything was set up automatically.
   plan and made them fail. They now `order by ordinal_position` (the
   pattern `GradeScalesRlsIsolationTest` already used).
 
+## 10. A suspended School (Phase 0N.9, ADR 0047 section 8)
+
+`AutomationTriggerConsumer` creates no execution for a School that is not
+`active` (the outbox row is still recorded as dispatched), and an
+execution that reaches `AutomationExecutionService::run()` while its
+School is not active is recorded `skipped` with `outcome_code =
+'school_suspended'` -- terminal, never retried, never replayed on RESUME
+(the same shape as `automation_disabled_for_school`). The check reads the
+School row FOR SHARE inside the evaluation transaction, so it serializes
+with a suspension. `automation:executions-redispatch` keeps walking
+suspended Schools so each pending execution reaches that terminal state
+exactly once.

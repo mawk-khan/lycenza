@@ -5,6 +5,7 @@ namespace App\Domain\Communications\Application;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
+use App\Support\Tenancy\SchoolOperationalGuard;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -114,15 +115,23 @@ class CommunicationDeliveryFactory
             // already-open one) rather than aborting the entire
             // enclosing transaction -- without this, the catch below
             // would itself fail with "current transaction is aborted".
-            return DB::transaction(fn () => CommunicationDelivery::query()->create([
-                'school_id' => $recipient->school_id,
-                'recipient_id' => $recipient->id,
-                'channel' => $channel->value,
-                'status' => $availableAt !== null ? 'queued' : 'pending',
-                'destination_snapshot' => $destinationSnapshot,
-                'queued_at' => now(),
-                'next_attempt_at' => $availableAt,
-            ]));
+            return DB::transaction(function () use ($recipient, $channel, $destinationSnapshot, $availableAt) {
+                // Phase 0N.9 (ADR 0047 section 8): no new delivery for a
+                // School that is not active. Read FOR SHARE, so it
+                // serializes with a suspension; the caller's transaction
+                // (a publish, an approval) rolls back whole.
+                app(SchoolOperationalGuard::class)->requireOperational($recipient->school_id);
+
+                return CommunicationDelivery::query()->create([
+                    'school_id' => $recipient->school_id,
+                    'recipient_id' => $recipient->id,
+                    'channel' => $channel->value,
+                    'status' => $availableAt !== null ? 'queued' : 'pending',
+                    'destination_snapshot' => $destinationSnapshot,
+                    'queued_at' => now(),
+                    'next_attempt_at' => $availableAt,
+                ]);
+            });
         } catch (UniqueConstraintViolationException) {
             return CommunicationDelivery::query()
                 ->where('recipient_id', $recipient->id)

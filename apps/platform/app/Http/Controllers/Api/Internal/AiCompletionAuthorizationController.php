@@ -58,6 +58,13 @@ class AiCompletionAuthorizationController extends Controller
             return $this->refuse('unknown_school_or_actor', 422);
         }
 
+        // Phase 0N.9 (ADR 0047 section 8): re-checked now, not trusted from
+        // when the token was minted (a token lives up to 60 seconds, and
+        // the School may have been suspended since).
+        if (! $school->isActive()) {
+            return $this->refuse('school_unavailable', 403);
+        }
+
         $capabilities->forgetCache($actor, $school);
         if (! $capabilities->canInSchool($actor, $validated['capability'], $school)) {
             return $this->refuse('capability_revoked', 403);

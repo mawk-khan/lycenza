@@ -23,6 +23,9 @@ enum ElevationEndReason: string
     case SchoolLeftGroup = 'school_left_group';
     case GroupAuthorityRevoked = 'group_authority_revoked';
     case GroupInactive = 'group_inactive';
+    // Phase 0N.9 (ADR 0047 section 8): the School was suspended -- ended
+    // eagerly in the suspension transaction, or on the next request.
+    case SchoolSuspended = 'school_suspended';
 
     public function status(): string
     {

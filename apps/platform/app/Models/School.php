@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\Identifiers\GeneratesUuidV7;
 use App\Support\NormalizesCode;
+use App\Support\Tenancy\SchoolStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * tenant boundary; it carries no school_id/RLS of its own.
  *
  * `status` (Phase 0B) is the PLATFORM tenant-lifecycle column
- * (active|suspended|archived) -- distinct from the School OPERATIONAL
+ * (Phase 0N.9, ADR 0047: provisioning|active|suspended|archived, see
+ * App\Support\Tenancy\SchoolStatus; database-checked, transitions
+ * database-enforced, written only by the platform lifecycle services;
+ * the column default is `provisioning`, so an operational School is
+ * always created `active` explicitly) -- distinct from the School OPERATIONAL
  * profile fields added in Phase 0D below. No `school.profile.manage`-
  * gated code path may write `status`; see
  * App\Http\Controllers\Api\V1\SchoolProfileController, whose validated
@@ -77,8 +82,24 @@ class School extends Model
         return $this->hasMany(SchoolMembership::class);
     }
 
+    /** Operational: the only status under which the tenant may operate. */
     public function isActive(): bool
     {
-        return $this->status === 'active';
+        return $this->status === SchoolStatus::Active->value;
+    }
+
+    public function isProvisioning(): bool
+    {
+        return $this->status === SchoolStatus::Provisioning->value;
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === SchoolStatus::Suspended->value;
+    }
+
+    public function lifecycleStatus(): ?SchoolStatus
+    {
+        return SchoolStatus::tryFrom((string) $this->status);
     }
 }

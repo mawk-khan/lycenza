@@ -45,7 +45,7 @@ class EnrollmentRolloverItemExecutionConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades academic_years/students/rollover plan/items
+            $this->deleteSchoolAsAdmin($this->school); // cascades academic_years/students/rollover plan/items
         }
 
         parent::tearDown();

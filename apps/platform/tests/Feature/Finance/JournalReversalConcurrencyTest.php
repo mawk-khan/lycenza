@@ -50,7 +50,7 @@ class JournalReversalConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades ledger_accounts/journal_entries/journal_lines
+            $this->deleteSchoolAsAdmin($this->school); // cascades ledger_accounts/journal_entries/journal_lines
         }
 
         parent::tearDown();

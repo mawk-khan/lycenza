@@ -30,4 +30,15 @@ class SchoolFactory extends Factory
     {
         return $this->state(fn () => ['status' => 'suspended']);
     }
+
+    /**
+     * Phase 0N.9 (ADR 0047): created, never activated. The definition
+     * above stays explicitly `active` -- ordinary tests need an
+     * operational School and must not rely on the column default, which
+     * is now `provisioning`.
+     */
+    public function provisioning(): static
+    {
+        return $this->state(fn () => ['status' => 'provisioning']);
+    }
 }

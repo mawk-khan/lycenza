@@ -52,7 +52,7 @@ class StatutoryPfStatusMutationConcurrencyTest extends TestCase
     {
         if ($this->school !== null) {
             try {
-                $this->school->delete();
+                $this->deleteSchoolAsAdmin($this->school);
             } catch (\Throwable) {
                 // Best-effort only.
             }

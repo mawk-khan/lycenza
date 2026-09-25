@@ -33,7 +33,7 @@ class InventoryStockConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades inventory_items/inventory_locations/inventory_stock_balances/stock_movements
+            $this->deleteSchoolAsAdmin($this->school); // cascades inventory_items/inventory_locations/inventory_stock_balances/stock_movements
         }
 
         parent::tearDown();

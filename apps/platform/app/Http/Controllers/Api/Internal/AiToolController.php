@@ -42,6 +42,13 @@ class AiToolController extends Controller
             return response()->json(['error' => ['message' => 'Context token references an unknown School or actor.']], 422);
         }
 
+        // Phase 0N.9 (ADR 0047 section 8): the School must be active NOW --
+        // a token minted while it was active proves nothing after a
+        // suspension. Refused before any School context or source access.
+        if (! $school->isActive()) {
+            return response()->json(['error' => ['message' => 'That School is not available.', 'code' => 'school_unavailable']], 403);
+        }
+
         try {
             $context->set($school);
             $context->setActor($actor);

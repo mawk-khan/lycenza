@@ -35,7 +35,7 @@ class HrEmployeeImportConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades employees, employment_records, employee_assignments, memberships
+            $this->deleteSchoolAsAdmin($this->school); // cascades employees, employment_records, employee_assignments, memberships
         }
 
         parent::tearDown();

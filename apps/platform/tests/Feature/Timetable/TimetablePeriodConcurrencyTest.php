@@ -52,7 +52,7 @@ class TimetablePeriodConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            $this->school->delete(); // cascades timetable_periods/timetable_entries
+            $this->deleteSchoolAsAdmin($this->school); // cascades timetable_periods/timetable_entries
         }
 
         parent::tearDown();
