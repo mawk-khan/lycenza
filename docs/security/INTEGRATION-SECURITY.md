@@ -173,6 +173,16 @@ a webhook secret, `APP_KEY` or the AI service token. Built in Phase 0O.3:
 School **Integrations > API clients**; no partner route is enabled in
 production.
 
+## Production secret handling (ADR 0050, O4)
+
+Production secrets — including every webhook-related key material the
+application needs from configuration (`APP_KEY`, which encrypts
+`webhook_endpoints.secret_encrypted`) — come from an external managed
+secret store injected at runtime, never from git, images or Terraform
+outputs. Webhook-secret and partner-credential rotation already exist in
+the application; a secret store does not add rotation to anything else
+(service-to-service rotation is O5; signing-key custody is future work).
+
 ## What this document does not cover
 
 - **Inbound webhooks** (a payment gateway calling School OS) are a

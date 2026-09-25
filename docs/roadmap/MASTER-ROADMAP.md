@@ -1391,6 +1391,16 @@ production partner route — O15 open), universal `/api/v1` throttling,
 exact-origin CORS, enforced CSP and the security-header baseline. Phase 0O
 stays PARTIALLY READY (`PHASE-0O-READINESS.md` §16).
 
+**0O.4 — Production Infrastructure, Secrets & Recovery Contract
+(2026-09-25).** ADR 0050 resolves O3 (provider-neutral containerized
+single-primary hosting, explicit trusted proxies), O4 (external managed
+secret store, vendor-neutral), O6 (fixed `school_os_app`), O8 (private,
+encrypted, versioned S3-compatible storage) and O10 (PostgreSQL RPO 15 min
+/ RTO 4 h, objects RPO 24 h / RTO 8 h, quarterly restore drills). It found
+that a Redis loss strands queued work without a reconciliation path and
+that releases need a maintenance window; Phase 0O.4A implements the
+repository side. Nothing is provisioned.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

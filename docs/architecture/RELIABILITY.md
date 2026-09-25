@@ -423,3 +423,16 @@ middleware should be reviewed for whether storing its full response
 body for the retention window is acceptable, or whether it should
 store a narrower reference instead — this checkpoint's demonstration
 endpoint deliberately returns nothing sensitive (a counter value).
+
+## Queue loss and Redis recovery (ADR 0050 finding, Phase 0O.4)
+
+Queued jobs carry only identifiers; their state is in PostgreSQL, so Redis
+holds no irreplaceable record. A Redis loss is nevertheless **not
+self-healing today**: `platform:outbox-dispatch` marks rows `dispatched`
+before the job runs and nothing re-claims a stale one; new webhook
+deliveries (`pending`, no `next_attempt_at`) and immediate Communication
+deliveries (`pending`) are outside their redispatch commands' selection
+(`retrying`/due, `queued`/due, lease-expired). Automation executions do
+recover. Phase 0O.4A adds a PostgreSQL-driven reconciliation for the three
+stranded states; until then production Redis should persist (AOF) or the
+restore runbook must re-queue them.

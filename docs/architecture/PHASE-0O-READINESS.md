@@ -30,6 +30,10 @@ Hardening Foundation is built with the owner values (30/90-day human
 tokens, 90/365-day partner credentials, HSTS 31,536,000 s) — section 16.
 No production partner route is enabled.
 
+**Update 2026-09-25 — 0O.4 contract recorded.** O3, O4, O6, O8 and O10 are
+resolved by ADR 0050 (Production Infrastructure, Secrets & Recovery
+Contract) — section 17. Phase 0O.4A implements its repository side.
+
 ## 1. Title and repository-defined scope
 
 `docs/roadmap/MASTER-ROADMAP.md`, "Phase 0O — External Surface and
@@ -287,14 +291,14 @@ Other findings:
 |---|---|---|---|---|
 | O1 | Phase 0O definition of done per scope item | No | Product | Phase closure, not 0O.1 |
 | O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | No | Product | S4 |
-| O3 | Hosting / deployment model (and therefore process manager, container runtime, Terraform target) | No | Product + operations | S3 infrastructure, images, runbook |
-| O4 | Secrets manager or host secret injection | ADR 0016 requires one before production; which one is open | Security + operations | S3 |
+| O3 | Hosting / deployment model (and therefore process manager, container runtime, Terraform target) | **RESOLVED — ADR 0050 (Phase 0O.4)** | Product + operations | S3 infrastructure, images, runbook |
+| O4 | Secrets manager or host secret injection | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
 | O5 | Service-to-service auth: keep the shared token (with rotation) or move to per-request signed tokens / mTLS | ADR 0016 "revisit" | Security | S3 (AI Gateway deployment) |
-| O6 | Runtime role name: keep `school_os_app` as a production contract, or generalize the code | ADR 0021 (model only) | Engineering | Production DB provisioning |
+| O6 | Runtime role name: keep `school_os_app` as a production contract, or generalize the code | **RESOLVED — ADR 0050 (Phase 0O.4)** | Engineering | Production DB provisioning |
 | O7 | API client model: who gets `/api/v1` tokens and how (mobile login token endpoint? partner keys? OAuth?), expiry, abilities | **RESOLVED — ADR 0049 (Phase 0O.2)**; lifetimes V1–V4 are owner values still required | Product + security | S1 |
-| O8 | Object storage: provider, region, encryption, versioning, lifecycle | No | Security + operations | S3 |
+| O8 | Object storage: provider, region, encryption, versioning, lifecycle | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
 | O9 | Custom School domains in production: ownership verification, TLS | No | Product + operations | Domain routing in production |
-| O10 | Backup policy, RPO/RTO, restore drills | No | Security + operations | Any production deployment |
+| O10 | Backup policy, RPO/RTO, restore drills | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | Any production deployment |
 | O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | ADR 0015 (model only) | Operations + security | S2 |
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | No | Product + operations | Real email |
@@ -503,3 +507,36 @@ Still open: O1 (overall definition of done), O2–O6, O8–O10, O12–O16. O7
 and O11 stay resolved. Trusted-proxy configuration (needed for correct
 client IPs and HTTPS detection behind a proxy) remains with O3; custom
 School domains with O9.
+
+## 17. Phase 0O.4 — Production Infrastructure, Secrets & Recovery Contract (2026-09-25)
+
+Documentation only (ADR 0050); nothing provisioned, deployed or applied.
+
+- **O3 resolved:** provider-neutral containerized single-primary model —
+  TLS-terminating proxy (only public entry), stateless web, workers for
+  `default`/`integrations`/`notifications`, exactly one scheduler, AI
+  Gateway on `NullProvider`, PostgreSQL 16, Redis, private S3-compatible
+  storage; explicit trusted-proxy list (never `*`); immutable images.
+- **O4 resolved:** an external managed secret store (vendor not chosen),
+  injected before the production guard and `config:cache`; admin DB
+  credentials only in the release step and operator console. Rotation
+  status recorded; O5 and signing-key custody stay future work.
+- **O6 resolved:** `school_os_app` stays the fixed v1 runtime role name;
+  production bootstrap must grant it default privileges for the actual
+  migration role.
+- **O8 resolved:** private, encrypted, versioned bucket per environment;
+  application-mediated downloads; no lifecycle expiry while legal
+  retention is unresolved.
+- **O10 resolved:** PostgreSQL RPO ≤ 15 min / RTO ≤ 4 h (PITR, 35-day
+  operational window); object storage RPO ≤ 24 h / RTO ≤ 8 h (versioning
+  + independent copy); quarterly isolated restore drills; single-primary DR
+  only.
+- **Findings:** Redis holds no irreplaceable record, but a Redis loss
+  strands `dispatched` outbox rows and `pending` webhook/Communication
+  deliveries (no reclaim path) — 0O.4A must add PostgreSQL-driven
+  reconciliation; rolling mixed-version releases are unproven (24
+  destructive migrations, no expand/contract policy), so v1 releases use a
+  maintenance window; `infrastructure/terraform` stays provider-neutral and
+  resource-free until a provider is chosen.
+- Still open: O1, O2, O5, O9, O12–O16. Next: Phase 0O.4A — Production
+  Infrastructure & Recovery Foundation.
