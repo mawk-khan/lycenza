@@ -26,7 +26,7 @@ enum QueueName: string
     /** Outbound calls to third-party systems -- App\Jobs\DeliverWebhookJob and any future outbound integration adapter (ADR 0018). */
     case Integrations = 'integrations';
 
-    /** Reserved: future email/SMS/WhatsApp/in-app notification delivery jobs. None exist yet -- App\Support\Events\Consumers\NotifyActorOfSettingChangeConsumer currently runs synchronously inline, not as its own queued job. */
+    /** Communication delivery -- App\Jobs\ProcessCommunicationDeliveryJob (in-app, email, ...). */
     case Notifications = 'notifications';
 
     /** Reserved: future AI-Gateway-triggered asynchronous work. None exists yet -- App\Support\Ai\AiGatewayClient calls are synchronous inline HTTP calls, not queued jobs. */

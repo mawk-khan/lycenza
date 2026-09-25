@@ -18,6 +18,7 @@ use App\Http\Middleware\RequireMfa;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
 use App\Http\Middleware\ResolveSchoolContext;
+use App\Http\Middleware\TrustConfiguredProxies;
 use App\Http\Middleware\VerifyAiGatewayServiceToken;
 use App\Support\Api\ApiAuthFailureLimiter;
 use App\Support\Auth\SessionEndedResponder;
@@ -27,6 +28,7 @@ use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -41,6 +43,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Phase 0O.4A (ADR 0050 section 2): only the explicitly configured
+        // proxies (TRUSTED_PROXIES) are believed -- never `*`.
+        $middleware->replace(TrustProxies::class, TrustConfiguredProxies::class);
+        // Phase 0O.4A (ADR 0050 section 13, CLAUDE.md rule 55): liveness
+        // stays 200 during a maintenance window -- the process is alive and
+        // must not be restarted. Readiness answers 503 itself
+        // (HealthController::ready(), which also fails closed when the
+        // PostgreSQL-held flag is unreadable); everything else is 503 here.
+        $middleware->preventRequestsDuringMaintenance(except: ['api/health/live', 'api/health/ready']);
+
         $middleware->append(AssignRequestId::class);
         $middleware->append(AssignTraceContext::class);
         // Phase 0O.3 (ADR 0049 section 11): the browser security header

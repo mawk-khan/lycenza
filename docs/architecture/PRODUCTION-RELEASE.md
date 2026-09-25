@@ -58,6 +58,22 @@ refuses to start on any of:
 | `session_cookie_not_secure` | `SESSION_SECURE_COOKIE` is not exactly true |
 | `ai_context_signing_key_missing` / `_placeholder` | `AI_GATEWAY_CONTEXT_SIGNING_KEY` is empty, or one of the committed development/test values |
 | `ai_service_token_development_value` | `AI_GATEWAY_SERVICE_TOKEN` is the public `dev-local-only-token` (an empty token is allowed: the Gateway is optional) |
+| `trusted_proxies_unsafe` (0O.4A) | the resolved proxy list is trust-all (`TRUSTED_PROXIES` itself refuses `*`, `**`, `0.0.0.0/0`, `::/0`, over-broad prefixes, hostnames and malformed entries at configuration load) |
+| `environment_not_separated` (0O.4A) | `APP_URL` is empty, `localhost`/loopback or a `.ddev.site`/`.test`/`.local`/`.localhost` host, or either connection names the test database |
+| `maintenance_mode_not_shared` (0O.4A) | `APP_MAINTENANCE_DRIVER` is not `cache` (a per-container `file` flag) |
+| `database_connection_not_pgsql` (0O.4A) | `DB_CONNECTION` is not `pgsql` |
+| `database_tls_not_required` (0O.4A) | `DB_SSLMODE` is not `require`, `verify-ca` or `verify-full` (runtime and admin connections) |
+| `redis_password_missing` (0O.4A) | `REDIS_PASSWORD` is empty or `null` |
+| `storage_disk_not_s3` (0O.4A) | `DOCUMENTS_DISK` or `COMMUNICATION_ATTACHMENTS_DISK` is not `s3` |
+| `storage_bucket_not_production` (0O.4A) | `AWS_BUCKET` is empty, `school-os-local` or `school-os-test` |
+| `storage_endpoint_not_https` (0O.4A) | `AWS_ENDPOINT` is set and not `https://` |
+| `storage_credentials_invalid` (0O.4A) | exactly one of `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` is set, or either is a committed local value |
+| `storage_public_visibility` (0O.4A) | the S3 disk's visibility is `public` |
+
+Provider-side encryption, versioning and the public-access block are
+**not** configuration flags (a flag could lie): `platform:verify-storage`
+checks them against the bucket, and the independent backup copy is
+operator evidence.
 
 The refusal names codes only, never a value. A refused web request gets a
 plain 500 (debug is forced off for the refusal, so no debug page is ever
@@ -78,9 +94,9 @@ API from a browser — empty by default (none); a wildcard or malformed
 value makes the application refuse to boot. Responses carry the security
 header baseline and an enforced CSP. **HSTS** (`max-age=31536000`, no
 subdomains, no preload) is emitted only when Laravel knows the request is
-HTTPS; behind a TLS-terminating proxy that needs the trusted-proxy
-configuration decided with the hosting model (O3) — never "trust every
-proxy". Partner API credentials exist, but no partner route is enabled.
+HTTPS; behind a TLS-terminating proxy that needs the proxy's addresses in
+`TRUSTED_PROXIES` (Phase 0O.4A) — never "trust every proxy". Partner API
+credentials exist, but no partner route is enabled.
 
 One service-token value is used in three places (decision O5 may change
 this): Laravel `AI_GATEWAY_SERVICE_TOKEN`, the Gateway `SERVICE_TOKEN`, and
@@ -95,13 +111,22 @@ the hashed `ai-gateway` row in `service_identities`.
   operator console**, never in web/worker/scheduler processes.
 - v1 releases are **single-version with a maintenance window**: rolling
   mixed-version deploys are unproven (no expand/contract policy).
-- A Redis loss currently strands queued work (`dispatched` outbox rows,
-  `pending` webhook and Communication deliveries): until 0O.4A adds
-  reconciliation, run Redis with persistence or re-queue them after a
-  Redis restore.
+- A Redis loss no longer strands queued work: since Phase 0O.4A the
+  scheduled sweeps rebuild it from PostgreSQL
+  (`docs/operations/REDIS-LOSS-RECOVERY.md`); Redis persistence is not
+  required for correctness.
 - Backups: PostgreSQL PITR (RPO 15 min, RTO 4 h, 35-day window); object
   storage versioning + independent copy (RPO 24 h, RTO 8 h); quarterly
   isolated restore drills.
+
+**Implemented by Phase 0O.4A:** production images and the process
+manifest (`docs/operations/PRODUCTION-IMAGES-AND-PROCESSES.md`), the
+database bootstrap (`docs/operations/DATABASE-BOOTSTRAP.md`), the
+maintenance-window sequence (`docs/operations/MAINTENANCE-WINDOW-RELEASE.md`)
+and backup/restore (`docs/operations/BACKUP-AND-RESTORE.md`). With the
+production image, steps 1 and 4–5 are the image build and the `web`/
+`worker`/`scheduler` entrypoint; step 3 is `console down`; the admin
+credentials reach only the `release` and `operator-console` processes.
 
 ## 3. Release order
 
@@ -161,9 +186,10 @@ corrected forward, never rolled back (ARCHITECTURE.md §10).
 
 - **Runtime role:** `school_os_app` — NOSUPERUSER, NOBYPASSRLS, no
   `DELETE` on the tables that forbid it; used by web, workers and
-  scheduler. **The name is fixed by the implementation** (`TenantRls`
-  defaults and migrations grant to it by name); whether to keep it as a
-  production contract or generalize it is decision **O6, still open**.
+  scheduler. **The name is a fixed v1 production contract** (O6 resolved
+  by ADR 0050); production bootstrap:
+  `infrastructure/postgres/production-bootstrap.sql`, verified by
+  `platform:verify-database`.
 - **Migration/admin role:** owns the tables, creates policies and
   triggers; used only by step 6 and the operator console commands that
   require it (`platform:provision-root`). Set `DB_ADMIN_USERNAME`/
@@ -205,11 +231,11 @@ account's password has no in-app recovery yet.
 
 ## 7. What stays open
 
-O2–O16 in `PHASE-0O-READINESS.md` §8 are unchanged by this contract —
-among them the hosting model and process manager (O3), secrets manager
-(O4), service-token rotation or replacement (O5), the runtime role name
-(O6), API client model (O7), object storage (O8), backup/restore (O10),
-security headers and CORS (O11) and observability (O12). Signing-key
+O3, O4, O6, O7, O8, O10 and O11 are resolved (ADR 0049, ADR 0050). Still
+open: O1 (definition of done — including a real restore drill), O2
+(payments), O5 (service-token rotation or replacement), O9 (custom
+domains), O12 (observability), O13 (email), O14 (password reset), O15
+(partner integrations) and O16 (supply chain). Signing-key
 rotation and a key id remain deferred (ADR 0023). `docker-compose.yml`'s
 local worker still works only `default` (a local-development gap recorded
 by the readiness audit, not changed here).

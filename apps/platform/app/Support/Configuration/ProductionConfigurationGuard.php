@@ -33,6 +33,21 @@ final class ProductionConfigurationGuard
     /** The public local development service token (`.env.example`, `.ddev`, the AI Gateway's former default). */
     public const DEVELOPMENT_SERVICE_TOKEN = 'dev-local-only-token';
 
+    /** Phase 0O.4A (ADR 0050): PostgreSQL sslmodes that encrypt the connection. */
+    public const SECURE_DB_SSLMODES = ['require', 'verify-ca', 'verify-full'];
+
+    /** The local/DDEV/test buckets a production deployment must never use. */
+    public const NON_PRODUCTION_BUCKETS = ['school-os-local', 'school-os-test'];
+
+    /** Committed local object-storage credentials (docker-compose MinIO, `.env.example`). */
+    public const PLACEHOLDER_STORAGE_CREDENTIALS = ['school_os', 'school_os_secret', 'minioadmin'];
+
+    /** Host suffixes that only ever name a developer machine or DDEV (ADR 0050 section 16). */
+    public const LOCAL_URL_HOST_SUFFIXES = ['.ddev.site', '.test', '.local', '.localhost'];
+
+    /** Trust-all proxy values (TrustedProxyList already refuses them; checked again here). */
+    public const TRUST_ALL_PROXIES = ['*', '**', '0.0.0.0/0', '::/0'];
+
     public function __construct(private readonly Repository $config) {}
 
     /**
@@ -63,7 +78,7 @@ final class ProductionConfigurationGuard
             $violations[] = 'ai_service_token_development_value';
         }
 
-        return $violations;
+        return [...$violations, ...$this->infrastructureViolations()];
     }
 
     public function assertSafe(): void
@@ -73,6 +88,96 @@ final class ProductionConfigurationGuard
         if ($violations !== []) {
             throw new ProductionConfigurationException($violations);
         }
+    }
+
+    /**
+     * Phase 0O.4A (ADR 0050 sections 2, 7, 8, 15): what the hosting contract
+     * requires and configuration can actually prove. Provider-side
+     * encryption, versioning and public-access blocks cannot be proved from
+     * configuration -- they are operator evidence (`platform:verify-storage`
+     * and the runbooks), never an environment flag that could lie.
+     *
+     * @return list<string>
+     */
+    private function infrastructureViolations(): array
+    {
+        $violations = [];
+
+        $proxies = $this->config->get('trustedproxy.proxies');
+        if (! is_array($proxies) || array_intersect($proxies, self::TRUST_ALL_PROXIES) !== []) {
+            $violations[] = 'trusted_proxies_unsafe';
+        }
+
+        // Row-level security, the runtime/admin role split and TLS below are
+        // PostgreSQL guarantees: any other default connection has none.
+        if ($this->config->get('database.default') !== 'pgsql') {
+            $violations[] = 'database_connection_not_pgsql';
+        }
+
+        // ADR 0050 section 16: production never uses the test database or a
+        // developer/DDEV address.
+        $host = strtolower((string) parse_url((string) $this->config->get('app.url'), PHP_URL_HOST));
+        $testDatabase = $this->config->get('database.testing_database');
+        if (in_array($host, ['', 'localhost', '127.0.0.1', '::1', '[::1]'], true)
+            || array_filter(self::LOCAL_URL_HOST_SUFFIXES, fn (string $suffix) => str_ends_with($host, $suffix)) !== []
+            || (is_string($testDatabase) && $testDatabase !== '' && in_array($testDatabase, [
+                $this->config->get('database.connections.pgsql.database'),
+                $this->config->get('database.connections.pgsql_admin.database'),
+            ], true))) {
+            $violations[] = 'environment_not_separated';
+        }
+
+        // Every web/worker/scheduler container must see the same maintenance
+        // state: a per-container file would leave the others serving and
+        // working during a migration window (ADR 0050 section 13).
+        if ($this->config->get('app.maintenance.driver') !== 'cache') {
+            $violations[] = 'maintenance_mode_not_shared';
+        }
+
+        foreach (['pgsql', 'pgsql_admin'] as $connection) {
+            $mode = $this->config->get("database.connections.{$connection}.sslmode");
+            if (! in_array($mode, self::SECURE_DB_SSLMODES, true)) {
+                $violations[] = 'database_tls_not_required';
+                break;
+            }
+        }
+
+        foreach (['default', 'cache'] as $redis) {
+            $password = $this->config->get("database.redis.{$redis}.password");
+            if (! is_string($password) || trim($password) === '' || strtolower($password) === 'null') {
+                $violations[] = 'redis_password_missing';
+                break;
+            }
+        }
+
+        if ($this->config->get('documents.disk') !== 's3' || $this->config->get('communications.attachments.disk') !== 's3') {
+            $violations[] = 'storage_disk_not_s3';
+        }
+
+        $bucket = $this->config->get('filesystems.disks.s3.bucket');
+        if (! is_string($bucket) || trim($bucket) === '' || in_array($bucket, self::NON_PRODUCTION_BUCKETS, true)) {
+            $violations[] = 'storage_bucket_not_production';
+        }
+
+        $endpoint = $this->config->get('filesystems.disks.s3.endpoint');
+        if (is_string($endpoint) && trim($endpoint) !== '' && ! str_starts_with(strtolower(trim($endpoint)), 'https://')) {
+            $violations[] = 'storage_endpoint_not_https';
+        }
+
+        // Explicit keys, or none at all (the SDK's runtime credential chain).
+        $key = $this->config->get('filesystems.disks.s3.key');
+        $secret = $this->config->get('filesystems.disks.s3.secret');
+        $keySet = is_string($key) && trim($key) !== '';
+        $secretSet = is_string($secret) && trim($secret) !== '';
+        if ($keySet !== $secretSet || in_array($key, self::PLACEHOLDER_STORAGE_CREDENTIALS, true) || in_array($secret, self::PLACEHOLDER_STORAGE_CREDENTIALS, true)) {
+            $violations[] = 'storage_credentials_invalid';
+        }
+
+        if ($this->config->get('filesystems.disks.s3.visibility') === 'public') {
+            $violations[] = 'storage_public_visibility';
+        }
+
+        return $violations;
     }
 
     /**

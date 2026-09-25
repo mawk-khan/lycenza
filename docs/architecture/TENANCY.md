@@ -393,6 +393,20 @@ sequence privileges (the local init scripts do this for `school_os`).
 RLS policies and the Phase 0O.1A root boundary are role-name-independent.
 A future ADR may generalize the name.
 
+**Phase 0O.4A:** production bootstrap is
+`infrastructure/postgres/production-bootstrap.sql` (any migration role
+name; verifies rather than alters an existing `school_os_app`; never
+grants on existing tables, so migration-level `DELETE`/`UPDATE`
+revocations survive), proven on a throwaway PostgreSQL 16 cluster, and
+`php artisan platform:verify-database` checks the result read-only —
+including forced RLS on every `school_id` table except the documented
+platform-resolvable bootstrap tables, guard-tested against the real
+schema. `platform:verify-restore` re-proves after a restore that RLS fails
+closed without a School and isolates Schools. Production refuses the test
+database and a local `APP_URL` (`environment_not_separated`). Queue
+recovery re-dispatches jobs whose payload carries the School id, so tenant
+context is set exactly as for a first dispatch (rule 21).
+
 ## What is NOT yet implemented (Phase 0B honesty note)
 
 Real School/Campus/membership/role data model, RLS, application-layer

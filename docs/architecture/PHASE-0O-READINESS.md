@@ -540,3 +540,50 @@ Documentation only (ADR 0050); nothing provisioned, deployed or applied.
   resource-free until a provider is chosen.
 - Still open: O1, O2, O5, O9, O12–O16. Next: Phase 0O.4A — Production
   Infrastructure & Recovery Foundation.
+
+## 18. Phase 0O.4A — Production Infrastructure & Recovery Foundation (COMPLETE, 2026-09-25)
+
+Repository work only, implementing ADR 0050 (implementation amendment
+there). Nothing deployed, applied, provisioned or activated; no real
+secret, DNS, TLS, bucket policy or backup policy; no cloud, secrets or
+observability vendor chosen.
+
+- **Images:** `infrastructure/docker/production/app.Dockerfile` (nginx +
+  PHP-FPM, non-root, OPcache, built assets, no dev dependencies, tests,
+  demo seeders or `.env`) and `ai.Dockerfile` (non-root, NullProvider,
+  fails closed without a token); `verify-images.sh` passes all checks
+  locally.
+- **Processes:** role entrypoint (`web`, three workers, one scheduler,
+  `console`), `deploy/processes.json` with per-process secret groups —
+  admin database credentials only for the release step and operator
+  console; guard-tested queue coverage.
+- **Trusted proxies:** explicit `TRUSTED_PROXIES` IP/CIDR list, trust-all
+  and hostnames refused; spoofing and HSTS-through-proxy tests.
+- **Guard:** trusted proxies, PostgreSQL default connection, TLS on
+  runtime and admin connections, Redis password, S3 disks, production
+  bucket, HTTPS endpoint, storage credentials, no public visibility, shared
+  maintenance mode, environment separation — codes only.
+- **Database:** `infrastructure/postgres/production-bootstrap.sql` +
+  `verify-production-bootstrap.sh` (throwaway PostgreSQL 16 with TLS,
+  non-`school_os` migration role, migrations through the production image,
+  all verification green); `platform:verify-database`.
+- **Redis loss:** outbox `processed_at` + `OutboxReconciler`; stale
+  `pending` webhook and immediate Communication deliveries re-dispatched;
+  Automation's sweep reused; `platform:recover-queued-work`; proven on
+  real Redis with exactly-once effects. Sessions (sign-in again), caches,
+  locks and rate limits rebuild (`docs/operations/REDIS-LOSS-RECOVERY.md`).
+- **Release:** maintenance-window runbook; liveness stays 200 during
+  maintenance, workers pause, the scheduler idles, the flag is shared
+  through PostgreSQL.
+- **Backup/restore:** runbooks, drill record template,
+  `platform:verify-restore`, `platform:verify-storage`.
+
+**REAL RESTORE DRILL STILL OUTSTANDING.** Outstanding operational
+evidence (ADR 0050 §20): a real deployment, real secrets in a secret
+store, bucket and backup policy activation, and one successful restore
+drill in a real, isolated non-production environment.
+
+Decisions: O3, O4, O6, O7, O8, O10, O11 resolved; **O1, O2, O5, O9,
+O12, O13, O14, O15, O16 open**. Phase 0O: **PARTIALLY READY**. Phase 0M:
+**BLOCKED**.
+

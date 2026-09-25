@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Support\Observability\OperationalStatus;
 use App\Support\Observability\OperationalStatusService;
 use Illuminate\Http\JsonResponse;
+use Throwable;
 
 /**
  * Phase 0C.4 sections 5-9: liveness and readiness are DELIBERATELY
@@ -41,7 +42,17 @@ class HealthController extends Controller
      */
     public function ready(): JsonResponse
     {
-        $status = app(OperationalStatusService::class)->readiness();
+        // Phase 0O.4A: readiness is exempt from the maintenance middleware
+        // (whose flag lives in PostgreSQL, so it would turn a database
+        // outage into a 500) and answers the maintenance question itself:
+        // down for maintenance -- or the flag unreadable -- is not ready.
+        try {
+            $maintenance = app()->isDownForMaintenance();
+        } catch (Throwable) {
+            $maintenance = true;
+        }
+
+        $status = $maintenance ? OperationalStatus::Unhealthy : app(OperationalStatusService::class)->readiness();
 
         return response()->json(
             ['status' => $status === OperationalStatus::Healthy ? 'ok' : 'degraded'],

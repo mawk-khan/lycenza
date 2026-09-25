@@ -25,9 +25,20 @@ class ProductionConfigurationGuardTest extends TestCase
     private function config(array $overrides = []): Repository
     {
         $config = new Repository([
-            'app' => ['debug' => false, 'key' => 'base64:'.base64_encode(str_repeat('k', 32)), 'cipher' => 'AES-256-CBC'],
+            'app' => ['url' => 'https://erp.example.org', 'debug' => false, 'key' => 'base64:'.base64_encode(str_repeat('k', 32)), 'cipher' => 'AES-256-CBC', 'maintenance' => ['driver' => 'cache', 'store' => 'database']],
             'session' => ['secure' => true],
             'services' => ['ai_gateway' => ['context_signing_key' => self::CANARY_SIGNING_KEY, 'service_token' => null]],
+            // Phase 0O.4A infrastructure baseline (ADR 0050 sections 2, 7, 8, 15).
+            'trustedproxy' => ['proxies' => ['10.0.0.0/8']],
+            'database' => [
+                'default' => 'pgsql',
+                'testing_database' => 'school_os_test',
+                'connections' => ['pgsql' => ['sslmode' => 'require', 'database' => 'lycenza'], 'pgsql_admin' => ['sslmode' => 'verify-full', 'database' => 'lycenza']],
+                'redis' => ['default' => ['password' => 'redis-canary-5d1e'], 'cache' => ['password' => 'redis-canary-5d1e']],
+            ],
+            'documents' => ['disk' => 's3'],
+            'communications' => ['attachments' => ['disk' => 's3']],
+            'filesystems' => ['disks' => ['s3' => ['bucket' => 'lycenza-production-objects', 'endpoint' => 'https://objects.example.net', 'key' => null, 'secret' => null]]],
         ]);
 
         foreach ($overrides as $key => $value) {
@@ -69,7 +80,66 @@ class ProductionConfigurationGuardTest extends TestCase
             'signing key dev placeholder' => [['services.ai_gateway.context_signing_key' => 'dev-local-only-context-signing-key-change-me'], 'ai_context_signing_key_placeholder'],
             'signing key test placeholder' => [['services.ai_gateway.context_signing_key' => 'test-only-context-signing-key'], 'ai_context_signing_key_placeholder'],
             'dev service token' => [['services.ai_gateway.service_token' => 'dev-local-only-token'], 'ai_service_token_development_value'],
+            // Phase 0O.4A (ADR 0050 section 15).
+            'proxies trust all (star)' => [['trustedproxy.proxies' => ['*']], 'trusted_proxies_unsafe'],
+            'proxies trust all (ipv4 any)' => [['trustedproxy.proxies' => ['10.0.0.0/8', '0.0.0.0/0']], 'trusted_proxies_unsafe'],
+            'proxies trust all (ipv6 any)' => [['trustedproxy.proxies' => ['::/0']], 'trusted_proxies_unsafe'],
+            'proxies not a list' => [['trustedproxy.proxies' => null], 'trusted_proxies_unsafe'],
+            'app url localhost' => [['app.url' => 'http://localhost'], 'environment_not_separated'],
+            'app url missing' => [['app.url' => null], 'environment_not_separated'],
+            'app url ddev' => [['app.url' => 'https://lycenza.ddev.site'], 'environment_not_separated'],
+            'app url dot test' => [['app.url' => 'https://erp.test'], 'environment_not_separated'],
+            'test database (runtime)' => [['database.connections.pgsql.database' => 'school_os_test'], 'environment_not_separated'],
+            'test database (admin)' => [['database.connections.pgsql_admin.database' => 'school_os_test'], 'environment_not_separated'],
+            'maintenance file driver' => [['app.maintenance.driver' => 'file'], 'maintenance_mode_not_shared'],
+            'default connection sqlite' => [['database.default' => 'sqlite'], 'database_connection_not_pgsql'],
+            'runtime db tls prefer' => [['database.connections.pgsql.sslmode' => 'prefer'], 'database_tls_not_required'],
+            'runtime db tls disabled' => [['database.connections.pgsql.sslmode' => 'disable'], 'database_tls_not_required'],
+            'admin db tls allow' => [['database.connections.pgsql_admin.sslmode' => 'allow'], 'database_tls_not_required'],
+            'admin db tls unset' => [['database.connections.pgsql_admin.sslmode' => null], 'database_tls_not_required'],
+            'redis password missing' => [['database.redis.default.password' => null], 'redis_password_missing'],
+            'redis password literal null' => [['database.redis.default.password' => 'null'], 'redis_password_missing'],
+            'redis cache password blank' => [['database.redis.cache.password' => ''], 'redis_password_missing'],
+            'documents on local disk' => [['documents.disk' => 'local'], 'storage_disk_not_s3'],
+            'attachments on local disk' => [['communications.attachments.disk' => 'local'], 'storage_disk_not_s3'],
+            'bucket missing' => [['filesystems.disks.s3.bucket' => null], 'storage_bucket_not_production'],
+            'local bucket' => [['filesystems.disks.s3.bucket' => 'school-os-local'], 'storage_bucket_not_production'],
+            'test bucket' => [['filesystems.disks.s3.bucket' => 'school-os-test'], 'storage_bucket_not_production'],
+            'plain http endpoint' => [['filesystems.disks.s3.endpoint' => 'http://minio:9000'], 'storage_endpoint_not_https'],
+            'key without secret' => [['filesystems.disks.s3.key' => 'AKIAEXAMPLE'], 'storage_credentials_invalid'],
+            'compose minio key' => [['filesystems.disks.s3.key' => 'school_os', 'filesystems.disks.s3.secret' => 'x-real-looking'], 'storage_credentials_invalid'],
+            'compose minio secret' => [['filesystems.disks.s3.key' => 'AKIAEXAMPLE', 'filesystems.disks.s3.secret' => 'school_os_secret'], 'storage_credentials_invalid'],
+            'minio default credentials' => [['filesystems.disks.s3.key' => 'minioadmin', 'filesystems.disks.s3.secret' => 'minioadmin'], 'storage_credentials_invalid'],
+            'public visibility' => [['filesystems.disks.s3.visibility' => 'public'], 'storage_public_visibility'],
         ];
+    }
+
+    #[Test]
+    public function infrastructure_values_that_are_safe_pass(): void
+    {
+        foreach ([
+            ['trustedproxy.proxies' => []],
+            ['trustedproxy.proxies' => ['10.0.0.0/8', '2001:db8::/32']],
+            ['database.connections.pgsql.sslmode' => 'verify-ca'],
+            ['filesystems.disks.s3.endpoint' => null],
+            ['filesystems.disks.s3.endpoint' => 'HTTPS://objects.example.net'],
+            ['filesystems.disks.s3.key' => 'AKIAEXAMPLE', 'filesystems.disks.s3.secret' => 'a-real-secret-value'],
+            ['filesystems.disks.s3.visibility' => 'private'],
+        ] as $overrides) {
+            $this->assertSame([], (new ProductionConfigurationGuard($this->config($overrides)))->violations(), json_encode($overrides));
+        }
+    }
+
+    #[Test]
+    public function no_configuration_flag_can_claim_provider_side_storage_protection(): void
+    {
+        // Encryption at rest, versioning and public-access blocks are
+        // provider evidence (platform:verify-storage, runbooks) -- never an
+        // environment flag that could simply lie (ADR 0050 section 8).
+        $source = (string) file_get_contents(dirname(__DIR__, 3).'/app/Support/Configuration/ProductionConfigurationGuard.php');
+        foreach (['encrypt', 'versioning', 'public_access_block'] as $flag) {
+            $this->assertDoesNotMatchRegularExpression("/config->get\\('[^']*{$flag}/i", $source);
+        }
     }
 
     /**
@@ -101,7 +171,7 @@ class ProductionConfigurationGuardTest extends TestCase
             $this->fail('An unsafe configuration must be refused.');
         } catch (ProductionConfigurationException $e) {
             $this->assertSame(['app_debug_enabled', 'app_key_invalid', 'session_cookie_not_secure', 'ai_service_token_development_value'], $e->violations);
-            foreach ([$appKeyCanary, $tokenCanary, self::CANARY_SIGNING_KEY] as $secret) {
+            foreach ([$appKeyCanary, $tokenCanary, self::CANARY_SIGNING_KEY, 'redis-canary-5d1e'] as $secret) {
                 $this->assertStringNotContainsString($secret, $e->getMessage());
             }
         }

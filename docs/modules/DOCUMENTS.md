@@ -389,6 +389,16 @@ backup and not legal retention; no lifecycle rule may expire objects or
 versions while retention is unresolved. Backups: an independent encrypted
 copy (RPO ≤ 24 h, RTO ≤ 8 h), restored quarterly in isolation.
 
+Phase 0O.4A: production refuses to boot unless `DOCUMENTS_DISK` (and
+`COMMUNICATION_ATTACHMENTS_DISK`) is `s3`, the bucket is not a local/test
+bucket, the endpoint is HTTPS (or the provider default) and the disk is not
+public. `platform:verify-storage` checks versioning, default encryption and
+the public-access block against the bucket (read-only; the independent
+copy is operator evidence), and `platform:verify-restore` samples active
+Documents per School after a restore — object present, size equal to
+`size_bytes` — printing counts only, never a filename or key
+(`docs/operations/BACKUP-AND-RESTORE.md`).
+
 ### Upload sequence and storage/database compensation
 
 PostgreSQL transactions cannot atomically cover a MinIO/S3 object

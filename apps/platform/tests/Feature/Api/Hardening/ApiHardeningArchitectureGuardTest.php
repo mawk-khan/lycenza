@@ -62,7 +62,10 @@ class ApiHardeningArchitectureGuardTest extends TestCase
     public function no_blanket_proxy_or_host_trust_is_configured(): void
     {
         $bootstrap = (string) file_get_contents(base_path('bootstrap/app.php'));
-        $this->assertStringNotContainsString('trustProxies', $bootstrap, 'Trusted proxies are decision O3; never `*`.');
+        // Phase 0O.4A (ADR 0050 section 2): the framework middleware is
+        // replaced by one trusting exactly TRUSTED_PROXIES -- never `*`.
+        $this->assertStringNotContainsString('trustProxies', $bootstrap, 'Proxies come only from TRUSTED_PROXIES (TrustedProxyList), never `*`.');
+        $this->assertStringContainsString('replace(TrustProxies::class, TrustConfiguredProxies::class)', $bootstrap);
         $this->assertStringNotContainsString('trustHosts', $bootstrap, 'Trusted hosts wait for O9.');
     }
 
