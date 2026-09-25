@@ -160,6 +160,15 @@ idempotency checkpoint's rules apply equally here)
   event per automatic HTTP attempt (that would flood the audit log with
   operational noise that belongs in structured logs/metrics instead).
 
+## Partner API credentials (ADR 0049 — contract)
+
+Inbound partner API keys are a separate system from outbound webhook
+secrets and from internal service identities: School-bound, 256-bit random
+secrets stored only as hashes and shown once, always expiring, rotated with
+at most a 24-hour overlap (the same precedent as webhook secret rotation),
+revoked immediately. A partner key is never derived from, or shared with,
+a webhook secret, `APP_KEY` or the AI service token.
+
 ## What this document does not cover
 
 - **Inbound webhooks** (a payment gateway calling School OS) are a

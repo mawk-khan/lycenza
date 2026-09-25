@@ -304,6 +304,11 @@ retry is not a way to get a larger effective quota. Authentication
 throttles (`throttle:login`) are independent of and never weakened by
 this interaction.
 
+ADR 0049 §8 (Phase 0O.2) freezes this interaction for the external API
+hardening: the new partner authentication is a framework auth guard so it
+runs before `ThrottleRequests` and the limiter can key by client; partner
+idempotency scope adds the actor type `api_client`; nothing is reordered.
+
 ### Payment and webhook readiness
 
 Documented distinctions for future modules, not implemented here:

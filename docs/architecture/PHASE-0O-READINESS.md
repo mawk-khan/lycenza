@@ -21,6 +21,10 @@ O2–O16 are all still open, and O1 (the phase's definition of done) is not
 resolved by 0O.1. Sections 4–9 below describe the pre-0O.1 baseline;
 section 13 records what changed.
 
+**Update 2026-09-25 — 0O.2 contract recorded.** O7 and O11 are resolved by
+ADR 0049 (External API & Browser Hardening Contract, section 15); Phase
+0O.3 implements it once the owner supplies the five numeric values V1–V5.
+
 ## 1. Title and repository-defined scope
 
 `docs/roadmap/MASTER-ROADMAP.md`, "Phase 0O — External Surface and
@@ -282,11 +286,11 @@ Other findings:
 | O4 | Secrets manager or host secret injection | ADR 0016 requires one before production; which one is open | Security + operations | S3 |
 | O5 | Service-to-service auth: keep the shared token (with rotation) or move to per-request signed tokens / mTLS | ADR 0016 "revisit" | Security | S3 (AI Gateway deployment) |
 | O6 | Runtime role name: keep `school_os_app` as a production contract, or generalize the code | ADR 0021 (model only) | Engineering | Production DB provisioning |
-| O7 | API client model: who gets `/api/v1` tokens and how (mobile login token endpoint? partner keys? OAuth?), expiry, abilities | API.md defers partner keys | Product + security | S1 |
+| O7 | API client model: who gets `/api/v1` tokens and how (mobile login token endpoint? partner keys? OAuth?), expiry, abilities | **RESOLVED — ADR 0049 (Phase 0O.2)**; lifetimes V1–V4 are owner values still required | Product + security | S1 |
 | O8 | Object storage: provider, region, encryption, versioning, lifecycle | No | Security + operations | S3 |
 | O9 | Custom School domains in production: ownership verification, TLS | No | Product + operations | Domain routing in production |
 | O10 | Backup policy, RPO/RTO, restore drills | No | Security + operations | Any production deployment |
-| O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | No | Security | S1 hardening |
+| O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | ADR 0015 (model only) | Operations + security | S2 |
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | No | Product + operations | Real email |
 | O14 | Password reset for production accounts | ADR 0037: none exists | Product + security | Production operations |
@@ -438,3 +442,37 @@ platform account.
 bootstrap sets an initial password only; it resets nothing. O1 and O2–O16
 remain open. With this correction **0O.1 is COMPLETE**; Phase 0O stays
 **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+
+## 15. Phase 0O.2 — External API & Browser Hardening Contract (2026-09-25)
+
+Documentation only (ADR 0049); nothing implemented, no configuration
+changed.
+
+- **O7 resolved:** two credential classes — human API tokens (Sanctum,
+  always expiring, `api.read`/`api.write`, authority re-checked per request,
+  issued with fresh MFA in the Account/Security area, never carrying
+  `platform.*`/`group.*` authority) and partner API clients (one immutable
+  School, platform-resolvable bootstrap records with forced RLS unchanged
+  for tenant data, hashed shown-once secrets, 24-hour rotation overlap,
+  immediate revocation, `integrations.api_clients.view`/`.manage` with fresh
+  MFA for issue/rotate/revoke, deny-by-default `/api/v1/partner` surface).
+  No partner route is enabled until the owner approves a scope; the
+  recommended first scope is read-only `academic_structure.read`.
+- **O11 resolved:** explicit exact-origin CORS allowlist (empty by default,
+  no credentials, no wildcard); enforced CSP with no `unsafe-eval` or
+  `unsafe-inline` (after moving Inertia's progress CSS into the bundle);
+  `nosniff`, `Referrer-Policy`, frame denial, a deny-list
+  `Permissions-Policy`, download sandboxing; production-only HSTS without
+  subdomains or preload.
+- **Verified on `b63ed08`:** 380 `/api/v1` routes in production mode (140
+  unthrottled: 139 GET + 1 POST); the audit's 388/143/141 is the local-mode
+  table including two demo routes. CORS allows `*` today (confirmed live);
+  no security header exists; bearer tokens never expire and have no issuance
+  surface or scopes; a disabled user's token still authenticates; a root's
+  bearer token can reach the platform operations-status API.
+- **Owner values still required before 0O.3 freezes configuration:** V1/V2
+  human token default/maximum lifetime, V3/V4 partner credential
+  default/maximum lifetime, V5 HSTS `max-age`.
+- Still open: O1 (0O.2 records only the API/browser component, ADR 0049
+  §20), O2–O6, O8–O10, O12–O16. Next: Phase 0O.3 — External API & Browser
+  Hardening Foundation.
