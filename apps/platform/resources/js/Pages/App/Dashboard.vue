@@ -34,6 +34,7 @@ interface Props {
     // because no valid School was selected (RequireSchoolContext).
     schoolContextNotice: 'select' | 'not_saved' | null;
     platformAccount: boolean;
+    platform: { canViewAuditLog: boolean; canGovernRoles: boolean };
     groups: { canViewOwn: boolean; canGovern: boolean };
     platformElevation: {
         canStart: boolean;
@@ -129,6 +130,22 @@ function activate(schoolId: string) {
             <a class="mt-1 inline-block text-sm underline" href="/app/platform/elevation">
                 Enter a School (elevated access)
             </a>
+        </section>
+
+        <section
+            v-if="platform.canViewAuditLog || platform.canGovernRoles"
+            class="mt-6"
+            data-testid="platform-admin"
+        >
+            <h2 class="text-sm font-medium text-slate-500">Platform administration</h2>
+            <ul class="mt-1 space-y-1 text-sm">
+                <li v-if="platform.canViewAuditLog">
+                    <a class="underline" href="/app/platform/audit-log">Platform audit log</a>
+                </li>
+                <li v-if="platform.canGovernRoles">
+                    <a class="underline" href="/app/platform/roles">Platform roles</a>
+                </li>
+            </ul>
         </section>
 
         <section v-if="groups.canViewOwn || groups.canGovern" class="mt-6" data-testid="groups">

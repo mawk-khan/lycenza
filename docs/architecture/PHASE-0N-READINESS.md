@@ -37,7 +37,11 @@ Group records. It unblocks nothing else. **Update (Phase 0N.6,
 (Platform Authority & Audit Governance Contract)** records the root role,
 runtime-assignable non-root platform roles, `platform_auditor`, and the
 platform audit review contract (nothing built). Still open: D11, D13,
-D15. Phase 0M
+D15. **Update (Phase 0N.7, 2026-09-25):** the platform authority and audit
+foundation is implemented (ADR 0046 "Implementation amendment"):
+`platform_auditor`, history-keeping platform grants with database
+anti-escalation, and the MFA-protected platform audit log. It unblocks
+nothing else. Phase 0M
 (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 

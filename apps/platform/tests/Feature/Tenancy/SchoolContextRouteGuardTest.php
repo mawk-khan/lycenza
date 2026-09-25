@@ -69,6 +69,10 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.groups.elevation.create',            // Group-derived entry --
         'app.groups.elevation.confirm',           // Group scope, never
         'app.groups.elevation.store',             // School context
+        'app.platform.audit-log',                 // Phase 0N.7: platform
+        'app.platform.roles.index',               // audit review and
+        'app.platform.roles.grants.store',        // platform-role
+        'app.platform.roles.grants.revoke',       // governance (ADR 0046)
     ];
 
     #[Test]

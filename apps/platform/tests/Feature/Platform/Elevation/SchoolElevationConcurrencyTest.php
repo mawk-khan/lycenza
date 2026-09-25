@@ -39,6 +39,9 @@ class SchoolElevationConcurrencyTest extends TestCase
         if ($this->actor !== null) {
             $admin->table('school_elevations')->where('actor_user_id', $this->actor->id)->delete();
             $admin->table('platform_audit_events')->where('actor_user_id', $this->actor->id)->delete();
+            $admin->table('platform_role_assignments')->where('user_id', $this->actor->id)->delete();
+            $admin->table('user_mfa_recovery_codes')->where('user_id', $this->actor->id)->delete();
+            $admin->table('user_mfa_factors')->where('user_id', $this->actor->id)->delete();
             $admin->table('users')->where('id', $this->actor->id)->delete();
         }
         foreach ($this->schools as $school) {

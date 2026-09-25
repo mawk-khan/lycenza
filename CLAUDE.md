@@ -789,6 +789,23 @@ docs/roadmap             MASTER-ROADMAP.md
     recording its authorizing Group and grant; losing that authority ends
     it, with no fallback to any other authority (ADR 0045).
 
+85. **Platform authority has a root and nothing root-equivalent.**
+    `platform_super_admin` is provisioned out of band only and is never
+    granted or revoked through the application (the database refuses a
+    runtime grant or revocation of any role not marked
+    `roles.runtime_assignable`). Only code-approved, runtime-assignable,
+    non-root roles are granted at runtime — v1 `platform_auditor` alone,
+    through `PlatformRoleGovernanceService` and the root-reserved
+    `platform.role_grants.manage` — never to or by oneself, with history
+    kept (revocation, never deletion). Root-reserved capabilities
+    (`platform.role_grants.manage`, `platform.schools.manage`) never sit on
+    a runtime-assignable role. Platform audit review needs
+    `platform.audit.view` and current MFA assurance, reads only
+    `platform_audit_events` through `PlatformAuditEventReader` (seven
+    envelope fields, never metadata, IP or user agent), sets no School
+    context, and records one `platform.audit_log.viewed` per review; it is
+    never merged with the School audit-log review (ADR 0046).
+
 ## Running things locally
 
 ```bash

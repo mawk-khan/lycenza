@@ -255,7 +255,19 @@ final class DemoDataBuilder
             'user_id' => $platformAdmin->id,
             'role_id' => $this->role('platform_super_admin', 'platform')->id,
         ]);
-        $this->account('Platform Super Admin', $platformAdmin, '(none -- platform scope)', 'Platform capabilities: School elevation (no School page opens) and School Group governance');
+        $this->account('Platform Super Admin', $platformAdmin, '(none -- platform scope)', 'Platform capabilities: School elevation (no School page opens), School Group governance, platform audit review, Platform Auditor grants');
+
+        // Phase 0N.7 (ADR 0046): the one runtime-assignable platform role,
+        // granted by the Platform Admin exactly as the Platform roles page
+        // would (a grantor, never a self-grant). Audit review also needs MFA.
+        $auditor = $this->user('Platform Auditor (Demo)', 'platform.auditor@example.test');
+        PlatformRoleAssignment::query()->create([
+            'user_id' => $auditor->id,
+            'role_id' => $this->role('platform_auditor', 'platform')->id,
+            'granted_by_user_id' => $platformAdmin->id,
+            'granted_at' => now(),
+        ]);
+        $this->account('Platform Auditor', $auditor, '(none -- platform scope)', 'platform.audit.view only: the platform audit log (needs MFA); nothing else');
 
         $this->admin = $this->user('Asha Rao (School Admin)', 'school.admin@example.test');
         $this->assignSchoolRole($this->member($this->admin, $this->school), 'school_admin');

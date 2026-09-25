@@ -1222,6 +1222,20 @@ fields, empty metadata allowlist, keyset paging, one
 Phase 0N.7 Platform Authority & Audit Foundation. Phase 0N stays
 **BLOCKED** on D11, D13 and D15.
 
+**Phase 0N.7 — Platform Authority & Audit Foundation (done, 2026-09-25).**
+Owner decisions: platform audit review requires the existing MFA
+assurance (no fresh code per page); the metadata allowlist stays empty;
+the root stays out of band. Built: `platform.audit.view`,
+`platform.role_grants.manage` (root only), the `platform_auditor` role
+(the only runtime-assignable one); `roles.runtime_assignable` with
+database guards keeping root-reserved capabilities off it; history-keeping
+`platform_role_assignments` (no self-grant/-revoke, no runtime grant or
+revocation of the root role, no deletion, RESTRICT FKs);
+`/app/platform/roles` to grant/revoke the auditor with audited refusals;
+and `/app/platform/audit-log` — seven envelope fields, keyset pages of 50,
+one `platform.audit_log.viewed` per review, no School context. Phase 0N
+stays **BLOCKED** on D11, D13 and D15.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,
