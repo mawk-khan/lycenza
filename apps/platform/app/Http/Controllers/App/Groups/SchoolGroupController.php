@@ -48,6 +48,9 @@ class SchoolGroupController extends Controller
 
         return Inertia::render('App/Groups/Show', [
             'group' => ['id' => $schoolGroup->id, 'name' => $schoolGroup->name, 'status' => $schoolGroup->status],
+            // Phase 0N.11 (ADR 0048): the Group report link, UX only -- the
+            // report re-authorizes everything itself.
+            'canViewReports' => $capabilities->canInGroup($user, 'group.reporting.view', $schoolGroup),
             'schools' => $schoolGroup->schools()->orderBy('schools.name')->get(['schools.id', 'schools.name', 'schools.status'])
                 ->map(fn (School $s) => [
                     'id' => $s->id,

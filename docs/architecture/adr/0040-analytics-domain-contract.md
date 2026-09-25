@@ -571,3 +571,8 @@ Group-safe summary and the aggregation math (sums of counts; percentage
 recomputed from sums). Every other report, platform-wide Analytics,
 person-counting Analytics and export remain governed by this ADR unchanged.
 Nothing is built until Phase 0N.11.
+
+**Built in Phase 0N.11** (ADR 0048 implementation amendment):
+`App\Domain\Analytics\Application\Group\` (Group-safe registry, gate,
+summary) and `CurriculumCoverageReadModel::groupSafeSummary()` /
+`aggregateGroup()`; `AnalyticsReadGate` and the School page are unchanged.

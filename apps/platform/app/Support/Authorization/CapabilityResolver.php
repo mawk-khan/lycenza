@@ -115,6 +115,18 @@ class CapabilityResolver
      */
     public function groupCapabilities(User $actor, SchoolGroup $group): array
     {
+        return $this->groupCapabilitiesById($actor, $group->id);
+    }
+
+    /**
+     * groupCapabilities() by Group id -- for a caller that must not depend
+     * on the School Group model (Phase 0N.11: Analytics' Group-safe report
+     * gate re-checks `group.reporting.view`, ADR 0048 section 7).
+     *
+     * @return array<int, string>
+     */
+    public function groupCapabilitiesById(User $actor, string $groupId): array
+    {
         if ($actor->isDisabled()) {
             return [];
         }
@@ -122,7 +134,7 @@ class CapabilityResolver
         return GroupRoleAssignment::query()
             ->active()
             ->where('group_role_assignments.user_id', $actor->id)
-            ->where('group_role_assignments.school_group_id', $group->id)
+            ->where('group_role_assignments.school_group_id', $groupId)
             ->join('school_groups', 'school_groups.id', '=', 'group_role_assignments.school_group_id')
             ->where('school_groups.status', SchoolGroup::STATUS_ACTIVE)
             ->join('role_capabilities', 'role_capabilities.role_id', '=', 'group_role_assignments.role_id')
@@ -135,6 +147,11 @@ class CapabilityResolver
     public function canInGroup(User $actor, string $capability, SchoolGroup $group): bool
     {
         return in_array($capability, $this->groupCapabilities($actor, $group), true);
+    }
+
+    public function canInGroupById(User $actor, string $capability, string $groupId): bool
+    {
+        return in_array($capability, $this->groupCapabilitiesById($actor, $groupId), true);
     }
 
     /**

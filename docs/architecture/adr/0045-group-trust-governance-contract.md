@@ -9,7 +9,8 @@
   ADR 0048 (D15: amends §4 with a third Group capability,
   `group.reporting.view`, for `group_admin`, and §14 with exactly one
   Group-safe cross-School report, `curriculum.coverage`, read one School at
-  a time through Analytics)
+  a time through Analytics; built in Phase 0N.11 -- `group_admin` now holds
+  `group.schools.view`, `group.schools.elevate`, `group.reporting.view`)
 
 ## Context
 

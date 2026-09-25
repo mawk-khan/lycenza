@@ -347,7 +347,7 @@ built; person-counting Analytics is conditional in the contract, fails
 closed today, and stays blocked on gate decisions 7.1–7.4. Closing
 Phase 0L.2 does not unblock it.
 
-## 15. Group cross-School reporting (ADR 0048, Phase 0N.10 — contract only)
+## 15. Group cross-School reporting (ADR 0048 — built in Phase 0N.11)
 
 The first and only cross-School Analytics decision: Group reporting of
 `curriculum.coverage` for holders of the Group capability
@@ -371,4 +371,8 @@ The first and only cross-School Analytics decision: Group reporting of
 
 `analytics.view`, `AnalyticsReadGate::read()` and the School page are
 unchanged; `analytics.platform.view` stays unseeded; no export, no cache,
-no persistence. Built in the proposed Phase 0N.11.
+no persistence. As built (Phase 0N.11): `App\Domain\Analytics\Application\Group\`
+(`GroupSafeReportRegistry`, `GroupSafeReportGate`, `GroupReportAuthority`,
+`CurriculumCoverageSchoolSummary`) and
+`CurriculumCoverageReadModel::groupSafeSummary()` / `aggregateGroup()`;
+guarded by `Tests\Feature\Analytics\GroupSafeReportGuardTest`.

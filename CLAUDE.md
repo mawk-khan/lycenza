@@ -781,8 +781,16 @@ docs/roadmap             MASTER-ROADMAP.md
     `CapabilityResolver::canInGroup()`/`groupCapabilities()` — never
     through `can()`, never cached, never read by the platform or School
     side. A Group never enters `TenantContext`, a Group page reads only
-    platform tables, and a Group grant never creates or implies a School
-    membership or School capability. Which Schools belong to a Group and
+    platform tables directly, and a Group grant never creates or implies a
+    School membership or School capability. The ONE tenant-data exception
+    (ADR 0048) is an explicitly registered Group-safe Analytics report
+    (`App\Domain\Analytics\Application\Group\GroupSafeReportRegistry`, v1
+    `curriculum.coverage` only) read under `group.reporting.view` through
+    Analytics' `GroupSafeReportGate` -- one School `TenantContext` at a time,
+    active member Schools only, never by Group code touching tenant models,
+    read models or source services, never cached, persisted or exported.
+    It is not a general Group tenant-data allowance: another report needs
+    an ADR 0048 amendment. Which Schools belong to a Group and
     who holds Group authority are platform-governed
     (`SchoolGroupGovernanceService`; no self-grants; Groups are archived,
     never deleted). Group-derived School entry is ADR 0044 elevation

@@ -36,7 +36,7 @@ class GroupAuthorityDatabaseInvariantsTest extends TestCase
             $this->assertRejected(fn () => DB::table('role_capabilities')->insert(['role_id' => $role, 'capability_key' => $capability]), 'scopes never mix');
         }
 
-        $this->assertSame(['group.schools.elevate', 'group.schools.view'], DB::table('role_capabilities')->where('role_id', $groupAdmin)->orderBy('capability_key')->pluck('capability_key')->all());
+        $this->assertSame(['group.reporting.view', 'group.schools.elevate', 'group.schools.view'], DB::table('role_capabilities')->where('role_id', $groupAdmin)->orderBy('capability_key')->pluck('capability_key')->all());
     }
 
     #[Test]

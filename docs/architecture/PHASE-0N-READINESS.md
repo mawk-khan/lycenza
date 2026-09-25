@@ -64,7 +64,16 @@ Analytics-owned Group-safe path with no RLS change (nothing built; proposed
 Phase 0N.11). **All Phase 0N decisions (D1–D18) are now recorded:
 architecture decisions complete — the first cross-School report
 implementation remains**, and Phase 0N stays in progress until it is built
-(the roadmap scopes 0N as "administration and reporting"). Phase 0M
+(the roadmap scopes 0N as "administration and reporting"). **Update (Phase
+0N.11, 2026-09-25):** the first cross-School report is built (ADR 0048
+"Implementation amendment"): Group Curriculum Coverage under
+`group.reporting.view`, one School context at a time, active member Schools
+only, unit-weighted totals, current MFA, platform-ledger audit, no export or
+persistence. With the School context foundation (0N.1), elevation (0N.3),
+Group authority (0N.5), platform authority and audit (0N.7) and School
+lifecycle (0N.9), every roadmap item of Phase 0N is implemented: **Phase 0N
+implementation complete — ready for the Phase 0N closeout audit** (the
+repository's convention, e.g. `PHASE-0L-CLOSEOUT.md`). Phase 0M
 (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 

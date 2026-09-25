@@ -128,7 +128,7 @@ asserts this directly against `pg_roles`, not just by convention.
   tenant-local only, using the ordinary isolation layers above with no
   new bypass of any kind; cross-School/platform-wide Analytics remains
   explicitly deferred to its own future, separately-reviewed
-  architecture checkpoint. **ADR 0048 (Phase 0N.10, contract only):**
+  architecture checkpoint. **ADR 0048 (built in Phase 0N.11):**
   the one authorized cross-School read is Group reporting of
   `curriculum.coverage` — not a cross-tenant query but a bounded sequence
   of ordinary single-School reads: for each active member School, one

@@ -42,6 +42,9 @@ class CapabilityAndRoleSeeder extends Seeder
             // Grants no School capability.
             ['key' => 'group.schools.view', 'label' => 'View the assigned School Group and its member Schools', 'namespace' => 'group'],
             ['key' => 'group.schools.elevate', 'label' => 'Enter a member School of the assigned Group via temporary elevation', 'namespace' => 'group'],
+            // Phase 0N.11 (ADR 0048): the Group's registered Group-safe
+            // reports (v1: curriculum.coverage only), read one School at a time.
+            ['key' => 'group.reporting.view', 'label' => 'View the registered Group-safe reports of the assigned Group', 'namespace' => 'group'],
             ['key' => 'school.settings.view', 'label' => 'View school settings', 'namespace' => 'school'],
             ['key' => 'school.settings.manage', 'label' => 'Manage school settings', 'namespace' => 'school'],
             ['key' => 'school.members.view', 'label' => 'View school members', 'namespace' => 'school'],
@@ -808,12 +811,14 @@ class CapabilityAndRoleSeeder extends Seeder
             // Phase 0N.5 (ADR 0045 section 4): the one Group-scope system
             // role. Deliberately no *.manage capability: a Group Admin
             // changes nothing about the Group, its Schools or its grants.
+            // Phase 0N.11 (ADR 0048 section 3): plus Group-safe reporting.
             'group_admin' => [
                 'name' => 'Group Admin',
                 'scope' => 'group',
                 'capabilities' => [
                     'group.schools.view',
                     'group.schools.elevate',
+                    'group.reporting.view',
                 ],
             ],
             'school_admin' => [

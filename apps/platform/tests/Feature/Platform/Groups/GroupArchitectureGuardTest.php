@@ -60,6 +60,7 @@ class GroupArchitectureGuardTest extends TestCase
             glob(app_path('Domain/Platform/Application/Groups/*.php')) ?: [],
             [
                 app_path('Http/Controllers/App/Groups/SchoolGroupController.php'),
+                app_path('Http/Controllers/App/Groups/GroupReportController.php'),
                 app_path('Http/Controllers/App/Platform/SchoolGroupAdminController.php'),
                 app_path('Models/SchoolGroup.php'),
                 app_path('Models/GroupRoleAssignment.php'),
@@ -74,13 +75,25 @@ class GroupArchitectureGuardTest extends TestCase
             $this->assertStringNotContainsString('pgsql_admin', $source, $file);
             $this->assertStringNotContainsString('withoutGlobalScope', $source, $file);
         }
+
+        // Phase 0N.11 (ADR 0048): the Group report may only CHECK that no
+        // School context is set and clear it defensively -- entering a
+        // School is Analytics' Group-safe gate's job, one School at a time.
+        foreach (glob(app_path('Domain/Platform/Application/Groups/Reporting/*.php')) ?: [] as $file) {
+            $source = $this->codeOnly((string) file_get_contents($file));
+            foreach (['->set(', 'withSchool(', 'MembershipRoleAssignment', 'pgsql_admin', 'withoutGlobalScope', 'Cache::', 'cache('] as $forbidden) {
+                $this->assertStringNotContainsString($forbidden, $source, "{$file}: {$forbidden}");
+            }
+            $this->assertDoesNotMatchRegularExpression('/SchoolMembership::(query\(\)->)?(create|insert|update|delete)/', $source, $file);
+        }
     }
 
     #[Test]
-    public function the_group_capability_catalog_is_exactly_two_and_has_no_management_power(): void
+    public function the_group_capability_catalog_is_exactly_three_and_has_no_management_power(): void
     {
+        // ADR 0045 section 4 plus ADR 0048 section 3 (group.reporting.view).
         $this->assertSame(
-            ['group.schools.elevate', 'group.schools.view'],
+            ['group.reporting.view', 'group.schools.elevate', 'group.schools.view'],
             DB::table('capabilities')->where('namespace', 'group')->orderBy('key')->pluck('key')->all(),
         );
         $this->assertSame(['group_admin'], DB::table('roles')->where('scope', 'group')->pluck('key')->all());

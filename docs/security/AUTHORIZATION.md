@@ -390,12 +390,12 @@ ends the moment that authority goes (no fallback to platform authority). Platfor
 ordinary member of several Schools holds no Group authority. See
 ADR 0045.
 
-## Group cross-School reporting (ADR 0048 — contract only, Phase 0N.10)
+## Group cross-School reporting (ADR 0048 — built in Phase 0N.11)
 
 - A Group report needs the Group capability **`group.reporting.view`** on
   an unrevoked grant in the one named, active Group (v1: held by
   `group_admin`, alongside `group.schools.view` and
-  `group.schools.elevate`; not seeded until Phase 0N.11), plus current MFA
+  `group.schools.elevate`; seeded in Phase 0N.11), plus current MFA
   assurance. One Group per request; grants in several Groups never pool.
 - It is **never** implied by `platform_super_admin` or any `platform.*`
   capability (a root needs a real Group grant, from another root), by

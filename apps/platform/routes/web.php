@@ -40,6 +40,7 @@ use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
 use App\Http\Controllers\App\Finance\PaymentController as FinancePaymentController;
+use App\Http\Controllers\App\Groups\GroupReportController;
 use App\Http\Controllers\App\Groups\SchoolGroupController;
 use App\Http\Controllers\App\GuardianAccountInvitationController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
@@ -315,6 +316,10 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/{schoolGroup}/elevation', [SchoolElevationController::class, 'storeForGroup'])
             ->middleware('throttle:platform-elevation')
             ->name('elevation.store');
+        // Phase 0N.11 (ADR 0048): the one Group-safe cross-School report,
+        // read one School at a time through Analytics' Group-safe gate.
+        Route::get('/{schoolGroup}/reports/curriculum-coverage', [GroupReportController::class, 'curriculumCoverage'])
+            ->name('reports.curriculum-coverage');
     });
 });
 
