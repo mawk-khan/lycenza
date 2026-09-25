@@ -1335,6 +1335,24 @@ lands), production secrets/infrastructure (ADR 0016,
 `infrastructure/terraform`), and broader third-party integrations
 (ADR 0018) beyond the payment gateway from Phase 0G.
 
+**Readiness audit recorded 2026-09-25 — PARTIALLY READY; SOME
+CHECKPOINTS MAY START.** `docs/architecture/PHASE-0O-READINESS.md` maps
+the four scope items against what exists (a production-grade outbound
+webhook subsystem, instrumentation-only observability, env-only
+configuration, strong tenancy/RLS and authorization foundations) and what
+does not: no `/api/v1` token issuance or expiry, no partner keys, no
+default API limiter, no trusted-proxy/security-header/CORS policy, no
+observability backend, no production images, IaC, release runbook or
+backup/restore, no fail-closed production configuration (the AI context
+signing key and the AI Gateway service token have unsafe fallbacks), and
+no production root-provisioning command. It records sixteen owner,
+security, provider and operator decisions (O1–O16), a deploy-gated register
+under the stop gates below, and a roadmap discrepancy: no Phase 0G payment
+gateway was ever integrated. Only **0O.1 — Production Bootstrap &
+Fail-Closed Configuration Foundation** is ready to start; the rest waits on
+those decisions. Phase 0M stays BLOCKED and must not be approached through
+Phase 0O.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on
