@@ -478,3 +478,50 @@ Repository-only, no apply, no deploy:
 `docs/security/INTEGRATION-SECURITY.md`, ADR 0016, ADR 0021, ADR 0023,
 ADR 0046, ADR 0049, `infrastructure/docker/postgres/init/01-roles.sql`,
 `apps/platform/config/database.php`, `routes/console.php`.
+
+## Implementation amendment (Phase 0O.4A, 2026-09-25)
+
+Status: the **repository side** of this contract is implemented. Nothing
+is deployed, applied, provisioned or activated; no real secret, DNS, TLS,
+bucket policy or backup policy was touched; **no real restore drill has
+been performed (REAL RESTORE DRILL STILL OUTSTANDING)**.
+
+| Section | Implemented as |
+|---|---|
+| §1, §3, §12 images and processes | `infrastructure/docker/production/app.Dockerfile` (nginx + PHP-FPM, non-root `www-data`, OPcache, built assets, no dev dependencies/tests/demo seeders/`.env`), `ai.Dockerfile` (non-root, runtime requirements only, `ENVIRONMENT=production`); role entrypoint `apps/platform/deploy/entrypoint.sh` (`web`, `worker <default\|integrations\|notifications>`, `scheduler`, `console`); manifest `apps/platform/deploy/processes.json` with per-process secret groups; `verify-images.sh` (local build/runtime verification, 41 checks); `ProductionImageContractTest`, `ProductionProcessManifestTest` (queue coverage, one singleton scheduler, no admin credentials in long-running roles, worker timeout < `retry_after`, every secret-shaped setting grouped, every recovery sweep scheduled) |
+| §2 trusted proxies | `TRUSTED_PROXIES` parsed by `App\Support\Http\TrustedProxyList` (IPs/CIDRs only; refuses `*`, `**`, `0.0.0.0/0`, `::/0`, prefixes broader than /8 or /32, the IPv4-mapped space, hostnames, malformed and empty entries — without echoing the value); the framework `TrustProxies` replaced by `TrustConfiguredProxies` (explicit list only, X-Forwarded-For/Host/Port/Proto, no host-name heuristics). Spoofing and HSTS-through-trusted-proxy tests. |
+| §6, §7 database roles | `infrastructure/postgres/production-bootstrap.sql` (configurable migration role, fixed `school_os_app`, verifies attributes instead of altering them, removes owner membership, default privileges FOR ROLE the migration role, no password, no grant on existing tables, idempotent); `verify-production-bootstrap.sh` (throwaway PostgreSQL 16 with TLS, migration role not named `school_os`, migrations/seeding through the production image); `platform:verify-database` (read-only) |
+| §8 storage | `platform:verify-storage` (read-only; versioning/encryption/public-access block via the S3 API where supported; independent copy always operator evidence); no configuration flag may claim provider-side protection |
+| §10 Redis recovery | `domain_event_outbox.processed_at` (+ partial index) set by `ProcessOutboxEventJob` on full success, `failed()` marks exhausted events; `OutboxReconciler` inside `platform:outbox-dispatch` (stale after 600 s, receipts decide acknowledge vs re-dispatch, `SKIP LOCKED`, bounded batches, 25-attempt bound); stale `pending` webhook and immediate Communication deliveries re-dispatched after one processing lease; Automation's existing sweep reused; `platform:recover-queued-work`. Real-Redis loss test. Sessions/cache/locks documented. |
+| §11 restore | `docs/operations/BACKUP-AND-RESTORE.md`, `RESTORE-DRILL-RECORD.md` (template; no drill recorded); `platform:verify-restore` (boot, database checks, migrations, readiness, RLS fail-closed and isolation, sampled Document objects and sizes, observed recovery point, duration) |
+| §13 Terraform | `infrastructure/terraform/README.md`: the provider-neutral input interface; still no resources |
+| §14 release | `docs/operations/MAINTENANCE-WINDOW-RELEASE.md`; maintenance-mode audit (below) |
+| §15 guard | `ProductionConfigurationGuard` codes: `trusted_proxies_unsafe`, `database_tls_not_required` (runtime **and** admin), `redis_password_missing`, `storage_disk_not_s3` (Documents **and** Communication attachments), `storage_bucket_not_production`, `storage_endpoint_not_https`, `storage_credentials_invalid`, `storage_public_visibility` |
+| §16 separation | `environment_not_separated` (production refuses the test database and a local/DDEV `APP_URL`); the production bucket guard refuses `school-os-local`/`school-os-test` |
+
+**Additions found necessary during implementation** (each strictly
+fail-closed; nothing existing weakened):
+
+1. `database_connection_not_pgsql` — Laravel's default connection is
+   `sqlite` when `DB_CONNECTION` is unset; every RLS/TLS/role guarantee is
+   PostgreSQL-only. The image also defaults `DB_CONNECTION=pgsql`.
+2. `maintenance_mode_not_shared` — the default `file` maintenance driver is
+   per container, so `artisan down` in one container would leave the others
+   serving and working during a migration. Production uses the `cache`
+   driver on the `database` store (PostgreSQL; survives a Redis loss); the
+   image defaults to it.
+3. Liveness (`/api/health/live`) is exempt from maintenance mode (rule
+   55): a maintenance window must not make an orchestrator restart healthy
+   processes. Readiness and every other route stay 503.
+4. `platform:verify-database` reports whether the runtime connection is
+   actually TLS-encrypted (`pg_stat_ssl`), FAIL in production when not.
+
+**Maintenance-mode audit:** API and pages 503; readiness 503; liveness
+200; workers pause (no `--force`); the scheduler runs no event (none opts
+into maintenance mode); the flag is shared through PostgreSQL
+(`Tests\Feature\Operations\MaintenanceWindowTest`).
+
+Still outstanding (operator evidence, ADR 0050 §19–§20): a real
+deployment, real secrets in a secret store, bucket and backup policy
+activation, and one successful restore drill in a real, isolated
+non-production environment. O1 stays open.

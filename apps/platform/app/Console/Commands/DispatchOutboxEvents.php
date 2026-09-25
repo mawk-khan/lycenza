@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\ProcessOutboxEventJob;
+use App\Support\Events\OutboxReconciler;
 use App\Support\Observability\QueueName;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
 use Illuminate\Console\Command;
@@ -33,10 +34,11 @@ class DispatchOutboxEvents extends Command
 
     protected $description = 'Dispatch pending domain_event_outbox rows into the queue.';
 
-    public function handle(SchedulerHeartbeatRecorder $heartbeats): int
+    public function handle(SchedulerHeartbeatRecorder $heartbeats, OutboxReconciler $reconciler): int
     {
         $batchSize = (int) $this->option('batch');
         $dispatched = 0;
+        $recovered = ['redispatched' => 0, 'acknowledged' => 0, 'failed' => 0];
 
         try {
             $dispatched = DB::transaction(function () use ($batchSize) {
@@ -64,6 +66,10 @@ class DispatchOutboxEvents extends Command
                 return $rows->count();
             });
 
+            // Phase 0O.4A (ADR 0050 section 10): recover events whose queued
+            // job was lost (Redis loss), decided from PostgreSQL receipts.
+            $recovered = $reconciler->reconcile($batchSize);
+
             $heartbeats->recordSuccess('outbox-dispatch');
         } catch (\Throwable $e) {
             $heartbeats->recordFailure('outbox-dispatch', $e->getMessage());
@@ -74,8 +80,8 @@ class DispatchOutboxEvents extends Command
             return self::FAILURE;
         }
 
-        $this->info("Dispatched {$dispatched} outbox event(s).");
-        Log::info('platform.outbox_dispatch.completed', ['dispatched' => $dispatched]);
+        $this->info("Dispatched {$dispatched} outbox event(s); recovered {$recovered['redispatched']}, acknowledged {$recovered['acknowledged']}, failed {$recovered['failed']}.");
+        Log::info('platform.outbox_dispatch.completed', ['dispatched' => $dispatched, ...$recovered]);
 
         return self::SUCCESS;
     }

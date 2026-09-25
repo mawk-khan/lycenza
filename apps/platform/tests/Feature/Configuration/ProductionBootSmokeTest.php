@@ -24,6 +24,8 @@ class ProductionBootSmokeTest extends TestCase
 {
     private const CANARY_SIGNING_KEY = 'canary-production-signing-key-4b8e1f0a6c2d9e7b';
 
+    private const CANARY_REDIS_PASSWORD = 'canary-redis-password-91c3e5a7';
+
     private string $dir;
 
     protected function setUp(): void
@@ -56,6 +58,25 @@ class ProductionBootSmokeTest extends TestCase
             'SESSION_SECURE_COOKIE' => 'true',
             'AI_GATEWAY_CONTEXT_SIGNING_KEY' => self::CANARY_SIGNING_KEY,
             'AI_GATEWAY_SERVICE_TOKEN' => '',
+            // Phase 0O.4A infrastructure baseline (ADR 0050 section 15).
+            'APP_URL' => 'https://erp.example.org',
+            'DB_CONNECTION' => 'pgsql',
+            'DB_DATABASE' => 'lycenza_production',
+            'APP_MAINTENANCE_DRIVER' => 'cache',
+            'APP_MAINTENANCE_STORE' => 'database',
+            'DB_SSLMODE' => 'require',
+            'REDIS_PASSWORD' => self::CANARY_REDIS_PASSWORD,
+            // The canary password reaches no real Redis: nothing in these
+            // subprocesses may depend on one.
+            'SESSION_DRIVER' => 'array',
+            'CACHE_STORE' => 'array',
+            'DOCUMENTS_DISK' => 's3',
+            'COMMUNICATION_ATTACHMENTS_DISK' => 's3',
+            'AWS_BUCKET' => 'lycenza-production-objects',
+            'AWS_ENDPOINT' => 'https://objects.example.net',
+            'AWS_ACCESS_KEY_ID' => '',
+            'AWS_SECRET_ACCESS_KEY' => '',
+            'TRUSTED_PROXIES' => '10.0.0.0/8',
             'APP_CONFIG_CACHE' => $this->dir.'/config.php',
             'APP_ROUTES_CACHE' => $this->dir.'/routes.php',
             ...$overrides,
@@ -108,22 +129,27 @@ class ProductionBootSmokeTest extends TestCase
     {
         $probe = base_path('tests/Support/http-boot-probe.php');
 
-        $unsafe = new Process(['php', '-d', 'display_errors=stderr', $probe], base_path(), $this->productionEnv(['APP_DEBUG' => 'true']));
-        $unsafe->setTimeout(120);
-        $unsafe->run();
-        $output = $unsafe->getOutput().$unsafe->getErrorOutput();
+        foreach (['/login', '/api/health/live'] as $uri) {
+            $unsafe = new Process(['php', '-d', 'display_errors=stderr', $probe], base_path(), $this->productionEnv(['APP_DEBUG' => 'true', 'PROBE_URI' => $uri]));
+            $unsafe->setTimeout(120);
+            $unsafe->run();
+            $output = $unsafe->getOutput().$unsafe->getErrorOutput();
 
-        // A plain 500 is all that is served: never the page, never a debug
-        // error page (source, trace, request), never a configured value --
-        // even though APP_DEBUG=true is the very violation being refused.
-        $this->assertStringContainsString('SERVED:500', $output);
-        $this->assertStringNotContainsString('csrf', strtolower($output));
-        foreach (['ProductionConfigurationGuard', 'AppServiceProvider', 'vendor/laravel', '<pre', 'Stack trace', self::CANARY_SIGNING_KEY] as $leak) {
-            $this->assertStringNotContainsString($leak, $output);
+            // A plain 500 is all that is served: never the page, never a debug
+            // error page (source, trace, request), never a configured value --
+            // even though APP_DEBUG=true is the very violation being refused.
+            $this->assertStringContainsString('SERVED:500', $output, $uri);
+            $this->assertStringNotContainsString('csrf', strtolower($output));
+            foreach (['ProductionConfigurationGuard', 'AppServiceProvider', 'vendor/laravel', '<pre', 'Stack trace', self::CANARY_SIGNING_KEY, self::CANARY_REDIS_PASSWORD] as $leak) {
+                $this->assertStringNotContainsString($leak, $output);
+            }
         }
 
-        // The same request with a safe configuration is served (the probe is not vacuous).
-        $safe = new Process(['php', $probe], base_path(), $this->productionEnv());
+        // The same kind of request with a safe configuration is served (the
+        // probe is not vacuous). Liveness needs no database: the production
+        // baseline requires TLS to PostgreSQL, which the test database
+        // server does not offer.
+        $safe = new Process(['php', $probe], base_path(), $this->productionEnv(['PROBE_URI' => '/api/health/live']));
         $safe->setTimeout(120);
         $safe->run();
         $this->assertStringContainsString('SERVED:200', $safe->getOutput(), $safe->getErrorOutput());
@@ -194,6 +220,53 @@ class ProductionBootSmokeTest extends TestCase
         $ok = $this->runArtisan(['config:cache'], $this->productionEnv(['CORS_ALLOWED_ORIGINS' => 'https://partner.example.com']));
         $this->assertSame(0, $ok->getExitCode(), $ok->getErrorOutput());
         $this->assertSame(['https://partner.example.com'], (require $this->dir.'/config.php')['cors']['allowed_origins']);
+    }
+
+    #[Test]
+    public function unsafe_infrastructure_configuration_refuses_to_boot_and_never_prints_a_value(): void
+    {
+        $storageCanary = 'canary-storage-secret-0d2f4b6e';
+
+        foreach ([
+            [['DB_CONNECTION' => 'sqlite'], 'database_connection_not_pgsql'],
+            [['APP_MAINTENANCE_DRIVER' => 'file'], 'maintenance_mode_not_shared'],
+            [['APP_URL' => 'https://lycenza.ddev.site'], 'environment_not_separated'],
+            [['DB_DATABASE' => 'school_os_test'], 'environment_not_separated'],
+            [['DB_SSLMODE' => 'prefer'], 'database_tls_not_required'],
+            [['REDIS_PASSWORD' => ''], 'redis_password_missing'],
+            [['DOCUMENTS_DISK' => 'local'], 'storage_disk_not_s3'],
+            [['AWS_BUCKET' => 'school-os-local'], 'storage_bucket_not_production'],
+            [['AWS_ENDPOINT' => 'http://minio:9000'], 'storage_endpoint_not_https'],
+            [['AWS_ACCESS_KEY_ID' => 'school_os', 'AWS_SECRET_ACCESS_KEY' => $storageCanary], 'storage_credentials_invalid'],
+        ] as [$unsafe, $code]) {
+            $process = $this->runArtisan(['about'], $this->productionEnv($unsafe));
+            $output = $process->getOutput().$process->getErrorOutput();
+
+            $this->assertNotSame(0, $process->getExitCode(), json_encode($unsafe).' must refuse to boot');
+            $this->assertStringContainsString($code, $output);
+            foreach ([self::CANARY_REDIS_PASSWORD, self::CANARY_SIGNING_KEY, $storageCanary] as $secret) {
+                $this->assertStringNotContainsString($secret, $output);
+            }
+        }
+    }
+
+    #[Test]
+    public function a_trust_all_or_malformed_proxy_list_refuses_to_boot_without_echoing_it(): void
+    {
+        foreach (['*', '0.0.0.0/0', '::/0', 'proxy.internal', '10.0.0.0/4', '10.0.0.1,,10.0.0.2'] as $proxies) {
+            $process = $this->runArtisan(['about'], $this->productionEnv(['TRUSTED_PROXIES' => $proxies]));
+            $output = $process->getOutput().$process->getErrorOutput();
+
+            $this->assertNotSame(0, $process->getExitCode(), "TRUSTED_PROXIES={$proxies} must refuse to boot");
+            $this->assertStringContainsString('TRUSTED_PROXIES', $output);
+            if (strlen($proxies) > 3) {
+                $this->assertStringNotContainsString($proxies, $output);
+            }
+        }
+
+        $ok = $this->runArtisan(['config:cache'], $this->productionEnv(['TRUSTED_PROXIES' => '10.1.0.0/16, 2001:db8::/32']));
+        $this->assertSame(0, $ok->getExitCode(), $ok->getErrorOutput());
+        $this->assertSame(['10.1.0.0/16', '2001:db8::/32'], (require $this->dir.'/config.php')['trustedproxy']['proxies']);
     }
 
     #[Test]

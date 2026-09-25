@@ -1,0 +1,29 @@
+# Phase 0O.4A: what never enters the production application image
+# (this is the root of its build context, apps/platform; the local Compose
+# builds use the repository root and are unaffected). Guarded by
+# Tests\Feature\Configuration\ProductionImageContractTest and
+# infrastructure/docker/production/verify-images.sh.
+.env
+.env.*
+**/.env
+**/*.pem
+**/*.key
+node_modules
+vendor
+public/build
+public/hot
+storage
+bootstrap/cache/*.php
+tests
+bin
+phpunit.xml
+.phpunit.cache
+*.log
+.git
+.gitignore
+# Local-DDEV demo data (fixed public demo password): only the guard class
+# that keeps the demo out of production is kept.
+database/seeders/Demo/*
+!database/seeders/Demo/DemoEnvironmentGuard.php
+# Testing-only command (documents local test credentials).
+app/Console/Commands/ResetTestDatabase.php

@@ -183,6 +183,18 @@ outputs. Webhook-secret and partner-credential rotation already exist in
 the application; a secret store does not add rotation to anything else
 (service-to-service rotation is O5; signing-key custody is future work).
 
+Phase 0O.4A: `apps/platform/deploy/processes.json` fixes which secret
+group each process receives — the AI Gateway only its `SERVICE_TOKEN`,
+web/workers/scheduler the application runtime group, and the database
+admin credentials only the release step and the operator console
+(guard-tested). Images carry no secret and no committed development value
+(`verify-images.sh`, `ProductionImageContractTest`). Webhook and
+Communication deliveries lost with Redis are re-dispatched from
+PostgreSQL; receivers must still assume at-least-once delivery (rule 39),
+and the delivery's own lease claim keeps one logical send per row.
+`X-Forwarded-*` headers are believed only from `TRUSTED_PROXIES`, so a
+client cannot spoof its address for rate limiting or audit.
+
 ## What this document does not cover
 
 - **Inbound webhooks** (a payment gateway calling School OS) are a

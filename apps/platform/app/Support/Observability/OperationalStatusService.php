@@ -66,8 +66,11 @@ class OperationalStatusService
             // how low `readiness_check_timeout_ms` is configured.
             $config = config('database.connections.pgsql');
             $connectTimeoutSeconds = max(2, (int) ceil($timeoutMs / 1000));
+            // Phase 0O.4A: the probe honours the configured sslmode
+            // (production requires TLS) like every other connection.
+            $sslmode = isset($config['sslmode']) && $config['sslmode'] !== '' ? ";sslmode={$config['sslmode']}" : '';
             $pdo = new PDO(
-                "pgsql:host={$config['host']};port={$config['port']};dbname={$config['database']};connect_timeout={$connectTimeoutSeconds}",
+                "pgsql:host={$config['host']};port={$config['port']};dbname={$config['database']};connect_timeout={$connectTimeoutSeconds}{$sslmode}",
                 $config['username'],
                 $config['password'],
                 [PDO::ATTR_TIMEOUT => $connectTimeoutSeconds],

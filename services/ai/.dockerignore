@@ -1,0 +1,15 @@
+# Phase 0O.4A: only the application package and its runtime requirements
+# enter the production AI Gateway image (context = services/ai; the local
+# Compose build uses the repository root and is unaffected).
+.env
+.env.*
+**/.env
+.venv
+tests
+__pycache__
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+requirements-dev.txt
+*.log

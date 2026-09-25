@@ -1401,6 +1401,20 @@ that a Redis loss strands queued work without a reconciliation path and
 that releases need a maintenance window; Phase 0O.4A implements the
 repository side. Nothing is provisioned.
 
+**0O.4A — Production Infrastructure & Recovery Foundation: COMPLETE
+(2026-09-25).** Production application and AI Gateway images (verified
+locally, never pushed), a role entrypoint and process manifest with
+per-process secret groups, explicit `TRUSTED_PROXIES`, the ADR 0050 §15
+guard extensions (plus shared maintenance mode, a PostgreSQL default
+connection and environment separation), a production PostgreSQL bootstrap
+proven on a throwaway PostgreSQL 16 cluster, PostgreSQL-driven Redis-loss
+reconciliation (outbox acknowledgement + reconciler, stale `pending`
+webhook/Communication deliveries) proven on real Redis, read-only
+database/storage/restore verification commands, and runbooks
+(`docs/operations/`). Not deployed; no real secret, bucket or backup
+policy; **the real restore drill is still outstanding**. Phase 0O stays
+PARTIALLY READY (`PHASE-0O-READINESS.md` §18).
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

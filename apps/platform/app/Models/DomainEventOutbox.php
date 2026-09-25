@@ -48,6 +48,7 @@ class DomainEventOutbox extends Model
             'occurred_at' => 'datetime',
             'available_at' => 'datetime',
             'dispatched_at' => 'datetime',
+            'processed_at' => 'datetime',
         ];
     }
 }

@@ -1,10 +1,11 @@
 <?php
 
-// ProductionBootSmokeTest: serves ONE GET /login through public/index.php
-// in this separate process, the way a web server would, so the test can
-// prove an unsafe production configuration never serves a page.
+// ProductionBootSmokeTest: serves ONE GET (default /login; PROBE_URI
+// overrides it) through public/index.php in this separate process, the way
+// a web server would, so the test can prove an unsafe production
+// configuration never serves a page.
 
-$_SERVER['REQUEST_URI'] = '/login';
+$_SERVER['REQUEST_URI'] = getenv('PROBE_URI') ?: '/login';
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_SERVER['HTTP_HOST'] = 'localhost';
 $_SERVER['SCRIPT_NAME'] = '/index.php';

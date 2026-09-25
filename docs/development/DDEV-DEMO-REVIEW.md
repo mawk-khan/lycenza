@@ -606,6 +606,15 @@ not resolve inside DDEV.
 `school_os_test` database (a guaranteed-empty start) and then runs the
 canonical `platform:test-db-reset`.
 
+Phase 0O.4A: `tests/Feature/Recovery/RedisQueueLossRecoveryTest` uses
+DDEV's real Redis on an isolated database index (13) that it flushes on
+setup and teardown — never the demo's queues (index 0) or cache (index 1).
+The production images and the production database bootstrap are verified
+outside DDEV with Docker (`infrastructure/docker/production/verify-images.sh`,
+`infrastructure/postgres/verify-production-bootstrap.sh`); DDEV itself
+keeps its local-only configuration (plain HTTP to PostgreSQL, the local
+bucket), which the production guard would refuse — by design.
+
 Known environment gaps inside DDEV: the MinIO integration tests
 (`DocumentMinioStorageTest`, `DocumentReadMinioIntegrationTest`,
 `DocumentHttpMinioIntegrationTest`) need a real MinIO, which DDEV does not

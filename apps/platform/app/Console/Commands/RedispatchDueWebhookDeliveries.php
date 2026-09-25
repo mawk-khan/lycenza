@@ -79,11 +79,25 @@ class RedispatchDueWebhookDeliveries extends Command
                         $q->where('status', 'retrying')->where('next_attempt_at', '<=', now());
                     })->orWhere(function ($q) {
                         $q->where('status', 'delivering')->where('processing_lease_expires_at', '<', now());
+                    })->orWhere(function ($q) {
+                        // Phase 0O.4A (ADR 0050 section 10): a `pending` row
+                        // no worker has claimed for a whole processing lease
+                        // lost its queued job (e.g. Redis loss). Re-dispatch
+                        // is duplicate-safe (the job's atomic lease claim)
+                        // and consumes no attempt; `updated_at` is bumped so
+                        // each row is re-dispatched at most once per lease.
+                        $q->where('status', 'pending')
+                            ->where('updated_at', '<=', now()->subSeconds((int) config('webhooks.processing_lease_seconds')));
                     });
                 })
                 ->limit($batchSize)
                 ->lock('for update skip locked')
-                ->get(['id']);
+                ->get(['id', 'status']);
+
+            $pending = $rows->where('status', 'pending')->pluck('id')->all();
+            if ($pending !== []) {
+                DB::table('webhook_deliveries')->whereIn('id', $pending)->where('status', 'pending')->update(['updated_at' => now()]);
+            }
 
             foreach ($rows as $row) {
                 DeliverWebhookJob::dispatch($school->id, $row->id)

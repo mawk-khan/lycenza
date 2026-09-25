@@ -40,6 +40,19 @@ class ProcessOutboxEventJob implements ShouldQueue
 
     public function __construct(public readonly string $eventId) {}
 
+    /**
+     * Phase 0O.4A: after every retry is exhausted the event is `failed`
+     * (never retried by recovery, visible to operators) with a fixed
+     * `last_error` code -- never exception text, which could carry payload
+     * data. A job lost with Redis never reaches this, so it stays
+     * `dispatched` and OutboxReconciler recovers it.
+     */
+    public function failed(?\Throwable $e = null): void
+    {
+        DomainEventOutbox::query()->whereKey($this->eventId)->where('status', 'dispatched')->whereNull('processed_at')
+            ->update(['status' => 'failed', 'last_error' => 'consumer_failures_exhausted_retries', 'updated_at' => now()]);
+    }
+
     public function handle(EventConsumerRegistry $registry, IdempotentConsumerGuard $guard, TenantContext $context): void
     {
         $event = DomainEventOutbox::query()->find($this->eventId);
@@ -92,6 +105,12 @@ class ProcessOutboxEventJob implements ShouldQueue
                     "One or more consumers failed for event {$event->id}: ".implode('; ', $failures)
                 );
             }
+
+            // Phase 0O.4A (ADR 0050 section 10): the durable acknowledgement
+            // -- every consumer now holds a receipt, so this event needs no
+            // recovery if its queue is ever lost.
+            DomainEventOutbox::query()->whereKey($event->id)->whereNull('processed_at')
+                ->update(['processed_at' => now(), 'updated_at' => now()]);
         } finally {
             $context->clearAll();
         }

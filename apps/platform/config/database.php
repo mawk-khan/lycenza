@@ -126,6 +126,12 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Phase 0O.4A: bounds connection establishment (pdo_pgsql maps
+            // ATTR_TIMEOUT to libpq's connect_timeout and otherwise imposes
+            // its own 30 s, overriding PGCONNECT_TIMEOUT), so an unreachable
+            // database fails a request in seconds instead of holding a
+            // PHP-FPM worker. Connection only -- never a query timeout.
+            'options' => [PDO::ATTR_TIMEOUT => max(2, (int) env('DB_CONNECT_TIMEOUT', 5))],
         ],
 
         // Migration/maintenance connection ONLY. Deliberately the
@@ -146,6 +152,12 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Phase 0O.4A: bounds connection establishment (pdo_pgsql maps
+            // ATTR_TIMEOUT to libpq's connect_timeout and otherwise imposes
+            // its own 30 s, overriding PGCONNECT_TIMEOUT), so an unreachable
+            // database fails a request in seconds instead of holding a
+            // PHP-FPM worker. Connection only -- never a query timeout.
+            'options' => [PDO::ATTR_TIMEOUT => max(2, (int) env('DB_CONNECT_TIMEOUT', 5))],
         ],
 
         'sqlsrv' => [

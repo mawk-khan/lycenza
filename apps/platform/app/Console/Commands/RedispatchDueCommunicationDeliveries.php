@@ -76,11 +76,27 @@ class RedispatchDueCommunicationDeliveries extends Command
                         $q->where('status', 'queued')->whereNotNull('next_attempt_at')->where('next_attempt_at', '<=', now());
                     })->orWhere(function ($q) {
                         $q->where('status', 'sending')->where('processing_lease_expires_at', '<', now());
+                    })->orWhere(function ($q) {
+                        // Phase 0O.4A (ADR 0050 section 10): an immediate
+                        // (`pending`) delivery is dispatched when created; one
+                        // no worker has claimed for a whole processing lease
+                        // lost its queued job (e.g. Redis loss). Re-dispatch
+                        // is duplicate-safe (the job's atomic claim), sends
+                        // nothing itself and consumes no attempt; a deferred
+                        // delivery is `queued` and untouched here. `updated_at`
+                        // is bumped: at most once per lease per row.
+                        $q->where('status', 'pending')
+                            ->where('updated_at', '<=', now()->subSeconds((int) config('communications.delivery.processing_lease_seconds')));
                     });
                 })
                 ->limit($batchSize)
                 ->lock('for update skip locked')
-                ->get(['id']);
+                ->get(['id', 'status']);
+
+            $pending = $rows->where('status', 'pending')->pluck('id')->all();
+            if ($pending !== []) {
+                DB::table('communication_deliveries')->whereIn('id', $pending)->where('status', 'pending')->update(['updated_at' => now()]);
+            }
 
             foreach ($rows as $row) {
                 ProcessCommunicationDeliveryJob::dispatch($school->id, $row->id)

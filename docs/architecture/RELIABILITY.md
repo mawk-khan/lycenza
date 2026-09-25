@@ -436,3 +436,34 @@ deliveries (`pending`) are outside their redispatch commands' selection
 recover. Phase 0O.4A adds a PostgreSQL-driven reconciliation for the three
 stranded states; until then production Redis should persist (AOF) or the
 restore runbook must re-queue them.
+
+**Implemented (Phase 0O.4A).** A Redis loss is now self-healing from
+PostgreSQL, and Redis persistence is not required for correctness:
+
+- `ProcessOutboxEventJob` sets `domain_event_outbox.processed_at` once
+  every consumer has succeeded, and its `failed()` marks an event whose
+  retries are exhausted `failed`. `App\Support\Events\OutboxReconciler`
+  (run by `platform:outbox-dispatch` every minute) re-dispatches
+  `dispatched` rows with no `processed_at` once they are older than
+  `STALE_AFTER_SECONDS` (600 s, beyond the job's whole retry lifecycle),
+  **unless** every consumer already holds a receipt (then it only
+  acknowledges). Rows are claimed `FOR UPDATE SKIP LOCKED` in bounded
+  batches, `dispatched_at`/`attempts` bumped (one re-dispatch per window),
+  and marked `failed` after 25 reconciliations. Consumer receipts keep
+  every effect exactly-once.
+- `platform:webhook-deliveries-redispatch` and
+  `platform:communication-deliveries-redispatch` also select `pending`
+  rows untouched for one processing lease (60 s / 30 s), bumping
+  `updated_at` so each is re-dispatched at most once per lease; the jobs'
+  atomic claims make duplicates harmless and no attempt is consumed.
+  Deferred Communication deliveries (`queued` + `next_attempt_at`) are
+  never pulled forward.
+- Automation keeps its own sweep (`automation:executions-redispatch`).
+- `platform:recover-queued-work` runs all four once.
+
+Proof: `Tests\Feature\Recovery\RedisQueueLossRecoveryTest` (real Redis,
+no sleeps, exactly-once effects) and `OutboxReconcilerTest`. Runbook:
+`docs/operations/REDIS-LOSS-RECOVERY.md` (sessions, caches, locks and rate
+limits too). Maintenance mode is shared through PostgreSQL, not Redis;
+during it workers pause and the scheduler idles
+(`docs/operations/MAINTENANCE-WINDOW-RELEASE.md`).

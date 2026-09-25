@@ -82,6 +82,12 @@ services:
       # Read-only, at the repo-relative location the contract tests
       # resolve (base_path('../../packages/contracts/...')).
       - ./packages/contracts:/var/packages/contracts:ro
+      # Read-only, for the same reason: the production image/deployment
+      # contract tests read the repository's infrastructure definitions and
+      # the Gateway's build-context rules (Phase 0O.4A,
+      # Tests\Feature\Configuration\ProductionImageContractTest).
+      - ./infrastructure:/var/infrastructure:ro
+      - ./services/ai/.dockerignore:/var/services/ai/.dockerignore:ro
     env_file:
       - ./apps/platform/.env
     environment:
