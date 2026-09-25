@@ -109,7 +109,7 @@ class DemoDataBuilderTest extends TestCase
         $group = SchoolGroup::query()->where('slug', DemoDataBuilder::SCHOOL_GROUP_SLUG)->firstOrFail();
         $this->assertEqualsCanonicalizing([$school->id, $annexe->id], $group->schools()->pluck('schools.id')->all());
         $groupAdmin = $this->user('group.admin@example.test');
-        $this->assertSame(['group.schools.elevate', 'group.schools.view'], $resolver->groupCapabilities($groupAdmin, $group));
+        $this->assertSame(['group.reporting.view', 'group.schools.elevate', 'group.schools.view'], $resolver->groupCapabilities($groupAdmin, $group));
         $this->assertSame([], $resolver->platformCapabilities($groupAdmin));
         $this->assertSame([], $resolver->schoolCapabilities($groupAdmin, $school));
         $this->assertSame([], $resolver->groupCapabilities($platformAdmin, $group), 'Platform authority is not Group authority.');

@@ -248,7 +248,7 @@ minute.
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
 | Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (14 `platform.*` capabilities, incl. `platform.schools.elevate`, School Group governance, `platform.audit.view`, `platform.role_grants.manage`) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13), **School Groups (platform)** (step 13a), **Platform audit log** and **Platform roles** (step 13b), **Schools (platform)** (step 13c); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
 | Platform Auditor | `platform.auditor@example.test` | Platform scope, review only | `platform_auditor` (`platform.audit.view` only), granted by the Platform Admin | **Platform audit log** only (needs MFA; step 13b). No School, Group, elevation or governance action |
-| Group Admin | `group.admin@example.test` | Group scope: Lycenza Demo Trust | `group_admin` Group grant (`group.schools.view`, `group.schools.elevate`), granted by the Platform Admin | **Your School Groups** -> the Trust's two Schools (name, status); enter one through elevated access (needs MFA). No School membership or School permission; cannot change the Group |
+| Group Admin | `group.admin@example.test` | Group scope: Lycenza Demo Trust | `group_admin` Group grant (`group.schools.view`, `group.schools.elevate`, `group.reporting.view`), granted by the Platform Admin | **Your School Groups** -> the Trust's two Schools (name, status); enter one through elevated access (needs MFA). No School membership or School permission; cannot change the Group |
 | Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
 | Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: same as Teacher |
 | Guardian | `guardian01@example.test` | Current parent experience | Member with no role, linked to Guardian Priya Sharma (activated via the real invitation flow) | **No parent/guardian portal exists**: same as Teacher |
@@ -439,6 +439,22 @@ Platform Admin (there is no platform UI to review).
     - There is no archive or delete, and no membership administration.
       Every change and refusal appears in the **Platform audit log**
       (event types only). `ddev demo-reset` removes the review School.
+13d. **Group curriculum coverage report** (Phase 0N.11, ADR 0048). The
+    report needs current MFA: enroll a factor for
+    **group.admin@example.test** at **Account security**, then sign in again
+    with a code (without a factor the report shows the MFA-required page).
+    - `/app/groups` -> **Lycenza Demo Trust** -> **Curriculum coverage
+      report**: one row per member School and a Group total. The Demo
+      School contributes its active year's syllabus-unit counts; the Annexe
+      has no academic year in the demo data, so it shows **No active
+      academic year** and adds nothing. The total is recomputed from the
+      summed unit counts (never an average of percentages). No grade or
+      subject breakdown, no export, no links into School pages.
+    - Suspend the Annexe (step 13c) and reload: it shows **Unavailable**;
+      resume and it returns. Each view adds one
+      `platform.school_group_report.viewed` row to the platform audit log.
+    - Platform Admin, Platform Auditor and School Admin get **404** on the
+      report URL -- only a Group grant with `group.reporting.view` opens it.
 14. **Analytics** (Phase 0L.2-1): as **School Admin** or **Principal**,
     Dashboard -> **Analytics: Curriculum Coverage**
     (`/app/analytics/curriculum-coverage`). It shows, for the active

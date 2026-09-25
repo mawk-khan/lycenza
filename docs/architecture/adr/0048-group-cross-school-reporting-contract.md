@@ -1,8 +1,8 @@
 # ADR 0048: Group Cross-School Reporting Contract (Phase 0N.10)
 
-- Status: Accepted (contract only — nothing built; implementation is the
-  proposed Phase 0N.11, section 17)
-- Date: 2026-09-25
+- Status: Accepted; foundation implemented in Phase 0N.11 (see
+  "Implementation amendment" at the end)
+- Date: 2026-09-25 (Phase 0N.10); amended 2026-09-25 (Phase 0N.11)
 - Relationship to other ADRs: this is the dedicated cross-School ADR that
   ADR 0040 §4 requires, **for exactly one registered report
   (`curriculum.coverage`) under Group authority** — Phase 0N and Analytics
@@ -479,3 +479,59 @@ ADR 0043, ADR 0044, ADR 0045, ADR 0046, ADR 0047;
 `docs/security/DATA-CLASSIFICATION.md`; `docs/security/AUTHORIZATION.md`;
 `docs/architecture/TENANCY.md`; `docs/architecture/PHASE-0N-READINESS.md`;
 CLAUDE.md rules 24–28, 83–86.
+
+## Implementation amendment (Phase 0N.11, 2026-09-25)
+
+Implemented as specified: one Group-safe report (`curriculum.coverage`),
+no export, no persistence, no other report.
+
+| Contract | Implementation |
+|---|---|
+| Capability (§3) | `group.reporting.view` (namespace `group`) seeded; `group_admin` holds exactly `group.reporting.view`, `group.schools.elevate`, `group.schools.view`; no platform or School role holds it |
+| Registry (§6) | `App\Domain\Analytics\Application\Group\GroupSafeReportRegistry::REPORTS` = `['curriculum.coverage' => CurriculumCoverageReadModel::class]`, separate from `AnalyticsReadModelRegistry`; `GroupSafeReportDeclaration` (refuses `countsPeople: true` at construction); `GroupSafeReport`, `GroupSafeSchoolSummary` |
+| Group-safe path (§7) | `GroupSafeReportGate` (registry, fresh `CapabilityResolver::canInGroupById()`, no-context assertion before and after, `SchoolOperationalGuard::holdOperational()`, `TenantContext::withSchool()`); `GroupReportAuthority` (identifiers only); `GroupReportAuthorityLostException` |
+| Summary (§7) | `CurriculumCoverageReadModel::groupSafeSummary()` → `CurriculumCoverageSchoolSummary` (active year only; name/code; `planned`, `completed`, `inProgress`, `notStarted`, `offerings`, `offeringsWithoutSyllabus`; `coveragePercent` derived); `compute()` and the School page are unchanged |
+| Aggregation (§8) | `CurriculumCoverageReadModel::aggregateGroup()`: sums; `percent(Σ completed, Σ planned)` |
+| Group layer | `App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService` (authorization, MFA assurance, per-School transaction with Group → grant → membership FOR SHARE, orchestration, failure semantics, audit), `GroupReportFailedException` (503); `GroupReportController`; route `GET /app/groups/{schoolGroup}/reports/curriculum-coverage` (`app.groups.reports.curriculum-coverage`), page `App/Groups/CurriculumCoverageReport`, link on the Group view when the capability is held |
+| Audit (§14) | `platform.school_group_report.viewed` (`group_role_assignment_id`, `report_key`, `contributing_school_ids`, `unavailable_count`, `no_active_year_count`); `platform.school_group_report.failed` (`group_role_assignment_id`, `report_key`, `outcome_code` `authority_lost`/`source_error`, `read_school_ids`) |
+
+**Refinements made while implementing:**
+
+1. **Lock order Group → grant → membership → School** in each
+   observation — the order `SchoolGroupGovernanceService::archive()` takes
+   the Group and its grants — so a racing archive, revocation or removal
+   waits instead of deadlocking. Proven with real two-process races
+   (`GroupReportConcurrencyTest`): a removal or revocation that commits
+   first is seen (School omitted / report fails closed); one that arrives
+   while an observation holds the rows waits, and the completed report
+   was authorized throughout.
+2. **Id-based Group capability check.** Analytics may not import the
+   School Group model (ADR 0040 §3 guard), so `CapabilityResolver` gained
+   `groupCapabilitiesById()` / `canInGroupById()` (same query, uncached);
+   `groupCapabilities()` delegates to it.
+3. **The summary reuses the source contract, not `compute()`:**
+   `groupSafeSummary()` sums the same `CurriculumCoverageReadService`
+   counts `compute()` sums for `totals`; a test pins the two equal for the
+   active year, and `compute()`'s fallback-year behaviour is unchanged
+   (tested).
+4. **Row order and states.** Schools are observed in School-id order
+   (deterministic) and shown by name; states `included`,
+   `no_active_academic_year`, `unavailable`. `generatedAt` and per-School
+   `observedAt` are shown; the page says the Schools are read one at a
+   time.
+5. **Failure responses.** Lost authority (revoked grant, capability
+   removed, Group archived mid-report) → the Group view's non-disclosing
+   404; a source failure → 503 page with no figures. Both audited; neither
+   returns anything partial. A request refused before any read (no grant,
+   no capability, inactive Group, MFA) is not audited.
+6. **Guards.** `Tests\Feature\Analytics\GroupSafeReportGuardTest`
+   (one registry entry; ordinary registration ≠ Group-safe; no person
+   dependency; Group layer never touches sources, Analytics never reads
+   Group tables; only the service mints `GroupReportAuthority`; only the
+   gate calls `groupSafeSummary()`; `group.reporting.view` only on
+   `group_admin`; one read-only route, no export, cache, persistence or
+   side effect; no Compliance/Automation/AI path). The existing Analytics
+   layering guard now allows exactly the Layer 6 reporting directory to
+   depend on Analytics; the Group guard forbids the reporting code from
+   setting a School context.
+7. CLAUDE.md rule 84 is amended with the one narrow exception.

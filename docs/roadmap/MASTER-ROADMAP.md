@@ -1292,6 +1292,20 @@ first cross-School report implementation remains:** Phase 0N stays in
 progress until Phase 0N.11 Group Curriculum Coverage Reporting Foundation
 is built.
 
+**Phase 0N.11 — Group Curriculum Coverage Reporting Foundation (done,
+2026-09-25).** Built ADR 0048: `group.reporting.view` (held by
+`group_admin` only); Analytics' separate Group-safe registry
+(`curriculum.coverage` only), `GroupSafeReportGate` and an active-year-only
+School summary; `GroupCurriculumCoverageReportService` observing each
+member School in its own transaction (Group, grant and membership FOR
+SHARE; School FOR SHARE; exactly one `TenantContext`, cleared after each);
+unit-weighted totals recomputed from summed counts; `unavailable` and
+`no active academic year` states; fail-closed authority loss (404) and
+source failure (503), audited; `/app/groups/{schoolGroup}/reports/curriculum-coverage`
+with current MFA assurance; no export, cache or persistence; real
+two-process race and raw-SQL RLS proofs. **Phase 0N implementation
+complete — ready for the Phase 0N closeout audit.**
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,

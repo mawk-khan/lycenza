@@ -144,7 +144,10 @@ class AnalyticsArchitectureGuardTest extends TestCase
             $path = $file->getPathname();
             if (! $file->isFile() || $file->getExtension() !== 'php'
                 || str_starts_with($path, app_path('Domain/Analytics'))
-                || str_starts_with($path, app_path('Http/Controllers/App/Analytics'))) {
+                || str_starts_with($path, app_path('Http/Controllers/App/Analytics'))
+                // Layer 6 (Multi-School Management) above Analytics: the Group
+                // report calls Analytics' Group-safe gate (ADR 0048 section 7).
+                || str_starts_with($path, app_path('Domain/Platform/Application/Groups/Reporting'))) {
                 continue;
             }
 

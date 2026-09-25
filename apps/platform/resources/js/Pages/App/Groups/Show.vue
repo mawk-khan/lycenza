@@ -4,6 +4,8 @@
 // (Confidential), nothing else: no counts and no School data. The only
 // action is entering ONE member School through elevated access, which
 // grants no School permissions. Changing the Group is platform-only.
+// Phase 0N.11 (ADR 0048): a link to the Group curriculum coverage report
+// when the actor holds group.reporting.view.
 interface School {
     id: string;
     name: string;
@@ -15,6 +17,7 @@ interface School {
 defineProps<{
     group: { id: string; name: string; status: string };
     schools: School[];
+    canViewReports: boolean;
 }>();
 </script>
 
@@ -51,6 +54,12 @@ defineProps<{
             </tbody>
         </table>
         <p v-if="!schools.length" class="mt-2 text-sm text-slate-600">No member Schools.</p>
+
+        <p v-if="canViewReports" class="mt-6 text-sm" data-testid="group-reports">
+            <a class="underline" :href="`/app/groups/${group.id}/reports/curriculum-coverage`"
+                >Curriculum coverage report</a
+            >
+        </p>
 
         <p class="mt-6 text-sm text-slate-600">
             Entering a School uses elevated access: at most 30 minutes, a fresh multi-factor code,
