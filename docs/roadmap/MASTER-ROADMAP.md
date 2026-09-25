@@ -1353,6 +1353,17 @@ Fail-Closed Configuration Foundation** is ready to start; the rest waits on
 those decisions. Phase 0M stays BLOCKED and must not be approached through
 Phase 0O.
 
+**0O.1 — Production Bootstrap & Fail-Closed Configuration Foundation:
+COMPLETE (2026-09-25).** Operator-only root provisioning
+(`platform:provision-root`, ADR 0046 §2), a production boot check that
+refuses unsafe configuration, a fail-closed AI context signing key, an AI
+Gateway that refuses the development token outside local/testing and
+reports 503 when not ready, a guarded `ServiceIdentitySeeder` plus operator
+issue/disable commands, the CI role-provisioning fix, and the production
+process and release contract (`docs/architecture/PRODUCTION-RELEASE.md`).
+Phase 0O stays PARTIALLY READY; decisions O1–O16 remain open
+(`PHASE-0O-READINESS.md` §13).
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

@@ -4,20 +4,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime configuration for the AI Gateway service.
 
-    Every value has a safe local default so the service boots without
-    secrets in Phase 0A. Real provider credentials are never required
-    to run the health check or the unit test suite.
+    Real provider credentials are never required to run the health check
+    or the unit test suite. Phase 0O.1: the service token has NO default
+    and the environment defaults to "production" -- an unset value fails
+    closed (app.core.startup refuses to start) instead of silently
+    falling back to the public development token. Local development sets
+    both explicitly (.env.example, docker-compose's env_file).
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     service_name: str = "school-os-ai-gateway"
-    environment: str = "local"
+    environment: str = "production"
 
     # Shared secret the platform (Laravel) and this service use to
     # authenticate service-to-service calls in both directions.
-    # See docs/ai/AI-SECURITY.md.
-    service_token: str = "dev-local-only-token"
+    # See docs/ai/AI-SECURITY.md. Required: never defaulted (Phase 0O.1).
+    service_token: str = ""
 
     # Base URL of the Laravel application's internal "ERP tool" contracts
     # that AI tools are allowed to call. AI code must never reach any

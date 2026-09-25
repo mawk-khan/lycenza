@@ -27,7 +27,14 @@ class AiContextTokenService
 {
     private const TTL_SECONDS = 60;
 
-    public function __construct(private readonly string $signingKey) {}
+    /**
+     * Phase 0O.1: a missing or blank key is accepted here (so an app that
+     * never uses AI still boots outside production) but refused at the
+     * first issue() or verify() -- never used as empty HMAC key material.
+     * Production refuses to boot without it
+     * (App\Support\Configuration\ProductionConfigurationGuard).
+     */
+    public function __construct(private readonly ?string $signingKey) {}
 
     /**
      * @param  array<int, string>  $grantedCapabilities
@@ -46,7 +53,7 @@ class AiContextTokenService
 
         $payloadJson = json_encode($payload, JSON_THROW_ON_ERROR);
         $payloadB64 = self::base64UrlEncode($payloadJson);
-        $signature = self::base64UrlEncode(hash_hmac('sha256', $payloadB64, $this->signingKey, true));
+        $signature = self::base64UrlEncode(hash_hmac('sha256', $payloadB64, $this->key(), true));
 
         return "{$payloadB64}.{$signature}";
     }
@@ -57,13 +64,15 @@ class AiContextTokenService
      */
     public function verify(?string $token): ?AiContextClaims
     {
+        $key = $this->key();
+
         if ($token === null || ! str_contains($token, '.')) {
             return null;
         }
 
         [$payloadB64, $signature] = explode('.', $token, 2);
 
-        $expectedSignature = self::base64UrlEncode(hash_hmac('sha256', $payloadB64, $this->signingKey, true));
+        $expectedSignature = self::base64UrlEncode(hash_hmac('sha256', $payloadB64, $key, true));
 
         if (! hash_equals($expectedSignature, $signature)) {
             return null;
@@ -88,6 +97,15 @@ class AiContextTokenService
             issuedAt: $payload['iat'] ?? null,
             expiresAt: $payload['exp'],
         );
+    }
+
+    private function key(): string
+    {
+        if ($this->signingKey === null || trim($this->signingKey) === '') {
+            throw new AiContextSigningKeyNotConfiguredException;
+        }
+
+        return $this->signingKey;
     }
 
     private static function base64UrlEncode(string $data): string

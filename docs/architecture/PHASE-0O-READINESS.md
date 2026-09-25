@@ -11,6 +11,13 @@ provisioned nothing and handled no secret values.
 Every "current state" claim below was checked against code, configuration,
 CI and a running DDEV instance on `f8e4b07` (section 12).
 
+**Update 2026-09-25 — 0O.1 COMPLETE.** Production Bootstrap & Fail-Closed
+Configuration Foundation is built (section 13). The phase status is
+unchanged: **PARTIALLY READY — SOME CHECKPOINTS MAY START**; decisions
+O2–O16 are all still open, and O1 (the phase's definition of done) is not
+resolved by 0O.1. Sections 4–9 below describe the pre-0O.1 baseline;
+section 13 records what changed.
+
 ## 1. Title and repository-defined scope
 
 `docs/roadmap/MASTER-ROADMAP.md`, "Phase 0O — External Surface and
@@ -294,7 +301,7 @@ No vendor or provider is chosen by this audit.
 | S2 Real observability backend | Instrumentation only; no exporter; plain logs; sanitizer unused | BLOCKED (backend) / PARTIAL (in-repo prep) | JSON logs, sanitizer wiring, ops-status resilience, exporter wiring | O12, O3 |
 | S3 Production secrets | Env-only; unsafe AI fallbacks; no validation; no rotation for service identities or signing key | PARTIAL | Fail-closed checks (0O.1); secrets manager integration | O4, O5 |
 | S3 Production infrastructure | No production image, no IaC, no runbook, no backup | BLOCKED + DEPLOY-GATED | Hosting model, images, runbook, backup | O3, O8, O10, rule 16 |
-| S3 Root provisioning (ADR 0046 §2) | Fully specified; not built | **READY** | The console command | none |
+| S3 Root provisioning (ADR 0046 §2) | Fully specified; built in 0O.1 (`platform:provision-root`) | **DONE (0O.1)** | First-account creation in production (section 13) | none |
 | S4 Broader third-party integrations | Outbound webhooks production-grade; no inbound provider endpoint; no provider chosen | BLOCKED | Provider choice and integration list | O2, O13, O15, legal |
 
 ## 10. Proposed sequence (not started)
@@ -367,3 +374,36 @@ configuration hardening only.
 - DDEV (read-only): PostgreSQL 16.14, extensions, runtime role attributes,
   `DELETE` privileges, effective CORS configuration, forced-RLS count.
 - Not verified: CI run results (not accessible from this environment).
+
+## 13. Phase 0O.1 outcome (COMPLETE, 2026-09-25)
+
+Repository work only — nothing deployed, provisioned or configured; no
+secret value created or installed; no provider chosen; `NullProvider`
+unchanged and `REAL_PROVIDERS_ENABLED` semantics unchanged.
+
+| Section 10 item | Result |
+|---|---|
+| Root provisioning (ADR 0046 §2) | `php artisan platform:provision-root` — console only, `pgsql_admin`, exact existing enabled account, typed confirmation or `--force`, idempotent (partial unique index; two-process race test), audited `platform.role_grant.provisioned` (actor null, `method: console`). No trigger changed or bypassed |
+| Production fail-closed configuration | `ProductionConfigurationGuard` in `AppServiceProvider::register()` when `APP_ENV=production`: debug, `APP_KEY` (missing or unusable), `SESSION_SECURE_COOKIE`, AI signing key (missing or committed placeholder), dev service token; reads resolved config (holds under `config:cache`); codes only, never values; a refused web request is a plain 500 with debug forced off |
+| AI context signing key | Fails closed in every environment (no issue, no verify without a key) |
+| AI Gateway | No default token; `ENVIRONMENT` defaults to `production`; refuses to start without a token, or with the dev token outside `local`/`testing`; `/health/ready` returns 503 when not ready; constant-time token comparison; an empty expected token never authenticates |
+| Service identities | `ServiceIdentitySeeder` throws outside `local`/`testing` and `DatabaseSeeder` calls it only there; `platform:service-identity-issue` / `platform:service-identity-disable` (credential shown once, hash only, never logged or audited; no rotation — O5) |
+| CI role provisioning (section 6) | **Defect confirmed locally and fixed:** a clean `postgres:16-alpine` with `POSTGRES_DB=school_os_test` fails `01-roles.sql` with `database "school_os" does not exist`. The CI service now creates `school_os` and runs the three init scripts in the local order; a faithful local reproduction then migrated (via the admin role), seeded and passed RLS tests. Remote GitHub Actions results were **not** observed from this environment |
+| Production process and release contract | `docs/architecture/PRODUCTION-RELEASE.md` (components, eight scheduled commands, three queues, release order, roles, seeding, operator commands) |
+| Route cache | Proven in production mode (subprocess, fake values): `config:cache` and `route:cache` succeed and the cached route table contains no local/testing or demo route |
+
+Still open after 0O.1: **O1–O16 all remain open** (O1 is not resolved by
+this checkpoint); O6 in particular — the runtime role name `school_os_app`
+is fixed by the implementation and documented as such, not generalized.
+
+Residuals recorded by 0O.1:
+
+- The database accepts a grantor-less (out-of-band) grant of the root role
+  from any connection; only the console provisioner writes one (guard
+  test). Tightening it needs fixture and grant rework (ADR 0046
+  cross-reference).
+- Production has no way to create the first platform account that
+  `platform:provision-root` needs (touches O14).
+- Signing-key and service-token rotation stay deferred (ADR 0023, O5).
+- `docker-compose.yml`'s local worker still works only `default` (local
+  development; unchanged).

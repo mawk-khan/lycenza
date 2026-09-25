@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\ServiceIdentity;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 
 /**
  * Local/dev/test bootstrap only: creates the "ai-gateway" service
@@ -14,11 +15,20 @@ use Illuminate\Database\Seeder;
  * App\Support\ServiceIdentities\ServiceIdentityIssuer (which shows the
  * plaintext credential exactly once) rather than reading it back out of
  * an env var like this seeder does for local convenience.
+ *
+ * Phase 0O.1: it refuses (throws) outside `local`/`testing`, so the public
+ * development token can never be installed as a real deployment's
+ * credential; DatabaseSeeder calls it only in those environments. A real
+ * deployment uses `php artisan platform:service-identity-issue`.
  */
 class ServiceIdentitySeeder extends Seeder
 {
     public function run(): void
     {
+        if (! app()->environment(['local', 'testing'])) {
+            throw new RuntimeException('ServiceIdentitySeeder is local/testing only. Issue real service credentials with `php artisan platform:service-identity-issue`.');
+        }
+
         $token = (string) config('services.ai_gateway.service_token');
 
         if ($token === '') {

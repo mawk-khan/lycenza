@@ -17,8 +17,10 @@ dependency this service does not strictly need to boot).
 """
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.startup import configuration_violations
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -32,13 +34,17 @@ async def live() -> dict:
     return {"status": "ok"}
 
 
-@router.get("/ready")
-async def ready() -> dict:
+@router.get("/ready", response_model=None)
+async def ready() -> dict | JSONResponse:
     """Can this instance safely receive normal tool-invocation traffic?
     Checks only configuration this service itself needs -- never a
     live call to Laravel or a model provider (section 11).
+
+    Phase 0O.1: not ready is HTTP 503 (a load balancer or orchestrator
+    reads the status code, not the body), and the body never names the
+    reason or a value.
     """
-    if not settings.service_token:
-        return {"status": "unhealthy"}
+    if configuration_violations(settings):
+        return JSONResponse(status_code=503, content={"status": "unhealthy"})
 
     return {"status": "ok"}

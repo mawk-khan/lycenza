@@ -4,6 +4,7 @@ namespace Tests\Unit\Ai;
 
 use App\Models\School;
 use App\Models\User;
+use App\Support\Ai\AiContextSigningKeyNotConfiguredException;
 use App\Support\Ai\AiContextTokenService;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -94,5 +95,38 @@ class AiContextTokenServiceTest extends TestCase
         $this->assertNull($service->verify(''));
         $this->assertNull($service->verify('not-a-token'));
         $this->assertNull($service->verify('..'));
+    }
+
+    /**
+     * Phase 0O.1: a missing or blank signing key fails closed in EVERY
+     * environment -- it never signs (or accepts) a token with an empty
+     * HMAC key, which anyone could forge.
+     */
+    #[Test]
+    public function a_missing_or_blank_signing_key_neither_issues_nor_verifies(): void
+    {
+        $forgedWithEmptyKey = (function (): string {
+            $payload = rtrim(strtr(base64_encode((string) json_encode(['school_id' => 's', 'actor_id' => 'a', 'capabilities' => ['x'], 'exp' => time() + 60])), '+/', '-_'), '=');
+
+            return $payload.'.'.rtrim(strtr(base64_encode(hash_hmac('sha256', $payload, '', true)), '+/', '-_'), '=');
+        })();
+
+        foreach ([null, '', '   '] as $key) {
+            $service = new AiContextTokenService($key);
+
+            try {
+                $service->issue($this->fakeSchool('school-a'), $this->fakeUser('actor-1'), ['x']);
+                $this->fail('issue() must refuse a missing signing key');
+            } catch (AiContextSigningKeyNotConfiguredException $e) {
+                $this->assertStringContainsString('not configured', $e->getMessage());
+            }
+
+            try {
+                $service->verify($forgedWithEmptyKey);
+                $this->fail('verify() must refuse a missing signing key');
+            } catch (AiContextSigningKeyNotConfiguredException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 }
