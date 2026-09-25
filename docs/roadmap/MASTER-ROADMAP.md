@@ -1273,6 +1273,25 @@ invitations unusable); real two-process race proofs. No archive, delete,
 break-glass or platform membership administration. Next: Phase 0N.10
 Cross-School Reporting Contract (D15). Phase 0N stays **BLOCKED** on D15.
 
+**Phase 0N.10 — Cross-School Reporting Contract (done, 2026-09-25,
+documentation only).** The owner decided D15; **ADR 0048** records a
+narrow Group reporting model: explicit Group authority
+(`group.reporting.view`, v1 held by `group_admin`; never implied by
+platform roles, School roles, multi-School membership or elevation); an
+Analytics-owned, code-registered Group-safe report registry containing only
+`curriculum.coverage` (syllabus-unit counts, Confidential, no persons);
+per-School execution with exactly one `TenantContext` at a time, member
+Schools re-checked FOR SHARE and only `active` ones read; sums of counts and
+a recomputed unit-weighted percentage (never averaged percentages); current
+MFA assurance; `platform.school_group_report.viewed` / `.failed` on the
+platform ledger; failures fail closed (partial results only for expected
+unavailable Schools); no persistence, no export, no Compliance, Automation
+or AI cross-School access; no RLS change. ADR 0048 is also ADR 0040 §4's
+cross-School ADR for that one report. **Architecture decisions complete —
+first cross-School report implementation remains:** Phase 0N stays in
+progress until Phase 0N.11 Group Curriculum Coverage Reporting Foundation
+is built.
+
 ## Phase 0O — External Surface and Production Readiness
 
 Public developer API hardening (rate limiting, partner API keys,

@@ -128,7 +128,13 @@ asserts this directly against `pg_roles`, not just by convention.
   tenant-local only, using the ordinary isolation layers above with no
   new bypass of any kind; cross-School/platform-wide Analytics remains
   explicitly deferred to its own future, separately-reviewed
-  architecture checkpoint.
+  architecture checkpoint. **ADR 0048 (Phase 0N.10, contract only):**
+  the one authorized cross-School read is Group reporting of
+  `curriculum.coverage` — not a cross-tenant query but a bounded sequence
+  of ordinary single-School reads: for each active member School, one
+  `TenantContext::withSchool()` (SchoolScope + forced RLS as always),
+  cleared before the next School; never two Schools in one context, no
+  RLS change, no `BYPASSRLS`, no multi-School session or SQL.
 
 ## TenantContext cleanup and aborted-transaction safety (Phase 1B.4A)
 
