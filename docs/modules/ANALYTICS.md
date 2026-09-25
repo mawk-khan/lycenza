@@ -109,7 +109,11 @@ undocumented privileged database path is introduced by this contract or
 may be introduced under it without a fresh ADR.
 
 **Cross-School/platform-wide Analytics is explicitly deferred** to a
-separate future architecture checkpoint. `TENANCY.md` already states
+separate future architecture checkpoint. *(Phase 0N: ADR 0048 is that
+checkpoint for exactly one report — Group reporting of
+`curriculum.coverage`, §15. Ordinary Analytics stays School-scoped; no
+other report is cross-School, and platform-wide Analytics remains
+deferred.)* `TENANCY.md` already states
 cross-tenant reporting is theoretically possible but "not implemented
 yet" — this contract changes nothing about that. See ADR 0040 §4 for
 the full reasoning and what a future cross-School checkpoint would need
