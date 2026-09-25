@@ -6,7 +6,10 @@
 - See also: ADR 0045 (Group-derived elevation reuses this primitive; since
   Phase 0N.5 every elevation records `authority_type` and, for Group
   authority, its Group and grant, and three `terminated` end reasons were
-  added; these invariants are unchanged)
+  added; these invariants are unchanged); ADR 0047 (suspending a School
+  terminates its active elevations in the suspension transaction with a
+  new end reason `school_suspended`; elevation into a `provisioning` or
+  `suspended` School stays refused)
 
 ## Context
 

@@ -3,6 +3,10 @@
 - Status: Accepted; foundation implemented in Phase 0N.7 (see
   "Implementation amendment" at the end)
 - Date: 2026-09-24 (Phase 0N.6); amended 2026-09-25 (Phase 0N.7)
+- See also: ADR 0047 (answers §12: what School creation, activation,
+  suspension and resume mean under the root-reserved
+  `platform.schools.manage`; lifecycle audit events join the platform
+  ledger)
 
 ## Context
 

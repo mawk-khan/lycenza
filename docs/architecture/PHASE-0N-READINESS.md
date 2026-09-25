@@ -41,7 +41,13 @@ D15. **Update (Phase 0N.7, 2026-09-25):** the platform authority and audit
 foundation is implemented (ADR 0046 "Implementation amendment"):
 `platform_auditor`, history-keeping platform grants with database
 anti-escalation, and the MFA-protected platform audit log. It unblocks
-nothing else. Phase 0M
+nothing else. **Update (Phase 0N.8, 2026-09-25):** the owner decided
+**D11** (create/activate/suspend/resume; archive and delete excluded
+behind a legal gate) and **D13** for v1 (bootstrap School Admin before
+first activation only; no ongoing platform membership administration);
+**ADR 0047 (School Lifecycle & Bootstrap Administration Contract)**
+records them (nothing built; proposed Phase 0N.9). **The only remaining
+Phase 0N decision is D15** (Group / cross-School reporting). Phase 0M
 (`AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`)
 is independent and remains BLOCKED.
 
@@ -260,9 +266,9 @@ possible by weakening it):
 | Need | Existing capability? | Note |
 |---|---|---|
 | School directory / list | `platform.schools.view` exists, unused | Classification of School metadata first (D14) |
-| School create / configure | `platform.schools.manage` exists, unused | In scope only if the owner adds it (D11) |
-| School activate / suspend | Could reuse `platform.schools.manage` or need its own | Suspension semantics open (D11) |
-| Membership administration | School-side `school.members.manage` exists | Platform-side need open (D13) |
+| School create / configure | `platform.schools.manage` exists, unused | In scope only if the owner adds it (D11). *Decided, ADR 0047: create, bootstrap admin, activate, suspend and resume all use `platform.schools.manage` (root-reserved); nothing new seeded* |
+| School activate / suspend | Could reuse `platform.schools.manage` or need its own | Suspension semantics open (D11). *Decided, ADR 0047 §7–8* |
+| Membership administration | School-side `school.members.manage` exists | Platform-side need open (D13). *Decided, ADR 0047 §6: bootstrap exception only* |
 | Platform role grants | None | Who may grant `platform_super_admin` (D12) |
 | Elevation into a School | None | Separate capability; never implied by `platform_super_admin` alone (D2) |
 | Group administration | None; no group scope | D1 |
@@ -492,6 +498,17 @@ owner puts it in 0N, these gates apply:
   REQUIRED]**; Finance (ADR 0030), HR/Payroll and Student records carry
   their own retention obligations. Recorded here, not changed.
 
+**Resolution (Phase 0N.8, ADR 0047).** Lifecycle is
+`provisioning → active → suspended → active` on the existing
+`schools.status` column (new value `provisioning`; `archived` kept, no
+transition). Suspension is enforced at execution time in every business
+substrate (webhooks and communications deferred, automation skipped,
+announcements held, AI and invitation acceptance refused), with platform
+safety work continuing; the gaps listed above, plus AI minting and the
+public Guardian invitation route found during 0N.8, are the Phase 0N.9
+scope. Archive/delete stay excluded behind the legal gate; the runtime
+role loses `DELETE` on `schools` in 0N.9.
+
 ## 14. Membership administration
 
 - **Today.** Memberships are created only by seeders and by the Guardian
@@ -508,6 +525,13 @@ owner puts it in 0N, these gates apply:
 - **Where 0N touches it.** Creating a School needs a first School Admin;
   and "give the operator a real membership" is one possible alternative
   to elevation (D3). Both are decisions, not assumptions.
+- **Resolution (Phase 0N.8, ADR 0047 §4, §6).** The platform may
+  establish or replace the bootstrap School Admin (a real, ordinary
+  membership and `school_admin` assignment for an exact, existing,
+  enabled user) only while the School is `provisioning`; the path closes
+  permanently at first activation. Ongoing platform membership
+  administration is not authorized in v1; losing every School Admin later
+  is a future break-glass decision.
 
 ## 15. Decision matrix
 
@@ -523,10 +547,10 @@ owner puts it in 0N, these gates apply:
 | D8 | Effective capabilities while elevated | None | fixed "support" capability set; copy of a School role; nothing beyond School setup | Security | **Decided, ADR 0044** — elevation establishes context, grants no School capability |
 | D9 | Platform-admin landing | DDEV-DEMO-REVIEW ("no platform UI") | (a) platform-scope landing showing no tenant data; (b) School directory (needs D14) | Product | **Approved (a) and implemented, Phase 0N.1** |
 | D10 | No-School behaviour on School routes | Section 11 | (a) redirect to School selection, no auto-select; (b) also auto-select a single active membership | Product | **Approved (a) and implemented, Phase 0N.1** |
-| D11 | School lifecycle in 0N, and what suspension stops | ORGANIZATION.md; section 13 | include create/activate/suspend; defer archive; delete excluded | Product + legal (archive/delete, retention) | Yes — lifecycle |
+| D11 | School lifecycle in 0N, and what suspension stops | ORGANIZATION.md; section 13 | include create/activate/suspend; defer archive; delete excluded | Product + legal (archive/delete, retention) | **Decided, ADR 0047** — create (root, `provisioning`), activate (bootstrap admin required), suspend (closed reason codes; execution-time enforcement per substrate), resume (no global replay); fresh MFA for every lifecycle action; archive/delete excluded pending a retention/legal decision |
 | D12 | Who may create Schools and grant platform roles | No platform-role administration exists | platform_super_admin only; two-person rule; CLI-only | Security | **Decided, ADR 0046** — `platform_super_admin` is root/bootstrap (never runtime-granted); School creation root-only (what it means stays D11); root grants only code-approved non-root roles (v1: `platform_auditor`); no self-grant |
-| D13 | Platform-level membership administration | Section 14 | out of 0N (School-owned); first School Admin at creation only | Product | Yes — School creation |
-| D14 | Classification of School metadata, memberships, platform roles, elevation records, platform audit | No rows in DATA-CLASSIFICATION.md (section 9) | tiers per section 9 or stricter | Security / privacy | **Decided for elevation records only, ADR 0044** — Highly Sensitive (v1); School metadata, memberships, platform roles, directory still open |
+| D13 | Platform-level membership administration | Section 14 | out of 0N (School-owned); first School Admin at creation only | Product | **Decided for v1, ADR 0047** — bootstrap School Admin before first activation only; no ongoing platform membership administration; break-glass recovery a future decision |
+| D14 | Classification of School metadata, memberships, platform roles, elevation records, platform audit | No rows in DATA-CLASSIFICATION.md (section 9) | tiers per section 9 or stricter | Security / privacy | **Decided for elevation records only, ADR 0044** — Highly Sensitive (v1); *ADR 0045 (Group records), ADR 0046 (platform audit, platform role assignments) and ADR 0047 (School metadata/lifecycle Confidential, bootstrap relationship Sensitive, lifecycle audit Highly Sensitive) added rows*; ordinary School memberships beyond the bootstrap relationship still unclassified |
 | D15 | Group-level / cross-School reporting | ADR 0040 §4, ADR 0042, ADR 0043 | own ADR; or remove reporting from 0N | Product + security (+ legal) | Yes — reporting |
 | D16 | Platform audit review surface | ADR 0042 §13 item 2 | who may read `platform_audit_events`, with what metadata | Security | **Decided, ADR 0046** — `platform.audit.view` (root + `platform_auditor`); context-neutral, Highly Sensitive, empty metadata allowlist, access audited; Schools see no elevation events in v1 |
 | D17 | Auditing denied selection / elevation | ADR 0017 ("worth auditing in later phases") | audit denials in `platform_audit_events` or not | Security | **Decided, ADR 0044** — denied elevation audited in the platform ledger (denied School selection unchanged) |
@@ -553,9 +577,9 @@ Engineering prerequisites:
 | No-School web requests handled without a 500 | **Done** (Phase 0N.1, D10(a); section 11 "Resolution") |
 | Platform-scope landing | **Done** as the neutral `/app` state (Phase 0N.1, D9(a)); no platform administration UI |
 | Elevation substrate | **Done** (Phase 0N.3, ADR 0044 amendment); no School route opted in |
-| Classification rows for 0N records | **Elevation records done** (D14, ADR 0044, DATA-CLASSIFICATION.md); School metadata / memberships / platform roles / directory still missing |
-| Suspension enforced beyond web/API | **Missing** (section 13, D11) |
-| School deletion safe for audit/finance evidence | **Not safe** (cascade FKs, section 13); only matters if deletion is ever in scope |
+| Classification rows for 0N records | **Elevation records done** (D14, ADR 0044, DATA-CLASSIFICATION.md); Group records (ADR 0045), platform audit/roles (ADR 0046), School metadata/lifecycle and the bootstrap relationship (ADR 0047) added; ordinary memberships still missing |
+| Suspension enforced beyond web/API | **Missing** (section 13); contract decided (ADR 0047 §8), built in the proposed Phase 0N.9 |
+| School deletion safe for audit/finance evidence | **Not safe** (cascade FKs, section 13); no delete in v1; ADR 0047 §12 revokes runtime `DELETE` on `schools` in 0N.9; archive/delete need a legal decision |
 | RLS, runtime role, platform/School role separation | Present and verified |
 
 ## 17. First implementation checkpoint (implemented as Phase 0N.1)
