@@ -1,7 +1,8 @@
 # ADR 0052: Supply Chain & Artifact Security Contract (Phase 0O.6)
 
-- Status: Accepted (contract only — nothing implemented, built for release,
-  signed, pushed or promoted; Phase 0O.6A implements the repository side).
+- Status: Accepted. Repository side implemented by Phase 0O.6A (see the
+  amendment at the end); nothing has been pushed, published or promoted, and
+  no registry, signing key or keyless identity is configured.
 - Date: 2026-09-26
 - Resolves: Phase 0O decision **O16** (dependency audit, artifact
   integrity, image pinning, production promotion policy)
@@ -466,3 +467,105 @@ ADR 0016, ADR 0050, ADR 0051; `infrastructure/docker/production/*`;
 `package-lock.json`, `.npmrc`; `services/ai/requirements*.txt`;
 `docs/operations/MAINTENANCE-WINDOW-RELEASE.md`,
 `docs/architecture/PRODUCTION-RELEASE.md`.
+
+## Amendment — Phase 0O.6A implementation (2026-09-26)
+
+Implemented as specified, in `infrastructure/release/` (Python standard
+library only; every tool a digest-pinned container image named in
+`artifact-policy.json`), `.github/workflows/{ci,release-qualification,sbom-rescan}.yml`,
+the production Dockerfiles, `services/ai/requirements.lock`, `.gitleaks.toml`,
+`Tests\Feature\Configuration\SupplyChainGuardTest` and 62 release-tooling
+tests. **NO PRODUCTION REGISTRY IS CONFIGURED. NO REAL SIGNING IDENTITY/KEY IS
+CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
+PROMOTED.**
+
+Implementation decisions and narrowings (none weakens the contract):
+
+1. **Pinned digests are the last-qualified ones.** `php:8.3.33-fpm-bookworm`,
+   `node:22.23.3-bookworm-slim`, `composer:2.10.2` and
+   `python:3.12.14-slim-bookworm` are pinned to the exact digests the 0O.4A /
+   0O.5A images were verified from (no silent toolchain change). The
+   registry has since re-published the `composer:2.10.2` and
+   `python:3.12.14-slim-bookworm` tags with newer digests, and
+   `php:8.3-fpm-bookworm` has moved to a newer PHP; adopting any of them is
+   an ordinary reviewed base update (§3.3).
+2. **OCI archive through a dedicated builder.** Docker's default `docker`
+   driver cannot export OCI archives, so each qualification creates a
+   throwaway `docker-container` builder from a pinned BuildKit image, builds
+   with `--no-cache` from a `git archive` of the commit (never the working
+   tree) and exports the OCI archive (the identity) plus, from the same
+   build, a docker archive loaded locally for `verify-images.sh` and the
+   filesystem scans; the loaded image id must equal the archive's config
+   digest. OCI labels (`source`, `revision`, `version`, `created`) come from
+   the policy, `git` and the clock only.
+3. **Grype scans the SBOM**, not the archive: verified identical results on
+   both images, and it makes the scheduled re-scan of a retained SBOM the
+   same operation. The database is refreshed per run and its build time
+   checked (≤ 24 h at scan time).
+4. **Image secret scan = gitleaks** (the ADR's "equivalent pinned tool") over
+   the exported filesystem, plus a canary/shape scanner (committed
+   development values outside the guards that refuse them, application
+   credential shapes, `APP_KEY` values, PEM private-key material, `.env`
+   files) and the config/history/env/label scan (build arguments leaked into
+   `RUN` history, secret-shaped variables set in any layer). Allowlists are
+   exact: gitleaks entries name one path and one value **and are scoped to
+   the `generic-api-key` rule** — a global gitleaks 8.28 allowlist path
+   exempts the whole file even with `condition = "AND"`, which the canary
+   proof test demonstrates is avoided; the canary scanner's allowlist also
+   pins the file's sha256 (the only entry: GnuTLS's compiled-in self-test
+   keys).
+5. **Exceptions are exact-version only** — the narrowest form of "version or
+   version constraint": ranges are refused because version ordering differs
+   between dpkg, PEP 440 and SemVer. An exception must also match the
+   reported severity. Any invalid entry invalidates the whole file.
+6. **Unrated language advisories** (pip-audit reports no severity; some
+   Composer advisories) are treated as HIGH and fixable, i.e. blocking until
+   resolved or excepted. UNKNOWN and NEGLIGIBLE scanner severities are
+   recorded with MEDIUM/LOW.
+7. **Language audits in PR CI report; the release gate blocks.** PR CI runs
+   lockfile integrity, the audits (report only — an advisory published after
+   merge must not block unrelated work), the release-tooling tests, a full
+   image build with `verify-images.sh`, gitleaks over the full history (the
+   pinned image, replacing the third-party gitleaks action and its token)
+   and the PHP guards. The release workflow's `verify-artifact` applies the
+   policy to the same reports.
+8. **Lockfile integrity** = `composer validate --strict`, `npm ci --dry-run`
+   (npm's own "lock out of sync" refusal) and `pip-compile` reproducing
+   `requirements.lock` byte for byte, all in pinned images.
+9. **Same-run regression** = `infrastructure/release/regression-gates` (every
+   static/frontend/Gateway gate, the release-tooling tests, then the complete
+   ERP regression through `bin/safe-test`), recorded with the run id and
+   commit that the provenance and verifier check.
+10. **Signing.** `cosign sign-blob` of `bundle.json` (every evidence file's
+    sha256 plus each image's digest and SBOM/provenance/scan digests) with a
+    per-run key generated in a private temporary directory, transparency-log
+    upload disabled (no external service), private key destroyed after use.
+    `verify-artifact` verifies through a custody `Verifier` that also
+    implements `external-key` (a cosign-resolvable reference, no KMS SDK)
+    and `keyless` (identity + issuer); with custody `unconfigured` and no
+    test key it fails `signing_identity_not_configured`.
+11. **Runners** are `ubuntu-24.04` in every workflow, not only release ones.
+
+**Qualification result on the final code (2026-09-26, Grype database built
+2026-09-26T06:29Z):** every mechanical check passes for both images (lock
+integrity, source and image secret scans, build, `verify-images.sh`, SBOM,
+provenance, signature, bundle integrity, digest, linkage), but **both images
+FAIL `vulnerability_policy`** and therefore neither is VERIFIED:
+
+- application image: 40 Critical and 112 High findings, 152 blocking (56
+  distinct advisories) — all Debian bookworm packages of the PHP base;
+  only OpenSSL (`libssl3`/`openssl` 3.0.20 → 3.0.22) has a fix, the rest
+  (glibc, perl, curl, libxml2, sqlite, util-linux, ncurses, nginx, …) are
+  `not-fixed`/`wont-fix` in Debian;
+- AI Gateway image: 10 Critical and 75 High findings, 85 blocking (46
+  distinct) — the same unfixed Debian classes, OpenSSL and PCRE2 with fixes,
+  CPython 3.12.14 (fix only in a later minor), and **Starlette 0.47.3**
+  (several advisories fixed in 0.49.1–1.3.1, which the pinned FastAPI
+  0.116.1 does not allow).
+
+No exception was created (an approval is a human security decision) and no
+dependency or base was changed to make the gate pass (0O.6A was scoped to
+lock the existing versions, with no upgrade and no auto-fix). Reaching VERIFIED needs an owner/security
+decision: a reviewed base refresh (newer bookworm digests, or a newer Debian
+release/minimal base), a FastAPI/Starlette upgrade, and exceptions — or a
+base change — for the Debian findings that have no fix.

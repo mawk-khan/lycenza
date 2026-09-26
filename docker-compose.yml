@@ -93,6 +93,12 @@ services:
       # Gateway's runtime requirements (no vendor telemetry SDK).
       - ./docs:/var/docs:ro
       - ./services/ai/requirements.txt:/var/services/ai/requirements.txt:ro
+      # Phase 0O.6A: the supply-chain guards (SupplyChainGuardTest) read the
+      # workflows, the source secret-scan allowlist and the Gateway's
+      # hash-locked requirements.
+      - ./.github:/var/.github:ro
+      - ./.gitleaks.toml:/var/.gitleaks.toml:ro
+      - ./services/ai/requirements.lock:/var/services/ai/requirements.lock:ro
     env_file:
       - ./apps/platform/.env
     environment:

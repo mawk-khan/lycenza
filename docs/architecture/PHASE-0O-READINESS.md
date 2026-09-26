@@ -714,3 +714,48 @@ Decisions: O3, O4, O6, O7, O8, O10, O11, O12, **O16** resolved (O12 and O16
 with deployment evidence outstanding); **O1, O2, O5, O9, O13, O14, O15
 open**. Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M:
 **BLOCKED**. REAL RESTORE DRILL STILL OUTSTANDING.
+
+## 22. Phase 0O.6A — Supply Chain & Artifact Security Foundation (COMPLETE, 2026-09-26)
+
+Repository implementation of ADR 0052 (amendment "Phase 0O.6A
+implementation"). **NO PRODUCTION REGISTRY IS CONFIGURED. NO REAL SIGNING
+IDENTITY/KEY IS CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION
+IMAGE HAS BEEN PROMOTED.**
+
+- **Inputs:** production bases pinned by digest (the last-qualified digests);
+  every workflow action pinned to a commit SHA with its version; all runners
+  `ubuntu-24.04`; workflows `contents: read`, no `pull_request_target`, no
+  repository secret (the gitleaks action replaced by the pinned image);
+  Composer `--no-scripts --no-plugins` with `allow-plugins: false` (stale
+  entries removed); `.npmrc` in effect for `npm ci` in the image; the Gateway
+  installs a fully resolved hash lock (`services/ai/requirements.lock`, the
+  same 22 packages + pip as the verified image) wheels-only with
+  `--require-hashes --no-deps`.
+- **Qualification (`infrastructure/release/qualify`):** lockfile integrity,
+  the same-run complete regression (`regression-gates`), gitleaks source
+  scan, `composer audit`/`npm audit`/`pip-audit` (unmodified reports),
+  fresh-builder OCI-archive builds with OCI labels (→ BUILT),
+  `verify-images.sh` (now 61 checks), Syft SPDX 2.3 SBOM, Grype with a fresh
+  ≤ 24 h database, image filesystem/config/history/env/label secret scans,
+  in-toto/SLSA v1 provenance (no level claimed), an evidence bundle signed
+  with an ephemeral NON-PRODUCTION key, and `verify-artifact` (15 fail-closed
+  checks) → VERIFIED or FAIL. States PUBLISHED/PROMOTED are refused.
+- **CI:** PR subset (lockfile integrity, audits reported, release-tooling
+  tests, image build + `verify-images.sh`, full-history secret scan, PHP
+  guards); `Release qualification` (`workflow_dispatch` on protected `main`,
+  one run, evidence upload 90 days, never keys/`.env`/archives); `SBOM
+  re-scan` (daily; `retained-releases.json` is empty).
+- **Runbooks:** `docs/operations/RELEASE-QUALIFICATION.md`,
+  `docs/operations/SUPPLY-CHAIN-INCIDENTS.md`; CLAUDE.md rule 87.
+- **Result:** both images pass every mechanical gate but **FAIL the
+  vulnerability policy** (application 40 Critical/112 High; Gateway 10
+  Critical/75 High incl. Starlette 0.47.3) — neither digest is VERIFIED. No
+  exception was fabricated and nothing was upgraded to pass.
+- **O16:** repository portion **COMPLETE**; deployment evidence (registry,
+  custody, a signed and verified promoted release) outstanding, and a
+  VERIFIED digest additionally needs the vulnerability remediation decision.
+
+Decisions: O3, O4, O6, O7, O8, O10, O11, O12, O16 resolved (O12 and O16 with
+deployment evidence outstanding); **O1, O2, O5, O9, O13, O14, O15 open**.
+Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M:
+**BLOCKED**. REAL RESTORE DRILL STILL OUTSTANDING.

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#
+# Phase 0O.6A (ADR 0052 section 3.15): every release TEST gate for the
+# checked-out commit, in order, stopping at the first failure. Release
+# qualification runs it as the same-run complete regression:
+#
+#   infrastructure/release/qualify all --out EVIDENCE --artifacts ARTIFACTS -- infrastructure/release/regression-gates
+#
+# Expects Composer and npm dependencies already installed from their locks
+# (apps/platform/vendor, node_modules) and a Gateway Python with
+# requirements-dev.txt (GATEWAY_PYTHON, default services/ai/.venv/bin/python).
+# The complete ERP regression is the canonical runner (rule 78); set
+# SAFE_TEST_ISOLATED=1 to use the isolated Compose project locally.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PY="${GATEWAY_PYTHON:-${ROOT}/services/ai/.venv/bin/python}"
+step() { printf '\n== [regression-gates] %s\n' "$*"; }
+
+cd "${ROOT}/apps/platform"
+step "Pint";                       vendor/bin/pint --test
+# A fresh, throwaway analysis cache: caches are optimizations, never release inputs.
+phpstan_dir="$(mktemp -d)"
+trap 'rm -rf "${phpstan_dir}"' EXIT
+printf 'includes:\n  - %s/phpstan.neon\nparameters:\n  tmpDir: %s\n' "${PWD}" "${phpstan_dir}/cache" > "${phpstan_dir}/phpstan.neon"
+step "Larastan";                   vendor/bin/phpstan analyse -c "${phpstan_dir}/phpstan.neon" --memory-limit=1G --no-progress
+step "TypeScript type-check";      npm run type-check
+step "ESLint";                     npm run lint
+step "Prettier";                   npm run format:check
+step "Frontend build";             npm run build
+
+cd "${ROOT}/services/ai"
+step "Gateway ruff";               "${PY}" -m ruff check .
+step "Gateway ruff format";        "${PY}" -m ruff format --check .
+step "Gateway mypy";               "${PY}" -m mypy app
+step "Gateway pytest";             "${PY}" -m pytest -q
+
+cd "${ROOT}/infrastructure/release"
+step "Release tooling tests";      python3 -B -m unittest discover -s tests
+
+cd "${ROOT}"
+step "Complete ERP regression: reset the test database"
+apps/platform/bin/safe-test --reset-db
+step "Complete ERP regression: full suite (PostgreSQL, Redis, MinIO)"
+apps/platform/bin/safe-test
+
+step "all release test gates passed"

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mawk-khan/lycenza/infrastructure/release/schema/retained-releases.schema.json",
+  "title": "Releases whose retained SBOMs are re-scanned (ADR 0052 section 3.7)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "releases"],
+  "properties": {
+    "$comment": {"type": "string"},
+    "schema_version": {"const": 1},
+    "releases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["image", "digest", "role", "evidence_run_id"],
+        "properties": {
+          "image": {"enum": ["app", "ai-gateway"]},
+          "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "role": {"enum": ["current", "rollback-candidate"]},
+          "evidence_run_id": {"type": "string", "pattern": "^[0-9]+$"}
+        }
+      }
+    }
+  }
+}

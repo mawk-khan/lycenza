@@ -92,7 +92,9 @@ class ProductionImageContractTest extends TestCase
 
         $this->assertMatchesRegularExpression('/^USER gateway$/m', $dockerfile);
         $this->assertStringContainsString('ENVIRONMENT=production', $dockerfile);
-        $this->assertStringContainsString('requirements.txt', $dockerfile);
+        // Phase 0O.6A (ADR 0052 section 3.5): runtime dependencies come from the
+        // fully resolved, hash-locked requirements.lock (SupplyChainGuardTest).
+        $this->assertStringContainsString('requirements.lock', $dockerfile);
         $this->assertStringNotContainsString('requirements-dev.txt', $dockerfile);
         $this->assertStringNotContainsString('--reload', $dockerfile);
         $this->assertDoesNotMatchRegularExpression('/^(ENV|ARG)[^\n]*(SERVICE_TOKEN|SECRET|PASSWORD)/m', $dockerfile);

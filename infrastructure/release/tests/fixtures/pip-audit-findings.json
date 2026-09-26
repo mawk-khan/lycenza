@@ -1,0 +1,1 @@
+{"dependencies": [{"name": "examplepkg", "version": "2.0.0", "vulns": [{"id": "PYSEC-2026-42", "fix_versions": ["2.0.1"], "aliases": ["CVE-2026-0002"], "description": "Example"}]}], "fixes": []}

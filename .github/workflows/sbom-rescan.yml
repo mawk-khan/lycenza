@@ -1,0 +1,45 @@
+# Phase 0O.6A (ADR 0052 section 3.7): scheduled, credential-free re-scan of
+# the RETAINED SBOMs of the current release and its approved rollback
+# candidates (infrastructure/release/retained-releases.json) with a fresh
+# vulnerability database. It reports only -- it never rebuilds, redeploys or
+# rolls back anything. The list is empty until a release is promoted:
+# NO PRODUCTION IMAGE HAS BEEN PUSHED OR PROMOTED.
+name: SBOM re-scan
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read # download the retained evidence of earlier qualification runs
+
+jobs:
+  rescan:
+    name: Re-scan retained release SBOMs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Re-scan (fresh database; report only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          releases="$(infrastructure/release/qualify retained)"
+          if [ -z "$releases" ]; then
+            echo "No retained release to re-scan (nothing has been promoted)."
+            exit 0
+          fi
+          status=0
+          while read -r run_id image digest _role; do
+            dir="$RUNNER_TEMP/evidence-$run_id"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --pattern "release-evidence-*" --dir "$dir"
+            sbom="$(find "$dir" -path "*/images/$image/sbom.spdx.json" | head -n1)"
+            infrastructure/release/qualify rescan --sbom "$image=$sbom" --expect "$image=$digest" \
+              --out "$RUNNER_TEMP/rescan/$run_id-$image" || status=1
+          done <<< "$releases"
+          exit "$status"

@@ -11,12 +11,17 @@
 #   docker build -f infrastructure/docker/production/app.Dockerfile \
 #     -t lycenza-app:<version> apps/platform
 #
-# Base images are pinned by tag; digest pinning follows the future O16
-# supply-chain policy.
+# Phase 0O.6A (ADR 0052 section 3.2): every base image is pinned BY DIGEST
+# (`image:exact-version@sha256:...`); the tag is a readable alias only and
+# the toolchain (PHP 8.3.33, Composer 2.10.2, Node 22.23.3 / npm 10.9.9) is
+# whatever these digests contain. A digest update is an ordinary reviewed
+# change that re-runs full release qualification (ADR 0052 section 3.3);
+# Tests\Feature\Configuration\SupplyChainGuardTest refuses a tag-only base.
+# Release builds never pass --build-arg for these.
 
-ARG PHP_IMAGE=php:8.3-fpm-bookworm
-ARG NODE_IMAGE=node:22-bookworm-slim
-ARG COMPOSER_IMAGE=composer:2
+ARG PHP_IMAGE=php:8.3.33-fpm-bookworm@sha256:cfdaca428b2c53858e048fabb0e7afafc01e5156c289f55197d383040c7c8435
+ARG NODE_IMAGE=node:22.23.3-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
+ARG COMPOSER_IMAGE=composer:2.10.2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040
 
 FROM ${COMPOSER_IMAGE} AS composer-bin
 
@@ -28,19 +33,25 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # --- Production PHP dependencies ------------------------------------------
+# From composer.lock only (`install`, never `update`); no Composer plugin and
+# no package script runs (ADR 0052 sections 3.5, 3.18). Laravel's own package
+# discovery is the one explicit step.
 FROM php-ext AS vendor
 COPY --from=composer-bin /usr/bin/composer /usr/bin/composer
 WORKDIR /app
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction --no-progress
+RUN composer install --no-dev --no-scripts --no-plugins --no-autoloader --prefer-dist --no-interaction --no-progress
 COPY . .
-RUN composer dump-autoload --no-dev --optimize --no-scripts --no-interaction \
+RUN composer dump-autoload --no-dev --optimize --no-scripts --no-plugins --no-interaction \
  && APP_ENV=build php artisan package:discover --ansi
 
 # --- Frontend assets --------------------------------------------------------
+# .npmrc is copied BEFORE `npm ci` so its ignore-scripts=true applies: no
+# dependency lifecycle script runs; the build itself is the explicit
+# `npm run build` below (ADR 0052 section 3.5).
 FROM ${NODE_IMAGE} AS assets
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json .npmrc ./
 RUN npm ci --no-audit --no-fund
 COPY . .
 # Tailwind's @source reads the framework's pagination views.

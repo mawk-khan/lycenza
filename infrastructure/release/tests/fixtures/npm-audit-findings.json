@@ -1,0 +1,12 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "example-lib": {"name": "example-lib", "severity": "moderate", "isDirect": false,
+      "via": [{"source": 1099999, "name": "example-lib", "title": "Example", "url": "https://github.com/advisories/GHSA-8888-9999-cccc",
+               "severity": "moderate", "range": "<3.0.1"}],
+      "effects": ["example-parent"], "range": "<3.0.1", "nodes": ["node_modules/example-lib"], "fixAvailable": true},
+    "example-parent": {"name": "example-parent", "severity": "moderate", "isDirect": true, "via": ["example-lib"],
+      "effects": [], "range": "*", "nodes": ["node_modules/example-parent"], "fixAvailable": true}
+  },
+  "metadata": {"vulnerabilities": {"info": 0, "low": 0, "moderate": 2, "high": 0, "critical": 0, "total": 2}}
+}

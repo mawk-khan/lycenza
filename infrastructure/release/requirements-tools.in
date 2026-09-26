@@ -1,0 +1,9 @@
+# Phase 0O.6A (ADR 0052 sections 3.2, 3.5, 3.7): the Python release tools --
+# pip-tools (the services/ai/requirements.lock generator and freshness
+# check) and pip-audit (Python advisory audit). Installed only from the
+# hash-locked requirements-tools.lock, wheels only, inside the pinned Python
+# base image (infrastructure/release/lib/tools.py); never into an
+# application image. pip is the version the pinned base image ships.
+pip==25.0.1
+pip-tools==7.6.1
+pip-audit==2.10.1

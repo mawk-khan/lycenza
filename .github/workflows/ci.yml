@@ -15,19 +15,56 @@ concurrency:
 
 jobs:
   secrets-scan:
-    name: Secrets scan
-    runs-on: ubuntu-latest
+    name: Secrets scan (gitleaks, full history)
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+      # Phase 0O.6A (ADR 0052 section 3.9): the pinned gitleaks image (the
+      # same digest release qualification uses) with the repository's
+      # exact-match allowlist (.gitleaks.toml); no third-party action and no
+      # token.
+      - name: gitleaks (pinned image, repository allowlist)
+        run: >-
+          docker run --rm -v "$PWD:/repo:ro"
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*'
+          zricethezav/gitleaks:v8.28.0@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854
+          git /repo --config /repo/.gitleaks.toml --no-banner --redact --exit-code 1
+
+  # Phase 0O.6A (ADR 0052 section 3.15, "PR CI subset"): lockfile integrity,
+  # language audits (reported, never auto-fixed), the release tooling's own
+  # tests -- no release or registry credential exists anywhere in CI.
+  supply-chain:
+    name: Supply chain (lockfiles, audits, release tooling)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Release tooling tests (policy, exceptions, evaluator, scans, provenance, verify-artifact)
+        working-directory: infrastructure/release
+        run: python3 -B -m unittest discover -s tests -v
+      - name: Lockfile integrity (composer validate --strict, npm ci --dry-run, pip-compile freshness)
+        run: |
+          infrastructure/release/qualify init --out "$RUNNER_TEMP/supply-chain"
+          infrastructure/release/qualify inputs --out "$RUNNER_TEMP/supply-chain"
+      - name: Language audits (composer audit, npm audit, pip-audit; report only)
+        run: infrastructure/release/qualify audit --out "$RUNNER_TEMP/supply-chain"
+
+  production-images:
+    name: Production images (build + verify-images.sh; never pushed)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: infrastructure/docker/production/verify-images.sh --build
 
   platform:
     name: Laravel (apps/platform)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       # Bootstrap superuser only -- the school_os_app runtime role
       # (ADR 0021) is created by the "Provision database roles" step
@@ -58,21 +95,22 @@ jobs:
       run:
         working-directory: apps/platform
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
           php-version: "8.3"
           extensions: pdo_pgsql, pgsql, bcmath, zip, gd
           coverage: none
 
       - name: Cache Composer dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: apps/platform/vendor
           key: composer-${{ hashFiles('apps/platform/composer.lock') }}
 
-      - run: composer install --no-interaction --prefer-dist
+      # From composer.lock only; no Composer plugin runs (ADR 0052 section 3.5).
+      - run: composer install --no-interaction --prefer-dist --no-plugins
 
       - run: cp .env.example .env
       - run: php artisan key:generate
@@ -114,7 +152,7 @@ jobs:
       - name: Larastan (static analysis)
         run: vendor/bin/phpstan analyse --memory-limit=512M
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
@@ -151,14 +189,14 @@ jobs:
 
   ai-service:
     name: AI Gateway (services/ai)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: services/ai
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
           cache: pip
@@ -177,7 +215,7 @@ jobs:
 
   mobile:
     name: Flutter (apps/mobile)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # NOTE: this job's correctness has NOT been verified locally — the
     # Flutter SDK was unavailable in the environment this repo was
     # scaffolded in. Verify on first real change to apps/mobile.
@@ -185,8 +223,8 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
       - run: flutter pub get
@@ -195,14 +233,14 @@ jobs:
 
   shared-types:
     name: Contracts -> shared TypeScript types
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: packages/shared-types
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm

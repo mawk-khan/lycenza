@@ -28,11 +28,14 @@ never worked on.
 
 0. **Artifact verification comes first (ADR 0052 §3.19).** The images to
    deploy are PROMOTED digests whose SBOM, scan, provenance and signature
-   passed the aggregate verifier (Phase 0O.6A). Never open a maintenance
-   window to discover an unsigned or failing image.
-1. **Build once** from the released commit (both images), run
-   `verify-images.sh` against them in CI or locally. Push to the registry
-   (deploy-gated; after ADR 0052's verification, by digest).
+   passed the aggregate verifier (`infrastructure/release/verify-artifact`,
+   [RELEASE-QUALIFICATION.md](RELEASE-QUALIFICATION.md)). Never open a
+   maintenance window to discover an unsigned or failing image.
+1. **Build once** — release qualification (`infrastructure/release/qualify`)
+   builds both images from the released commit, runs `verify-images.sh`
+   against exactly those images and produces their evidence. Publishing to
+   a registry is deploy-gated and happens only for a VERIFIED digest, by
+   digest (a digest-preserving copy — never a rebuild).
 2. **Announce** the window.
 3. `console down --retry=60` (old image). Readiness goes 503; workers pause;
    the scheduler idles.
@@ -63,7 +66,9 @@ never worked on.
 ## Rollback
 
 Code-only rollback (no migration in the release): redeploy the previous
-image the same way. **With migrations:** there is no general `down()`
+**promoted digest** the same way, after re-verifying its retained evidence
+(`RELEASE-QUALIFICATION.md` → Rollback) — never a rebuild of an old commit,
+and never automatically. **With migrations:** there is no general `down()`
 rollback in production — restore to the step-5 checkpoint
 (`BACKUP-AND-RESTORE.md`) and redeploy the previous image. Decide before
 step 6 whether the release is reversible.
