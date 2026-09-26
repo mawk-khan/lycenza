@@ -14,6 +14,8 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 | [REDIS-LOSS-RECOVERY.md](REDIS-LOSS-RECOVERY.md) | What a Redis loss costs and how queued work is rebuilt from PostgreSQL |
 | [BACKUP-AND-RESTORE.md](BACKUP-AND-RESTORE.md) | PostgreSQL and object-storage backup requirements, the restore procedure, restore validation |
 | [RESTORE-DRILL-RECORD.md](RESTORE-DRILL-RECORD.md) | The drill record template (no drill has been performed) |
+| [RELEASE-QUALIFICATION.md](RELEASE-QUALIFICATION.md) | Release order, qualification to VERIFIED, exceptions, rollback re-verification, evidence retention, the scheduled re-scan (ADR 0052) |
+| [SUPPLY-CHAIN-INCIDENTS.md](SUPPLY-CHAIN-INCIDENTS.md) | Compromised dependency, compromised CI action, leaked signing key/identity, malicious artifact, Critical CVE after deployment |
 
 Observability and alerting are contracted by ADR 0051
 (`docs/architecture/adr/0051-production-observability-alerting-contract.md`):
@@ -32,6 +34,8 @@ Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
 | Production images build and pass local verification | Repository-verified (`infrastructure/docker/production/verify-images.sh`) |
 | Production database bootstrap on a clean PostgreSQL 16 | Repository-verified on a throwaway cluster (`infrastructure/postgres/verify-production-bootstrap.sh`) |
 | Redis-loss reconciliation | Repository-verified (real Redis, `Tests\Feature\Recovery\RedisQueueLossRecoveryTest`) |
+| Release qualification (lock integrity, SBOM, vulnerability scan, secret/history scans, provenance, ephemeral signature, `verify-artifact`) | Repository-verified; **both images currently FAIL the vulnerability policy** (ADR 0052 amendment) — no digest is VERIFIED |
+| Registry, signing custody, publication, promotion | **Not configured / not performed** |
 | Real deployment, real secrets, real bucket policy | **Not performed** |
 | Backup policy activation (PITR, object copy) | **Not performed** |
 | **Restore drill in a real non-production environment** | **REAL RESTORE DRILL STILL OUTSTANDING** |
@@ -49,12 +53,15 @@ Each prints one line per check — `PASS`, `FAIL` or
 `OPERATOR_EVIDENCE_REQUIRED` — and exits non-zero on any `FAIL`. None
 prints a credential, endpoint, error text, filename or payload.
 
-## Supply chain (ADR 0052, contract)
+## Supply chain (ADR 0052, implemented in Phase 0O.6A)
 
 Release artifacts are immutable image digests: built once, verified
 (SBOM, vulnerability scan, secret/history scan, provenance, signature),
-then promoted — production deploys PROMOTED digests only. Phase 0O.6A adds
-the aggregate verifier, the policy manifest, the vulnerability-exception
-file and incident runbooks (compromised dependency, compromised CI action,
-leaked signing key, malicious/incorrect artifact, critical CVE after
-deployment). **No image has been pushed, signed or promoted.**
+then promoted — production deploys PROMOTED digests only. The repository
+side exists: `infrastructure/release/qualify` (BUILT → VERIFIED),
+`infrastructure/release/verify-artifact` (the one fail-closed verifier), the
+policy manifest, the exception file, the Release-qualification and
+SBOM-re-scan workflows, and the runbooks above.
+**NO PRODUCTION REGISTRY IS CONFIGURED. NO REAL SIGNING IDENTITY/KEY IS
+CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
+PROMOTED.**

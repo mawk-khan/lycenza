@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "exceptions": [
+    {
+      "id": "CVE-2026-0003",
+      "status": "accepted_risk",
+      "image": "app",
+      "package": "libexample3",
+      "version": "3.0-1",
+      "severity": "high",
+      "reason": "No fixed Debian package exists; the library is not reachable from the web role.",
+      "compensating_control": "Not loaded by any application process; re-evaluated at every base update.",
+      "approved_by": "SEC-REVIEW-0001",
+      "created": "2026-09-20",
+      "expires": "2026-10-15"
+    },
+    {
+      "id": "CVE-2026-0003",
+      "status": "accepted_risk",
+      "image": "app",
+      "package": "libexample3",
+      "version": "3.0-1",
+      "severity": "high",
+      "reason": "No fixed Debian package exists; the library is not reachable from the web role.",
+      "compensating_control": "Not loaded by any application process; re-evaluated at every base update.",
+      "approved_by": "SEC-REVIEW-0001",
+      "created": "2026-09-20",
+      "expires": "2026-10-15"
+    }
+  ]
+}

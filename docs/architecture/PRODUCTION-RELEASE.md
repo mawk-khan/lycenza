@@ -133,9 +133,13 @@ credentials reach only the `release` and `operator-console` processes.
 Each step's invariant is in bold. Every step that talks to a database
 names the database it is about to touch first (rule 54).
 
-1. **Build once, from a clean checkout of the released commit:**
-   `composer install --no-dev --optimize-autoloader`, `npm ci && npm run
-   build`. No `.env` file is part of the artifact.
+1. **Build once, from a clean checkout of the released commit** — since
+   Phase 0O.6A this is release qualification (`infrastructure/release/qualify`,
+   `docs/operations/RELEASE-QUALIFICATION.md`): the production images are
+   built from the commit with digest-pinned bases, lock-only installs (no
+   Composer plugins or package scripts, npm `ignore-scripts`, hash-verified
+   Python wheels) and verified to **VERIFIED** before anything else happens.
+   No `.env` file is part of the artifact.
 2. **Configuration is injected by the environment** (mechanism: O4). No
    secret is committed or baked into an image (ADR 0016).
 3. **Stop background processing** that would run old code against a new
@@ -237,7 +241,9 @@ restore drill), O2 (payments), O5 (service-token rotation or replacement), O9
 (custom domains), O13 (email), O14 (password reset) and O15 (partner
 integrations). **No production image is pushed to a registry or promoted
 before Phase 0O.6A's repository controls are complete**, and then only by an
-authorized operator.
+authorized operator. Those controls now exist (Phase 0O.6A): **NO PRODUCTION
+REGISTRY IS CONFIGURED, NO REAL SIGNING IDENTITY/KEY IS CONFIGURED, NO
+PRODUCTION IMAGE HAS BEEN PUSHED, NO PRODUCTION IMAGE HAS BEEN PROMOTED.**
 
 **Supply chain (ADR 0052):** a release is one immutable OCI image digest per
 image, built once from a commit on protected `main` and qualified by the

@@ -8,19 +8,25 @@ supervise processes will do. No orchestrator manifest is committed.
 
 | Image | Dockerfile | Build context | Base |
 |---|---|---|---|
-| Application | `infrastructure/docker/production/app.Dockerfile` | `apps/platform` | `php:8.3-fpm-bookworm` (+ `node:22-bookworm-slim`, `composer:2` build stages) |
-| AI Gateway | `infrastructure/docker/production/ai.Dockerfile` | `services/ai` | `python:3.12-slim-bookworm` |
+| Application | `infrastructure/docker/production/app.Dockerfile` | `apps/platform` | `php:8.3.33-fpm-bookworm@sha256:cfdaca42…` (+ `node:22.23.3-bookworm-slim@sha256:43ac6c60…`, `composer:2.10.2@sha256:4d71c3c2…` build stages) |
+| AI Gateway | `infrastructure/docker/production/ai.Dockerfile` | `services/ai` | `python:3.12.14-slim-bookworm@sha256:a116514e…` |
 
-Base images are pinned by tag today; ADR 0052 (O16) requires digest pinning
-(Phase 0O.6A), a final-image SPDX SBOM, vulnerability and secret/history
-scanning, provenance and a signature before any image is published or
-promoted.
+Since Phase 0O.6A (ADR 0052) every base image is pinned **by digest**
+(`image:exact-version@sha256:…`; the tag is a readable alias) and a digest
+update is an ordinary reviewed change that re-runs full release
+qualification. Releases are built, scanned, attested and verified by
+`infrastructure/release/qualify` and `verify-artifact`
+([RELEASE-QUALIFICATION.md](RELEASE-QUALIFICATION.md)); no image is
+published or promoted by the repository.
 The local development Dockerfiles (`infrastructure/docker/*.Dockerfile`)
 stay local-only.
 
 **Application image.** Multi-stage: PHP extensions (`pdo_pgsql`, `pgsql`,
 `bcmath`, `gd`, `opcache`, `pcntl`, `zip`) → `composer install --no-dev`
-with an optimized autoloader → `npm ci && npm run build` → a runtime stage
+from `composer.lock` with **no Composer plugin and no package script**
+(`--no-scripts --no-plugins`; Laravel's `package:discover` is the one
+explicit step) and an optimized autoloader → `npm ci` with the repository
+`.npmrc` in effect (`ignore-scripts=true`), then `npm run build` → a runtime stage
 with nginx and PHP-FPM only. It contains no `.env`, tests, PHPUnit
 configuration, dev Composer packages, `node_modules`, demo seeders (only
 `DemoEnvironmentGuard` remains, the class that refuses demo behaviour),
@@ -32,8 +38,10 @@ timestamp validation off, `expose_php` off, and never uses
 `APP_MAINTENANCE_STORE=database`, `LOG_CHANNEL=stderr`,
 `REDIS_CLIENT=predis` — no secret.
 
-**AI Gateway image.** Runtime dependencies only (`requirements.txt`, never
-`requirements-dev.txt`), non-root user `gateway`, `ENVIRONMENT=production`,
+**AI Gateway image.** Runtime dependencies only, installed from the fully
+resolved, hash-locked `requirements.lock` (`pip install --require-hashes
+--no-deps --only-binary=:all:` — every file hash-checked, wheels only, no
+source build; never `requirements-dev.txt`), non-root user `gateway`, `ENVIRONMENT=production`,
 no provider SDK (NullProvider only). It refuses to start without
 `SERVICE_TOKEN` or with the development token; readiness is 503 when the
 configuration is unsafe.

@@ -1,0 +1,98 @@
+# Phase 0O.6A (ADR 0052 section 3.9): IMAGE filesystem secret scan
+# configuration (infrastructure/release/qualify mounts the exported image
+# filesystem at /image). gitleaks' default rules apply unchanged; the
+# allowlist is EXACT-MATCH only (one image path + the exact flagged value)
+# and is reviewed whenever a base digest or dependency update changes a
+# listed file. None of these is a credential.
+
+[extend]
+useDefault = true
+
+# Scoped to the one default rule that raised these (generic-api-key); see
+# ../../.gitleaks.toml for why no global allowlist is used.
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "/usr/include/linux/netfilter/nf_tables.h: app: a C enum constant (Debian linux-libc-dev headers)"
+condition = "AND"
+paths = ['''^/image/usr/include/linux/netfilter/nf_tables\.h$''']
+regexTarget = "secret"
+regexes = ['''^__NFTA_TUNNEL_KEY_IP6_MAX$''']
+
+[[rules.allowlists]]
+description = "/usr/include/linux/nl80211.h: app: a C enum constant (Debian linux-libc-dev headers)"
+condition = "AND"
+paths = ['''^/image/usr/include/linux/nl80211\.h$''']
+regexTarget = "secret"
+regexes = ['''^NL80211_KEY_MAX$''']
+
+[[rules.allowlists]]
+description = "/usr/lib/x86_64-linux-gnu/perl/5.36.0/CORE/cop.h: app: a Perl header macro name"
+condition = "AND"
+paths = ['''^/image/usr/lib/x86_64-linux-gnu/perl/5\.36\.0/CORE/cop\.h$''']
+regexTarget = "secret"
+regexes = ['''^COPHH_KEY_UTF8$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/app/Models/ApiClient.php: app: a trait name"
+condition = "AND"
+paths = ['''^/image/var/www/app/app/Models/ApiClient\.php$''']
+regexTarget = "secret"
+regexes = ['''^GeneratesUuidV7$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/vendor/aws/aws-sdk-php/src/data/ebs/2019-11-02/api-2.json.php: app: an AWS SDK auth-type identifier"
+condition = "AND"
+paths = ['''^/image/var/www/app/vendor/aws/aws-sdk-php/src/data/ebs/2019-11-02/api-2\.json\.php$''']
+regexTarget = "secret"
+regexes = ['''^v4-unsigned-body$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/vendor/aws/aws-sdk-php/src/data/mediastore-data/2017-09-01/api-2.json.php: app: an AWS SDK auth-type identifier"
+condition = "AND"
+paths = ['''^/image/var/www/app/vendor/aws/aws-sdk-php/src/data/mediastore-data/2017-09-01/api-2\.json\.php$''']
+regexTarget = "secret"
+regexes = ['''^v4-unsigned-body$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/vendor/aws/aws-sdk-php/src/data/omics/2022-11-28/api-2.json.php: app: an AWS SDK auth-type identifier"
+condition = "AND"
+paths = ['''^/image/var/www/app/vendor/aws/aws-sdk-php/src/data/omics/2022-11-28/api-2\.json\.php$''']
+regexTarget = "secret"
+regexes = ['''^v4-unsigned-body$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/vendor/aws/aws-sdk-php/src/data/runtime.lex/2016-11-28/api-2.json.php: app: an AWS SDK auth-type identifier"
+condition = "AND"
+paths = ['''^/image/var/www/app/vendor/aws/aws-sdk-php/src/data/runtime\.lex/2016-11-28/api-2\.json\.php$''']
+regexTarget = "secret"
+regexes = ['''^v4-unsigned-body$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/vendor/aws/aws-sdk-php/src/data/s3/2006-03-01/api-2.json.php: app: an AWS SDK auth-type identifier"
+condition = "AND"
+paths = ['''^/image/var/www/app/vendor/aws/aws-sdk-php/src/data/s3/2006-03-01/api-2\.json\.php$''']
+regexTarget = "secret"
+regexes = ['''^v4-unsigned-body$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/vendor/aws/aws-sdk-php/src/data/redshift/2012-12-01/paginators-1.json.php: app: an AWS SDK paginator result key"
+condition = "AND"
+paths = ['''^/image/var/www/app/vendor/aws/aws-sdk-php/src/data/redshift/2012-12-01/paginators-1\.json\.php$''']
+regexTarget = "secret"
+regexes = ['''^Qev2IdcApplications$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/vendor/aws/aws-sdk-php/src/data/payment-cryptography/2021-09-14/api-2.json.php: app: AWS SDK key-usage enum names"
+condition = "AND"
+paths = ['''^/image/var/www/app/vendor/aws/aws-sdk-php/src/data/payment-cryptography/2021-09-14/api-2\.json\.php$''']
+regexTarget = "secret"
+regexes = ['''^TR31_E2_EMV_MKEY_INTEGRITY$''', '''^TR31_K0_KEY_ENCRYPTION_KEY$''', '''^TR31_P0_PIN_ENCRYPTION_KEY$''', '''^TR31_V1_IBM3624_PIN_VERIFICATION_KEY$''', '''^TR31_V2_VISA_PIN_VERIFICATION_KEY$''']
+
+[[rules.allowlists]]
+description = "/var/www/app/vendor/symfony/mime/MimeTypes.php: app: a MIME type"
+condition = "AND"
+paths = ['''^/image/var/www/app/vendor/symfony/mime/MimeTypes\.php$''']
+regexTarget = "secret"
+regexes = ['''^application/mdb$''']

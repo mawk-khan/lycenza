@@ -1448,6 +1448,19 @@ provenance, cosign-compatible signing and a fail-closed verifier before any
 promotion. Nothing is signed, pushed or promoted; Phase 0O.6A implements the
 repository side.
 
+**0O.6A — Supply Chain & Artifact Security Foundation (COMPLETE,
+2026-09-26).** Digest-pinned bases, SHA-pinned actions, lock-only installs
+(no Composer plugins/scripts, npm `ignore-scripts`, a hash-verified
+wheels-only Python lock), `infrastructure/release/qualify` (same-run
+regression, audits, OCI-archive builds, SBOM, fresh-database scan, image
+secret/history scans, provenance, ephemeral NON-PRODUCTION signing) and the
+fail-closed `verify-artifact`; release-qualification and SBOM re-scan
+workflows; release and incident runbooks. Both images currently FAIL the
+vulnerability policy (unfixed Debian bookworm Criticals, OpenSSL/PCRE2 fixes
+in newer bases, Starlette 0.47.3) — remediation is an owner decision. NO
+PRODUCTION REGISTRY OR SIGNING IDENTITY IS CONFIGURED; NO IMAGE HAS BEEN
+PUSHED OR PROMOTED.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

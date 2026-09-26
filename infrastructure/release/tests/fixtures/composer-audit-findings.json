@@ -1,0 +1,13 @@
+{
+    "advisories": {
+        "example/package": [
+            {"advisoryId": "PKSA-abcd-efgh-ijkl", "packageName": "example/package", "affectedVersions": "<1.2.4",
+             "title": "Example", "cve": "CVE-2026-1111", "link": "https://example.invalid", "reportedAt": "2026-09-01T00:00:00+00:00",
+             "sources": [{"name": "GitHub", "remoteId": "GHSA-5555-6666-7777"}], "severity": "high"},
+            {"advisoryId": "PKSA-mnop-qrst-uvwx", "packageName": "example/package", "affectedVersions": "<1.2.4",
+             "title": "Unrated", "cve": null, "link": "https://example.invalid", "reportedAt": "2026-09-01T00:00:00+00:00",
+             "sources": [], "severity": null}
+        ]
+    },
+    "abandoned": []
+}

@@ -1,0 +1,2 @@
+# Python bytecode from running the release tooling or its tests.
+__pycache__/

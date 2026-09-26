@@ -1,0 +1,5 @@
+{
+  "$comment": "Phase 0O.6A (ADR 0052 sections 3.7, 3.17): the releases whose retained SBOMs the scheduled re-scan checks -- the current release and the approved rollback candidates. EMPTY: NO PRODUCTION IMAGE HAS BEEN PUSHED OR PROMOTED. An entry is added only by the deploy-gated promotion process.",
+  "schema_version": 1,
+  "releases": []
+}

@@ -1,0 +1,80 @@
+# Phase 0O.6A (ADR 0052 sections 3.15, 3.19): trusted release qualification.
+#
+# Manually dispatched on protected `main` only; qualifies the exact
+# checked-out commit in ONE run: the complete regression, lockfile integrity,
+# language audits, source secret scan, fresh-builder OCI-archive builds of both
+# production images, verify-images.sh, SBOM, vulnerability scan (fresh
+# database), image secret/history scan, provenance, an evidence bundle signed
+# with an EPHEMERAL NON-PRODUCTION key, and verify-artifact -> VERIFIED/FAIL.
+#
+# It NEVER pushes an image, publishes, promotes or deploys: there is no
+# registry credential, no signing identity, no OIDC token permission and no
+# repository secret here. NO PRODUCTION REGISTRY IS CONFIGURED; NO REAL
+# SIGNING IDENTITY/KEY IS CONFIGURED. Only release evidence is uploaded --
+# never keys, .env files, databases or the image archives.
+name: Release qualification
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-qualification
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: Qualify the protected-main commit (no push, no promotion)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Refuse anything that is not a commit on protected main
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      # Toolchains for the test gates only (release images use their own
+      # digest-pinned bases). No dependency caching -- caches are
+      # optimizations, never release inputs.
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: "8.3"
+          extensions: pdo_pgsql, pgsql, bcmath, zip, gd
+          coverage: none
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies from their locks
+        run: |
+          (cd apps/platform && composer install --no-interaction --prefer-dist --no-plugins && npm ci && cp .env.example .env)
+          python -m venv services/ai/.venv
+          services/ai/.venv/bin/pip install --disable-pip-version-check -r services/ai/requirements-dev.txt
+
+      - name: Qualify (same-run regression + artifacts + evidence + verify-artifact)
+        run: >-
+          infrastructure/release/qualify all
+          --out "$RUNNER_TEMP/release-evidence"
+          --artifacts "$RUNNER_TEMP/release-artifacts"
+          -- infrastructure/release/regression-gates
+
+      - name: Upload release evidence (Confidential; never keys, .env or image archives)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-evidence
+          if-no-files-found: error
+          retention-days: 90

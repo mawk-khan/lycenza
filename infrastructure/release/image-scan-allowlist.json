@@ -1,0 +1,19 @@
+{
+  "description": "Phase 0O.6A (ADR 0052 section 3.9): EXACT-MATCH allowlist for the image filesystem canary/shape scan (lycenza_release.imagescan). An entry matches only one image, one issue code, one path AND the file's exact sha256 -- a changed file is scanned afresh. Reviewed whenever a base digest changes.",
+  "entries": [
+    {
+      "image": "app",
+      "code": "private_key_material",
+      "path": "/usr/lib/x86_64-linux-gnu/libgnutls.so.30.34.3",
+      "sha256": "779b25d20249988bea2c1aa6bbeb218f5ae7ea8a9d30ce4f54ea37372965cc4b",
+      "reason": "GnuTLS power-on self-test key vectors compiled into Debian's libgnutls30 (public test data, not a credential)"
+    },
+    {
+      "image": "ai-gateway",
+      "code": "private_key_material",
+      "path": "/usr/lib/x86_64-linux-gnu/libgnutls.so.30.34.3",
+      "sha256": "779b25d20249988bea2c1aa6bbeb218f5ae7ea8a9d30ce4f54ea37372965cc4b",
+      "reason": "GnuTLS power-on self-test key vectors compiled into Debian's libgnutls30 (public test data, not a credential)"
+    }
+  ]
+}

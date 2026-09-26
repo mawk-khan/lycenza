@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mawk-khan/lycenza/infrastructure/release/schema/artifact-policy.schema.json",
+  "title": "Lycenza release artifact policy (ADR 0052 section 3.12)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["policy_version", "source", "images", "required_evidence", "vulnerability_policy", "signing", "tools", "states"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "policy_version": {"const": 1},
+    "description": {"type": "string"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "protected_branch", "protected_remote_ref"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "protected_branch": {"const": "main"},
+        "protected_remote_ref": {"const": "origin/main"}
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app", "ai-gateway"],
+      "properties": {
+        "app": {"$ref": "#/$defs/image"},
+        "ai-gateway": {"$ref": "#/$defs/image"}
+      }
+    },
+    "required_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sbom_format", "statement_type", "provenance_predicate", "build_type", "signature", "vulnerability_scanner", "language_audits", "source_secret_scan", "image_secret_scan", "image_config_scan", "complete_regression"],
+      "properties": {
+        "sbom_format": {"const": "SPDX-2.3"},
+        "statement_type": {"const": "https://in-toto.io/Statement/v1"},
+        "provenance_predicate": {"const": "https://slsa.dev/provenance/v1"},
+        "build_type": {"type": "string", "pattern": "^https://"},
+        "signature": {"const": "cosign-sign-blob"},
+        "vulnerability_scanner": {"const": "grype"},
+        "language_audits": {"type": "array", "items": {"enum": ["composer", "npm", "pip"]}, "minItems": 3, "uniqueItems": true},
+        "source_secret_scan": {"const": "gitleaks"},
+        "image_secret_scan": {"const": "gitleaks"},
+        "image_config_scan": {"const": true},
+        "complete_regression": {"const": true}
+      }
+    },
+    "vulnerability_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blocking", "exception_required", "recorded_not_blocking", "unrated_language_advisory_severity", "scanner_db_max_age_hours", "exception_file", "exception_max_days"],
+      "properties": {
+        "blocking": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["critical", "high"],
+          "properties": {
+            "critical": {"const": "always"},
+            "high": {"const": "when_fix_available"}
+          }
+        },
+        "exception_required": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["high"],
+          "properties": {"high": {"const": "when_no_fix"}}
+        },
+        "recorded_not_blocking": {"type": "array", "items": {"enum": ["medium", "low", "negligible", "unknown"]}, "uniqueItems": true},
+        "unrated_language_advisory_severity": {"enum": ["critical", "high"]},
+        "scanner_db_max_age_hours": {"type": "integer", "minimum": 1, "maximum": 24},
+        "exception_file": {"const": "infrastructure/release/vulnerability-exceptions.json"},
+        "exception_max_days": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["critical", "high", "other"],
+          "properties": {
+            "critical": {"type": "integer", "minimum": 1, "maximum": 30},
+            "high": {"type": "integer", "minimum": 1, "maximum": 30},
+            "other": {"type": "integer", "minimum": 1, "maximum": 90}
+          }
+        }
+      }
+    },
+    "signing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["custody", "public_key_ref", "certificate_identity", "certificate_oidc_issuer", "test_signing"],
+      "properties": {
+        "custody": {"enum": ["unconfigured", "external-key", "keyless"]},
+        "public_key_ref": {"type": "string", "maxLength": 512},
+        "certificate_identity": {"type": "string", "maxLength": 512},
+        "certificate_oidc_issuer": {"type": "string", "maxLength": 512},
+        "test_signing": {"const": "ephemeral-per-run-key-non-production"}
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildkit", "syft", "grype", "cosign", "gitleaks", "python", "composer", "node"],
+      "properties": {
+        "buildkit": {"$ref": "#/$defs/pinned_image"},
+        "syft": {"$ref": "#/$defs/pinned_image"},
+        "grype": {"$ref": "#/$defs/pinned_image"},
+        "cosign": {"$ref": "#/$defs/pinned_image"},
+        "gitleaks": {"$ref": "#/$defs/pinned_image"},
+        "python": {"$ref": "#/$defs/pinned_image"},
+        "composer": {"$ref": "#/$defs/pinned_image"},
+        "node": {"$ref": "#/$defs/pinned_image"}
+      }
+    },
+    "states": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository_reachable", "deploy_gated"],
+      "properties": {
+        "repository_reachable": {"const": ["BUILT", "VERIFIED"]},
+        "deploy_gated": {"const": ["PUBLISHED", "PROMOTED"]}
+      }
+    }
+  },
+  "$defs": {
+    "pinned_image": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9./_-]*:[A-Za-z0-9][A-Za-z0-9._-]*@sha256:[0-9a-f]{64}$"
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "dockerfile", "context", "target", "platform", "sbom_required_purl_types"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^lycenza-[a-z-]+$"},
+        "dockerfile": {"type": "string", "pattern": "^infrastructure/docker/production/[a-z]+\\.Dockerfile$"},
+        "context": {"enum": ["apps/platform", "services/ai"]},
+        "target": {"const": "runtime"},
+        "platform": {"const": "linux/amd64"},
+        "sbom_required_purl_types": {"type": "array", "items": {"enum": ["deb", "composer", "pypi", "npm"]}, "minItems": 1, "uniqueItems": true}
+      }
+    }
+  }
+}

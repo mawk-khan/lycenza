@@ -16,6 +16,7 @@ packages/contracts    OpenAPI + domain-event JSON Schemas (source of truth)
 packages/shared-types Generated TypeScript bindings from packages/contracts
 infrastructure/docker Local dev Dockerfiles + docker-compose.yml (repo root)
 infrastructure/terraform  Empty by design — no cloud resources yet
+infrastructure/release    Release qualification + artifact verification (ADR 0052) — never pushes or promotes
 docs/architecture     ARCHITECTURE.md, DOMAIN-MAP.md, TENANCY.md, API.md, EVENTS.md, adr/
 docs/ai                AI-PLATFORM.md, AI-SECURITY.md
 docs/security           DATA-CLASSIFICATION.md, AUTHORIZATION.md
@@ -840,6 +841,29 @@ docs/roadmap             MASTER-ROADMAP.md
     `SetTenantContextForJob` -- and a new queued job or School-walking
     command must decide its suspended-School behaviour
     (`SchoolLifecycleArchitectureGuardTest`, ADR 0047).
+
+87. **A release is one immutable, verified image digest; the repository
+    reaches VERIFIED, never PUBLISHED or PROMOTED (ADR 0052).** Production
+    bases are pinned `image:version@sha256:…`; every workflow action is
+    pinned to a full commit SHA with a `# vX.Y.Z` comment; workflows start
+    at `permissions: contents: read`, never use `pull_request_target`, and
+    never hold a registry credential, signing identity or repository secret.
+    Dependencies install from their locks only -- Composer with
+    `--no-scripts --no-plugins` (`allow-plugins: false`), npm with the
+    repository `.npmrc` (`ignore-scripts`), the Gateway from the hash-locked
+    `services/ai/requirements.lock` (`--require-hashes --no-deps
+    --only-binary=:all:`; regenerate it with pip-compile, never hand-edit).
+    Never `npm audit fix`/`composer update` in CI or a build, never edit a
+    scanner report, never fabricate an exception approval: vulnerability
+    thresholds live only in `infrastructure/release/lycenza_release/evaluate.py`,
+    exceptions are exact and time-bounded in
+    `infrastructure/release/vulnerability-exceptions.json`, and the verdict
+    comes only from `infrastructure/release/verify-artifact`. Repository
+    signing uses an ephemeral per-run NON-PRODUCTION key only -- never commit,
+    reuse or configure a real key or keyless identity without explicit
+    deployment authorization. Secret-scan allowlists are exact (one path +
+    one value, scoped to one gitleaks rule). `SupplyChainGuardTest` and
+    `infrastructure/release/tests` enforce this.
 
 ## Running things locally
 

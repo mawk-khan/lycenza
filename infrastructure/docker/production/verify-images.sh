@@ -30,6 +30,18 @@
 #                  start without a service token or with the development
 #                  token; with a token: live 200 and ready 200, no external
 #                  provider enabled.
+#   supply chain   -- (Phase 0O.6A) no Composer/Node/npm in the application
+#                  runtime; no private-key file in application paths; the
+#                  Gateway's installed packages are exactly
+#                  services/ai/requirements.lock; no compiler in the Gateway.
+#
+# Where this fits (ADR 0052): verify-images.sh proves how the images BEHAVE
+# and is one gate inside release qualification
+# (infrastructure/release/qualify, stage `verify-images`, run against the
+# exact images built from the OCI archives). The ARTIFACT -- digest, SBOM,
+# vulnerability policy, secret/history scans, provenance, signature, source
+# lineage -- is judged only by infrastructure/release/verify-artifact. A
+# pass here never makes an image releasable on its own.
 
 set -euo pipefail
 
@@ -100,6 +112,8 @@ check "PHP does not expose itself" in_app 'php -i | grep -q "expose_php => Off"'
 check "stack traces carry no arguments (zend.exception_ignore_args)" in_app 'php -i | grep -q "zend.exception_ignore_args => On"'
 check "production logs default to structured JSON at info" in_app 'test "$LOG_FORMAT" = json && test "$LOG_LEVEL" = info'
 check "metrics front controller exists outside public/" in_app 'test -f /var/www/app/metrics/index.php && test ! -e /var/www/app/public/metrics.php'
+check "no Composer, Node or npm in the runtime image" in_app '! command -v composer && ! command -v node && ! command -v npm'
+check "no private-key file in application or configuration paths" test -z "$(in_app 'find /var/www/app /usr/local/etc /etc/nginx \( -name "*.pem" -o -name "*.key" -o -name "id_rsa*" \) -not -path "*/vendor/*" 2>/dev/null')"
 
 docker network create "$NETWORK" >/dev/null
 docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" redis:7-alpine redis-server --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
@@ -169,6 +183,20 @@ check "unknown role refused (exit 64)" test "$unknown" = "64"
 echo "== gateway image: $AI_IMAGE"
 in_ai() { docker run --rm --entrypoint sh "$AI_IMAGE" -c "$1"; }
 check "gateway runs as a non-root user" test "$(in_ai 'id -u')" != "0"
+locked="$(python3 - "$ROOT/services/ai/requirements.lock" <<'PY'
+import re, sys
+pins = re.findall(r"^([A-Za-z0-9._-]+)==(\S+)", open(sys.argv[1]).read(), re.M)
+print("\n".join(sorted(name.lower().replace("_", "-") + "==" + version for name, version in pins)))
+PY
+)"
+installed="$(docker run --rm -i --entrypoint /opt/venv/bin/python "$AI_IMAGE" - <<'PY'
+import importlib.metadata as metadata
+names = (d.metadata["Name"].lower().replace("_", "-") + "==" + d.version for d in metadata.distributions())
+print("\n".join(sorted(n for n in names if not n.startswith("pip=="))))
+PY
+)"
+check "gateway packages are exactly services/ai/requirements.lock" test "$locked" = "$installed"
+check "no compiler in the gateway image (wheels only)" in_ai '! command -v gcc && ! command -v cc'
 check "gateway has no .env, tests or dev requirements" in_ai 'test ! -e /srv/ai/.env && test ! -e /srv/ai/tests && test ! -e /srv/ai/requirements-dev.txt && test -z "$(find /srv -name ".env*")"'
 
 set +e
