@@ -1461,6 +1461,15 @@ in newer bases, Starlette 0.47.3) — remediation is an owner decision. NO
 PRODUCTION REGISTRY OR SIGNING IDENTITY IS CONFIGURED; NO IMAGE HAS BEEN
 PUSHED OR PROMOTED.
 
+**0O.6B — Release Vulnerability Remediation (BLOCKED — RELEASE VULNERABILITY,
+2026-09-26).** Debian 13 bases for both images, the PHP image's build
+toolchain purged from the application runtime, FastAPI 0.133.0 / Starlette
+1.3.1 (security-only). Application 40 C / 112 H → 9 C / 65 H; Gateway 10 C /
+75 H → 0 C / 50 H. Blocked by genuine libcurl/libxml2 CRITICALs linked by
+the official PHP binary (no Debian fix) and, for the Gateway, a CPython 3.12
+HIGH fixed only in 3.14 plus unapproved HIGH-without-fix exceptions. Nothing
+VERIFIED, pushed or promoted.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

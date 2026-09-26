@@ -34,6 +34,9 @@
 #                  runtime; no private-key file in application paths; the
 #                  Gateway's installed packages are exactly
 #                  services/ai/requirements.lock; no compiler in the Gateway.
+#                  (Phase 0O.6B) every required PHP extension loads; no build
+#                  toolchain/perl/curl/xz in the application runtime; CA
+#                  bundles, TLS-capable libpq and PHP timezone data present.
 #
 # Where this fits (ADR 0052): verify-images.sh proves how the images BEHAVE
 # and is one gate inside release qualification
@@ -113,6 +116,14 @@ check "stack traces carry no arguments (zend.exception_ignore_args)" in_app 'php
 check "production logs default to structured JSON at info" in_app 'test "$LOG_FORMAT" = json && test "$LOG_LEVEL" = info'
 check "metrics front controller exists outside public/" in_app 'test -f /var/www/app/metrics/index.php && test ! -e /var/www/app/public/metrics.php'
 check "no Composer, Node or npm in the runtime image" in_app '! command -v composer && ! command -v node && ! command -v npm'
+# Phase 0O.6B: the base-image change (Debian 13) must not lose a PHP extension
+# or native dependency, TLS trust, or timezone support -- and the build
+# toolchain the PHP base image carries is purged from the runtime.
+check "every required PHP extension loads" in_app 'for m in bcmath ctype curl dom fileinfo gd iconv json mbstring openssl pcntl pdo_pgsql pgsql session sodium tokenizer xml zip zlib; do php -r "exit(extension_loaded(\"$m\") ? 0 : 1);" || exit 1; done && php -m | grep -qx "Zend OPcache"'
+check "no compiler, build toolchain, perl (beyond Essential perl-base), curl or xz in the application runtime" in_app '! command -v gcc && ! command -v cc && ! command -v make && ! command -v curl && ! command -v xz && for p in perl libc6-dev dpkg-dev binutils; do ! dpkg -s "$p" >/dev/null 2>&1 || exit 1; done'
+check "CA bundle present and PHP/OpenSSL verify against it" in_app 'test -s /etc/ssl/certs/ca-certificates.crt && php -r "exit(openssl_x509_parse(file_get_contents(\"/etc/ssl/certs/ca-certificates.crt\")) ? 0 : 1);"'
+check "PostgreSQL client library is TLS-capable" in_app 'ldd /usr/lib/x86_64-linux-gnu/libpq.so.5 | grep -q libssl'
+check "PHP timezone database resolves School timezones" in_app 'php -r "new DateTimeZone(\"Asia/Kolkata\"); new DateTimeZone(\"America/New_York\");"'
 check "no private-key file in application or configuration paths" test -z "$(in_app 'find /var/www/app /usr/local/etc /etc/nginx \( -name "*.pem" -o -name "*.key" -o -name "id_rsa*" \) -not -path "*/vendor/*" 2>/dev/null')"
 
 docker network create "$NETWORK" >/dev/null
@@ -197,6 +208,7 @@ PY
 )"
 check "gateway packages are exactly services/ai/requirements.lock" test "$locked" = "$installed"
 check "no compiler in the gateway image (wheels only)" in_ai '! command -v gcc && ! command -v cc'
+check "gateway TLS trust store is populated" in_ai 'python -c "import ssl,sys; sys.exit(0 if ssl.create_default_context().cert_store_stats()[\"x509_ca\"] > 0 else 1)"'
 check "gateway has no .env, tests or dev requirements" in_ai 'test ! -e /srv/ai/.env && test ! -e /srv/ai/tests && test ! -e /srv/ai/requirements-dev.txt && test -z "$(find /srv -name ".env*")"'
 
 set +e

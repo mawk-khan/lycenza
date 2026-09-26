@@ -165,6 +165,15 @@ parameters: the pinned BuildKit image, the OCI-archive exporter and "no
 cache". Resolved dependencies: the source commit and every digest-pinned
 base image of the Dockerfile.
 
+## Current release status (Phase 0O.6B)
+
+Both production images still **FAIL** the vulnerability policy after the
+Phase 0O.6B remediation (Debian 13 bases, runtime minimization,
+FastAPI/Starlette): see
+`docs/security/release-remediation/0O.6B-RELEASE-VULNERABILITY-REMEDIATION.md`.
+No digest is VERIFIED; the exception file stays empty; proposed (unapproved)
+Gateway exception records live beside the remediation record, never here.
+
 ## Known limits (recorded, not claimed away)
 
 - Composer's GitHub dists carry no `shasum`: archive integrity rests on TLS

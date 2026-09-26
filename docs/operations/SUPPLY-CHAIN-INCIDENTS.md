@@ -105,3 +105,11 @@ never trusted for promotion.)*
    incident record; a rollback to them needs the same judgement.
 4. Never silence a finding by editing a scanner report: reports are kept
    unmodified and exceptions are applied by the evaluator.
+5. A genuine CRITICAL is never risk-accepted (owner decision R5, Phase
+   0O.6B): only an evidence-backed `false_positive`/`not_affected` record
+   (component absent, or vulnerable functionality genuinely unavailable) may
+   stop it blocking. When the vulnerable library is linked by a required
+   runtime (as libcurl/libxml2 are by the official PHP binary) and the
+   distribution has no fix, the options are waiting for the distribution,
+   building the library from fixed upstream sources, or a base-family change
+   — each an owner decision (`docs/security/release-remediation/`).

@@ -8,8 +8,8 @@ supervise processes will do. No orchestrator manifest is committed.
 
 | Image | Dockerfile | Build context | Base |
 |---|---|---|---|
-| Application | `infrastructure/docker/production/app.Dockerfile` | `apps/platform` | `php:8.3.33-fpm-bookworm@sha256:cfdaca42…` (+ `node:22.23.3-bookworm-slim@sha256:43ac6c60…`, `composer:2.10.2@sha256:4d71c3c2…` build stages) |
-| AI Gateway | `infrastructure/docker/production/ai.Dockerfile` | `services/ai` | `python:3.12.14-slim-bookworm@sha256:a116514e…` |
+| Application | `infrastructure/docker/production/app.Dockerfile` | `apps/platform` | `php:8.3.35-fpm-trixie@sha256:e0623b71…` — Debian 13 since Phase 0O.6B (+ `node:22.23.3-bookworm-slim@sha256:43ac6c60…`, `composer:2.10.2@sha256:4d71c3c2…` build-only stages) |
+| AI Gateway | `infrastructure/docker/production/ai.Dockerfile` | `services/ai` | `python:3.12.14-slim-trixie@sha256:f77ac9e4…` — Debian 13 since Phase 0O.6B |
 
 Since Phase 0O.6A (ADR 0052) every base image is pinned **by digest**
 (`image:exact-version@sha256:…`; the tag is a readable alias) and a digest
@@ -27,7 +27,8 @@ from `composer.lock` with **no Composer plugin and no package script**
 (`--no-scripts --no-plugins`; Laravel's `package:discover` is the one
 explicit step) and an optimized autoloader → `npm ci` with the repository
 `.npmrc` in effect (`ignore-scripts=true`), then `npm run build` → a runtime stage
-with nginx and PHP-FPM only. It contains no `.env`, tests, PHPUnit
+with nginx and PHP-FPM only (Phase 0O.6B: the PHP base image's extension
+build toolchain, libc headers, curl CLI and xz-utils are purged from it). It contains no `.env`, tests, PHPUnit
 configuration, dev Composer packages, `node_modules`, demo seeders (only
 `DemoEnvironmentGuard` remains, the class that refuses demo behaviour),
 the test-database reset command or cached configuration

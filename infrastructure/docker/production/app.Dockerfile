@@ -13,13 +13,16 @@
 #
 # Phase 0O.6A (ADR 0052 section 3.2): every base image is pinned BY DIGEST
 # (`image:exact-version@sha256:...`); the tag is a readable alias only and
-# the toolchain (PHP 8.3.33, Composer 2.10.2, Node 22.23.3 / npm 10.9.9) is
-# whatever these digests contain. A digest update is an ordinary reviewed
+# the toolchain (PHP 8.3.35, Composer 2.10.2, Node 22.23.3 / npm 10.9.9) is
+# whatever these digests contain. Phase 0O.6B: the PHP base (extension build,
+# Composer install and runtime stages) is Debian 13 "trixie"; the Node and
+# Composer images are build-only and unchanged, so npm/Composer output is
+# unchanged. A digest update is an ordinary reviewed
 # change that re-runs full release qualification (ADR 0052 section 3.3);
 # Tests\Feature\Configuration\SupplyChainGuardTest refuses a tag-only base.
 # Release builds never pass --build-arg for these.
 
-ARG PHP_IMAGE=php:8.3.33-fpm-bookworm@sha256:cfdaca428b2c53858e048fabb0e7afafc01e5156c289f55197d383040c7c8435
+ARG PHP_IMAGE=php:8.3.35-fpm-trixie@sha256:e0623b713dba09e154cd513c9d175ba0967b82dae101f0c817a7e812b4b1c5d4
 ARG NODE_IMAGE=node:22.23.3-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
 ARG COMPOSER_IMAGE=composer:2.10.2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040
 
@@ -59,9 +62,19 @@ COPY --from=vendor /app/vendor/laravel/framework/src/Illuminate/Pagination/resou
 RUN npm run build
 
 # --- Runtime ------------------------------------------------------------------
+# Phase 0O.6B (runtime package minimization): the official PHP image keeps
+# its extension build toolchain ($PHPIZE_DEPS: gcc, g++, binutils, make,
+# autoconf, dpkg-dev + perl, pkg-config, re2c, file), the libc headers, and
+# the curl CLI / xz-utils it used to fetch PHP's source. None is needed at
+# run time (extensions are compiled in the php-ext stage), so they are
+# purged. The libraries PHP itself links (libcurl, libxml2, libsqlite3,
+# libonig, libargon2, libsodium, libreadline, OpenSSL, zlib) are marked
+# manually installed by the base image and stay; `php -m` is verified by
+# verify-images.sh.
 FROM ${PHP_IMAGE} AS runtime
 RUN apt-get update \
- && apt-get install -y --no-install-recommends nginx libpq5 libpng16-16 libzip4 ca-certificates \
+ && apt-get install -y --no-install-recommends nginx libpq5 libpng16-16t64 libzip5 ca-certificates \
+ && apt-get purge -y --auto-remove $PHPIZE_DEPS libc6-dev curl xz-utils \
  && rm -rf /var/lib/apt/lists/* \
  && rm -f /etc/nginx/sites-enabled/default
 COPY --from=php-ext /usr/local/lib/php/extensions /usr/local/lib/php/extensions
