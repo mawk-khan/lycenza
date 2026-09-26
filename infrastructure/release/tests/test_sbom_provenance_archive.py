@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import tarfile
 import tempfile
 import unittest
@@ -84,7 +85,10 @@ class ProvenanceTest(unittest.TestCase):
                 statement = copy.deepcopy(self.statement)
                 mutate(statement)
                 self.assertIn(code, self.verify(statement))
-        self.assertIn("provenance_base_images_mismatch", self.verify(self.statement, dockerfile_text=self.dockerfile.replace("cfdaca", "cfdacb")))
+        pinned = re.search(r"@sha256:([0-9a-f]{64})", self.dockerfile).group(1)
+        tampered = self.dockerfile.replace(pinned, ("0" if pinned[0] != "0" else "1") + pinned[1:], 1)
+        self.assertNotEqual(tampered, self.dockerfile)
+        self.assertIn("provenance_base_images_mismatch", self.verify(self.statement, dockerfile_text=tampered))
         self.assertIn("provenance_source_mismatch", self.verify(self.statement, commit="d" * 40))
         self.assertEqual(self.verify("not a statement"), ["provenance_malformed"])
 

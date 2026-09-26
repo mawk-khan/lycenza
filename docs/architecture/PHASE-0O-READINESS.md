@@ -759,3 +759,29 @@ Decisions: O3, O4, O6, O7, O8, O10, O11, O12, O16 resolved (O12 and O16 with
 deployment evidence outstanding); **O1, O2, O5, O9, O13, O14, O15 open**.
 Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M:
 **BLOCKED**. REAL RESTORE DRILL STILL OUTSTANDING.
+
+## 23. Phase 0O.6B — Release Vulnerability Remediation (BLOCKED — RELEASE VULNERABILITY, 2026-09-26)
+
+Owner decisions R1–R7 applied with the unchanged ADR 0052 gate
+(`docs/security/release-remediation/`). Both images now build on Debian 13
+"trixie" (same official families, digest-pinned); the application runtime no
+longer carries a compiler toolchain, perl, curl CLI or xz; the Gateway runs
+FastAPI 0.133.0 / Starlette 1.3.1 (minimal security-only change, pip-audit
+clean) on Python 3.12.14. Findings: application 40 C / 112 H → **9 C / 65 H**;
+Gateway 10 C / 75 H → **0 C / 50 H**.
+
+**Neither image is VERIFIED:**
+
+- application — 9 genuine CRITICAL advisories in libcurl (8) and libxml2 (1),
+  libraries the official PHP binary links, with no Debian 13 fix (stop
+  condition; no exception permitted);
+- Gateway — CVE-2026-82049 (CPython, HIGH, fixed only in 3.14; changing the
+  Python minor needs an owner decision) and 12 HIGH-without-fix advisories
+  whose exception records are prepared but **not approved**.
+
+**NO PRODUCTION REGISTRY IS CONFIGURED. NO REAL SIGNING IDENTITY/KEY IS
+CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
+PROMOTED.** Decisions: O3, O4, O6, O7, O8, O10, O11, O12, O16 resolved;
+**O1, O2, O5, O9, O13, O14, O15 open**. Phase 0O: **PARTIALLY READY — SOME
+CHECKPOINTS MAY START**. Phase 0M: **BLOCKED**. REAL RESTORE DRILL STILL
+OUTSTANDING.

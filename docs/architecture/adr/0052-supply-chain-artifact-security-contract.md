@@ -569,3 +569,30 @@ lock the existing versions, with no upgrade and no auto-fix). Reaching VERIFIED 
 decision: a reviewed base refresh (newer bookworm digests, or a newer Debian
 release/minimal base), a FastAPI/Starlette upgrade, and exceptions — or a
 base change — for the Debian findings that have no fix.
+
+## Amendment — Phase 0O.6B release vulnerability remediation (2026-09-26)
+
+Artifact remediation under owner decisions R1–R7 with the unchanged 0O.6A
+gate (`docs/security/release-remediation/0O.6B-RELEASE-VULNERABILITY-REMEDIATION.md`,
+finding matrix and proposed exception records alongside). **Status: BLOCKED —
+RELEASE VULNERABILITY; no image VERIFIED, PUBLISHED or PROMOTED.**
+
+- Both production images moved to Debian 13 "trixie" within the same
+  official families (`php:8.3.35-fpm-trixie`, `python:3.12.14-slim-trixie`,
+  digest-pinned); the application runtime purges the PHP image's extension
+  build toolchain, libc headers, curl CLI and xz-utils; the Gateway takes the
+  minimal security-only FastAPI 0.133.0 / Starlette 1.3.1 upgrade (+
+  `annotated-doc`), nothing else in its graph changed; Python stays 3.12.14
+  (the newest 3.12 release).
+- Findings (same database): application 40 C / 112 H / 152 blocking →
+  **9 C / 65 H / 74**; Gateway 10 C / 75 H (+6 pip-audit) / 85 →
+  **0 C / 50 H / 50**, pip-audit clean.
+- Remaining blockers: application — 9 genuine CRITICAL advisories in
+  `libcurl4t64` (8) and `libxml2` (1), both linked by the official PHP binary,
+  Debian `wont-fix`, no newer package in any trixie suite; Gateway —
+  CVE-2026-82049 (CPython tarfile, HIGH, fixed only in CPython 3.14; a newer
+  minor is outside R3) plus 12 HIGH-without-fix advisories whose proposed
+  exception records await human/security approval.
+- No evidence-backed false-positive/not-affected determination was
+  possible; no exception was written; the policy, evaluator and tooling are
+  unchanged.
