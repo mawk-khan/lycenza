@@ -1,6 +1,6 @@
 # ADR 0015: OpenTelemetry-Compatible Observability
 
-- Status: Accepted
+- Status: Accepted — **amended by ADR 0051** (Phase 0O.5, 2026-09-26)
 - Date: 2026-08-22
 
 ## Context
@@ -82,3 +82,15 @@ Choosing and standing up an actual OTel-compatible backend (self-hosted
 or managed), plus adding SDK instrumentation to `apps/platform` and
 `services/ai`, is explicitly out of scope for Phase 0A and belongs to a
 future infrastructure phase — see `docs/roadmap/MASTER-ROADMAP.md`.
+
+## Amendment (ADR 0051, Phase 0O.5, 2026-09-26)
+
+Not superseded. The OpenTelemetry data model remains the compatibility
+target and the request id remains the correlation key. For production v1,
+ADR 0051 fixes: metrics as an OpenMetrics endpoint on a private port,
+scraped by a deployment-provided collector (an OpenTelemetry Collector or
+any Prometheus-compatible backend ingests it); logs as structured JSON on
+stderr; **no distributed tracing** (spans are not exported; the W3C
+`traceparent` correlation primitive stays). OTel SDKs are not required in
+v1. Retention: logs 30 days, metrics 90 days. See
+`docs/architecture/adr/0051-production-observability-alerting-contract.md`.

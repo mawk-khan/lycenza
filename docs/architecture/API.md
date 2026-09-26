@@ -193,6 +193,12 @@ Every API request also receives a W3C-compatible `traceparent` header
 model (`request_id`/`correlation_id`/`causation_id`/`trace_id`/`span_id`)
 and how a trace survives a Laravel → AI Gateway → Laravel round trip.
 
+ADR 0051 (Phase 0O.5) bounds the inbound value: an `X-Request-Id` is
+honoured only if it matches `^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$` (UUIDs
+and ULIDs do); anything else is replaced by a server-generated UUID, which
+is what the response echoes. Implemented in Phase 0O.5A; today any value
+is accepted.
+
 ## Webhooks
 
 See ADR 0018, ADR 0026, ADR 0027. **Outbound** webhook delivery

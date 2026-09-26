@@ -270,3 +270,39 @@ own webhook endpoint being persistently down is the same story —
 `webhooks()` caps its status at `Degraded` regardless of how old the
 retry backlog gets (never *our* unhealthy). Both are internal
 diagnostics signals only, never a public readiness failure.
+
+## Production observability contract (ADR 0051, Phase 0O.5)
+
+ADR 0051 resolves O12 and fixes what production telemetry must look like;
+Phase 0O.5A implements the repository side. In short:
+
+- **Logs:** one JSON object per line on stderr with a fixed, bounded
+  schema and stable `event` codes; sanitization at one central boundary (a
+  Monolog processor installed by a logging `tap`, applying `LogSanitizer`
+  to context and `extra`), extended key and value redaction; exceptions
+  logged by class/`error_code`/`sqlstate`, never raw SQL or HTTP-client
+  text; stack traces without arguments. Retention 30 days; Confidential.
+- **Request ids:** inbound `X-Request-Id` accepted only if it matches
+  `^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$`, otherwise replaced by a new UUID.
+  The correlation model above is unchanged.
+- **Metrics:** OpenMetrics on a private port of the `web` role, bearer
+  scrape token, scraped by a deployment collector; scrape-time gauges from
+  PostgreSQL/queues and best-effort Redis counters; a closed label
+  allowlist (never School/user/record/request ids). Retention 90 days;
+  Confidential. No tracing in v1.
+- **Heartbeats:** process-class, not replica: scheduler task heartbeats
+  (all tasks) and per-queue canary jobs for `default`, `integrations` and
+  `notifications`.
+- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-26 with thresholds derived from
+  this file's cadences and ADR 0050's recovery objectives.
+- **Operations status** stays the operator view over the same checks,
+  complete (all heartbeats, all three queues, Communications, Automation,
+  outbox stale/failed, reconciliation) and degrading per component instead
+  of failing when PostgreSQL is down.
+
+Verified debt this contract assigns to 0O.5A: `RecordQueueHeartbeat` is
+registered twice (explicit `Event::listen` plus listener discovery of its
+`handle*` methods); operations status watches only two heartbeats and two
+queues and is unguarded; `LogSanitizer`/`ErrorReporter` have no
+production caller; raw exception text reaches logs and
+`scheduler_heartbeats.last_error`; inbound request ids are unbounded.
