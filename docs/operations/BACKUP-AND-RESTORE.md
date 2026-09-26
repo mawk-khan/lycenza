@@ -97,3 +97,31 @@ same steps; a real recovery then repoints traffic (deploy-gated).
 Every quarter, one drill per ADR 0050 §11, recorded with the template. The
 first successful drill in a real non-production environment is part of
 the Phase 0O definition of done (ADR 0050 §20) and is **outstanding**.
+
+## Feeding backup and drill evidence to monitoring (Phase 0O.5A)
+
+The application cannot know whether a backup succeeded. The deployment's
+backup tooling (and the operator, after each drill) writes one JSON
+document to a path mounted **read-only** into the `web` role and named by
+`OBSERVABILITY_DEPLOYMENT_EVIDENCE_FILE`; the metrics listener re-exposes
+it as `lycenza_backup_*` / `lycenza_restore_drill_*` (alerts OBS-20…OBS-23).
+Unix timestamps in seconds; unknown keys, wrong types, future or pre-2020
+times make the whole document rejected (and counted as a collection error).
+
+```json
+{
+  "schema": "lycenza.deployment-evidence/v1",
+  "backups": {
+    "postgresql": {"last_success_at": 1790000000, "recovery_point_at": 1790003500, "last_failure_at": null},
+    "objects": {"last_success_at": 1789990000, "last_failure_at": null}
+  },
+  "restore_drill": {"record_id": "DRILL-2026-Q4-1", "last_result": "PASS",
+                    "last_success_at": 1789000000, "duration_seconds": 5400,
+                    "recovery_point_gap_seconds": 90}
+}
+```
+
+`restore_drill` is `null` until a real drill has been recorded in
+`RESTORE-DRILL-RECORD.md` — which is the case today (**REAL RESTORE DRILL
+STILL OUTSTANDING**), so OBS-23 will report the drill as overdue. The file is
+operator-controlled, not signed; its authenticity rests on who can write it.

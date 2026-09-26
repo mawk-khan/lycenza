@@ -6,6 +6,7 @@ use App\Models\DomainEventOutbox;
 use App\Models\School;
 use App\Models\WebhookDelivery;
 use App\Models\WebhookDeliveryAttempt;
+use App\Support\Observability\MetricsRecorder;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Webhooks\SsrfRejectedException;
@@ -252,12 +253,14 @@ class DeliverWebhookJob implements ShouldQueue
                 'delivered_at' => now(),
                 'processing_lease_expires_at' => null,
             ]);
+            $this->finished('delivered');
 
             return;
         }
 
         if ($outcome === 'permanent_failure') {
             $delivery->update(['status' => 'failed', 'attempts' => $attemptNumber, 'processing_lease_expires_at' => null]);
+            $this->finished('failed');
 
             return;
         }
@@ -304,6 +307,7 @@ class DeliverWebhookJob implements ShouldQueue
                 'processing_lease_expires_at' => null,
                 'next_attempt_at' => null,
             ]);
+            $this->finished('abandoned');
 
             return;
         }
@@ -333,12 +337,18 @@ class DeliverWebhookJob implements ShouldQueue
         }
 
         $delivery->update($attributes);
+        $this->finished('abandoned');
 
         Log::warning('webhook.delivery.abandoned', [
             'school_id' => $this->schoolId,
             'delivery_id' => $delivery->id,
             'reason' => $reason,
         ]);
+    }
+
+    private function finished(string $outcome): void
+    {
+        app(MetricsRecorder::class)->counter('lycenza_webhook_deliveries_finished_total', 1, ['outcome' => $outcome]);
     }
 
     /**
@@ -356,6 +366,12 @@ class DeliverWebhookJob implements ShouldQueue
         string $outcome,
         ?string $errorClass,
     ): void {
+        // Phase 0O.5A (ADR 0051 §11): bounded outcome and latency only --
+        // never URL, School, secret or delivery id.
+        $metrics = app(MetricsRecorder::class);
+        $metrics->counter('lycenza_webhook_attempts_total', 1, ['outcome' => in_array($outcome, ['success', 'permanent_failure'], true) ? $outcome : 'transient_failure']);
+        $metrics->observe('lycenza_webhook_request_duration_seconds', microtime(true) - $start);
+
         WebhookDeliveryAttempt::query()->create([
             'school_id' => $delivery->school_id,
             'webhook_delivery_id' => $delivery->id,

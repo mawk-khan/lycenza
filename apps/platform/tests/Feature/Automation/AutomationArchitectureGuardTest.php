@@ -31,6 +31,8 @@ class AutomationArchitectureGuardTest extends TestCase
         'App\\Support\\Events\\EventConsumer',
         'App\\Support\\FeatureFlags\\FeatureFlagResolver',
         'App\\Support\\Identifiers\\GeneratesUuidV7',
+        // Phase 0O.5A (ADR 0051 §11): bounded execution-outcome counters.
+        'App\\Support\\Observability\\MetricsRecorder',
         'App\\Support\\Observability\\QueueName',
         'App\\Support\\Tenancy\\BelongsToSchool',
         // Phase 0N.9 (ADR 0047 section 8): the execution-time School

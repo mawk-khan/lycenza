@@ -72,6 +72,17 @@ Both PostgreSQL connections bound connection establishment with
 waits 30 s and ignores `PGCONNECT_TIMEOUT`), so an unreachable database
 fails a request in seconds instead of holding a PHP-FPM worker.
 
+## Logs and metrics (Phase 0O.5A, ADR 0051)
+
+Every role logs one JSON object per line to stderr (`LOG_FORMAT=json`,
+`LOG_LEVEL=info`, `process_role` from the entrypoint); the container
+runtime collects them. The `web` role also listens on **port 9102** — the
+private metrics listener: `GET /metrics` with `Authorization: Bearer
+<METRICS_SCRAPE_TOKEN>`, Prometheus text format, operational values only.
+Expose 9102 only to the deployment's collector (never through the public
+TLS proxy); it keeps answering during a maintenance window. The AI Gateway
+logs the same JSON schema.
+
 ## Health
 
 | Process | Liveness | Readiness |

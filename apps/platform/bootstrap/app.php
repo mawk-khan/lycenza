@@ -14,6 +14,7 @@ use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureIdempotent;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PreventAuthenticatedPageCaching;
+use App\Http\Middleware\RecordHttpMetrics;
 use App\Http\Middleware\RequireMfa;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
@@ -22,9 +23,13 @@ use App\Http\Middleware\TrustConfiguredProxies;
 use App\Http\Middleware\VerifyAiGatewayServiceToken;
 use App\Support\Api\ApiAuthFailureLimiter;
 use App\Support\Auth\SessionEndedResponder;
+use App\Support\Observability\Metrics\MetricCatalog;
+use App\Support\Observability\MetricsRecorder;
+use App\Support\Observability\SafeException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -54,6 +59,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->preventRequestsDuringMaintenance(except: ['api/health/live', 'api/health/ready']);
 
         $middleware->append(AssignRequestId::class);
+        // Phase 0O.5A (ADR 0051 §11): bounded HTTP metrics, recorded after the response.
+        $middleware->append(RecordHttpMetrics::class);
         $middleware->append(AssignTraceContext::class);
         // Phase 0O.3 (ADR 0049 section 11): the browser security header
         // baseline on every response, alongside the existing no-store,
@@ -162,6 +169,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // Phase 0O.5A (ADR 0051 §6.3, §11): an unhandled database error is
+        // counted by SQLSTATE class; the report itself continues through the
+        // central log pipeline (SafeLogProcessor), which never records the
+        // message (SQL with bound values) -- only class and SQLSTATE.
+        $exceptions->report(function (QueryException $e): void {
+            $state = SafeException::sqlstate($e);
+            $class = $state !== null ? substr($state, 0, 2) : 'other';
+            app(MetricsRecorder::class)->counter('lycenza_database_query_errors_total', 1, [
+                'sqlstate_class' => in_array($class, MetricCatalog::SQLSTATE_CLASSES, true) ? $class : 'other',
+            ]);
+        });
 
         // Consistent JSON error envelope for the whole /api surface.
         // See docs/architecture/API.md ("Error format").

@@ -9,6 +9,7 @@ use App\Domain\Automation\Infrastructure\AutomationReviewItem;
 use App\Domain\Automation\Infrastructure\AutomationRuleInstance;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Observability\MetricsRecorder;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -61,9 +62,10 @@ class AutomationExecutionService
         }
 
         [$execution, $attemptNumber, $startedAt] = $claim;
+        $this->count('started');
 
         try {
-            DB::transaction(function () use ($school, $execution, $attemptNumber, $startedAt): void {
+            [$finalStatus, $finalCode] = DB::transaction(function () use ($school, $execution, $attemptNumber, $startedAt): array {
                 [$status, $code] = $this->evaluate($school, $execution);
 
                 $execution->update([
@@ -74,7 +76,14 @@ class AutomationExecutionService
                 ]);
 
                 $this->recordAttempt($execution, $attemptNumber, $status === AutomationExecution::STATUS_SUCCEEDED ? 'succeeded' : 'skipped', $code, $startedAt);
+
+                return [$status, $code];
             });
+
+            $this->count($finalStatus === AutomationExecution::STATUS_SUCCEEDED ? 'succeeded' : 'skipped');
+            if ($finalCode === 'review_item_created') {
+                app(MetricsRecorder::class)->counter('lycenza_automation_review_items_created_total');
+            }
         } catch (Throwable $e) {
             Log::error('automation.execution.failed', [
                 'school_id' => $school->id,
@@ -162,6 +171,10 @@ class AutomationExecutionService
                 ->whereIn('status', [AutomationExecution::STATUS_PENDING, AutomationExecution::STATUS_RUNNING])
                 ->update(['status' => AutomationExecution::STATUS_ABANDONED, 'outcome_code' => 'attempts_exhausted', 'completed_at' => now(), 'processing_lease_expires_at' => null]);
 
+            if ($abandoned === 1) {
+                $this->count('abandoned');
+            }
+
             if ($abandoned === 1 && $seen->status === AutomationExecution::STATUS_RUNNING) {
                 $this->recordAttempt($seen, $seen->attempts, 'interrupted', 'lease_expired', null);
             }
@@ -204,6 +217,17 @@ class AutomationExecutionService
 
             $this->recordAttempt($execution, $attemptNumber, 'failed', 'unexpected_error', $startedAt);
         });
+
+        $this->count($exhausted ? 'abandoned' : 'failed');
+    }
+
+    /**
+     * Phase 0O.5A (ADR 0051 §11): the execution outcome as a counter --
+     * never the rule, School or subject.
+     */
+    private function count(string $outcome): void
+    {
+        app(MetricsRecorder::class)->counter('lycenza_automation_executions_total', 1, ['outcome' => $outcome]);
     }
 
     private function recordAttempt(AutomationExecution $execution, int $attemptNumber, string $outcome, ?string $code, ?Carbon $startedAt): void

@@ -74,6 +74,8 @@ RUN mkdir -p storage/app/private storage/framework/cache/data storage/framework/
 # and it survives a Redis loss) -- ProductionConfigurationGuard refuses a
 # `file` driver.
 ENV APP_ENV=production \
+    LOG_FORMAT=json \
+    LOG_LEVEL=info \
     DB_CONNECTION=pgsql \
     APP_MAINTENANCE_DRIVER=cache \
     APP_MAINTENANCE_STORE=database \
@@ -81,6 +83,7 @@ ENV APP_ENV=production \
     REDIS_CLIENT=predis
 
 USER www-data
-EXPOSE 8080
+# 8080: public web (behind the TLS proxy); 9102: private metrics (collector only).
+EXPOSE 8080 9102
 ENTRYPOINT ["lycenza"]
 CMD ["web"]

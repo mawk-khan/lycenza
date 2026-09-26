@@ -4,9 +4,11 @@ namespace App\Jobs;
 
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
 use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPolicyService;
+use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Models\School;
+use App\Support\Observability\MetricsRecorder;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Bus\Queueable;
@@ -93,6 +95,7 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
                 'failure_code' => 'channel_not_supported',
                 'processing_lease_expires_at' => null,
             ]);
+            self::finished($delivery, 'failed');
 
             return;
         }
@@ -109,6 +112,7 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
                 'delivered_at' => $status === 'delivered' ? now() : null,
                 'processing_lease_expires_at' => null,
             ]);
+            self::finished($delivery, $status);
 
             return;
         }
@@ -129,6 +133,7 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
             'failure_reason' => $result->failureMessage,
             'processing_lease_expires_at' => null,
         ]);
+        self::finished($delivery, 'failed');
     }
 
     /**
@@ -229,6 +234,13 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
         ?string $failureCode,
         ?string $failureMessage,
     ): void {
+        // Phase 0O.5A (ADR 0051 §11): channel and outcome only -- never the
+        // recipient, message or School.
+        app(MetricsRecorder::class)->counter('lycenza_communication_attempts_total', 1, [
+            'delivery_channel' => self::channelLabel($delivery),
+            'outcome' => in_array($outcome, ['success', 'transient_failure', 'permanent_failure'], true) ? $outcome : 'transient_failure',
+        ]);
+
         CommunicationDeliveryAttempt::query()->create([
             'school_id' => $delivery->school_id,
             'communication_delivery_id' => $delivery->id,
@@ -241,5 +253,21 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
             'failure_message' => $failureMessage,
             'duration_ms' => (int) round($startedAt->diffInMilliseconds(now())),
         ]);
+    }
+
+    private static function channelLabel(CommunicationDelivery $delivery): string
+    {
+        $channel = (string) $delivery->getAttribute('channel');
+
+        return in_array($channel, array_map(fn (CommunicationChannel $c) => $c->value, CommunicationChannel::cases()), true) ? $channel : 'other';
+    }
+
+    private static function finished(CommunicationDelivery $delivery, string $status): void
+    {
+        $outcomes = ['accepted', 'sent', 'delivered', 'read', 'failed', 'bounced', 'rejected', 'expired', 'cancelled'];
+
+        if (in_array($status, $outcomes, true)) {
+            app(MetricsRecorder::class)->counter('lycenza_communication_deliveries_finished_total', 1, ['delivery_channel' => self::channelLabel($delivery), 'outcome' => $status]);
+        }
     }
 }

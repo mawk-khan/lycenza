@@ -4,7 +4,10 @@ namespace App\Console\Commands;
 
 use App\Jobs\DeliverWebhookJob;
 use App\Models\School;
+use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\QueueName;
+use App\Support\Observability\RecoveryMetrics;
+use App\Support\Observability\SafeException;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
 use App\Support\Tenancy\SchoolStatus;
 use App\Support\Tenancy\TenantContext;
@@ -40,6 +43,7 @@ class RedispatchDueWebhookDeliveries extends Command
 
     public function handle(SchedulerHeartbeatRecorder $heartbeats): int
     {
+        $startedAt = microtime(true);
         $batchSize = (int) $this->option('batch');
         $totalDispatched = 0;
 
@@ -55,14 +59,16 @@ class RedispatchDueWebhookDeliveries extends Command
                 }
             });
         } catch (\Throwable $e) {
-            $heartbeats->recordFailure('webhook-deliveries-redispatch', $e->getMessage());
-            Log::error('platform.webhook_deliveries_redispatch.failed', ['error' => $e->getMessage()]);
-            $this->error("Webhook redispatch failed: {$e->getMessage()}");
+            app(RecoveryMetrics::class)->record('webhook', false, $startedAt);
+            $heartbeats->recordFailure('webhook-deliveries-redispatch', SafeException::code($e));
+            app(ErrorReporter::class)->report($e, 'platform.webhook_deliveries_redispatch.failed', 'scheduler', 'webhook-deliveries-redispatch');
+            $this->error('Webhook redispatch failed ('.SafeException::code($e).').');
 
             return self::FAILURE;
         }
 
         $heartbeats->recordSuccess('webhook-deliveries-redispatch');
+        app(RecoveryMetrics::class)->record('webhook', true, $startedAt, ['inspected' => $totalDispatched, 'redispatched' => $totalDispatched]);
         $this->info("Re-dispatched {$totalDispatched} webhook deliverie(s).");
         Log::info('platform.webhook_deliveries_redispatch.completed', ['dispatched' => $totalDispatched]);
 

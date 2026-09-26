@@ -6,48 +6,22 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Default ErrorReporter implementation (section 38): one structured
- * log line, sanitized metadata, and a stable grouping key (section 40)
- * -- exception class + component + operation, never a hash of the full
- * stack trace (two occurrences of the same logical failure at
- * different call depths should still group together).
+ * Default ErrorReporter (ADR 0051 §6): one `error` record under the given
+ * event code, carrying the exception itself so the central SafeLogProcessor
+ * reduces it to class / SQLSTATE / error code / argument-free frames
+ * (never an unsafe message), plus a stable grouping fingerprint --
+ * `{exception_class}:{component}:{operation}`, never a stack-trace hash.
  */
 class LogErrorReporter implements ErrorReporter
 {
-    public function __construct(private readonly LogSanitizer $sanitizer) {}
-
-    public function report(
-        Throwable $exception,
-        string $component,
-        string $operation,
-        ?string $schoolId = null,
-        ?string $requestId = null,
-        ?string $correlationId = null,
-        array $metadata = [],
-    ): void {
-        $exceptionClass = $exception::class;
-
-        Log::error('application_error', [
-            'exception_class' => $exceptionClass,
-            'message' => $exception->getMessage(),
+    public function report(Throwable $exception, string $eventCode, string $component, string $operation, array $context = []): void
+    {
+        Log::error($eventCode, [
+            ...$context,
             'component' => $component,
             'operation' => $operation,
-            'school_id' => $schoolId,
-            'request_id' => $requestId,
-            'correlation_id' => $correlationId,
-            'fingerprint' => $this->fingerprint($exceptionClass, $component, $operation),
-            'metadata' => $this->sanitizer->sanitize($metadata),
+            'fingerprint' => $exception::class.":{$component}:{$operation}",
+            'exception' => $exception,
         ]);
-    }
-
-    /**
-     * Stable grouping key (section 40) -- deliberately NOT a hash of
-     * the stack trace, which would scatter the same logical failure
-     * across many distinct "groups" depending on call depth/line
-     * number.
-     */
-    private function fingerprint(string $exceptionClass, string $component, string $operation): string
-    {
-        return "{$exceptionClass}:{$component}:{$operation}";
     }
 }

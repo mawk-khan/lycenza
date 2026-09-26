@@ -26,6 +26,8 @@ class ProductionBootSmokeTest extends TestCase
 
     private const CANARY_REDIS_PASSWORD = 'canary-redis-password-91c3e5a7';
 
+    private const CANARY_SCRAPE_TOKEN = 'canary-scrape-token-6d2e8f0a1b3c5d7e9f2a4b6c8d0e';
+
     private string $dir;
 
     protected function setUp(): void
@@ -60,6 +62,8 @@ class ProductionBootSmokeTest extends TestCase
             'AI_GATEWAY_SERVICE_TOKEN' => '',
             // Phase 0O.4A infrastructure baseline (ADR 0050 section 15).
             'APP_URL' => 'https://erp.example.org',
+            'LOG_FORMAT' => 'json',
+            'METRICS_SCRAPE_TOKEN' => self::CANARY_SCRAPE_TOKEN,
             'DB_CONNECTION' => 'pgsql',
             'DB_DATABASE' => 'lycenza_production',
             'APP_MAINTENANCE_DRIVER' => 'cache',
@@ -231,6 +235,8 @@ class ProductionBootSmokeTest extends TestCase
             [['DB_CONNECTION' => 'sqlite'], 'database_connection_not_pgsql'],
             [['APP_MAINTENANCE_DRIVER' => 'file'], 'maintenance_mode_not_shared'],
             [['APP_URL' => 'https://lycenza.ddev.site'], 'environment_not_separated'],
+            [['LOG_FORMAT' => 'line'], 'log_format_not_structured'],
+            [['METRICS_SCRAPE_TOKEN' => ''], 'metrics_scrape_token_invalid'],
             [['DB_DATABASE' => 'school_os_test'], 'environment_not_separated'],
             [['DB_SSLMODE' => 'prefer'], 'database_tls_not_required'],
             [['REDIS_PASSWORD' => ''], 'redis_password_missing'],
@@ -244,7 +250,7 @@ class ProductionBootSmokeTest extends TestCase
 
             $this->assertNotSame(0, $process->getExitCode(), json_encode($unsafe).' must refuse to boot');
             $this->assertStringContainsString($code, $output);
-            foreach ([self::CANARY_REDIS_PASSWORD, self::CANARY_SIGNING_KEY, $storageCanary] as $secret) {
+            foreach ([self::CANARY_REDIS_PASSWORD, self::CANARY_SIGNING_KEY, self::CANARY_SCRAPE_TOKEN, $storageCanary] as $secret) {
                 $this->assertStringNotContainsString($secret, $output);
             }
         }

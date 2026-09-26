@@ -7,6 +7,7 @@ use App\Models\ApiClientCredential;
 use App\Models\School;
 use App\Support\Api\PartnerCredentialFormat;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Observability\MetricsRecorder;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +61,12 @@ class PartnerCredentialAuthenticator
         $parsed = PartnerCredentialFormat::parse($request->bearerToken());
 
         if ($parsed === null) {
+            // Only a token that claims to be a partner credential is a
+            // partner authentication failure (a human token is not).
+            if (str_starts_with((string) $request->bearerToken(), PartnerCredentialFormat::PREFIX)) {
+                $this->countFailure('malformed');
+            }
+
             return null;
         }
 
@@ -68,6 +75,8 @@ class PartnerCredentialAuthenticator
         $credential = ApiClientCredential::query()->where('key_id', $keyId)->first();
 
         if ($credential === null) {
+            $this->countFailure('unknown_key');
+
             return null;
         }
 
@@ -83,6 +92,8 @@ class PartnerCredentialAuthenticator
         };
 
         if ($outcome !== null) {
+            $this->countFailure($outcome);
+
             if ($client !== null) {
                 $this->recordDenial($client, $credential, $outcome);
             }
@@ -116,5 +127,15 @@ class PartnerCredentialAuthenticator
             'credential_id' => $credential->id,
             'outcome_code' => $outcome,
         ]));
+    }
+
+    /**
+     * Phase 0O.5A (ADR 0051 §11): the closed outcome code only -- never the
+     * key id, client, School or source address (those stay in the audit
+     * trail and logs).
+     */
+    private function countFailure(string $outcome): void
+    {
+        app(MetricsRecorder::class)->counter('lycenza_partner_auth_failures_total', 1, ['outcome' => $outcome]);
     }
 }

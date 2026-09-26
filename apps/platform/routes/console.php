@@ -65,6 +65,14 @@ Schedule::command('automation:executions-redispatch')
 // elevations whose session went away without another request. The
 // conditional finish in SchoolElevationService is the correctness
 // guarantee; withoutOverlapping() is an efficiency safeguard only.
+// Phase 0O.5A (ADR 0051 §11): one no-op canary per required worker queue
+// every minute -- the worker-class heartbeat that distinguishes an idle
+// queue from a dead worker.
+Schedule::command('platform:dispatch-worker-canaries')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('worker-canaries');
+
 Schedule::command('platform:expire-school-elevations')
     ->everyMinute()
     ->withoutOverlapping()

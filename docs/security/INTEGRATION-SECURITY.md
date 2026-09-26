@@ -218,3 +218,11 @@ are legitimate and are that customer's concern. Partner authentication
 failures are counted by the authenticator's bounded outcome codes only.
 The metrics scrape token (0O.5A) is an ordinary production secret under
 ADR 0050 §4, not a partner or service credential, and is never logged.
+
+Implemented (Phase 0O.5A): webhook metrics carry only a bounded outcome or
+state; partner authentication failures are counted by the authenticator's
+seven outcome codes (`malformed`, `unknown_key`, `client_missing`,
+`secret_mismatch`, `credential_revoked`, `credential_expired`,
+`client_revoked`) — only for tokens carrying the partner prefix. The scrape
+token is compared over SHA-256 digests in constant time and a missing,
+wrong or unconfigured token receives the same empty 401.

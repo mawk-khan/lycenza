@@ -2,14 +2,8 @@
 
 namespace App\Support\Observability;
 
-use App\Models\DomainEventOutbox;
-use App\Models\School;
-use App\Models\WebhookDelivery;
-use App\Support\Tenancy\TenantContext;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use App\Support\Observability\Signals\OperationalSignals;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use PDO;
 use Predis\Client as PredisClient;
@@ -28,6 +22,11 @@ use Throwable;
  */
 class OperationalStatusService
 {
+    public function __construct(
+        private readonly OperationalSignals $signals,
+        private readonly MetricsRecorder $metrics,
+    ) {}
+
     /**
      * Readiness (section 7): PostgreSQL + Redis only -- the two
      * dependencies genuinely essential for "can this instance safely
@@ -82,6 +81,8 @@ class OperationalStatusService
         } catch (Throwable) {
             // Never the exception message/class (section 60) -- could
             // contain the host/database name/credentials.
+            $this->metrics->counter('lycenza_dependency_check_failures_total', 1, ['dependency' => 'postgresql']);
+
             return new ComponentStatus('database', OperationalStatus::Unhealthy, 'unreachable');
         }
     }
@@ -104,6 +105,8 @@ class OperationalStatusService
 
             return new ComponentStatus('redis', OperationalStatus::Healthy, detail: ['duration_ms' => $durationMs]);
         } catch (Throwable) {
+            $this->metrics->counter('lycenza_dependency_check_failures_total', 1, ['dependency' => 'redis']);
+
             return new ComponentStatus('redis', OperationalStatus::Unhealthy, 'unreachable');
         }
     }
@@ -118,172 +121,140 @@ class OperationalStatusService
             // Object storage is NOT essential to readiness (section
             // 59) -- most routes do not touch it, so a failure here is
             // degraded, never unhealthy.
+            $this->metrics->counter('lycenza_dependency_check_failures_total', 1, ['dependency' => 'object_storage']);
+
             return new ComponentStatus('storage', OperationalStatus::Degraded, 'unreachable');
         }
     }
 
     /**
+     * Phase 0O.5A (ADR 0051 §15): every scheduled task's heartbeat, with
+     * the shared thresholds (a minute task is stale after 300 s and
+     * critical after 1800 s; a daily task after 26 h).
+     *
      * @return array<int, ComponentStatus>
      */
     public function scheduler(): array
     {
-        $recorder = app(SchedulerHeartbeatRecorder::class);
-        $staleAfter = (int) config('observability.scheduler_stale_after_seconds');
-
-        return array_map(function (string $name) use ($recorder, $staleAfter) {
-            $heartbeat = $recorder->get($name);
-
-            if ($heartbeat === null) {
-                return new ComponentStatus("scheduler:{$name}", OperationalStatus::Unknown, 'never run');
-            }
-
-            if ($recorder->isStale($heartbeat, $staleAfter)) {
-                return new ComponentStatus(
-                    "scheduler:{$name}",
-                    OperationalStatus::Unhealthy,
-                    'stale',
-                    ['last_success_at' => $heartbeat->last_success_at?->toIso8601String()],
-                );
-            }
-
-            return new ComponentStatus(
-                "scheduler:{$name}",
-                $heartbeat->last_error !== null ? OperationalStatus::Degraded : OperationalStatus::Healthy,
-                $heartbeat->last_error !== null ? 'last run failed' : null,
-                ['last_success_at' => $heartbeat->last_success_at?->toIso8601String()],
-            );
-        }, ['outbox-dispatch', 'webhook-deliveries-redispatch']);
+        return $this->guarded('scheduler', fn () => array_map(fn ($task) => new ComponentStatus(
+            "scheduler:{$task->name}",
+            match (true) {
+                $task->critical => OperationalStatus::Unhealthy,
+                $task->stale => OperationalStatus::Degraded,
+                $task->lastErrorCode !== null => OperationalStatus::Degraded,
+                default => OperationalStatus::Healthy,
+            },
+            match (true) {
+                $task->lastSuccessAt === null => 'never_succeeded',
+                $task->stale => 'stale',
+                $task->lastErrorCode !== null => 'last_run_failed',
+                default => null,
+            },
+            ['last_success_at' => $task->lastSuccessAt?->toIso8601String(), 'error_code' => $task->lastErrorCode],
+        ), $this->signals->taskHeartbeats()));
     }
 
     /**
+     * Worker classes (`default`, `integrations`, `notifications`): the
+     * heartbeat is refreshed by every processed job and at least by the
+     * per-minute canary, so a stale heartbeat means the worker class is
+     * not processing -- whether or not work is waiting (ADR 0051 §11).
+     *
      * @return array<int, ComponentStatus>
      */
     public function queues(): array
     {
-        $recorder = app(SchedulerHeartbeatRecorder::class);
-        $staleAfter = (int) config('observability.queue_stale_after_seconds');
+        return $this->guarded('queues', function () {
+            $failed = $this->signals->failedJobs();
+            $warn = (int) config('observability.thresholds.backlog_warning_seconds');
+            $high = (int) config('observability.thresholds.backlog_high_seconds');
 
-        return array_map(function (QueueName $queue) use ($recorder, $staleAfter) {
-            $name = "queue:{$queue->value}";
-            $pending = $this->queueDepth($queue->value);
-            $failed = DB::table('failed_jobs')->where('queue', $queue->value)->count();
-            $heartbeat = $recorder->get($name);
+            return array_map(function ($queue) use ($failed, $warn, $high) {
+                $age = $queue->oldestPendingAgeSeconds ?? 0;
+                [$status, $reason] = match (true) {
+                    $queue->heartbeatStale => [OperationalStatus::Unhealthy, 'stalled'],
+                    $age > $high => [OperationalStatus::Unhealthy, 'backlog'],
+                    $age > $warn => [OperationalStatus::Degraded, 'backlog'],
+                    ($failed[$queue->queue] ?? 0) > 0 => [OperationalStatus::Degraded, 'has failed jobs'],
+                    default => [OperationalStatus::Healthy, null],
+                };
 
-            // Section 20: an idle queue with zero pending work is
-            // NEVER stalled, regardless of heartbeat age -- there is
-            // simply nothing to have processed recently.
-            if ($pending === 0) {
-                $status = $failed > 0 ? OperationalStatus::Degraded : OperationalStatus::Healthy;
-
-                return new ComponentStatus($name, $status, $failed > 0 ? 'has failed jobs' : null, [
-                    'pending' => $pending,
-                    'failed' => $failed,
+                return new ComponentStatus("queue:{$queue->queue}", $status, $reason, [
+                    'pending' => $queue->pending,
+                    'delayed' => $queue->delayed,
+                    'oldest_pending_age_seconds' => $queue->oldestPendingAgeSeconds,
+                    'failed' => $failed[$queue->queue] ?? 0,
+                    'last_success_at' => $queue->heartbeatAt?->toIso8601String(),
                 ]);
-            }
-
-            $stalled = $heartbeat === null || $recorder->isStale($heartbeat, $staleAfter);
-
-            return new ComponentStatus(
-                $name,
-                $stalled ? OperationalStatus::Unhealthy : OperationalStatus::Healthy,
-                $stalled ? 'stalled' : null,
-                [
-                    'pending' => $pending,
-                    'failed' => $failed,
-                    'last_success_at' => $heartbeat?->last_success_at?->toIso8601String(),
-                ],
-            );
-        }, [QueueName::Default, QueueName::Integrations]);
-    }
-
-    private function queueDepth(string $queue): int
-    {
-        try {
-            return Queue::size($queue);
-        } catch (Throwable) {
-            return 0;
-        }
+            }, $this->signals->queues());
+        });
     }
 
     public function outbox(): ComponentStatus
     {
-        $pending = DomainEventOutbox::query()->where('status', 'pending')->count();
-        $oldest = DomainEventOutbox::query()->where('status', 'pending')->min('available_at');
-        // min()/max() are query-builder aggregates -- they return the
-        // RAW database value, not a cast Carbon instance, even though
-        // the model casts this column -- parse explicitly.
-        $ageSeconds = $oldest !== null ? now()->diffInSeconds(Carbon::parse($oldest)) : 0;
+        return $this->guarded('outbox', function () {
+            $outbox = $this->signals->outbox();
+            $warn = (int) config('observability.outbox_degraded_after_seconds');
+            $high = (int) config('observability.outbox_critical_after_seconds');
 
-        $degradedAfter = (int) config('observability.outbox_degraded_after_seconds');
-        $criticalAfter = (int) config('observability.outbox_critical_after_seconds');
+            [$status, $reason] = match (true) {
+                $outbox->pending > 0 && $outbox->oldestPendingAgeSeconds > $high => [OperationalStatus::Unhealthy, 'backlog'],
+                $outbox->failed > 0 => [OperationalStatus::Degraded, 'failed_events'],
+                $outbox->pending > 0 && $outbox->oldestPendingAgeSeconds > $warn => [OperationalStatus::Degraded, 'backlog'],
+                $outbox->stale > 0 => [OperationalStatus::Degraded, 'stale_unacknowledged'],
+                default => [OperationalStatus::Healthy, null],
+            };
 
-        $status = match (true) {
-            $pending === 0 => OperationalStatus::Healthy,
-            $ageSeconds > $criticalAfter => OperationalStatus::Unhealthy,
-            $ageSeconds > $degradedAfter => OperationalStatus::Degraded,
-            default => OperationalStatus::Healthy,
-        };
-
-        return new ComponentStatus('outbox', $status, detail: [
-            'pending_count' => $pending,
-            'oldest_pending_age_seconds' => $ageSeconds,
-        ]);
+            return new ComponentStatus('outbox', $status, $reason, [
+                'pending_count' => $outbox->pending,
+                'oldest_pending_age_seconds' => $outbox->oldestPendingAgeSeconds,
+                'unacknowledged_count' => $outbox->unacknowledged,
+                'stale_count' => $outbox->stale,
+                'failed_count' => $outbox->failed,
+            ]);
+        })[0];
     }
 
+    /**
+     * Recovery sweeps (Redis-loss reconciliation, ADR 0050 §10): fresh
+     * when each sweep's task heartbeat succeeded within the minute-task
+     * window.
+     */
+    public function recovery(): ComponentStatus
+    {
+        return $this->guarded('recovery', function () {
+            $stale = (int) config('observability.thresholds.minute_task_stale_seconds');
+            $detail = [];
+            $late = [];
+
+            foreach ($this->signals->recoverySweeps() as $source => $at) {
+                $detail[$source] = $at?->toIso8601String();
+                if ($at === null || $at->diffInSeconds(now(), true) > $stale) {
+                    $late[] = $source;
+                }
+            }
+
+            return new ComponentStatus('recovery', $late === [] ? OperationalStatus::Healthy : OperationalStatus::Degraded, $late === [] ? null : 'stale:'.implode(',', $late), $detail);
+        })[0];
+    }
+
+    /**
+     * Unfinished webhook deliveries -- never Unhealthy: a customer's
+     * endpoint failing is not an ERP outage (section 59, rule 56).
+     */
     public function webhooks(): ComponentStatus
     {
-        // webhook_deliveries is tenant-owned/RLS-protected (unlike the
-        // central domain_event_outbox) -- a cross-School aggregate
-        // MUST iterate every School's own context explicitly (the same
-        // pattern App\Console\Commands\RedispatchDueWebhookDeliveries
-        // already uses), never an unscoped/raw query. There is no
-        // "see every tenant's rows at once" mode by design (ADR 0004);
-        // `pgsql_admin` is migration-only (ADR 0021) and must never be
-        // used by runtime application code to bypass this.
-        $pending = 0;
-        $retrying = 0;
-        $abandoned = 0;
-        $oldestRetryAt = null;
-        $context = app(TenantContext::class);
+        return $this->backlogComponent('webhooks', 'webhook', OperationalStatus::Degraded);
+    }
 
-        School::query()->select('id')->orderBy('id')->chunk(200, function ($schools) use (&$pending, &$retrying, &$abandoned, &$oldestRetryAt, $context): void {
-            foreach ($schools as $school) {
-                $context->withSchool($school, function () use ($school, &$pending, &$retrying, &$abandoned, &$oldestRetryAt): void {
-                    $pending += WebhookDelivery::query()->where('school_id', $school->id)->whereIn('status', ['pending', 'retrying'])->count();
-                    $retrying += WebhookDelivery::query()->where('school_id', $school->id)->where('status', 'retrying')->count();
-                    $abandoned += WebhookDelivery::query()->where('school_id', $school->id)->where('status', 'abandoned')->count();
+    public function communications(): ComponentStatus
+    {
+        return $this->backlogComponent('communications', 'communication', OperationalStatus::Unhealthy);
+    }
 
-                    $schoolOldest = WebhookDelivery::query()->where('school_id', $school->id)->where('status', 'retrying')->min('next_attempt_at');
-                    if ($schoolOldest !== null) {
-                        $schoolOldestAt = Carbon::parse($schoolOldest);
-                        if ($oldestRetryAt === null || $schoolOldestAt->lt($oldestRetryAt)) {
-                            $oldestRetryAt = $schoolOldestAt;
-                        }
-                    }
-                });
-            }
-        });
-
-        $ageSeconds = $oldestRetryAt !== null ? now()->diffInSeconds($oldestRetryAt) : 0;
-
-        $degradedAfter = (int) config('observability.webhook_degraded_after_seconds');
-        $criticalAfter = (int) config('observability.webhook_critical_after_seconds');
-
-        // Section 49/59: a customer's own endpoint being down is never
-        // OUR unhealthy -- capped at Degraded, never Unhealthy,
-        // regardless of how old the backlog gets.
-        $status = match (true) {
-            $pending === 0 => OperationalStatus::Healthy,
-            $ageSeconds > $degradedAfter || $ageSeconds > $criticalAfter => OperationalStatus::Degraded,
-            default => OperationalStatus::Healthy,
-        };
-
-        return new ComponentStatus('webhooks', $status, detail: [
-            'pending_count' => $pending,
-            'retrying_count' => $retrying,
-            'abandoned_count' => $abandoned,
-            'oldest_retry_age_seconds' => $ageSeconds,
-        ]);
+    public function automation(): ComponentStatus
+    {
+        return $this->backlogComponent('automation', 'automation', OperationalStatus::Degraded);
     }
 
     public function aiGateway(): ComponentStatus
@@ -323,8 +294,50 @@ class OperationalStatusService
             ...$this->scheduler(),
             ...$this->queues(),
             $this->outbox(),
+            $this->recovery(),
             $this->webhooks(),
+            $this->communications(),
+            $this->automation(),
             $this->aiGateway(),
         ];
+    }
+
+    private function backlogComponent(string $component, string $source, OperationalStatus $worst): ComponentStatus
+    {
+        return $this->guarded($component, function () use ($component, $source, $worst) {
+            $backlog = $this->signals->backlog($source);
+            $warn = (int) config('observability.thresholds.backlog_warning_seconds');
+            $high = (int) config('observability.thresholds.backlog_high_seconds');
+
+            [$status, $reason] = match (true) {
+                $backlog->oldestOverdueAgeSeconds > $high => [$worst, 'overdue'],
+                $backlog->oldestOverdueAgeSeconds > $warn => [OperationalStatus::Degraded, 'overdue'],
+                default => [OperationalStatus::Healthy, null],
+            };
+
+            return new ComponentStatus($component, $status, $reason, [
+                'unfinished' => $backlog->states,
+                'overdue_count' => $backlog->overdue,
+                'oldest_overdue_age_seconds' => $backlog->oldestOverdueAgeSeconds,
+            ]);
+        })[0];
+    }
+
+    /**
+     * Phase 0O.5A (ADR 0051 §15): one component failing to compute (e.g.
+     * PostgreSQL down) degrades to `unknown` with a fixed reason -- never an
+     * exception, never the exception text.
+     *
+     * @return array<int, ComponentStatus>
+     */
+    private function guarded(string $component, callable $compute): array
+    {
+        try {
+            $result = $compute();
+
+            return is_array($result) ? array_values($result) : [$result];
+        } catch (Throwable) {
+            return [new ComponentStatus($component, OperationalStatus::Unknown, 'unavailable')];
+        }
     }
 }

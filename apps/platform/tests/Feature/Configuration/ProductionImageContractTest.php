@@ -71,6 +71,8 @@ class ProductionImageContractTest extends TestCase
         $this->assertStringContainsString('DB_CONNECTION=pgsql', $dockerfile);
         $this->assertStringContainsString('APP_MAINTENANCE_DRIVER=cache', $dockerfile);
         $this->assertStringContainsString('APP_MAINTENANCE_STORE=database', $dockerfile);
+        $this->assertStringContainsString('LOG_FORMAT=json', $dockerfile);
+        $this->assertStringContainsString('LOG_LEVEL=info', $dockerfile);
         // An unreachable database fails in seconds (verify-images.sh times it).
         $this->assertSame(5, config('database.connections.pgsql.options')[\PDO::ATTR_TIMEOUT]);
         $this->assertSame(5, config('database.connections.pgsql_admin.options')[\PDO::ATTR_TIMEOUT]);
@@ -101,7 +103,7 @@ class ProductionImageContractTest extends TestCase
     {
         $ini = $this->repo('apps/platform/deploy/php/production.ini');
 
-        foreach (['expose_php = Off', 'display_errors = Off', 'opcache.enable = 1', 'opcache.validate_timestamps = 0', 'session.use_strict_mode = 1'] as $line) {
+        foreach (['expose_php = Off', 'display_errors = Off', 'opcache.enable = 1', 'opcache.validate_timestamps = 0', 'session.use_strict_mode = 1', 'zend.exception_ignore_args = On'] as $line) {
             $this->assertStringContainsString($line, $ini);
         }
 
@@ -117,7 +119,19 @@ class ProductionImageContractTest extends TestCase
         $this->assertStringContainsString('server_tokens off;', $nginx);
         $this->assertStringContainsString('listen 8080', $nginx);
         $this->assertStringContainsString('location = /index.php', $nginx);
-        $this->assertSame(1, substr_count($nginx, 'fastcgi_pass'), 'exactly one PHP entry point');
+        // Exactly two PHP entry points: the public front controller, and the
+        // metrics script on the private listener (ADR 0051 §9).
+        $this->assertSame(2, substr_count($nginx, 'fastcgi_pass'));
+        [$public, $private] = explode('listen 9102;', $nginx, 2);
+        $this->assertSame(1, substr_count($public, 'fastcgi_pass'), 'the public listener executes only public/index.php');
+        $publicServer = substr($public, (int) strpos($public, 'listen 8080'), (int) strpos($public, '# Phase 0O.5A') - (int) strpos($public, 'listen 8080'));
+        $this->assertStringContainsString('location = /index.php', $publicServer);
+        $this->assertStringNotContainsString('metrics', strtolower($publicServer));
+        $this->assertStringContainsString('fastcgi_param SCRIPT_FILENAME /var/www/app/metrics/index.php;', $private);
+        $this->assertStringContainsString('fastcgi_param LYCENZA_METRICS_LISTENER 1;', $private);
+        $this->assertMatchesRegularExpression('/location \/ \{\s*return 404;/', $private);
+        $this->assertFileExists(base_path('metrics/index.php'));
+        $this->assertStringNotContainsString('metrics', (string) file_get_contents(base_path('public/index.php')));
         $this->assertMatchesRegularExpression('/location ~ \\\\\.php\$ \{\s*return 404;/', $nginx);
         $this->assertMatchesRegularExpression('/location ~ \/\\\\\. \{\s*(deny all|return 404);/', $nginx);
         $this->assertStringNotContainsString('autoindex on', $nginx);

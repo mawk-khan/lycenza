@@ -3,37 +3,36 @@
 namespace App\Support\Observability;
 
 /**
- * Phase 0C.4 section 45: a provider-independent metrics interface.
- * `App\Support\Idempotency\IdempotencyMetrics` (Phase 0C.2) already
- * established the "structured log line, not a vendor SDK" pattern for
- * exactly this reason -- this interface generalizes it into one shared
- * abstraction instead of every subsystem reinventing its own metrics
- * helper (section 4: "do not create duplicate abstractions").
+ * Phase 0C.4 section 45, redefined in Phase 0O.5A (ADR 0051 §9-§10): the
+ * application's one way to record an EVENT metric (counters and
+ * histograms). Every name and label set must be in
+ * App\Support\Observability\Metrics\MetricCatalog -- a closed catalog with
+ * closed label values; never a School, user, person, record, request,
+ * client or delivery identifier. State metrics (backlogs, ages,
+ * heartbeats) are computed at scrape time, not recorded here.
  *
- * Deliberately excludes any identifier that could become
- * high-cardinality (request id, correlation id, event id, delivery id,
- * user id, student id, a full URL) from `$labels` -- those belong in
- * logs/traces (section 47), never a metric label. School id is
- * likewise NEVER passed as a label by any current call site (section
- * 46) -- it is a legitimate cardinality concern (thousands of Schools)
- * even though it is not a *request-scoped* identifier the way the
- * others are; School-level metrics filtering is a logs/traces concern,
- * not this interface's.
+ * Best effort: recording never throws into business code in production,
+ * never retries and never buffers.
  */
 interface MetricsRecorder
 {
     /**
      * @param  array<string, string>  $labels
      */
-    public function counter(string $name, int $value = 1, array $labels = []): void;
+    public function counter(string $name, int|float $value = 1, array $labels = []): void;
 
     /**
+     * Set a stored gauge (a value an operator process reports, e.g. the last
+     * verification result). Scrape-time state is NOT recorded here.
+     *
      * @param  array<string, string>  $labels
      */
     public function gauge(string $name, float $value, array $labels = []): void;
 
     /**
+     * Record one observation (in seconds) into a histogram.
+     *
      * @param  array<string, string>  $labels
      */
-    public function timing(string $name, float $milliseconds, array $labels = []): void;
+    public function observe(string $name, float $seconds, array $labels = []): void;
 }

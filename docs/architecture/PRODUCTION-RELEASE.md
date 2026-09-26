@@ -238,13 +238,16 @@ drill), O2 (payments), O5 (service-token rotation or replacement), O9
 integrations) and O16 (supply chain). **No production image is pushed to
 a registry or promoted before O16 is resolved.**
 
-**Observability (ADR 0051):** a production deployment must provide a
-collector and backend that keep application logs (JSON on stderr) for at
-least 30 days and metrics (OpenMetrics, private scrape port, bearer token
-from the secret store once 0O.5A adds it) for at least 90 days, evaluate
-the OBS-01…OBS-26 alert catalog, route notifications, and feed the backup
-and restore-drill metrics the application cannot originate. Until 0O.5A
-lands, the application emits plain-text logs and no scrape endpoint. Signing-key
+**Observability (ADR 0051, implemented in 0O.5A):** production refuses to
+boot unless logs are JSON (`log_format_not_structured`) and
+`METRICS_SCRAPE_TOKEN` is a real secret of at least 32 characters
+(`metrics_scrape_token_invalid`). A deployment must provide a collector
+that reads container stderr (JSON logs, kept ≥ 30 days) and scrapes the web
+role's private port 9102 `/metrics` with the bearer token (metrics kept
+≥ 90 days), load `docs/operations/alerts/lycenza-alerts.rules.yml`
+(re-rendered with its operator values by `console platform:alerts-export`),
+route notifications, and mount the backup/drill evidence file
+(`OBSERVABILITY_DEPLOYMENT_EVIDENCE_FILE`). **None of this is active yet.** Signing-key
 rotation and a key id remain deferred (ADR 0023). `docker-compose.yml`'s
 local worker still works only `default` (a local-development gap recorded
 by the readiness audit, not changed here).

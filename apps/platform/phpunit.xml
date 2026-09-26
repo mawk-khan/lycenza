@@ -54,6 +54,10 @@
         <env name="BCRYPT_ROUNDS" value="4" force="true"/>
         <env name="BROADCAST_CONNECTION" value="null" force="true"/>
         <env name="CACHE_STORE" value="array" force="true"/>
+        <!-- Phase 0O.5A: metrics stay in-process; a test never writes the shared Redis metrics hash. -->
+        <env name="METRICS_STORE" value="array" force="true"/>
+        <env name="METRICS_SCRAPE_TOKEN" value="" force="true"/>
+        <env name="OBSERVABILITY_DEPLOYMENT_EVIDENCE_FILE" value="" force="true"/>
         <!--
             Real PostgreSQL, not SQLite. See ADR 0024
             (docs/architecture/adr/0024-real-postgresql-test-infrastructure.md).

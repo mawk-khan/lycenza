@@ -18,6 +18,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Observability\StorageMetrics;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantStoragePath;
 use Closure;
@@ -174,7 +175,9 @@ class CommunicationAttachmentService
                 $this->audit->school($attachment->school, 'communication_attachment.removed', actor: $actor, subject: $attachment, metadata: $metadata);
             });
 
-            Storage::disk($attachment->storage_disk)->delete($attachment->storage_path);
+            if (! Storage::disk($attachment->storage_disk)->delete($attachment->storage_path)) {
+                StorageMetrics::failed('delete');
+            }
 
             // Phase 5A.12 §25: removing an attachment is exactly as
             // approval-sensitive as adding one -- see upload()'s own
@@ -290,6 +293,8 @@ class CommunicationAttachmentService
         }
 
         if ($stored === false) {
+            StorageMetrics::failed('write');
+
             throw new AttachmentStorageException;
         }
 
@@ -315,7 +320,9 @@ class CommunicationAttachmentService
                 return $attachment;
             });
         } catch (Throwable $e) {
-            Storage::disk($disk)->delete($path);
+            if (! Storage::disk($disk)->delete($path)) {
+                StorageMetrics::failed('delete');
+            }
 
             throw $e;
         }

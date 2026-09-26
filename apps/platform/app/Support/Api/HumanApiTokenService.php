@@ -4,9 +4,11 @@ namespace App\Support\Api;
 
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Observability\MetricsRecorder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
+use Throwable;
 
 /**
  * Phase 0O.3 (ADR 0049 section 2): a person's own API tokens, from the
@@ -49,7 +51,7 @@ class HumanApiTokenService
             throw ValidationException::withMessages(['lifetime_days' => 'A token lasts between 1 and '.HumanApiTokenLifetime::MAX_DAYS.' days.']);
         }
 
-        return DB::transaction(function () use ($owner, $name, $scopes, $lifetimeDays): array {
+        return $this->counted('issue', fn () => DB::transaction(function () use ($owner, $name, $scopes, $lifetimeDays): array {
             $new = $owner->createToken($name, $scopes, now()->addDays($lifetimeDays));
             /** @var PersonalAccessToken $token */
             $token = $new->accessToken;
@@ -62,12 +64,12 @@ class HumanApiTokenService
             ]);
 
             return [$token, $new->plainTextToken];
-        });
+        }));
     }
 
     public function revoke(User $owner, string $tokenId): void
     {
-        DB::transaction(function () use ($owner, $tokenId): void {
+        $this->counted('revoke', fn () => DB::transaction(function () use ($owner, $tokenId): void {
             $token = $owner->tokens()->whereKey($tokenId)->lockForUpdate()->first();
 
             if ($token === null) {
@@ -79,7 +81,30 @@ class HumanApiTokenService
             $this->audit->platform(self::REVOKED, actor: $owner, metadata: [
                 'token_id' => (string) $tokenId,
             ]);
-        });
+        }));
+    }
+
+    /**
+     * Phase 0O.5A (ADR 0051 §11): an UNEXPECTED failure of a token
+     * operation (not a validation refusal) is counted, then rethrown
+     * unchanged.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $run
+     * @return T
+     */
+    private function counted(string $operation, callable $run): mixed
+    {
+        try {
+            return $run();
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            app(MetricsRecorder::class)->counter('lycenza_api_token_operation_errors_total', 1, ['operation' => $operation]);
+
+            throw $e;
+        }
     }
 
     /**

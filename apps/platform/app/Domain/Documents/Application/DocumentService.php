@@ -16,6 +16,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Observability\StorageMetrics;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantStoragePath;
 use Illuminate\Http\UploadedFile;
@@ -130,6 +131,8 @@ class DocumentService
             }
 
             if ($stored === false) {
+                StorageMetrics::failed('write');
+
                 throw new DocumentStorageException;
             }
 
@@ -163,7 +166,9 @@ class DocumentService
                 // transaction failed, so the object we already wrote
                 // must not silently remain as an orphan no Document row
                 // references.
-                Storage::disk($disk)->delete($path);
+                if (! Storage::disk($disk)->delete($path)) {
+                    StorageMetrics::failed('delete');
+                }
 
                 throw $e;
             }

@@ -17,10 +17,13 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 
 Observability and alerting are contracted by ADR 0051
 (`docs/architecture/adr/0051-production-observability-alerting-contract.md`):
-alerts OBS-01…OBS-26 link to the runbooks above; Phase 0O.5A adds the alert
-index, rule specifications and runbooks for webhook/integration failures,
-Communication delivery failures, failed jobs and telemetry collection
-failure. No observability backend is connected.
+alerts OBS-01…OBS-26 link to the runbooks above and to those added in
+Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
+[dashboard specification](dashboards.md),
+[WEBHOOK-FAILURES](WEBHOOK-FAILURES.md),
+[COMMUNICATION-FAILURES](COMMUNICATION-FAILURES.md),
+[FAILED-JOBS](FAILED-JOBS.md), [TELEMETRY-COLLECTION](TELEMETRY-COLLECTION.md).
+**No observability backend is connected and no alert routing is active.**
 
 ## Status of operational evidence
 

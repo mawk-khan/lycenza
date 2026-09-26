@@ -62,7 +62,9 @@ build() {
 random() { head -c 32 /dev/urandom | base64 | tr -d '/+=' | cut -c1-40; }
 
 REDIS_PASSWORD="$(random)"
+METRICS_TOKEN="$(random)$(random)"
 APP_ENV_ARGS=(
+    -e METRICS_SCRAPE_TOKEN="$METRICS_TOKEN"
     -e APP_KEY="base64:$(head -c 32 /dev/urandom | base64)"
     -e APP_URL=https://verify.invalid
     -e APP_DEBUG=false
@@ -95,6 +97,9 @@ leaked="$(in_app 'grep -rlF -e "dev-local-only-token" -e "school_os_secret" /var
 check "development token/placeholder only in the guard that refuses them" test -z "$leaked"
 check "OPcache timestamp validation off" in_app 'php -i | grep -q "opcache.validate_timestamps => Off"'
 check "PHP does not expose itself" in_app 'php -i | grep -q "expose_php => Off"'
+check "stack traces carry no arguments (zend.exception_ignore_args)" in_app 'php -i | grep -q "zend.exception_ignore_args => On"'
+check "production logs default to structured JSON at info" in_app 'test "$LOG_FORMAT" = json && test "$LOG_LEVEL" = info'
+check "metrics front controller exists outside public/" in_app 'test -f /var/www/app/metrics/index.php && test ! -e /var/www/app/public/metrics.php'
 
 docker network create "$NETWORK" >/dev/null
 docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" redis:7-alpine redis-server --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
@@ -124,6 +129,25 @@ docker run -d --name "${RUN_ID}-web-proxied" --network "$NETWORK" "${APP_ENV_ARG
 proxied() { docker exec "${RUN_ID}-web-proxied" php -r '$c=stream_context_create(["http"=>["ignore_errors"=>true,"header"=>"X-Forwarded-Proto: https"]]); @file_get_contents("http://127.0.0.1:8080/api/health/live",false,$c); echo implode("\n",$http_response_header ?? []);'; }
 for _ in $(seq 1 30); do proxied 2>/dev/null | grep -q '200' && break; sleep 1; done
 check "HSTS through a trusted proxy" grep -qi '^strict-transport-security: max-age=31536000$' <<<"$(proxied 2>/dev/null | tr -d '\r' || true)"
+
+# Phase 0O.5A (ADR 0051): structured logs and the private metrics listener.
+log_line="$(docker run --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e PROCESS_ROLE=console --entrypoint php "$APP_IMAGE" -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); Illuminate\Support\Facades\Log::info("verify.images.structured", ["password" => "canary-image-pw"]);' 2>&1 | grep '"event_code":"verify.images.structured"' || true)"
+check "production logs are one JSON object per line" test -n "$log_line"
+check "log lines carry the fixed fields" grep -q '"service":"platform","process_role":"console","environment":"production"' <<<"$log_line"
+check "the log pipeline redacts inside the image" test -z "$(grep canary-image-pw <<<"$log_line")"
+
+metrics() { docker exec "${RUN_ID}-web" php -r '$c=stream_context_create(["http"=>["ignore_errors"=>true,"timeout"=>60,"header"=>$argv[2] ?? ""]]); $b=@file_get_contents("http://127.0.0.1:".$argv[1]."/metrics",false,$c); echo implode("\n",$http_response_header ?? []),"\n\n",$b;' "$@"; }
+# (With the database deliberately unreachable every public request fails;
+# what matters is that the public listener never returns the exposition.)
+public_metrics="$(metrics 8080 "Authorization: Bearer $METRICS_TOKEN" 2>/dev/null || true)"
+check "the public listener never serves metrics, even with the token" test -z "$(grep -E 'HTTP/1.1 200|lycenza_' <<<"$public_metrics")"
+check "the private listener refuses a missing token" grep -q "HTTP/1.1 401" <<<"$(metrics 9102 2>/dev/null || true)"
+check "the private listener refuses a wrong token" grep -q "HTTP/1.1 401" <<<"$(metrics 9102 "Authorization: Bearer wrong-token-value" 2>/dev/null || true)"
+check "the private listener serves nothing but /metrics" grep -q "HTTP/1.1 404" <<<"$(docker exec "${RUN_ID}-web" php -r '$c=stream_context_create(["http"=>["ignore_errors"=>true]]); @file_get_contents("http://127.0.0.1:9102/api/health/live",false,$c); echo $http_response_header[0] ?? "";' 2>/dev/null || true)"
+private="$(metrics 9102 "Authorization: Bearer $METRICS_TOKEN" 2>/dev/null || true)"
+check "the private listener serves the exposition with the token" grep -q "# TYPE lycenza_readiness_status gauge" <<<"$private"
+check "metrics work with no backend and an unreachable database" grep -q 'lycenza_readiness_status{dependency="postgresql"} 0' <<<"$private"
+check "the exposition carries no identifier" test -z "$(grep -E '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-' <<<"$private")"
 
 routes="$(docker run --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" console route:list --json 2>/dev/null || true)"
 check "production route list builds" grep -q '"uri"' <<<"$routes"
@@ -164,6 +188,9 @@ for _ in $(seq 1 20); do ai_get /health/live >/dev/null 2>&1 && break; sleep 1; 
 check "gateway liveness 200" grep -q '^200' <<<"$(ai_get /health/live 2>/dev/null || true)"
 check "gateway readiness 200 with a token" grep -q '^200' <<<"$(ai_get /health/ready 2>/dev/null || true)"
 check "gateway does not name its server" grep -q '^200 None' <<<"$(ai_get /health/live 2>/dev/null || true)"
+gateway_logs="$(docker logs "${RUN_ID}-ai" 2>&1 || true)"
+check "gateway logs are structured JSON" grep -q '"service":"ai-gateway","process_role":"gateway","environment":"production"' <<<"$gateway_logs"
+check "gateway access lines carry no client address" test -z "$(grep '"event_code":"http.access"' <<<"$gateway_logs" | grep -E '"client|127\.0\.0\.1:' || true)"
 check "no external model provider enabled" docker exec "${RUN_ID}-ai" python -c 'from app.core.config import settings; import sys; sys.exit(1 if settings.real_providers_allowed else 0)'
 
 echo

@@ -380,6 +380,8 @@ def test_no_provider_credential_or_host_in_configuration() -> None:
         "service_token",
         "erp_contract_base_url",
         "real_providers_enabled",
+        # Phase 0O.5A (ADR 0051 §5): log format only -- not a provider setting.
+        "log_format",
     }
 
 

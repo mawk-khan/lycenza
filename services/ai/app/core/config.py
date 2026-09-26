@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     # provider exists in this codebase either way.
     real_providers_enabled: str = ""
 
+    # Phase 0O.5A (ADR 0051 §5): `json` (production) or `text` for a local
+    # terminal. Structured JSON is the default everywhere.
+    log_format: str = "json"
+
     @property
     def real_providers_allowed(self) -> bool:
         return self.real_providers_enabled.strip().lower() == "true"

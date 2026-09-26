@@ -1427,6 +1427,18 @@ Phase 0O.5A (duplicate queue-heartbeat listener, unwatched heartbeats and
 outage, raw exception text, unbounded request ids). Nothing is collected
 or activated; O16 must be resolved before any image registry push.
 
+**0O.5A — Observability & Alerting Foundation: COMPLETE (2026-09-26).**
+Central JSON logging with one sanitizer and safe exception handling,
+validated request ids, a closed low-cardinality metrics catalog on a
+private token-protected scrape listener, worker canaries and full scheduler
+heartbeats, trigger-maintained durable-work backlog signals (no RLS
+bypass), outage-tolerant operations status, the OBS-01…OBS-26 alert catalog
+as deterministic conditions plus a provider-neutral rule file, deployment
+evidence ingestion for backups and drills, structured Gateway logs, and
+runbooks. No backend, retention or alert routing is active; that evidence
+remains deploy-gated. Phase 0O stays PARTIALLY READY
+(`PHASE-0O-READINESS.md` §20).
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

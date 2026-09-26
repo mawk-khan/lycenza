@@ -30,6 +30,8 @@ class ProductionConfigurationGuardTest extends TestCase
             'services' => ['ai_gateway' => ['context_signing_key' => self::CANARY_SIGNING_KEY, 'service_token' => null]],
             // Phase 0O.4A infrastructure baseline (ADR 0050 sections 2, 7, 8, 15).
             'trustedproxy' => ['proxies' => ['10.0.0.0/8']],
+            // Phase 0O.5A (ADR 0051 §5, §9).
+            'observability' => ['logging' => ['format' => 'json'], 'metrics' => ['scrape_token' => 'scrape-canary-2f6b9d1e4a7c0b3d5e8f1a2c4b6d8e0f']],
             'database' => [
                 'default' => 'pgsql',
                 'testing_database' => 'school_os_test',
@@ -91,6 +93,10 @@ class ProductionConfigurationGuardTest extends TestCase
             'app url dot test' => [['app.url' => 'https://erp.test'], 'environment_not_separated'],
             'test database (runtime)' => [['database.connections.pgsql.database' => 'school_os_test'], 'environment_not_separated'],
             'test database (admin)' => [['database.connections.pgsql_admin.database' => 'school_os_test'], 'environment_not_separated'],
+            'line log format' => [['observability.logging.format' => 'line'], 'log_format_not_structured'],
+            'scrape token missing' => [['observability.metrics.scrape_token' => null], 'metrics_scrape_token_invalid'],
+            'scrape token too short' => [['observability.metrics.scrape_token' => 'short-token'], 'metrics_scrape_token_invalid'],
+            'scrape token placeholder' => [['observability.metrics.scrape_token' => 'dev-local-only-metrics-token-change-me-0000'], 'metrics_scrape_token_invalid'],
             'maintenance file driver' => [['app.maintenance.driver' => 'file'], 'maintenance_mode_not_shared'],
             'default connection sqlite' => [['database.default' => 'sqlite'], 'database_connection_not_pgsql'],
             'runtime db tls prefer' => [['database.connections.pgsql.sslmode' => 'prefer'], 'database_tls_not_required'],
@@ -171,7 +177,7 @@ class ProductionConfigurationGuardTest extends TestCase
             $this->fail('An unsafe configuration must be refused.');
         } catch (ProductionConfigurationException $e) {
             $this->assertSame(['app_debug_enabled', 'app_key_invalid', 'session_cookie_not_secure', 'ai_service_token_development_value'], $e->violations);
-            foreach ([$appKeyCanary, $tokenCanary, self::CANARY_SIGNING_KEY, 'redis-canary-5d1e'] as $secret) {
+            foreach ([$appKeyCanary, $tokenCanary, self::CANARY_SIGNING_KEY, 'redis-canary-5d1e', 'scrape-canary-2f6b9d1e4a7c0b3d5e8f1a2c4b6d8e0f'] as $secret) {
                 $this->assertStringNotContainsString($secret, $e->getMessage());
             }
         }

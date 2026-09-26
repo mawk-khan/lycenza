@@ -25,6 +25,12 @@ warm_caches() {
 role="${1:-web}"
 [ "$#" -gt 0 ] && shift
 
+# Phase 0O.5A (ADR 0051 §5): the process role every structured log line
+# carries (web | worker | scheduler | console).
+case "$role" in
+    web|worker|scheduler|console) export PROCESS_ROLE="$role" ;;
+esac
+
 case "$role" in
     web)
         warm_caches

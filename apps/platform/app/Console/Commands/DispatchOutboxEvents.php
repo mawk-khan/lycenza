@@ -4,7 +4,10 @@ namespace App\Console\Commands;
 
 use App\Jobs\ProcessOutboxEventJob;
 use App\Support\Events\OutboxReconciler;
+use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\QueueName;
+use App\Support\Observability\RecoveryMetrics;
+use App\Support\Observability\SafeException;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -34,9 +37,10 @@ class DispatchOutboxEvents extends Command
 
     protected $description = 'Dispatch pending domain_event_outbox rows into the queue.';
 
-    public function handle(SchedulerHeartbeatRecorder $heartbeats, OutboxReconciler $reconciler): int
+    public function handle(SchedulerHeartbeatRecorder $heartbeats, OutboxReconciler $reconciler, RecoveryMetrics $recoveryMetrics): int
     {
         $batchSize = (int) $this->option('batch');
+        $reconcileStartedAt = null;
         $dispatched = 0;
         $recovered = ['redispatched' => 0, 'acknowledged' => 0, 'failed' => 0];
 
@@ -68,14 +72,21 @@ class DispatchOutboxEvents extends Command
 
             // Phase 0O.4A (ADR 0050 section 10): recover events whose queued
             // job was lost (Redis loss), decided from PostgreSQL receipts.
+            $reconcileStartedAt = microtime(true);
             $recovered = $reconciler->reconcile($batchSize);
+            $recoveryMetrics->record('outbox', true, $reconcileStartedAt, [
+                'inspected' => array_sum($recovered), ...$recovered,
+            ]);
+            $reconcileStartedAt = null;
 
             $heartbeats->recordSuccess('outbox-dispatch');
         } catch (\Throwable $e) {
-            $heartbeats->recordFailure('outbox-dispatch', $e->getMessage());
-
-            Log::error('platform.outbox_dispatch.failed', ['error' => $e->getMessage()]);
-            $this->error("Outbox dispatch failed: {$e->getMessage()}");
+            if ($reconcileStartedAt !== null) {
+                $recoveryMetrics->record('outbox', false, $reconcileStartedAt);
+            }
+            $heartbeats->recordFailure('outbox-dispatch', SafeException::code($e));
+            app(ErrorReporter::class)->report($e, 'platform.outbox_dispatch.failed', 'scheduler', 'outbox-dispatch');
+            $this->error('Outbox dispatch failed ('.SafeException::code($e).').');
 
             return self::FAILURE;
         }

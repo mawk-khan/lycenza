@@ -3,65 +3,118 @@
 namespace App\Support\Observability;
 
 /**
- * Phase 0C.4 section 37: a centralized backstop against sensitive keys
- * reaching a log line or error report -- callers are still expected to
- * only pass explicit, minimal, already-safe metadata (see
- * App\Support\Observability\ErrorReporter's docblock); this exists so
- * that expectation is not the ONLY thing standing between a mistake and
- * a leaked secret. Recurses into nested arrays. Matching is
- * case-insensitive and matches on the key existing anywhere in a
- * snake_case/camelCase/PascalCase name (e.g. `webhookSecret`,
- * `WEBHOOK_SECRET`, and `previous_secret_encrypted` all redact),
- * deliberately broad rather than an exact-match allowlist that a new
- * field name could silently slip past.
+ * Phase 0C.4 section 37, made central in Phase 0O.5A (ADR 0051 §6): the
+ * one sanitizer every log record passes through (SafeLogProcessor and
+ * StructuredJsonFormatter call it; callers never have to). Callers are
+ * still expected to pass only minimal, already-safe metadata -- this is
+ * the backstop, not the primary control.
+ *
+ * Keys: matched by WORD SEGMENT after normalising snake/kebab/camel case
+ * (`webhookSecret`, `WEBHOOK_SECRET`, `x-schoolos-signature` all match),
+ * so a sensitive word anywhere in a key redacts it, but a short fragment
+ * inside an unrelated word does not (`otp` never matches `footprint`,
+ * `token` never matches the count `input_tokens`).
+ *
+ * Values: secret-shaped strings are scrubbed wherever they appear --
+ * including messages -- with a small, bounded set of patterns (bearer
+ * credentials, the application's own `lyc_pat_`/`lyc_pk_` credentials,
+ * `base64:` keys, URL userinfo, the committed development tokens). It is
+ * deliberately not a universal secret detector.
  */
 class LogSanitizer
 {
-    private const REDACTED = '[redacted]';
+    public const REDACTED = '[redacted]';
 
     /**
-     * @var array<int, string>
+     * Word sequences whose presence in a key redacts the value, whatever
+     * its type.
+     *
+     * @var list<string>
      */
-    private const SENSITIVE_KEY_FRAGMENTS = [
-        'password',
-        'token',
-        'authorization',
-        'secret',
-        'api_key',
-        'apikey',
-        'access_key',
-        'private_key',
-        'credential',
-        'signature',
+    private const SENSITIVE_WORDS = [
+        'password', 'passwd', 'passphrase', 'secret', 'secrets', 'authorization', 'cookie', 'cookies',
+        'credential', 'credentials', 'private_key', 'api_key', 'apikey', 'access_key',
+        'recovery_code', 'recovery_codes', 'otp', 'totp', 'mfa_secret', 'app_key', 'previous_keys',
+        'signing_key', 'hmac_key', 'service_token', 'dsn', 'prompt', 'completion', 'context_token',
     ];
 
     /**
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
+     * Words that redact string/array values but leave numbers and booleans
+     * (counts such as `token_count` or flags such as `session_ended`
+     * stay readable).
+     *
+     * @var list<string>
+     */
+    private const SENSITIVE_STRING_WORDS = [
+        'token', 'signature', 'session', 'hash', 'body', 'content', 'contents', 'payload',
+    ];
+
+    /** @var array<string, string> pattern => replacement */
+    private const VALUE_PATTERNS = [
+        '/\bBearer\s+[A-Za-z0-9._~+\/|=-]+/i' => 'Bearer '.self::REDACTED,
+        '/\blyc_(pat|pk)_[A-Za-z0-9._|-]+/' => 'lyc_$1_'.self::REDACTED,
+        '/\bbase64:[A-Za-z0-9+\/=]{16,}/' => 'base64:'.self::REDACTED,
+        '/\b([a-z][a-z0-9+.-]*:\/\/)[^\s\/:@]+:[^\s\/@]+@/i' => '$1'.self::REDACTED.'@',
+        '/dev-local-only-(?:token|context-signing-key-change-me)/' => self::REDACTED,
+    ];
+
+    /**
+     * @param  array<array-key, mixed>  $data
+     * @return array<array-key, mixed>
      */
     public function sanitize(array $data): array
     {
         $result = [];
 
         foreach ($data as $key => $value) {
-            if ($this->isSensitiveKey($key)) {
+            if (is_string($key) && $this->redacts($key, $value)) {
                 $result[$key] = self::REDACTED;
 
                 continue;
             }
 
-            $result[$key] = is_array($value) ? $this->sanitize($value) : $value;
+            $result[$key] = match (true) {
+                is_array($value) => $this->sanitize($value),
+                is_string($value) => $this->sanitizeString($value),
+                default => $value,
+            };
         }
 
         return $result;
     }
 
-    private function isSensitiveKey(string $key): bool
+    public function sanitizeString(string $value): string
     {
-        $normalized = strtolower(str_replace(['-', ' '], '_', $key));
+        return (string) preg_replace(array_keys(self::VALUE_PATTERNS), array_values(self::VALUE_PATTERNS), $value);
+    }
 
-        foreach (self::SENSITIVE_KEY_FRAGMENTS as $fragment) {
-            if (str_contains($normalized, $fragment)) {
+    public function isSensitiveKey(string $key): bool
+    {
+        return $this->matches($key, self::SENSITIVE_WORDS) || $this->matches($key, self::SENSITIVE_STRING_WORDS);
+    }
+
+    private function redacts(string $key, mixed $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        if ($this->matches($key, self::SENSITIVE_WORDS)) {
+            return true;
+        }
+
+        return ! is_int($value) && ! is_float($value) && ! is_bool($value) && $this->matches($key, self::SENSITIVE_STRING_WORDS);
+    }
+
+    /**
+     * @param  list<string>  $words
+     */
+    private function matches(string $key, array $words): bool
+    {
+        $normalized = '_'.strtolower((string) preg_replace(['/([a-z0-9])([A-Z])/', '/[^A-Za-z0-9]+/'], ['$1_$2', '_'], $key)).'_';
+
+        foreach ($words as $word) {
+            if (str_contains($normalized, '_'.$word.'_')) {
                 return true;
             }
         }

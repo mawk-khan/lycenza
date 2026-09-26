@@ -62,7 +62,7 @@ class ProductionProcessManifestTest extends TestCase
                 continue;
             }
 
-            preg_match_all('/QueueName::(\w+)/', $source, $cases);
+            preg_match_all('/QueueName::(\w+)\b(?!\s*\()/', $source, $cases);
             foreach ($cases[1] as $case) {
                 $queues[] = constant(QueueName::class.'::'.$case)->value;
             }
