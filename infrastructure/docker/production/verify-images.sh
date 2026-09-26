@@ -37,6 +37,15 @@
 #                  (Phase 0O.6B) every required PHP extension loads; no build
 #                  toolchain/perl/curl/xz in the application runtime; CA
 #                  bundles, TLS-capable libpq and PHP timezone data present.
+#   custom PHP     -- (Phase 0O.6D) PHP 8.3.35 built from source; the exact
+#                  expected extension set; libcurl 8.22.0 / libxml2 2.15.4
+#                  resolved from /usr/local/lib by php and php-fpm (never a
+#                  Debian copy -- none is installed); ELF package notes; no
+#                  headers, source, phpize or PEAR; SIGQUIT stop signal; and a
+#                  native smoke INSIDE the image (runtime-checks/
+#                  php-native-smoke.php): the webhook HTTP client stack over
+#                  real TLS with a throwaway CA, AWS SDK against a real MinIO,
+#                  every PHP XML API -- repeated, crash signatures refused.
 #
 # Where this fits (ADR 0052): verify-images.sh proves how the images BEHAVE
 # and is one gate inside release qualification
@@ -59,9 +68,11 @@ pass() { printf 'PASS  %s\n' "$1"; }
 fail() { printf 'FAIL  %s\n' "$1"; failures=$((failures + 1)); }
 check() { local name="$1"; shift; if "$@" >/dev/null 2>&1; then pass "$name"; else fail "$name"; fi; }
 
+SMOKE_DIR="$(mktemp -d)"
 cleanup() {
     docker ps -aq --filter "name=${RUN_ID}" | xargs -r docker rm -f >/dev/null 2>&1 || true
     docker network rm "$NETWORK" >/dev/null 2>&1 || true
+    rm -rf "$SMOKE_DIR"
 }
 trap cleanup EXIT
 
@@ -124,6 +135,18 @@ check "no compiler, build toolchain, perl (beyond Essential perl-base), curl or 
 check "CA bundle present and PHP/OpenSSL verify against it" in_app 'test -s /etc/ssl/certs/ca-certificates.crt && php -r "exit(openssl_x509_parse(file_get_contents(\"/etc/ssl/certs/ca-certificates.crt\")) ? 0 : 1);"'
 check "PostgreSQL client library is TLS-capable" in_app 'ldd /usr/lib/x86_64-linux-gnu/libpq.so.5 | grep -q libssl'
 check "PHP timezone database resolves School timezones" in_app 'php -r "new DateTimeZone(\"Asia/Kolkata\"); new DateTimeZone(\"America/New_York\");"'
+# Phase 0O.6D: the repository-built PHP runtime and its patched libraries.
+expected_modules="$(tr '\n' ' ' < "$ROOT/infrastructure/docker/production/php-modules.expected")"
+check "PHP is the repository-built 8.3.35" in_app 'php -r "exit(PHP_VERSION === \"8.3.35\" ? 0 : 1);"'
+check "PHP module set equals php-modules.expected exactly" test "$(in_app 'php -m | grep -v "^\[" | grep -v "^$" | sort -u | tr "\n" " "')" = "$expected_modules"
+check "libcurl 8.22.0 and libxml2 2.15.4 are the loaded runtime versions" in_app 'php -r "exit(curl_version()[\"version\"] === \"8.22.0\" && LIBXML_DOTTED_VERSION === \"2.15.4\" ? 0 : 1);"'
+check "php and php-fpm resolve libcurl.so.4 and libxml2.so.16 from /usr/local/lib" in_app 'for b in /usr/local/bin/php /usr/local/sbin/php-fpm; do ldd "$b" | grep -q "libcurl.so.4 => /usr/local/lib/libcurl.so.4" && ldd "$b" | grep -q "libxml2.so.16 => /usr/local/lib/libxml2.so.16" || exit 1; done'
+check "no binary or extension has an unresolved library" test -z "$(in_app 'ldd /usr/local/bin/php /usr/local/sbin/php-fpm /usr/local/lib/php/extensions/*/*.so | grep "not found"')"
+check "the loader registers /usr/local/lib explicitly" in_app 'grep -qx /usr/local/lib /etc/ld.so.conf.d/00-lycenza-native.conf && ldconfig -p | grep -q "libcurl.so.4 .*=> /usr/local/lib/libcurl.so.4"'
+check "no Debian libcurl/libxml2 package and no other copy on disk" in_app '! dpkg -s libcurl4t64 >/dev/null 2>&1 && ! dpkg -s libxml2 >/dev/null 2>&1 && test "$(find / -xdev \( -name "libcurl.so*" -o -name "libxml2.so*" \) 2>/dev/null | sort | tr "\n" " ")" = "/usr/local/lib/libcurl.so.4 /usr/local/lib/libxml2.so.16 "'
+check "patched libraries carry their ELF package notes" in_app 'grep -aq "\"name\":\"curl\",\"version\":\"8.22.0\"" /usr/local/lib/libcurl.so.4 && grep -aq "\"name\":\"libxml2\",\"version\":\"2.15.4\"" /usr/local/lib/libxml2.so.16'
+check "no headers, PHP/curl/libxml2 source, phpize, php-config or PEAR" in_app 'test -z "$(find /usr/local/include /usr/src -mindepth 1 2>/dev/null)" && ! command -v phpize && ! command -v php-config && ! command -v pear && ! command -v curl-config && ! command -v xmllint'
+check "graceful FPM stop signal is SIGQUIT" test "$(docker image inspect -f '{{.Config.StopSignal}}' "$APP_IMAGE")" = "SIGQUIT"
 check "no private-key file in application or configuration paths" test -z "$(in_app 'find /var/www/app /usr/local/etc /etc/nginx \( -name "*.pem" -o -name "*.key" -o -name "id_rsa*" \) -not -path "*/vendor/*" 2>/dev/null')"
 
 docker network create "$NETWORK" >/dev/null
@@ -190,6 +213,51 @@ for role in worker-default worker-integrations worker-notifications scheduler; d
 done
 set +e; docker run --rm "$APP_IMAGE" bogus >/dev/null 2>&1; unknown=$?; set -e
 check "unknown role refused (exit 64)" test "$unknown" = "64"
+
+# --- Phase 0O.6D native smoke inside the production image ------------------------
+# Throwaway CA + server certificate (SANs: the pinned test name only), an
+# HTTPS test server and a MinIO, both on the private network; nothing leaves
+# this run.
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=lycenza-verify-ca" -keyout "$SMOKE_DIR/ca.key" -out "$SMOKE_DIR/ca.pem" >/dev/null 2>&1
+openssl req -newkey rsa:2048 -nodes -subj "/CN=pinned.invalid" -keyout "$SMOKE_DIR/server.key" -out "$SMOKE_DIR/server.csr" >/dev/null 2>&1
+printf 'subjectAltName=DNS:pinned.invalid\n' > "$SMOKE_DIR/san.ext"
+openssl x509 -req -in "$SMOKE_DIR/server.csr" -CA "$SMOKE_DIR/ca.pem" -CAkey "$SMOKE_DIR/ca.key" -CAcreateserial -days 1 -extfile "$SMOKE_DIR/san.ext" -out "$SMOKE_DIR/server.pem" >/dev/null 2>&1
+cat > "$SMOKE_DIR/server.py" <<'PY'
+import http.server, json, ssl, time
+class H(http.server.BaseHTTPRequestHandler):
+    def _reply(self):
+        if self.path.startswith("/slow"):
+            time.sleep(10)
+        if self.path.startswith("/redirect"):
+            self.send_response(302); self.send_header("Location", "/ok"); self.send_header("Content-Length", "0"); self.end_headers(); return
+        body = json.dumps({"ok": True}).encode()
+        self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+    def do_GET(self): self._reply()
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0))); self._reply()
+    def log_message(self, *args): pass
+server = http.server.ThreadingHTTPServer(("0.0.0.0", 8443), H)
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.load_cert_chain("/tls/server.pem", "/tls/server.key")
+server.socket = ctx.wrap_socket(server.socket, server_side=True)
+server.serve_forever()
+PY
+chmod a+r "$SMOKE_DIR"/*
+docker run -d --name "${RUN_ID}-tls" --network "$NETWORK" -v "$SMOKE_DIR:/tls:ro" \
+    python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d python /tls/server.py >/dev/null
+MINIO_KEY="verify$(random | cut -c1-12)"; MINIO_SECRET="$(random)"
+docker run -d --name "${RUN_ID}-minio" --network "$NETWORK" -e MINIO_ROOT_USER="$MINIO_KEY" -e MINIO_ROOT_PASSWORD="$MINIO_SECRET" \
+    minio/minio:RELEASE.2025-04-08T15-41-24Z server /data >/dev/null
+tls_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${RUN_ID}-tls")"
+for _ in $(seq 1 30); do docker exec "${RUN_ID}-minio" sh -c 'exec 3<>/dev/tcp/127.0.0.1/9000' 2>/dev/null && break; sleep 1; done
+smoke() { docker run --rm --network "$NETWORK" -v "$ROOT/infrastructure/docker/production/runtime-checks:/checks:ro" -v "$SMOKE_DIR/ca.pem:/checks-ca/ca.pem:ro" \
+    -e TLS_HOST="${RUN_ID}-tls" -e TLS_IP="$tls_ip" -e TLS_CA=/checks-ca/ca.pem -e S3_ENDPOINT="http://${RUN_ID}-minio:9000" \
+    -e S3_KEY="$MINIO_KEY" -e S3_SECRET="$MINIO_SECRET" -e ROUNDS="$1" --entrypoint php "$APP_IMAGE" /checks/php-native-smoke.php 2>&1; }
+set +e; smoke_out="$(smoke 3)"; smoke_rc=$?; smoke_again="$(smoke 1)"; again_rc=$?; set -e
+printf '%s\n' "$smoke_out" | sed 's/^/    /'
+check "native smoke passes inside the production image (3 rounds)" test "$smoke_rc" = "0"
+check "native smoke passes again in a fresh process" test "$again_rc" = "0"
+check "no crash signature (segfault/abort/symbol/loader error)" test -z "$(printf '%s\n%s\n' "$smoke_out" "$smoke_again" | grep -iE 'segmentation|core dumped|abort|symbol lookup|error while loading shared' || true)"
+check "no crash exit status (139 SIGSEGV / 134 SIGABRT)" test "$smoke_rc" != "139" -a "$smoke_rc" != "134" -a "$again_rc" != "139" -a "$again_rc" != "134"
 
 echo "== gateway image: $AI_IMAGE"
 in_ai() { docker run --rm --entrypoint sh "$AI_IMAGE" -c "$1"; }

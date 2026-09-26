@@ -62,13 +62,22 @@ class ProvenanceTest(unittest.TestCase):
         self.assertEqual(self.statement["predicateType"], "https://slsa.dev/provenance/v1")
         self.assertEqual(self.statement["subject"], [{"name": "lycenza-app", "digest": {"sha256": "ab" * 32}}])
         names = [d.get("name") for d in self.statement["predicate"]["buildDefinition"]["resolvedDependencies"][1:]]
-        self.assertEqual(names, ["PHP_IMAGE", "NODE_IMAGE", "COMPOSER_IMAGE"])
+        self.assertEqual(names, ["PHP_IMAGE", "RUNTIME_IMAGE", "NODE_IMAGE", "COMPOSER_IMAGE",
+                                 "PHP_SOURCE", "CURL_SOURCE", "LIBXML2_SOURCE"])
+        sources = {d["name"]: d for d in self.statement["predicate"]["buildDefinition"]["resolvedDependencies"] if d.get("name", "").endswith("_SOURCE")}
+        self.assertEqual(sources["CURL_SOURCE"]["uri"], "https://curl.se/download/curl-8.22.0.tar.xz")
+        self.assertRegex(sources["LIBXML2_SOURCE"]["digest"]["sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(self.verify(self.statement), [])
 
     def test_every_base_image_is_digest_pinned(self) -> None:
         for name in ("app", "ai"):
             text = (REPO_ROOT / f"infrastructure/docker/production/{name}.Dockerfile").read_text()
-            self.assertEqual(len(base_images(text)), text.count("_IMAGE=") , f"{name}.Dockerfile has an unpinned base")
+            pinned = [d for d in base_images(text) if d["name"].endswith("_IMAGE")]
+            self.assertEqual(len(pinned), text.count("_IMAGE="), f"{name}.Dockerfile has an unpinned base")
+
+    def test_a_source_archive_without_a_pinned_hash_is_refused(self) -> None:
+        with self.assertRaises(ReleaseError):
+            base_images("ENV LYCENZA_FOO_URL=https://example.invalid/foo.tar.xz \\\n    LYCENZA_FOO_VERSION=1\n")
 
     def test_failures(self) -> None:
         mutations = {

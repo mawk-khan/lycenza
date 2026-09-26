@@ -806,3 +806,25 @@ CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
 PROMOTED.** Decisions: **O1, O2, O5, O9, O13, O14, O15 open**. Phase 0O:
 **PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M: **BLOCKED**. REAL
 RESTORE DRILL STILL OUTSTANDING.
+
+## 25. Phase 0O.6D — Custom PHP Runtime & ABI Remediation (TECHNICAL REMEDIATION COMPLETE — AWAITING HIGH VULNERABILITY EXCEPTION DECISION, 2026-09-26)
+
+The production application image now runs a **repository-built PHP 8.3.35**
+against curl 8.22.0 and libxml2 2.15.4 (verified upstream sources, no PHP
+source patch, extension parity with the official binary, native smoke inside
+the image). **Lycenza maintains this runtime** (`docs/operations/CUSTOM-PHP-RUNTIME.md`).
+
+- Application: 9 CRITICAL / 65 HIGH → **0 CRITICAL, 0 HIGH with a fix**, 48
+  HIGH-without-fix matches.
+- Gateway (unchanged, CPython 3.14.7): 0 CRITICAL, 0 HIGH with a fix, 49
+  HIGH-without-fix matches.
+- Both residual sets are the same 12 Debian 13 Essential-package advisories
+  (util-linux, acl, glibc, ncurses, perl-base, zlib) in one **inactive**
+  combined decision pack. **Neither image is VERIFIED** until those exceptions
+  are individually approved and the real verifier passes.
+
+**NO PRODUCTION REGISTRY IS CONFIGURED. NO REAL SIGNING IDENTITY/KEY IS
+CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
+PROMOTED.** Decisions: **O1, O2, O5, O9, O13, O14, O15 open**. Phase 0O:
+**PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M: **BLOCKED**. REAL
+RESTORE DRILL STILL OUTSTANDING.

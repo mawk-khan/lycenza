@@ -15,6 +15,7 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 | [BACKUP-AND-RESTORE.md](BACKUP-AND-RESTORE.md) | PostgreSQL and object-storage backup requirements, the restore procedure, restore validation |
 | [RESTORE-DRILL-RECORD.md](RESTORE-DRILL-RECORD.md) | The drill record template (no drill has been performed) |
 | [RELEASE-QUALIFICATION.md](RELEASE-QUALIFICATION.md) | Release order, qualification to VERIFIED, exceptions, rollback re-verification, evidence retention, the scheduled re-scan (ADR 0052) |
+| [CUSTOM-PHP-RUNTIME.md](CUSTOM-PHP-RUNTIME.md) | The repository-built PHP runtime (curl/libxml2): pins, ownership, rebuild triggers, update procedure |
 | [SUPPLY-CHAIN-INCIDENTS.md](SUPPLY-CHAIN-INCIDENTS.md) | Compromised dependency, compromised CI action, leaked signing key/identity, malicious artifact, Critical CVE after deployment |
 
 Observability and alerting are contracted by ADR 0051
@@ -34,7 +35,7 @@ Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
 | Production images build and pass local verification | Repository-verified (`infrastructure/docker/production/verify-images.sh`) |
 | Production database bootstrap on a clean PostgreSQL 16 | Repository-verified on a throwaway cluster (`infrastructure/postgres/verify-production-bootstrap.sh`) |
 | Redis-loss reconciliation | Repository-verified (real Redis, `Tests\Feature\Recovery\RedisQueueLossRecoveryTest`) |
-| Release qualification (lock integrity, SBOM, vulnerability scan, secret/history scans, provenance, ephemeral signature, `verify-artifact`) | Repository-verified; **both images still FAIL the vulnerability policy after Phase 0O.6C** (app: libcurl/libxml2 CRITICALs pending an ABI decision; Gateway: only unapproved HIGH-without-fix) — no digest is VERIFIED ([remediation records](../security/release-remediation/0O.6C-PATCHED-LIBRARIES-PYTHON314.md)) |
+| Release qualification (lock integrity, SBOM, vulnerability scan, secret/history scans, provenance, ephemeral signature, `verify-artifact`) | Repository-verified; **both images still FAIL the vulnerability policy after Phase 0O.6D, only on unapproved HIGH-without-fix findings** (0 CRITICAL, 0 HIGH with a fix in either) — no digest is VERIFIED ([remediation records](../security/release-remediation/0O.6D-CUSTOM-PHP-RUNTIME.md)) |
 | Registry, signing custody, publication, promotion | **Not configured / not performed** |
 | Real deployment, real secrets, real bucket policy | **Not performed** |
 | Backup policy activation (PITR, object copy) | **Not performed** |

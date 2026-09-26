@@ -14,7 +14,7 @@ Common rules for every case below:
   repository (the deployment's incident record); commit only the resulting
   reviewed changes.
 
-## 1. Compromised dependency (a malicious or hijacked Composer, npm or Python package)
+## 1. Compromised dependency (a malicious or hijacked Composer, npm or Python package — or an upstream PHP/curl/libxml2 release of the custom PHP runtime)
 
 1. **Identify exposure** from the retained SBOMs: which digests contain the
    package/version (`jq` over `images/*/sbom.spdx.json` of the current and
@@ -28,7 +28,8 @@ Common rules for every case below:
    (ADR 0050 secret inventory).
 4. **Fix forward in a reviewed change**: pin a known-good version (update
    the lock; for Python regenerate `requirements.lock` with pip-compile and
-   hashes), never `audit fix` in CI. Re-qualify (complete regression +
+   hashes; for PHP/curl/libxml2 follow `CUSTOM-PHP-RUNTIME.md` — new pinned
+   version, checksum and signature), never `audit fix` in CI. Re-qualify (complete regression +
    evidence) and promote the new digest.
 5. If a rollback candidate predates the compromise, it may be deployed after
    re-verification (`RELEASE-QUALIFICATION.md` → Rollback).

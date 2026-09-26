@@ -1,5 +1,5 @@
 {
-  "status": "DECISION PACK -- PROPOSED -- NOT APPROVED -- NOT IN EFFECT",
+  "status": "SUPERSEDED by 0O.6D-combined-residual-high-decision-pack.json -- PROPOSED -- NOT APPROVED -- NOT IN EFFECT",
   "note": "Phase 0O.6C (owner decisions R16, R18; Step 31): the AI Gateway's complete residual set after all technical remediation (Debian 13, CPython 3.14.7, FastAPI 0.133.0 / Starlette 1.3.1 / pydantic 2.12.0): 0 CRITICAL, 0 HIGH with a fix, and these HIGH-without-fix matches, all in Debian 13 Essential/required base packages. Each `proposed_record` is the exact ADR 0052 exception record that would be added to infrastructure/release/vulnerability-exceptions.json ONLY after a human/security approval fills approved_by/created/expires (max 30 days). Nothing here is active; the live exception file stays empty. Supersedes 0O.6B-proposed-gateway-exceptions.json. Source: Grype 0.100.0 report of the Python 3.14.7 Gateway candidate (database built 2026-09-26T06:29Z); package versions must be re-checked against the final qualification scan before approval.",
   "summary": {
     "advisories": 12,
