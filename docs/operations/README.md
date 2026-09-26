@@ -48,3 +48,13 @@ Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
 Each prints one line per check — `PASS`, `FAIL` or
 `OPERATOR_EVIDENCE_REQUIRED` — and exits non-zero on any `FAIL`. None
 prints a credential, endpoint, error text, filename or payload.
+
+## Supply chain (ADR 0052, contract)
+
+Release artifacts are immutable image digests: built once, verified
+(SBOM, vulnerability scan, secret/history scan, provenance, signature),
+then promoted — production deploys PROMOTED digests only. Phase 0O.6A adds
+the aggregate verifier, the policy manifest, the vulnerability-exception
+file and incident runbooks (compromised dependency, compromised CI action,
+leaked signing key, malicious/incorrect artifact, critical CVE after
+deployment). **No image has been pushed, signed or promoted.**

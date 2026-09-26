@@ -784,3 +784,6 @@ Still outstanding (deploy-gated, §22): telemetry reaching a real backend;
 loaded and routed to the intended channel; backup freshness evidence
 connected; the restore-drill overdue alert active. O12's repository portion
 is complete; O12 is **not** operationally complete in production.
+
+**Note (Phase 0O.6, 2026-09-26):** the O16 boundary in §23 is resolved by
+ADR 0052; supply-chain findings never become runtime metric labels.

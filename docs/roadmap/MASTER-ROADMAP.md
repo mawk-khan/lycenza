@@ -1439,6 +1439,15 @@ runbooks. No backend, retention or alert routing is active; that evidence
 remains deploy-gated. Phase 0O stays PARTIALLY READY
 (`PHASE-0O-READINESS.md` §20).
 
+**0O.6 — Supply Chain & Artifact Security Contract (2026-09-26).** ADR 0052
+resolves O16: build once and promote one immutable OCI digest,
+digest-pinned bases, SHA-pinned CI actions, hash-verified locks, final-image
+SPDX SBOM, vulnerability gate (Critical blocks; High with a fix blocks;
+≤ 30-day exceptions), secret and image-history scanning, SLSA-style
+provenance, cosign-compatible signing and a fail-closed verifier before any
+promotion. Nothing is signed, pushed or promoted; Phase 0O.6A implements the
+repository side.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

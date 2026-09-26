@@ -231,12 +231,20 @@ account's password has no in-app recovery yet.
 
 ## 7. What stays open
 
-O3, O4, O6, O7, O8, O10, O11 and O12 are resolved (ADR 0049, ADR 0050,
-ADR 0051). Still open: O1 (definition of done — including a real restore
-drill), O2 (payments), O5 (service-token rotation or replacement), O9
-(custom domains), O13 (email), O14 (password reset), O15 (partner
-integrations) and O16 (supply chain). **No production image is pushed to
-a registry or promoted before O16 is resolved.**
+O3, O4, O6, O7, O8, O10, O11, O12 and O16 are resolved (ADR 0049, ADR 0050,
+ADR 0051, ADR 0052). Still open: O1 (definition of done — including a real
+restore drill), O2 (payments), O5 (service-token rotation or replacement), O9
+(custom domains), O13 (email), O14 (password reset) and O15 (partner
+integrations). **No production image is pushed to a registry or promoted
+before Phase 0O.6A's repository controls are complete**, and then only by an
+authorized operator.
+
+**Supply chain (ADR 0052):** a release is one immutable OCI image digest per
+image, built once from a commit on protected `main` and qualified by the
+complete regression; its SBOM, scan, provenance and signature are verified by
+one fail-closed verifier **before** promotion and **before** the maintenance
+window opens (ADR 0052 §3.19). Only a PROMOTED digest is deployed; rollback
+redeploys an earlier promoted digest after re-verification — never a rebuild.
 
 **Observability (ADR 0051, implemented in 0O.5A):** production refuses to
 boot unless logs are JSON (`log_format_not_structured`) and

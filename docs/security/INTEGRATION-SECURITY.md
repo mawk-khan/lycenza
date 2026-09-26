@@ -226,3 +226,14 @@ seven outcome codes (`malformed`, `unknown_key`, `client_missing`,
 `client_revoked`) — only for tokens carrying the partner prefix. The scrape
 token is compared over SHA-256 digests in constant time and a missing,
 wrong or unconfigured token receives the same empty 401.
+
+## Supply chain (ADR 0052)
+
+Third-party code enters only through committed lockfiles (Composer, npm,
+hash-verified Python) from public sources; there is no private package, so
+no dependency-confusion boundary exists today (one becomes mandatory if a
+private package is ever added). CI runs untrusted pull-request code without
+secrets (`contents: read`, no `pull_request_target`); signing and publish
+authority exists only in a trusted release context on protected `main`.
+Vulnerability exceptions are validated records of a human security decision,
+never silent suppression.
