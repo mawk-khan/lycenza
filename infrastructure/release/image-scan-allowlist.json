@@ -4,16 +4,9 @@
     {
       "image": "app",
       "code": "private_key_material",
-      "path": "/usr/lib/x86_64-linux-gnu/libgnutls.so.30.34.3",
-      "sha256": "779b25d20249988bea2c1aa6bbeb218f5ae7ea8a9d30ce4f54ea37372965cc4b",
-      "reason": "GnuTLS power-on self-test key vectors compiled into Debian's libgnutls30 (public test data, not a credential)"
-    },
-    {
-      "image": "ai-gateway",
-      "code": "private_key_material",
-      "path": "/usr/lib/x86_64-linux-gnu/libgnutls.so.30.34.3",
-      "sha256": "779b25d20249988bea2c1aa6bbeb218f5ae7ea8a9d30ce4f54ea37372965cc4b",
-      "reason": "GnuTLS power-on self-test key vectors compiled into Debian's libgnutls30 (public test data, not a credential)"
+      "path": "/usr/lib/x86_64-linux-gnu/libgnutls.so.30.40.3",
+      "sha256": "4b14edde42e7cbeefd8a6d88d035e096f2e6412a535388bb1d073a1c196e2822",
+      "reason": "GnuTLS power-on self-test key vectors (gnutls_pk_self_test) compiled into Debian 13's libgnutls30t64 3.8.9-3+deb13u4, required by libcurl (public test data, not a credential); re-reviewed for the Phase 0O.6B Debian 13 base"
     }
   ]
 }
