@@ -5,12 +5,14 @@ namespace App\Console\Commands;
 use App\Domain\Automation\Infrastructure\AutomationExecution;
 use App\Jobs\RunAutomationExecutionJob;
 use App\Models\School;
+use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\QueueName;
+use App\Support\Observability\RecoveryMetrics;
+use App\Support\Observability\SafeException;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Phase 0L.6 (ADR 0043 §7): drives Automation execution retry timing, the
@@ -31,6 +33,7 @@ class RedispatchDueAutomationExecutions extends Command
 
     public function handle(SchedulerHeartbeatRecorder $heartbeats): int
     {
+        $startedAt = microtime(true);
         $batchSize = (int) $this->option('batch');
         $total = 0;
 
@@ -45,14 +48,16 @@ class RedispatchDueAutomationExecutions extends Command
                 }
             });
         } catch (\Throwable $e) {
-            $heartbeats->recordFailure('automation-executions-redispatch', $e::class);
-            Log::error('automation.executions_redispatch.failed', ['exception' => $e::class]);
+            app(RecoveryMetrics::class)->record('automation', false, $startedAt);
+            $heartbeats->recordFailure('automation-executions-redispatch', SafeException::code($e));
+            app(ErrorReporter::class)->report($e, 'automation.executions_redispatch.failed', 'scheduler', 'automation-executions-redispatch');
             $this->error('Automation execution redispatch failed.');
 
             return self::FAILURE;
         }
 
         $heartbeats->recordSuccess('automation-executions-redispatch');
+        app(RecoveryMetrics::class)->record('automation', true, $startedAt, ['inspected' => $total, 'redispatched' => $total]);
         $this->info("Re-dispatched {$total} Automation execution(s).");
 
         return self::SUCCESS;

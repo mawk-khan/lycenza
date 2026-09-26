@@ -6,12 +6,12 @@
         "ai-gateway": "infrastructure/docker/production/ai.Dockerfile"
     },
     "secret_groups": {
-        "app_runtime": ["APP_KEY", "APP_PREVIOUS_KEYS", "MAIL_PASSWORD", "DB_PASSWORD", "REDIS_PASSWORD", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AI_GATEWAY_CONTEXT_SIGNING_KEY", "AI_GATEWAY_SERVICE_TOKEN", "CONTACT_LOOKUP_HMAC_KEY", "STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY"],
+        "app_runtime": ["APP_KEY", "METRICS_SCRAPE_TOKEN", "APP_PREVIOUS_KEYS", "MAIL_PASSWORD", "DB_PASSWORD", "REDIS_PASSWORD", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AI_GATEWAY_CONTEXT_SIGNING_KEY", "AI_GATEWAY_SERVICE_TOKEN", "CONTACT_LOOKUP_HMAC_KEY", "STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY"],
         "database_admin": ["DB_ADMIN_USERNAME", "DB_ADMIN_PASSWORD"],
         "gateway": ["SERVICE_TOKEN"]
     },
     "processes": [
-        { "role": "web", "image": "app", "command": ["web"], "long_running": true, "public": true, "health": { "liveness": "/api/health/live", "readiness": "/api/health/ready" }, "secret_groups": ["app_runtime"] },
+        { "role": "web", "image": "app", "command": ["web"], "long_running": true, "public": true, "health": { "liveness": "/api/health/live", "readiness": "/api/health/ready" }, "metrics": { "port": 9102, "path": "/metrics", "auth": "bearer METRICS_SCRAPE_TOKEN", "exposure": "private collector network only" }, "secret_groups": ["app_runtime"] },
         { "role": "worker-default", "image": "app", "command": ["worker", "default"], "long_running": true, "queue": "default", "secret_groups": ["app_runtime"] },
         { "role": "worker-integrations", "image": "app", "command": ["worker", "integrations"], "long_running": true, "queue": "integrations", "secret_groups": ["app_runtime"] },
         { "role": "worker-notifications", "image": "app", "command": ["worker", "notifications"], "long_running": true, "queue": "notifications", "secret_groups": ["app_runtime"] },

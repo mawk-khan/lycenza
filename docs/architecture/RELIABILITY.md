@@ -481,3 +481,12 @@ schedules documented here (ADR 0051 §14): 300 s (five one-minute sweep
 cycles) for Warning/High, 1800 s for High, and exhausted/`failed` outbox
 events as High. Telemetry is best effort: a metrics or log-shipping
 failure never fails, retries or rolls back business work.
+
+Implemented in Phase 0O.5A: the reconciliation and backlog metrics above
+(`lycenza_reconciliation_*`, `lycenza_outbox_*`, `lycenza_webhook_*`,
+`lycenza_communication_*`, `lycenza_automation_*`), with overdue computed
+from the trigger-maintained `operational_work_backlog` (whose `state_since`
+survives the redispatch `updated_at` bump), and a proof that a failing
+metrics store changes no HTTP, transaction, job or recovery outcome
+(`Tests\Feature\Observability\TelemetryFailureIsolationTest`). The Redis-loss
+recovery tests pass unchanged.

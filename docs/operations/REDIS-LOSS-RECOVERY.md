@@ -56,3 +56,11 @@ jobs after completion do nothing; Automation's own sweep is asserted to
 remain in the recovery set. `Tests\Feature\Recovery\OutboxReconcilerTest`
 covers staleness, acknowledgement from receipts, partial receipts,
 batching and the attempt bound.
+
+## Observability (Phase 0O.5A)
+
+Watch `lycenza_reconciliation_*` and the `recovery` component of
+`platform:operations-status`; alerts OBS-11 to OBS-14 (outbox), OBS-15
+(webhooks), OBS-17 (Communications) and OBS-19 (Automation). A Redis loss
+also resets the metrics counters (they live in Redis); rate-based alerts
+tolerate resets, and every state metric is recomputed from PostgreSQL.

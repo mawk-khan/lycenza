@@ -196,8 +196,9 @@ and how a trace survives a Laravel → AI Gateway → Laravel round trip.
 ADR 0051 (Phase 0O.5) bounds the inbound value: an `X-Request-Id` is
 honoured only if it matches `^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$` (UUIDs
 and ULIDs do); anything else is replaced by a server-generated UUID, which
-is what the response echoes. Implemented in Phase 0O.5A; today any value
-is accepted.
+is what the response echoes (implemented in Phase 0O.5A,
+`App\Http\Middleware\AssignRequestId`). `=` is outside the class, so e.g.
+AWS-style `Root=…` ids are replaced.
 
 ## Webhooks
 

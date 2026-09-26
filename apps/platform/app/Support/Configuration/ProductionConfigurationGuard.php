@@ -127,6 +127,18 @@ final class ProductionConfigurationGuard
             $violations[] = 'environment_not_separated';
         }
 
+        // Phase 0O.5A (ADR 0051 §5, §9): production logs are structured JSON,
+        // and the private metrics listener needs a real scrape token (an O4
+        // secret, at least 32 characters, never a placeholder).
+        if ($this->config->get('observability.logging.format') !== 'json') {
+            $violations[] = 'log_format_not_structured';
+        }
+
+        $scrapeToken = $this->config->get('observability.metrics.scrape_token');
+        if (! is_string($scrapeToken) || strlen(trim($scrapeToken)) < 32 || preg_match('/^(dev|test|local|changeme|example)/i', $scrapeToken) === 1) {
+            $violations[] = 'metrics_scrape_token_invalid';
+        }
+
         // Every web/worker/scheduler container must see the same maintenance
         // state: a per-container file would leave the others serving and
         // working during a migration window (ADR 0050 section 13).

@@ -6,13 +6,14 @@ use App\Models\DomainEventOutbox;
 use App\Models\School;
 use App\Support\Events\EventConsumerRegistry;
 use App\Support\Events\IdempotentConsumerGuard;
+use App\Support\Observability\ErrorReporter;
+use App\Support\Observability\SafeException;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Dispatched by `platform:outbox-dispatch` (afterCommit) for every
@@ -89,14 +90,16 @@ class ProcessOutboxEventJob implements ShouldQueue
                 try {
                     $guard->run($consumer, $event);
                 } catch (\Throwable $e) {
-                    Log::error('event_consumer.failed', [
+                    // Phase 0O.5A (ADR 0051 §6.3): class/SQLSTATE/code only --
+                    // never the consumer's exception text, in the log or in
+                    // the exception failed_jobs stores below.
+                    app(ErrorReporter::class)->report($e, 'event_consumer.failed', 'outbox', $consumer->name(), [
                         'consumer' => $consumer->name(),
                         'event_id' => $event->id,
                         'event_type' => $event->event_type,
-                        'error' => $e->getMessage(),
                     ]);
 
-                    $failures[] = "{$consumer->name()}: {$e->getMessage()}";
+                    $failures[] = $consumer->name().' ('.SafeException::code($e).')';
                 }
             }
 

@@ -638,3 +638,43 @@ O9, O13, O14, O15, O16 open**. Phase 0O: **PARTIALLY READY — SOME
 CHECKPOINTS MAY START**. Phase 0M: **BLOCKED**. REAL RESTORE DRILL STILL
 OUTSTANDING.
 
+## 20. Phase 0O.5A — Observability & Alerting Foundation (COMPLETE, 2026-09-26)
+
+Repository work only, implementing ADR 0051 (implementation amendment
+there). **NO REAL OBSERVABILITY BACKEND IS ACTIVE. NO ALERT ROUTING IS
+ACTIVE. DEPLOY-GATED O12 EVIDENCE REMAINS.**
+
+- **Logs:** central `StructuredLogTap` (JSON, fixed schema, stable event
+  codes) with the central `LogSanitizer` (keys by word segment, secret-shaped
+  values); safe exception logging (no raw messages, no SQL values, no stack
+  arguments; `zend.exception_ignore_args = On` in the image); the Gateway
+  logs the same JSON schema with G3 redaction.
+- **Request ids:** the ADR pattern or a fresh UUID; the oversized-id audit
+  failure is fixed.
+- **Metrics:** closed `MetricCatalog`, best-effort shared Redis counters,
+  scrape-time signals; a private listener (port 9102, bearer scrape token,
+  no Laravel route, available during maintenance); no vendor SDK, no
+  tracing.
+- **Heartbeats:** per-queue worker canaries every minute; every scheduled
+  task heartbeated and counted; the duplicate queue-heartbeat listener
+  fixed; atomic heartbeat upserts.
+- **Durable-work visibility without RLS bypass:** trigger-maintained
+  `operational_work_backlog`; overdue means eligible and not picked up —
+  legitimate backoff and deferred work never alert.
+- **Operations status:** the same signals and thresholds; every task, all
+  three queues, Communications, Automation, outbox, recovery; degrades per
+  component during a PostgreSQL outage.
+- **Alerts:** OBS-01…OBS-26 as deterministic conditions and a generated,
+  provider-neutral rule file; operator-valued tiers disabled until set.
+- **Evidence:** backup and restore-drill metrics only from a
+  deployment-controlled, strictly validated file.
+- **Runbooks/dashboards:** alert index, four dashboard views, runbooks for
+  webhook, Communication, failed-job and telemetry failures.
+
+O12: **repository portion COMPLETE**; operational evidence outstanding —
+a real backend receiving telemetry, ≥ 30-day log and ≥ 90-day metric
+retention, the alert rules active, routing active, backup metrics
+connected, the restore-drill overdue alert active. REAL RESTORE DRILL STILL
+OUTSTANDING. Decisions still open: **O1, O2, O5, O9, O13, O14, O15, O16**.
+Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M:
+**BLOCKED**. No production image may be pushed or promoted before O16.

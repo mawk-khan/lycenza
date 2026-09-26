@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Models\School;
+use App\Support\Observability\ErrorReporter;
+use App\Support\Observability\SafeException;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
 use App\Support\Tenancy\SchoolNotOperationalException;
 use App\Support\Tenancy\SchoolStatus;
@@ -59,9 +61,9 @@ class PublishScheduledAnnouncements extends Command
                 }
             });
         } catch (Throwable $e) {
-            $heartbeats->recordFailure('communications-publish-scheduled', $e->getMessage());
-            Log::error('platform.communications_publish_scheduled.failed', ['error' => $e->getMessage()]);
-            $this->error("Scheduled announcement publication failed: {$e->getMessage()}");
+            $heartbeats->recordFailure('communications-publish-scheduled', SafeException::code($e));
+            app(ErrorReporter::class)->report($e, 'platform.communications_publish_scheduled.failed', 'scheduler', 'communications-publish-scheduled');
+            $this->error('Scheduled announcement publication failed ('.SafeException::code($e).').');
 
             return self::FAILURE;
         }

@@ -88,6 +88,11 @@ services:
       # Tests\Feature\Configuration\ProductionImageContractTest).
       - ./infrastructure:/var/infrastructure:ro
       - ./services/ai/.dockerignore:/var/services/ai/.dockerignore:ro
+      # Phase 0O.5A: the alert/runbook/dashboard contract tests read docs/
+      # (the generated alert rules, runbooks, dashboard spec) and the
+      # Gateway's runtime requirements (no vendor telemetry SDK).
+      - ./docs:/var/docs:ro
+      - ./services/ai/requirements.txt:/var/services/ai/requirements.txt:ro
     env_file:
       - ./apps/platform/.env
     environment:

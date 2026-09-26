@@ -37,4 +37,16 @@ enum QueueName: string
 
     /** Reserved: future high-priority financial/compliance-sensitive jobs, once a module needing that guarantee exists. */
     case Critical = 'critical';
+
+    /**
+     * Phase 0O.5A (ADR 0051 §11): the queues a deployment must run a worker
+     * class for (deploy/processes.json) -- each gets a per-minute canary and
+     * a heartbeat. Guard-tested against the manifest.
+     *
+     * @return list<self>
+     */
+    public static function requiredWorkerQueues(): array
+    {
+        return [self::Default, self::Integrations, self::Notifications];
+    }
 }

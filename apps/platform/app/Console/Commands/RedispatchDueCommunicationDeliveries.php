@@ -4,7 +4,10 @@ namespace App\Console\Commands;
 
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Models\School;
+use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\QueueName;
+use App\Support\Observability\RecoveryMetrics;
+use App\Support\Observability\SafeException;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
 use App\Support\Tenancy\SchoolStatus;
 use App\Support\Tenancy\TenantContext;
@@ -37,6 +40,7 @@ class RedispatchDueCommunicationDeliveries extends Command
 
     public function handle(SchedulerHeartbeatRecorder $heartbeats): int
     {
+        $startedAt = microtime(true);
         $batchSize = (int) $this->option('batch');
         $totalDispatched = 0;
 
@@ -52,14 +56,16 @@ class RedispatchDueCommunicationDeliveries extends Command
                 }
             });
         } catch (\Throwable $e) {
-            $heartbeats->recordFailure('communication-deliveries-redispatch', $e->getMessage());
-            Log::error('platform.communication_deliveries_redispatch.failed', ['error' => $e->getMessage()]);
-            $this->error("Communication delivery redispatch failed: {$e->getMessage()}");
+            app(RecoveryMetrics::class)->record('communication', false, $startedAt);
+            $heartbeats->recordFailure('communication-deliveries-redispatch', SafeException::code($e));
+            app(ErrorReporter::class)->report($e, 'platform.communication_deliveries_redispatch.failed', 'scheduler', 'communication-deliveries-redispatch');
+            $this->error('Communication delivery redispatch failed ('.SafeException::code($e).').');
 
             return self::FAILURE;
         }
 
         $heartbeats->recordSuccess('communication-deliveries-redispatch');
+        app(RecoveryMetrics::class)->record('communication', true, $startedAt, ['inspected' => $totalDispatched, 'redispatched' => $totalDispatched]);
         $this->info("Re-dispatched {$totalDispatched} communication deliverie(s).");
         Log::info('platform.communication_deliveries_redispatch.completed', ['dispatched' => $totalDispatched]);
 

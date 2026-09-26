@@ -2,6 +2,7 @@
 
 namespace App\Support\Operations;
 
+use App\Support\Observability\MetricsRecorder;
 use Illuminate\Console\Command;
 
 /**
@@ -24,6 +25,14 @@ trait RendersCheckResults
         $failed = count(array_filter($results, fn (CheckResult $r) => $r->failed()));
         $evidence = count(array_filter($results, fn (CheckResult $r) => $r->status === CheckResult::EVIDENCE));
         $this->line("failed={$failed} operator_evidence_required={$evidence}");
+
+        // Phase 0O.5A (ADR 0051 §11): the result as a stored gauge in the
+        // metrics store -- never a database write (these commands stay
+        // read-only). Best effort.
+        $check = str_replace(['platform:', '-'], ['', '_'], (string) $this->getName());
+        if (in_array($check, ['verify_database', 'verify_storage', 'verify_restore'], true)) {
+            app(MetricsRecorder::class)->gauge('lycenza_verification_last_result', $failed === 0 ? 1.0 : 0.0, ['check' => $check]);
+        }
 
         return $failed === 0 ? Command::SUCCESS : Command::FAILURE;
     }

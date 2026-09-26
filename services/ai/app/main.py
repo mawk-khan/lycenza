@@ -11,6 +11,7 @@ from app.audit import laravel_audit
 from app.audit.ledger import AuditEntry, audit_ledger
 from app.core.config import settings
 from app.core.health import router as health_router
+from app.core.logging import configure_logging
 from app.core.security import require_service_token
 from app.core.startup import assert_safe_configuration
 from app.core.trace import TraceContext
@@ -26,6 +27,10 @@ from app.tools.registry import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Phase 0O.5A (ADR 0051 §5, §8): structured JSON on stderr, INFO and above,
+# uvicorn's own loggers included; G3 redaction as the backstop.
+configure_logging(settings.environment, settings.log_format.strip().lower())
 
 # Gap G4: refuse to start if an external provider is registered while the
 # real-provider switch is off (the router also refuses at registration and
@@ -158,6 +163,7 @@ async def complete(
     if request.school_id is not None and request.school_id != authorization.school_id:
         raise _refuse(422, "context_mismatch")
 
+    trace = TraceContext.from_header(traceparent)
     started = time.monotonic()
     try:
         result = await provider.complete(CompletionRequest(prompt=request.prompt))
@@ -180,7 +186,7 @@ async def complete(
         tool=None,
         action="model.complete",
         context_token=request.context_token,
-        trace=TraceContext.from_header(traceparent),
+        trace=trace,
         provider=provider.name,
         model=result.model if result is not None else None,
         outcome=outcome,
@@ -192,6 +198,9 @@ async def complete(
     logger.info(
         "ai.complete",
         extra={
+            # Correlation only (verified token claim, shared trace id).
+            "request_id": authorization.request_id,
+            "trace_id": trace.trace_id,
             "school_id": authorization.school_id,
             "agent": request.agent,
             "provider": provider.name,

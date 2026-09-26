@@ -703,3 +703,15 @@ production because:
    the NOBYPASSRLS runtime connection inside `TenantContext`, lifecycle
    records go through their Application services, and accounts receive
    capabilities only through real role assignments.
+
+### Observability in DDEV (Phase 0O.5A)
+
+DDEV needs no observability backend. Logs stay in the readable `line`
+format unless `LOG_FORMAT=json` is set for a command (e.g.
+`ddev exec 'LOG_FORMAT=json php artisan platform:operations-status'`); the
+metrics store is DDEV's Redis. The private metrics listener exists only in
+the production image; locally the same handler can be exercised with
+`ddev exec 'LYCENZA_METRICS_LISTENER=1 METRICS_SCRAPE_TOKEN=local-fake-token-for-ddev-review-only HTTP_AUTHORIZATION="Bearer local-fake-token-for-ddev-review-only" php metrics/index.php'`
+(a fake local token, never a real one). DDEV's scheduler dispatches the
+worker canaries every minute, so `platform:operations-status` shows all
+three queue heartbeats fresh while DDEV's worker runs.

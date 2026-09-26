@@ -306,3 +306,26 @@ registered twice (explicit `Event::listen` plus listener discovery of its
 queues and is unguarded; `LogSanitizer`/`ErrorReporter` have no
 production caller; raw exception text reaches logs and
 `scheduler_heartbeats.last_error`; inbound request ids are unbounded.
+
+## Implemented (Phase 0O.5A)
+
+The contract above is implemented; see the ADR 0051 implementation
+amendment for the exact field names, label keys and metric names. Quick
+reference:
+
+- `App\Support\Observability\Logging\*` — tap, processor, JSON formatter;
+  `LogSanitizer`, `SafeException`, `ErrorReporter` (handled exceptions).
+- `App\Support\Observability\Metrics\*` — `MetricCatalog`,
+  `StoreMetricsRecorder`, stores, `MetricsExporter`, `MetricsEndpoint`,
+  `DeploymentEvidence`; front controller `apps/platform/metrics/index.php`
+  (private listener only).
+- `App\Support\Observability\Signals\OperationalSignals` — the shared
+  readers behind operations status and the scrape.
+- `App\Support\Observability\Alerts\*` — the 26 alerts,
+  `platform:alerts-export`.
+- `WorkerCanaryJob`, `platform:dispatch-worker-canaries`,
+  `RecordScheduledTaskRun`, `RecordQueueHeartbeat` (registered once).
+
+The queue-health model changed: with a per-minute canary on every required
+queue, a stale `queue:{name}` heartbeat now means the worker class is not
+processing (`stalled`), whether or not other work is waiting.

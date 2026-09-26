@@ -21,6 +21,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
     private const JOBS_WITHOUT_OWN_EFFECT = [
         'ProcessOutboxEventJob.php',     // routes to consumers, which gate their own effects
         'RecordSchoolAuditPingJob.php',  // Phase 0B demo: writes audit evidence only
+        'WorkerCanaryJob.php',           // Phase 0O.5A: no-op worker-class heartbeat, no School
     ];
 
     /** Business jobs and where their execution-time lifecycle check lives. */

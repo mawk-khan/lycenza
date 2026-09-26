@@ -10,6 +10,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Observability\StorageMetrics;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -107,6 +108,8 @@ class DocumentReadService
             }
 
             if ($stream === false || $stream === null) {
+                StorageMetrics::failed('read');
+
                 throw new DocumentContentUnavailableException;
             }
 

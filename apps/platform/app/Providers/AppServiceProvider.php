@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Listeners\RecordQueueHeartbeat;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
@@ -13,7 +12,11 @@ use App\Support\Configuration\ProductionConfigurationException;
 use App\Support\Configuration\ProductionConfigurationGuard;
 use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\LogErrorReporter;
-use App\Support\Observability\LogMetricsRecorder;
+use App\Support\Observability\Metrics\ArrayMetricStore;
+use App\Support\Observability\Metrics\MetricStore;
+use App\Support\Observability\Metrics\NullMetricStore;
+use App\Support\Observability\Metrics\RedisMetricStore;
+use App\Support\Observability\Metrics\StoreMetricsRecorder;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Privacy\ContactLookupHasher;
 use App\Support\Privacy\StatutoryIdentifierLookupHasher;
@@ -21,8 +24,6 @@ use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\TestDatabaseGuard;
 use Illuminate\Http\Request;
-use Illuminate\Queue\Events\JobFailed;
-use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -100,7 +101,15 @@ class AppServiceProvider extends ServiceProvider
         // A future real adapter (a real metrics backend, a real error-
         // tracking vendor) rebinds these two lines only -- no call site
         // anywhere else changes.
-        $this->app->bind(MetricsRecorder::class, LogMetricsRecorder::class);
+        // Phase 0O.5A (ADR 0051 §9-§10): one metrics substrate -- a
+        // catalog-validated recorder over a shared store (Redis in
+        // production, in-process in tests, or disabled).
+        $this->app->singleton(MetricStore::class, fn () => match (config('observability.metrics.store')) {
+            'array' => new ArrayMetricStore,
+            'null' => new NullMetricStore,
+            default => new RedisMetricStore((string) config('observability.metrics.redis_connection'), (string) config('observability.metrics.redis_key')),
+        });
+        $this->app->singleton(MetricsRecorder::class, StoreMetricsRecorder::class);
         $this->app->bind(ErrorReporter::class, LogErrorReporter::class);
     }
 
@@ -141,14 +150,11 @@ class AppServiceProvider extends ServiceProvider
         // TWICE, silently doubling every domain event -- see the Phase
         // 0C Final Report's Security Review / Technical Debt notes.
 
-        // Phase 0C.4 section 19: queue processing heartbeat, hooked
-        // into Laravel's OWN queue lifecycle events -- no per-job code
-        // change required anywhere. JobProcessed/JobFailed are plain
-        // Laravel events (not interface-discovered like
-        // ShouldBeOutboxed above), so explicit registration here is
-        // correct and does not risk the double-registration problem
-        // noted above.
-        Event::listen(JobProcessed::class, [RecordQueueHeartbeat::class, 'handleProcessed']);
-        Event::listen(JobFailed::class, [RecordQueueHeartbeat::class, 'handleFailed']);
+        // Phase 0C.4 section 19 queue heartbeat: App\Listeners\RecordQueueHeartbeat
+        // is registered by Laravel's listener DISCOVERY only (its public
+        // handle* methods, type-hinted on the queue events). Phase 0O.5A
+        // (ADR 0051 §4.2) removed the explicit Event::listen() that also
+        // registered it, which double-recorded every heartbeat --
+        // Tests\Feature\Observability\ObservabilityDefectReproductionTest.
     }
 }

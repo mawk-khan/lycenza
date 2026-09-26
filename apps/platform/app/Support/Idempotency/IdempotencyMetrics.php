@@ -5,7 +5,9 @@ namespace App\Support\Idempotency;
 use App\Support\Observability\MetricsRecorder;
 
 /**
- * Section 29: emits `idempotency_<outcome>_total` via the shared
+ * Section 29 / Phase 0O.5A: emits `lycenza_idempotency_requests_total{outcome}`
+ * (formerly the `idempotency_<outcome>_total` log line, now a real counter
+ * in the catalog -- ADR 0051 §10) via the shared
  * App\Support\Observability\MetricsRecorder abstraction (Phase 0C.4)
  * -- this class predates that shared abstraction (Phase 0C.2 built it
  * first, as the original vendor-neutral-metrics precedent) and is kept
@@ -19,6 +21,6 @@ class IdempotencyMetrics
 
     public function increment(IdempotencyOutcome $outcome): void
     {
-        $this->metrics->counter("idempotency_{$outcome->value}_total");
+        $this->metrics->counter('lycenza_idempotency_requests_total', 1, ['outcome' => $outcome->value]);
     }
 }
