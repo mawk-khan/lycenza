@@ -854,8 +854,10 @@ this phase implements.
   - Expiry dates: **2026-10-10** (util-linux #1/#3/#4) and **2026-10-26** (others).
 - The hardened images' fresh scan has exactly the reviewed residual set:
   0 CRITICAL, 0 HIGH with a fix, and no new advisory.
-- Qualified digests and the `verify-artifact` result are in
-  `docs/security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md` §5.
+- Final qualification of `93b72e5`: **both images VERIFIED**. The
+  application is `sha256:8f43e1c6…6311` and the Gateway
+  `sha256:f9c1573a…3808`; both have `exception_conditions_proven`. Details
+  are in `docs/security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md` §5.
 
 **O16: repository controls COMPLETE; local artifacts qualified (see §5 of the
 0O.6F record). Deployment evidence outstanding:** the real platform applying
