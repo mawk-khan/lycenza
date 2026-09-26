@@ -21,12 +21,24 @@ PREDICATE_TYPE = "https://slsa.dev/provenance/v1"
 _BASE_ARG = re.compile(r"^ARG ([A-Z_]+_IMAGE)=([a-z0-9][a-z0-9./_-]*):([A-Za-z0-9][A-Za-z0-9._-]*)@(sha256:[0-9a-f]{64})\s*$", re.M)
 
 
+_SOURCE_URL = re.compile(r"\bLYCENZA_([A-Z0-9]+)_URL=(https://\S+?)\s*\\?$", re.M)
+
+
 def base_images(dockerfile_text: str) -> list[dict[str, Any]]:
-    """The digest-pinned base-image ARGs of a production Dockerfile."""
-    return [
+    """The digest-pinned base-image ARGs of a production Dockerfile, followed by
+    any verified upstream source archives it builds from (Phase 0O.6D:
+    `LYCENZA_<NAME>_URL` + `LYCENZA_<NAME>_SHA256` declarations)."""
+    images = [
         {"name": arg, "uri": f"pkg:docker/{repo}@{tag}", "digest": {"sha256": digest[7:]}}
         for arg, repo, tag, digest in _BASE_ARG.findall(dockerfile_text)
     ]
+    sources = []
+    for name, url in _SOURCE_URL.findall(dockerfile_text):
+        sha = re.search(rf"\bLYCENZA_{name}_SHA256=([0-9a-f]{{64}})\b", dockerfile_text)
+        if sha is None:
+            raise ReleaseError("provenance_input_invalid", f"{name} source has no pinned sha256")
+        sources.append({"name": f"{name}_SOURCE", "uri": url, "digest": {"sha256": sha.group(1)}})
+    return images + sources
 
 
 def build_statement(*, policy: dict[str, Any], image_key: str, manifest_digest: str, commit: str,

@@ -1478,6 +1478,15 @@ an ABI-breaking change: libxml2's HIGH fixes exist only in 2.15.4
 (`libxml2.so.16`), which the official PHP binary cannot load — owner decision
 (recommended: rebuild PHP 8.3.35 against curl 8.22.0 + libxml2 2.15.4).
 
+**0O.6D — Custom PHP Runtime & ABI Remediation (TECHNICAL REMEDIATION
+COMPLETE — AWAITING HIGH VULNERABILITY EXCEPTION DECISION, 2026-09-26).**
+Repository-built PHP 8.3.35 against curl 8.22.0 and libxml2 2.15.4 (verified
+sources, no PHP patch, extension parity, native smoke in the image);
+Lycenza maintains the runtime. Application 0 CRITICAL / 0 HIGH with a fix;
+Gateway unchanged at the same state; the remaining Debian Essential-package
+HIGH-without-fix advisories await per-advisory approval. Nothing VERIFIED,
+pushed or promoted.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

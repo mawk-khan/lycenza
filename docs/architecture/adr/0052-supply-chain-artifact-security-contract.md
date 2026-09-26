@@ -621,3 +621,24 @@ PROMOTED; no exception active.**
   application image is unchanged.
 - No policy, evaluator, validator or tooling-logic change; no scanner output
   edited; no Essential package removed.
+
+## Amendment — Phase 0O.6D custom PHP runtime (2026-09-26)
+
+Owner decision: the production application runtime is a **repository-built
+PHP 8.3.35** (official source, signature-verified; official docker-library
+configure flags, no source patch, PEAR omitted) linked against **curl 8.22.0**
+(signature-verified; HTTP/HTTPS only, OpenSSL) and **libxml2 2.15.4**
+(`libxml2.so.16`; checksum-verified), on `debian:13.7-slim` with no Debian
+libcurl/libxml2 (`docs/security/release-remediation/0O.6D-CUSTOM-PHP-RUNTIME.md`,
+`docs/operations/CUSTOM-PHP-RUNTIME.md`). **Lycenza maintains this runtime**;
+the official PHP image is build-only.
+
+- Application: **0 CRITICAL, 0 HIGH with a fix**; 48 HIGH-without-fix matches
+  (12 Debian Essential-package advisories). Gateway unchanged: 0 CRITICAL, 0
+  HIGH with a fix, 49 HIGH-without-fix matches. **Status: TECHNICAL
+  REMEDIATION COMPLETE — AWAITING HIGH VULNERABILITY EXCEPTION DECISION**; one
+  combined inactive decision pack; nothing VERIFIED, PUBLISHED or PROMOTED.
+- Tooling: provenance now records the verified source archives (URL +
+  sha256) as resolved dependencies; source-built libraries carry standard ELF
+  `.note.package` metadata so Syft identifies them. No policy, evaluator or
+  verifier change; no exception active; no scanner output edited.
