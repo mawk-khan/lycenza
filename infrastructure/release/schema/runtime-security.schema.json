@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mawk-khan/lycenza/infrastructure/release/schema/runtime-security.schema.json",
+  "title": "Lycenza production runtime security contract (Phase 0O.6F)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "contract", "images", "reference_invocation", "provider_equivalents"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema_version": {"const": 1},
+    "description": {"type": "string"},
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["privileged", "cap_drop", "cap_add", "no_new_privileges", "run_as_non_root", "read_only_root_filesystem"],
+      "properties": {
+        "privileged": {"const": false},
+        "cap_drop": {"const": ["ALL"]},
+        "cap_add": {"const": []},
+        "no_new_privileges": {"const": true},
+        "run_as_non_root": {"const": true},
+        "read_only_root_filesystem": {"type": "boolean"}
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app", "ai-gateway"],
+      "properties": {
+        "app": {"$ref": "#/$defs/image"},
+        "ai-gateway": {"$ref": "#/$defs/image"}
+      }
+    },
+    "reference_invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["docker"],
+      "properties": {
+        "docker": {"const": ["--cap-drop", "ALL", "--security-opt", "no-new-privileges:true"]}
+      }
+    },
+    "provider_equivalents": {"type": "object"},
+    "future_hardening": {"type": "object"}
+  },
+  "$defs": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user", "uid", "roles", "setuid_removed", "writable_paths", "required_verification_checks"],
+      "properties": {
+        "user": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+        "uid": {"type": "integer", "minimum": 1},
+        "roles": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "setuid_removed": {"type": "array", "items": {"type": "string", "pattern": "^/"}, "uniqueItems": true},
+        "writable_paths": {"type": "array", "items": {"type": "string", "pattern": "^/"}, "uniqueItems": true},
+        "required_verification_checks": {"type": "array", "items": {"type": "string", "minLength": 10}, "minItems": 1, "uniqueItems": true}
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "./schema/runtime-security.schema.json",
+  "schema_version": 1,
+  "description": "Phase 0O.6F (ADR 0052 amendment; owner decision OWNER-0O6E-2026-09-26): the provider-neutral runtime security contract every production container of both images MUST be started with. It is a deployment REQUIREMENT, not a runtime default: no orchestrator is chosen, so each platform maps it to its own semantics (see provider_equivalents). Guarded by Tests\\Feature\\Configuration\\RuntimeSecurityContractTest; proven by infrastructure/docker/production/verify-images.sh, which starts every container with reference_invocation.docker. A capability may be added back only by a later ADR.",
+  "contract": {
+    "privileged": false,
+    "cap_drop": ["ALL"],
+    "cap_add": [],
+    "no_new_privileges": true,
+    "run_as_non_root": true,
+    "read_only_root_filesystem": false
+  },
+  "images": {
+    "app": {
+      "user": "www-data",
+      "uid": 33,
+      "roles": ["web", "worker-default", "worker-integrations", "worker-notifications", "scheduler", "release", "operator-console"],
+      "setuid_removed": ["/usr/bin/mount", "/usr/bin/umount"],
+      "writable_paths": ["/var/www/app/storage", "/var/www/app/bootstrap/cache", "/tmp"],
+      "required_verification_checks": [
+        "app: hardened invocation -- not privileged, all capabilities dropped, none added, no-new-privileges",
+        "app: runs as www-data (uid 33) with no permitted, effective or bounding capability and NoNewPrivs=1",
+        "app: every process of the web, worker and scheduler roles is non-root with no capability and NoNewPrivs=1",
+        "app: mount/umount carry no setuid bit (dpkg-statoverride)",
+        "app: setuid/setgid execution gains no privilege under the hardened invocation",
+        "app: /etc/fstab has no user-mountable entry"
+      ]
+    },
+    "ai-gateway": {
+      "user": "gateway",
+      "uid": 10001,
+      "roles": ["ai-gateway"],
+      "setuid_removed": ["/usr/bin/mount", "/usr/bin/umount"],
+      "writable_paths": ["/tmp"],
+      "required_verification_checks": [
+        "gateway: hardened invocation -- not privileged, all capabilities dropped, none added, no-new-privileges",
+        "gateway: runs as gateway (uid 10001) with no permitted, effective or bounding capability and NoNewPrivs=1",
+        "gateway: every process is non-root with no capability and NoNewPrivs=1",
+        "gateway: mount/umount carry no setuid bit (dpkg-statoverride)",
+        "gateway: setuid/setgid execution gains no privilege under the hardened invocation",
+        "gateway: /etc/fstab has no user-mountable entry"
+      ]
+    }
+  },
+  "reference_invocation": {
+    "docker": ["--cap-drop", "ALL", "--security-opt", "no-new-privileges:true"]
+  },
+  "provider_equivalents": {
+    "docker / compose": "never --privileged / privileged: true; --cap-drop ALL / cap_drop: [ALL]; no --cap-add / cap_add; --security-opt no-new-privileges:true",
+    "kubernetes": "securityContext: privileged: false, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, runAsNonRoot: true",
+    "podman": "--cap-drop=all --security-opt=no-new-privileges; not --privileged",
+    "other": "the platform's documented equivalent of each contract field; an unsupported field blocks deployment"
+  },
+  "future_hardening": {
+    "read_only_root_filesystem": "NOT required in this checkpoint (0O.6F audit, docker diff of hardened containers). The application writes /tmp/nginx (pid and temp paths), /var/www/app/bootstrap/cache (config/route caches warmed at start) and /var/www/app/storage/framework/views (compiled views); the Gateway writes nothing. A plain --read-only root with EMPTY writable mounts over storage and bootstrap/cache fails at start (view:cache needs the storage/framework tree), so the future change must pre-create that tree (or warm the caches at build time) and mount only /tmp, storage and bootstrap/cache writable. The Gateway already runs with --read-only and a /tmp tmpfs."
+  }
+}

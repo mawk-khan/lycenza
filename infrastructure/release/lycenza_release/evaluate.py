@@ -10,6 +10,10 @@ scheduled re-scan all call evaluate(); nothing else interprets severities.
 - An exception matches only on the exact image, advisory id (or alias),
   package, version AND reported severity; a scanner that raises the severity
   therefore invalidates the exception rather than being silently covered.
+- An exception never covers a HIGH that has a fix (the policy requires an
+  exception only when there is none): when a fix appears, the finding blocks
+  again as high_fix_available, naming the exception it supersedes, so the
+  record is reconsidered rather than kept.
 """
 
 from __future__ import annotations
@@ -50,7 +54,10 @@ def evaluate(findings: Iterable[Finding], exceptions: list[VulnerabilityExceptio
             "version": finding.version, "severity": finding.severity, "fix_state": finding.fix_state,
             "severity_rated_by_source": finding.rated,
         }
-        if match is not None:
+        if match is not None and reason == "high_fix_available":
+            used.add(match)
+            blocking.append({**record, "reason": reason, "superseded_exception": exceptions[match].id})
+        elif match is not None:
             used.add(match)
             excepted.append({**record, "exception": exceptions[match].id, "exception_status": exceptions[match].status,
                              "exception_expires": exceptions[match].expires.isoformat()})

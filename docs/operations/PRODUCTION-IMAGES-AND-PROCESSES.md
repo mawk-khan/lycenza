@@ -84,6 +84,73 @@ Both PostgreSQL connections bound connection establishment with
 waits 30 s and ignores `PGCONNECT_TIMEOUT`), so an unreachable database
 fails a request in seconds instead of holding a PHP-FPM worker.
 
+## Runtime security contract (Phase 0O.6F, ADR 0052 amendment)
+
+Every production container of **both** images, in every role, MUST be
+started with the provider-neutral contract in
+[`infrastructure/release/runtime-security.json`](../../infrastructure/release/runtime-security.json).
+It is a deployment requirement, not a runtime default: do not assume a
+platform's defaults are sufficient.
+
+| Field | Required value |
+|---|---|
+| `privileged` | `false` — never a privileged container |
+| `cap_drop` | `ALL` — every Linux capability dropped |
+| `cap_add` | none — a capability may be added back only by a later ADR |
+| `no_new_privileges` | `true` — setuid/setgid/file capabilities never raise privilege |
+| user | the image's existing non-root user: `www-data` (uid 33) for the application, `gateway` (uid 10001) for the Gateway — never root, never a platform-chosen user override to 0 |
+
+Reference invocation (Docker): `--cap-drop ALL --security-opt no-new-privileges:true`.
+Equivalents:
+- Compose: `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, no `privileged`/`cap_add`.
+- Kubernetes: `securityContext` with `privileged: false`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]` and `runAsNonRoot: true`.
+- Podman: `--cap-drop=all --security-opt=no-new-privileges`.
+
+A platform that cannot express a field **blocks deployment**. The
+contract's own `provider_equivalents` is authoritative. No orchestrator
+manifest is committed for this.
+
+**Image-level hardening.**
+- `mount` and `umount` carry no setuid bit in either image. It is removed
+  through Debian's `dpkg-statoverride`, recorded in the dpkg database; no
+  Essential file is removed. Nothing in either image mounts filesystems.
+- `/etc/fstab` has no active entry at all, and no user-mountable one
+  (`user`, `users`, `owner`, `group`, `bind`, `X-mount.*`).
+- The remaining setuid/setgid programs (`su`, `passwd`, `chfn`, `chsh`,
+  `gpasswd`, `newgrp`, `chage`, `expiry`, `unix_chkpwd`) gain nothing under
+  no-new-privileges. `verify-images.sh` proves it: `chage -l` reads
+  `/etc/shadow` in an unhardened control and is refused under the contract.
+
+**No root process.** No role runs anything as root:
+- web: the entrypoint, nginx master and workers, the PHP-FPM master and pool;
+- workers, scheduler, release and operator-console commands;
+- the Gateway's uvicorn.
+
+`verify-images.sh` checks `/proc/<pid>/status` for every process of the web,
+worker and scheduler roles and of the Gateway:
+- Uid non-root;
+- CapPrm, CapEff, CapBnd and CapAmb all zero;
+- NoNewPrivs 1.
+
+**Why it is required.** Five approved vulnerability exceptions are
+**conditional** on this contract (owner decision `OWNER-0O6E-2026-09-26`):
+the util-linux mount advisories and the two acl advisories. `verify-artifact`
+applies them only with the signed evidence that these checks passed for the
+exact artifact. Deploying without the contract breaks the condition of that
+approval.
+
+**Writable paths / read-only root filesystem (future, not required).**
+Audited with `docker diff` of hardened containers:
+- The application writes `/tmp/nginx` (pid and temp paths),
+  `/var/www/app/bootstrap/cache` (config/route caches) and
+  `/var/www/app/storage/framework/views` (compiled views).
+- The Gateway writes nothing.
+
+A `--read-only` root with *empty* writable mounts over `storage` and
+`bootstrap/cache` fails at start, because `view:cache` needs the
+`storage/framework` tree. A future change must pre-create it, or warm the
+caches at build time. The Gateway already runs read-only with a `/tmp` tmpfs.
+
 ## Logs and metrics (Phase 0O.5A, ADR 0051)
 
 Every role logs one JSON object per line to stderr (`LOG_FORMAT=json`,
@@ -129,5 +196,7 @@ It inspects image contents, starts the web role against a throwaway
 password-protected Redis with fake credentials, checks nginx/PHP-FPM
 serving, headers, spoofed-proxy behaviour and HSTS through a trusted proxy,
 starts every worker and the scheduler, checks the production route table
-has no probe/demo route, and checks the Gateway's refusals and health. It
-pushes nothing and removes every container it started.
+has no probe/demo route, and checks the Gateway's refusals and health. Since
+Phase 0O.6F every application and Gateway container it starts uses the runtime
+security contract's reference invocation, and it proves the contract from the
+kernel (above). It pushes nothing and removes every container it started.

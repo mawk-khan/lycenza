@@ -536,3 +536,11 @@ before O16 is resolved.
 order gains a first step — supply-chain verification of PROMOTED digests
 before the maintenance window opens (ADR 0052 §3.19); images still may not
 be pushed or promoted before Phase 0O.6A's repository controls exist.
+
+**Note (Phase 0O.6F, 2026-09-26):** the process and image contract gains a
+**runtime security contract**: never privileged, ALL capabilities dropped,
+none added, no-new-privileges, the image's existing non-root user
+(`infrastructure/release/runtime-security.json`, ADR 0052 amendment 0O.6F,
+`docs/operations/PRODUCTION-IMAGES-AND-PROCESSES.md`). It is required for
+every role of both images on any platform. A read-only root filesystem
+is recorded as future work, not required.

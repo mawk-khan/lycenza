@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import unittest
 
@@ -90,11 +91,37 @@ class EvaluatorTest(unittest.TestCase):
                 self.assertEqual(evaluate(high_no_fix, self.exceptions(**change))["verdict"], "FAIL")
 
     def test_an_exception_matches_an_alias(self) -> None:
-        high_fixed = [f for f in grype_findings() if f.id == "GHSA-2222-3333-4444"]
+        high_no_fix = [dataclasses.replace(f, fix_state="not-fixed") for f in grype_findings() if f.id == "GHSA-2222-3333-4444"]
         covered = self.exceptions(id="CVE-2026-0002", package="examplepkg", version="2.0.0", status="not_affected")
-        result = evaluate(high_fixed, covered)
+        result = evaluate(high_no_fix, covered)
         self.assertEqual(result["verdict"], "PASS")
         self.assertEqual(result["excepted"][0]["exception"], "CVE-2026-0002")
+
+    def test_a_fix_becoming_available_stops_the_exception(self) -> None:
+        # Phase 0O.6F recheck trigger: the same advisory/package/version gains a fix -> it blocks again
+        # (High-with-fix must be fixed), naming the exception it supersedes; whatever the exception's status.
+        gained_fix = [dataclasses.replace(f, fix_state="fixed") for f in grype_findings() if f.id == "CVE-2026-0003"]
+        for status in ("accepted_risk", "not_affected", "false_positive"):
+            with self.subTest(status):
+                result = evaluate(gained_fix, [dataclasses.replace(e, status=status) for e in self.exceptions()])
+                self.assertEqual(result["verdict"], "FAIL")
+                self.assertEqual(result["blocking"][0]["reason"], "high_fix_available")
+                self.assertEqual(result["blocking"][0]["superseded_exception"], "CVE-2026-0003")
+                self.assertEqual(result["excepted"], [])
+        high_fixed_alias = [f for f in grype_findings() if f.id == "GHSA-2222-3333-4444"]
+        covered = self.exceptions(id="CVE-2026-0002", package="examplepkg", version="2.0.0", status="not_affected")
+        self.assertEqual(evaluate(high_fixed_alias, covered)["verdict"], "FAIL")
+
+    def test_a_new_finding_is_never_covered_by_an_existing_exception(self) -> None:
+        # Phase 0O.6F: a new advisory on an excepted package, or the same advisory at a new version or a
+        # raised severity, is a new finding -- it blocks and needs its own separate review.
+        base = next(f for f in grype_findings() if f.id == "CVE-2026-0003")
+        for change in ({"id": "CVE-2026-0006"}, {"version": "3.0-2"}, {"severity": "critical"}):
+            with self.subTest(change):
+                result = evaluate([base, dataclasses.replace(base, **change)], self.exceptions())
+                self.assertEqual(result["verdict"], "FAIL")
+                self.assertEqual(len(result["blocking"]), 1)
+                self.assertEqual(len(result["excepted"]), 1)
 
     def test_critical_blocks_without_an_exception_and_unused_exceptions_are_reported(self) -> None:
         result = evaluate([f for f in grype_findings() if f.id == "CVE-2026-0001"], self.exceptions())

@@ -19,7 +19,8 @@ own). Each security tool runs from a digest-pinned container image named in
 | File | Purpose |
 |---|---|
 | `artifact-policy.json` (+ `schema/`) | The one policy manifest: images, required evidence, vulnerability thresholds, scanner-database age, exception limits, signing custody (unconfigured), pinned tool digests, reachable states. `verify-artifact` reads only this. |
-| `vulnerability-exceptions.json` (+ `schema/`) | Time-bounded, exact-match vulnerability exceptions. **Empty.** |
+| `vulnerability-exceptions.json` (+ `schema/`) | Time-bounded, exact-match vulnerability exceptions, each linked to a recorded human approval (`approvals`). Since Phase 0O.6F: the 97 records of owner decision `OWNER-0O6E-2026-09-26` (12 Debian 13 advisories; expiring 2026-10-10 / 2026-10-26). |
+| `runtime-security.json` (+ `schema/`) | Phase 0O.6F: the provider-neutral runtime security contract every production container is started with (never privileged, ALL capabilities dropped, none added, no-new-privileges, existing non-root user) and the checks `verify-images.sh` must pass to prove it. |
 | `retained-releases.json` (+ `schema/`) | Releases whose retained SBOMs the scheduled re-scan covers. **Empty** (nothing promoted). |
 | `gitleaks-image.toml`, `../../.gitleaks.toml` | Image-filesystem and source secret-scan configuration: gitleaks' default rules with an **exact-match** allowlist (one path + exact value per entry). |
 | `image-scan-allowlist.json` | Exact-match allowlist (image + code + path + file sha256) for the filesystem canary/shape scan. |
@@ -77,7 +78,9 @@ tree):
    locally for the image checks; the loaded image id must equal the
    archive's config digest. → **BUILT**
 7. `verify-images` — `infrastructure/docker/production/verify-images.sh`
-   against exactly those images.
+   against exactly those images, every container started with the runtime
+   security contract's reference invocation; `verify-images.json` records the
+   exit code, the PASS/FAIL lines and the config digest of each image verified.
 8. `scan` — Syft SPDX 2.3 SBOM from the OCI archive; a fresh Grype database;
    Grype over the SBOM; gitleaks over the exported image filesystem; the
    config/history/env/label and filesystem canary scan.
@@ -112,7 +115,15 @@ passed; provenance (subject, source, parameters, base-image digests against
 the Dockerfile at that commit, run id, SBOM/scan byproduct digests, test run,
 no SLSA level, no secret); SBOM (SPDX 2.3, Syft pinned version, describes
 this digest, required ecosystems present); scanner pinned and its database
-≤ 24 h old at scan time; the vulnerability policy; an optional fresh
+≤ 24 h old at scan time; **exception conditions** (Phase 0O.6F: an exception
+with `conditions: ["runtime-hardening"]` applies only when the signed
+`verify-images.json` of this run is bound to this artifact's config digest,
+exited 0 and contains every `required_verification_checks` entry of
+`runtime-security.json` at the commit as `PASS`; otherwise the conditional
+exceptions are withdrawn and the check FAILs, codes
+`runtime_hardening_evidence_missing`, `runtime_hardening_verification_failed`,
+`runtime_hardening_evidence_not_for_artifact`, `runtime_security_contract_invalid`,
+`runtime_hardening_check_missing`); the vulnerability policy; an optional fresh
 re-scan; secret and history scans clean.
 
 Rollback re-verification runs the same command against the retained
@@ -129,6 +140,9 @@ exception, never an automatic pass — and never an automatic rollback.
 - Language advisories without a severity (pip-audit reports none; some
   Composer advisories) are treated as **HIGH** and as **fixable** — so they
   block until resolved or excepted.
+- An exception never covers a HIGH that has a fix (Phase 0O.6F): when a fix
+  appears the finding blocks again as `high_fix_available`, naming the
+  `superseded_exception`, whatever the record's status.
 - An exception matches only on the exact image, advisory id (or alias),
   package, version **and** reported severity. Versions are exact only (ranges
   are refused: version ordering differs between dpkg, PEP 440 and SemVer).
@@ -137,6 +151,19 @@ exception, never an automatic pass — and never an automatic rollback.
   entry invalidates the whole file (FAIL). The tooling validates the record;
   **it never decides whether a risk is acceptable** — `approved_by` references
   the human security approval.
+- **Approval linkage (Phase 0O.6F).** `approved_by` must name an entry of the
+  file's `approvals`, whose `record` is a committed decision record that
+  states the reference and every approved advisory. A record may not go
+  beyond its approval: the advisory must be approved, the image/package must
+  be listed with **exactly** the record's status (so `accepted_risk` is only
+  where the vulnerable code is present), the window must not exceed the
+  approval's `max_days` (itself never above the policy maximum), the record
+  must not predate the decision, and its `conditions` must equal the
+  approval's. Anything else invalidates the whole file.
+- **Recheck triggers.** A new advisory, a new package version or a raised
+  severity is a new, uncovered finding (blocks; separate review); a fix
+  becoming available blocks (above); an expired record fails every
+  verification. The scheduled SBOM re-scan applies the same evaluator daily.
 
 ## Signing custody
 
@@ -165,17 +192,20 @@ parameters: the pinned BuildKit image, the OCI-archive exporter and "no
 cache". Resolved dependencies: the source commit and every digest-pinned
 base image of the Dockerfile.
 
-## Current release status (Phase 0O.6B)
+## Current release status (Phase 0O.6F)
 
-Both production images still **FAIL** the vulnerability policy
-(`docs/security/release-remediation/`), now ONLY on HIGH findings without a
-fix (Debian 13 Essential packages): after Phase 0O.6D the application
-(repository-built PHP 8.3.35 on curl 8.22.0 / libxml2 2.15.4) and the Gateway
-(CPython 3.14.7) each have 0 CRITICAL and 0 HIGH with a fix. The combined
-residual decision pack is inactive; approval is advisory by advisory. No digest is
-VERIFIED; the exception file stays empty; proposed records live beside the
-remediation records, never here. The pinned tool Python (lock freshness,
-pip-audit) is the Gateway's interpreter, CPython 3.14.7.
+Both production images have 0 CRITICAL and 0 HIGH with a fix (application:
+repository-built PHP 8.3.35 on curl 8.22.0 / libxml2 2.15.4; Gateway: CPython
+3.14.7). Their remaining HIGH-without-fix findings — 12 Debian 13
+Essential-package advisories, 48 + 49 matches — are covered exactly by owner
+decision `OWNER-0O6E-2026-09-26`
+(`docs/security/release-remediation/0O.6E-owner-security-decision.md`),
+five of them conditional on the runtime security contract. The qualified
+digests and their `verify-artifact` result are recorded in
+`docs/security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md`.
+**PUBLISHED = NONE, PROMOTED = NONE**: no registry, no production signing
+identity, no deployment. The pinned tool Python (lock freshness, pip-audit)
+is the Gateway's interpreter, CPython 3.14.7.
 
 ## Known limits (recorded, not claimed away)
 

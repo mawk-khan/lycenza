@@ -54,6 +54,8 @@ the run's `state/<image>.verification.json` (Confidential).
 | `signature_invalid`, `bundle_file_modified`, `bundle_file_set_mismatch`, `digest_mismatch`, `archive_digest_mismatch` | The evidence or artifact is not what was qualified — treat as a potential incident (`SUPPLY-CHAIN-INCIDENTS.md`). |
 | `source_secret_scan_findings`, `image_secret_scan_findings`, `image_config_or_filesystem_findings` | A secret-shaped value in source or in the image — stop; if real, handle as a leaked credential (rotate first). |
 | `signing_identity_not_configured` | No custody configured and no test key supplied — expected until a deployment chooses custody. |
+| `exceptions_invalid` | The exception file is malformed, an entry expired, or an entry goes beyond its approval (unknown approval reference, missing decision record, unapproved advisory/package, a status other than the approved one, a longer window, different conditions). Renew through a new human decision or remove the entry — never extend a date by hand. |
+| `runtime_hardening_evidence_missing`, `runtime_hardening_verification_failed`, `runtime_hardening_evidence_not_for_artifact`, `runtime_hardening_check_missing`, `runtime_security_contract_invalid` | A conditional (`runtime-hardening`) exception without proof, for this exact artifact, that `verify-images.sh` passed every check `runtime-security.json` requires — the conditional exceptions are withdrawn. Fix the image or the contract and re-qualify; never drop the condition. |
 
 ## Vulnerability exceptions
 
@@ -63,6 +65,21 @@ the severity as reported, reason, compensating control, `approved_by` (the
 security approval record), `created`, `expires` (Critical/High ≤ 30 days,
 others ≤ 90). The tooling validates the record; the risk decision is human.
 Expired entries fail every qualification until removed or renewed.
+
+Since Phase 0O.6F:
+- `approved_by` must name an entry of the file's `approvals`. Its decision
+  record, committed under `docs/security/`, must state the reference and each
+  advisory.
+- The approval lists, per advisory, the maximum days, any conditions, and per
+  image the exact status of each package.
+- `accepted_risk` is only for packages that actually contain the vulnerable
+  code; every other matched package is `not_affected`, or `false_positive`
+  where the advisory does not apply to the version at all.
+- A new advisory, a new package version, a raised severity, or a fix
+  becoming available is **not** covered. It blocks and goes to a separate
+  review; it is never folded into an existing approval. The current
+  approval is `OWNER-0O6E-2026-09-26`
+  (`docs/security/release-remediation/0O.6E-owner-security-decision.md`).
 
 ## Rollback
 
