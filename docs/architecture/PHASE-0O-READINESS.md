@@ -304,7 +304,7 @@ Other findings:
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | No | Product + operations | Real email |
 | O14 | Password reset for production accounts | ADR 0037: none exists | Product + security | Production operations |
 | O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | No | Product | S4 |
-| O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest | Security | Supply chain |
+| O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest; repository controls COMPLETE (0O.6F: runtime security contract, approved exceptions `OWNER-0O6E-2026-09-26`), deployment evidence outstanding | Security | Supply chain |
 
 No vendor or provider is chosen by this audit.
 
@@ -828,3 +828,44 @@ CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
 PROMOTED.** Decisions: **O1, O2, O5, O9, O13, O14, O15 open**. Phase 0O:
 **PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M: **BLOCKED**. REAL
 RESTORE DRILL STILL OUTSTANDING.
+
+## 26. Phase 0O.6F — Runtime Hardening, Approved Exceptions & Artifact Requalification (2026-09-26)
+
+Owner decision **`OWNER-0O6E-2026-09-26`**
+(`docs/security/release-remediation/0O.6E-owner-security-decision.md`)
+accepts the 12 residual Debian 13 HIGH-without-fix advisories exactly, per
+advisory and per package. Five are conditional on runtime hardening, which
+this phase implements.
+
+- **Runtime security contract**
+  (`infrastructure/release/runtime-security.json`, provider-neutral,
+  schema-guarded):
+  - never privileged; ALL capabilities dropped, none added; no-new-privileges; the existing non-root user;
+  - `mount`/`umount` setuid removed; no user-mountable fstab entry;
+  - proven from `/proc/<pid>/status` for every process of every role by `verify-images.sh` (95/95);
+  - no root process in any role;
+  - read-only root audited, recorded as future work.
+- **Exceptions:** 97 records (48 + 49), activated only after the hardening
+  evidence.
+  - Tooling enforces the approval linkage, exact per-package status, the
+    approved duration, and conditional activation against the signed
+    evidence of the exact artifact.
+  - A fix becoming available blocks again; expiry fails verification.
+  - Expiry dates: **2026-10-10** (util-linux #1/#3/#4) and **2026-10-26** (others).
+- The hardened images' fresh scan has exactly the reviewed residual set:
+  0 CRITICAL, 0 HIGH with a fix, and no new advisory.
+- Qualified digests and the `verify-artifact` result are in
+  `docs/security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md` §5.
+
+**O16: repository controls COMPLETE; local artifacts qualified (see §5 of the
+0O.6F record). Deployment evidence outstanding:** the real platform applying
+the runtime contract, a registry, a production signing identity, and
+promotion. **PUBLISHED = NONE, PROMOTED = NONE.**
+
+**NO PRODUCTION REGISTRY IS CONFIGURED. NO REAL SIGNING IDENTITY/KEY IS
+CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
+PROMOTED.**
+- Decisions **O1, O2, O5, O9, O13, O14, O15** remain open.
+- Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+- Phase 0M: **BLOCKED**.
+- The **real restore drill is still outstanding**.

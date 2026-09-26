@@ -1487,6 +1487,25 @@ Gateway unchanged at the same state; the remaining Debian Essential-package
 HIGH-without-fix advisories await per-advisory approval. Nothing VERIFIED,
 pushed or promoted.
 
+**0O.6F — Runtime Hardening, Approved Exceptions & Artifact Requalification
+(2026-09-26).** Owner decision `OWNER-0O6E-2026-09-26` accepts the 12
+residual Debian 13 advisories exactly, per package (97 records, expiring
+2026-10-10 for util-linux #1/#3/#4 and 2026-10-26 for the others). Five are
+conditional on the new provider-neutral runtime security contract:
+- never privileged, ALL capabilities dropped, no-new-privileges, non-root;
+- `mount`/`umount` setuid removed;
+- proven from `/proc` in `verify-images.sh`.
+
+Tooling:
+- approval linkage;
+- conditional activation only with the artifact's hardening evidence;
+- a fix becoming available blocks again.
+
+The requalification digests are in the 0O.6F remediation record. O16
+repository controls are complete; deployment evidence is outstanding.
+PUBLISHED = NONE, PROMOTED = NONE. Next proposed: **0O.7 — Service-to-Service
+Authentication & Rotation Contract (O5)**, not started.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

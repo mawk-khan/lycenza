@@ -44,9 +44,10 @@ def git(repo: Path, *args: str) -> str:
 
 
 def make_repo(root: Path, on_main: bool = True) -> tuple[Path, str]:
-    """A repository whose HEAD holds the real production Dockerfiles and minimal locks."""
+    """A repository whose HEAD holds the real production Dockerfiles, runtime security contract and minimal locks."""
     repo = root / "repo"
-    for rel in ("infrastructure/docker/production/app.Dockerfile", "infrastructure/docker/production/ai.Dockerfile"):
+    for rel in ("infrastructure/docker/production/app.Dockerfile", "infrastructure/docker/production/ai.Dockerfile",
+                "infrastructure/release/runtime-security.json", "infrastructure/release/schema/runtime-security.schema.json"):
         (repo / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(REPO_ROOT / rel, repo / rel)
     (repo / "apps/platform").mkdir(parents=True)
@@ -159,6 +160,7 @@ class Evidence:
         self.set_grype("grype-clean.json")
         write_json(base / "gitleaks.json", [])
         write_json(base / "image-scan.json", {"config_issues": [], "rootfs_issues": [], "rootfs_allowlisted": []})
+        self.write_verify_images()
         self.write_provenance()
         self.sign()
 
@@ -176,6 +178,13 @@ class Evidence:
         write_json(self.base() / "grype.json", report)
         write_json(self.base() / "scanner.json", {"image": self.policy["tools"]["grype"], "version": "0.100.0",
                                                   "db_built": report["descriptor"]["db"]["status"]["built"]})
+
+    def write_verify_images(self, *, exit_code: int = 0, config_digest: str | None = None, omit: str | None = None) -> None:
+        """The qualify verify-images record: every runtime-security check the contract requires, passed for this artifact."""
+        contract = json.loads((REPO_ROOT / "infrastructure/release/runtime-security.json").read_text())
+        checks = [f"PASS  {name}" for name in contract["images"][self.image]["required_verification_checks"] if name != omit]
+        write_json(self.out / "verify-images.json", {"exit_code": exit_code, "images": {self.image: config_digest or self.config_digest},
+                                                     "checks": [*checks, "verify-images: all checks passed"]})
 
     def write_provenance(self, **overrides: Any) -> None:
         base = self.base()

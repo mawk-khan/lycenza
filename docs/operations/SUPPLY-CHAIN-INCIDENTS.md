@@ -101,7 +101,9 @@ never trusted for promotion.)*
      full re-qualification, promotion, maintenance-window deployment; or
    - **accept temporarily** — a time-bounded exception (≤ 30 days for
      Critical/High) with a compensating control and an approval reference,
-     until the fix exists.
+     until the fix exists. Only while **no fix** exists: once a fix appears
+     the evaluator blocks the finding again (`high_fix_available`,
+     `superseded_exception`), and the answer is the rebuild.
 3. Rollback candidates with the same finding are marked accordingly in the
    incident record; a rollback to them needs the same judgement.
 4. Never silence a finding by editing a scanner report: reports are kept

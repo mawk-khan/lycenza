@@ -5,11 +5,13 @@ Docker and are reported as skipped -- never as passed -- where it is unavailable
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from lycenza_release import evidence as ev
 from lycenza_release.policy import load_policy
@@ -176,6 +178,45 @@ class VerifyArtifactTest(unittest.TestCase):
             self.assertFails(e, "exceptions_invalid")
         finally:
             exc_module.EXCEPTIONS_FILE = original
+
+    # --- Phase 0O.6F: conditional exceptions need their condition's evidence -----------
+
+    def conditional(self) -> contextlib.AbstractContextManager:
+        import lycenza_release.exceptions as exc_module
+        return mock.patch.object(exc_module, "EXCEPTIONS_FILE", Path(__file__).with_name("fixtures") / "exceptions" / "conditional.json")
+
+    def test_a_conditional_exception_applies_with_runtime_hardening_evidence(self) -> None:
+        e = self.evidence()
+        e.set_grype("grype-high-no-fix.json")
+        e.refresh()
+        with self.conditional():
+            verdict, failed = self.run_verify(e)
+        self.assertEqual((verdict, failed), (ev.VERIFIED, {}))
+        e.set_grype("grype-high-no-fix.json")
+        e.refresh()
+        self.assertFails(e, "vulnerability_policy_blocking_findings")  # no exception at all -> blocked
+
+    def test_a_conditional_exception_cannot_activate_without_the_evidence(self) -> None:
+        cases = (("runtime_hardening_evidence_missing", lambda e: (e.out / "verify-images.json").unlink()),
+                 ("runtime_hardening_verification_failed", lambda e: e.write_verify_images(exit_code=1)),
+                 ("runtime_hardening_check_missing", lambda e: e.write_verify_images(
+                     omit="app: every process of the web, worker and scheduler roles is non-root with no capability and NoNewPrivs=1")),
+                 ("runtime_hardening_evidence_not_for_artifact", lambda e: e.write_verify_images(config_digest="sha256:" + "0" * 64)))
+        for code, mutate in cases:
+            with self.subTest(code):
+                self.tmp.cleanup()
+                self.tmp = tempfile.TemporaryDirectory()
+                self.root = Path(self.tmp.name)
+                e = self.evidence()
+                e.set_grype("grype-high-no-fix.json")
+                mutate(e)
+                e.refresh()
+                with self.conditional():
+                    verdict, failed = self.run_verify(e)
+                self.assertEqual(verdict, ev.FAILED)
+                self.assertEqual(failed.get("exception_conditions"), code)
+                # the withdrawn exception no longer covers the finding
+                self.assertEqual(failed.get("vulnerability_policy"), "vulnerability_policy_blocking_findings")
 
     def test_test_linkage(self) -> None:
         e = self.evidence()

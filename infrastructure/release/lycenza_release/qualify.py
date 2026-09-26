@@ -316,11 +316,16 @@ def cmd_build(args: argparse.Namespace) -> None:
 def cmd_verify_images(args: argparse.Namespace) -> None:
     policy = load_policy()
     record = load_run(args.out, args.repo)
-    env = dict(os.environ, APP_IMAGE=local_tag(policy, "app", record["commit"]), AI_IMAGE=local_tag(policy, "ai-gateway", record["commit"]))
+    tags = {key: local_tag(policy, key, record["commit"]) for key in IMAGE_KEYS}
+    env = dict(os.environ, APP_IMAGE=tags["app"], AI_IMAGE=tags["ai-gateway"])
     result = subprocess.run([str(args.repo / "infrastructure/docker/production/verify-images.sh")], env=env, check=False,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     summary = [line for line in result.stdout.decode(errors="replace").splitlines() if line.startswith(("PASS", "FAIL", "verify-images:"))]
-    write_json(args.out / "verify-images.json", {"exit_code": result.returncode, "checks": summary})
+    # The config digest of each image actually verified, binding this record (and the runtime-hardening proof
+    # it carries for conditional exceptions) to the built artifact.
+    images = {key: run(["docker", "image", "inspect", "--format", "{{.Id}}", tag], code="image_inspect_failed").stdout.decode().strip()
+              for key, tag in tags.items()}
+    write_json(args.out / "verify-images.json", {"exit_code": result.returncode, "images": images, "checks": summary})
     log(summary[-1] if summary else "verify-images produced no summary")
     if result.returncode != 0:
         raise ReleaseError("production_image_verification_failed")

@@ -642,3 +642,72 @@ the official PHP image is build-only.
   sha256) as resolved dependencies; source-built libraries carry standard ELF
   `.note.package` metadata so Syft identifies them. No policy, evaluator or
   verifier change; no exception active; no scanner output edited.
+
+## Amendment — Phase 0O.6F runtime hardening, approved exceptions (2026-09-26)
+
+Owner decision **`OWNER-0O6E-2026-09-26`**
+(`docs/security/release-remediation/0O.6E-owner-security-decision.md`)
+accepts the 12 residual Debian 13 HIGH-without-fix advisories **advisory by
+advisory and package by package**. Five of them are conditional on runtime
+hardening: util-linux CVE-2026-76642/78409/78410 (14 days) and acl
+CVE-2026-54369/54370. There is no family-level exception, no wildcard, and
+no other advisory. The record is
+`docs/security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md`.
+
+**1. Runtime security contract** (new; complements ADR 0050 §3, which had none).
+- `infrastructure/release/runtime-security.json` is provider-neutral and
+  schema-guarded; the schema holds each safety value as a constant.
+- Required for every container of both images: never privileged, ALL
+  capabilities dropped, none added, no-new-privileges, the existing non-root
+  user.
+- A capability may be added back only by a later ADR. The read-only root
+  filesystem is audited and recorded as future work; it is not required.
+- `mount`/`umount` lose their setuid bit (`dpkg-statoverride`), and
+  `/etc/fstab` has no user-mountable entry.
+- `verify-images.sh` starts every production container with the contract.
+  It proves the contract from `/proc/<pid>/status`: every process of every
+  role is non-root, has zero capability sets, and has NoNewPrivs 1. An
+  unhardened control shows that the setgid test discriminates.
+- Guarded by `Tests\Feature\Configuration\RuntimeSecurityContractTest`.
+
+**2. Exception approval linkage** (§3.8, tightened; its fields and maximums are unchanged).
+- `vulnerability-exceptions.json` carries `approvals`, each pointing at a
+  committed decision record that names the reference and every advisory.
+- A record must stay within its approval:
+  - the advisory must be approved;
+  - the image/package must be listed, with exactly the record's status;
+  - the window must not exceed the approved maximum;
+  - the record must not predate the decision;
+  - its conditions must equal the approval's.
+
+**3. Conditional exceptions.**
+- A record with `conditions: ["runtime-hardening"]` is applied by
+  `verify-artifact` (new check `exception_conditions`) only when the signed
+  `verify-images.json` of the same run shows every contract-required check
+  passed. That record must also be bound to the artifact's config digest,
+  which qualify now records.
+- Otherwise those exceptions are withdrawn and verification FAILs.
+
+**4. Fix-available rule enforced in the one evaluator.**
+- An exception never covers a HIGH that has a fix. This is what the policy
+  already says (`exception_required.high = when_no_fix`), now enforced.
+- When a fix appears, the finding blocks as `high_fix_available`, naming
+  `superseded_exception`.
+- The Critical policy, the High-with-fix policy, the exception maximums, and
+  the evaluator's thresholds are **unchanged**.
+
+**5. Digest binding.**
+- Records match content (image, advisory, package, version, severity), never
+  a digest: every build yields a new digest.
+- The approval names the reviewed 0O.6D digests. A successor digest inherits
+  it only when four things hold:
+  - it was built from the protected commit carrying the record;
+  - its fresh scan has exactly the reviewed residual set;
+  - its signed evidence proves the runtime hardening;
+  - `verify-artifact` returns VERIFIED.
+- The qualified successor digests are recorded in the 0O.6F record.
+
+**Status.** O16 repository controls are **COMPLETE**; the local artifacts
+are qualified as recorded in the 0O.6F record. Deployment evidence (the real
+platform applying the contract, registry, production signing identity) is
+still outstanding. **PUBLISHED = NONE, PROMOTED = NONE.**

@@ -26,6 +26,7 @@ from .lineage import on_protected_branch
 from .oci import read_archive
 from .policy import load_policy
 from .provenance import dockerfile_at, verify_statement
+from .schema import validate
 from .sbom import verify_sbom
 from .signing import verifier_for
 from .util import (
@@ -40,6 +41,10 @@ from .util import (
     utc_now,
     write_json,
 )
+
+
+RUNTIME_SECURITY = "infrastructure/release/runtime-security.json"
+RUNTIME_SECURITY_SCHEMA = "infrastructure/release/schema/runtime-security.schema.json"
 
 
 def tool_version(pinned: str) -> str:
@@ -243,6 +248,41 @@ def _collect_findings(ctx: Context, grype_report: Any) -> list[fnd.Finding]:
     return found
 
 
+def _runtime_hardening(ctx: Context) -> None:
+    """The runtime security contract at the commit, proven for THIS artifact by the signed verify-images record."""
+    path = ctx.path("verify-images.json")
+    if not path.is_file():
+        raise ReleaseError("runtime_hardening_evidence_missing")
+    record = load_json(path)
+    if record.get("exit_code") != 0:
+        raise ReleaseError("runtime_hardening_verification_failed")
+    if record.get("images", {}).get(ctx.image) != load_json(ctx.image_path("build.json"))["config_digest"]:
+        raise ReleaseError("runtime_hardening_evidence_not_for_artifact")
+    contract = _at_commit(ctx, RUNTIME_SECURITY)
+    if validate(contract, _at_commit(ctx, RUNTIME_SECURITY_SCHEMA)):
+        raise ReleaseError("runtime_security_contract_invalid")
+    passed = set(record.get("checks", []))
+    if any(f"PASS  {name}" not in passed for name in contract["images"][ctx.image]["required_verification_checks"]):
+        raise ReleaseError("runtime_hardening_check_missing")
+
+
+CONDITION_EVIDENCE: dict[str, Callable[[Context], None]] = {"runtime-hardening": _runtime_hardening}
+
+
+def _conditions(ctx: Context) -> str:
+    """A conditional exception applies only when the evidence proves its condition; otherwise it is withdrawn and this fails."""
+    conditional = [e for e in ctx.exceptions if e.image == ctx.image and e.conditions]
+    if not conditional:
+        return "no_conditional_exceptions"
+    try:
+        for condition in sorted({c for e in conditional for c in e.conditions}):
+            CONDITION_EVIDENCE[condition](ctx)
+    except Exception:
+        ctx.exceptions = [e for e in ctx.exceptions if e not in conditional]
+        raise
+    return "exception_conditions_proven"
+
+
 def _vulnerabilities(ctx: Context) -> str:
     ctx.vulnerability = evaluate(_collect_findings(ctx, load_json(ctx.image_path("grype.json"))), ctx.exceptions)
     if ctx.vulnerability["verdict"] != "PASS":
@@ -286,6 +326,7 @@ CHECKS: list[tuple[str, Callable[[Context], str]]] = [
     ("provenance", _provenance),
     ("sbom", _sbom),
     ("scanner_freshness", _scanner),
+    ("exception_conditions", _conditions),
     ("vulnerability_policy", _vulnerabilities),
     ("rescan", _rescan),
     ("secret_and_history_scans", _secrets),

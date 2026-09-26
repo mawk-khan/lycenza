@@ -28,7 +28,11 @@ COPY requirements.lock /tmp/requirements.lock
 RUN /opt/venv/bin/pip install --no-cache-dir --require-hashes --no-deps --only-binary=:all: -r /tmp/requirements.lock
 
 FROM ${PYTHON_IMAGE} AS runtime
-RUN useradd --system --uid 10001 --home-dir /srv/ai --shell /usr/sbin/nologin gateway
+RUN useradd --system --uid 10001 --home-dir /srv/ai --shell /usr/sbin/nologin gateway \
+ # Phase 0O.6F (runtime security contract): nothing mounts filesystems, so
+ # mount/umount lose their setuid bit via Debian's dpkg-statoverride.
+ && dpkg-statoverride --update --add root root 0755 /usr/bin/mount \
+ && dpkg-statoverride --update --add root root 0755 /usr/bin/umount
 COPY --from=deps /opt/venv /opt/venv
 WORKDIR /srv/ai
 COPY --chown=gateway:gateway app ./app

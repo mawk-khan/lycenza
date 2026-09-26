@@ -220,6 +220,12 @@ COPY deploy/php/production.ini /usr/local/etc/php/conf.d/zz-lycenza-production.i
 COPY deploy/php/fpm-pool.conf /usr/local/etc/php-fpm.d/zz-lycenza-pool.conf
 COPY deploy/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --chmod=0755 deploy/entrypoint.sh /usr/local/bin/lycenza
+# Phase 0O.6F (runtime security contract, infrastructure/release/runtime-security.json):
+# nothing in the image mounts filesystems, so mount/umount lose their setuid
+# bit through Debian's own dpkg-statoverride (recorded in the dpkg database;
+# no Essential file is removed).
+RUN dpkg-statoverride --update --add root root 0755 /usr/bin/mount \
+ && dpkg-statoverride --update --add root root 0755 /usr/bin/umount
 RUN echo /usr/local/lib > /etc/ld.so.conf.d/00-lycenza-native.conf \
  && ldconfig \
  && ! ldd /usr/local/bin/php /usr/local/sbin/php-fpm /usr/local/lib/php/extensions/*/*.so | grep -q 'not found' \

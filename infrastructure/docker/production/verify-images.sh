@@ -46,6 +46,15 @@
 #                  php-native-smoke.php): the webhook HTTP client stack over
 #                  real TLS with a throwaway CA, AWS SDK against a real MinIO,
 #                  every PHP XML API -- repeated, crash signatures refused.
+#   runtime security -- (Phase 0O.6F) EVERY container of both images is started
+#                  with the runtime security contract's reference invocation
+#                  (infrastructure/release/runtime-security.json: all
+#                  capabilities dropped, none added, no-new-privileges, never
+#                  privileged); the kernel's own /proc/<pid>/status proves uid,
+#                  capability sets and NoNewPrivs for every process of every
+#                  role; mount/umount carry no setuid bit; a setgid program
+#                  gains nothing (with a control run proving the test
+#                  discriminates); /etc/fstab has no user-mountable entry.
 #
 # Where this fits (ADR 0052): verify-images.sh proves how the images BEHAVE
 # and is one gate inside release qualification
@@ -63,6 +72,10 @@ AI_IMAGE="${AI_IMAGE:-lycenza-ai-gateway:verify}"
 RUN_ID="lycenza-verify-$$"
 NETWORK="${RUN_ID}-net"
 failures=0
+
+# Phase 0O.6F: the production runtime security contract's reference invocation.
+mapfile -t HARDEN < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["reference_invocation"]["docker"]))' "$ROOT/infrastructure/release/runtime-security.json")
+drun() { docker run "${HARDEN[@]}" "$@"; }
 
 pass() { printf 'PASS  %s\n' "$1"; }
 fail() { printf 'FAIL  %s\n' "$1"; failures=$((failures + 1)); }
@@ -106,7 +119,7 @@ APP_ENV_ARGS=(
     -e TRUSTED_PROXIES=10.0.0.0/8
 )
 
-in_app() { docker run --rm --entrypoint sh "$APP_IMAGE" -c "$1"; }
+in_app() { drun --rm --entrypoint sh "$APP_IMAGE" -c "$1"; }
 
 echo "== app image: $APP_IMAGE"
 check "app runs as a non-root user" test "$(in_app 'id -u')" != "0"
@@ -152,11 +165,11 @@ check "no private-key file in application or configuration paths" test -z "$(in_
 docker network create "$NETWORK" >/dev/null
 docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" redis:7-alpine redis-server --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
 
-unsafe_output="$(docker run --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e APP_KEY=canary-unsafe-app-key "$APP_IMAGE" web 2>&1 || true)"
+unsafe_output="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e APP_KEY=canary-unsafe-app-key "$APP_IMAGE" web 2>&1 || true)"
 check "unsafe configuration refuses to start" grep -q "Refusing to start" <<<"$unsafe_output"
 check "refusal never prints the value" test -z "$(grep -F canary-unsafe-app-key <<<"$unsafe_output")"
 
-docker run -d --name "${RUN_ID}-web" --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" web >/dev/null
+drun -d --name "${RUN_ID}-web" --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" web >/dev/null
 http() { docker exec "${RUN_ID}-web" php -r '$c=stream_context_create(["http"=>["ignore_errors"=>true,"header"=>$argv[2] ?? ""]]); $b=@file_get_contents("http://127.0.0.1:8080".$argv[1],false,$c); echo implode("\n",$http_response_header ?? []),"\n\n",$b;' "$@"; }
 for _ in $(seq 1 30); do http /api/health/live 2>/dev/null | grep -q '200' && break; docker exec "${RUN_ID}-web" true 2>/dev/null || break; sleep 1; done
 live="$(http /api/health/live 2>/dev/null || true)"
@@ -173,13 +186,13 @@ check "web processes run as www-data" test -z "$(docker top "${RUN_ID}-web" -o u
 check "spoofed X-Forwarded-Proto from an untrusted peer earns no HSTS" test -z "$(http /api/health/live 'X-Forwarded-Proto: https' 2>/dev/null | grep -i '^strict-transport-security' || true)"
 
 # The same image with its own loopback trusted (as a sidecar proxy would be).
-docker run -d --name "${RUN_ID}-web-proxied" --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e TRUSTED_PROXIES=127.0.0.1/32 "$APP_IMAGE" web >/dev/null
+drun -d --name "${RUN_ID}-web-proxied" --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e TRUSTED_PROXIES=127.0.0.1/32 "$APP_IMAGE" web >/dev/null
 proxied() { docker exec "${RUN_ID}-web-proxied" php -r '$c=stream_context_create(["http"=>["ignore_errors"=>true,"header"=>"X-Forwarded-Proto: https"]]); @file_get_contents("http://127.0.0.1:8080/api/health/live",false,$c); echo implode("\n",$http_response_header ?? []);'; }
 for _ in $(seq 1 30); do proxied 2>/dev/null | grep -q '200' && break; sleep 1; done
 check "HSTS through a trusted proxy" grep -qi '^strict-transport-security: max-age=31536000$' <<<"$(proxied 2>/dev/null | tr -d '\r' || true)"
 
 # Phase 0O.5A (ADR 0051): structured logs and the private metrics listener.
-log_line="$(docker run --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e PROCESS_ROLE=console --entrypoint php "$APP_IMAGE" -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); Illuminate\Support\Facades\Log::info("verify.images.structured", ["password" => "canary-image-pw"]);' 2>&1 | grep '"event_code":"verify.images.structured"' || true)"
+log_line="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e PROCESS_ROLE=console --entrypoint php "$APP_IMAGE" -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); Illuminate\Support\Facades\Log::info("verify.images.structured", ["password" => "canary-image-pw"]);' 2>&1 | grep '"event_code":"verify.images.structured"' || true)"
 check "production logs are one JSON object per line" test -n "$log_line"
 check "log lines carry the fixed fields" grep -q '"service":"platform","process_role":"console","environment":"production"' <<<"$log_line"
 check "the log pipeline redacts inside the image" test -z "$(grep canary-image-pw <<<"$log_line")"
@@ -197,21 +210,85 @@ check "the private listener serves the exposition with the token" grep -q "# TYP
 check "metrics work with no backend and an unreachable database" grep -q 'lycenza_readiness_status{dependency="postgresql"} 0' <<<"$private"
 check "the exposition carries no identifier" test -z "$(grep -E '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-' <<<"$private")"
 
-routes="$(docker run --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" console route:list --json 2>/dev/null || true)"
+routes="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" console route:list --json 2>/dev/null || true)"
 check "production route list builds" grep -q '"uri"' <<<"$routes"
 check "no probe or demo route in production" test -z "$(grep -oE '"uri":"[^"]*(probe|demo)[^"]*"' <<<"$routes")"
-check "configuration and routes cache in production mode" docker run --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" --entrypoint sh "$APP_IMAGE" -c 'php artisan config:cache && php artisan route:cache && php artisan route:list >/dev/null'
+check "configuration and routes cache in production mode" drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" --entrypoint sh "$APP_IMAGE" -c 'php artisan config:cache && php artisan route:cache && php artisan route:list >/dev/null'
+
+# --- Phase 0O.6F: runtime security contract, proven from the kernel --------------
+# One /proc/<pid>/status record per line-separated paragraph on stdin: every
+# record must be non-root, hold no permitted/effective/bounding/ambient
+# capability, and have NoNewPrivs=1.
+statuses_ok() {
+    awk -v RS= '
+        { n++; uid = eff = prm = bnd = amb = nnp = ""
+          c = split($0, line, "\n")
+          for (i = 1; i <= c; i++) { split(line[i], f, "\t")
+              if (f[1] == "Uid:") uid = f[2]; if (f[1] == "CapEff:") eff = f[2]; if (f[1] == "CapPrm:") prm = f[2]
+              if (f[1] == "CapBnd:") bnd = f[2]; if (f[1] == "CapAmb:") amb = f[2]; if (f[1] == "NoNewPrivs:") nnp = f[2] }
+          z = "0000000000000000"
+          if (uid == "0" || uid == "" || eff != z || prm != z || bnd != z || (amb != "" && amb != z) || nnp != "1") bad = 1 }
+        END { exit (bad || n == 0) }'
+}
+proc_statuses() { docker exec "$1" sh -c 'for s in /proc/[0-9]*/status; do cat "$s" 2>/dev/null; echo; done'; }
+# The worker and scheduler roles exit a few seconds after start in this
+# harness (the database is deliberately unreachable), so their process
+# evidence is captured as soon as the role's PHP process is running.
+declare -A ROLE_STATUS=()
+role_status() { # container
+    local i out
+    for i in $(seq 1 40); do
+        out="$(proc_statuses "$1" 2>/dev/null)" || return 1
+        if grep -qE '^Name:[[:space:]]+php$' <<<"$out"; then printf '%s\n' "$out"; return 0; fi
+        sleep 0.25
+    done
+    return 1
+}
 
 for role in "worker default" "worker integrations" "worker notifications" scheduler; do
     name="${RUN_ID}-$(tr ' ' '-' <<<"$role")"
     # shellcheck disable=SC2086
-    docker run -d --name "$name" --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" $role >/dev/null
+    drun -d --name "$name" --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" $role >/dev/null
+done
+# (captured in the background so the "stays running" timing below is unchanged)
+for role in worker-default worker-integrations worker-notifications scheduler; do
+    role_status "${RUN_ID}-$role" >"$SMOKE_DIR/status-$role" 2>/dev/null &
 done
 sleep 5
 for role in worker-default worker-integrations worker-notifications scheduler; do
     check "$role role stays running" test "$(docker inspect -f '{{.State.Running}}' "${RUN_ID}-${role}")" = "true"
 done
-set +e; docker run --rm "$APP_IMAGE" bogus >/dev/null 2>&1; unknown=$?; set -e
+wait
+for role in worker-default worker-integrations worker-notifications scheduler; do
+    ROLE_STATUS[${RUN_ID}-$role]="$(cat "$SMOKE_DIR/status-$role")"
+done
+# --- Phase 0O.6F: runtime security contract (continued) -------------------------
+every_process_ok() { # container: live, or the status captured at role start
+    if [[ -v "ROLE_STATUS[$1]" ]]; then statuses_ok <<<"${ROLE_STATUS[$1]}"; else proc_statuses "$1" | statuses_ok; fi
+}
+self_ok() { # image expected-uid
+    test "$(docker run "${HARDEN[@]}" --rm --entrypoint id "$1" -u)" = "$2" \
+        && docker run "${HARDEN[@]}" --rm --entrypoint cat "$1" /proc/self/status | statuses_ok
+}
+invocation_ok() {
+    test "$(docker inspect -f '{{.HostConfig.Privileged}}|{{json .HostConfig.CapDrop}}|{{json .HostConfig.CapAdd}}|{{json .HostConfig.SecurityOpt}}' "$1")" = 'false|["ALL"]|null|["no-new-privileges:true"]'
+}
+fstab_ok() { # image
+    ! docker run "${HARDEN[@]}" --rm --entrypoint cat "$1" /etc/fstab | awk '!/^[[:space:]]*(#|$)/' \
+        | grep -qE '(^|[[:space:],])(user|users|owner|group|bind|rbind|X-mount\.[A-Za-z]+)([=,[:space:]]|$)'
+}
+app_roles_ok() { local c; for c in web worker-default worker-integrations worker-notifications scheduler; do "$1" "${RUN_ID}-$c" || return 1; done; }
+setuid_removed='test "$(stat -c %a /usr/bin/mount)" = 755 && test "$(stat -c %a /usr/bin/umount)" = 755 && grep -qx "root root 755 /usr/bin/mount" /var/lib/dpkg/statoverride && grep -qx "root root 755 /usr/bin/umount" /var/lib/dpkg/statoverride'
+
+check "app: hardened invocation -- not privileged, all capabilities dropped, none added, no-new-privileges" app_roles_ok invocation_ok
+check "app: runs as www-data (uid 33) with no permitted, effective or bounding capability and NoNewPrivs=1" self_ok "$APP_IMAGE" 33
+check "app: every process of the web, worker and scheduler roles is non-root with no capability and NoNewPrivs=1" app_roles_ok every_process_ok
+check "app: mount/umount carry no setuid bit (dpkg-statoverride)" in_app "$setuid_removed"
+check "app: setuid/setgid execution gains no privilege under the hardened invocation" in_app '! chage -l www-data >/dev/null 2>&1 && ! mount -t tmpfs none /tmp >/dev/null 2>&1'
+check "control: without no-new-privileges the same setgid program does gain privilege (the test discriminates)" docker run --rm --entrypoint chage "$APP_IMAGE" -l www-data
+check "app: /etc/fstab has no user-mountable entry" fstab_ok "$APP_IMAGE"
+
+set +e; drun --rm "$APP_IMAGE" bogus >/dev/null 2>&1; unknown=$?; set -e
 check "unknown role refused (exit 64)" test "$unknown" = "64"
 
 # --- Phase 0O.6D native smoke inside the production image ------------------------
@@ -249,7 +326,7 @@ docker run -d --name "${RUN_ID}-minio" --network "$NETWORK" -e MINIO_ROOT_USER="
     minio/minio:RELEASE.2025-04-08T15-41-24Z server /data >/dev/null
 tls_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${RUN_ID}-tls")"
 for _ in $(seq 1 30); do docker exec "${RUN_ID}-minio" sh -c 'exec 3<>/dev/tcp/127.0.0.1/9000' 2>/dev/null && break; sleep 1; done
-smoke() { docker run --rm --network "$NETWORK" -v "$ROOT/infrastructure/docker/production/runtime-checks:/checks:ro" -v "$SMOKE_DIR/ca.pem:/checks-ca/ca.pem:ro" \
+smoke() { drun --rm --network "$NETWORK" -v "$ROOT/infrastructure/docker/production/runtime-checks:/checks:ro" -v "$SMOKE_DIR/ca.pem:/checks-ca/ca.pem:ro" \
     -e TLS_HOST="${RUN_ID}-tls" -e TLS_IP="$tls_ip" -e TLS_CA=/checks-ca/ca.pem -e S3_ENDPOINT="http://${RUN_ID}-minio:9000" \
     -e S3_KEY="$MINIO_KEY" -e S3_SECRET="$MINIO_SECRET" -e ROUNDS="$1" --entrypoint php "$APP_IMAGE" /checks/php-native-smoke.php 2>&1; }
 set +e; smoke_out="$(smoke 3)"; smoke_rc=$?; smoke_again="$(smoke 1)"; again_rc=$?; set -e
@@ -260,7 +337,7 @@ check "no crash signature (segfault/abort/symbol/loader error)" test -z "$(print
 check "no crash exit status (139 SIGSEGV / 134 SIGABRT)" test "$smoke_rc" != "139" -a "$smoke_rc" != "134" -a "$again_rc" != "139" -a "$again_rc" != "134"
 
 echo "== gateway image: $AI_IMAGE"
-in_ai() { docker run --rm --entrypoint sh "$AI_IMAGE" -c "$1"; }
+in_ai() { drun --rm --entrypoint sh "$AI_IMAGE" -c "$1"; }
 check "gateway runs as a non-root user" test "$(in_ai 'id -u')" != "0"
 locked="$(python3 - "$ROOT/services/ai/requirements.lock" <<'PY'
 import re, sys
@@ -268,7 +345,7 @@ pins = re.findall(r"^([A-Za-z0-9._-]+)==(\S+)", open(sys.argv[1]).read(), re.M)
 print("\n".join(sorted(name.lower().replace("_", "-") + "==" + version for name, version in pins)))
 PY
 )"
-installed="$(docker run --rm -i --entrypoint /opt/venv/bin/python "$AI_IMAGE" - <<'PY'
+installed="$(drun --rm -i --entrypoint /opt/venv/bin/python "$AI_IMAGE" - <<'PY'
 import importlib.metadata as metadata
 names = (d.metadata["Name"].lower().replace("_", "-") + "==" + d.version for d in metadata.distributions())
 print("\n".join(sorted(n for n in names if not n.startswith("pip=="))))
@@ -281,13 +358,13 @@ check "gateway TLS trust store is populated" in_ai 'python -c "import ssl,sys; s
 check "gateway has no .env, tests or dev requirements" in_ai 'test ! -e /srv/ai/.env && test ! -e /srv/ai/tests && test ! -e /srv/ai/requirements-dev.txt && test -z "$(find /srv -name ".env*")"'
 
 set +e
-docker run --rm -e SERVICE_TOKEN= "$AI_IMAGE" >/dev/null 2>&1; no_token=$?
-docker run --rm -e SERVICE_TOKEN=dev-local-only-token "$AI_IMAGE" >/dev/null 2>&1; dev_token=$?
+drun --rm -e SERVICE_TOKEN= "$AI_IMAGE" >/dev/null 2>&1; no_token=$?
+drun --rm -e SERVICE_TOKEN=dev-local-only-token "$AI_IMAGE" >/dev/null 2>&1; dev_token=$?
 set -e
 check "gateway refuses to start without a service token" test "$no_token" != "0"
 check "gateway refuses the development token in production" test "$dev_token" != "0"
 
-docker run -d --name "${RUN_ID}-ai" --network "$NETWORK" -e SERVICE_TOKEN="$(random)" "$AI_IMAGE" >/dev/null
+drun -d --name "${RUN_ID}-ai" --network "$NETWORK" -e SERVICE_TOKEN="$(random)" "$AI_IMAGE" >/dev/null
 ai_get() { docker exec "${RUN_ID}-ai" python -c 'import sys,urllib.request,urllib.error
 try:
     r=urllib.request.urlopen("http://127.0.0.1:8100"+sys.argv[1]); print(r.status, r.headers.get("server"), r.read().decode())
@@ -295,6 +372,12 @@ except urllib.error.HTTPError as e:
     print(e.code, e.headers.get("server"), e.read().decode())' "$1"; }
 for _ in $(seq 1 20); do ai_get /health/live >/dev/null 2>&1 && break; sleep 1; done
 check "gateway liveness 200" grep -q '^200' <<<"$(ai_get /health/live 2>/dev/null || true)"
+check "gateway: hardened invocation -- not privileged, all capabilities dropped, none added, no-new-privileges" invocation_ok "${RUN_ID}-ai"
+check "gateway: runs as gateway (uid 10001) with no permitted, effective or bounding capability and NoNewPrivs=1" self_ok "$AI_IMAGE" 10001
+check "gateway: every process is non-root with no capability and NoNewPrivs=1" every_process_ok "${RUN_ID}-ai"
+check "gateway: mount/umount carry no setuid bit (dpkg-statoverride)" in_ai "$setuid_removed"
+check "gateway: setuid/setgid execution gains no privilege under the hardened invocation" in_ai '! chage -l gateway >/dev/null 2>&1 && ! mount -t tmpfs none /tmp >/dev/null 2>&1'
+check "gateway: /etc/fstab has no user-mountable entry" fstab_ok "$AI_IMAGE"
 check "gateway readiness 200 with a token" grep -q '^200' <<<"$(ai_get /health/ready 2>/dev/null || true)"
 check "gateway does not name its server" grep -q '^200 None' <<<"$(ai_get /health/live 2>/dev/null || true)"
 gateway_logs="$(docker logs "${RUN_ID}-ai" 2>&1 || true)"

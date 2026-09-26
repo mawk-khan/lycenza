@@ -1,5 +1,35 @@
 {
   "schema_version": 1,
+  "approvals": {
+    "SEC-REVIEW-0001": {
+      "record": "infrastructure/release/tests/fixtures/exceptions/SEC-REVIEW-0001.md",
+      "decided": "2026-08-01",
+      "advisories": {
+        "CVE-2026-0003": {
+          "max_days": 90,
+          "conditions": [],
+          "packages": {
+            "app": {
+              "libexample3": "accepted_risk",
+              "libexample": "accepted_risk"
+            },
+            "ai-gateway": {
+              "libexample3": "accepted_risk"
+            }
+          }
+        },
+        "CVE-2026-0002": {
+          "max_days": 30,
+          "conditions": [],
+          "packages": {
+            "app": {
+              "examplepkg": "not_affected"
+            }
+          }
+        }
+      }
+    }
+  },
   "exceptions": [
     {
       "id": "CVE-2026-*",
