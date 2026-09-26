@@ -785,3 +785,24 @@ PROMOTED.** Decisions: O3, O4, O6, O7, O8, O10, O11, O12, O16 resolved;
 **O1, O2, O5, O9, O13, O14, O15 open**. Phase 0O: **PARTIALLY READY — SOME
 CHECKPOINTS MAY START**. Phase 0M: **BLOCKED**. REAL RESTORE DRILL STILL
 OUTSTANDING.
+
+## 24. Phase 0O.6C — Patched Runtime Libraries & Python 3.14 (BLOCKED — RELEASE VULNERABILITY, 2026-09-26)
+
+- **AI Gateway — technical remediation complete:** CPython 3.14.7 on Debian
+  13 (digest-pinned), pydantic 2.12.0 / pydantic-core 2.41.1 (forced by
+  cp314 wheels), everything else unchanged; CVE-2026-82049 cleared; 0
+  CRITICAL, 0 HIGH with a fix; 12 HIGH-without-fix advisories (Debian
+  Essential packages) in an **inactive** decision pack awaiting human
+  approval — so still **not VERIFIED**.
+- **Application — blocked on an ABI decision:** curl 8.22.0 (signature
+  verified) would clear every libcurl finding, but libxml2's HIGH fixes exist
+  only in 2.15.4 (`libxml2.so.16`, not loadable by the official PHP binary).
+  The unit stopped before forcing it; options and a recommendation (rebuild
+  PHP 8.3.35 from source against the patched libraries) are recorded in
+  `docs/security/release-remediation/0O.6C-PATCHED-LIBRARIES-PYTHON314.md`.
+
+**NO PRODUCTION REGISTRY IS CONFIGURED. NO REAL SIGNING IDENTITY/KEY IS
+CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
+PROMOTED.** Decisions: **O1, O2, O5, O9, O13, O14, O15 open**. Phase 0O:
+**PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M: **BLOCKED**. REAL
+RESTORE DRILL STILL OUTSTANDING.

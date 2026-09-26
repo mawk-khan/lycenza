@@ -9,7 +9,7 @@ supervise processes will do. No orchestrator manifest is committed.
 | Image | Dockerfile | Build context | Base |
 |---|---|---|---|
 | Application | `infrastructure/docker/production/app.Dockerfile` | `apps/platform` | `php:8.3.35-fpm-trixie@sha256:e0623b71…` — Debian 13 since Phase 0O.6B (+ `node:22.23.3-bookworm-slim@sha256:43ac6c60…`, `composer:2.10.2@sha256:4d71c3c2…` build-only stages) |
-| AI Gateway | `infrastructure/docker/production/ai.Dockerfile` | `services/ai` | `python:3.12.14-slim-trixie@sha256:f77ac9e4…` — Debian 13 since Phase 0O.6B |
+| AI Gateway | `infrastructure/docker/production/ai.Dockerfile` | `services/ai` | `python:3.14.7-slim-trixie@sha256:51dafde8…` — Debian 13 since Phase 0O.6B, CPython 3.14 since Phase 0O.6C |
 
 Since Phase 0O.6A (ADR 0052) every base image is pinned **by digest**
 (`image:exact-version@sha256:…`; the tag is a readable alias) and a digest

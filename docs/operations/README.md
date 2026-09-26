@@ -34,7 +34,7 @@ Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
 | Production images build and pass local verification | Repository-verified (`infrastructure/docker/production/verify-images.sh`) |
 | Production database bootstrap on a clean PostgreSQL 16 | Repository-verified on a throwaway cluster (`infrastructure/postgres/verify-production-bootstrap.sh`) |
 | Redis-loss reconciliation | Repository-verified (real Redis, `Tests\Feature\Recovery\RedisQueueLossRecoveryTest`) |
-| Release qualification (lock integrity, SBOM, vulnerability scan, secret/history scans, provenance, ephemeral signature, `verify-artifact`) | Repository-verified; **both images still FAIL the vulnerability policy after Phase 0O.6B** (app: libcurl/libxml2 CRITICALs; Gateway: CPython HIGH + unapproved HIGH-no-fix) — no digest is VERIFIED ([remediation record](../security/release-remediation/0O.6B-RELEASE-VULNERABILITY-REMEDIATION.md)) |
+| Release qualification (lock integrity, SBOM, vulnerability scan, secret/history scans, provenance, ephemeral signature, `verify-artifact`) | Repository-verified; **both images still FAIL the vulnerability policy after Phase 0O.6C** (app: libcurl/libxml2 CRITICALs pending an ABI decision; Gateway: only unapproved HIGH-without-fix) — no digest is VERIFIED ([remediation records](../security/release-remediation/0O.6C-PATCHED-LIBRARIES-PYTHON314.md)) |
 | Registry, signing custody, publication, promotion | **Not configured / not performed** |
 | Real deployment, real secrets, real bucket policy | **Not performed** |
 | Backup policy activation (PITR, object copy) | **Not performed** |

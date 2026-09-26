@@ -596,3 +596,28 @@ RELEASE VULNERABILITY; no image VERIFIED, PUBLISHED or PROMOTED.**
 - No evidence-backed false-positive/not-affected determination was
   possible; no exception was written; the policy, evaluator and tooling are
   unchanged.
+
+## Amendment — Phase 0O.6C patched libraries & Python 3.14 (2026-09-26)
+
+Owner decisions R8–R18 (`docs/security/release-remediation/0O.6C-PATCHED-LIBRARIES-PYTHON314.md`).
+**Status: BLOCKED — RELEASE VULNERABILITY; nothing VERIFIED, PUBLISHED or
+PROMOTED; no exception active.**
+
+- AI Gateway: CPython 3.12.14 → **3.14.7** (`python:3.14.7-slim-trixie`,
+  digest-pinned; the policy's pinned tool Python moved with it); pydantic
+  2.11.7 → 2.12.0 and pydantic-core 2.33.2 → 2.41.1 (no cp314 wheel for the
+  old core), nothing else changed. CVE-2026-82049 no longer matches.
+  **Technical remediation complete:** 0 CRITICAL, 0 HIGH with a fix; 12
+  HIGH-without-fix advisories (49 matches, Debian Essential packages) await a
+  human exception decision (decision pack alongside, inactive).
+- Application: the minimum published upstream fixes are curl **8.22.0**
+  (clears all 8 libcurl CRITICAL + 10 HIGH advisories; `libcurl.so.4`;
+  signature verified) and libxml2 **2.15.4** (the only release fixing the
+  libxml2 HIGHs; ABI-breaking soname `libxml2.so.16`, so the official PHP
+  binary cannot load it). The ABI-compatible 2.13.9 fixes the CRITICAL only
+  and is unmaintained. Per Step 6 the unit stopped before forcing an
+  ABI-breaking change: rebuilding PHP 8.3.35 from source against the patched
+  libraries (recommended) or another option is an owner decision. The
+  application image is unchanged.
+- No policy, evaluator, validator or tooling-logic change; no scanner output
+  edited; no Essential package removed.
