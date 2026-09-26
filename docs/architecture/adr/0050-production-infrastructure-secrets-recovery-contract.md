@@ -525,3 +525,9 @@ Still outstanding (operator evidence, ADR 0050 §19–§20): a real
 deployment, real secrets in a secret store, bucket and backup policy
 activation, and one successful restore drill in a real, isolated
 non-production environment. O1 stays open.
+
+**Note (Phase 0O.5, 2026-09-26):** O12, kept open in §17, is resolved by
+ADR 0051 (vendor-neutral observability backend, 30-day logs, 90-day
+metrics, no tracing in v1, alert catalog including the O10 backup and
+restore-drill alerts). No production image may be pushed or promoted
+before O16 is resolved.

@@ -467,3 +467,17 @@ no sleeps, exactly-once effects) and `OutboxReconcilerTest`. Runbook:
 limits too). Maintenance mode is shared through PostgreSQL, not Redis;
 during it workers pause and the scheduler idles
 (`docs/operations/MAINTENANCE-WINDOW-RELEASE.md`).
+
+## Observability of durable-work recovery (ADR 0051, Phase 0O.5)
+
+The recovery paths above become alertable signals in Phase 0O.5A:
+reconciliation runs/rows/duration/last success per source (`outbox`,
+`webhook`, `communication`, `automation`), outbox pending/stale/failed
+counts built on the 0O.4A `processed_at` model, and *overdue* webhook,
+Communication and Automation work — eligible (past `next_attempt_at` or an
+expired lease) but not picked up — so that legitimate backoff (up to ≈10.6
+h for webhooks) never alerts. Thresholds come from the cadences and retry
+schedules documented here (ADR 0051 §14): 300 s (five one-minute sweep
+cycles) for Warning/High, 1800 s for High, and exhausted/`failed` outbox
+events as High. Telemetry is best effort: a metrics or log-shipping
+failure never fails, retries or rolls back business work.

@@ -300,7 +300,7 @@ Other findings:
 | O9 | Custom School domains in production: ownership verification, TLS | No | Product + operations | Domain routing in production |
 | O10 | Backup policy, RPO/RTO, restore drills | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | Any production deployment |
 | O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
-| O12 | Observability backend and log/metric retention | ADR 0015 (model only) | Operations + security | S2 |
+| O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | No | Product + operations | Real email |
 | O14 | Password reset for production accounts | ADR 0037: none exists | Product + security | Production operations |
 | O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | No | Product | S4 |
@@ -314,7 +314,7 @@ No vendor or provider is chosen by this audit.
 |---|---|---|---|---|
 | S1 API hardening — rate limiting | 19 named limiters; no default API limiter; 143 unthrottled `/api` routes; IP limits break behind an untrusted proxy | PARTIAL | Default API limiter; proxy trust; per-account login protection | O11 |
 | S1 API hardening — partner API keys / client access | No token issuance, no expiry, no abilities, no partner keys | BLOCKED | Client model, then implementation | O7 |
-| S2 Real observability backend | Instrumentation only; no exporter; plain logs; sanitizer unused | BLOCKED (backend) / PARTIAL (in-repo prep) | JSON logs, sanitizer wiring, ops-status resilience, exporter wiring | O12, O3 |
+| S2 Real observability backend | Instrumentation only; no exporter; plain logs; sanitizer unused. Contract fixed by ADR 0051 (Phase 0O.5) | CONTRACT DONE / in-repo foundation next (0O.5A) / backend DEPLOY-GATED | JSON logs, central sanitizer, request-id bounds, metrics endpoint, heartbeats, resilient ops status, alert specs (0O.5A); real backend, retention, alert routing (operator) | rule 16 |
 | S3 Production secrets | Env-only; unsafe AI fallbacks; no validation; no rotation for service identities or signing key | PARTIAL | Fail-closed checks (0O.1); secrets manager integration | O4, O5 |
 | S3 Production infrastructure | No production image, no IaC, no runbook, no backup | BLOCKED + DEPLOY-GATED | Hosting model, images, runbook, backup | O3, O8, O10, rule 16 |
 | S3 Root provisioning (ADR 0046 §2) | Built in 0O.1 (`platform:provision-root`); database-enforced boundary and first-boot `platform:bootstrap-root` in 0O.1A | **DONE (0O.1 + 0O.1A)** | — | none |
@@ -586,4 +586,55 @@ drill in a real, isolated non-production environment.
 Decisions: O3, O4, O6, O7, O8, O10, O11 resolved; **O1, O2, O5, O9,
 O12, O13, O14, O15, O16 open**. Phase 0O: **PARTIALLY READY**. Phase 0M:
 **BLOCKED**.
+
+## 19. Phase 0O.5 — Observability & Alerting Contract (2026-09-26)
+
+Documentation only (ADR 0051); nothing implemented, exported, collected or
+activated; no vendor chosen.
+
+- **O12 resolved:** a vendor-neutral external observability backend
+  (the application emits sanitized JSON logs, low-cardinality metrics,
+  health signals, alert definitions and runbooks; the deployment
+  collects, stores, evaluates and notifies); operational logs **30 days**;
+  operational metrics **90 days**; **no distributed tracing in v1**;
+  no tenant/person/record identifier as a metric label. Retention does not
+  change audit, legal or backup retention.
+- **ADR 0015 amended, not superseded:** the OTel data model stays the
+  compatibility target; v1 metrics are an OpenMetrics endpoint on a
+  private port scraped by a deployment collector (token = O4 secret; O5
+  untouched); logs are JSON on stderr; spans are not exported.
+- **Verified current state (79cfd5a):** logs are plain text; one metric
+  family (idempotency) written as log lines; `LogSanitizer` and
+  `ErrorReporter` have no production caller; raw exception text reaches
+  logs and `scheduler_heartbeats.last_error` from five sites and the
+  framework reporter; the production image keeps exception arguments in
+  traces (`zend.exception_ignore_args = 0`); inbound `X-Request-Id` is
+  unbounded (an over-255-character value would fail an audited write);
+  `RecordQueueHeartbeat` is registered twice; operations status watches 2
+  of 6 minute-cadence heartbeats and 2 of 3 queues, omits Communications,
+  Automation and outbox stale/failed state, and 500s when PostgreSQL is
+  down; the Gateway has no logging configuration. The historical "outbox
+  never `failed`" debt is resolved by 0O.4A.
+- **Contract:** fixed JSON log schema with stable event codes; central
+  sanitizing processor (Laravel logging `tap`) with extended key and value
+  redaction; safe exception logging; request ids
+  `^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$` or a new UUID; process-class
+  heartbeats with per-queue canary jobs; queue, outbox/reconciliation,
+  webhook, Communication, Automation, API and dependency metrics;
+  deployment-fed backup and restore-drill metrics; a three-level severity
+  model (SEV-1/2/3) and a 26-alert catalog with sourced thresholds
+  (O10-derived for backups: PITR age SEV-1 above 15 min, object copy SEV-1
+  above 24 h, drill overdue after 92 days); resilient operations status
+  over the same checks.
+- **Next:** Phase 0O.5A — Observability & Alerting Foundation (repository
+  only). Deploy-gated evidence for O12: telemetry reaching a real
+  backend, 30/90-day retention configured, alerts active and routed,
+  backup metrics connected, drill-overdue alert active.
+- **O16 boundary:** no production image may be pushed to a registry or
+  promoted before O16 is resolved.
+
+Decisions: O3, O4, O6, O7, O8, O10, O11, **O12** resolved; **O1, O2, O5,
+O9, O13, O14, O15, O16 open**. Phase 0O: **PARTIALLY READY — SOME
+CHECKPOINTS MAY START**. Phase 0M: **BLOCKED**. REAL RESTORE DRILL STILL
+OUTSTANDING.
 

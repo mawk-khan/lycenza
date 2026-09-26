@@ -154,7 +154,10 @@ token and re-check the capability before the provider is called
 the verified token, every model call is audited durably with
 identifiers and numbers only, and no output is returned if that audit
 cannot be written. Gateway logs and errors never carry prompts, outputs
-or bodies, and an external provider stays off unless
+or bodies (ADR 0051 §8 keeps this for production telemetry: JSON logs with
+the verified context token's `request_id` and the shared `traceparent`
+trace id for correlation, never prompts, outputs, bodies, credentials or
+tokens), and an external provider stays off unless
 `REAL_PROVIDERS_ENABLED` is exactly `true` — which is only permitted
 after the recorded approvals in
 `docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`. Only the offline

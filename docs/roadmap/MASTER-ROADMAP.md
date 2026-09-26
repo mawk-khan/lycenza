@@ -1415,6 +1415,18 @@ database/storage/restore verification commands, and runbooks
 policy; **the real restore drill is still outstanding**. Phase 0O stays
 PARTIALLY READY (`PHASE-0O-READINESS.md` §18).
 
+**0O.5 — Observability & Alerting Contract (2026-09-26).** ADR 0051
+resolves O12: a vendor-neutral external backend fed by sanitized JSON logs
+(30-day retention) and low-cardinality OpenMetrics metrics on a private
+scrape port (90-day retention), no tracing in v1, no identifier metric
+labels, a SEV-1/2/3 alert catalog with thresholds derived from runtime
+cadence and the O10 recovery objectives, and deployment-fed backup and
+restore-drill metrics. It amends ADR 0015 and records verified debt for
+Phase 0O.5A (duplicate queue-heartbeat listener, unwatched heartbeats and
+`notifications` queue, operations status failing during a database
+outage, raw exception text, unbounded request ids). Nothing is collected
+or activated; O16 must be resolved before any image registry push.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

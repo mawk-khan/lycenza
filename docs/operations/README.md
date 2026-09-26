@@ -15,6 +15,13 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 | [BACKUP-AND-RESTORE.md](BACKUP-AND-RESTORE.md) | PostgreSQL and object-storage backup requirements, the restore procedure, restore validation |
 | [RESTORE-DRILL-RECORD.md](RESTORE-DRILL-RECORD.md) | The drill record template (no drill has been performed) |
 
+Observability and alerting are contracted by ADR 0051
+(`docs/architecture/adr/0051-production-observability-alerting-contract.md`):
+alerts OBS-01…OBS-26 link to the runbooks above; Phase 0O.5A adds the alert
+index, rule specifications and runbooks for webhook/integration failures,
+Communication delivery failures, failed jobs and telemetry collection
+failure. No observability backend is connected.
+
 ## Status of operational evidence
 
 | Evidence (ADR 0050 §20) | Status |

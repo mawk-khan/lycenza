@@ -205,3 +205,16 @@ client cannot spoof its address for rate limiting or audit.
   idempotency concern from both this document and
   `docs/architecture/RELIABILITY.md`'s client `Idempotency-Key`
   contract — a future Fees/Payments module needs all three.
+
+## Integration telemetry (ADR 0051, Phase 0O.5)
+
+Webhook and partner-API telemetry never carries a destination URL,
+customer hostname, School id, delivery id, client key id, secret or
+signature as a metric label; per-delivery and per-client detail stays in
+logs (Confidential, 30-day retention) and the existing audit trail.
+Webhook alerts key on **overdue** eligible deliveries and on exhausted
+outcomes in aggregate — never on one customer endpoint's failures, which
+are legitimate and are that customer's concern. Partner authentication
+failures are counted by the authenticator's bounded outcome codes only.
+The metrics scrape token (0O.5A) is an ordinary production secret under
+ADR 0050 §4, not a partner or service credential, and is never logged.
