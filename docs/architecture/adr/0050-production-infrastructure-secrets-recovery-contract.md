@@ -531,3 +531,8 @@ ADR 0051 (vendor-neutral observability backend, 30-day logs, 90-day
 metrics, no tracing in v1, alert catalog including the O10 backup and
 restore-drill alerts). No production image may be pushed or promoted
 before O16 is resolved.
+
+**Note (Phase 0O.6, 2026-09-26):** O16 is resolved by ADR 0052. The release
+order gains a first step — supply-chain verification of PROMOTED digests
+before the maintenance window opens (ADR 0052 §3.19); images still may not
+be pushed or promoted before Phase 0O.6A's repository controls exist.

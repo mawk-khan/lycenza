@@ -11,7 +11,10 @@ supervise processes will do. No orchestrator manifest is committed.
 | Application | `infrastructure/docker/production/app.Dockerfile` | `apps/platform` | `php:8.3-fpm-bookworm` (+ `node:22-bookworm-slim`, `composer:2` build stages) |
 | AI Gateway | `infrastructure/docker/production/ai.Dockerfile` | `services/ai` | `python:3.12-slim-bookworm` |
 
-Base images are pinned by tag; digest pinning is the future O16 policy.
+Base images are pinned by tag today; ADR 0052 (O16) requires digest pinning
+(Phase 0O.6A), a final-image SPDX SBOM, vulnerability and secret/history
+scanning, provenance and a signature before any image is published or
+promoted.
 The local development Dockerfiles (`infrastructure/docker/*.Dockerfile`)
 stay local-only.
 

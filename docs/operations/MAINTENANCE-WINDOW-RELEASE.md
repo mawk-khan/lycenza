@@ -26,9 +26,13 @@ never worked on.
 
 ## Sequence
 
+0. **Artifact verification comes first (ADR 0052 §3.19).** The images to
+   deploy are PROMOTED digests whose SBOM, scan, provenance and signature
+   passed the aggregate verifier (Phase 0O.6A). Never open a maintenance
+   window to discover an unsigned or failing image.
 1. **Build once** from the released commit (both images), run
    `verify-images.sh` against them in CI or locally. Push to the registry
-   (deploy-gated).
+   (deploy-gated; after ADR 0052's verification, by digest).
 2. **Announce** the window.
 3. `console down --retry=60` (old image). Readiness goes 503; workers pause;
    the scheduler idles.

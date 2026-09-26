@@ -304,7 +304,7 @@ Other findings:
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | No | Product + operations | Real email |
 | O14 | Password reset for production accounts | ADR 0037: none exists | Product + security | Production operations |
 | O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | No | Product | S4 |
-| O16 | Dependency/vulnerability audit and image pinning policy | No | Security | Supply chain |
+| O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest | Security | Supply chain |
 
 No vendor or provider is chosen by this audit.
 
@@ -678,3 +678,39 @@ connected, the restore-drill overdue alert active. REAL RESTORE DRILL STILL
 OUTSTANDING. Decisions still open: **O1, O2, O5, O9, O13, O14, O15, O16**.
 Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M:
 **BLOCKED**. No production image may be pushed or promoted before O16.
+
+## 21. Phase 0O.6 — Supply Chain & Artifact Security Contract (2026-09-26)
+
+Documentation only (ADR 0052); nothing built for release, signed, pushed or
+promoted; no registry vendor, signing key or KMS chosen.
+
+- **O16 resolved:** immutable OCI digests; build once, verify, promote the
+  same digest (no per-environment rebuild); production bases pinned by
+  digest; every workflow action pinned to a commit SHA; deterministic
+  installs (Composer/npm lock gates, a hash-verified wheels-only Python
+  lock); SPDX JSON SBOM from the final image (Syft); Grype image scan with a
+  ≤ 24 h database plus `composer audit`/`npm audit`/`pip-audit`; release gate
+  CRITICAL blocks, HIGH with a fix blocks, HIGH without a fix needs a ≤ 30-day
+  exception; exceptions in a validated JSON file, never wildcard or
+  indefinite; source, image-filesystem, history, label and environment
+  secret scanning; in-toto/SLSA v1 provenance (no SLSA level claimed);
+  cosign-compatible signatures and attestations with custody chosen at
+  deployment; one aggregate fail-closed verifier and policy manifest; states
+  BUILT → VERIFIED → PUBLISHED → PROMOTED, production accepts PROMOTED
+  digests only; the complete regression qualifies every release commit.
+- **Audit findings for 0O.6A:** all production bases tag-only (`composer:2`
+  floating a major); all CI actions tag-referenced; the Gateway pins only 5
+  of 23 resolved packages and verifies no hashes; the image build runs
+  `npm ci` without the repository `.npmrc` (`ignore-scripts`); stale Composer
+  `allow-plugins`; Composer GitHub dists carry no `shasum` (recorded limit);
+  no image history/label check, SBOM, provenance, signing or vulnerability
+  scan. CI is read-only (`contents: read`), has no `pull_request_target`,
+  uploads nothing and holds no registry credential.
+- **Next:** Phase 0O.6A — Supply Chain & Artifact Security Foundation
+  (repository only). **No production image may be pushed or promoted before
+  its repository controls are complete**; the first push stays deploy-gated.
+
+Decisions: O3, O4, O6, O7, O8, O10, O11, O12, **O16** resolved (O12 and O16
+with deployment evidence outstanding); **O1, O2, O5, O9, O13, O14, O15
+open**. Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**. Phase 0M:
+**BLOCKED**. REAL RESTORE DRILL STILL OUTSTANDING.
