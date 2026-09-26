@@ -208,6 +208,7 @@ PY
 )"
 check "gateway packages are exactly services/ai/requirements.lock" test "$locked" = "$installed"
 check "no compiler in the gateway image (wheels only)" in_ai '! command -v gcc && ! command -v cc'
+check "gateway runs CPython 3.14 (Phase 0O.6C, CVE-2026-82049)" in_ai 'python -c "import sys; sys.exit(0 if sys.version_info[:2] == (3, 14) else 1)"'
 check "gateway TLS trust store is populated" in_ai 'python -c "import ssl,sys; sys.exit(0 if ssl.create_default_context().cert_store_stats()[\"x509_ca\"] > 0 else 1)"'
 check "gateway has no .env, tests or dev requirements" in_ai 'test ! -e /srv/ai/.env && test ! -e /srv/ai/tests && test ! -e /srv/ai/requirements-dev.txt && test -z "$(find /srv -name ".env*")"'
 

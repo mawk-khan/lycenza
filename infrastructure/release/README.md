@@ -167,12 +167,14 @@ base image of the Dockerfile.
 
 ## Current release status (Phase 0O.6B)
 
-Both production images still **FAIL** the vulnerability policy after the
-Phase 0O.6B remediation (Debian 13 bases, runtime minimization,
-FastAPI/Starlette): see
-`docs/security/release-remediation/0O.6B-RELEASE-VULNERABILITY-REMEDIATION.md`.
-No digest is VERIFIED; the exception file stays empty; proposed (unapproved)
-Gateway exception records live beside the remediation record, never here.
+Both production images still **FAIL** the vulnerability policy
+(`docs/security/release-remediation/`): after Phase 0O.6C the Gateway (CPython
+3.14.7) has 0 CRITICAL and 0 HIGH with a fix — only HIGH-without-fix findings
+awaiting a human exception decision (inactive decision pack) — and the
+application awaits an ABI decision for patched libcurl/libxml2. No digest is
+VERIFIED; the exception file stays empty; proposed records live beside the
+remediation records, never here. The pinned tool Python (lock freshness,
+pip-audit) is the Gateway's interpreter, CPython 3.14.7.
 
 ## Known limits (recorded, not claimed away)
 

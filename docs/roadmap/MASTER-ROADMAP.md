@@ -1470,6 +1470,14 @@ the official PHP binary (no Debian fix) and, for the Gateway, a CPython 3.12
 HIGH fixed only in 3.14 plus unapproved HIGH-without-fix exceptions. Nothing
 VERIFIED, pushed or promoted.
 
+**0O.6C — Patched Runtime Libraries & Python 3.14 (BLOCKED — RELEASE
+VULNERABILITY, 2026-09-26).** Gateway on CPython 3.14.7 (pydantic 2.12.0,
+the only forced change): 0 CRITICAL, 0 HIGH with a fix; residual Debian
+HIGH-without-fix set in an inactive decision pack. Application stopped before
+an ABI-breaking change: libxml2's HIGH fixes exist only in 2.15.4
+(`libxml2.so.16`), which the official PHP binary cannot load — owner decision
+(recommended: rebuild PHP 8.3.35 against curl 8.22.0 + libxml2 2.15.4).
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on
