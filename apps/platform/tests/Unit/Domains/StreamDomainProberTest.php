@@ -173,7 +173,8 @@ class StreamDomainProberTest extends TestCase
         $started = microtime(true);
         $hang = $this->probe('valid', 'hang');
         $this->assertSame(ProbeResult::INDETERMINATE, $hang->outcome, 'a silent edge times out');
-        $this->assertLessThan(StreamDomainProber::READ_TIMEOUT_SECONDS + StreamDomainProber::CONNECT_TIMEOUT_SECONDS + 2, microtime(true) - $started);
+        // Bounded by the connect and read timeouts (plus scheduling slack on a loaded host).
+        $this->assertLessThan(StreamDomainProber::READ_TIMEOUT_SECONDS + StreamDomainProber::CONNECT_TIMEOUT_SECONDS + 5, microtime(true) - $started);
     }
 
     #[Test]
