@@ -96,9 +96,12 @@ abstract class TestCase extends BaseTestCase
             return;
         }
 
-        DB::connection('pgsql_admin')->table('schools')
-            ->where('id', $school instanceof School ? $school->id : $school)
-            ->delete();
+        $id = $school instanceof School ? $school->id : $school;
+
+        // ADR 0054: `school_domains.school_id` is RESTRICT (domain history is
+        // kept); an administrative School deletion removes those rows first.
+        DB::connection('pgsql_admin')->table('school_domains')->where('school_id', $id)->delete();
+        DB::connection('pgsql_admin')->table('schools')->where('id', $id)->delete();
     }
 
     /**

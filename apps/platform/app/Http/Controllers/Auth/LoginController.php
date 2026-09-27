@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Auth;
 use App\Domain\Platform\Application\Elevation\ElevationEndReason;
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\ResolveSchoolContext;
+use App\Models\School;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\MfaChallengeService;
 use App\Support\Auth\SessionEndedResponder;
@@ -53,9 +55,16 @@ class LoginController extends Controller
         // (see DemoLoginPanel); it only prefills this same form.
         // `sessionEnded` is a one-request flash set when an open signed-in
         // page found its session gone (SessionEndedResponder).
+        // Phase 0O.8A (ADR 0054 section 8.5): on an ACTIVE School domain the
+        // Host is the intended School -- its name for branding only; no
+        // TenantContext before sign-in, and membership still decides access.
+        $hostSchoolId = $request->attributes->get(ResolveSchoolContext::HOST_SCHOOL_ATTRIBUTE);
+        $hostSchool = is_string($hostSchoolId) ? School::query()->find($hostSchoolId) : null;
+
         return Inertia::render('Auth/Login', [
             'demo' => $demoPanel->forCurrentEnvironment(),
             'sessionEnded' => $request->session()->get(SessionEndedResponder::FLASH_KEY) === true,
+            'hostSchool' => $hostSchool !== null ? ['name' => $hostSchool->name] : null,
         ]);
     }
 

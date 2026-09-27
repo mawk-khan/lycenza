@@ -1,6 +1,6 @@
 # ADR 0054: Custom School Domains & TLS Contract
 
-- Status: Accepted (contract only; implementation is Phase 0O.8A)
+- Status: Accepted; repository implementation Phase 0O.8A (see the amendment at the end). Deployment evidence outstanding.
 - Date: 2026-09-27 (Phase 0O.8)
 - Resolves: **O9** (`docs/architecture/PHASE-0O-READINESS.md` §8)
 - Amends:
@@ -878,3 +878,180 @@ regeneration, full `/app` load) is preserved.
   revocation and host-safe sessions; after 0O.8A plus its deployment
   evidence, none of these remains.
 - Still open: **O1, O2, O13, O14, O15**.
+
+## Amendment — Phase 0O.8A implementation (2026-09-27)
+
+The repository portion of O9 is **implemented**. The deployment evidence of
+§14 is still outstanding (rule 16). Decisions made during implementation,
+each within this contract unless it says it amends a section:
+
+1. **Schema and history** (`2026_10_24_090000`). `school_domains` evolves in
+   place (no parallel table):
+   - `domain` becomes `hostname` (CHECK: lowercase LDH, ≤ 253, no `xn--`
+     label), `type` is CHECK-constrained to `custom`, and `state` is the only
+     lifecycle truth;
+   - evidence columns (ownership/routing/TLS outcome and time, certificate
+     `notAfter`, SHA-256 fingerprint and issuer name), drift counters, and
+     terminal timestamps (`revoked_at` with `revocation_source`,
+     `expired_at`) are added;
+   - `school_id` is **`ON DELETE RESTRICT`**: the runtime role can delete
+     neither a School (ADR 0047) nor a domain row (DELETE revoked), so history
+     survives; only an administrative School deletion
+     (`TestCase::deleteSchoolAsAdmin()`) removes the School's domain rows
+     first. No orphan is possible;
+   - rows that existed before (never managed, never ownership-proven) become
+     terminal `revoked` history with `revocation_source = legacy`.
+
+2. **Primary invariant — the exact mechanism.** Three database layers plus
+   the service:
+   - a row CHECK: only an `active` row may be primary;
+   - a partial unique index: at most one primary per School;
+   - a `DEFERRABLE INITIALLY DEFERRED` constraint trigger
+     (`trg_school_domains_primary_invariant`, only when `state` or
+     `is_primary` changed) that checks **at COMMIT** that a School with any
+     active domain has exactly one primary — the cross-row "at least one"
+     half no CHECK or index can express — under the School's transaction
+     advisory lock, so two concurrent transactions cannot each commit half of
+     a swap;
+   - **lock order:** every writer takes the School's advisory lock
+     (`SchoolDomainService::lockSchool()`) **before** any row lock, and several
+     Schools in sorted order, so the commit-time re-acquisition is re-entrant.
+     The first ordering (row lock, then the commit-time advisory lock)
+     deadlocked in the real-process test of a check racing a regeneration;
+     that is how the order was found and fixed.
+
+   **Amends §3.6 and §7.3 (who picks the next primary):**
+   - a School revoking its **primary while another domain is active must name
+     the replacement** (the page asks; the service refuses
+     `replacement_required` otherwise) — never a silent primary-less state;
+   - a **drift suspension** or an **operator revocation** of the primary
+     hands it to the **oldest active alias** (audited
+     `school.domain.primary_changed`, outcome `primary_promoted`);
+   - with no other active domain the primary simply ends and links fall back
+     to the platform host.
+
+3. **Claims.** One transaction: lock the claiming School and the holder of a
+   stale pending claim (sorted), expire that stale claim (compared with the
+   application clock that wrote it), insert. The partial unique index decides
+   a same-hostname race (the loser gets "That domain is not available." — no
+   School named); the INSERT trigger's advisory lock plus count decides the
+   3-per-School limit. Both proven with two real, overlapping OS processes.
+
+4. **DNS client and PSL** (both under O16):
+   - **`mikepultz/netdns2` v2.0.8** (MIT, no dependencies, no shelling out):
+     2 s per query, 2 attempts (the second to the next resolver), 10 s per
+     check, CNAME depth ≤ 8, ≤ 32 TXT RRs and ≤ 32 addresses. v1 sends plain
+     512-byte UDP with the library's automatic TCP retry on truncation
+     (within the §4.5 bound) instead of EDNS. NXDOMAIN and NODATA are
+     `absent`; SERVFAIL, REFUSED, timeouts, loops and floods are
+     `indeterminate`, never `absent`. Proven against a local wire-format DNS
+     responder.
+   - **`jeremykendall/php-domain-parser` 6.4.0** (MIT, no `intl` needed for
+     ASCII), with the **committed snapshot**
+     `resources/public-suffix-list/public_suffix_list.dat` (version
+     2026-09-24_13-26-36_UTC, commit `a179a48c`, sha256 `257b298d…503e`,
+     recorded in `snapshot.json` and **verified before every parse**, so an
+     edited list fails closed). A name under an unknown TLD is refused too.
+
+5. **TLS probe.** `StreamDomainProber` (PHP OpenSSL streams): IP-pinned to at
+   most two routing-validated addresses, SNI + peer and peer-name
+   verification against the system CA bundle, TLS 1.2/1.3 only, a fresh
+   256-bit nonce, `HTTP/1.0` (no chunking), ≤ 8 KiB read, redirects never
+   followed. Outcomes: `pass`, `tls_invalid`, `proof_mismatch`,
+   `indeterminate`. Proven against a local TLS "edge" with throwaway
+   certificates (valid, expired, not yet valid, wrong name, untrusted CA,
+   TLS < 1.2, wrong proof, 404, redirect, silent). No switch relaxes
+   verification.
+
+6. **Probe host class.** A `tls_pending`, `active` or `suspended` hostname of
+   an active School may reach **only** `/.well-known/lycenza-domain-probe`
+   before it is active (421 for everything else). The route belongs to no
+   middleware group (no session, cookie or CSRF), and the production nginx
+   passes that one dot-path to the application.
+
+7. **Health (amends §8.1 `health`).** Health paths are served on the
+   platform, internal and development hosts and on **IP-literal** Hosts
+   (orchestrators probe by address). On **any other name** they answer a
+   fixed 404 **without a domain lookup**, so liveness never depends on
+   PostgreSQL (CLAUDE.md rule 55); a School host therefore still never
+   serves health.
+
+8. **Internal hosts.** `INTERNAL_HOSTS` (exact, multi-label names) serve
+   `/api/internal/ai/*` and health only. The platform host serves the
+   internal AI routes only in `local`/`testing` on a development host.
+   Production refuses to boot with the AI Gateway configured but no internal
+   host (`internal_hosts_missing`).
+
+9. **Cross-host sign-in handoff (new; extends §8.7).** Host-only cookies
+   cannot follow a switch to another origin. The switch therefore issues a
+   **one-time ticket** (`App\Support\Auth\CrossHostHandoff`):
+   - 256 random bits (43 base64url characters), opaque; the record lives
+     server-side in the handoff store (Redis in production,
+     `SESSION_HANDOFF_STORE`, guard `session_handoff_store_not_redis`) under
+     sha256(ticket), for **60 s**;
+   - bound to the user, the **source session**, the exact target School (or
+     the platform), the exact target hostname and the purpose
+     `school-switch`;
+   - redeemed exactly once (an atomic `SET NX` of a `used` marker — 8 real
+     processes on real Redis, exactly one redeems);
+   - `GET /session/handoff?ticket=`: consumed before anything renders, then an
+     immediate 303 to `/app`; `no-store` and `Referrer-Policy: no-referrer`;
+     the ticket never reaches a log (LogSanitizer redacts `ticket=`; the
+     production nginx access log records the path only, never a query
+     string).
+
+   Redemption is **not** authority. It re-checks the exact Host (and, for a
+   School, that this Host is still its canonical origin), that the source
+   session is still signed in as the same user, the user, the School's
+   status and the membership. It refuses when a **different** user is signed
+   in on the target host (the login-CSRF / session-confusion defence). It
+   invalidates the target host's session, signs in with a fresh id (a session
+   id is never taken from the URL or copied between hosts), sets the School
+   selection and carries the source's MFA assurance time unchanged (a stale
+   one is not carried). A store outage refuses cross-host switches only;
+   same-host work never touches the store.
+
+10. **Logout.** Sessions are host-local: logout ends the session of the host
+    it runs on. There is no cross-domain global logout in v1 (no shared
+    cookie, by design); a session on another School host ends on its own
+    logout or expiry. Redemption requires the **source** session to be
+    signed in still, so signing out before redeeming voids a pending ticket.
+
+11. **URLs.** `App\Support\Domains\CanonicalOrigin` is the one source of
+    absolute School URLs (switching, invitation links, future O14 recovery):
+    the ACTIVE primary of an active School, else `APP_URL`. In production the
+    request root URL is forced to the canonical origin. An architecture test
+    forbids request-Host readers anywhere but the Host boundary and
+    `url()`/`route()` in mail, notifications, jobs and Application services.
+
+12. **Checks.** "Check now" (per School 6/min and 30/h, per domain 3/min) and
+    the scheduler (`platform:domains-check`, every minute, bounded by
+    `DOMAIN_CHECKS_PER_RUN`) **queue** `CheckSchoolDomainJob` (tenant-scoped,
+    1 try, 60 s timeout); no DNS or TLS work runs in a web request or in the
+    scheduler. A check never starts another step after 15 s. A non-active
+    School's domains are skipped, never changed.
+
+13. **Disabled mode.** `CUSTOM_DOMAINS_ENABLED=false` (the default) is a
+    complete, safe mode: nothing is claimed or resolved, and the Host
+    boundary still applies. Only enabled production needs the edge target,
+    a probe key (≥ 32 characters, no development prefix) and public DNS
+    resolvers.
+
+14. **Fakes.** `FakeDomainDnsResolver` / `FakeDomainProber` are bound only with
+    `DOMAIN_FAKES_ENABLED` **and** `local`/`testing`; production refuses the
+    flag. DDEV scripts them with `platform:domain-fake-dns` (records live in
+    the cache store, so the CLI and web agree). The fake prober still computes
+    and checks the real HMAC, so a missing probe key fails there too.
+
+15. **Findings of §15 — all closed.** (1) Host validation: the 421 boundary,
+    and the invitation link now uses the canonical origin. (2) `/api/*`
+    never takes a School from a Host. (3) A domain never overrides the
+    platform-host session, and a School host refuses a session naming another
+    School. (4) The weak model is replaced (above). Each was reproduced by a
+    test on the pre-fix code before it was fixed.
+
+**Deployment evidence still outstanding (§14):** the real edge target; a
+real non-production domain verified; a certificate issued and renewed;
+HTTP → HTTPS at the edge; private-key custody outside the application; drift
+monitoring active; one revoke/re-add drill. Runbook:
+`docs/operations/CUSTOM-DOMAINS.md`.

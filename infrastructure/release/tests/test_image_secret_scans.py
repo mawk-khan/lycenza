@@ -47,6 +47,10 @@ class ConfigScanTest(unittest.TestCase):
             "credential shape in a label": config(labels={"note": "lyc_pat_0123456789abcdefABCDEF"}),
             "secret-shaped label": config(labels={"deploy.api-token": "x"}),
             "app key in cmd": config(cmd=["sh", "-c", "APP_KEY=base64:" + "A" * 44 + " web"]),
+            # ADR 0054: the custom-domain probe key is a secret-shaped setting, and
+            # the committed development value is a canary wherever it appears.
+            "domain probe key env": config(env=["DOMAIN_PROBE_KEY=canary"]),
+            "committed development probe key": config(history=["RUN /bin/sh -c echo " + "dev-local-only-domain-" + "probe-key-change-me-0000 # buildkit"]),
         }
         for name, cfg in cases.items():
             with self.subTest(name):

@@ -148,6 +148,7 @@ APP_ENV_ARGS=(
     -e DOCUMENTS_DISK=s3 -e COMMUNICATION_ATTACHMENTS_DISK=s3
     -e AWS_BUCKET=lycenza-verify -e AWS_DEFAULT_REGION=us-east-1 -e AWS_ENDPOINT=https://objects.invalid
     -e TRUSTED_PROXIES=10.0.0.0/8
+    -e INTERNAL_HOSTS=platform-internal.verify.invalid
 )
 
 in_app() { drun --rm --entrypoint sh "$APP_IMAGE" -c "$1"; }
@@ -225,6 +226,36 @@ drun -d --name "${RUN_ID}-web-proxied" --network "$NETWORK" "${APP_ENV_ARGS[@]}"
 proxied() { docker exec "${RUN_ID}-web-proxied" php -r '$c=stream_context_create(["http"=>["ignore_errors"=>true,"header"=>"X-Forwarded-Proto: https"]]); @file_get_contents("http://127.0.0.1:8080/api/health/live",false,$c); echo implode("\n",$http_response_header ?? []);'; }
 for _ in $(seq 1 30); do proxied 2>/dev/null | grep -q '200' && break; sleep 1; done
 check "HSTS through a trusted proxy" grep -qi '^strict-transport-security: max-age=31536000$' <<<"$(proxied 2>/dev/null | tr -d '\r' || true)"
+
+# Phase 0O.8A (ADR 0054): the Host boundary and custom-domain safety in the image.
+misdirected="$(http /login 'Host: attacker.invalid' 2>/dev/null || true)"
+check "an unknown Host is refused with 421 before any cookie (ADR 0054)" grep -q "HTTP/1.1 421" <<<"$misdirected"
+check "that refusal sets no cookie" test -z "$(grep -i '^set-cookie' <<<"$misdirected" || true)"
+check "the probe dot-path reaches the application's Host boundary, not nginx's dotfile deny" grep -q "HTTP/1.1 421" <<<"$(http '/.well-known/lycenza-domain-probe?n=x' 'Host: attacker.invalid' 2>/dev/null || true)"
+check "internal AI routes are absent on the platform host (404)" grep -q "HTTP/1.1 404" <<<"$(http /api/internal/ai/completions/authorize 'Host: verify.invalid' 2>/dev/null || true)"
+check "the internal host serves no browser page (404)" grep -q "HTTP/1.1 404" <<<"$(http /login 'Host: platform-internal.verify.invalid' 2>/dev/null || true)"
+check "health answers on an IP Host, never on an unknown name" bash -c 'grep -q "HTTP/1.1 200" <<<"$1" && grep -q "HTTP/1.1 404" <<<"$2"' _ "$live" "$(http /api/health/live 'Host: school.attacker.invalid' 2>/dev/null || true)"
+HANDOFF_CANARY="verifyhandoffcanary$(random)"
+http "/session/handoff?ticket=${HANDOFF_CANARY}" 'Host: attacker.invalid' >/dev/null 2>&1 || true
+sleep 1
+web_access="$(docker logs "${RUN_ID}-web" 2>&1 || true)"
+check "the access log records paths, never query strings (a handoff ticket never reaches it)" bash -c 'grep -q "/session/handoff" <<<"$1" && ! grep -qF "$2" <<<"$1"' _ "$web_access" "$HANDOFF_CANARY"
+for unsafe in DOMAIN_FAKES_ENABLED=true:domain_fakes_enabled DOMAIN_ALLOW_DEVELOPMENT_HOSTS=true:domain_development_hosts_enabled SESSION_DOMAIN=.verify.invalid:session_domain_shared INTERNAL_HOSTS=web:domain_host_list_invalid; do
+    refusal="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e "${unsafe%%:*}" "$APP_IMAGE" web 2>&1 || true)"
+    check "production refuses ${unsafe%%=*} (${unsafe##*:})" grep -q "${unsafe##*:}" <<<"$refusal"
+done
+PROBE_CANARY="dev-local-only-domain-probe-key-change-me-0000"
+enabled_refusal="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e CUSTOM_DOMAINS_ENABLED=true -e DOMAIN_PROBE_KEY="$PROBE_CANARY" "$APP_IMAGE" web 2>&1 || true)"
+check "enabled custom domains need an edge target, a real probe key and public resolvers" bash -c 'for code in domain_edge_target_missing domain_probe_key_invalid domain_dns_resolvers_missing; do grep -q "$code" <<<"$1" || exit 1; done' _ "$enabled_refusal"
+check "that refusal never prints the probe key" test -z "$(grep -F "$PROBE_CANARY" <<<"$enabled_refusal" || true)"
+check "the pinned Public Suffix List works without intl (ASCII-only v1)" drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" --entrypoint php "$APP_IMAGE" -r '
+    require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+    $psl = app(App\Support\Domains\PublicSuffixPolicy::class); $psl->assertRegistrable("erp.northfield.co.uk");
+    try { $psl->assertRegistrable("co.uk"); exit(1); } catch (App\Support\Domains\HostnameRejected $e) {}
+    exit(extension_loaded("intl") ? 1 : 0);'
+check "the DNS client loads without ext-sockets (unconfigured is indeterminate, never absent)" drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" --entrypoint php "$APP_IMAGE" -r '
+    require "vendor/autoload.php";
+    exit((new App\Support\Domains\Dns\NetDns2DomainResolver([]))->txt("_lycenza-verification.example.org")->isIndeterminate() ? 0 : 1);'
 
 # Phase 0O.5A (ADR 0051): structured logs and the private metrics listener.
 log_line="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e PROCESS_ROLE=console --entrypoint php "$APP_IMAGE" -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); Illuminate\Support\Facades\Log::info("verify.images.structured", ["password" => "canary-image-pw"]);' 2>&1 | grep '"event_code":"verify.images.structured"' || true)"
@@ -462,7 +493,9 @@ check "platform -> gateway: a replay to the same Gateway process is refused" gre
 # instance keeps its maintenance flag in Redis (still a shared store); a
 # rejected context token proves authentication passed (context_invalid, not
 # service_authentication_failed); a replay is refused through Redis.
-drun -d --name "${RUN_ID}-web-internal" --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e APP_MAINTENANCE_STORE=redis "$APP_IMAGE" web >/dev/null
+# ADR 0054 section 8.3: the internal AI routes answer only on the configured
+# internal host, so the Gateway calls this web role by that private name.
+drun -d --name "${RUN_ID}-web-internal" --network "$NETWORK" --network-alias platform-internal.verify.invalid "${APP_ENV_ARGS[@]}" -e APP_MAINTENANCE_STORE=redis "$APP_IMAGE" web >/dev/null
 for _ in $(seq 1 30); do docker exec "${RUN_ID}-web-internal" php -r 'exit(@file_get_contents("http://127.0.0.1:8080/api/health/live") === false ? 1 : 0);' 2>/dev/null && break; sleep 1; done
 gateway_call() { # mode: signed | bearer | replay | wrong-audience
     drun --rm --network "$NETWORK" "${GATEWAY_ENV[@]}" --entrypoint /opt/venv/bin/python "$AI_IMAGE" -c '
@@ -487,7 +520,7 @@ def send():
     except urllib.error.HTTPError as e:
         return f"{e.code} {e.read().decode()}"
 first = send()
-print(send() if mode == "replay" else first)' "${RUN_ID}-web-internal" "$1"
+print(send() if mode == "replay" else first)' platform-internal.verify.invalid "$1"
 }
 check "gateway -> platform: a signed ai-gateway assertion authenticates (the context check then decides)" grep -q '^401 {"error":{"code":"context_invalid"}}' <<<"$(gateway_call signed 2>&1 || true)"
 check "gateway -> platform: any other credential gets the uniform 401" grep -q '^401 {"error":{"code":"service_authentication_failed"}}' <<<"$(gateway_call bearer 2>&1 || true)"

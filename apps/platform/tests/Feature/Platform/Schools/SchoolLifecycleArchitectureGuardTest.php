@@ -29,6 +29,8 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'DeliverWebhookJob.php' => 'app/Jobs/DeliverWebhookJob.php',
         'ProcessCommunicationDeliveryJob.php' => 'app/Jobs/ProcessCommunicationDeliveryJob.php',
         'RunAutomationExecutionJob.php' => 'app/Domain/Automation/Application/AutomationExecutionService.php',
+        // Phase 0O.8A: a non-active School's domain checks are skipped (ADR 0054 section 7.1).
+        'CheckSchoolDomainJob.php' => 'app/Domain/Platform/Application/Domains/SchoolDomainCheckService.php',
     ];
 
     /** Commands that walk every School and why they may include non-active ones. */

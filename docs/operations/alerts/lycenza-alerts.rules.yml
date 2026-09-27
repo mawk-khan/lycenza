@@ -49,7 +49,7 @@ groups:
           summary: 'AI Gateway not ready (optional subsystem; never pages).'
           runbook: 'docs/operations/PRODUCTION-IMAGES-AND-PROCESSES.md'
       - alert: LycenzaOBS05High
-        expr: 'min by () (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries"}) > 300 or absent(lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries"})'
+        expr: 'min by () (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"}) > 300 or absent(lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"})'
         labels:
           severity: high
           sev: SEV-2
@@ -59,7 +59,7 @@ groups:
           summary: 'Scheduler stopped: every minute-cadence task heartbeat is stale.'
           runbook: 'docs/operations/MAINTENANCE-WINDOW-RELEASE.md'
       - alert: LycenzaOBS05Critical
-        expr: 'min by () (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries"}) > 1800'
+        expr: 'min by () (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"}) > 1800'
         labels:
           severity: critical
           sev: SEV-1
@@ -69,7 +69,7 @@ groups:
           summary: 'Scheduler stopped: every minute-cadence task heartbeat is stale.'
           runbook: 'docs/operations/MAINTENANCE-WINDOW-RELEASE.md'
       - alert: LycenzaOBS06Warning
-        expr: '(time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries"}) > 300 or (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"idempotency-prune|webhook-deliveries-prune"}) > 93600'
+        expr: '(time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"}) > 300 or (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"idempotency-prune|webhook-deliveries-prune"}) > 93600'
         labels:
           severity: warning
           sev: SEV-3
@@ -79,7 +79,7 @@ groups:
           summary: 'A scheduled task is stale while the scheduler runs.'
           runbook: 'docs/operations/PRODUCTION-IMAGES-AND-PROCESSES.md'
       - alert: LycenzaOBS07Warning
-        expr: 'max by (scheduled_task) (rate(lycenza_scheduler_task_runs_total{outcome="success",scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries"}[10m])) * 60 > 1.5'
+        expr: 'max by (scheduled_task) (rate(lycenza_scheduler_task_runs_total{outcome="success",scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"}[10m])) * 60 > 1.5'
         labels:
           severity: warning
           sev: SEV-3
@@ -363,3 +363,43 @@ groups:
         annotations:
           summary: 'Service-to-service authentication failing, or a service key near its 90-day limit.'
           runbook: 'docs/operations/SERVICE-KEY-ROTATION.md'
+      - alert: LycenzaOBS28Warning
+        expr: 'sum(increase(lycenza_domain_transitions_total{to="suspended"}[1h])) > 0'
+        labels:
+          severity: warning
+          sev: SEV-3
+          obs_id: OBS-28
+          threshold_source: 'A'
+        annotations:
+          summary: 'A custom School domain was suspended (ownership, routing or TLS drift confirmed).'
+          runbook: 'docs/operations/CUSTOM-DOMAINS.md'
+      - alert: LycenzaOBS29Warning
+        expr: 'min(lycenza_domain_certificate_min_days_remaining) <= 21'
+        labels:
+          severity: warning
+          sev: SEV-3
+          obs_id: OBS-29
+          threshold_source: 'A'
+        annotations:
+          summary: 'An active custom domain''s certificate is close to expiry (edge renewal not happening).'
+          runbook: 'docs/operations/CUSTOM-DOMAINS.md'
+      - alert: LycenzaOBS29High
+        expr: 'min(lycenza_domain_certificate_min_days_remaining) <= 7'
+        labels:
+          severity: high
+          sev: SEV-2
+          obs_id: OBS-29
+          threshold_source: 'A'
+        annotations:
+          summary: 'An active custom domain''s certificate is close to expiry (edge renewal not happening).'
+          runbook: 'docs/operations/CUSTOM-DOMAINS.md'
+      - alert: LycenzaOBS30Warning
+        expr: 'max(lycenza_domain_indeterminate_max_age_seconds) >= 259200'
+        labels:
+          severity: warning
+          sev: SEV-3
+          obs_id: OBS-30
+          threshold_source: 'A'
+        annotations:
+          summary: 'Custom-domain checks indeterminate for 3 days (resolver or network trouble; never suspends).'
+          runbook: 'docs/operations/CUSTOM-DOMAINS.md'

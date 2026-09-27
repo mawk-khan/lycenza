@@ -18,6 +18,9 @@ const props = defineProps<{
     // True for one page load after an open signed-in page found its
     // session gone (expired, or signed out elsewhere).
     sessionEnded?: boolean;
+    // Phase 0O.8A (ADR 0054 section 8.5): on a School's own web address, that
+    // School's name (branding only -- signing in still needs membership).
+    hostSchool?: { name: string } | null;
 }>();
 
 const form = useForm({
@@ -55,6 +58,9 @@ function submit() {
 <template>
     <main class="mx-auto max-w-sm p-8 font-sans text-slate-900">
         <h1 class="text-xl font-semibold">Sign in</h1>
+        <p v-if="hostSchool" class="mt-1 text-sm text-slate-600" data-testid="host-school">
+            {{ hostSchool.name }}
+        </p>
 
         <p
             v-if="sessionEnded"

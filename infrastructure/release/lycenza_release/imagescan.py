@@ -33,6 +33,8 @@ CANARIES = (
     "dev-local-only-context-signing-key-change-me",
     "dev-local-only-contact-lookup-hmac-key-change-me",
     "dev-local-only-statutory-identifier-lookup-hmac-key-change-me",
+    # ADR 0054: the committed DEVELOPMENT custom-domain probe key.
+    "dev-local-only-domain-probe-key-change-me-0000",
     # ADR 0053: the committed DEVELOPMENT service keys' private seeds (JWK "d"):
     # no image may carry them, not even in a guard (guards match public keys).
     "XZoBPMZruZQzihxKjIBvRRf7cuG1E1zAoq2IWtvQgKI",

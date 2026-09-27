@@ -4,7 +4,7 @@ namespace Tests\Feature\ServiceAuth;
 
 use App\Http\Middleware\AuthenticateServiceAssertion;
 use App\Http\Middleware\DevOnlySchoolHeaderResolver;
-use App\Models\SchoolDomain;
+use App\Models\School;
 use App\Support\Ai\AiContextTokenService;
 use App\Support\Observability\LogSanitizer;
 use App\Support\Observability\Metrics\MetricStore;
@@ -16,6 +16,7 @@ use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CapturesStructuredLogs;
+use Tests\Concerns\CreatesSchoolDomains;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\SignsServiceAssertions;
 use Tests\TestCase;
@@ -28,7 +29,7 @@ use Tests\TestCase;
  */
 class ServiceAssertionMiddlewareTest extends TestCase
 {
-    use CapturesStructuredLogs, CreatesTenancyFixtures, SignsServiceAssertions;
+    use CapturesStructuredLogs, CreatesSchoolDomains, CreatesTenancyFixtures, SignsServiceAssertions;
 
     private const ECHO = '/api/internal/ai/tools/school-echo';
 
@@ -196,7 +197,7 @@ class ServiceAssertionMiddlewareTest extends TestCase
     }
 
     #[Test]
-    public function neither_a_verified_school_domain_nor_a_school_header_sets_context_on_a_service_route(): void
+    public function neither_a_school_domain_nor_a_school_header_sets_context_on_a_service_route(): void
     {
         // A probe under a cataloged route name, so it passes route authorization.
         Route::middleware(['api', 'service-auth'])->withoutMiddleware([DevOnlySchoolHeaderResolver::class])
@@ -204,11 +205,15 @@ class ServiceAssertionMiddlewareTest extends TestCase
             ->name('api.internal.ai.tools.school-echo');
         Route::getRoutes()->refreshNameLookups();
         [, $schoolId] = $this->context();
-        SchoolDomain::query()->create(['school_id' => $schoolId, 'domain' => 'localhost', 'verified_at' => now()]);
         config(['tenancy.allow_dev_header_override' => true]);
 
         $this->internalPost('/api/internal/ai/probe', ['x' => 1], $this->gatewaySigner($this->gatewayKey), ['X-School-Id' => $schoolId])
             ->assertOk()->assertExactJson(['hasSchool' => false]);
+
+        // ADR 0054 section 8.3: a School's ACTIVE custom domain never even
+        // reaches an internal route -- the Host boundary answers first.
+        $this->createSchoolDomain(School::query()->findOrFail($schoolId), 'erp.service-auth-school.org');
+        $this->postJson('http://erp.service-auth-school.org/api/internal/ai/probe', ['x' => 1])->assertNotFound();
     }
 
     #[Test]

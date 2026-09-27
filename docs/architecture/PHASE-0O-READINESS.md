@@ -297,7 +297,7 @@ Other findings:
 | O6 | Runtime role name: keep `school_os_app` as a production contract, or generalize the code | **RESOLVED — ADR 0050 (Phase 0O.4)** | Engineering | Production DB provisioning |
 | O7 | API client model: who gets `/api/v1` tokens and how (mobile login token endpoint? partner keys? OAuth?), expiry, abilities | **RESOLVED — ADR 0049 (Phase 0O.2)**; lifetimes V1–V4 are owner values still required | Product + security | S1 |
 | O8 | Object storage: provider, region, encryption, versioning, lifecycle | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
-| O9 | Custom School domains in production: ownership verification, TLS | **RESOLVED — ADR 0054 (Phase 0O.8)**: browser-only School surface; persistent DNS TXT ownership; explicit lifecycle; edge-owned TLS proven by a domain probe; host-only sessions; 421 for unknown/non-active hosts; implementation Phase 0O.8A | Product + operations | Domain routing in production |
+| O9 | Custom School domains in production: ownership verification, TLS | **RESOLVED — ADR 0054 (Phase 0O.8)**: browser-only School surface; persistent DNS TXT ownership; explicit lifecycle; edge-owned TLS proven by a domain probe; host-only sessions; 421 for unknown/non-active hosts. **Repository implementation COMPLETE (Phase 0O.8A, §30)**; deployment evidence outstanding | Product + operations | Domain routing in production |
 | O10 | Backup policy, RPO/RTO, restore drills | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | Any production deployment |
 | O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
@@ -1097,6 +1097,63 @@ closes the four recorded findings (ADR 0054 §15).
 
 **Exception clock:** the VERIFIED artifacts' exception records expire
 **2026-10-10** and **2026-10-26**; O9 renews nothing.
+
+- Decisions **O1, O2, O13, O14, O15** remain open.
+- Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- The **real restore drill is still outstanding**.
+
+## 30. Phase 0O.8A — Custom School Domains & TLS Foundation (COMPLETE — repository, 2026-09-27)
+
+ADR 0054 is **implemented in the repository** (implementation amendment in
+the ADR; runbook `docs/operations/CUSTOM-DOMAINS.md`; CLAUDE.md rule 88).
+Custom domains are **off by default** (`CUSTOM_DOMAINS_ENABLED=false`, a
+complete, safe mode); DDEV and the test suite run them with double-guarded
+fake DNS and TLS.
+
+**The four ADR 0054 §15 findings, each reproduced by a test on the pre-fix
+code first, are closed:**
+1. any Host was accepted and the guardian invitation link followed it —
+   now one fixed **421** before any session, and every School link comes
+   from the stored canonical origin;
+2. `/api/*` took a School from the Host — never now;
+3. a verified domain overrode the session School — never on the platform
+   host; a School host refuses a session naming another School;
+4. the weak `school_domains` model — replaced.
+
+**What exists now:**
+- **Host boundary:** exact classification right after trusted proxies
+  (platform + aliases, `INTERNAL_HOSTS`, ACTIVE School domain, alias → 308,
+  probe path, IP-literal health); a closed School-host surface; no domain
+  lookup for health on a named host (rule 55).
+- **Domains:** canonical ASCII-only hostnames, the pinned PSL
+  (`jeremykendall/php-domain-parser` 6.4.0; snapshot sha256 verified before
+  use), reserved hosts; one claiming row per hostname, ≤ 3 per School; the
+  database-enforced lifecycle; the primary invariant (row CHECK + partial
+  unique index + a deferred COMMIT-time constraint trigger under a per-School
+  advisory lock, with an advisory-first lock order found by a real-process
+  deadlock); history kept (`ON DELETE RESTRICT`, no runtime DELETE).
+- **Evidence:** persistent DNS TXT ownership through a bounded DNS client
+  (`mikepultz/netdns2` 2.0.8), separate routing validation (edge CNAME or
+  address set; any non-public answer blocks), an IP-pinned TLS ≥ 1.2 probe
+  with a per-deployment HMAC; drift suspension on the frozen thresholds and
+  automatic recovery; queued, rate-limited checks.
+- **Sessions:** host-only cookies kept; a one-time, 60 s, server-side
+  **cross-host sign-in handoff** for School switches (continuity, never
+  authority; login-CSRF defence; never logged; exactly one of 8 real-Redis
+  redemptions succeeds).
+- **Management and operations:** `school.domains.view`/`.manage` with fresh
+  MFA, the School page, `platform:domains-edge-desired`,
+  `platform:domain-probe`, `platform:domain-revoke`, OBS-28–30, production
+  guards, `verify-images.sh` checks.
+
+**Deployment evidence OUTSTANDING (rule 16):** the real edge target; a real
+non-production domain verified; a certificate issued and renewed; HTTP →
+HTTPS at the edge; private-key custody outside the application; drift
+monitoring active; one revoke/re-add drill.
+
+**Qualification:** recorded in §31 (the qualified commit's digests).
 
 - Decisions **O1, O2, O13, O14, O15** remain open.
 - Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.

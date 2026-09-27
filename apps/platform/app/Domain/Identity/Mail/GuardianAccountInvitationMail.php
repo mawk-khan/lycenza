@@ -5,6 +5,7 @@ namespace App\Domain\Identity\Mail;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Identity\Infrastructure\GuardianAccountInvitation;
 use App\Models\School;
+use App\Support\Domains\CanonicalOrigin;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -52,7 +53,9 @@ class GuardianAccountInvitationMail extends Mailable
             with: [
                 'schoolName' => $this->school->name,
                 'guardianFirstName' => $this->guardian->first_name,
-                'acceptanceUrl' => url("/invitations/{$this->school->id}/{$this->plaintextToken}"),
+                // ADR 0054 section 8.9: the School's stored canonical origin --
+                // never the URL helper, which would follow the request's Host.
+                'acceptanceUrl' => app(CanonicalOrigin::class)->schoolUrl($this->school, "invitations/{$this->school->id}/{$this->plaintextToken}"),
                 'expiresAt' => $this->invitation->expires_at,
             ],
         );

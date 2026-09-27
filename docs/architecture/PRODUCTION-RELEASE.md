@@ -263,11 +263,25 @@ account's password has no in-app recovery yet.
 ## 7. What stays open
 
 O3, O4, O5, O6, O7, O8, O9, O10, O11, O12 and O16 are resolved (ADR 0049, ADR 0050,
-ADR 0051, ADR 0052, ADR 0053, ADR 0054; O9's implementation is Phase 0O.8A:
-custom School domains stay unsupported in production until then). Still open: O1 (definition of done — including a real
-restore drill), O2 (payments)
-(custom domains), O13 (email), O14 (password reset) and O15 (partner
-integrations). **No production image is pushed to a registry or promoted
+ADR 0051, ADR 0052, ADR 0053, ADR 0054; O9's repository implementation is
+Phase 0O.8A, and its deployment evidence is outstanding). Still open: O1
+(definition of done — including a real restore drill), O2 (payments), O13
+(email), O14 (password reset) and O15 (partner integrations).
+
+**Hosts and custom domains (ADR 0054, implemented in 0O.8A):** every Host is
+classified exactly; anything unexpected answers 421. Production refuses to
+boot (codes only) with a shared `SESSION_DOMAIN` (`session_domain_shared`),
+a non-https or malformed `APP_URL` (`platform_url_invalid`), the development
+Host or fake DNS/TLS switches (`domain_development_hosts_enabled`,
+`domain_fakes_enabled`), a malformed host list (`domain_host_list_invalid`),
+a non-Redis handoff store (`session_handoff_store_not_redis`), or the AI
+Gateway configured without `INTERNAL_HOSTS` (`internal_hosts_missing`). Only
+with `CUSTOM_DOMAINS_ENABLED=true` does it also require the edge target
+(`domain_edge_target_missing`/`_invalid`, public `DOMAIN_EDGE_ADDRESSES`),
+`DOMAIN_PROBE_KEY` (≥ 32 characters, an `app_runtime` secret;
+`domain_probe_key_invalid`) and public `DOMAIN_DNS_RESOLVERS`
+(`domain_dns_resolvers_missing`/`_invalid`). Disabled is a complete, safe
+mode. See `docs/operations/CUSTOM-DOMAINS.md`. **No production image is pushed to a registry or promoted
 before Phase 0O.6A's repository controls are complete**, and then only by an
 authorized operator. Those controls now exist (Phase 0O.6A): **NO PRODUCTION
 REGISTRY IS CONFIGURED, NO REAL SIGNING IDENTITY/KEY IS CONFIGURED, NO

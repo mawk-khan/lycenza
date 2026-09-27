@@ -3,6 +3,8 @@
 namespace App\Support\Observability\Metrics;
 
 use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Support\Domains\DomainState;
+use App\Support\Domains\DomainTelemetry;
 use App\Support\Observability\QueueName;
 use App\Support\ServiceAuth\ServiceAuthContract;
 use App\Support\ServiceAuth\ServiceAuthTelemetry;
@@ -30,6 +32,8 @@ final class MetricCatalog
         'recovery_source', 'backup_store', 'state', 'dependency', 'operation', 'sqlstate_class', 'check', 'result', 'component',
         // ADR 0053: service-to-service authentication (closed catalogs).
         'direction', 'service',
+        // ADR 0054: custom-domain lifecycle target state (closed).
+        'to',
     ];
 
     public const REQUEST_SURFACES = ['web', 'api_v1', 'api_partner', 'api_internal', 'health'];
@@ -65,6 +69,14 @@ final class MetricCatalog
             'lycenza_service_auth_total' => self::counter('Service-assertion authentication outcomes by direction, calling service and closed outcome code.', ['direction' => [ServiceAuthTelemetry::INBOUND, ServiceAuthTelemetry::OUTBOUND], 'service' => [...ServiceAuthContract::SERVICES, 'unknown'], 'outcome' => ServiceAuthTelemetry::OUTCOMES]),
             'lycenza_service_signing_key_age_days' => self::gauge('Age in days of this process\'s own service signing key (hard limit 90; alert from 76). Only when the AI Gateway is configured.', ['service' => [ServiceAuthContract::PLATFORM]]),
             'lycenza_service_verification_key_max_age_days' => self::gauge('Age in days of the oldest key in the verification ring for a calling service. Only when the AI Gateway is configured.', ['service' => [ServiceAuthContract::AI_GATEWAY]]),
+            // ADR 0054 (Phase 0O.8A): the Host boundary and custom School
+            // domains. Closed labels only -- never hostname, School or domain id.
+            'lycenza_host_responses_total' => self::counter('Requests answered by the Host boundary itself: 421 unknown Host, 404 health or surface outside it, 308 alias.', ['outcome' => DomainTelemetry::HOST_OUTCOMES]),
+            'lycenza_domain_checks_total' => self::counter('Custom-domain checks by check and closed outcome.', ['check' => DomainTelemetry::CHECKS, 'outcome' => DomainTelemetry::CHECK_OUTCOMES]),
+            'lycenza_domain_transitions_total' => self::counter('Custom-domain lifecycle transitions by target state.', ['to' => array_map(fn (DomainState $s) => $s->value, DomainState::cases())]),
+            'lycenza_school_domains' => self::gauge('Custom domains by lifecycle state (computed at scrape).', ['state' => array_map(fn (DomainState $s) => $s->value, DomainState::cases())]),
+            'lycenza_domain_certificate_min_days_remaining' => self::gauge('Fewest whole days before any active custom domain\'s certificate expires (absent when none is recorded).', []),
+            'lycenza_domain_indeterminate_max_age_seconds' => self::gauge('How long the oldest live custom domain has had only indeterminate DNS/TLS results (0 when none).', []),
             'lycenza_api_token_operation_errors_total' => self::counter('Human API token issue/revoke operations that failed unexpectedly.', ['operation' => ['issue', 'revoke']]),
             'lycenza_idempotency_requests_total' => self::counter('Idempotency-Key outcomes (formerly idempotency_{outcome}_total log lines).', ['outcome' => ['new', 'replay', 'conflict', 'in_progress', 'failed']]),
 
@@ -132,7 +144,7 @@ final class MetricCatalog
             'lycenza_restore_drill_last_result' => self::gauge('Deployment evidence: 1 PASS / 0 FAIL of the last drill.', []),
 
             // Telemetry about telemetry
-            'lycenza_metrics_collection_errors_total' => self::counter('Metric writes or scrape-time collections that failed (best effort).', ['component' => ['recorder', 'queues', 'outbox', 'backlog', 'heartbeats', 'failed_jobs', 'readiness', 'ai_gateway', 'evidence']]),
+            'lycenza_metrics_collection_errors_total' => self::counter('Metric writes or scrape-time collections that failed (best effort).', ['component' => ['recorder', 'queues', 'outbox', 'backlog', 'heartbeats', 'failed_jobs', 'readiness', 'ai_gateway', 'evidence', 'domains']]),
         ];
     }
 
@@ -153,7 +165,7 @@ final class MetricCatalog
         return [
             'outbox-dispatch', 'webhook-deliveries-redispatch', 'communication-deliveries-redispatch',
             'communications-publish-scheduled', 'automation-executions-redispatch', 'expire-school-elevations',
-            'worker-canaries', 'idempotency-prune', 'webhook-deliveries-prune',
+            'worker-canaries', 'idempotency-prune', 'webhook-deliveries-prune', 'domains-check',
         ];
     }
 

@@ -69,6 +69,7 @@ interface Props {
         canViewAuditLog: boolean;
         canViewAutomation: boolean;
         canViewApiClients: boolean;
+        canViewDomains: boolean;
     };
 }
 
@@ -279,6 +280,9 @@ function activate(schoolId: string) {
                     <a class="underline" href="/app/integrations/api-clients"
                         >Integrations: API clients</a
                     >
+                </li>
+                <li v-if="nav.canViewDomains">
+                    <a class="underline" href="/app/settings/domains">Custom domains</a>
                 </li>
             </ul>
         </nav>

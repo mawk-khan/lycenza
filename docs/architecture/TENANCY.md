@@ -421,10 +421,33 @@ mode), tenant-custom roles (only system-defined roles exist), and a
 production-grade credential-issuance story for the `school_os`/
 `school_os_app` role split (ADR 0021's "Future extraction path").
 
-## Custom School domains (ADR 0054 — contract, Phase 0O.8; implementation 0O.8A)
+## Custom School domains (ADR 0054 — contract Phase 0O.8, implemented Phase 0O.8A)
 
-`school_domains` becomes a real, explicit lifecycle. Until Phase 0O.8A
-lands, the behaviour described above is still today's code. Once it lands:
+`school_domains` is an explicit lifecycle (`pending_verification`,
+`verified`, `tls_pending`, `active`, `suspended`, `revoked`, `expired`),
+database-enforced, platform data without RLS (resolved before any School
+context exists). Where this section and the older "School domain
+resolution" text above disagree, this section is current:
+- **The Host boundary.** `App\Http\Middleware\ClassifyRequestHost` (global,
+  right after trusted-proxy handling) classifies every Host exactly
+  (`App\Support\Domains\HostClassifier`): platform (APP_URL +
+  `DOMAIN_PLATFORM_ALIASES`; development hosts only in local/testing),
+  internal (`INTERNAL_HOSTS`: internal AI routes and health only), an ACTIVE
+  School domain, an alias (308 to the stored primary), the probe path, or
+  **421** before any session, cookie, CSRF, School or URL logic.
+- **Intent vs context.** Before sign-in the School host is only intent
+  (`ResolveSchoolContext::HOST_SCHOOL_ATTRIBUTE`: branding, the sign-in
+  target); `TenantContext` is set only for a signed-in user with an active
+  membership. Without one: a fixed 403 page (platform-only and Group-only
+  accounts included); elevation never resolves there.
+- **Cross-host switching** carries the sign-in with a one-time, 60 s ticket
+  (ADR 0054 amendment item 9); cookies stay host-only.
+- **URLs** come from `App\Support\Domains\CanonicalOrigin`, never a Host.
+- **Cache.** Positive Host lookups may be cached ≤ 60 s
+  (`App\Support\Domains\DomainDirectory`), forgotten on every transition and
+  School lifecycle change; a cache failure falls back to PostgreSQL.
+
+The rules:
 - **What selects a School.** Only an **`active`** domain of an active
   School selects a School, after exact canonical host classification.
   Unknown and non-active hosts get 421, with no default School.

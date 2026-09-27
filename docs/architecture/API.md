@@ -18,10 +18,14 @@ platform-level `/education-boards` catalog — see
 `docs/modules/ACADEMIC-STRUCTURE.md` for the domain design and the
 OpenAPI spec for the full request/response shapes.
 
-## Hosts (ADR 0054)
+## Hosts (ADR 0054, implemented Phase 0O.8A)
 
 `/api/v1` is served on the **platform host only**. Custom School domains
-are browser-only surfaces, and every `/api/*` path answers 404 on them.
+are browser-only surfaces, and every `/api/*` path answers 404 on them; an
+unknown or non-active Host answers **421** before any API logic. The
+internal AI routes (`/api/internal/ai/*`, ADR 0053) answer only on a
+configured `INTERNAL_HOSTS` name (and, in local/testing only, a development
+host).
 The School is always the `{school}` URL parameter, verified by
 `school-membership`. A Host header never selects or pre-sets API tenancy.
 CORS stays ADR 0049's exact-origin list and never automatically includes

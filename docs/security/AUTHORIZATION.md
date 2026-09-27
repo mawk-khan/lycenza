@@ -278,6 +278,27 @@ Known limits, deliberately not addressed by these controls:
 Tests: `tests/Feature/Auth/PostLogoutHistoryPrivacyTest.php`; the real
 browser check is in `docs/development/DDEV-DEMO-REVIEW.md`.
 
+## Custom School domains: host-local sessions and the sign-in handoff (ADR 0054, Phase 0O.8A)
+
+- **Capabilities.** `school.domains.view` and `school.domains.manage`
+  (`school_admin` by default); add, new record value, primary and removal also
+  need a fresh MFA code. Platform and Group authority grant neither.
+- **Host is intent, not authority.** On a School's active domain the Host
+  names the School; `TenantContext` is set only for a signed-in user with an
+  active membership in it. Anyone else (platform-only and Group-only accounts
+  included) gets a fixed 403 page there. Elevation never applies on a School
+  host.
+- **Sessions are host-local.** Cookies stay host-only (`SESSION_DOMAIN`
+  empty, production-guarded). Logout ends the session of the host it runs on;
+  there is no cross-domain global logout in v1.
+- **Cross-host switching.** A School switch whose target origin differs
+  issues a one-time, 60 s, server-side ticket bound to the user, the source
+  session, the School and the exact target host. The target redeems it once
+  and re-checks the Host, the source session (still signed in), the user,
+  the School and the membership before signing in with a fresh session id;
+  it refuses when a different user is signed in there. The ticket is
+  continuity, never authority, and is never logged.
+
 ## When a session ends without logout
 
 Explicit logout and a session that ends on its own are different events:

@@ -2,6 +2,8 @@
 
 namespace App\Support\Configuration;
 
+use App\Support\Domains\HostnameNormalizer;
+use App\Support\Domains\PublicAddress;
 use App\Support\ServiceAuth\ServiceAuthContract;
 use App\Support\ServiceAuth\ServiceKeyConfigException;
 use App\Support\ServiceAuth\ServiceKeyRing;
@@ -28,6 +30,12 @@ use Illuminate\Encryption\Encrypter;
  * a valid `platform` signing key and `ai-gateway` verification ring (neither
  * a committed development key, the signing key at most 90 days old, the ring
  * within its 1-2 key / 24 h transition rules) and a Redis replay store.
+ *
+ * Phase 0O.8A (ADR 0054): a shared SESSION_DOMAIN, a non-https or malformed
+ * APP_URL, the development Host/fake switches, malformed host lists, a
+ * non-Redis handoff store, an AI Gateway without INTERNAL_HOSTS and -- when
+ * custom domains are enabled -- a missing/invalid edge target, probe key
+ * or public DNS resolver set.
  *
  * The exception names violation codes only, never a value.
  */
@@ -84,7 +92,7 @@ final class ProductionConfigurationGuard
             $violations[] = 'ai_legacy_service_token_configured';
         }
 
-        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations()];
+        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations(), ...$this->hostViolations()];
     }
 
     public function assertSafe(): void
@@ -252,6 +260,99 @@ final class ProductionConfigurationGuard
 
         if ($this->config->get('filesystems.disks.s3.visibility') === 'public') {
             $violations[] = 'storage_public_visibility';
+        }
+
+        return $violations;
+    }
+
+    /**
+     * Phase 0O.8A (ADR 0054 sections 3.4, 5.2, 6.2, 8, 9): the Host boundary,
+     * host-only cookies and -- only when CUSTOM_DOMAINS_ENABLED -- the custom
+     * domain settings. Disabled custom domains are a complete, safe mode: the
+     * edge, probe key and resolvers are then not required. Codes only.
+     *
+     * @return list<string>
+     */
+    private function hostViolations(): array
+    {
+        $violations = [];
+        $names = new HostnameNormalizer;
+
+        // A shared parent-domain cookie would carry one School's session to
+        // another School's host (ADR 0054 section 9).
+        $sessionDomain = $this->config->get('session.domain');
+        if ($sessionDomain !== null && trim((string) $sessionDomain) !== '') {
+            $violations[] = 'session_domain_shared';
+        }
+
+        $url = (string) $this->config->get('app.url');
+        if (strtolower((string) parse_url($url, PHP_URL_SCHEME)) !== 'https' || $names->canonicalRequestHost((string) parse_url($url, PHP_URL_HOST)) === null) {
+            $violations[] = 'platform_url_invalid';
+        }
+
+        if ((bool) $this->config->get('domains.allow_development_hosts')) {
+            $violations[] = 'domain_development_hosts_enabled';
+        }
+
+        if ((bool) $this->config->get('domains.fakes')) {
+            $violations[] = 'domain_fakes_enabled';
+        }
+
+        foreach (['domains.platform_aliases', 'domains.internal_hosts', 'domains.reserved_hosts', 'domains.reserved_suffixes'] as $key) {
+            foreach ((array) $this->config->get($key, []) as $host) {
+                if (! is_string($host) || $names->canonicalRequestHost($host) === null || $names->fold($host) !== $host) {
+                    $violations[] = 'domain_host_list_invalid';
+                    break 2;
+                }
+            }
+        }
+
+        $handoffStore = $this->config->get('domains.handoff_store') ?? $this->config->get('cache.default');
+        if ($this->config->get("cache.stores.{$handoffStore}.driver") !== 'redis') {
+            $violations[] = 'session_handoff_store_not_redis';
+        }
+
+        // ADR 0053 section 10.1: the Gateway reaches the internal AI routes on
+        // a private internal host, which the Host boundary must know.
+        if (trim((string) $this->config->get('services.ai_gateway.base_url')) !== '' && (array) $this->config->get('domains.internal_hosts', []) === []) {
+            $violations[] = 'internal_hosts_missing';
+        }
+
+        if (! (bool) $this->config->get('domains.enabled')) {
+            return $violations;
+        }
+
+        $target = trim((string) $this->config->get('domains.edge.cname_target'));
+        $addresses = (array) $this->config->get('domains.edge.addresses', []);
+        if ($target === '' && $addresses === []) {
+            $violations[] = 'domain_edge_target_missing';
+        }
+        if ($target !== '' && $names->canonicalRequestHost($target) === null) {
+            $violations[] = 'domain_edge_target_invalid';
+        }
+        foreach ($addresses as $address) {
+            $canonical = is_string($address) ? PublicAddress::canonical($address) : null;
+            if ($canonical === null || ! PublicAddress::isPublic($canonical)) {
+                $violations[] = 'domain_edge_addresses_invalid';
+                break;
+            }
+        }
+
+        $probeKey = $this->config->get('domains.probe_key');
+        if (! is_string($probeKey) || strlen(trim($probeKey)) < 32 || preg_match('/^(dev|test|local|changeme|example)/i', $probeKey) === 1) {
+            $violations[] = 'domain_probe_key_invalid';
+        }
+
+        $resolvers = (array) $this->config->get('domains.dns.resolvers', []);
+        if ($resolvers === []) {
+            $violations[] = 'domain_dns_resolvers_missing';
+        }
+        foreach ($resolvers as $resolver) {
+            $canonical = is_string($resolver) ? PublicAddress::canonical($resolver) : null;
+            if ($canonical === null || ! PublicAddress::isPublic($canonical)) {
+                $violations[] = 'domain_dns_resolvers_invalid';
+                break;
+            }
         }
 
         return $violations;

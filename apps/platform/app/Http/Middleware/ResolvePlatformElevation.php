@@ -7,6 +7,7 @@ use App\Domain\Platform\Application\Elevation\ElevationEndReason;
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Models\SchoolElevation;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Domains\HostClassification;
 use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use Closure;
@@ -40,6 +41,8 @@ use Symfony\Component\HttpFoundation\Response;
  * that School differed from the elevation's, the request is marked as a
  * target conflict and no School context can be established at all.
  *
+ * Never on a custom School domain (Phase 0O.8A, ADR 0054 section 8.5).
+ *
  * Priority-pinned after ResolveSchoolContext/DevOnlySchoolHeaderResolver
  * and before RequireSchoolContext (bootstrap/app.php).
  */
@@ -60,6 +63,13 @@ class ResolvePlatformElevation
         // Never inherit a previous unit of work's elevation (a long-running
         // worker, or several requests in one test process).
         app(ElevationContext::class)->clear();
+
+        // ADR 0054 section 8.5: elevation is a platform-host flow only. A
+        // custom School domain never resolves one (its host-only session
+        // could not have started one anyway; this makes that structural).
+        if (HostClassification::schoolHostOf($request) !== null) {
+            return $next($request);
+        }
 
         if (! $request->hasSession() || ! $request->session()->has(self::SESSION_KEY)) {
             return $next($request);

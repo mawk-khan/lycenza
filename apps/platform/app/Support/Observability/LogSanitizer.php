@@ -38,6 +38,8 @@ class LogSanitizer
         'signing_key', 'hmac_key', 'service_token', 'dsn', 'prompt', 'completion', 'context_token',
         // ADR 0053: service assertions and key material.
         'verification_keys', 'assertion', 'jti', 'bsh',
+        // ADR 0054: the cross-host sign-in ticket and the domain probe key.
+        'ticket', 'probe_key',
     ];
 
     /**
@@ -62,6 +64,9 @@ class LogSanitizer
         '/\bbase64:[A-Za-z0-9+\/=]{16,}/' => 'base64:'.self::REDACTED,
         '/\b([a-z][a-z0-9+.-]*:\/\/)[^\s\/:@]+:[^\s\/@]+@/i' => '$1'.self::REDACTED.'@',
         '/dev-local-only-(?:token|context-signing-key-change-me)/' => self::REDACTED,
+        // ADR 0054: a domain ownership TXT value and a handoff ticket in a URL.
+        '/\blycenza-domain-verification=[A-Za-z0-9_-]+/' => 'lycenza-domain-verification='.self::REDACTED,
+        '/([?&]ticket=)[^&\s"\']+/' => '$1'.self::REDACTED,
     ];
 
     /**

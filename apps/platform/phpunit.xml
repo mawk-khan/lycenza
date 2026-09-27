@@ -122,6 +122,24 @@
         <env name="AI_GATEWAY_REPLAY_STORE" value="" force="true"/>
         <env name="AI_GATEWAY_SERVICE_TOKEN" value="" force="true"/>
         <env name="AI_GATEWAY_CONTEXT_SIGNING_KEY" value="test-only-context-signing-key" force="true"/>
+        <!-- ADR 0054 (Phase 0O.8A): custom domains ON, with the fake DNS
+             resolver and fake TLS prober and the development hosts (both
+             honoured only because APP_ENV=testing: the double guard), a
+             deterministic test-only probe key and a fake edge. Every other
+             host list is forced empty so a developer .env never leaks a
+             platform alias or internal host into the suite. -->
+        <env name="CUSTOM_DOMAINS_ENABLED" value="true" force="true"/>
+        <env name="DOMAIN_FAKES_ENABLED" value="true" force="true"/>
+        <env name="DOMAIN_ALLOW_DEVELOPMENT_HOSTS" value="true" force="true"/>
+        <env name="DOMAIN_PROBE_KEY" value="test-only-domain-probe-key-for-the-suite" force="true"/>
+        <env name="DOMAIN_EDGE_CNAME_TARGET" value="edge.lycenza-local.invalid" force="true"/>
+        <env name="DOMAIN_EDGE_ADDRESSES" value="1.2.3.4,1.2.3.5" force="true"/>
+        <env name="DOMAIN_DNS_RESOLVERS" value="" force="true"/>
+        <env name="DOMAIN_PLATFORM_ALIASES" value="" force="true"/>
+        <env name="INTERNAL_HOSTS" value="" force="true"/>
+        <env name="DOMAIN_RESERVED_HOSTS" value="" force="true"/>
+        <env name="DOMAIN_RESERVED_SUFFIXES" value="" force="true"/>
+        <env name="SESSION_HANDOFF_STORE" value="" force="true"/>
         <env name="CONTACT_LOOKUP_HMAC_KEY" value="test-only-contact-lookup-hmac-key" force="true"/>
         <env name="CONTACT_LOOKUP_HMAC_KEY_VERSION" value="1" force="true"/>
         <env name="STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY" value="test-only-statutory-identifier-lookup-hmac-key" force="true"/>

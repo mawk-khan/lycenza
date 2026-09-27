@@ -90,6 +90,15 @@ web_environment:
     # (JSON values; web_environment cannot quote them).
     - AI_GATEWAY_CONTEXT_SIGNING_KEY=dev-local-only-context-signing-key-change-me
     - TENANCY_ALLOW_DEV_HEADER_OVERRIDE=false
+    # ADR 0054 (Phase 0O.8A): custom domains with the FAKE DNS resolver and
+    # TLS prober (local only; `platform:domain-fake-dns` scripts them) and the
+    # development hosts. Public, local-only probe key.
+    - CUSTOM_DOMAINS_ENABLED=true
+    - DOMAIN_FAKES_ENABLED=true
+    - DOMAIN_ALLOW_DEVELOPMENT_HOSTS=true
+    - DOMAIN_EDGE_CNAME_TARGET=edge.lycenza-local.invalid
+    - DOMAIN_EDGE_ADDRESSES=1.2.3.4,1.2.3.5
+    - DOMAIN_PROBE_KEY=dev-local-only-domain-probe-key-change-me-0000
     - INERTIA_SSR_ENABLED=false
     - INERTIA_DEVTOOLS_ENABLED=false
 

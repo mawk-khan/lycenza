@@ -5,7 +5,6 @@ namespace Tests\Feature\Platform\Groups;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
 use App\Models\GroupRoleAssignment;
 use App\Models\PlatformAuditEvent;
-use App\Models\SchoolDomain;
 use App\Models\SchoolGroup;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
@@ -15,6 +14,7 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Tests\Concerns\CreatesSchoolDomains;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -25,7 +25,7 @@ use Tests\TestCase;
  */
 class SchoolGroupGovernanceTest extends TestCase
 {
-    use CreatesTenancyFixtures, GroupTestHelpers;
+    use CreatesSchoolDomains, CreatesTenancyFixtures, GroupTestHelpers;
 
     private function governance(): SchoolGroupGovernanceService
     {
@@ -47,12 +47,12 @@ class SchoolGroupGovernanceTest extends TestCase
         $admin = $this->platformAdmin();
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
-        SchoolDomain::query()->create(['school_id' => $schoolB->id, 'domain' => 'b.example.test', 'verified_at' => now()]);
+        $this->createSchoolDomain($schoolB, 'erp.b-school.org');
 
         $group = $this->governance()->create($admin, 'North Trust', 'north-trust');
         $this->governance()->rename($admin, $group, 'North Education Trust');
         $this->governance()->addSchool($admin, $group, $schoolA->id);
-        $this->governance()->addSchool($admin, $group, 'b.example.test');
+        $this->governance()->addSchool($admin, $group, 'erp.b-school.org');
 
         $this->assertSame('North Education Trust', $group->fresh()->name);
         $this->assertSame('active', $group->fresh()->status);
