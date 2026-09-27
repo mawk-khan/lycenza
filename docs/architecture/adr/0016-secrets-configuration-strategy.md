@@ -90,3 +90,9 @@ shared token should be revisited — likely replaced or supplemented with
 per-request signed tokens or mTLS once there's a real multi-instance
 deployment topology to secure. Both are explicitly deferred, not
 decided, in this checkpoint.
+
+**Note (Phase 0O.7, 2026-09-27):** item (2), "revisit the Laravel<->AI
+Gateway shared token", is decided by **ADR 0053**. The shared token is
+replaced by per-request Ed25519 service assertions, with one keypair per
+calling service, verification rings, and staged or emergency rotation; mTLS
+is not the v1 mechanism. Phase 0O.7A implements it.

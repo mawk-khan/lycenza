@@ -293,7 +293,7 @@ Other findings:
 | O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | No | Product | S4 |
 | O3 | Hosting / deployment model (and therefore process manager, container runtime, Terraform target) | **RESOLVED — ADR 0050 (Phase 0O.4)** | Product + operations | S3 infrastructure, images, runbook |
 | O4 | Secrets manager or host secret injection | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
-| O5 | Service-to-service auth: keep the shared token (with rotation) or move to per-request signed tokens / mTLS | ADR 0016 "revisit" | Security | S3 (AI Gateway deployment) |
+| O5 | Service-to-service auth: keep the shared token (with rotation) or move to per-request signed tokens / mTLS | **RESOLVED — ADR 0053 (Phase 0O.7)**: per-request Ed25519 service assertions, one keypair per calling service, 24 h rotation overlap, 90-day keys; implementation Phase 0O.7A | Security | S3 (AI Gateway deployment) |
 | O6 | Runtime role name: keep `school_os_app` as a production contract, or generalize the code | **RESOLVED — ADR 0050 (Phase 0O.4)** | Engineering | Production DB provisioning |
 | O7 | API client model: who gets `/api/v1` tokens and how (mobile login token endpoint? partner keys? OAuth?), expiry, abilities | **RESOLVED — ADR 0049 (Phase 0O.2)**; lifetimes V1–V4 are owner values still required | Product + security | S1 |
 | O8 | Object storage: provider, region, encryption, versioning, lifecycle | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
@@ -870,4 +870,70 @@ PROMOTED.**
 - Decisions **O1, O2, O5, O9, O13, O14, O15** remain open.
 - Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
 - Phase 0M: **BLOCKED**.
+- The **real restore drill is still outstanding**.
+
+## 27. Phase 0O.7 — Service-to-Service Authentication & Rotation Contract (2026-09-27)
+
+**O5 is RESOLVED as a contract by ADR 0053**
+(`docs/architecture/adr/0053-service-to-service-authentication-rotation-contract.md`).
+This checkpoint is documentation only: there are no executable changes,
+no keys, and no deployment.
+
+**Audit.**
+- **Both directions exist:**
+  - A, Laravel → Gateway: `/v1/tools/invoke`, `/v1/complete`, sent with
+    `X-Service-Token`. `AiGatewayClient` has no production caller yet.
+  - B, Gateway → Laravel: `/api/internal/ai/tools/school-echo`, `/audit`,
+    `/completions/authorize`, sent with `Bearer`.
+- Both use **one symmetric value** held in three places: Laravel's
+  environment, the Gateway, and a hash in `service_identities`. It has no
+  expiry and no rotation, and it serves both directions.
+- The ADR 0023 context token is separate and has no O5-relevant defect.
+
+**Decision:**
+- **Assertion:** a short-lived, per-request, request-bound Ed25519 service
+  assertion. It is a JWS compact serialization with `alg` = `EdDSA`,
+  `typ` = `lycenza-service+jwt` and `kid`, sent as
+  `Authorization: Lycenza-Service …`.
+- **Identities and audiences:** a closed identity catalog, `platform` and
+  `ai-gateway`, with one keypair per caller. The audiences are
+  `lycenza-ai-gateway` and `lycenza-platform-internal-ai`.
+- **Claims:** `ver`, `iss`, `sub`, `aud`, `iat`, `nbf`, `exp`, `jti`,
+  `htm`, `htp`, `bsh` and an optional `rid`. There is no School, User,
+  capability or elevation claim.
+- **Lifetime:** at most 120 s (60 s by default), with 30 s of skew.
+- **Rings and rotation:** receiver rings hold at most 2 keys; transitional
+  keys carry `not_after` ≤ 24 h; keys live at most 90 days; emergency
+  revocation is by key removal.
+- **Replay:** Laravel consumes each `jti` once in the existing production
+  Redis. The Gateway has no shared store, so its bounded same-request
+  replay window is a documented residual risk.
+- **Status codes:** 401 for authentication failure, 403 for route
+  authorization failure. There is no fallback.
+- **Separation:** the service assertion stays separate from the AI context
+  token, and never sets `TenantContext`.
+- **Transport:** TLS and the private network remain required; mTLS is
+  optional defense in depth.
+
+**Next:** Phase 0O.7A — Service-to-Service Authentication & Rotation
+Foundation (repository only). It must bring:
+- one new audited Python Ed25519 library, which must pass O16;
+- the production guards;
+- the rotation runbook and tests;
+- requalification of both images.
+
+Deployment evidence (real keys, rings on every replica, one routine
+rotation, and an emergency-revocation drill in a non-production
+environment) stays deploy-gated.
+
+**Exception clock:** the VERIFIED artifacts' exception records expire on
+**2026-10-10** and **2026-10-26**. O5 does not renew them.
+
+**NO PRODUCTION REGISTRY IS CONFIGURED. NO REAL SIGNING IDENTITY/KEY IS
+CONFIGURED. NO PRODUCTION IMAGE HAS BEEN PUSHED. NO PRODUCTION IMAGE HAS BEEN
+PROMOTED. NO SERVICE KEY EXISTS.**
+- Decisions **O1, O2, O9, O13, O14, O15** remain open.
+- Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
 - The **real restore drill is still outstanding**.

@@ -123,6 +123,21 @@ mechanisms, both required.
   be built on this same verify-claims-before-acting pattern -- documented
   in `docs/ai/AI-SECURITY.md` and root `CLAUDE.md`.
 
+## Amendment — Phase 0O.7 (ADR 0053, 2026-09-27)
+
+The "shared service-bearer-token check" this ADR sits beside is replaced,
+by Phase 0O.7A, with per-request Ed25519 **service assertions** (ADR 0053).
+The two remain **separate mechanisms answering separate questions**:
+- the assertion proves the calling internal service;
+- this context token proves the actor, School and capability.
+
+They are never merged into one token, and the assertion never carries or
+sets School/actor context. This token's construction, key, TTL and
+verification are unchanged. Observations recorded for later (not defects):
+- the context key has no `kid` or rotation ring (ADR 0050 §5);
+- the token has no purpose or audience claim;
+- `verify()` does not check `iat` sanity.
+
 ## Future extraction/evolution path
 
 If `services/ai` is later split into multiple independently-deployed

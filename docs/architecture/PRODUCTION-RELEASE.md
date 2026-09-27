@@ -98,9 +98,18 @@ HTTPS; behind a TLS-terminating proxy that needs the proxy's addresses in
 `TRUSTED_PROXIES` (Phase 0O.4A) — never "trust every proxy". Partner API
 credentials exist, but no partner route is enabled.
 
-One service-token value is used in three places (decision O5 may change
-this): Laravel `AI_GATEWAY_SERVICE_TOKEN`, the Gateway `SERVICE_TOKEN`, and
-the hashed `ai-gateway` row in `service_identities`.
+One service-token value is used in three places today: Laravel
+`AI_GATEWAY_SERVICE_TOKEN`, the Gateway `SERVICE_TOKEN`, and the hashed
+`ai-gateway` row in `service_identities`.
+
+**O5 is decided by ADR 0053.** Phase 0O.7A replaces this token with
+per-request Ed25519 service assertions and one keypair per calling service:
+- `platform` signs for Laravel → Gateway;
+- `ai-gateway` signs for Gateway → Laravel.
+
+Each receiver holds only a public verification ring. The production guards
+then refuse any leftover shared-token variable, the committed development
+keys, and non-HTTPS internal URLs.
 
 ### Decided by ADR 0050 (Phase 0O.4)
 
@@ -235,9 +244,9 @@ account's password has no in-app recovery yet.
 
 ## 7. What stays open
 
-O3, O4, O6, O7, O8, O10, O11, O12 and O16 are resolved (ADR 0049, ADR 0050,
-ADR 0051, ADR 0052). Still open: O1 (definition of done — including a real
-restore drill), O2 (payments), O5 (service-token rotation or replacement), O9
+O3, O4, O5, O6, O7, O8, O10, O11, O12 and O16 are resolved (ADR 0049, ADR 0050,
+ADR 0051, ADR 0052, ADR 0053; O5's implementation is Phase 0O.7A). Still open: O1 (definition of done — including a real
+restore drill), O2 (payments), O9
 (custom domains), O13 (email), O14 (password reset) and O15 (partner
 integrations). **No production image is pushed to a registry or promoted
 before Phase 0O.6A's repository controls are complete**, and then only by an

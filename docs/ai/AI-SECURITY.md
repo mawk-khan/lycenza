@@ -165,6 +165,43 @@ after the recorded approvals in
 `docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`. Only the offline
 `NullProvider` exists; Phase 0M remains BLOCKED.
 
+## Service authentication is separate from context (ADR 0053, Phase 0O.7)
+
+Two different questions get two different mechanisms, and both are
+required on every internal call.
+
+**1. Which internal service sent this request?**
+- **Today:** one shared token, `X-Service-Token` or `Bearer`, used in both
+  directions.
+- **After Phase 0O.7A:** a per-request Ed25519 **service assertion** in
+  `Authorization: Lycenza-Service …`:
+  - signed by the caller's own private key: `platform` for Laravel →
+    Gateway, `ai-gateway` for Gateway → Laravel;
+  - verified against a public ring the receiver holds, so the receiver
+    cannot sign as its caller;
+  - bound to the audience, method, path and body digest;
+  - valid for at most 120 s.
+
+**2. Which actor, School and capability may this call act for?** The
+HMAC-signed **context token** (ADR 0023, above), minted and verified only by
+Laravel, with a key the Gateway never holds.
+
+The assertion carries **no** School, actor, capability or elevation, and it
+never sets `TenantContext`. Only the verified context token does.
+Consequences:
+- Changing an assertion cannot select another School.
+- A valid service identity never enables a real model provider
+  (`NullProvider` stays; Phase 0M is blocked).
+- The two keys are separate, rotated separately and revoked separately.
+- The two tokens are never merged.
+
+Receivers check, in order:
+1. the assertion;
+2. the request binding;
+3. replay (a one-time `jti` at Laravel);
+4. the service's closed route scope;
+5. only then the context token and the operation's own authorization.
+
 ## What Phase 0B proves vs. what remains to be built
 
 **Proven now** (passing tests — `services/ai/tests/`,

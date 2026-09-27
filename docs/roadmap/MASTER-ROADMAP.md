@@ -1503,8 +1503,25 @@ Tooling:
 
 The requalification digests are in the 0O.6F remediation record. O16
 repository controls are complete; deployment evidence is outstanding.
-PUBLISHED = NONE, PROMOTED = NONE. Next proposed: **0O.7 — Service-to-Service
-Authentication & Rotation Contract (O5)**, not started.
+PUBLISHED = NONE, PROMOTED = NONE.
+
+**0O.7 — Service-to-Service Authentication & Rotation Contract (2026-09-27,
+documentation only).** ADR 0053 resolves O5.
+- **Scope:** both internal directions (Laravel → Gateway, Gateway →
+  Laravel) move from one shared symmetric token to per-request,
+  request-bound Ed25519 service assertions (`Authorization:
+  Lycenza-Service`), with one keypair per calling service.
+- **Receivers:** audience-exact, with a closed route scope. Laravel
+  consumes each `jti` once; the Gateway's bounded replay window is a
+  recorded residual risk.
+- **Rotation:** rings with at most 24 h of overlap, 90-day keys, and
+  emergency revocation by key removal.
+- **Separation:** the service assertion is strictly separate from the AI
+  context token and never sets School context.
+
+Next proposed: **0O.7A — Service-to-Service Authentication & Rotation
+Foundation**, not started. It covers repository implementation only: no
+real key and no deployment. Remaining open: O1, O2, O9, O13, O14, O15.
 
 ## Cross-cutting, ongoing (not a single phase)
 
