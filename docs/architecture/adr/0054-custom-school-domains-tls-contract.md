@@ -792,7 +792,9 @@ regeneration, full `/app` load) is preserved.
 - **O13 email.** An application hostname authorizes **nothing** about
   email. `school.example` being active says nothing about sending from
   `@example`: SPF, DKIM, DMARC and sending domains are O13, with separate
-  ownership proofs.
+  ownership proofs. *Frozen by ADR 0055 §8.4 (Phase 0O.9):* v1 email is
+  sent only from a Lycenza-controlled sending domain, and an `active`
+  School web domain grants no From, DKIM or return-path at that domain.
 - **O14 recovery.** Recovery links (future) use §8.9's canonical origin
   and never a request host. O14 remains open.
 - **Phase 0N governance.** Domain ownership grants no platform, Group or

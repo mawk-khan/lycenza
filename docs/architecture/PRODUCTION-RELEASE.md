@@ -262,11 +262,30 @@ account's password has no in-app recovery yet.
 
 ## 7. What stays open
 
-O3, O4, O5, O6, O7, O8, O9, O10, O11, O12 and O16 are resolved (ADR 0049, ADR 0050,
-ADR 0051, ADR 0052, ADR 0053, ADR 0054; O9's repository implementation is
-Phase 0O.8A, and its deployment evidence is outstanding). Still open: O1
-(definition of done — including a real restore drill), O2 (payments), O13
-(email), O14 (password reset) and O15 (partner integrations).
+O3, O4, O5, O6, O7, O8, O9, O10, O11, O12, O13 and O16 are resolved (ADR 0049,
+ADR 0050, ADR 0051, ADR 0052, ADR 0053, ADR 0054, ADR 0055; O9's repository
+implementation is Phase 0O.8A, and its deployment evidence is outstanding;
+O13 is a contract whose implementation is Phase 0O.9A, not started). Still
+open: O1 (definition of done — including a real restore drill), O2
+(payments), O14 (password reset) and O15 (partner integrations).
+
+**Email (ADR 0055, contract only).** Today nothing stops production from
+using the `log` mailer, a `hello@example.com` From, an unbounded SMTP
+timeout or the `failover → log` mailer, and the Guardian invitation is sent
+inside its business transaction. **No production email may be relied on
+before Phase 0O.9A and the deployment evidence (ADR 0055 §23).**
+
+The 0O.9A production guard must refuse to boot with any of these:
+- a framework sink (`log`, `array`, `failover`, `roundrobin`, `sendmail`)
+  or a local SMTP host;
+- the fake adapter;
+- a missing credential, sending domain or webhook secret ring;
+- a From outside the mailbox catalog;
+- plaintext or unverified SMTP TLS;
+- tracking enabled;
+- a missing suppression HMAC key.
+
+`MAIL_PROVIDER=none` stays an explicit, honest disabled mode.
 
 **Hosts and custom domains (ADR 0054, implemented in 0O.8A):** every Host is
 classified exactly; anything unexpected answers 421. Production refuses to
