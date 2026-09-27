@@ -1050,6 +1050,10 @@ each within this contract unless it says it amends a section:
     School. (4) The weak model is replaced (above). Each was reproduced by a
     test on the pre-fix code before it was fixed.
 
+**Qualification:** `main` `e981f25` — both images **VERIFIED** (application
+`sha256:49b9be95…9d37`, AI Gateway `sha256:d89f24f1…35ef`;
+`PHASE-0O-READINESS.md` §31). PUBLISHED = NONE, PROMOTED = NONE.
+
 **Deployment evidence still outstanding (§14):** the real edge target; a
 real non-production domain verified; a certificate issued and renewed;
 HTTP → HTTPS at the edge; private-key custody outside the application; drift

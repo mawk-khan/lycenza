@@ -1153,10 +1153,51 @@ non-production domain verified; a certificate issued and renewed; HTTP →
 HTTPS at the edge; private-key custody outside the application; drift
 monitoring active; one revoke/re-add drill.
 
-**Qualification:** recorded in §31 (the qualified commit's digests).
+**Qualification:** §31.
 
 - Decisions **O1, O2, O13, O14, O15** remain open.
 - Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
 - Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
   REQUIRED**.
 - The **real restore drill is still outstanding**.
+
+## 31. Phase 0O.8A — VERIFIED digests (2026-09-27)
+
+Final qualification of the published `main` commit **`e981f25`**
+(`e981f252eda7`, run `local-20260927T175753Z-e63a82a1`; Grype database
+refreshed for the run):
+- **Same-run complete regression:** 6,199 tests, 0 failures, only the
+  deliberate ESI-12 skip (144 new tests since 0O.7A).
+- **`verify-images.sh`:** 126/126 checks (111 before), including the Host
+  boundary (421 before any cookie), the probe dot-path reaching Laravel, the
+  access log without query strings, the production refusals of the fakes,
+  development hosts, a shared `SESSION_DOMAIN` and a malformed host list, the
+  enabled-mode edge/probe-key/resolver requirements, and the pinned PSL and
+  DNS client working without `intl`/`ext-sockets`.
+- **Language audits:** 0 advisories (including `jeremykendall/php-domain-parser`
+  6.4.0 and `mikepultz/netdns2` 2.0.8). **Secret scans:** 0 findings.
+
+| Image | Manifest digest | Config digest | `verify-artifact` |
+|---|---|---|---|
+| Application | `sha256:49b9be956d764381b1124e2e46ae5b06aefd9f7a890790c89aa5d89900ae9d37` | `sha256:e138f35e…e95c` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 48 excepted |
+| AI Gateway | `sha256:d89f24f10bfce6fd79b21873a3a38a7564f2a63b80a503874a219adc1f9635ef` | `sha256:c23bd656…4ee2` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 49 excepted |
+
+Both residual sets are the reviewed `OWNER-0O6E-2026-09-26` set (same counts
+and records as 0O.7A); the new PHP dependencies add no finding. Evidence
+bundle sha256 `8368c4c86dbbdacab4a3c6080deb147df0f4e74edadc0861009065367e406269`,
+signed with an ephemeral **non-production** key. **PUBLISHED = NONE,
+PROMOTED = NONE.**
+
+**What the qualification runs found and fixed (each published separately):**
+fixture tokens the source secret scan flagged (now computed at run time); the
+nginx access log recording the `/index.php` rewrite instead of the path; the
+image route check matching the one production probe route; two
+host-load-sensitive test timing margins; and a pre-existing Library test
+fixture flake (`library_loans` check-in before check-out across a second
+boundary). The shared `school-os` Compose test database was found with a
+drifted `school_os_app=UC` public-schema grant (not produced by any
+repository code; the database role verifier flagged it); the qualification
+ran against the isolated project and the shared database was left untouched.
+
+**Exception clock:** the records expire **2026-10-10** / **2026-10-26**;
+nothing was renewed.
