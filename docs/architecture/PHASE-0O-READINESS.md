@@ -981,8 +981,29 @@ keeps them out.
   (with `cffi` and `pycparser`), which passes O16.
 
 **Proof:** `verify-images.sh` has **111** checks (95 before) and proves both
-signed directions across real containers. Final qualification and digests
-are recorded below after publication.
+signed directions across real containers.
+
+Final qualification of the published `main` commit **`50cb6e9`**
+(`50cb6e99ef8d`, run `local-20260927T110726Z-5c4b1fb9`; Grype 0.100.0, fresh
+database built 2026-09-27T06:30Z):
+- **Same-run complete regression:** 6,055 tests, 0 failures, only the
+  deliberate ESI-12 skip.
+- **`verify-images.sh`:** 111/111.
+- **Language audits:** 0 advisories (including the new `cryptography` 50.0.1,
+  `cffi` 2.1.1 and `pycparser` 3.0).
+- **Secret scans:** 0 findings.
+
+| Image | Manifest digest | Config digest | `verify-artifact` |
+|---|---|---|---|
+| Application | `sha256:42b0df7da85c5ec1ee5ed440bd66147a6c264a881595596342d9af701a53a3e3` | `sha256:5cc22da2…6b29` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 48 excepted |
+| AI Gateway | `sha256:c1604da880f2ec5e1f233aaa969aa7c1664fc8cca3b3228b37a1d43e53e0ca99` | `sha256:6e76d817…8958` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 49 excepted |
+
+Both residual sets are **identical** to the reviewed `OWNER-0O6E-2026-09-26`
+set, and the new Python dependencies add no finding. So these successor
+digests meet all four conditions of the decision record's §4. The evidence
+bundle's sha256 is `7c5bb5a9e21444b55f911823b6efe21594e3a45758ab7e1c213802c338e87dc5`,
+signed with an ephemeral **non-production** key. **PUBLISHED = NONE,
+PROMOTED = NONE.**
 
 **O5:** repository implementation **COMPLETE**. Deployment evidence
 **OUTSTANDING**:
