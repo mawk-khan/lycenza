@@ -297,7 +297,7 @@ Other findings:
 | O6 | Runtime role name: keep `school_os_app` as a production contract, or generalize the code | **RESOLVED — ADR 0050 (Phase 0O.4)** | Engineering | Production DB provisioning |
 | O7 | API client model: who gets `/api/v1` tokens and how (mobile login token endpoint? partner keys? OAuth?), expiry, abilities | **RESOLVED — ADR 0049 (Phase 0O.2)**; lifetimes V1–V4 are owner values still required | Product + security | S1 |
 | O8 | Object storage: provider, region, encryption, versioning, lifecycle | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
-| O9 | Custom School domains in production: ownership verification, TLS | No | Product + operations | Domain routing in production |
+| O9 | Custom School domains in production: ownership verification, TLS | **RESOLVED — ADR 0054 (Phase 0O.8)**: browser-only School surface; persistent DNS TXT ownership; explicit lifecycle; edge-owned TLS proven by a domain probe; host-only sessions; 421 for unknown/non-active hosts; implementation Phase 0O.8A | Product + operations | Domain routing in production |
 | O10 | Backup policy, RPO/RTO, restore drills | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | Any production deployment |
 | O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
@@ -1029,3 +1029,77 @@ OR PROMOTED.**
   REQUIRED**.
 - The **real restore drill is still outstanding**.
 
+## 29. Phase 0O.8 — Custom School Domains & TLS Contract (2026-09-27)
+
+**O9 is RESOLVED as a contract by ADR 0054**
+(`docs/architecture/adr/0054-custom-school-domains-tls-contract.md`).
+This checkpoint is documentation only: no executable change, no DNS,
+TLS, ACME or edge vendor, and no deployment.
+
+**Audit.**
+- **Data model.** `school_domains` has `domain` unique across all rows,
+  `type`, an unconstrained `is_primary`, and `verified_at` as its only
+  state. There is no challenge, lifecycle, audit, capability, route or
+  service; nothing manages domains, and no demo School has one.
+- **Resolution.** `ResolveSchoolContext` matches the exact,
+  non-normalized host against `verified_at IS NOT NULL` in **both** the
+  web and api groups, and a verified domain overrides the session School.
+- **Host validation and URLs.** None exists, and in-request absolute URLs
+  follow the Host (the synchronous guardian invitation link included).
+- **Unchanged and correct.** The 0O.7A service-route exclusion,
+  host-only cookies (`SESSION_DOMAIN=null`), bearer-only Sanctum on
+  `/api/v1`, exact-origin CORS, the `'self'` CSP and HSTS without
+  subdomains or preload.
+- **Missing facilities.** No `intl`, no PSL facility, and no DNS client
+  with response codes or timeouts.
+
+**Decision:**
+- **Surface.** A custom domain is a **browser School surface only**. The
+  platform, Group, `/api/v1`, internal, health and storage routes answer
+  404 on it; `/api/v1` stays on the platform host (model B).
+- **Hostnames.**
+  - Hostnames are canonical lowercase ASCII LDH. IDN (`xn--`) is refused
+    in v1.
+  - Public suffixes are refused through a pinned PSL snapshot.
+  - Reserved hosts are deployment-configured.
+  - There is one claiming row per hostname (a partial unique index), and
+    pending claims reserve the hostname for 24 h.
+  - A School may hold up to 3 domains, with exactly one primary among
+    `active` ones; aliases 308-redirect to it.
+- **Lifecycle.** `pending_verification`, `verified`, `tls_pending`,
+  `active`, `suspended`, `revoked`, `expired`, with database-enforced
+  transitions and no deletions.
+- **Ownership.** A persistent TXT record,
+  `_lycenza-verification.<host>` = `lycenza-domain-verification=<43-char
+  base64url 256-bit token>`, matched exactly with split strings joined.
+  It is re-verified daily and never removed.
+- **Routing and TLS.** Routing must reach the deployment-configured edge
+  target (CNAME or an address set; private IPs are refused). The edge
+  owns TLS, and the application only proves it: an IP-pinned, publicly
+  trusted TLS ≥ 1.2 probe with an HMAC nonce response gates `active`.
+- **Drift.** Confirmation rules suspend on conclusive failures and never
+  on a single timeout.
+- **Requests.**
+  - Exact host classification returns **421** for unknown and non-active
+    hosts alike.
+  - The host decides the School, and membership is still required.
+  - Switching navigates to the target's canonical origin.
+  - Every absolute URL, background or in-request, comes from the stored
+    canonical origin, never the Host.
+- **Management.** `school.domains.view` / `.manage` with a fresh MFA code;
+  a `domain-checks` rate limit.
+- **Observability.** Metrics with closed labels and alerts
+  **OBS-28–OBS-30**; one School's domain never affects global readiness.
+
+**Next:** Phase 0O.8A — Custom School Domains & TLS Foundation
+(repository only). It adds a PSL library and a DNS client under O16, and
+closes the four recorded findings (ADR 0054 §15).
+
+**Exception clock:** the VERIFIED artifacts' exception records expire
+**2026-10-10** and **2026-10-26**; O9 renews nothing.
+
+- Decisions **O1, O2, O13, O14, O15** remain open.
+- Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- The **real restore drill is still outstanding**.

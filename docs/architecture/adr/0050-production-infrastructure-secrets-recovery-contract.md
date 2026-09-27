@@ -561,3 +561,16 @@ and images. §5's "service-to-service credential rotation — O5, open" is now
 
 The AI context signing key remains a separate secret with its own future
 custody (§5).
+
+**Note (Phase 0O.8, 2026-09-27):** O9 is resolved by **ADR 0054**.
+- **TLS:** the deployment edge terminates TLS for School custom domains,
+  and owns their certificates, renewal and private keys; the application
+  never does.
+- **Proof before `active`:** the application proves ownership (a
+  persistent DNS TXT record), routing to the deployment-configured edge
+  target, and TLS readiness (an IP-pinned probe).
+- **Proxies:** the trusted-proxy contract of §2 is unchanged. Forwarded
+  hosts count only from `TRUSTED_PROXIES`.
+- **New configuration:** `DOMAIN_EDGE_CNAME_TARGET`,
+  `DOMAIN_EDGE_ADDRESSES`, `DOMAIN_DNS_RESOLVERS` and `INTERNAL_HOSTS`, plus
+  the secret `DOMAIN_PROBE_KEY`.

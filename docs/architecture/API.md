@@ -18,6 +18,15 @@ platform-level `/education-boards` catalog — see
 `docs/modules/ACADEMIC-STRUCTURE.md` for the domain design and the
 OpenAPI spec for the full request/response shapes.
 
+## Hosts (ADR 0054)
+
+`/api/v1` is served on the **platform host only**. Custom School domains
+are browser-only surfaces, and every `/api/*` path answers 404 on them.
+The School is always the `{school}` URL parameter, verified by
+`school-membership`. A Host header never selects or pre-sets API tenancy.
+CORS stays ADR 0049's exact-origin list and never automatically includes
+custom domains.
+
 ## Authentication
 
 - Web console (Inertia): standard Laravel session auth — not part of

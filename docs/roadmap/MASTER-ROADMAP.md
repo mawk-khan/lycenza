@@ -1535,8 +1535,24 @@ documentation only).** ADR 0053 resolves O5.
   across real containers.
 
 O5 repository portion complete; deployment evidence outstanding. Remaining
-open: O1, O2, O9, O13, O14, O15. Next proposed: **0O.8 — Custom School
-Domains & TLS Contract (O9)**, not started.
+open: O1, O2, O9, O13, O14, O15.
+
+**0O.8 — Custom School Domains & TLS Contract (2026-09-27, documentation
+only).** ADR 0054 resolves O9.
+- **Surface:** custom domains are a browser School surface only; `/api/v1`
+  stays on the platform host.
+- **Ownership:** a persistent DNS TXT proof (frozen syntax, 24 h
+  challenge) with an explicit database-enforced lifecycle; pending claims
+  reserve the hostname, and there is one primary with redirecting aliases.
+- **Routing and TLS:** the deployment edge owns TLS; the application
+  proves routing and TLS with an IP-pinned probe before `active`.
+- **Drift:** daily drift checks with confirmation rules.
+- **Requests:** exact host classification (421 otherwise); host-decides,
+  membership-still-required tenancy; canonical-origin URL generation that
+  closes Host-header poisoning.
+
+Remaining open: O1, O2, O13, O14, O15. Next proposed: **0O.8A — Custom
+School Domains & TLS Foundation**, not started.
 
 ## Cross-cutting, ongoing (not a single phase)
 
