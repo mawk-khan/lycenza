@@ -107,7 +107,7 @@ class LibraryCatalogueLifecycleTest extends TestCase
         $title = $this->createLibraryTitle($school);
         $copy = $this->createLibraryCopy($title);
         $student = $this->createStudent($school, ['status' => 'active']);
-        $loan = $this->createLibraryLoan($copy, $student, ['status' => 'returned', 'checked_in_at' => now()]);
+        $loan = $this->createLibraryLoan($copy, $student, ['status' => 'returned', 'checked_out_at' => now()->subDay(), 'due_at' => now()->addDays(13), 'checked_in_at' => now()]);
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user));
 
         $client->patchJson("/api/v1/schools/{$school->id}/library-titles/{$title->id}", ['status' => 'inactive'])->assertOk();
