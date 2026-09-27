@@ -37,6 +37,7 @@ construction. Guard-tested: every metric named here exists in
 | Recovery sweeps | `sum by (recovery_source, result) (increase(lycenza_reconciliation_rows_total[1h]))`, `time() - lycenza_reconciliation_last_success_timestamp_seconds`, `sum by (recovery_source, outcome) (increase(lycenza_reconciliation_runs_total[1h]))` |
 | Webhooks | `lycenza_webhook_deliveries`, `lycenza_webhook_overdue_deliveries`, `lycenza_webhook_oldest_overdue_age_seconds`, `sum by (outcome) (increase(lycenza_webhook_attempts_total[1h]))`, `sum by (outcome) (increase(lycenza_webhook_deliveries_finished_total[1h]))` |
 | Communications | `lycenza_communication_deliveries`, `lycenza_communication_overdue_deliveries`, `lycenza_communication_oldest_overdue_age_seconds`, `sum by (delivery_channel, outcome) (increase(lycenza_communication_deliveries_finished_total[1h]))` |
+| Email (ADR 0055) | `lycenza_email_pending_messages`, `lycenza_email_oldest_pending_age_seconds`, `sum by (message_class, outcome) (increase(lycenza_email_messages_total[1h]))`, `sum by (outcome) (increase(lycenza_email_submission_attempts_total[1h]))`, `sum by (outcome) (increase(lycenza_email_webhook_requests_total[1h]))`, `time() - lycenza_email_last_event_timestamp_seconds` |
 | Automation | `sum by (outcome) (increase(lycenza_automation_executions_total[1h]))`, `lycenza_automation_pending_executions`, `lycenza_automation_overdue_executions`, `increase(lycenza_automation_review_items_created_total[1d])` |
 | Partner auth failures | `sum by (outcome) (increase(lycenza_partner_auth_failures_total[1h]))` |
 

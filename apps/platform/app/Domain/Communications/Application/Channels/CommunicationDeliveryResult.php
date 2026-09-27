@@ -36,6 +36,17 @@ final class CommunicationDeliveryResult
     }
 
     /**
+     * Phase 0O.9A (ADR 0055 section 9.5): handed to the platform email layer
+     * -- durable, but NOT yet submitted to a provider, let alone delivered.
+     * `providerReference` is the internal email message id. The delivery
+     * then follows the email's state (CommunicationDeliveryEmailSource).
+     */
+    public static function accepted(string $emailMessageId): self
+    {
+        return new self(true, status: 'accepted', providerReference: $emailMessageId);
+    }
+
+    /**
      * `retryable` (brief §21): true only for a transient transport
      * condition worth a bounded retry (e.g. a connection failure). A
      * deterministic failure (no address, channel disabled, recipient

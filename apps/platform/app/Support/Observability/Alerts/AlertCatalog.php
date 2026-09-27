@@ -2,11 +2,14 @@
 
 namespace App\Support\Observability\Alerts;
 
+use App\Support\Email\EmailKind;
+use App\Support\Email\EmailPurpose;
 use App\Support\Observability\Metrics\MetricCatalog;
 
 /**
- * Phase 0O.5A (ADR 0051 §14.4): the 26 required alerts, OBS-01..OBS-26,
- * as deterministic definitions. The application sends NO notification:
+ * Phase 0O.5A (ADR 0051 §14.4): the required alerts as deterministic
+ * definitions -- OBS-01..OBS-26 (ADR 0051), OBS-27 (ADR 0053), OBS-28..30
+ * (ADR 0054) and OBS-31..38 (ADR 0055, production email). The application sends NO notification:
  * the deployment's backend evaluates the exported rules
  * (AlertRulesExporter) and routes them.
  *
@@ -45,11 +48,17 @@ final class AlertCatalog
         $storageFailures = self::operator('storage_failures_per_15m', 1, 100000);
         $securityRejections = self::operator('security_rejections_per_15m', 1, 10000000);
         $telemetryFor = self::operator('telemetry_down_for_seconds', 60, 3600);
+        $emailRatio = self::operator('email_failure_ratio_per_hour', 0.001, 1.0);
+        $emailHardBounces = self::operator('email_hard_bounces_per_hour', 1, 1000000);
+        $emailComplaints = self::operator('email_complaints_per_hour', 1, 1000000);
+        $emailWebhookAuth = self::operator('email_webhook_auth_failures_per_15m', 1, 1000000);
 
         $minuteTasks = array_values(array_diff(MetricCatalog::scheduledTasks(), MetricCatalog::DAILY_TASKS));
         $minuteRegex = implode('|', $minuteTasks);
         $dailyRegex = implode('|', MetricCatalog::DAILY_TASKS);
         $queues = MetricCatalog::queues();
+        $criticalList = array_values(array_map(fn (EmailPurpose $p) => $p->value, array_filter(EmailPurpose::cases(), fn (EmailPurpose $p) => $p->kind() === EmailKind::Critical)));
+        $criticalClasses = implode('|', $criticalList);
 
         $taskAge = fn (MetricSnapshot $s, string $task) => $s->age('lycenza_scheduler_task_last_success_timestamp_seconds', ['scheduled_task' => $task]);
         $allMinuteTasksOlderThan = fn (MetricSnapshot $s, int $seconds) => array_reduce($minuteTasks, fn (bool $carry, string $task) => $carry && (($taskAge($s, $task) ?? INF) > $seconds), true);
@@ -244,6 +253,47 @@ final class AlertCatalog
                 self::tier(Severity::Sev3, 'max(lycenza_domain_indeterminate_max_age_seconds) >= 259200', 0,
                     fn (MetricSnapshot $s) => ($s->value('lycenza_domain_indeterminate_max_age_seconds') ?? 0) >= 3 * self::DAY),
             ]),
+            // ADR 0055 (Phase 0O.9A): production email. Email is optional for
+            // readiness: nothing here pages as SEV-1.
+            self::rule('OBS-31', 'Critical email (account invitations) waiting too long to reach the provider.', 'B', 'EMAIL-DELIVERABILITY.md', [
+                self::tier(Severity::Sev2, "max(lycenza_email_oldest_pending_age_seconds{message_class=~\"{$criticalClasses}\"}) > {$high}", 0,
+                    fn (MetricSnapshot $s) => max(array_map(fn (string $c) => $s->value('lycenza_email_oldest_pending_age_seconds', ['message_class' => $c]) ?? 0, $criticalList)) > $high),
+            ]),
+            self::rule('OBS-32', 'Standard email (School communications) backlog too old.', 'B', 'EMAIL-DELIVERABILITY.md', [
+                self::tier(Severity::Sev3, "max(lycenza_email_oldest_pending_age_seconds{message_class=\"school_communication\"}) > {$high}", 0,
+                    fn (MetricSnapshot $s) => ($s->value('lycenza_email_oldest_pending_age_seconds', ['message_class' => 'school_communication']) ?? 0) > $high),
+            ]),
+            self::rule('OBS-33', 'Email submission failure ratio above the operator baseline.', 'C', 'EMAIL-DELIVERABILITY.md', $emailRatio === null ? [] : [
+                self::tier(Severity::Sev3, "sum(increase(lycenza_email_submission_attempts_total{outcome=~\"transient_failure|permanent_failure\"}[1h])) / sum(increase(lycenza_email_submission_attempts_total[1h])) > {$emailRatio}", 0,
+                    function (MetricSnapshot $s) use ($emailRatio) {
+                        $total = $s->increase('lycenza_email_submission_attempts_total', '1h');
+                        $failed = $s->increase('lycenza_email_submission_attempts_total', '1h', ['outcome' => 'transient_failure']) + $s->increase('lycenza_email_submission_attempts_total', '1h', ['outcome' => 'permanent_failure']);
+
+                        return $total > 0 && $failed / $total > $emailRatio;
+                    }),
+            ], $emailRatio === null ? 'operator value ALERT_EMAIL_FAILURE_RATIO_PER_HOUR not set' : null),
+            self::rule('OBS-34', 'Email provider refusing the configured credentials or TLS (sending paused).', 'A', 'EMAIL-DELIVERABILITY.md', [
+                self::tier(Severity::Sev2, 'sum(increase(lycenza_email_submission_attempts_total{outcome="auth_failure"}[15m])) > 0', 0,
+                    fn (MetricSnapshot $s) => $s->increase('lycenza_email_submission_attempts_total', '15m', ['outcome' => 'auth_failure']) > 0),
+            ]),
+            self::rule('OBS-35', 'No provider email events while email is being submitted (event feed stale).', 'A', 'EMAIL-DELIVERABILITY.md', [
+                self::tier(Severity::Sev3, '(time() - max(lycenza_email_last_event_timestamp_seconds)) > 86400 and sum(increase(lycenza_email_messages_total{outcome="submitted"}[1h])) > 0', 0,
+                    fn (MetricSnapshot $s) => $s->value('lycenza_email_last_event_timestamp_seconds') !== null
+                        && ($s->age('lycenza_email_last_event_timestamp_seconds') ?? INF) > self::DAY
+                        && $s->increase('lycenza_email_messages_total', '1h', ['outcome' => 'submitted']) > 0),
+            ]),
+            self::rule('OBS-36', 'Hard-bounce spike above the operator baseline (list quality or a sending problem).', 'C', 'EMAIL-DELIVERABILITY.md', $emailHardBounces === null ? [] : [
+                self::tier(Severity::Sev3, "sum(increase(lycenza_email_messages_total{outcome=\"bounced\"}[1h])) > {$emailHardBounces}", 0,
+                    fn (MetricSnapshot $s) => $s->increase('lycenza_email_messages_total', '1h', ['outcome' => 'bounced']) > $emailHardBounces),
+            ], $emailHardBounces === null ? 'operator value ALERT_EMAIL_HARD_BOUNCES_PER_HOUR not set' : null),
+            self::rule('OBS-37', 'Complaint spike above the operator baseline (sending reputation at risk).', 'C', 'EMAIL-DELIVERABILITY.md', $emailComplaints === null ? [] : [
+                self::tier(Severity::Sev2, "sum(increase(lycenza_email_messages_total{outcome=\"complained\"}[1h])) > {$emailComplaints}", 0,
+                    fn (MetricSnapshot $s) => $s->increase('lycenza_email_messages_total', '1h', ['outcome' => 'complained']) > $emailComplaints),
+            ], $emailComplaints === null ? 'operator value ALERT_EMAIL_COMPLAINTS_PER_HOUR not set' : null),
+            self::rule('OBS-38', 'Email provider-event webhook authentication failures above the operator baseline.', 'C', 'EMAIL-DELIVERABILITY.md', $emailWebhookAuth === null ? [] : [
+                self::tier(Severity::Sev3, "sum(increase(lycenza_email_webhook_requests_total{outcome=\"unauthenticated\"}[15m])) > {$emailWebhookAuth}", 0,
+                    fn (MetricSnapshot $s) => $s->increase('lycenza_email_webhook_requests_total', '15m', ['outcome' => 'unauthenticated']) > $emailWebhookAuth),
+            ], $emailWebhookAuth === null ? 'operator value ALERT_EMAIL_WEBHOOK_AUTH_FAILURES_PER_15M not set' : null),
         ];
     }
 

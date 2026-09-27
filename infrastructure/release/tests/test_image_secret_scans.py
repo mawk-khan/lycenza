@@ -51,6 +51,14 @@ class ConfigScanTest(unittest.TestCase):
             # the committed development value is a canary wherever it appears.
             "domain probe key env": config(env=["DOMAIN_PROBE_KEY=canary"]),
             "committed development probe key": config(history=["RUN /bin/sh -c echo " + "dev-local-only-domain-" + "probe-key-change-me-0000 # buildkit"]),
+            # ADR 0055: email secrets are secret-shaped settings, and the committed
+            # development/test values are canaries wherever they appear.
+            "mail suppression key env": config(env=["MAIL_SUPPRESSION_HMAC_KEY=canary"]),
+            "mail previous suppression key env": config(env=["MAIL_SUPPRESSION_HMAC_PREVIOUS_KEY=canary"]),
+            "mail provider event secret env": config(env=["MAIL_PROVIDER_EVENT_SECRET=canary"]),
+            "smtp password env": config(env=["MAIL_PASSWORD=canary"]),
+            "committed development mail key": config(history=["RUN /bin/sh -c echo " + "dev-local-only-mail-" + "suppression-hmac-key-change-me # buildkit"]),
+            "committed test mail event secret": config(labels={"note": "phpunit-only-mail-" + "provider-event-secret-0001"}),
         }
         for name, cfg in cases.items():
             with self.subTest(name):
@@ -116,7 +124,7 @@ class RootfsScanTest(unittest.TestCase):
         self.assertEqual([(i["code"], i["where"]) for i in scan_rootfs(self.root, "ai-gateway")], [("ed25519_private_jwk", "/srv/ai/app/keys.json")])
 
         (self.root / "srv/ai/app/keys.json").unlink()
-        dev_seeds = [c for c in CANARIES if not c.startswith(("dev-", "Demo", "school_os", "minio"))]
+        dev_seeds = [c for c in CANARIES if not c.startswith(("dev-", "phpunit-", "Demo", "school_os", "minio"))]
         self.assertEqual(len(dev_seeds), 2)
         guard = "/var/www/app/app/Support/Configuration/ProductionConfigurationGuard.php"
         self.put(guard, dev_seeds[0].encode())

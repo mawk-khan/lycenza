@@ -183,6 +183,8 @@ class ProductionProcessManifestTest extends TestCase
             // ADR 0053: PUBLIC verification keys (configuration, not a secret),
             // and the retired shared token, read only so production refuses it.
             'AI_GATEWAY_INBOUND_VERIFICATION_KEYS', 'AI_GATEWAY_SERVICE_TOKEN',
+            // ADR 0055: the suppression key ring's key IDS (labels, not keys).
+            'MAIL_SUPPRESSION_HMAC_KEY_ID', 'MAIL_SUPPRESSION_HMAC_PREVIOUS_KEY_ID',
         ];
 
         $names = [];

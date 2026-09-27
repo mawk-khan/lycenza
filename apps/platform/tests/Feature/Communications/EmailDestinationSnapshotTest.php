@@ -3,7 +3,6 @@
 namespace Tests\Feature\Communications;
 
 use App\Domain\Communications\Application\AnnouncementService;
-use App\Domain\Communications\Application\Channels\CommunicationMail;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
@@ -11,10 +10,10 @@ use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -27,7 +26,7 @@ use Tests\TestCase;
  */
 class EmailDestinationSnapshotTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -38,7 +37,7 @@ class EmailDestinationSnapshotTest extends TestCase
     public function a_published_deliverys_destination_survives_a_later_change_to_the_users_email(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser(['email' => 'old@school-os.test']);
@@ -79,7 +78,7 @@ class EmailDestinationSnapshotTest extends TestCase
         // ...while the newly created delivery resolves the NEW address.
         $this->assertSame('new@school-os.test', $secondEmailDelivery->destination_snapshot['email']);
 
-        Mail::assertSent(CommunicationMail::class, fn ($mail) => $mail->hasTo('old@school-os.test'));
-        Mail::assertSent(CommunicationMail::class, fn ($mail) => $mail->hasTo('new@school-os.test'));
+        $this->assertEmailAcceptedTo('old@school-os.test');
+        $this->assertEmailAcceptedTo('new@school-os.test');
     }
 }

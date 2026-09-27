@@ -95,6 +95,11 @@ class ProductionBootSmokeTest extends TestCase
             'DOMAIN_FAKES_ENABLED' => 'false',
             'DOMAIN_ALLOW_DEVELOPMENT_HOSTS' => 'false',
             'SESSION_HANDOFF_STORE' => 'redis',
+            // ADR 0055 (Phase 0O.9A): email explicitly disabled (a complete,
+            // safe mode) -- phpunit.xml turns the fake provider and fake
+            // event feed on for the suite.
+            'MAIL_PROVIDER' => 'none',
+            'MAIL_PROVIDER_EVENTS' => 'none',
             'PROBE_HOST' => 'erp.example.org',
             'APP_CONFIG_CACHE' => $this->dir.'/config.php',
             'APP_ROUTES_CACHE' => $this->dir.'/routes.php',

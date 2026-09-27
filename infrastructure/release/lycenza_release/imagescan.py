@@ -35,6 +35,12 @@ CANARIES = (
     "dev-local-only-statutory-identifier-lookup-hmac-key-change-me",
     # ADR 0054: the committed DEVELOPMENT custom-domain probe key.
     "dev-local-only-domain-probe-key-change-me-0000",
+    # ADR 0055: the committed DEVELOPMENT/TEST email suppression key and
+    # provider-event secret (.env.example, .ddev, phpunit.xml).
+    "dev-local-only-mail-suppression-hmac-key-change-me",
+    "dev-local-only-mail-provider-event-secret-change-me",
+    "phpunit-only-mail-suppression-hmac-key-0001",
+    "phpunit-only-mail-provider-event-secret-0001",
     # ADR 0053: the committed DEVELOPMENT service keys' private seeds (JWK "d"):
     # no image may carry them, not even in a guard (guards match public keys).
     "XZoBPMZruZQzihxKjIBvRRf7cuG1E1zAoq2IWtvQgKI",

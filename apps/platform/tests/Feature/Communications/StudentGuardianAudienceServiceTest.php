@@ -22,10 +22,10 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -39,7 +39,7 @@ use Tests\TestCase;
  */
 class StudentGuardianAudienceServiceTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -337,7 +337,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
     public function a_guardian_with_an_eligible_email_contact_gets_a_real_delivery(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);
@@ -354,14 +354,14 @@ class StudentGuardianAudienceServiceTest extends TestCase
         $this->assertNotNull($emailDelivery);
         $this->assertSame('sent', $emailDelivery->status);
         $this->assertSame('guardian@example.com', $emailDelivery->destination_snapshot['email']);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function a_guardian_without_an_email_contact_gets_no_delivery_and_a_destination_unavailable_decision(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);
@@ -379,7 +379,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
             ->where('message_id', $published->message_id)->where('recipient_guardian_id', $guardian->id)
             ->where('channel', 'email')->value('reason'));
         $this->assertSame('recipient_destination_unavailable', $reason);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
 
         // §34: still fully present in the immutable logical snapshot --
         // never silently dropped.
@@ -390,7 +390,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
     public function email_globally_disabled_produces_no_real_send(): void
     {
         Config::set('communications.channels.email.enabled', false);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);
@@ -408,14 +408,14 @@ class StudentGuardianAudienceServiceTest extends TestCase
         $published = $this->service()->publish($announcement, $creator);
 
         $this->assertCount(0, $this->deliveriesFor($school, $published->message_id));
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function guardian_email_selection_prefers_the_active_primary_contact(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);
@@ -437,7 +437,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
     public function guardian_email_selection_falls_back_to_the_oldest_active_contact_with_no_primary(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);
@@ -460,7 +460,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
     public function republishing_does_not_duplicate_the_guardian_email_delivery(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);
@@ -476,14 +476,14 @@ class StudentGuardianAudienceServiceTest extends TestCase
 
         $emailCount = $this->deliveriesFor($school, $first->message_id)->where('channel', 'email')->count();
         $this->assertSame(1, $emailCount);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function guardian_email_respects_quiet_hours_deferral_exactly_like_a_membership_recipient(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -505,14 +505,14 @@ class StudentGuardianAudienceServiceTest extends TestCase
         $emailDelivery = $this->deliveriesFor($school, $published->message_id)->firstWhere('channel', 'email');
         $this->assertSame('queued', $emailDelivery->status);
         $this->assertNotNull($emailDelivery->next_attempt_at);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function guardian_email_emergency_bypasses_quiet_hours(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -539,14 +539,14 @@ class StudentGuardianAudienceServiceTest extends TestCase
 
         $emailDelivery = $this->deliveriesFor($school, $published->message_id)->firstWhere('channel', 'email');
         $this->assertSame('sent', $emailDelivery->status);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function partial_reachability_all_guardians_are_snapshotted_but_only_the_eligible_ones_get_a_delivery(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $eligible = [];
@@ -572,7 +572,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
 
         $emailDeliveries = $this->deliveriesFor($school, $published->message_id)->where('channel', 'email');
         $this->assertCount(3, $emailDeliveries);
-        Mail::assertSentCount(3);
+        $this->assertEmailAcceptedCount(3);
     }
 
     // --- §45: Snapshot immutability --------------------------------------
@@ -581,7 +581,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
     public function editing_a_guardian_contact_after_publish_does_not_change_the_historical_destination_snapshot(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);

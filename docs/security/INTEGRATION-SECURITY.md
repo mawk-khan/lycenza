@@ -247,9 +247,12 @@ authority exists only in a trusted release context on protected `main`.
 Vulnerability exceptions are validated records of a human security decision,
 never silent suppression.
 
-## Inbound email provider events (ADR 0055, Phase 0O.9 — contract; built in 0O.9A)
+## Inbound email provider events (ADR 0055; implemented in Phase 0O.9A)
 
-No inbound provider endpoint exists today. The contract, ADR 0055 §11:
+Implemented as `App\Http\Controllers\Api\Integrations\EmailProviderEventController`
+with the provider's `EmailEventAdapter`. **Only the test/local fake adapter
+exists**, and production refuses it; with no adapter the route answers 404.
+A vendor's adapter arrives with the vendor selection. ADR 0055 §11:
 - **Route.** One endpoint, `POST /api/integrations/email-provider/events`,
   on the platform host only (a School host answers 404), with no session
   and no School derived from the Host.
@@ -271,6 +274,17 @@ No inbound provider endpoint exists today. The contract, ADR 0055 §11:
 - **Tenancy.** The School always comes from the stored message found by
   provider message id, never from the payload. Unknown message ids are
   recorded as `ignored`.
+
+Checked in this order: body bound, then authentication, then content type,
+then JSON depth, then shape, then event count. Every authentication failure
+gets one empty 401.
+
+- Events are stored normalized in `email_events` (no payload, no School,
+  no address) and applied by a queued job. The School always comes from
+  `email_provider_references`.
+- Duplicates are no-ops (`(provider, event_key)` unique).
+- Out-of-order events are recorded `stale` and change nothing.
+- Unknown message ids are recorded `unknown_message` and create nothing.
 
 This is separate from outbound webhooks (ADR 0026/0027, rules 35–49) and
 from payment-provider callbacks (rule 34).

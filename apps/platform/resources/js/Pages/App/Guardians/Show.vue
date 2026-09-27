@@ -41,10 +41,17 @@ interface EmailPreferenceState {
     endpointAvailable: boolean;
 }
 
+// Phase 0O.9A (ADR 0055): the invitation email's transport state -- closed
+// codes only. "queued"/"sent to the email provider" never means delivered.
+interface InvitationEmailState {
+    state: string;
+    waitingReason: string | null;
+}
+
 interface AccountInvitationState {
     canManage: boolean;
     hasEmailContact: boolean;
-    pending: { status: string; expiresAt: string } | null;
+    pending: { status: string; expiresAt: string; email: InvitationEmailState | null } | null;
 }
 
 interface Props {
@@ -124,6 +131,34 @@ function unlinkAccount(): void {
 }
 
 // --- Phase 5D.3: account invitation ---------------------------------
+const emailStateLabels: Record<string, string> = {
+    pending: 'queued',
+    submitting: 'being sent',
+    submitted: 'sent to the email provider (not yet confirmed delivered)',
+    deferred: 'delayed by the receiving mail server',
+    delivered: 'delivered',
+    bounced: 'bounced (the address could not receive it)',
+    complained: 'reported as unwanted by the recipient',
+    failed: 'could not be sent',
+    suppressed: 'not sent (this address is blocked after an earlier bounce or complaint)',
+    cancelled: 'cancelled',
+};
+
+const waitingReasonLabels: Record<string, string> = {
+    email_disabled: 'email sending is not enabled on this deployment',
+    sending_not_verified: 'email sending is not verified yet on this deployment',
+    sending_domain_missing: 'email sending is not configured on this deployment',
+    provider_auth_failure: 'the email service is temporarily unavailable',
+    provider_auth_paused: 'the email service is temporarily unavailable',
+    school_not_operational: 'the School is not active',
+};
+
+function invitationEmailLabel(email: InvitationEmailState): string {
+    const label = emailStateLabels[email.state] ?? email.state;
+    const reason = email.waitingReason ? waitingReasonLabels[email.waitingReason] : undefined;
+
+    return reason ? `${label} -- waiting: ${reason}` : label;
+}
 
 const invitationBusy = ref(false);
 
@@ -509,6 +544,12 @@ function submitContact(): void {
                         (expires
                         {{ new Date(accountInvitation.pending.expiresAt).toLocaleDateString() }})
                     </span>
+                </p>
+                <p v-if="accountInvitation.pending.email" class="mt-1 text-slate-600">
+                    Invitation email:
+                    <span class="font-medium">{{
+                        invitationEmailLabel(accountInvitation.pending.email)
+                    }}</span>
                 </p>
                 <div class="mt-2 space-x-4">
                     <button

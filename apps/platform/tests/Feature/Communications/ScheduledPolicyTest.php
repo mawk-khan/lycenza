@@ -11,10 +11,10 @@ use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -24,7 +24,7 @@ use Tests\TestCase;
  */
 class ScheduledPolicyTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -35,7 +35,7 @@ class ScheduledPolicyTest extends TestCase
     public function a_preference_disabled_after_scheduling_but_before_due_time_suppresses_email_at_publication(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
@@ -61,14 +61,14 @@ class ScheduledPolicyTest extends TestCase
             ->pluck('channel')->all());
 
         $this->assertSame(['in_app'], $channels, 'The DUE-TIME preference (disabled) must govern, not the schedule-time one (enabled).');
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function a_preference_enabled_after_scheduling_but_before_due_time_permits_email_at_publication(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
@@ -94,6 +94,6 @@ class ScheduledPolicyTest extends TestCase
             ->pluck('channel')->sort()->values()->all());
 
         $this->assertSame(['email', 'in_app'], $channels, 'The DUE-TIME preference (enabled) must govern, not the schedule-time one (disabled).');
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 }

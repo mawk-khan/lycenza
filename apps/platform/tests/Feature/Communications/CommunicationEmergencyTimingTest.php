@@ -17,10 +17,10 @@ use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -35,7 +35,7 @@ use Tests\TestCase;
  */
 class CommunicationEmergencyTimingTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -75,7 +75,7 @@ class CommunicationEmergencyTimingTest extends TestCase
     public function standard_during_quiet_hours_with_bypass_enabled_still_defers(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: true);
         $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
@@ -86,14 +86,14 @@ class CommunicationEmergencyTimingTest extends TestCase
         $published = $this->service()->publish($announcement, $creator);
 
         $this->assertSame('queued', $this->emailDeliveryStatus(app(TenantContext::class), $school, $published->message_id));
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function critical_standard_during_quiet_hours_with_bypass_enabled_still_defers(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: true);
         $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
@@ -104,14 +104,14 @@ class CommunicationEmergencyTimingTest extends TestCase
         $published = $this->service()->publish($announcement, $creator);
 
         $this->assertSame('queued', $this->emailDeliveryStatus(app(TenantContext::class), $school, $published->message_id));
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function required_standard_during_quiet_hours_with_bypass_enabled_still_defers(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: true);
         $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
@@ -123,14 +123,14 @@ class CommunicationEmergencyTimingTest extends TestCase
         $published = $this->service()->publish($announcement, $creator);
 
         $this->assertSame('queued', $this->emailDeliveryStatus(app(TenantContext::class), $school, $published->message_id));
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function emergency_during_quiet_hours_with_bypass_disabled_still_defers(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: false);
         $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
@@ -144,14 +144,14 @@ class CommunicationEmergencyTimingTest extends TestCase
         $published = $this->service()->publish($announcement, $creator);
 
         $this->assertSame('queued', $this->emailDeliveryStatus(app(TenantContext::class), $school, $published->message_id));
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function emergency_during_quiet_hours_with_bypass_enabled_sends_now(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: true);
         $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
@@ -166,7 +166,7 @@ class CommunicationEmergencyTimingTest extends TestCase
 
         $context = app(TenantContext::class);
         $this->assertSame('sent', $this->emailDeliveryStatus($context, $school, $published->message_id));
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
 
         $this->assertSame(1, $context->withSchool($school, fn () => SchoolAuditEvent::query()
             ->where('event_type', 'communication.emergency_quiet_hours_bypass_used')->where('subject_id', $published->id)->count()));
@@ -176,7 +176,7 @@ class CommunicationEmergencyTimingTest extends TestCase
     public function emergency_outside_quiet_hours_sends_now_without_a_bypass_reason(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: true);
         // 12:00 is well outside the 20:00-07:00 window -- no bypass is
         // even considered, this is an ordinary immediate send.
@@ -193,7 +193,7 @@ class CommunicationEmergencyTimingTest extends TestCase
 
         $context = app(TenantContext::class);
         $this->assertSame('sent', $this->emailDeliveryStatus($context, $school, $published->message_id));
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
 
         $this->assertSame(0, $context->withSchool($school, fn () => SchoolAuditEvent::query()
             ->where('event_type', 'communication.emergency_quiet_hours_bypass_used')->where('subject_id', $published->id)->count()));
@@ -205,7 +205,7 @@ class CommunicationEmergencyTimingTest extends TestCase
     public function in_app_is_never_delayed_for_an_emergency_announcement_either(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: false);
         $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
@@ -232,7 +232,7 @@ class CommunicationEmergencyTimingTest extends TestCase
     public function a_disabled_optional_email_preference_never_suppresses_a_required_emergency(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
         $creatorMembership = $this->createMembership($creator, $school);
@@ -254,7 +254,7 @@ class CommunicationEmergencyTimingTest extends TestCase
         $published = $this->service()->publish($announcement, $creator);
 
         $this->assertSame('sent', $this->emailDeliveryStatus(app(TenantContext::class), $school, $published->message_id));
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     // --- §52/§17: channel policy still wins ------------------------------
@@ -263,7 +263,7 @@ class CommunicationEmergencyTimingTest extends TestCase
     public function school_channel_policy_denial_of_required_email_still_suppresses_an_emergency(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: true);
         $this->createChannelPolicy($school, [
             'channel' => 'email',
@@ -292,7 +292,7 @@ class CommunicationEmergencyTimingTest extends TestCase
             ->where('message_id', $published->message_id)->where('channel', 'email')->value('reason'));
         $this->assertSame('school_required_channel_disabled', $reason);
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     // --- §19/§53: the global technical gate still wins -------------------
@@ -309,7 +309,7 @@ class CommunicationEmergencyTimingTest extends TestCase
         // like Channels\EmailChannelDriverTest already proves for a
         // STANDARD delivery.
         Config::set('communications.channels.email.enabled', false);
-        Mail::fake();
+        $this->fakeEmail();
         ['creator' => $creator, 'school' => $school] = $this->setUpSchoolWithMember(quietBypassAllowed: true);
         $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
@@ -331,6 +331,6 @@ class CommunicationEmergencyTimingTest extends TestCase
         $this->assertSame('failed', $delivery->status);
         $this->assertSame('email_channel_disabled', $delivery->failure_code);
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 }

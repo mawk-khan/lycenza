@@ -3,7 +3,6 @@
 namespace Tests\Feature\CustomDomains;
 
 use App\Domain\Guardians\Infrastructure\ContactType;
-use App\Domain\Identity\Mail\GuardianAccountInvitationMail;
 use App\Domain\Platform\Application\Domains\SchoolDomainCheckService;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Models\School;
@@ -16,12 +15,12 @@ use App\Support\Observability\LogSanitizer;
 use App\Support\Observability\Metrics\MetricCatalog;
 use App\Support\Observability\Metrics\MetricsExporter;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CapturesStructuredLogs;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesSchoolDomains;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -31,7 +30,7 @@ use Tests\TestCase;
  */
 class DomainUrlsAndObservabilityTest extends TestCase
 {
-    use CapturesStructuredLogs, CreatesCommunicationFixtures, CreatesSchoolDomains, CreatesTenancyFixtures;
+    use CapturesStructuredLogs, CreatesCommunicationFixtures, CreatesSchoolDomains, CreatesTenancyFixtures, FakesEmail;
 
     #[Test]
     public function the_canonical_origin_is_the_active_primary_or_the_platform_never_the_request(): void
@@ -54,19 +53,20 @@ class DomainUrlsAndObservabilityTest extends TestCase
     #[Test]
     public function an_invitation_link_uses_the_canonical_origin_whatever_host_the_request_came_in_on(): void
     {
-        Mail::fake();
+        $this->fakeEmail();
         config(['app.url' => 'https://app.lycenza-platform.com', 'domains.platform_aliases' => ['www.lycenza-platform.com']]);
         [$admin, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);
         $this->createGuardianContact($guardian, ContactType::Email, 'guardian@example.com');
 
         $urls = [];
+        // Phase 0O.9A: the link as SEALED in the queued email and submitted by
+        // a worker with no request at all.
         $capture = function () use (&$urls): void {
-            Mail::assertSent(GuardianAccountInvitationMail::class, function (GuardianAccountInvitationMail $mail) use (&$urls): bool {
-                $urls[spl_object_id($mail)] ??= (string) $mail->content()->with['acceptanceUrl'];
-
-                return true;
-            });
+            foreach ($this->emailFake()->acceptedEmails() as $email) {
+                preg_match('#https://\S+/invitations/\S+#', $email->text, $m);
+                $urls[$email->messageId] ??= $m[0];
+            }
         };
 
         // Sent from the platform alias: the link is still the School's canonical origin.

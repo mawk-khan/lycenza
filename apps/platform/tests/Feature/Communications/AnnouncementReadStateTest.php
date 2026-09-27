@@ -10,10 +10,10 @@ use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -25,7 +25,7 @@ use Tests\TestCase;
  */
 class AnnouncementReadStateTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -192,7 +192,7 @@ class AnnouncementReadStateTest extends TestCase
     public function email_delivery_status_is_never_touched_by_in_app_read_state(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $recipient = $this->createUser(['email' => 'recipient@school-os.test']);

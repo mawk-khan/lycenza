@@ -263,29 +263,45 @@ account's password has no in-app recovery yet.
 ## 7. What stays open
 
 O3, O4, O5, O6, O7, O8, O9, O10, O11, O12, O13 and O16 are resolved (ADR 0049,
-ADR 0050, ADR 0051, ADR 0052, ADR 0053, ADR 0054, ADR 0055; O9's repository
-implementation is Phase 0O.8A, and its deployment evidence is outstanding;
-O13 is a contract whose implementation is Phase 0O.9A, not started). Still
+ADR 0050, ADR 0051, ADR 0052, ADR 0053, ADR 0054, ADR 0055; O9's and O13's
+repository implementations are Phases 0O.8A and 0O.9A, and their deployment
+evidence is outstanding). Still
 open: O1 (definition of done — including a real restore drill), O2
 (payments), O14 (password reset) and O15 (partner integrations).
 
-**Email (ADR 0055, contract only).** Today nothing stops production from
-using the `log` mailer, a `hello@example.com` From, an unbounded SMTP
-timeout or the `failover → log` mailer, and the Guardian invitation is sent
-inside its business transaction. **No production email may be relied on
-before Phase 0O.9A and the deployment evidence (ADR 0055 §23).**
+**Email (ADR 0055, implemented in 0O.9A).** Every business email goes through
+the durable email layer.
 
-The 0O.9A production guard must refuse to boot with any of these:
-- a framework sink (`log`, `array`, `failover`, `roundrobin`, `sendmail`)
-  or a local SMTP host;
-- the fake adapter;
-- a missing credential, sending domain or webhook secret ring;
-- a From outside the mailbox catalog;
-- plaintext or unverified SMTP TLS;
-- tracking enabled;
-- a missing suppression HMAC key.
+**Disabled mode.** `MAIL_PROVIDER=none` (the default) is a complete,
+explicit mode: messages wait and nothing claims to be sent.
 
-`MAIL_PROVIDER=none` stays an explicit, honest disabled mode.
+**Always refused in production:**
+- `mail_provider_fake` / `mail_provider_invalid`;
+- `mail_events_adapter_fake` / `mail_events_adapter_invalid`;
+- `mail_unsafe_mailer_default` (a failover/roundrobin/sendmail default
+  mailer);
+- `mail_provider_debug_enabled`;
+- `mail_tracking_enabled`.
+
+**Also refused when email is enabled:**
+- `mail_laravel_default_is_sink` (a log/array default);
+- `mail_sending_domain_missing` / `_invalid`;
+- `mail_from_not_catalog`;
+- `mail_suppression_keys_invalid`.
+
+**For SMTP:**
+- `mail_smtp_host_missing` / `mail_smtp_host_local`;
+- `mail_smtp_tls_not_required`;
+- `mail_smtp_credentials_missing`;
+- `mail_smtp_timeout_unbounded`.
+
+**With an event adapter:** `mail_event_secrets_invalid`.
+
+**At run time**, nothing is submitted while the sending domain is not
+reserved (`sending_domain_not_reserved`) or `MAIL_SENDING_VERIFIED` is false
+(`sending_not_verified`); messages wait durably.
+
+See `docs/operations/EMAIL-DELIVERABILITY.md`.
 
 **Hosts and custom domains (ADR 0054, implemented in 0O.8A):** every Host is
 classified exactly; anything unexpected answers 421. Production refuses to

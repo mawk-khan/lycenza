@@ -53,13 +53,21 @@ class PlatformServiceProvider extends ServiceProvider
         // (FeatureFlagResolverWorkerScopeTest).
         $this->app->scoped(FeatureFlagResolver::class);
 
-        $this->app->singleton(NotificationDispatcher::class, function () {
+        // Phase 0O.9A (ADR 0055): the Phase 0C log-only "email" and fake
+        // SMS/WhatsApp/push providers exist for local/testing only. In any
+        // other environment an `email` notification has NO provider and is
+        // refused -- never "sent" by writing a log line. Real email goes
+        // through App\Support\Email\OutboundEmailGateway.
+        $this->app->singleton(NotificationDispatcher::class, function ($app) {
             $dispatcher = new NotificationDispatcher;
             $dispatcher->registerProvider(new InAppProvider);
-            $dispatcher->registerProvider(new LogEmailProvider);
-            $dispatcher->registerProvider(new FakeSmsProvider);
-            $dispatcher->registerProvider(new FakeWhatsAppProvider);
-            $dispatcher->registerProvider(new FakePushProvider);
+
+            if ($app->environment(['local', 'testing'])) {
+                $dispatcher->registerProvider(new LogEmailProvider);
+                $dispatcher->registerProvider(new FakeSmsProvider);
+                $dispatcher->registerProvider(new FakeWhatsAppProvider);
+                $dispatcher->registerProvider(new FakePushProvider);
+            }
 
             return $dispatcher;
         });

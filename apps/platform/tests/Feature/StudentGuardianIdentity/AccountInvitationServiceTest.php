@@ -9,13 +9,12 @@ use App\Domain\Identity\Application\Exceptions\GuardianAlreadyHasAccountLinkExce
 use App\Domain\Identity\Application\Exceptions\GuardianAlreadyHasPendingInvitationException;
 use App\Domain\Identity\Application\Exceptions\GuardianHasNoEmailContactException;
 use App\Domain\Identity\Infrastructure\GuardianAccountInvitation;
-use App\Domain\Identity\Mail\GuardianAccountInvitationMail;
 use App\Models\SchoolAuditEvent;
 use App\Support\Tenancy\TenantContext;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -25,12 +24,12 @@ use Tests\TestCase;
  */
 class AccountInvitationServiceTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Mail::fake();
+        $this->fakeEmail();
     }
 
     private function service(): AccountInvitationService
@@ -51,7 +50,7 @@ class AccountInvitationServiceTest extends TestCase
         $this->assertSame($guardian->id, $invitation->guardian_id);
         $this->assertNotSame('guardian@example.com', $invitation->destination_email_hash);
         $this->assertSame(hash('sha256', 'guardian@example.com'), $invitation->destination_email_hash);
-        Mail::assertSent(GuardianAccountInvitationMail::class);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
@@ -65,7 +64,7 @@ class AccountInvitationServiceTest extends TestCase
         try {
             $this->service()->invite($school, $guardian, $admin);
         } finally {
-            Mail::assertNothingSent();
+            $this->assertNoEmailAccepted();
         }
     }
 

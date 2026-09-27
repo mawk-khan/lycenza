@@ -63,15 +63,28 @@ web_environment:
     - SESSION_DRIVER=redis
     - QUEUE_CONNECTION=redis
     # DDEV's built-in Mailpit captures every message; nothing leaves
-    # the machine. Communication Hub email stays disabled (its own
-    # gate, see .env.example).
+    # the machine. Phase 0O.9A (ADR 0055): application email goes through
+    # the durable email layer to Mailpit over the hardened SMTP adapter
+    # (plaintext is allowed for Mailpit in local only), with the fake,
+    # signed provider-event feed for delivered/bounce/complaint review
+    # (`platform:mail-fake-event`). Communication Hub email is enabled
+    # here because it can only ever reach Mailpit.
     - MAIL_MAILER=smtp
     - MAIL_SCHEME=null
     - MAIL_HOST=127.0.0.1
     - MAIL_PORT=1025
     - MAIL_USERNAME=null
     - MAIL_PASSWORD=null
-    - COMMUNICATION_EMAIL_ENABLED=false
+    - MAIL_PROVIDER=smtp
+    - MAIL_SMTP_TLS=none
+    - MAIL_SENDING_DOMAIN=notify.lycenza.ddev.site
+    - MAIL_FROM_ADDRESS=notifications@notify.lycenza.ddev.site
+    - MAIL_FROM_NAME=Lycenza
+    - MAIL_PROVIDER_EVENTS=fake
+    - MAIL_PROVIDER_EVENT_SECRET=dev-local-only-mail-provider-event-secret-change-me
+    - MAIL_SUPPRESSION_HMAC_KEY=dev-local-only-mail-suppression-hmac-key-change-me
+    - MAIL_SUPPRESSION_HMAC_KEY_ID=dev-1
+    - COMMUNICATION_EMAIL_ENABLED=true
     # Local disk storage -- Documents and Communication attachments
     # already default to the `local` disk (config/documents.php,
     # config/communications.php), so no MinIO/S3 service is needed.

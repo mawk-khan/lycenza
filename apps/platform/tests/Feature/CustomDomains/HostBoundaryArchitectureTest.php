@@ -131,8 +131,10 @@ class HostBoundaryArchitectureTest extends TestCase
             }
         }
 
-        $invitation = (string) file_get_contents(app_path('Domain/Identity/Mail/GuardianAccountInvitationMail.php'));
-        $this->assertStringContainsString('CanonicalOrigin::class', $invitation);
+        // Phase 0O.9A: the invitation link is built where its email is sealed.
+        $invitation = (string) file_get_contents(app_path('Domain/Identity/Application/AccountInvitationService.php'));
+        $this->assertStringContainsString('CanonicalOrigin $origins', $invitation);
+        $this->assertStringContainsString('$this->origins->schoolUrl(', $invitation);
     }
 
     #[Test]

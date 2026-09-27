@@ -293,7 +293,7 @@ Phase 0O.5A implements the repository side. In short:
 - **Heartbeats:** process-class, not replica: scheduler task heartbeats
   (all tasks) and per-queue canary jobs for `default`, `integrations` and
   `notifications`.
-- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-30 (OBS-27: ADR 0053 service authentication; OBS-28–OBS-30, Phase 0O.8A / ADR 0054: a custom domain suspended — SEV-3; a custom-domain certificate ≤ 21 days from expiry — SEV-3, ≤ 7 days — SEV-2; custom-domain checks indeterminate for 3 days — SEV-3; runbook `docs/operations/CUSTOM-DOMAINS.md`; none pages as SEV-1 and none touches readiness) with thresholds derived from
+- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-38 (OBS-31–OBS-38, Phase 0O.9A / ADR 0055: production email — see "Production email" below; OBS-27: ADR 0053 service authentication; OBS-28–OBS-30, Phase 0O.8A / ADR 0054: a custom domain suspended — SEV-3; a custom-domain certificate ≤ 21 days from expiry — SEV-3, ≤ 7 days — SEV-2; custom-domain checks indeterminate for 3 days — SEV-3; runbook `docs/operations/CUSTOM-DOMAINS.md`; none pages as SEV-1 and none touches readiness) with thresholds derived from
   this file's cadences and ADR 0050's recovery objectives.
 - **Operations status** stays the operator view over the same checks,
   complete (all heartbeats, all three queues, Communications, Automation,
@@ -348,28 +348,40 @@ closed codes; `session_handoff.failed` carries a closed outcome only. The
 scheduled task `domains-check` is a minute-cadence heartbeat task. One
 School's domain problem never changes readiness.
 
-## Production email (ADR 0055, Phase 0O.9 — contract; built in 0O.9A)
+## Production email (ADR 0055, Phase 0O.9A)
 
-Nothing below exists yet. Today email is visible only through the
-Communications metrics and OBS-17/OBS-18, and the Guardian invitation has
-no delivery record at all.
+Closed labels only (`message_class` is the closed purpose catalog; never a
+School, recipient, domain, provider message id, internal message id or
+template):
 
-The contract, ADR 0055 §16:
-- **Metrics** (closed labels only: `message_class`, `outcome`, normalized
-  event; never a School, recipient, domain, provider message id or
-  template):
-  - `lycenza_email_messages_total`;
-  - `lycenza_email_submission_attempts_total`;
-  - `lycenza_email_webhook_requests_total`;
-  - `lycenza_email_pending_messages`;
-  - `lycenza_email_oldest_pending_age_seconds`;
-  - `lycenza_email_last_event_timestamp_seconds`.
-- **Alerts** (conceptual; OBS ids are assigned in 0O.9A, after OBS-30):
-  - SEV-2: critical-class backlog age, provider authentication failures,
-    a complaint spike;
-  - SEV-3: standard backlog, submission failure ratio, event staleness, a
-    hard-bounce spike, webhook authentication failures.
+| Metric | Type | Labels |
+|---|---|---|
+| `lycenza_email_messages_total` | counter | `message_class`, `outcome` (queued, submitted, delivered, deferred, bounced, complained, suppressed, failed, cancelled) |
+| `lycenza_email_submission_attempts_total` | counter | `message_class`, `outcome` (accepted, transient_failure, permanent_failure, auth_failure) |
+| `lycenza_email_webhook_requests_total` | counter | `outcome` (accepted, unauthenticated, too_large, malformed, duplicate, disabled) |
+| `lycenza_email_pending_messages` | gauge (scrape) | `message_class` |
+| `lycenza_email_oldest_pending_age_seconds` | gauge (scrape) | `message_class` |
+| `lycenza_email_last_event_timestamp_seconds` | gauge (scrape; only with an event adapter) | — |
 
-  None is SEV-1.
-- **Operations Status:** an `email` component that is `Degraded` at worst,
-  never calls the provider live, and never touches readiness (rules 55/56).
+**Alerts:**
+- OBS-31: critical email waiting more than 1800 s (SEV-2).
+- OBS-32: standard email waiting more than 1800 s (SEV-3).
+- OBS-33: submission failure ratio (SEV-3; operator value).
+- OBS-34: provider authentication/TLS refusal (SEV-2).
+- OBS-35: event feed stale for 24 h while mail is submitted (SEV-3).
+- OBS-36: hard-bounce spike (SEV-3; operator value).
+- OBS-37: complaint spike (SEV-2; operator value).
+- OBS-38: webhook authentication failures (SEV-3; operator value).
+
+None pages as SEV-1. The runbook is
+`docs/operations/EMAIL-DELIVERABILITY.md`.
+
+**Operations Status and recovery:**
+- The `email` Operations Status component is `Degraded` at worst:
+  `disabled`, `sending_not_verified`, `provider_auth_failure`, `backlog`,
+  `events_stale`. It is never part of readiness and never calls the
+  provider.
+- The email backlog is mirrored into `operational_work_backlog` as
+  `email:<purpose>`.
+- Scheduled tasks: `email-messages-redispatch` (every minute; recovery
+  source `email`) and `email-prune` (daily).

@@ -248,6 +248,20 @@ PROBE_CANARY="dev-local-only-domain-probe-key-change-me-0000"
 enabled_refusal="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e CUSTOM_DOMAINS_ENABLED=true -e DOMAIN_PROBE_KEY="$PROBE_CANARY" "$APP_IMAGE" web 2>&1 || true)"
 check "enabled custom domains need an edge target, a real probe key and public resolvers" bash -c 'for code in domain_edge_target_missing domain_probe_key_invalid domain_dns_resolvers_missing; do grep -q "$code" <<<"$1" || exit 1; done' _ "$enabled_refusal"
 check "that refusal never prints the probe key" test -z "$(grep -F "$PROBE_CANARY" <<<"$enabled_refusal" || true)"
+# ADR 0055 (Phase 0O.9A): production email never silently sinks. Disabled
+# (MAIL_PROVIDER=none, the default here) is a complete mode; each unsafe
+# switch is refused by code, and an enabled SMTP setup must be real.
+for unsafe in MAIL_PROVIDER=fake:mail_provider_fake MAIL_PROVIDER_EVENTS=fake:mail_events_adapter_fake MAIL_PROVIDER_OPEN_TRACKING=true:mail_tracking_enabled MAIL_MAILER=failover:mail_unsafe_mailer_default; do
+    refusal="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e "${unsafe%%:*}" "$APP_IMAGE" web 2>&1 || true)"
+    check "production refuses ${unsafe%%=*} (${unsafe##*:})" grep -q "${unsafe##*:}" <<<"$refusal"
+done
+MAIL_CANARY="dev-local-only-mail-suppression-hmac-key-change-me"
+mail_refusal="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e MAIL_PROVIDER=smtp -e MAIL_HOST=mailpit -e MAIL_SMTP_TLS=none -e MAIL_SUPPRESSION_HMAC_KEY="$MAIL_CANARY" -e MAIL_SUPPRESSION_HMAC_KEY_ID=dev-1 "$APP_IMAGE" web 2>&1 || true)"
+check "enabled email needs a sending domain, a real TLS SMTP host with credentials and a real suppression key" bash -c 'for code in mail_sending_domain_missing mail_smtp_host_local mail_smtp_tls_not_required mail_smtp_credentials_missing mail_suppression_keys_invalid mail_laravel_default_is_sink; do grep -q "$code" <<<"$1" || exit 1; done' _ "$mail_refusal"
+check "that refusal never prints the suppression key" test -z "$(grep -F "$MAIL_CANARY" <<<"$mail_refusal" || true)"
+check "no log-only email notification provider exists in production" drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" --entrypoint php "$APP_IMAGE" -r '
+    require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+    try { app(App\Support\Notifications\NotificationDispatcher::class)->send(new App\Models\School, null, "email", "probe"); exit(1); } catch (InvalidArgumentException $e) { exit(0); }'
 check "the pinned Public Suffix List works without intl (ASCII-only v1)" drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" --entrypoint php "$APP_IMAGE" -r '
     require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
     $psl = app(App\Support\Domains\PublicSuffixPolicy::class); $psl->assertRegistrable("erp.northfield.co.uk");

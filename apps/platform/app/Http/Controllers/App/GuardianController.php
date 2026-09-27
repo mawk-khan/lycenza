@@ -14,6 +14,7 @@ use App\Domain\Identity\Application\AccountLinkService;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Email\EmailDeliveryPresenter;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -148,6 +149,10 @@ class GuardianController extends Controller
                 'pending' => $pendingInvitation === null ? null : [
                     'status' => $pendingInvitation->effectiveStatus(),
                     'expiresAt' => $pendingInvitation->expires_at->toIso8601String(),
+                    // Phase 0O.9A (ADR 0055): the invitation EMAIL's transport
+                    // state -- closed codes only, never an address or a
+                    // provider message.
+                    'email' => EmailDeliveryPresenter::present($invitations->emailFor($school, $pendingInvitation)),
                 ],
             ],
             'guardian' => $this->presentSummary($model),

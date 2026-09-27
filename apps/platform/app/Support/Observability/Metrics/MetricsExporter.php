@@ -3,6 +3,8 @@
 namespace App\Support\Observability\Metrics;
 
 use App\Support\Domains\DomainSignals;
+use App\Support\Email\EmailSignals;
+use App\Support\Email\Events\EmailEventAdapterResolver;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Observability\OperationalStatus;
 use App\Support\Observability\OperationalStatusService;
@@ -171,6 +173,19 @@ final class MetricsExporter
             }
             $this->gauge('lycenza_domain_certificate_min_days_remaining', [], $domains->certificateMinDaysRemaining());
             $this->gauge('lycenza_domain_indeterminate_max_age_seconds', [], $domains->indeterminateMaxAgeSeconds());
+        });
+
+        // Phase 0O.9A (ADR 0055 section 16): email backlog by purpose (closed)
+        // and provider-event freshness. Platform reads only.
+        $this->collect('email', function (): void {
+            $signals = app(EmailSignals::class);
+            foreach ($signals->backlog() as $purpose => $backlog) {
+                $this->gauge('lycenza_email_pending_messages', ['message_class' => $purpose], $backlog['pending'] + $backlog['submitting']);
+                $this->gauge('lycenza_email_oldest_pending_age_seconds', ['message_class' => $purpose], $backlog['oldest_age_seconds']);
+            }
+            if (app(EmailEventAdapterResolver::class)->active() !== null) {
+                $this->gauge('lycenza_email_last_event_timestamp_seconds', [], $signals->lastEventAt()?->getTimestamp() ?? 0);
+            }
         });
 
         $this->collect('evidence', fn () => $this->evidenceSamples());

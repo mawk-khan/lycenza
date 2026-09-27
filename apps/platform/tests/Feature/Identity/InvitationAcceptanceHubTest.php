@@ -12,14 +12,13 @@ use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Identity\Application\AccountInvitationService;
 use App\Domain\Identity\Infrastructure\GuardianAccountInvitation;
-use App\Domain\Identity\Mail\GuardianAccountInvitationMail;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -32,12 +31,12 @@ use Tests\TestCase;
  */
 class InvitationAcceptanceHubTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Mail::fake();
+        $this->fakeEmail();
     }
 
     private function activate(User $user, School $school): void
@@ -50,9 +49,7 @@ class InvitationAcceptanceHubTest extends TestCase
         $this->createGuardianContact($guardian, ContactType::Email, $email);
         app(AccountInvitationService::class)->invite($school, $guardian, $admin);
 
-        $mails = Mail::sent(GuardianAccountInvitationMail::class);
-        $rendered = $mails->first()->render();
-        preg_match('#/invitations/[^\s<"]+#', $rendered, $matches);
+        preg_match('#/invitations/[^\s<"]+#', $this->lastAcceptedEmail()->text, $matches);
 
         return $matches[0];
     }

@@ -883,6 +883,26 @@ docs/roadmap             MASTER-ROADMAP.md
     never authority, and is never logged. The DNS/TLS fakes exist only behind
     `DOMAIN_FAKES_ENABLED` AND local/testing.
 
+89. **Every application email goes through the durable email layer, and email
+    never silently sinks (ADR 0055).** Business code never calls Laravel's
+    `Mail`, a Mailable or a mail transport: it queues through
+    `App\Support\Email\OutboundEmailGateway` with a purpose from the closed
+    `EmailPurpose` catalog (reserved `account_recovery`/`security_notice`
+    have no producer until their own contract) -- in the caller's
+    transaction, submitted only after commit by `SubmitEmailMessageJob`.
+    From is `notifications@MAIL_SENDING_DOMAIN` (a Lycenza, reserved domain,
+    never a School web domain) with a sanitized "<School> via <platform>"
+    name; there is no Reply-To, Cc or Bcc. `email_messages`' state graph,
+    identity and content purge are database-enforced; submission is never
+    delivery; retries belong to the email layer only (at most 6, never
+    exactly-once). Provider events are authenticated by the provider's
+    adapter, deduplicated on `(provider, event_key)` and find their School
+    from `email_provider_references`, never the payload. Suppression is
+    global, fingerprint-only (a current + previous HMAC key ring) and
+    released only by `platform:mail-suppression-release`; critical mail never
+    bypasses it. `MAIL_PROVIDER=none` is the explicit disabled mode; the
+    fake provider and fake event adapter exist only in local/testing.
+
 ## Running things locally
 
 ```bash

@@ -9,7 +9,7 @@ use Illuminate\Support\Carbon;
  * summary, as produced by ConversationReadModel::summarize(). A named
  * value object (matching this module's existing convention --
  * CommunicationDeliveryResult, ResolvedAudience,
- * CommunicationEmailPayload) rather than a loose array shape.
+ * App\Support\Email\Providers\OutboundEmail) rather than a loose array shape.
  */
 final class ConversationThreadSummary
 {

@@ -3,13 +3,12 @@
 namespace Tests\Feature\App;
 
 use App\Domain\Guardians\Infrastructure\ContactType;
-use App\Domain\Identity\Mail\GuardianAccountInvitationMail;
 use App\Models\School;
 use App\Models\User;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -20,12 +19,12 @@ use Tests\TestCase;
  */
 class GuardianAccountInvitationHubTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Mail::fake();
+        $this->fakeEmail();
     }
 
     private function activate(User $user, School $school): void
@@ -58,7 +57,7 @@ class GuardianAccountInvitationHubTest extends TestCase
             ->where('accountInvitation.pending', null)
         );
 
-        Mail::assertSent(GuardianAccountInvitationMail::class, 2);
+        $this->assertEmailAcceptedCount(2);
     }
 
     #[Test]
@@ -71,7 +70,7 @@ class GuardianAccountInvitationHubTest extends TestCase
         $this->activate($actor, $school);
 
         $this->post("/app/guardians/{$guardian->id}/account-invitation")->assertForbidden();
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
@@ -84,7 +83,7 @@ class GuardianAccountInvitationHubTest extends TestCase
         $this->activate($actor, $school);
 
         $this->post("/app/guardians/{$guardian->id}/account-invitation")->assertForbidden();
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]

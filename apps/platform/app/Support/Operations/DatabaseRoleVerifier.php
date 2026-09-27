@@ -23,14 +23,14 @@ class DatabaseRoleVerifier
      * Any other table with a school_id must have forced RLS.
      */
     public const NON_RLS_SCHOOL_TABLES = [
-        'api_client_credentials', 'api_clients', 'domain_event_outbox', 'event_consumer_receipts',
+        'api_client_credentials', 'api_clients', 'domain_event_outbox', 'email_provider_references', 'event_consumer_receipts',
         'school_domains', 'school_elevations', 'school_group_members', 'school_memberships',
     ];
 
     /** Tables whose history the runtime role must never delete. */
     public const NO_RUNTIME_DELETE = [
         'schools', 'platform_role_assignments', 'school_groups', 'api_clients', 'api_client_credentials',
-        'platform_audit_events', 'school_audit_events',
+        'platform_audit_events', 'school_audit_events', 'email_suppressions',
     ];
 
     /**

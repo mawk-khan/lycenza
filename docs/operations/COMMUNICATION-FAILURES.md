@@ -23,7 +23,8 @@ for 5 min (SEV-3) / 30 min (SEV-2).
 
 The share of deliveries ending `failed`/`bounced`/`rejected` in an hour
 above the operator value (disabled until set). v1 has no external email/SMS
-provider (O13 is resolved as a contract by ADR 0055; bounce/complaint
-evidence arrives with Phase 0O.9A); in-app delivery failures point at application errors
+provider account yet (O13: the email layer is implemented, Phase 0O.9A;
+email deliveries now become `bounced`/`rejected` only from provider evidence
+or suppression -- see EMAIL-DELIVERABILITY.md); in-app delivery failures point at application errors
 — check `event_code=application.exception` logs for the notifications job.
 Metrics carry the channel only, never recipient or message.

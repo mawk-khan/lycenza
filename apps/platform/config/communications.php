@@ -14,16 +14,16 @@ return [
     | future notification, ...). Defaults to false: deploying this
     | checkpoint activates nothing until a human explicitly flips it.
     |
-    | `mailer` optionally names a specific config/mail.php mailer to use
-    | for Communication Hub email; null means "use the application's
-    | default mailer" (config('mail.default')).
+    | Phase 0O.9A (ADR 0055): Communication Hub email is handed to the
+    | platform email layer (config/email.php, MAIL_PROVIDER); the former
+    | `mailer` setting (COMMUNICATION_EMAIL_MAILER) was removed with the
+    | direct Laravel Mail call. MAIL_PROVIDER=none also refuses the channel.
     |
     */
 
     'channels' => [
         'email' => [
             'enabled' => (bool) env('COMMUNICATION_EMAIL_ENABLED', false),
-            'mailer' => env('COMMUNICATION_EMAIL_MAILER'),
         ],
     ],
 
@@ -87,8 +87,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | `disk` is Communication Hub's OWN explicit storage choice --
-    | independent of `config('filesystems.default')`, same reasoning as
-    | `channels.email.mailer` above -- so a future unrelated change to
+    | independent of `config('filesystems.default')` -- so a future unrelated change to
     | the application's default disk never silently relocates
     | attachment storage. Defaults to `local` (storage_path('app/private'),
     | already private -- see config/filesystems.php), never `public`.

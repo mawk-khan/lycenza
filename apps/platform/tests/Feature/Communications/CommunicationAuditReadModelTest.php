@@ -12,10 +12,10 @@ use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Domain\CommunicationRequirement;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -26,7 +26,7 @@ use Tests\TestCase;
  */
 class CommunicationAuditReadModelTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function announcements(): AnnouncementService
     {
@@ -116,7 +116,7 @@ class CommunicationAuditReadModelTest extends TestCase
         $this->travelTo(Carbon::parse('2026-08-23 22:00:00', 'Asia/Kolkata'));
 
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $announcement = $this->announcements()->createDraft(
             $school, $creator, 'T', 'B', CommunicationPriority::Normal, CommunicationAudienceType::SchoolWide,

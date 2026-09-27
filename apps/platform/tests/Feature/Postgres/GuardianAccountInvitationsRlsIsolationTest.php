@@ -8,11 +8,11 @@ use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -21,12 +21,12 @@ use Tests\TestCase;
  */
 class GuardianAccountInvitationsRlsIsolationTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Mail::fake();
+        $this->fakeEmail();
     }
 
     private function setSchool(string $schoolId): void

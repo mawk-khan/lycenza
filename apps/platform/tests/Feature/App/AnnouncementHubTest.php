@@ -3,10 +3,10 @@
 namespace Tests\Feature\App;
 
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -17,7 +17,7 @@ use Tests\TestCase;
  */
 class AnnouncementHubTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function activate($user, $school): void
     {
@@ -205,7 +205,7 @@ class AnnouncementHubTest extends TestCase
     public function an_authorized_sender_can_select_email_and_publishing_creates_email_deliveries(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$admin, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
@@ -234,14 +234,14 @@ class AnnouncementHubTest extends TestCase
             ->has('channelDeliverySummary.in_app')
             ->has('channelDeliverySummary.email')
         );
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function the_in_app_only_flow_is_unchanged_when_channels_is_not_submitted_at_all(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$admin, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(), $school);
@@ -261,7 +261,7 @@ class AnnouncementHubTest extends TestCase
 
         $this->post("{$showUrl}/publish")->assertRedirect();
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
