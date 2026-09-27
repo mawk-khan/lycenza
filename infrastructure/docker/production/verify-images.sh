@@ -279,7 +279,7 @@ check "the exposition carries no identifier" test -z "$(grep -E '[0-9a-f]{8}-[0-
 routes="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" console route:list --json 2>/dev/null || true)"
 check "production route list builds" grep -q '"uri"' <<<"$routes"
 # The one production probe route is ADR 0054's public TLS readiness probe.
-check "no probe or demo route in production (only the ADR 0054 domain probe)" test -z "$(grep -oE '"uri":"[^"]*(probe|demo)[^"]*"' <<<"$routes" | grep -vxF '"uri":".well-known/lycenza-domain-probe"')"
+check "no probe or demo route in production (only the ADR 0054 domain probe)" test -z "$(grep -oE '"uri":"[^"]*(probe|demo)[^"]*"' <<<"$routes" | grep -vxF '"uri":".well-known\/lycenza-domain-probe"')"
 check "configuration and routes cache in production mode" drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" --entrypoint sh "$APP_IMAGE" -c 'php artisan config:cache && php artisan route:cache && php artisan route:list >/dev/null'
 
 # --- Phase 0O.6F: runtime security contract, proven from the kernel --------------
