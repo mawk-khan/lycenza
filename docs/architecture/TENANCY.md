@@ -420,3 +420,21 @@ section 12 of the Phase 0B brief: no invisible see-every-tenant-row
 mode), tenant-custom roles (only system-defined roles exist), and a
 production-grade credential-issuance story for the `school_os`/
 `school_os_app` role split (ADR 0021's "Future extraction path").
+
+## Custom School domains (ADR 0054 — contract, Phase 0O.8; implementation 0O.8A)
+
+`school_domains` becomes a real, explicit lifecycle. Until Phase 0O.8A
+lands, the behaviour described above is still today's code. Once it lands:
+- **What selects a School.** Only an **`active`** domain of an active
+  School selects a School, after exact canonical host classification.
+  Unknown and non-active hosts get 421, with no default School.
+- **Web only.** Domain resolution happens only for web routes on a School
+  host. `/api/v1` keeps its `{school}`-in-the-URL selection and never
+  reads the Host.
+- **Host and session.** On a School host the host decides the School. The
+  session selection is aligned to it, a disagreement is refused, and an
+  active membership is still required: domain ownership grants none.
+- **Switching** navigates to the target School's canonical origin: its
+  primary active domain, or else the platform host.
+- **Isolation.** Internal service routes (ADR 0053) and elevation (ADR
+  0044) never use domain resolution.

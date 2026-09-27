@@ -293,7 +293,7 @@ Phase 0O.5A implements the repository side. In short:
 - **Heartbeats:** process-class, not replica: scheduler task heartbeats
   (all tasks) and per-queue canary jobs for `default`, `integrations` and
   `notifications`.
-- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-27 (OBS-27: ADR 0053 service authentication) with thresholds derived from
+- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-27 (OBS-27: ADR 0053 service authentication) (OBS-28–OBS-30 are reserved by ADR 0054 for custom-domain ownership/routing/TLS suspension, certificate expiry and indeterminate DNS; added in 0O.8A) with thresholds derived from
   this file's cadences and ADR 0050's recovery objectives.
 - **Operations status** stays the operator view over the same checks,
   complete (all heartbeats, all three queues, Communications, Automation,

@@ -262,9 +262,10 @@ account's password has no in-app recovery yet.
 
 ## 7. What stays open
 
-O3, O4, O5, O6, O7, O8, O10, O11, O12 and O16 are resolved (ADR 0049, ADR 0050,
-ADR 0051, ADR 0052, ADR 0053; O5's implementation is Phase 0O.7A). Still open: O1 (definition of done — including a real
-restore drill), O2 (payments), O9
+O3, O4, O5, O6, O7, O8, O9, O10, O11, O12 and O16 are resolved (ADR 0049, ADR 0050,
+ADR 0051, ADR 0052, ADR 0053, ADR 0054; O9's implementation is Phase 0O.8A:
+custom School domains stay unsupported in production until then). Still open: O1 (definition of done — including a real
+restore drill), O2 (payments)
 (custom domains), O13 (email), O14 (password reset) and O15 (partner
 integrations). **No production image is pushed to a registry or promoted
 before Phase 0O.6A's repository controls are complete**, and then only by an

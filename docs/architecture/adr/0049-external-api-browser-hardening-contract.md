@@ -703,3 +703,13 @@ amendment of this ADR.
 6. **Legacy tokens.** No token was ever issued in production; any row
    without an expiry or with a wildcard ability simply stops
    authenticating (tests prove it) — no migration needed.
+
+**Note (Phase 0O.8, 2026-09-27):** the items deferred to O9 here (§10
+custom-domain CORS, §11/V5 HSTS, §12 host allowlisting) are decided by
+**ADR 0054**:
+- **CORS:** still never includes custom domains automatically.
+- **HSTS:** stays `max-age=31536000`, with no `includeSubDomains`/`preload`
+  on School-owned domains.
+- **Hosts:** allowlisting is an exact host classification (platform,
+  `active` custom, internal, probe, health), with 421 otherwise and no
+  wildcard.
