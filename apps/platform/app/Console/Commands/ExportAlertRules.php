@@ -16,7 +16,7 @@ class ExportAlertRules extends Command
 {
     protected $signature = 'platform:alerts-export {--output= : Write to this path instead of stdout}';
 
-    protected $description = 'Export the OBS-01..OBS-26 alert rules (Prometheus rule format, provider-neutral).';
+    protected $description = 'Export the OBS-01..OBS-27 alert rules (Prometheus rule format, provider-neutral).';
 
     public function handle(AlertRulesExporter $exporter): int
     {

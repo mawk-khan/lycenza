@@ -182,19 +182,18 @@ secret store injected at runtime, never from git, images or Terraform
 outputs. Webhook-secret and partner-credential rotation already exist in
 the application; a secret store does not add rotation to anything else
 (signing-key custody is future work). Service-to-service authentication and
-rotation (O5) are decided by ADR 0053:
+rotation (O5, ADR 0053) are implemented in Phase 0O.7A, replacing the shared
+`SERVICE_TOKEN`:
 - per-request Ed25519 service assertions (`Authorization: Lycenza-Service …`);
 - one keypair per calling service;
 - verification rings with at most 24 h of overlap and 90-day keys;
-- emergency revocation by removing the key.
-
-They are implemented in Phase 0O.7A, and they replace the shared
-`SERVICE_TOKEN`.
+- emergency revocation by removing the key
+  ([SERVICE-KEY-ROTATION](../operations/SERVICE-KEY-ROTATION.md)).
 
 Phase 0O.4A: `apps/platform/deploy/processes.json` fixes which secret
-group each process receives — the AI Gateway only its `SERVICE_TOKEN`
-(after Phase 0O.7A, per ADR 0053: its own `ai-gateway` private signing key
-and the public `platform` verification ring),
+group each process receives — the AI Gateway only its own `ai-gateway`
+private signing key (`SERVICE_SIGNING_KEY`; the public `platform` ring is
+configuration, not a secret, ADR 0053),
 web/workers/scheduler the application runtime group, and the database
 admin credentials only the release step and the operator console
 (guard-tested). Images carry no secret and no committed development value

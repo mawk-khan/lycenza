@@ -343,3 +343,23 @@ groups:
         annotations:
           summary: 'Telemetry collection failing.'
           runbook: 'docs/operations/TELEMETRY-COLLECTION.md'
+      - alert: LycenzaOBS27Warning
+        expr: 'sum(increase(lycenza_service_auth_total{outcome=~"unknown_kid|bad_signature|key_expired|rejected_by_receiver"}[15m])) > 0'
+        labels:
+          severity: warning
+          sev: SEV-3
+          obs_id: OBS-27
+          threshold_source: 'A'
+        annotations:
+          summary: 'Service-to-service authentication failing, or a service key near its 90-day limit.'
+          runbook: 'docs/operations/SERVICE-KEY-ROTATION.md'
+      - alert: LycenzaOBS27WarningKeyAge
+        expr: 'max(lycenza_service_signing_key_age_days) >= 76 or max(lycenza_service_verification_key_max_age_days) >= 76'
+        labels:
+          severity: warning
+          sev: SEV-3
+          obs_id: OBS-27
+          threshold_source: 'A'
+        annotations:
+          summary: 'Service-to-service authentication failing, or a service key near its 90-day limit.'
+          runbook: 'docs/operations/SERVICE-KEY-ROTATION.md'

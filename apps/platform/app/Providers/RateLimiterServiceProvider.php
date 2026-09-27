@@ -90,11 +90,11 @@ class RateLimiterServiceProvider extends ServiceProvider
         // Generous enough that normal tool-invocation traffic is never
         // throttled into unreliability, while still bounding a
         // misbehaving/compromised service identity.
-        RateLimiter::for('internal-service', function (Request $request) {
-            $identity = $request->attributes->get('service_identity');
-
-            return Limit::perMinute(300)->by($identity !== null ? $identity->id : $request->ip());
-        });
+        // ADR 0053: ThrottleRequests is framework-prioritized ahead of the
+        // service-assertion middleware (rule 61), so no authenticated service
+        // is known yet -- the limit is per source address, which also bounds
+        // unauthenticated attempts.
+        RateLimiter::for('internal-service', fn (Request $request) => Limit::perMinute(300)->by('internal-service:'.$request->ip()));
 
         // Internal diagnostics (section 32): OperationalStatusService::
         // full() runs real per-School queries -- an authenticated

@@ -1,6 +1,8 @@
 import httpx
 
 from app.core.config import settings
+from app.core.security import encode_body, laravel_headers
+from app.core.service_auth import ServiceKeyConfigError
 from app.tools.registry import ToolExecutionError
 
 REQUIRED_CAPABILITY = "school.settings.view"
@@ -17,12 +19,13 @@ async def handle(payload: dict) -> dict:
     if not context_token:
         raise ToolExecutionError("school-echo tool requires a context_token in its payload.")
 
+    request_body = encode_body({"context_token": context_token})
+    try:
+        headers = laravel_headers("/tools/school-echo", request_body)
+    except ServiceKeyConfigError as exc:
+        raise ToolExecutionError("Service signing key unavailable.") from exc
     async with httpx.AsyncClient(base_url=settings.erp_contract_base_url, timeout=5.0) as client:
-        response = await client.post(
-            "/tools/school-echo",
-            json={"context_token": context_token},
-            headers={"Authorization": f"Bearer {settings.service_token}"},
-        )
+        response = await client.post("/tools/school-echo", content=request_body, headers=headers)
 
     # Gap G3: the status code only -- a response body never reaches the
     # error message, the 502 detail or a log line.

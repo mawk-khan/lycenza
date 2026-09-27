@@ -4,24 +4,38 @@ namespace Tests\Feature\Api\Internal;
 
 use App\Models\SchoolAuditEvent;
 use App\Support\Ai\AiContextTokenService;
-use App\Support\ServiceIdentities\ServiceIdentityIssuer;
 use App\Support\Tenancy\TenantContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\SignsServiceAssertions;
 use Tests\TestCase;
 
 /**
  * Required end-to-end Proof C (Phase 0C section 69): the AI Gateway's
  * durable-audit write-back into Laravel's authoritative SchoolAuditEvent
- * store, plus the four required denial scenarios: invalid service
- * identity, invalid context signature, School mismatch, and unrelated
- * service capability.
+ * store, plus the required denial scenarios: invalid service
+ * credential, untrusted service key (ADR 0053), invalid context signature
+ * and School mismatch. Service-route authorization (the 403 for a route
+ * outside the closed catalog) is proven in
+ * Tests\Feature\ServiceAuth\ServiceAssertionMiddlewareTest.
  */
 class AiAuditControllerTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, SignsServiceAssertions;
 
-    private const SERVICE_TOKEN = 'dev-local-only-token';
+    private array $gatewayKey;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // ADR 0053: a runtime-generated `ai-gateway` key; Laravel trusts only
+        // its public half, and every request below is signed with it unless
+        // it names another Authorization value.
+        $this->gatewayKey = $this->serviceKey('test-ai-gateway-1');
+        $this->useServiceKeys([$this->publicJwk($this->gatewayKey)]);
+        $this->asService($this->gatewaySigner($this->gatewayKey));
+    }
 
     #[Test]
     public function it_rejects_an_invalid_service_identity(): void
@@ -42,12 +56,11 @@ class AiAuditControllerTest extends TestCase
     #[Test]
     public function it_rejects_an_invalid_context_signature(): void
     {
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/audit', [
-                'context_token' => 'tampered.notavalidsignature',
-                'agent' => 'phase0b-proof-agent',
-                'action' => 'tool.invoke',
-            ]);
+        $response = $this->postJson('/api/internal/ai/audit', [
+            'context_token' => 'tampered.notavalidsignature',
+            'agent' => 'phase0b-proof-agent',
+            'action' => 'tool.invoke',
+        ]);
 
         $response->assertUnauthorized();
     }
@@ -60,41 +73,32 @@ class AiAuditControllerTest extends TestCase
 
         $token = app(AiContextTokenService::class)->issue($schoolA, $userA, ['school.settings.view']);
 
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/audit', [
-                'context_token' => $token,
-                'school_id' => $schoolB->id,
-                'agent' => 'phase0b-proof-agent',
-                'action' => 'tool.invoke',
-            ]);
+        $response = $this->postJson('/api/internal/ai/audit', [
+            'context_token' => $token,
+            'school_id' => $schoolB->id,
+            'agent' => 'phase0b-proof-agent',
+            'action' => 'tool.invoke',
+        ]);
 
         $response->assertStatus(422);
     }
 
     #[Test]
-    public function it_rejects_a_service_identity_that_lacks_the_audit_write_capability(): void
+    public function it_rejects_an_assertion_from_a_key_laravel_does_not_trust(): void
     {
+        // ADR 0053: a well-formed, correctly signed assertion from any key
+        // outside Laravel's ring -- including one claiming the `ai-gateway`
+        // identity -- authenticates nothing.
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $token = app(AiContextTokenService::class)->issue($school, $user, ['school.settings.view']);
 
-        // A real, currently-valid service identity -- but scoped ONLY
-        // to tool invocation, never granted ai.audit.write. Proves
-        // "a valid credential does not imply access to every internal
-        // capability" (section 27), exercising the SAME
-        // ServiceIdentityAuthenticator that verifies the AI Gateway's
-        // own identity, not a second/parallel authorization mechanism.
-        [, $credential] = app(ServiceIdentityIssuer::class)->issue(
-            'unrelated-caller', 'Unrelated Test Caller', ['ai.tools.invoke'], null,
-        );
-
-        $response = $this->withToken($credential)
+        $this->asService($this->gatewaySigner($this->serviceKey('test-untrusted-1')))
             ->postJson('/api/internal/ai/audit', [
                 'context_token' => $token,
                 'agent' => 'phase0b-proof-agent',
                 'action' => 'tool.invoke',
-            ]);
-
-        $response->assertUnauthorized();
+            ])
+            ->assertUnauthorized();
     }
 
     #[Test]
@@ -103,14 +107,13 @@ class AiAuditControllerTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $token = app(AiContextTokenService::class)->issue($school, $user, ['school.settings.view'], 'req-audit-1');
 
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/audit', [
-                'context_token' => $token,
-                'school_id' => $school->id,
-                'agent' => 'phase0b-proof-agent',
-                'tool' => 'school.echo',
-                'action' => 'tool.invoke',
-            ]);
+        $response = $this->postJson('/api/internal/ai/audit', [
+            'context_token' => $token,
+            'school_id' => $school->id,
+            'agent' => 'phase0b-proof-agent',
+            'tool' => 'school.echo',
+            'action' => 'tool.invoke',
+        ]);
 
         $response->assertOk();
         $this->assertNotNull($response->json('audit.id'));
@@ -137,7 +140,7 @@ class AiAuditControllerTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $token = app(AiContextTokenService::class)->issue($school, $user, ['school.settings.view'], 'req-model-1');
 
-        $this->withToken(self::SERVICE_TOKEN)->postJson('/api/internal/ai/audit', [
+        $this->postJson('/api/internal/ai/audit', [
             'context_token' => $token,
             'school_id' => $school->id,
             'agent' => 'phase0b-proof-agent',
@@ -179,7 +182,7 @@ class AiAuditControllerTest extends TestCase
             ['latency_ms' => -1],
             ['input_tokens' => 'many'],
         ] as $bad) {
-            $this->withToken(self::SERVICE_TOKEN)->postJson('/api/internal/ai/audit', [...$base, ...$bad])->assertUnprocessable();
+            $this->postJson('/api/internal/ai/audit', [...$base, ...$bad])->assertUnprocessable();
         }
 
         $this->assertSame(0, app(TenantContext::class)->withSchool($school, fn () => SchoolAuditEvent::query()->where('event_type', 'ai.gateway_action_recorded')->count()));

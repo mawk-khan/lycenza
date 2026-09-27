@@ -99,6 +99,9 @@ services:
       - ./.github:/var/.github:ro
       - ./.gitleaks.toml:/var/.gitleaks.toml:ro
       - ./services/ai/requirements.lock:/var/services/ai/requirements.lock:ro
+      # Phase 0O.7A (ADR 0053): the Gateway's service-auth constants, read by
+      # ServiceAuthArchitectureTest to prove both implementations agree.
+      - ./services/ai/app/core/service_auth.py:/var/services/ai/app/core/service_auth.py:ro
     env_file:
       - ./apps/platform/.env
     environment:

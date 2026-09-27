@@ -1,4 +1,4 @@
-# Alert index (OBS-01 … OBS-26)
+# Alert index (OBS-01 … OBS-27)
 
 ADR 0051 §14. The rules are generated from
 `App\Support\Observability\Alerts\AlertCatalog` into
@@ -40,6 +40,7 @@ source: **A** contract, **B** runtime cadence, **C** operator value.
 | OBS-24 | Storage validation failing | SEV-2: `verify-storage` FAIL (B); failures above operator rate (C) | [BACKUP-AND-RESTORE](../BACKUP-AND-RESTORE.md) |
 | OBS-25 | Security-boundary stress | SEV-3 (C; disabled until set) | [INTEGRATION-SECURITY](../../security/INTEGRATION-SECURITY.md) |
 | OBS-26 | Telemetry collection failing | SEV-2 (C: for 300 s) | [TELEMETRY-COLLECTION](../TELEMETRY-COLLECTION.md) |
+| OBS-27 | Service-to-service authentication failing (unknown kid, bad signature, expired key, or the peer refusing our assertions), or a service key ≥ 76 days old (ADR 0053) | SEV-3 only (A); never pages -- the AI Gateway is optional | [SERVICE-KEY-ROTATION](../SERVICE-KEY-ROTATION.md) |
 
 Operator values (`ALERT_*`, `config/observability.php` `alerts`): unset
 means the tier is **disabled** and the exported file says so; a value

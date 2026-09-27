@@ -219,6 +219,14 @@ final class AlertCatalog
                 self::tier(Severity::Sev2, 'up{job="lycenza-metrics"} == 0 or increase(lycenza_metrics_collection_errors_total[15m]) > 0', $telemetryFor ?? 300,
                     fn (MetricSnapshot $s) => ! $s->scrapeUp || $s->increase('lycenza_metrics_collection_errors_total', '15m') > 0),
             ]),
+            // ADR 0053 (Phase 0O.7A): service-to-service authentication. The AI
+            // Gateway is optional, so this never pages (SEV-3 only).
+            self::rule('OBS-27', 'Service-to-service authentication failing, or a service key near its 90-day limit.', 'A', 'SERVICE-KEY-ROTATION.md', [
+                self::tier(Severity::Sev3, 'sum(increase(lycenza_service_auth_total{outcome=~"unknown_kid|bad_signature|key_expired|rejected_by_receiver"}[15m])) > 0', 0,
+                    fn (MetricSnapshot $s) => array_sum(array_map(fn (string $o) => $s->increase('lycenza_service_auth_total', '15m', ['outcome' => $o]), ['unknown_kid', 'bad_signature', 'key_expired', 'rejected_by_receiver'])) > 0),
+                self::tier(Severity::Sev3, 'max(lycenza_service_signing_key_age_days) >= 76 or max(lycenza_service_verification_key_max_age_days) >= 76', 0,
+                    fn (MetricSnapshot $s) => max(self::maxOf($s, 'lycenza_service_signing_key_age_days'), self::maxOf($s, 'lycenza_service_verification_key_max_age_days')) >= 76, 'KeyAge'),
+            ]),
         ];
     }
 

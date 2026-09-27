@@ -20,6 +20,7 @@ use App\Support\Observability\Metrics\StoreMetricsRecorder;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Privacy\ContactLookupHasher;
 use App\Support\Privacy\StatutoryIdentifierLookupHasher;
+use App\Support\ServiceAuth\ServiceAuthKeys;
 use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\TestDatabaseGuard;
@@ -78,6 +79,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AiContextTokenService::class, fn () => new AiContextTokenService(
             config('services.ai_gateway.context_signing_key'),
         ));
+
+        // ADR 0053 (Phase 0O.7A): service keys are parsed once per process
+        // (lazily, from resolved config); changing them is a restart.
+        $this->app->singleton(ServiceAuthKeys::class);
 
         // Phase 1A.3: like AiContextTokenService above (since Phase
         // 0O.1), this does NOT cast a missing key to an empty string

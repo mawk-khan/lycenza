@@ -3,6 +3,8 @@ import logging
 import httpx
 
 from app.core.config import settings
+from app.core.security import encode_body, laravel_headers
+from app.core.service_auth import ServiceKeyConfigError
 from app.core.trace import TraceContext
 
 logger = logging.getLogger(__name__)
@@ -55,37 +57,37 @@ async def write_through(
     # trace-id throughout).
     child = (trace or TraceContext.start()).child_span()
 
+    body = encode_body(
+        {
+            "context_token": context_token,
+            "school_id": school_id,
+            "agent": agent,
+            "tool": tool,
+            "action": action,
+            **{
+                key: value
+                for key, value in {
+                    "provider": provider,
+                    "model": model,
+                    "outcome": outcome,
+                    "latency_ms": latency_ms,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                }.items()
+                if value is not None
+            },
+        }
+    )
     try:
         async with httpx.AsyncClient(
             base_url=settings.erp_contract_base_url, timeout=5.0
         ) as client:
             response = await client.post(
                 "/audit",
-                json={
-                    "context_token": context_token,
-                    "school_id": school_id,
-                    "agent": agent,
-                    "tool": tool,
-                    "action": action,
-                    **{
-                        key: value
-                        for key, value in {
-                            "provider": provider,
-                            "model": model,
-                            "outcome": outcome,
-                            "latency_ms": latency_ms,
-                            "input_tokens": input_tokens,
-                            "output_tokens": output_tokens,
-                        }.items()
-                        if value is not None
-                    },
-                },
-                headers={
-                    "Authorization": f"Bearer {settings.service_token}",
-                    "traceparent": child.to_header(),
-                },
+                content=body,
+                headers=laravel_headers("/audit", body, {"traceparent": child.to_header()}),
             )
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ServiceKeyConfigError) as exc:
         logger.warning(
             "laravel_audit.write_through_failed", extra={"exception": type(exc).__name__}
         )

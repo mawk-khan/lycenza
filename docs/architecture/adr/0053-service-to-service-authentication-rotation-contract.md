@@ -948,3 +948,160 @@ compatibility period and no unsafe flag day in the suite):
   bearer credential, or an undocumented private-network assumption. After
   0O.7A and its deployment evidence, none of these remains.
 - Still open: **O1, O2, O9, O13, O14, O15**.
+
+## Amendment — Phase 0O.7A implementation (2026-09-27)
+
+The repository portion of O5 is **implemented**. Deployment evidence
+(§15) is still outstanding. Decisions made during implementation, each
+within this contract:
+
+1. **Route scopes.** The route catalog gives
+   `POST /api/internal/ai/completions/authorize` its own scope,
+   **`ai.completions.authorize`**, instead of reusing `ai.tools.invoke`
+   (§6.1 table amended). The final closed map:
+
+   | Receiver | Route | Scope | Caller |
+   |---|---|---|---|
+   | Gateway | `POST /v1/tools/invoke` | `gateway.tools.invoke` | `platform` |
+   | Gateway | `POST /v1/complete` | `gateway.complete` | `platform` |
+   | Laravel | `api.internal.ai.tools.school-echo` | `ai.tools.invoke` | `ai-gateway` |
+   | Laravel | `api.internal.ai.completions.authorize` | `ai.completions.authorize` | `ai-gateway` |
+   | Laravel | `api.internal.ai.audit.store` | `ai.audit.write` | `ai-gateway` |
+
+   **Code:**
+   - Laravel: `App\Support\ServiceAuth\ServiceAuthContract::ROUTE_SCOPES`
+     and `SERVICE_SCOPES`, keyed by route name, with no prefix inference;
+   - Gateway: `app/core/service_auth.py`.
+
+   A route with `service-auth` that is missing from the catalog is a 403.
+   `ServiceAuthArchitectureTest` proves that the catalog equals the real
+   routes and that both implementations share every constant.
+
+2. **Keys.**
+   - **Format:** the private JWK also carries `created`
+     (`{kty,crv,kid,x,d,created}`), so a signer can enforce its own 90-day
+     life.
+   - **Scope of the age rule:** it is enforced outside `local`/`testing`,
+     where the committed development keys are refused anyway.
+   - **Injection:** keys are injected as single-line JSON in environment
+     variables, consistent with every other secret (ADR 0050, the process
+     manifest's secret groups). A single-line JWK needs no multiline
+     quoting; a file-path variant was not added.
+   - **At rest:** under `config:cache` the private key sits in the cached
+     configuration file inside the running container, exactly like
+     `APP_KEY`. It is never printed. The smoke test proves that
+     `config:cache`, `route:cache` and `route:list` output carries no key
+     material.
+
+3. **Libraries.**
+   - **PHP:** libsodium (`sodium_crypto_sign_seed_keypair`,
+     `sodium_crypto_sign_detached`, `sodium_crypto_sign_verify_detached`).
+   - **Python:** **`cryptography` 50.0.1** (PyCA), plus its `cffi` 2.1.1
+     and `pycparser` 3.0, hash-locked wheels only. PyNaCl would need the
+     same `cffi`; `cryptography` is the more widely audited library.
+   - Neither side has hand-written cryptography or a JWT framework.
+
+4. **Receiver placement.** The Gateway verifies in a pure ASGI middleware
+   (`ServiceAuthMiddleware`) **before** routing and body parsing. A FastAPI
+   dependency would let a malformed body answer 422 before authentication.
+   The middleware buffers the exact body, verifies its digest, then
+   replays it unchanged.
+
+5. **A finding fixed.** `ResolveSchoolContext` (in the `api` middleware
+   group) resolved a School from a **verified School domain** or the
+   session on every API request, internal AI routes included. That lookup
+   ran before service authentication, and on a School's verified domain it
+   established `TenantContext` from the Host. On a `service-auth` route it
+   now resolves no School. The development-only `X-School-Id` resolver is
+   excluded from the internal AI group. The first real-container smoke
+   exposed this; `ServiceAssertionMiddlewareTest` guards it.
+
+6. **Replay.**
+   - **Laravel:** consumes each `jti` in `AI_GATEWAY_REPLAY_STORE` (default
+     cache when unset). Production requires Redis. The key is
+     `service-assertion:{iss}:{sha256(jti)}`, with TTL `exp + 30 − now`,
+     bounded to at most 150 s. A store failure is a 401.
+     `ServiceAssertionReplayConcurrencyTest` releases 8 OS processes on one
+     `jti` against the real Redis: exactly one is accepted.
+   - **Gateway:** keeps a 10 000-entry, expiry-aware, lock-protected
+     in-process set. A test demonstrates the accepted residual explicitly
+     (§5.5): two replicas both accept.
+
+7. **Rate limiting.** The `internal-service` limiter keys by source
+   address. `ThrottleRequests` is framework-prioritized ahead of the
+   service middleware (rule 61), so no authenticated service is known yet.
+   This also bounds unauthenticated attempts.
+
+8. **Enablement and the legacy token.**
+   - **Enablement:** the Laravel integration is enabled only by
+     `AI_GATEWAY_BASE_URL`, which now has no default. Unset means no keys
+     are needed, and the operations status reports `not_configured`.
+   - **Legacy token:** `AI_GATEWAY_SERVICE_TOKEN` (Laravel) and
+     `SERVICE_TOKEN` (Gateway) are read **only** to refuse a non-empty
+     leftover.
+
+9. **Schema** (`2026_10_23_090000_retire_shared_service_credentials`,
+   reversible).
+   - **Dropped:** `service_identities` and `service_identity_capabilities`,
+     which only held the shared secret's hash and which nothing reads.
+   - **Removed:** the capability rows `ai.tools.invoke`, `ai.audit.write`,
+     `platform.service_identities.view` and `.manage` (the last two only
+     administered the retired identities; no route used them).
+   - **Added:** CHECK `capabilities_not_service_scope`, so no service scope
+     can ever be a human capability.
+   - **Rollback:** `down()` restores the schema and catalog rows. Retired
+     credential hashes are deliberately not restorable.
+   - **Retired code:**
+     - `platform:service-identity-issue` and `-disable`;
+     - `ServiceIdentitySeeder`, `ServiceIdentityIssuer` and
+       `ServiceIdentityAuthenticator`;
+     - `VerifyAiGatewayServiceToken`, `X-Service-Token` and the `ai-service`
+       middleware.
+
+10. **Operator tooling.**
+    - **`platform:service-key-generate`:** the private JWK goes only to a
+      0600 file outside the application; it never overwrites, and
+      `--non-production` forces the `dev-local-only-` prefix.
+    - **`platform:verify-service-auth`:** read-only; kids, ages and
+      transition only, never key material.
+    - **Runbook:** `docs/operations/SERVICE-KEY-ROTATION.md`.
+
+11. **Observability.**
+    - **Metrics:** `lycenza_service_auth_total{direction,service,outcome}`,
+      `lycenza_service_signing_key_age_days{service}` and
+      `lycenza_service_verification_key_max_age_days{service}`.
+    - **Alert OBS-27** (SEV-3, never pages): `unknown_kid`,
+      `bad_signature`, `key_expired` or `rejected_by_receiver`, or a key at
+      76 days or more.
+    - **Logs:** `service_auth.failed` and `service_auth.succeeded` carry
+      `peer_service`, `direction`, `outcome`, the route and `kid`. Both
+      sanitizers redact `Lycenza-Service …`, JWS-shaped values, private-JWK
+      `d` members, and `jti`/`bsh`/`assertion`/`verification_keys` keys.
+
+12. **Secret hygiene.**
+    - **gitleaks:** its default rules do not recognise a JWK, and the
+      source-scan policy forbids custom rules, so there is no allowlist
+      entry.
+    - **Source guard:**
+      `infrastructure/release/tests/test_service_key_hygiene.py` fails on
+      any committed Ed25519 private JWK other than the development keys at
+      their three exact files.
+    - **Image scan:** the new `ed25519_private_jwk` shape, plus both
+      development seeds as canaries allowed nowhere.
+    - **`verify-images.sh`:** proves both images carry neither seed.
+
+13. **Proof across real containers** (`verify-images.sh`, 111 checks).
+    - **Keys:** each run generates non-production keys.
+    - **Laravel → Gateway:** the app image's own signer calls the running
+      Gateway. It authenticates, and a Bearer or replayed call is refused.
+    - **Gateway → Laravel:** the Gateway image's own signer calls a hardened
+      web role. It authenticates, and a Bearer call, the wrong audience and
+      a replay (Redis) are refused.
+    - **Refusals:** the Gateway refuses to start without keys, with the
+      legacy token, with a development key or with a plaintext URL; the
+      application refuses the legacy token.
+
+**Recorded, not fixed** (outside O5 scope; `docs/ai/AI-PLATFORM.md`):
+- the ADR 0023 context-token debt of §12 (no `kid` or rotation, no
+  purpose or audience claim, no `iat` sanity check);
+- `/v1/tools/invoke` answering 500 on an unknown agent or tool.

@@ -6,8 +6,11 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Observability\TraceContext;
+use App\Support\ServiceAuth\ServiceAuthKeys;
+use App\Support\ServiceAuth\ServiceAuthTelemetry;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -29,6 +32,8 @@ class AiGatewayClient
         private readonly CapabilityResolver $capabilities,
         private readonly TenantContext $context,
         private readonly SchoolOperationalGuard $operational,
+        private readonly ServiceAuthKeys $serviceKeys,
+        private readonly ServiceAuthTelemetry $telemetry,
     ) {}
 
     /**
@@ -41,42 +46,16 @@ class AiGatewayClient
 
         $contextToken = $this->tokens->issue($school, $actor, [$capability], $this->context->requestId());
 
-        // X-Service-Token, not Authorization: Bearer -- must match
-        // services/ai's require_service_token dependency
-        // (app/core/security.py), which is the Phase 0A convention for
-        // Laravel -> AI Gateway calls specifically. This is the
-        // opposite direction from AiToolController's inbound check
-        // (App\Http\Middleware\VerifyAiGatewayServiceToken), which
-        // correctly uses Authorization: Bearer for AI Gateway ->
-        // Laravel calls -- the two directions are deliberately
-        // independent conventions, not the same header reused.
-        //
-        // Section 43: propagate the CURRENT trace (this request's),
-        // with a fresh child span-id for this specific outbound hop --
-        // the AI Gateway's own inbound handling mints a further child
-        // span from this when it, in turn, calls back to Laravel's
-        // audit write-back endpoint (services/ai's app/core/trace.py).
-        $currentTraceId = $this->context->traceId();
-        $childSpan = $currentTraceId !== null
-            ? TraceContext::forTraceId($currentTraceId)
-            : TraceContext::start();
-
-        $response = Http::withHeaders([
-            'X-Service-Token' => (string) config('services.ai_gateway.service_token'),
-            'traceparent' => $childSpan->toHeader(),
-        ])
-            ->baseUrl((string) config('services.ai_gateway.base_url'))
-            ->timeout(5)
-            ->post('/v1/tools/invoke', [
-                'school_id' => $school->id,
-                'agent' => $agent,
-                'tool' => $tool,
-                'context_token' => $contextToken,
-                // (object) cast: an empty PHP array json_encodes as
-                // `[]`, but the AI Gateway's payload field requires a
-                // JSON object (`{}`) even when empty.
-                'payload' => (object) $payload,
-            ]);
+        $response = $this->send('/v1/tools/invoke', [
+            'school_id' => $school->id,
+            'agent' => $agent,
+            'tool' => $tool,
+            'context_token' => $contextToken,
+            // (object) cast: an empty PHP array json_encodes as
+            // `[]`, but the AI Gateway's payload field requires a
+            // JSON object (`{}`) even when empty.
+            'payload' => (object) $payload,
+        ], 5);
 
         $response->throw();
 
@@ -101,22 +80,11 @@ class AiGatewayClient
 
         $contextToken = $this->tokens->issue($school, $actor, [$capability], $this->context->requestId());
 
-        $currentTraceId = $this->context->traceId();
-        $childSpan = $currentTraceId !== null
-            ? TraceContext::forTraceId($currentTraceId)
-            : TraceContext::start();
-
-        $response = Http::withHeaders([
-            'X-Service-Token' => (string) config('services.ai_gateway.service_token'),
-            'traceparent' => $childSpan->toHeader(),
-        ])
-            ->baseUrl((string) config('services.ai_gateway.base_url'))
-            ->timeout(10)
-            ->post('/v1/complete', [
-                'agent' => $agent,
-                'context_token' => $contextToken,
-                'prompt' => $prompt,
-            ]);
+        $response = $this->send('/v1/complete', [
+            'agent' => $agent,
+            'context_token' => $contextToken,
+            'prompt' => $prompt,
+        ], 10);
 
         $response->throw();
 
@@ -125,6 +93,45 @@ class AiGatewayClient
             'provider' => (string) $response->json('provider'),
             'model' => (string) $response->json('model'),
         ];
+    }
+
+    /**
+     * ADR 0053: one fresh `platform` service assertion per request, bound to
+     * POST, the exact path the Gateway sees and these exact body bytes
+     * (serialized once, signed, then sent unchanged). The context token
+     * travels separately, inside the body -- the assertion carries no
+     * School, actor or capability.
+     *
+     * Section 43: the CURRENT trace propagates with a fresh child span-id for
+     * this hop (the Gateway mints a further child for its call back to
+     * Laravel's audit write-back).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function send(string $path, array $payload, int $timeoutSeconds): Response
+    {
+        $body = (string) json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        $url = rtrim((string) config('services.ai_gateway.base_url'), '/').$path;
+
+        $currentTraceId = $this->context->traceId();
+        $childSpan = $currentTraceId !== null ? TraceContext::forTraceId($currentTraceId) : TraceContext::start();
+
+        $response = Http::withHeaders([
+            'Authorization' => $this->serviceKeys->signer()->authorization('POST', $url, $body, $this->context->requestId()),
+            'traceparent' => $childSpan->toHeader(),
+        ])
+            ->withBody($body, 'application/json')
+            ->timeout($timeoutSeconds)
+            ->post($url);
+
+        $this->telemetry->record(
+            ServiceAuthTelemetry::OUTBOUND,
+            'platform',
+            in_array($response->status(), [401, 403], true) ? 'rejected_by_receiver' : 'success',
+            $path,
+        );
+
+        return $response;
     }
 
     /**

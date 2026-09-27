@@ -259,6 +259,11 @@ class OperationalStatusService
 
     public function aiGateway(): ComponentStatus
     {
+        // ADR 0053: the Gateway integration is enabled only by its base URL.
+        if (trim((string) config('services.ai_gateway.base_url')) === '') {
+            return new ComponentStatus('ai_gateway', OperationalStatus::Degraded, 'not_configured');
+        }
+
         try {
             $timeoutSeconds = max(0.1, (int) config('observability.ai_gateway_check_timeout_ms') / 1000);
             $response = Http::timeout($timeoutSeconds)

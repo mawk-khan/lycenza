@@ -6,6 +6,10 @@ use App\Support\Observability\MetricsRecorder;
 use App\Support\Observability\OperationalStatus;
 use App\Support\Observability\OperationalStatusService;
 use App\Support\Observability\Signals\OperationalSignals;
+use App\Support\ServiceAuth\ServiceAuthContract;
+use App\Support\ServiceAuth\ServiceAuthKeys;
+use App\Support\ServiceAuth\ServiceKeyConfigException;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -53,12 +57,25 @@ final class MetricsExporter
         });
 
         // The optional AI Gateway is probed only where the deployment runs one
-        // (a service token is configured); "not ready" is a 0, not a
-        // collection failure.
+        // (its base URL is configured); "not ready" is a 0, not a collection
+        // failure. ADR 0053: the service keys' age, from configuration only.
         $this->collect('ai_gateway', function (): void {
             $base = rtrim((string) config('services.ai_gateway.base_url'), '/');
-            if ($base === '' || trim((string) config('services.ai_gateway.service_token')) === '') {
+            if ($base === '') {
                 return;
+            }
+            $keys = app(ServiceAuthKeys::class);
+            $now = CarbonImmutable::now('UTC');
+            try {
+                $this->gauge('lycenza_service_signing_key_age_days', ['service' => ServiceAuthContract::PLATFORM], $keys->signingKey()->ageDays($now));
+            } catch (ServiceKeyConfigException) {
+                // Unusable key: the production guard refuses it at boot.
+            }
+            try {
+                $ages = array_map(fn ($key) => $key->ageDays($now), $keys->ring()->keys());
+                $this->gauge('lycenza_service_verification_key_max_age_days', ['service' => ServiceAuthContract::AI_GATEWAY], max($ages));
+            } catch (ServiceKeyConfigException) {
+                // As above.
             }
             try {
                 $ok = Http::timeout(max(0.1, (int) config('observability.ai_gateway_check_timeout_ms') / 1000))->get($base.'/health/ready')->successful();

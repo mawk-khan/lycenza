@@ -36,6 +36,8 @@ class LogSanitizer
         'credential', 'credentials', 'private_key', 'api_key', 'apikey', 'access_key',
         'recovery_code', 'recovery_codes', 'otp', 'totp', 'mfa_secret', 'app_key', 'previous_keys',
         'signing_key', 'hmac_key', 'service_token', 'dsn', 'prompt', 'completion', 'context_token',
+        // ADR 0053: service assertions and key material.
+        'verification_keys', 'assertion', 'jti', 'bsh',
     ];
 
     /**
@@ -52,6 +54,10 @@ class LogSanitizer
     /** @var array<string, string> pattern => replacement */
     private const VALUE_PATTERNS = [
         '/\bBearer\s+[A-Za-z0-9._~+\/|=-]+/i' => 'Bearer '.self::REDACTED,
+        // ADR 0053: a service assertion (any JWS-shaped value) and private JWK material.
+        '/\bLycenza-Service\s+[A-Za-z0-9._~+\/|=-]+/i' => 'Lycenza-Service '.self::REDACTED,
+        '/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{16,}/' => self::REDACTED,
+        '/"d"\s*:\s*"[A-Za-z0-9_-]{16,}"/' => '"d":"'.self::REDACTED.'"',
         '/\blyc_(pat|pk)_[A-Za-z0-9._|-]+/' => 'lyc_$1_'.self::REDACTED,
         '/\bbase64:[A-Za-z0-9+\/=]{16,}/' => 'base64:'.self::REDACTED,
         '/\b([a-z][a-z0-9+.-]*:\/\/)[^\s\/:@]+:[^\s\/@]+@/i' => '$1'.self::REDACTED.'@',

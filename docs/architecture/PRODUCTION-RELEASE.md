@@ -57,7 +57,11 @@ refuses to start on any of:
 | `app_key_missing` / `app_key_invalid` | `APP_KEY` is empty, or not a key the configured cipher accepts |
 | `session_cookie_not_secure` | `SESSION_SECURE_COOKIE` is not exactly true |
 | `ai_context_signing_key_missing` / `_placeholder` | `AI_GATEWAY_CONTEXT_SIGNING_KEY` is empty, or one of the committed development/test values |
-| `ai_service_token_development_value` | `AI_GATEWAY_SERVICE_TOKEN` is the public `dev-local-only-token` (an empty token is allowed: the Gateway is optional) |
+| `ai_legacy_service_token_configured` | The retired shared `AI_GATEWAY_SERVICE_TOKEN` is set to any value (ADR 0053: there is no fallback to it) |
+| `ai_gateway_url_not_https` | The AI Gateway is configured (`AI_GATEWAY_BASE_URL` set) but its URL is not `https://` |
+| `ai_service_signing_key_missing` / `_invalid` / `_development` / `_expired` | With the Gateway configured: Laravel's `platform` signing key (`AI_GATEWAY_SERVICE_SIGNING_KEY`, one RFC 8037 OKP JWK) is absent, malformed, a committed development key (kid prefix or public-key fingerprint), or older than 90 days |
+| `ai_service_verification_keys_missing` / `_invalid` / `_development` / `_too_many` / `_duplicate_kid` / `_steady_key` / `_private_material`, `ai_service_verification_key_transition_expired` / `_too_long` | With the Gateway configured: the ring of `ai-gateway` public keys (`AI_GATEWAY_INBOUND_VERIFICATION_KEYS`) is absent, malformed, holds a development key, breaks the 1-2 key / one-steady-key rule, holds private material, or has a transitional key past or more than 24 h beyond `not_after` |
+| `ai_service_replay_store_not_redis` | With the Gateway configured: the store consuming each inbound `jti` once (`AI_GATEWAY_REPLAY_STORE`, else the default cache) is not Redis |
 | `trusted_proxies_unsafe` (0O.4A) | the resolved proxy list is trust-all (`TRUSTED_PROXIES` itself refuses `*`, `**`, `0.0.0.0/0`, `::/0`, over-broad prefixes, hostnames and malformed entries at configuration load) |
 | `environment_not_separated` (0O.4A) | `APP_URL` is empty, `localhost`/loopback or a `.ddev.site`/`.test`/`.local`/`.localhost` host, or either connection names the test database |
 | `maintenance_mode_not_shared` (0O.4A) | `APP_MAINTENANCE_DRIVER` is not `cache` (a per-container `file` flag) |
@@ -82,11 +86,16 @@ rendered); PHP's `display_errors` must be off in production, as in
 signing key fails closed everywhere: without it no context token is issued
 or accepted (`AiContextSigningKeyNotConfiguredException`).
 
-The AI Gateway (`services/ai/app/core/startup.py`) refuses to start — and
-reports 503 on `/health/ready` — without `SERVICE_TOKEN` in any
-environment, or with the public development token unless `ENVIRONMENT` is
-exactly `local` or `testing`. `ENVIRONMENT` defaults to `production` and
-`SERVICE_TOKEN` has no default.
+The AI Gateway (`services/ai/app/core/startup.py`) refuses to start, and
+reports 503 on `/health/ready`, in these cases (ADR 0053):
+- in any environment: without a valid `SERVICE_SIGNING_KEY` (its own
+  `ai-gateway` Ed25519 key) and `PLATFORM_VERIFICATION_KEYS` (the ring of
+  `platform` public keys), or with the retired `SERVICE_TOKEN` set;
+- unless `ENVIRONMENT` is exactly `local` or `testing`: with a committed
+  development key, a signing key older than 90 days, or a non-`https`
+  `ERP_CONTRACT_BASE_URL`.
+
+`ENVIRONMENT` defaults to `production`; no key has a default.
 
 **External API and browser hardening (Phase 0O.3, ADR 0049):**
 `CORS_ALLOWED_ORIGINS` lists exact `https://` origins allowed to call the
@@ -98,18 +107,19 @@ HTTPS; behind a TLS-terminating proxy that needs the proxy's addresses in
 `TRUSTED_PROXIES` (Phase 0O.4A) — never "trust every proxy". Partner API
 credentials exist, but no partner route is enabled.
 
-One service-token value is used in three places today: Laravel
-`AI_GATEWAY_SERVICE_TOKEN`, the Gateway `SERVICE_TOKEN`, and the hashed
-`ai-gateway` row in `service_identities`.
+**O5 (ADR 0053) is implemented in Phase 0O.7A.** The shared service token
+used to live in three places: Laravel `AI_GATEWAY_SERVICE_TOKEN`, the
+Gateway `SERVICE_TOKEN`, and a hash in `service_identities`. It is gone.
 
-**O5 is decided by ADR 0053.** Phase 0O.7A replaces this token with
-per-request Ed25519 service assertions and one keypair per calling service:
+Every internal call now carries a per-request Ed25519 service assertion,
+with one keypair per calling service:
 - `platform` signs for Laravel → Gateway;
 - `ai-gateway` signs for Gateway → Laravel.
 
 Each receiver holds only a public verification ring. The production guards
-then refuse any leftover shared-token variable, the committed development
-keys, and non-HTTPS internal URLs.
+refuse a leftover shared-token variable, the committed development keys and
+non-HTTPS internal URLs. Deployment evidence (real keys, rotation and
+revocation drills) is still outstanding.
 
 ### Decided by ADR 0050 (Phase 0O.4)
 
@@ -168,23 +178,31 @@ names the database it is about to touch first (rule 54).
 7. `php artisan db:seed --force` (`DatabaseSeeder`) — **production-safe
    catalogs only**: capabilities and roles, education boards, statutory
    rule versions; idempotent; no accounts, no credentials, no School data.
-   In production `DatabaseSeeder` does not call `ServiceIdentitySeeder`,
-   which itself refuses outside `local`/`testing`. `DemoSeeder` refuses
+   Service identities are a closed code catalog with configured keys (ADR
+   0053); nothing about them is seeded. `DemoSeeder` refuses
    anywhere but a developer's DDEV (`DemoEnvironmentGuard`).
 8. **Operator-only, first release only:**
    - `php artisan platform:bootstrap-root` — interactive, creates the first
      platform account and provisions root (§5); later root accounts use
      `php artisan platform:provision-root <exact email or user id>` for an
      account that already exists;
-   - `php artisan platform:service-identity-issue ai-gateway
-     --capability=ai.tools.invoke --capability=ai.audit.write` — prints the
-     credential once; the operator installs it as both
-     `AI_GATEWAY_SERVICE_TOKEN` and the Gateway's `SERVICE_TOKEN`.
+   - only if the AI Gateway is deployed: generate the two ADR 0053 service
+     keypairs **outside** request processing
+     (`php artisan platform:service-key-generate platform|ai-gateway
+     --output=<dir outside the app>`, or the secret store's own generator).
+     Install each private JWK in the managed secret store (Laravel:
+     `AI_GATEWAY_SERVICE_SIGNING_KEY`; Gateway: `SERVICE_SIGNING_KEY`) and
+     each public JWK in the other side's ring (Laravel:
+     `AI_GATEWAY_INBOUND_VERIFICATION_KEYS`; Gateway:
+     `PLATFORM_VERIFICATION_KEYS`), then destroy the files. Check with
+     `php artisan platform:verify-service-auth`, which prints no key
+     material ([SERVICE-KEY-ROTATION](../operations/SERVICE-KEY-ROTATION.md)).
 9. Start the new web processes; `php artisan queue:restart` so every worker
    reloads code and cached configuration; restart `schedule:work` (a
    per-minute `schedule:run` picks up new code by itself).
-10. Start/restart the AI Gateway with the same token; it refuses to start
-    if the token is absent or the development value.
+10. Start/restart the AI Gateway with its service keys. It refuses to start
+    without valid keys, with a development key, with a plaintext Laravel
+    URL or with the retired `SERVICE_TOKEN` set (ADR 0053).
 11. **Verify:** Laravel `/api/health/ready` and the Gateway `/health/ready`
     return 200; `php artisan platform:operations-status` shows workers
     and the scheduler heartbeating.
@@ -221,8 +239,8 @@ corrected forward, never rolled back (ARCHITECTURE.md §10).
 |---|---|---|---|
 | `platform:bootstrap-root` | `pgsql_admin` | First boot only (no active root): creates one enabled account — name, email, password through two hidden prompts (no visible fallback, never an argument), `Password::defaults()` — and provisions root, in one transaction; interactive only; no School membership or Group grant | `platform.role_grant.provisioned` (actor null, `method: console`); never the password or its hash |
 | `platform:provision-root {user} [--force]` | `pgsql_admin` | Grants the root platform role to one existing, enabled account named by exact email or id; interactive confirmation (type the account's email) unless `--force`; idempotent | `platform.role_grant.provisioned` (actor null, subject the assignment, `role_key`, `user_id`, `method: console`) |
-| `platform:service-identity-issue {slug} --capability=… [--name=] [--force]` | runtime | New identity; capabilities limited to `ai.tools.invoke`, `ai.audit.write`; credential shown once, stored only as a hash; existing slug refused (no rotation — O5) | `platform.service_identity.issued` (slug, capabilities; never the credential) |
-| `platform:service-identity-disable {slug} [--force]` | runtime | Disables an identity; its calls fail at once; idempotent | `platform.service_identity.disabled` |
+| `platform:service-key-generate {platform\|ai-gateway} --output=<dir> [--kid=] [--non-production]` | none | Phase 0O.7A (ADR 0053): one Ed25519 keypair; the private JWK goes **only** to `<dir>/<kid>.private.jwk` (0600), never printed; the directory must be outside the application; never overwrites; `--non-production` forces the `dev-local-only-` prefix that production refuses. Replaces the retired `platform:service-identity-issue/-disable` | none (keys never enter the database; rotation evidence is operator evidence, [SERVICE-KEY-ROTATION](../operations/SERVICE-KEY-ROTATION.md)) |
+| `platform:verify-service-auth` | none | Read-only: legacy token absent; Gateway configured; https; signing kid and age; ring kids, ages and transition end; development keys; Redis replay store; rotation drill = operator evidence. Prints no key material | none |
 
 None has an HTTP route or UI. A non-interactive run without `--force`
 refuses; `--force` is for trusted operator automation only.

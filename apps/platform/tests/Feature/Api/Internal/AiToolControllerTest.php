@@ -7,6 +7,7 @@ use App\Support\Ai\AiContextTokenService;
 use App\Support\Tenancy\TenantContext;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\SignsServiceAssertions;
 use Tests\TestCase;
 
 /**
@@ -18,25 +19,36 @@ use Tests\TestCase;
  */
 class AiToolControllerTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, SignsServiceAssertions;
 
-    private const SERVICE_TOKEN = 'dev-local-only-token';
+    private array $gatewayKey;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // ADR 0053: a runtime-generated `ai-gateway` key; Laravel trusts only
+        // its public half, and every request below is signed with it unless
+        // it names another Authorization value.
+        $this->gatewayKey = $this->serviceKey('test-ai-gateway-1');
+        $this->useServiceKeys([$this->publicJwk($this->gatewayKey)]);
+        $this->asService($this->gatewaySigner($this->gatewayKey));
+    }
 
     #[Test]
-    public function it_rejects_calls_without_a_valid_service_token(): void
+    public function it_rejects_calls_without_a_service_assertion(): void
     {
-        $response = $this->postJson('/api/internal/ai/tools/school-echo', [
+        $response = $this->asService(null)->postJson('/api/internal/ai/tools/school-echo', [
             'context_token' => 'irrelevant',
         ]);
 
-        $response->assertUnauthorized();
+        $response->assertUnauthorized()->assertExactJson(['error' => ['code' => 'service_authentication_failed']]);
     }
 
     #[Test]
     public function it_rejects_a_missing_context_token(): void
     {
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/tools/school-echo', []);
+        $response = $this->postJson('/api/internal/ai/tools/school-echo', []);
 
         $response->assertUnauthorized();
     }
@@ -44,8 +56,7 @@ class AiToolControllerTest extends TestCase
     #[Test]
     public function it_rejects_a_forged_context_token(): void
     {
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/tools/school-echo', ['context_token' => 'not.avalidtoken']);
+        $response = $this->postJson('/api/internal/ai/tools/school-echo', ['context_token' => 'not.avalidtoken']);
 
         $response->assertUnauthorized();
     }
@@ -60,8 +71,7 @@ class AiToolControllerTest extends TestCase
         // school-echo tool requires school.settings.view specifically.
         $token = $tokenService->issue($school, $user, ['school.members.manage']);
 
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token]);
+        $response = $this->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token]);
 
         $response->assertForbidden();
     }
@@ -76,8 +86,7 @@ class AiToolControllerTest extends TestCase
         $token = $tokenService->issue($school, $user, ['school.settings.view']);
         $this->travelBack();
 
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token]);
+        $response = $this->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token]);
 
         $response->assertUnauthorized();
     }
@@ -89,8 +98,7 @@ class AiToolControllerTest extends TestCase
         $tokenService = app(AiContextTokenService::class);
         $token = $tokenService->issue($school, $user, ['school.settings.view'], 'req-ai-1');
 
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token]);
+        $response = $this->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token]);
 
         $response->assertOk();
         $response->assertJsonPath('result.schoolId', $school->id);
@@ -118,8 +126,7 @@ class AiToolControllerTest extends TestCase
         $tokenService = app(AiContextTokenService::class);
         $token = $tokenService->issue($schoolA, $userA, ['school.settings.view']);
 
-        $response = $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token]);
+        $response = $this->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token]);
 
         $response->assertOk();
         // Necessarily School A -- the token cannot name School B
@@ -147,8 +154,7 @@ class AiToolControllerTest extends TestCase
         config(['services.ai_gateway.context_signing_key' => null]);
         $this->app->forgetInstance(AiContextTokenService::class);
 
-        $this->withToken(self::SERVICE_TOKEN)
-            ->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $forged])
+        $this->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $forged])
             ->assertStatus(500);
 
         $this->assertSame(0, app(TenantContext::class)->withSchool(

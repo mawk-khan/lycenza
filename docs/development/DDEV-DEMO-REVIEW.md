@@ -681,12 +681,22 @@ production because:
    there is no auto-login route (`DemoLoginPanelTest` proves both).
 5. **Phase 0O.1 production boot check:** with `APP_ENV=production` the
    application refuses to boot on debug, a missing/invalid `APP_KEY`, a
-   non-Secure session cookie, the committed AI signing-key placeholders or
-   the development service token
+   non-Secure session cookie or the committed AI signing-key placeholders
    (`docs/architecture/PRODUCTION-RELEASE.md` §2). DDEV runs `local`, so
-   none of this applies here and nothing changes for the demo;
-   `ServiceIdentitySeeder` still seeds the development `ai-gateway`
-   identity locally and refuses anywhere else. Since Phase 0O.1A the
+   none of this applies here and nothing changes for the demo.
+
+   **Phase 0O.7A (ADR 0053):** DDEV and `.env.example` carry committed
+   **development-only** Ed25519 service keys:
+   - `dev-local-only-platform-1` for Laravel, and the public ring of
+     `dev-local-only-ai-gateway-1`;
+   - the matching pair in `services/ai/.env.example` for a locally run
+     Gateway.
+
+   Every production guard refuses them by kid prefix and public-key
+   fingerprint. The retired shared token and `ServiceIdentitySeeder` are
+   gone. To exercise a local Gateway, run it from `services/ai` with its
+   `.env` copied from `.env.example`. `platform:verify-service-auth` shows
+   the configuration without printing key material. Since Phase 0O.1A the
    demo Platform Admin's root grant is provisioned through the admin
    connection (the runtime role can no longer write one), audited as
    `platform.role_grant.provisioned` with method `demo_seed`.

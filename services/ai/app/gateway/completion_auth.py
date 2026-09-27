@@ -3,6 +3,8 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.config import settings
+from app.core.security import encode_body, laravel_headers
+from app.core.service_auth import ServiceKeyConfigError
 
 
 @dataclass(frozen=True)
@@ -36,20 +38,21 @@ async def authorize_completion(
     match, and the actor still holding the capability) BEFORE any model
     provider is called. Any refusal or failure raises; nothing is retried.
     """
+    body = encode_body(
+        {"context_token": context_token, "capability": capability, "school_id": school_id}
+    )
     try:
         async with httpx.AsyncClient(
             base_url=settings.erp_contract_base_url, timeout=5.0
         ) as client:
             response = await client.post(
                 "/completions/authorize",
-                json={
-                    "context_token": context_token,
-                    "capability": capability,
-                    "school_id": school_id,
-                },
-                headers={"Authorization": f"Bearer {settings.service_token}"},
+                content=body,
+                headers=laravel_headers("/completions/authorize", body),
             )
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ServiceKeyConfigError) as exc:
+        # ServiceKeyConfigError: this service's signing key can no longer sign
+        # (e.g. past its 90-day life) -- fail closed, never unsigned.
         raise CompletionAuthorizationError("authorization_unavailable", 503) from exc
 
     if response.status_code in _REFUSALS:

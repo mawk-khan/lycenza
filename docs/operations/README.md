@@ -20,7 +20,7 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 
 Observability and alerting are contracted by ADR 0051
 (`docs/architecture/adr/0051-production-observability-alerting-contract.md`):
-alerts OBS-01…OBS-26 link to the runbooks above and to those added in
+alerts OBS-01…OBS-27 link to the runbooks above and to those added in
 Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
 [dashboard specification](dashboards.md),
 [WEBHOOK-FAILURES](WEBHOOK-FAILURES.md),
@@ -36,7 +36,7 @@ Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
 | Production database bootstrap on a clean PostgreSQL 16 | Repository-verified on a throwaway cluster (`infrastructure/postgres/verify-production-bootstrap.sh`) |
 | Redis-loss reconciliation | Repository-verified (real Redis, `Tests\Feature\Recovery\RedisQueueLossRecoveryTest`) |
 | Release qualification (lock integrity, SBOM, vulnerability scan, secret/history scans, provenance, ephemeral signature, `verify-artifact`) | Repository-verified; **both images VERIFIED** (Phase 0O.6F, commit `93b72e5`) under owner decision `OWNER-0O6E-2026-09-26`, whose exception records **expire 2026-10-10 / 2026-10-26** ([0O.6F record](../security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md)). PUBLISHED = NONE, PROMOTED = NONE. |
-| Service-to-service authentication and rotation (O5) | **Contract only** (ADR 0053). Phase 0O.7A adds the Ed25519 service assertions, the key rings, the production guards and the routine/emergency rotation runbook. Real keys, a routine rotation and an emergency-revocation drill in a non-production environment remain **deployment evidence**. |
+| Service-to-service authentication and rotation (O5) | **Repository-implemented** (ADR 0053, Phase 0O.7A): Ed25519 service assertions both ways, verification rings, production guards, `platform:verify-service-auth`, OBS-27, [SERVICE-KEY-ROTATION](SERVICE-KEY-ROTATION.md); proven across real containers by `verify-images.sh`. Real keys, the ring on every replica, one routine rotation and one emergency-revocation drill in a non-production environment remain **deployment evidence**. |
 | Registry, signing custody, publication, promotion | **Not configured / not performed** |
 | Real deployment, real secrets, real bucket policy | **Not performed** |
 | Backup policy activation (PITR, object copy) | **Not performed** |

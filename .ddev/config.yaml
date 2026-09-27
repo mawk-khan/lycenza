@@ -86,7 +86,8 @@ web_environment:
     - STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY_VERSION=1
     - GUARDIAN_INVITATION_EXPIRY_DAYS=7
     - AI_GATEWAY_BASE_URL=http://localhost:8100
-    - AI_GATEWAY_SERVICE_TOKEN=dev-local-only-token
+    # ADR 0053 development-only service keys: .ddev/docker-compose.service-keys.yaml
+    # (JSON values; web_environment cannot quote them).
     - AI_GATEWAY_CONTEXT_SIGNING_KEY=dev-local-only-context-signing-key-change-me
     - TENANCY_ALLOW_DEV_HEADER_OVERRIDE=false
     - INERTIA_SSR_ENABLED=false

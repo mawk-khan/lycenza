@@ -6,11 +6,11 @@ use App\Models\MembershipRoleAssignment;
 use App\Models\SchoolAuditEvent;
 use App\Models\SchoolMembership;
 use App\Support\Ai\AiContextTokenService;
-use App\Support\ServiceIdentities\ServiceIdentityIssuer;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\SignsServiceAssertions;
 use Tests\TestCase;
 
 /**
@@ -22,17 +22,29 @@ use Tests\TestCase;
  */
 class AiCompletionAuthorizationTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, SignsServiceAssertions;
 
     private const URL = '/api/internal/ai/completions/authorize';
 
-    private const SERVICE_TOKEN = 'dev-local-only-token';
+    private array $gatewayKey;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // ADR 0053: a runtime-generated `ai-gateway` key; Laravel trusts only
+        // its public half, and every request below is signed with it unless
+        // it names another Authorization value.
+        $this->gatewayKey = $this->serviceKey('test-ai-gateway-1');
+        $this->useServiceKeys([$this->publicJwk($this->gatewayKey)]);
+        $this->asService($this->gatewaySigner($this->gatewayKey));
+    }
 
     private const CAPABILITY = 'school.settings.view';
 
     private function authorizeWith(string $token, string $capability = self::CAPABILITY, array $extra = []): TestResponse
     {
-        return $this->withToken(self::SERVICE_TOKEN)->postJson(self::URL, [
+        return $this->postJson(self::URL, [
             'context_token' => $token,
             'capability' => $capability,
             ...$extra,
@@ -62,8 +74,14 @@ class AiCompletionAuthorizationTest extends TestCase
 
         $this->withToken('not-a-real-credential')->postJson(self::URL, ['context_token' => $token, 'capability' => self::CAPABILITY])->assertUnauthorized();
 
-        [, $auditOnly] = app(ServiceIdentityIssuer::class)->issue('audit-only', 'Audit only', ['ai.audit.write'], null);
-        $this->withToken($auditOnly)->postJson(self::URL, ['context_token' => $token, 'capability' => self::CAPABILITY])->assertUnauthorized();
+        // ADR 0053: an assertion meant for the Gateway (wrong audience) or from
+        // the `platform` identity is refused here -- a valid context token
+        // never substitutes for the calling service's own authentication.
+        $key = $this->gatewayKey;
+        $this->asService($this->gatewaySigner($key, audience: 'lycenza-ai-gateway'))
+            ->postJson(self::URL, ['context_token' => $token, 'capability' => self::CAPABILITY])->assertUnauthorized();
+        $this->asService($this->gatewaySigner($key, issuer: 'platform'))
+            ->postJson(self::URL, ['context_token' => $token, 'capability' => self::CAPABILITY])->assertUnauthorized();
     }
 
     #[Test]
@@ -72,7 +90,7 @@ class AiCompletionAuthorizationTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $token = app(AiContextTokenService::class)->issue($school, $user, [self::CAPABILITY]);
 
-        $this->withToken(self::SERVICE_TOKEN)->postJson(self::URL, ['capability' => self::CAPABILITY])->assertUnprocessable();
+        $this->postJson(self::URL, ['capability' => self::CAPABILITY])->assertUnprocessable();
         $this->authorizeWith('not-a-token')->assertUnauthorized()->assertExactJson(['error' => ['code' => 'context_invalid']]);
         $this->authorizeWith(substr($token, 0, -3).'AAA')->assertUnauthorized();
         [$payload] = explode('.', $token);

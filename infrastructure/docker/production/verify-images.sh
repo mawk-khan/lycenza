@@ -102,6 +102,34 @@ random() { head -c 32 /dev/urandom | base64 | tr -d '/+=' | cut -c1-40; }
 
 REDIS_PASSWORD="$(random)"
 METRICS_TOKEN="$(random)$(random)"
+
+# Phase 0O.7A (ADR 0053): ephemeral NON-PRODUCTION Ed25519 service keys for this
+# run only -- generated inside the app image by libsodium, held in memory,
+# passed to the throwaway containers' environment, never written anywhere.
+service_keypair() { # kid -> "<private JWK><TAB><public JWK>"
+    drun --rm --entrypoint php "$APP_IMAGE" -r '$seed = random_bytes(32); $pair = sodium_crypto_sign_seed_keypair($seed);
+        $b = fn ($x) => rtrim(strtr(base64_encode($x), "+/", "-_"), "=");
+        $public = ["kty" => "OKP", "crv" => "Ed25519", "kid" => $argv[1], "x" => $b(sodium_crypto_sign_publickey($pair)), "created" => gmdate("Y-m-d")];
+        $private = ["kty" => "OKP", "crv" => "Ed25519", "kid" => $argv[1], "x" => $public["x"], "d" => $b($seed), "created" => $public["created"]];
+        echo json_encode($private), "\t", json_encode($public), "\n";' "$1"
+}
+IFS=$'\t' read -r PLATFORM_KEY PLATFORM_PUBLIC < <(service_keypair verify-platform-1)
+IFS=$'\t' read -r GATEWAY_KEY GATEWAY_PUBLIC < <(service_keypair verify-ai-gateway-1)
+IFS=$'\t' read -r DEV_GATEWAY_KEY _ < <(service_keypair dev-local-only-ai-gateway-9)
+PLATFORM_SEED="$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["d"])' "$PLATFORM_KEY")"
+# The committed development private seeds (never allowed in an image).
+DEV_SEEDS=()
+while IFS= read -r seed; do DEV_SEEDS+=(-e "$seed"); done < <(python3 -c 'import json,re,sys
+for path in sys.argv[1:]:
+    for m in re.finditer(r"\{[^{}]*\"d\":\"[A-Za-z0-9_-]{43}\"[^{}]*\}", open(path).read()):
+        print(json.loads(m.group(0))["d"])' "$ROOT/apps/platform/.env.example" "$ROOT/services/ai/.env.example")
+check "the two committed development private seeds were found (for the image checks)" test "${#DEV_SEEDS[@]}" = 4
+no_dev_seed() { # image path... : true when none of the committed dev seeds appears
+    local image=$1
+    shift
+    ! drun --rm --entrypoint grep "$image" -rqsF "${DEV_SEEDS[@]}" "$@"
+}
+
 APP_ENV_ARGS=(
     -e METRICS_SCRAPE_TOKEN="$METRICS_TOKEN"
     -e APP_KEY="base64:$(head -c 32 /dev/urandom | base64)"
@@ -109,7 +137,10 @@ APP_ENV_ARGS=(
     -e APP_DEBUG=false
     -e SESSION_SECURE_COOKIE=true
     -e AI_GATEWAY_CONTEXT_SIGNING_KEY="$(random)"
-    -e AI_GATEWAY_SERVICE_TOKEN="$(random)"
+    -e AI_GATEWAY_BASE_URL=https://ai-gateway.invalid
+    -e AI_GATEWAY_SERVICE_SIGNING_KEY="$PLATFORM_KEY"
+    -e AI_GATEWAY_INBOUND_VERIFICATION_KEYS="[$GATEWAY_PUBLIC]"
+    -e AI_GATEWAY_REPLAY_STORE=redis
     -e DB_HOST=192.0.2.10 -e DB_SSLMODE=require
     -e DB_USERNAME=school_os_app -e DB_PASSWORD="$(random)"
     -e REDIS_HOST="${RUN_ID}-redis" -e REDIS_PASSWORD="$REDIS_PASSWORD"
@@ -127,6 +158,7 @@ check "no .env file anywhere in the application" test -z "$(in_app 'find /var/ww
 check "no tests or PHPUnit configuration" in_app 'test ! -e /var/www/app/tests && test ! -e /var/www/app/phpunit.xml'
 check "no dev Composer packages" in_app 'test ! -e /var/www/app/vendor/phpunit && test ! -e /var/www/app/vendor/mockery && test ! -e /var/www/app/vendor/larastan'
 check "no node_modules" in_app 'test ! -e /var/www/app/node_modules'
+check "no development private service key in the app image (ADR 0053)" no_dev_seed "$APP_IMAGE" /var/www/app /usr/local /etc
 check "demo seeders excluded (guard only)" test "$(in_app 'ls /var/www/app/database/seeders/Demo')" = "DemoEnvironmentGuard.php"
 check "test-database reset command excluded" in_app 'test ! -e /var/www/app/app/Console/Commands/ResetTestDatabase.php'
 check "no cached configuration or routes baked in" in_app 'test ! -e /var/www/app/bootstrap/cache/config.php && ! ls /var/www/app/bootstrap/cache/routes-*.php'
@@ -168,6 +200,9 @@ docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" redis:7-alpine redis
 unsafe_output="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e APP_KEY=canary-unsafe-app-key "$APP_IMAGE" web 2>&1 || true)"
 check "unsafe configuration refuses to start" grep -q "Refusing to start" <<<"$unsafe_output"
 check "refusal never prints the value" test -z "$(grep -F canary-unsafe-app-key <<<"$unsafe_output")"
+legacy_output="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e AI_GATEWAY_SERVICE_TOKEN=canary-legacy-shared-token "$APP_IMAGE" web 2>&1 || true)"
+check "app refuses the retired shared service token (ADR 0053)" grep -q "ai_legacy_service_token_configured" <<<"$legacy_output"
+check "that refusal never prints the token or a key" test -z "$(grep -F -e canary-legacy-shared-token -e "$PLATFORM_SEED" <<<"$legacy_output")"
 
 drun -d --name "${RUN_ID}-web" --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" web >/dev/null
 http() { docker exec "${RUN_ID}-web" php -r '$c=stream_context_create(["http"=>["ignore_errors"=>true,"header"=>$argv[2] ?? ""]]); $b=@file_get_contents("http://127.0.0.1:8080".$argv[1],false,$c); echo implode("\n",$http_response_header ?? []),"\n\n",$b;' "$@"; }
@@ -357,14 +392,28 @@ check "gateway runs CPython 3.14 (Phase 0O.6C, CVE-2026-82049)" in_ai 'python -c
 check "gateway TLS trust store is populated" in_ai 'python -c "import ssl,sys; sys.exit(0 if ssl.create_default_context().cert_store_stats()[\"x509_ca\"] > 0 else 1)"'
 check "gateway has no .env, tests or dev requirements" in_ai 'test ! -e /srv/ai/.env && test ! -e /srv/ai/tests && test ! -e /srv/ai/requirements-dev.txt && test -z "$(find /srv -name ".env*")"'
 
-set +e
-drun --rm -e SERVICE_TOKEN= "$AI_IMAGE" >/dev/null 2>&1; no_token=$?
-drun --rm -e SERVICE_TOKEN=dev-local-only-token "$AI_IMAGE" >/dev/null 2>&1; dev_token=$?
-set -e
-check "gateway refuses to start without a service token" test "$no_token" != "0"
-check "gateway refuses the development token in production" test "$dev_token" != "0"
+# Phase 0O.7A (ADR 0053): the Gateway's own `ai-gateway` key and the ring of
+# `platform` public keys; ENVIRONMENT defaults to production.
+GATEWAY_ENV=(
+    -e SERVICE_SIGNING_KEY="$GATEWAY_KEY"
+    -e PLATFORM_VERIFICATION_KEYS="[$PLATFORM_PUBLIC]"
+    -e ERP_CONTRACT_BASE_URL="https://platform.invalid/api/internal/ai"
+)
+check "gateway has the audited Ed25519 library (cryptography, ADR 0053)" in_ai 'python -c "from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey; Ed25519PrivateKey.generate()"'
+check "no development private service key in the gateway image (ADR 0053)" no_dev_seed "$AI_IMAGE" /srv /opt/venv /etc
 
-drun -d --name "${RUN_ID}-ai" --network "$NETWORK" -e SERVICE_TOKEN="$(random)" "$AI_IMAGE" >/dev/null
+set +e
+drun --rm "$AI_IMAGE" >/dev/null 2>&1; no_keys=$?
+drun --rm "${GATEWAY_ENV[@]}" -e SERVICE_TOKEN=canary-legacy-shared-token "$AI_IMAGE" >/dev/null 2>&1; legacy_token=$?
+drun --rm "${GATEWAY_ENV[@]}" -e SERVICE_SIGNING_KEY="$DEV_GATEWAY_KEY" "$AI_IMAGE" >/dev/null 2>&1; dev_key=$?
+drun --rm "${GATEWAY_ENV[@]}" -e ERP_CONTRACT_BASE_URL=http://platform.invalid/api/internal/ai "$AI_IMAGE" >/dev/null 2>&1; plaintext=$?
+set -e
+check "gateway refuses to start without service keys" test "$no_keys" != "0"
+check "gateway refuses the retired SERVICE_TOKEN (any value)" test "$legacy_token" != "0"
+check "gateway refuses a development service key in production" test "$dev_key" != "0"
+check "gateway refuses a plaintext Laravel URL in production" test "$plaintext" != "0"
+
+drun -d --name "${RUN_ID}-ai" --network "$NETWORK" "${GATEWAY_ENV[@]}" "$AI_IMAGE" >/dev/null
 ai_get() { docker exec "${RUN_ID}-ai" python -c 'import sys,urllib.request,urllib.error
 try:
     r=urllib.request.urlopen("http://127.0.0.1:8100"+sys.argv[1]); print(r.status, r.headers.get("server"), r.read().decode())
@@ -378,12 +427,73 @@ check "gateway: every process is non-root with no capability and NoNewPrivs=1" e
 check "gateway: mount/umount carry no setuid bit (dpkg-statoverride)" in_ai "$setuid_removed"
 check "gateway: setuid/setgid execution gains no privilege under the hardened invocation" in_ai '! chage -l gateway >/dev/null 2>&1 && ! mount -t tmpfs none /tmp >/dev/null 2>&1'
 check "gateway: /etc/fstab has no user-mountable entry" fstab_ok "$AI_IMAGE"
-check "gateway readiness 200 with a token" grep -q '^200' <<<"$(ai_get /health/ready 2>/dev/null || true)"
+check "gateway readiness 200 with valid service keys" grep -q '^200' <<<"$(ai_get /health/ready 2>/dev/null || true)"
 check "gateway does not name its server" grep -q '^200 None' <<<"$(ai_get /health/live 2>/dev/null || true)"
 gateway_logs="$(docker logs "${RUN_ID}-ai" 2>&1 || true)"
 check "gateway logs are structured JSON" grep -q '"service":"ai-gateway","process_role":"gateway","environment":"production"' <<<"$gateway_logs"
 check "gateway access lines carry no client address" test -z "$(grep '"event_code":"http.access"' <<<"$gateway_logs" | grep -E '"client|127\.0\.0\.1:' || true)"
 check "no external model provider enabled" docker exec "${RUN_ID}-ai" python -c 'from app.core.config import settings; import sys; sys.exit(1 if settings.real_providers_allowed else 0)'
+
+# --- Phase 0O.7A (ADR 0053): both signed directions, real containers -------------
+# Laravel -> Gateway: the app image's own signer (`platform` key) calls the
+# running Gateway. An unknown agent proves authentication passed (403 from
+# the agent check, not 401); nothing else authenticates; a replay to the same
+# Gateway process is refused.
+platform_call() { # mode: signed | bearer | replay
+    drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" --entrypoint php "$APP_IMAGE" -r '
+        require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+        $url = "http://".$argv[1].":8100/v1/complete";
+        $body = json_encode(["agent" => "verify-no-such-agent", "context_token" => "t", "prompt" => "p"]);
+        $auth = $argv[2] === "bearer" ? "Bearer verify-not-a-credential" : app(App\Support\ServiceAuth\ServiceAuthKeys::class)->signer()->authorization("POST", $url, $body);
+        $send = function () use ($url, $body, $auth) {
+            $c = stream_context_create(["http" => ["method" => "POST", "ignore_errors" => true, "timeout" => 20, "header" => "Content-Type: application/json\r\nAuthorization: {$auth}\r\n", "content" => $body]]);
+            $r = file_get_contents($url, false, $c);
+            return explode(" ", $http_response_header[0])[1]." ".$r;
+        };
+        $first = $send();
+        echo $argv[2] === "replay" ? $send() : $first;' "${RUN_ID}-ai" "$1"
+}
+check "platform -> gateway: a signed platform assertion authenticates (the unknown agent is then refused)" grep -q '^403 {"detail":"agent_not_allowed"}' <<<"$(platform_call signed 2>&1 || true)"
+check "platform -> gateway: any other credential gets the uniform 401" grep -q '^401 {"error":{"code":"service_authentication_failed"}}' <<<"$(platform_call bearer 2>&1 || true)"
+check "platform -> gateway: a replay to the same Gateway process is refused" grep -q '^401 {"error":{"code":"service_authentication_failed"}}' <<<"$(platform_call replay 2>&1 || true)"
+
+# Gateway -> Laravel: the Gateway image's own signer (`ai-gateway` key) calls a
+# hardened web role. PostgreSQL is deliberately unreachable here, so this web
+# instance keeps its maintenance flag in Redis (still a shared store); a
+# rejected context token proves authentication passed (context_invalid, not
+# service_authentication_failed); a replay is refused through Redis.
+drun -d --name "${RUN_ID}-web-internal" --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e APP_MAINTENANCE_STORE=redis "$APP_IMAGE" web >/dev/null
+for _ in $(seq 1 30); do docker exec "${RUN_ID}-web-internal" php -r 'exit(@file_get_contents("http://127.0.0.1:8080/api/health/live") === false ? 1 : 0);' 2>/dev/null && break; sleep 1; done
+gateway_call() { # mode: signed | bearer | replay | wrong-audience
+    drun --rm --network "$NETWORK" "${GATEWAY_ENV[@]}" --entrypoint /opt/venv/bin/python "$AI_IMAGE" -c '
+import json, sys, urllib.error, urllib.request
+from app.core.security import service_auth
+from app.core.service_auth import AI_GATEWAY, AUDIENCE_AI_GATEWAY, ServiceSigner, parse_signing_key
+from app.core.config import settings
+url = "http://" + sys.argv[1] + ":8080/api/internal/ai/completions/authorize"
+body = json.dumps({"context_token": "not.a-real-token", "capability": "school.settings.view"}).encode()
+mode = sys.argv[2]
+if mode == "bearer":
+    auth = "Bearer verify-not-a-credential"
+elif mode == "wrong-audience":
+    auth = ServiceSigner(parse_signing_key(settings.service_signing_key), issuer=AI_GATEWAY, audience=AUDIENCE_AI_GATEWAY).authorization("POST", url, body)
+else:
+    auth = service_auth.signer.authorization("POST", url, body)
+def send():
+    request = urllib.request.Request(url, data=body, method="POST", headers={"Content-Type": "application/json", "Accept": "application/json", "Authorization": auth})
+    try:
+        response = urllib.request.urlopen(request, timeout=20)
+        return f"{response.status} {response.read().decode()}"
+    except urllib.error.HTTPError as e:
+        return f"{e.code} {e.read().decode()}"
+first = send()
+print(send() if mode == "replay" else first)' "${RUN_ID}-web-internal" "$1"
+}
+check "gateway -> platform: a signed ai-gateway assertion authenticates (the context check then decides)" grep -q '^401 {"error":{"code":"context_invalid"}}' <<<"$(gateway_call signed 2>&1 || true)"
+check "gateway -> platform: any other credential gets the uniform 401" grep -q '^401 {"error":{"code":"service_authentication_failed"}}' <<<"$(gateway_call bearer 2>&1 || true)"
+check "gateway -> platform: an assertion for the Gateway audience is refused" grep -q '^401 {"error":{"code":"service_authentication_failed"}}' <<<"$(gateway_call wrong-audience 2>&1 || true)"
+check "gateway -> platform: a replayed assertion is refused (one-time jti in Redis)" grep -q '^401 {"error":{"code":"service_authentication_failed"}}' <<<"$(gateway_call replay 2>&1 || true)"
+check "gateway -> platform: the web role logs a closed code and never the assertion" test -n "$(docker logs "${RUN_ID}-web-internal" 2>&1 | grep '"event_code":"service_auth.failed"' | grep '"outcome":"replayed"' | grep -v 'eyJ' || true)"
 
 echo
 if [[ "$failures" -gt 0 ]]; then

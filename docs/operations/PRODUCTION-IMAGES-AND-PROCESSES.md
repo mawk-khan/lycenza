@@ -43,9 +43,17 @@ timestamp validation off, `expose_php` off, and never uses
 resolved, hash-locked `requirements.lock` (`pip install --require-hashes
 --no-deps --only-binary=:all:` — every file hash-checked, wheels only, no
 source build; never `requirements-dev.txt`), non-root user `gateway`, `ENVIRONMENT=production`,
-no provider SDK (NullProvider only). It refuses to start without
-`SERVICE_TOKEN` or with the development token; readiness is 503 when the
-configuration is unsafe.
+no provider SDK (NullProvider only), and PyCA `cryptography` for Ed25519
+(ADR 0053). It refuses to start in these cases, and readiness is 503 when
+the configuration is unsafe:
+- without its own `SERVICE_SIGNING_KEY` and the `PLATFORM_VERIFICATION_KEYS`
+  ring;
+- with a committed development key, an expired key or a plaintext Laravel
+  URL outside local/testing;
+- with the retired `SERVICE_TOKEN` set.
+
+Every business route authenticates a signed `platform` assertion before
+routing ([SERVICE-KEY-ROTATION](SERVICE-KEY-ROTATION.md)).
 
 ## Roles (one application image, selected by command)
 
@@ -75,9 +83,14 @@ health endpoints and the **secret groups** it receives. Guarded by
 
 | Secret group | Contents | Given to |
 |---|---|---|
-| `app_runtime` | `APP_KEY`, `APP_PREVIOUS_KEYS`, `MAIL_PASSWORD`, `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (or none: the platform's credential chain), `AI_GATEWAY_CONTEXT_SIGNING_KEY`, `AI_GATEWAY_SERVICE_TOKEN`, both lookup HMAC keys | web, workers, scheduler, release, operator console |
+| `app_runtime` | `APP_KEY`, `APP_PREVIOUS_KEYS`, `MAIL_PASSWORD`, `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (or none: the platform's credential chain), `AI_GATEWAY_CONTEXT_SIGNING_KEY`, `AI_GATEWAY_SERVICE_SIGNING_KEY` (Laravel's `platform` Ed25519 key, ADR 0053; only where the Gateway is deployed), both lookup HMAC keys | web, workers, scheduler, release, operator console |
 | `database_admin` | `DB_ADMIN_USERNAME`, `DB_ADMIN_PASSWORD` | release, operator console only |
-| `gateway` | `SERVICE_TOKEN` | AI Gateway only |
+| `gateway` | `SERVICE_SIGNING_KEY` (the Gateway's `ai-gateway` Ed25519 key, ADR 0053) | AI Gateway only |
+
+The verification rings (`AI_GATEWAY_INBOUND_VERIFICATION_KEYS` for Laravel,
+`PLATFORM_VERIFICATION_KEYS` for the Gateway) hold **public** keys. They are
+integrity-controlled deployment configuration, not secrets, and must reach
+every replica before a caller switches keys.
 
 Both PostgreSQL connections bound connection establishment with
 `DB_CONNECT_TIMEOUT` (default 5 s, `PDO::ATTR_TIMEOUT`; pdo_pgsql otherwise
@@ -176,7 +189,10 @@ Load balancers route on readiness; the Gateway is never public.
 
 `ProductionConfigurationGuard` codes, never values (Phase 0O.1, 0O.3,
 0O.4A): debug off; valid `APP_KEY`; secure session cookie; AI signing key
-set and not a placeholder; no development service token; CORS allowlist
+set and not a placeholder; the retired shared service token not set; when
+the AI Gateway is configured, its ADR 0053 service keys sound (https URL,
+valid non-development `platform` key at most 90 days old, valid
+`ai-gateway` ring, Redis replay store); CORS allowlist
 valid; `TRUSTED_PROXIES` explicit (never trust-all); `DB_CONNECTION=pgsql`;
 `DB_SSLMODE` `require`/`verify-ca`/`verify-full` (runtime **and** admin);
 `REDIS_PASSWORD` set; shared maintenance mode (`cache` driver); Documents

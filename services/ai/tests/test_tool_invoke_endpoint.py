@@ -1,13 +1,18 @@
+import json
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import httpx
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.service_keys import signed
 
 client = TestClient(app)
 
-AUTH_HEADERS = {"X-Service-Token": "dev-local-only-token"}
+
+def _with_traceparent(request: dict[str, Any], traceparent: str) -> dict[str, Any]:
+    return {**request, "headers": {**request["headers"], "traceparent": traceparent}}
 
 
 def test_invoke_requires_service_token() -> None:
@@ -40,13 +45,15 @@ def test_invoke_denied_when_agent_lacks_capability() -> None:
 
     response = client.post(
         "/v1/tools/invoke",
-        json={
-            "school_id": "school-a",
-            "agent": "phase0b-proof-agent",
-            "tool": "school.unrelated",
-            "context_token": "irrelevant",
-        },
-        headers=AUTH_HEADERS,
+        **signed(
+            "/v1/tools/invoke",
+            {
+                "school_id": "school-a",
+                "agent": "phase0b-proof-agent",
+                "tool": "school.unrelated",
+                "context_token": "irrelevant",
+            },
+        ),
     )
     assert response.status_code == 403
 
@@ -68,13 +75,15 @@ def test_invoke_relays_context_token_to_laravel_and_records_audit() -> None:
     with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=fake_response)) as mocked_post:
         response = client.post(
             "/v1/tools/invoke",
-            json={
-                "school_id": "school-a",
-                "agent": "phase0b-proof-agent",
-                "tool": "school.echo",
-                "context_token": "signed-token-from-laravel",
-            },
-            headers=AUTH_HEADERS,
+            **signed(
+                "/v1/tools/invoke",
+                {
+                    "school_id": "school-a",
+                    "agent": "phase0b-proof-agent",
+                    "tool": "school.echo",
+                    "context_token": "signed-token-from-laravel",
+                },
+            ),
         )
 
     assert response.status_code == 200
@@ -86,11 +95,11 @@ def test_invoke_relays_context_token_to_laravel_and_records_audit() -> None:
     # signing key and cannot).
     assert mocked_post.call_count == 2
     for call in mocked_post.call_args_list:
-        assert call.kwargs["json"]["context_token"] == "signed-token-from-laravel"
+        assert json.loads(call.kwargs["content"])["context_token"] == "signed-token-from-laravel"
 
     audit_call_args, audit_call_kwargs = mocked_post.call_args_list[1]
     assert audit_call_args[0] == "/audit"
-    assert audit_call_kwargs["json"]["action"] == "tool.invoke"
+    assert json.loads(audit_call_kwargs["content"])["action"] == "tool.invoke"
 
 
 def test_invoke_propagates_the_inbound_trace_to_the_audit_write_back() -> None:
@@ -109,13 +118,18 @@ def test_invoke_propagates_the_inbound_trace_to_the_audit_write_back() -> None:
     with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=fake_response)) as mocked_post:
         client.post(
             "/v1/tools/invoke",
-            json={
-                "school_id": "school-a",
-                "agent": "phase0b-proof-agent",
-                "tool": "school.echo",
-                "context_token": "signed-token-from-laravel",
-            },
-            headers={**AUTH_HEADERS, "traceparent": f"00-{inbound_trace_id}-{inbound_span_id}-01"},
+            **_with_traceparent(
+                signed(
+                    "/v1/tools/invoke",
+                    {
+                        "school_id": "school-a",
+                        "agent": "phase0b-proof-agent",
+                        "tool": "school.echo",
+                        "context_token": "signed-token-from-laravel",
+                    },
+                ),
+                f"00-{inbound_trace_id}-{inbound_span_id}-01",
+            ),
         )
 
     _, audit_call_kwargs = mocked_post.call_args_list[1]
@@ -135,13 +149,15 @@ def test_invoke_still_forwards_a_valid_trace_when_none_was_provided() -> None:
     with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=fake_response)) as mocked_post:
         client.post(
             "/v1/tools/invoke",
-            json={
-                "school_id": "school-a",
-                "agent": "phase0b-proof-agent",
-                "tool": "school.echo",
-                "context_token": "signed-token-from-laravel",
-            },
-            headers=AUTH_HEADERS,
+            **signed(
+                "/v1/tools/invoke",
+                {
+                    "school_id": "school-a",
+                    "agent": "phase0b-proof-agent",
+                    "tool": "school.echo",
+                    "context_token": "signed-token-from-laravel",
+                },
+            ),
         )
 
     _, audit_call_kwargs = mocked_post.call_args_list[1]
@@ -158,13 +174,15 @@ def test_invoke_returns_bad_gateway_when_laravel_call_fails() -> None:
     with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=fake_response)):
         response = client.post(
             "/v1/tools/invoke",
-            json={
-                "school_id": "school-a",
-                "agent": "phase0b-proof-agent",
-                "tool": "school.echo",
-                "context_token": "expired-or-tampered",
-            },
-            headers=AUTH_HEADERS,
+            **signed(
+                "/v1/tools/invoke",
+                {
+                    "school_id": "school-a",
+                    "agent": "phase0b-proof-agent",
+                    "tool": "school.echo",
+                    "context_token": "expired-or-tampered",
+                },
+            ),
         )
 
     assert response.status_code == 502

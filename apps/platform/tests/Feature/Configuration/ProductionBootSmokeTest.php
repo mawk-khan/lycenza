@@ -4,6 +4,7 @@ namespace Tests\Feature\Configuration;
 
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
+use Tests\Concerns\GeneratesServiceKeys;
 use Tests\TestCase;
 
 /**
@@ -22,6 +23,8 @@ use Tests\TestCase;
  */
 class ProductionBootSmokeTest extends TestCase
 {
+    use GeneratesServiceKeys;
+
     private const CANARY_SIGNING_KEY = 'canary-production-signing-key-4b8e1f0a6c2d9e7b';
 
     private const CANARY_REDIS_PASSWORD = 'canary-redis-password-91c3e5a7';
@@ -59,6 +62,9 @@ class ProductionBootSmokeTest extends TestCase
             'APP_KEY' => 'base64:'.base64_encode(random_bytes(32)),
             'SESSION_SECURE_COOKIE' => 'true',
             'AI_GATEWAY_CONTEXT_SIGNING_KEY' => self::CANARY_SIGNING_KEY,
+            // ADR 0053: no AI Gateway configured (an empty value also masks a
+            // developer .env); the retired shared token is never set.
+            'AI_GATEWAY_BASE_URL' => '',
             'AI_GATEWAY_SERVICE_TOKEN' => '',
             // Phase 0O.4A infrastructure baseline (ADR 0050 section 15).
             'APP_URL' => 'https://erp.example.org',
@@ -112,6 +118,7 @@ class ProductionBootSmokeTest extends TestCase
             ['AI_GATEWAY_CONTEXT_SIGNING_KEY' => ''],
             ['AI_GATEWAY_CONTEXT_SIGNING_KEY' => 'dev-local-only-context-signing-key-change-me'],
             ['AI_GATEWAY_SERVICE_TOKEN' => 'dev-local-only-token'],
+            ['AI_GATEWAY_BASE_URL' => 'http://gateway.internal:8100'],
         ] as $unsafe) {
             foreach (['about', 'route:list', 'schedule:list'] as $command) {
                 $process = $this->runArtisan([$command], $this->productionEnv($unsafe));
@@ -292,13 +299,44 @@ class ProductionBootSmokeTest extends TestCase
     }
 
     #[Test]
+    public function a_configured_ai_gateway_boots_and_caches_with_sound_service_keys_and_never_prints_them(): void
+    {
+        // ADR 0053: runtime-generated keys, config:cache (as the release does),
+        // then a boot from the cache. Key material stays out of every output.
+        $platform = $this->serviceKey('platform-20260901-1');
+        $gateway = $this->serviceKey('ai-gateway-20260901-1');
+        $env = $this->productionEnv([
+            'AI_GATEWAY_BASE_URL' => 'https://gateway.internal',
+            'AI_GATEWAY_SERVICE_SIGNING_KEY' => $this->privateJwk($platform),
+            'AI_GATEWAY_INBOUND_VERIFICATION_KEYS' => $this->ring([$this->publicJwk($gateway)]),
+            'AI_GATEWAY_REPLAY_STORE' => 'redis',
+        ]);
+
+        $outputs = '';
+        foreach ([['config:cache'], ['route:cache'], ['route:list', '--path=api/internal/ai']] as $command) {
+            $process = $this->runArtisan($command, $env);
+            $outputs .= $process->getOutput().$process->getErrorOutput();
+            $this->assertSame(0, $process->getExitCode(), implode(' ', $command).":\n".$process->getOutput().$process->getErrorOutput());
+        }
+        foreach ([$platform['d'], $platform['x'], $gateway['x'], self::CANARY_SIGNING_KEY] as $secret) {
+            $this->assertStringNotContainsString($secret, $outputs);
+        }
+
+        // The same boot with the plaintext URL or the replay store off Redis is refused.
+        foreach ([['AI_GATEWAY_BASE_URL' => 'http://gateway.internal:8100'], ['AI_GATEWAY_REPLAY_STORE' => 'array']] as $unsafe) {
+            $refused = $this->runArtisan(['route:list'], [...$env, ...$unsafe, 'APP_CONFIG_CACHE' => $this->dir.'/unsafe-config.php']);
+            $this->assertNotSame(0, $refused->getExitCode());
+            $this->assertStringNotContainsString($platform['d'], $refused->getOutput().$refused->getErrorOutput());
+        }
+    }
+
+    #[Test]
     public function local_boot_is_unchanged_by_the_production_guard(): void
     {
         $process = $this->runArtisan(['about', '--only=environment'], [
             'APP_ENV' => 'local',
             'APP_DEBUG' => 'true',
             'SESSION_SECURE_COOKIE' => 'false',
-            'AI_GATEWAY_SERVICE_TOKEN' => 'dev-local-only-token',
             'AI_GATEWAY_CONTEXT_SIGNING_KEY' => 'dev-local-only-context-signing-key-change-me',
             'APP_CONFIG_CACHE' => $this->dir.'/config.php',
             'APP_ROUTES_CACHE' => $this->dir.'/routes.php',

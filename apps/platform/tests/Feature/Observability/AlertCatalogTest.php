@@ -78,10 +78,10 @@ class AlertCatalogTest extends TestCase
     }
 
     #[Test]
-    public function the_catalog_is_exactly_obs_01_to_obs_26_with_existing_runbooks(): void
+    public function the_catalog_is_exactly_obs_01_to_obs_27_with_existing_runbooks(): void
     {
         $ids = array_map(fn (AlertRule $r) => $r->id, AlertCatalog::all());
-        $this->assertSame(array_map(fn ($n) => sprintf('OBS-%02d', $n), range(1, 26)), $ids);
+        $this->assertSame(array_map(fn ($n) => sprintf('OBS-%02d', $n), range(1, 27)), $ids);
 
         foreach (AlertCatalog::all() as $rule) {
             $this->assertFileExists(dirname(base_path(), 2).'/docs/operations/'.$rule->runbook, "{$rule->id} runbook");
@@ -94,6 +94,21 @@ class AlertCatalogTest extends TestCase
                 }
             }
         }
+    }
+
+    #[Test]
+    public function service_authentication_failures_and_key_age_warn_but_never_page(): void
+    {
+        $age = fn (float $days, string $metric = 'lycenza_service_signing_key_age_days', string $service = 'platform') => $this->snapshot([[$metric, ['service' => $service], $days]]);
+        $auth = fn (string $outcome) => $this->snapshot([], [['15m', 'lycenza_service_auth_total', ['direction' => 'gateway_to_platform', 'service' => 'unknown', 'outcome' => $outcome], 1.0]]);
+
+        $this->assertNull($this->rule('OBS-27')->evaluate($age(75)));
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-27')->evaluate($age(76)));
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-27')->evaluate($age(80, 'lycenza_service_verification_key_max_age_days', 'ai-gateway')));
+        foreach (['unknown_kid', 'bad_signature', 'key_expired', 'rejected_by_receiver'] as $outcome) {
+            $this->assertSame(Severity::Sev3, $this->rule('OBS-27')->evaluate($auth($outcome)), $outcome);
+        }
+        $this->assertNull($this->rule('OBS-27')->evaluate($auth('replayed')), 'a refused replay is counted, not a key problem');
     }
 
     #[Test]
@@ -237,7 +252,7 @@ class AlertCatalogTest extends TestCase
         ]]);
 
         preg_match_all('/- alert: (\S+)/', (new AlertRulesExporter)->yaml(), $names);
-        $this->assertCount(38, $names[1]);
+        $this->assertCount(40, $names[1]); // 38 + the two OBS-27 tiers (ADR 0053)
         $this->assertSame($names[1], array_values(array_unique($names[1])));
     }
 

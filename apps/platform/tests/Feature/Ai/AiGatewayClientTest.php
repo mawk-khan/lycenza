@@ -5,9 +5,15 @@ namespace Tests\Feature\Ai;
 use App\Support\Ai\AiContextTokenService;
 use App\Support\Ai\AiGatewayAuthorizationException;
 use App\Support\Ai\AiGatewayClient;
+use App\Support\ServiceAuth\ServiceAssertionVerifier;
+use App\Support\ServiceAuth\ServiceAuthContract;
+use App\Support\ServiceAuth\ServiceKeyRing;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\SignsServiceAssertions;
 use Tests\TestCase;
 
 /**
@@ -18,7 +24,30 @@ use Tests\TestCase;
  */
 class AiGatewayClientTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, SignsServiceAssertions;
+
+    /** @var array{kid: string, created: string, x: string, d: string} */
+    private array $platformKey;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // ADR 0053: Laravel signs with its own runtime-generated `platform` key.
+        $this->platformKey = $this->serviceKey('test-platform-1');
+        $this->useServiceKeys(platformKey: $this->platformKey, baseUrl: 'http://gateway.test');
+    }
+
+    /** What the Gateway does: verify the `platform` assertion over the exact request. */
+    private function gatewayAccepts(Request $request, string $path): bool
+    {
+        $gateway = new ServiceAssertionVerifier(
+            ServiceKeyRing::fromJson($this->ring([$this->publicJwk($this->platformKey)]), CarbonImmutable::now('UTC')),
+            ServiceAuthContract::PLATFORM, ServiceAuthContract::AUDIENCE_AI_GATEWAY,
+        );
+
+        return $gateway->verify($request->header('Authorization')[0] ?? null, 'POST', $path, '', $request->body())->service === 'platform';
+    }
 
     #[Test]
     public function it_mints_a_token_and_calls_the_gateway_when_the_actor_holds_the_capability(): void
@@ -50,10 +79,11 @@ class AiGatewayClientTest extends TestCase
         // from services/ai's actual contract twice during this
         // checkpoint -- assert both explicitly so a regression fails
         // here, not only in a live environment.
-        Http::assertSent(function ($request) {
-            return $request->hasHeader('X-Service-Token', 'dev-local-only-token')
-                && ! $request->hasHeader('Authorization');
-        });
+        // ADR 0053: a per-request `platform` assertion, verifiable by the
+        // Gateway over these exact bytes; never the retired shared token.
+        Http::assertSent(fn (Request $request) => ! $request->hasHeader('X-Service-Token')
+            && str_starts_with($request->header('Authorization')[0] ?? '', 'Lycenza-Service ')
+            && $this->gatewayAccepts($request, '/v1/tools/invoke'));
     }
 
     #[Test]
@@ -143,7 +173,7 @@ class AiGatewayClientTest extends TestCase
             $claims = app(AiContextTokenService::class)->verify($request['context_token']);
 
             return array_keys($request->data()) === ['agent', 'context_token', 'prompt']
-                && $request->hasHeader('X-Service-Token', 'dev-local-only-token')
+                && $this->gatewayAccepts($request, '/v1/complete')
                 && $claims?->schoolId === $school->id
                 && $claims->actorId === $user->id
                 && $claims->capabilities === ['school.settings.view'];

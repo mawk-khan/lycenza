@@ -148,7 +148,7 @@ class ProductionProcessManifestTest extends TestCase
         sort($admin);
         $this->assertSame(['operator-console', 'release'], $admin);
 
-        // The gateway holds only its own token; never the application's secrets.
+        // The gateway holds only its own signing key; never the application's secrets.
         $gateway = array_values(array_filter($this->processes(), fn ($p) => $p['image'] === 'ai-gateway'));
         $this->assertSame(['gateway'], $gateway[0]['secret_groups']);
         $this->assertFalse($gateway[0]['public']);
@@ -180,6 +180,9 @@ class ProductionProcessManifestTest extends TestCase
             'IDEMPOTENCY_KEY_MAX_LENGTH', 'IDEMPOTENCY_KEY_MIN_LENGTH', 'MFA_PASSWORD_CONFIRMATION_WINDOW_MINUTES',
             'CONTACT_LOOKUP_HMAC_KEY_VERSION', 'STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY_VERSION', 'WEBHOOKS_SECRET_ROTATION_OVERLAP_HOURS',
             'MEMCACHED_PASSWORD', 'POSTMARK_API_KEY', 'RESEND_API_KEY', 'SLACK_BOT_USER_OAUTH_TOKEN',
+            // ADR 0053: PUBLIC verification keys (configuration, not a secret),
+            // and the retired shared token, read only so production refuses it.
+            'AI_GATEWAY_INBOUND_VERIFICATION_KEYS', 'AI_GATEWAY_SERVICE_TOKEN',
         ];
 
         $names = [];
@@ -195,7 +198,7 @@ class ProductionProcessManifestTest extends TestCase
             $this->assertTrue(in_array($name, $grouped, true) || in_array($name, $notSecrets, true), "{$name} is secret-shaped but in no secret group");
         }
         foreach ($grouped as $name) {
-            if ($name !== 'SERVICE_TOKEN') {
+            if ($name !== 'SERVICE_SIGNING_KEY') { // the Gateway's own setting, not Laravel configuration
                 $this->assertContains($name, $read, "{$name} is in a secret group but no configuration reads it");
             }
         }

@@ -46,6 +46,7 @@ use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\SignsServiceAssertions;
 use Tests\TestCase;
 
 /**
@@ -57,7 +58,7 @@ use Tests\TestCase;
  */
 class SchoolSuspensionEnforcementTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, SignsServiceAssertions;
 
     private function in(School $school, callable $callback): mixed
     {
@@ -296,17 +297,20 @@ class SchoolSuspensionEnforcementTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $token = app(AiContextTokenService::class)->issue($school, $user, ['school.settings.view']);
         $this->suspend($school);
+        $gatewayKey = $this->serviceKey('test-ai-gateway-1');
+        $this->useServiceKeys([$this->publicJwk($gatewayKey)]);
+        $this->asService($this->gatewaySigner($gatewayKey));
 
-        $this->withToken('dev-local-only-token')->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token])
+        $this->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token])
             ->assertForbidden()->assertJsonPath('error.code', 'school_unavailable')->assertJsonMissing(['schoolName' => $school->name]);
-        $this->withToken('dev-local-only-token')->postJson('/api/internal/ai/completions/authorize', ['context_token' => $token, 'capability' => 'school.settings.view'])
+        $this->postJson('/api/internal/ai/completions/authorize', ['context_token' => $token, 'capability' => 'school.settings.view'])
             ->assertForbidden()->assertJsonPath('error.code', 'school_unavailable');
 
         $this->assertSame(0, $this->in($school, fn () => DomainEventOutbox::query()->count() + SchoolAuditEvent::query()->where('event_type', 'ai.tool_invoked')->count()));
 
         // Resumed: the same (still valid) token works again -- nothing cached.
         $this->resume($school);
-        $this->withToken('dev-local-only-token')->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token])->assertOk();
+        $this->postJson('/api/internal/ai/tools/school-echo', ['context_token' => $token])->assertOk();
     }
 
     // --- Guardian invitation acceptance ----------------------------------------------------

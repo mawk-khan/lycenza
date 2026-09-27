@@ -35,16 +35,32 @@ return [
         ],
     ],
 
-    // AI Gateway boundary (ADR 0013, ADR 0023). service_token
-    // authenticates "this call came from the trusted AI Gateway
-    // process"; context_signing_key is held ONLY by Laravel (never
-    // shared with services/ai) and signs/verifies the short-lived
-    // AiContextTokenService tokens that cryptographically bind
-    // school_id/actor/capabilities into every AI tool invocation.
+    // AI Gateway boundary (ADR 0013, ADR 0023, ADR 0053).
+    //
+    // - base_url: the integration is ENABLED only when this is set
+    //   (production requires https); unset means no AI Gateway.
+    // - service_signing_key: Laravel's own `platform` Ed25519 private key
+    //   (one RFC 8037 OKP JWK, Highly Sensitive, from the managed secret
+    //   store) signing per-request assertions to the Gateway.
+    // - inbound_verification_keys: the ring (JSON list, 1-2 keys) of the
+    //   Gateway's `ai-gateway` PUBLIC keys, verifying its calls to
+    //   /api/internal/ai/*. Public, but integrity-controlled configuration.
+    // - replay_store: the cache store consuming each inbound jti once
+    //   (null = the default store; production requires Redis).
+    // - context_signing_key: held ONLY by Laravel (never shared with
+    //   services/ai); signs/verifies the short-lived AiContextTokenService
+    //   tokens binding school_id/actor/capabilities (a separate secret from
+    //   the service keys -- ADR 0053 section 3.2).
+    // - legacy_service_token_configured: the retired shared token, read
+    //   only so the production guard can refuse a leftover value; nothing
+    //   authenticates with it.
     'ai_gateway' => [
-        'base_url' => env('AI_GATEWAY_BASE_URL', 'http://localhost:8100'),
-        'service_token' => env('AI_GATEWAY_SERVICE_TOKEN'),
+        'base_url' => env('AI_GATEWAY_BASE_URL'),
+        'service_signing_key' => env('AI_GATEWAY_SERVICE_SIGNING_KEY'),
+        'inbound_verification_keys' => env('AI_GATEWAY_INBOUND_VERIFICATION_KEYS'),
+        'replay_store' => env('AI_GATEWAY_REPLAY_STORE') ?: null,
         'context_signing_key' => env('AI_GATEWAY_CONTEXT_SIGNING_KEY'),
+        'legacy_service_token_configured' => trim((string) env('AI_GATEWAY_SERVICE_TOKEN', '')) !== '',
     ],
 
 ];

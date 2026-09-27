@@ -97,7 +97,7 @@ class ProductionImageContractTest extends TestCase
         $this->assertStringContainsString('requirements.lock', $dockerfile);
         $this->assertStringNotContainsString('requirements-dev.txt', $dockerfile);
         $this->assertStringNotContainsString('--reload', $dockerfile);
-        $this->assertDoesNotMatchRegularExpression('/^(ENV|ARG)[^\n]*(SERVICE_TOKEN|SECRET|PASSWORD)/m', $dockerfile);
+        $this->assertDoesNotMatchRegularExpression('/^(ENV|ARG)[^\n]*(SERVICE_TOKEN|SIGNING_KEY|VERIFICATION_KEYS|SECRET|PASSWORD)/m', $dockerfile);
     }
 
     #[Test]
@@ -152,7 +152,7 @@ class ProductionImageContractTest extends TestCase
         foreach ($files as $file) {
             $content = $this->repo($file);
             $this->assertNotSame('', $content, $file);
-            foreach (['Demo1234!', 'school_os_app_local_only_password', 'school_os_secret', 'dev-local-only-token', 'dev-local-only-context-signing-key', 'minioadmin', 'BEGIN PRIVATE KEY', 'base64:'] as $canary) {
+            foreach (['Demo1234!', 'school_os_app_local_only_password', 'school_os_secret', 'dev-local-only-token', 'dev-local-only-context-signing-key', 'dev-local-only-platform-', 'dev-local-only-ai-gateway-', 'minioadmin', 'BEGIN PRIVATE KEY', 'base64:'] as $canary) {
                 $this->assertStringNotContainsString($canary, $content, "{$file} contains {$canary}");
             }
         }

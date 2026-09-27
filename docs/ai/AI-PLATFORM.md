@@ -51,17 +51,28 @@ change to anything that calls the router. See ADR 0013.
 
 ## How Laravel calls the AI Gateway
 
-1. Laravel authenticates to the AI Gateway using the shared service
-   token (`AI_GATEWAY_SERVICE_TOKEN`, header `X-Service-Token` —
-   checked by `services/ai/app/core/security.py`, constant-time). This
-   proves "the caller is the trusted platform," nothing more. Since Phase
-   0O.1 the Gateway has **no default token**: it refuses to start (and
-   `/health/ready` returns 503) without `SERVICE_TOKEN`, or with the
-   public `dev-local-only-token` unless `ENVIRONMENT` is exactly `local`
-   or `testing` (`ENVIRONMENT` defaults to `production`;
-   `services/ai/app/core/startup.py`). Laravel refuses to boot in
-   production with that development token or without a real context
-   signing key (`docs/architecture/PRODUCTION-RELEASE.md` §2).
+1. Laravel authenticates to the AI Gateway with a per-request Ed25519
+   **service assertion** (ADR 0053, Phase 0O.7A):
+   - it is sent as `Authorization: Lycenza-Service …`, signed with
+     Laravel's own `platform` private key, and bound to the method, the
+     exact path and the SHA-256 of the exact body bytes, with a lifetime
+     of at most 120 s;
+   - the Gateway verifies it against its ring of `platform` **public**
+     keys, before any routing or body parsing
+     (`services/ai/app/core/security.py`, `ServiceAuthMiddleware`).
+
+   This proves "the caller is the trusted platform", nothing more.
+
+   **No fallback.** There is no shared token and no `X-Service-Token`; the
+   Gateway refuses to start (and `/health/ready` returns 503):
+   - without valid keys;
+   - with the committed development keys outside `local`/`testing`;
+   - with a plaintext Laravel URL outside `local`/`testing`;
+   - with the retired `SERVICE_TOKEN` set.
+
+   `ENVIRONMENT` defaults to `production` (`services/ai/app/core/startup.py`).
+   Laravel's production guard is the mirror image
+   (`docs/architecture/PRODUCTION-RELEASE.md` §2).
 2. For `/v1/tools/invoke` (ADR 0023), `App\Support\Ai\AiGatewayClient`
    first verifies the calling actor actually holds the required
    capability in the target School (via `CapabilityResolver`) — **before**
@@ -85,10 +96,16 @@ the pattern every future real tool must follow:
 
 - Lives under `/api/internal/ai/...`, never the general `/api/v1`
   surface a human/mobile client uses.
-- Guarded by `App\Http\Middleware\VerifyAiGatewayServiceToken`
-  (`Authorization: Bearer` — a **different** header/direction than
-  step 1 above; see that middleware's docblock) — proves the caller is
-  the trusted gateway.
+- **Service assertion.** Guarded by
+  `App\Http\Middleware\AuthenticateServiceAssertion` (`service-auth`,
+  ADR 0053). It requires a per-request `ai-gateway` Ed25519 assertion,
+  signed with the Gateway's **own** key: the reverse direction uses a
+  separate keypair from step 1.
+- **Replay.** Laravel consumes each assertion's `jti` once, in Redis.
+- **Route scope.** The route must be in the closed catalog
+  (`App\Support\ServiceAuth\ServiceAuthContract::ROUTE_SCOPES`). This
+  proves the caller is the trusted gateway, and nothing about a School:
+  `ResolveSchoolContext` resolves no School on a service route.
 - Then verifies the **context token** (`AiContextTokenService::verify()`):
   signature, expiry, and that the token's capability claim matches what
   this specific tool requires (`school.settings.view`) — proves the
@@ -140,3 +157,22 @@ no Safety/Policy Engine beyond the capability checks described above,
 no Evaluation Framework, and no durable AI-side audit storage (Laravel's
 own audit trail for AI-initiated Laravel-side effects IS durable; the
 AI Gateway's own ledger is still the in-process Phase 0A stub).
+
+## Recorded, not fixed (Phase 0O.7A)
+
+These are tracked here deliberately; they are **not** part of ADR 0053's
+scope.
+
+- **AI context token (ADR 0023) debt:**
+  - the context signing key has no `kid` or rotation ring (its managed
+    custody is ADR 0050 §5's future item);
+  - the token carries no purpose or audience claim (one token is accepted
+    by school-echo, audit and completion-authorize, scoped by its
+    capability claim);
+  - `verify()` does not check `iat` sanity or a maximum lifetime (only
+    Laravel signs, so this is not exploitable without the key).
+- **Gateway reliability:** `POST /v1/tools/invoke` answers **500** (an
+  unhandled `KeyError`) for an unknown agent or tool, after successful
+  service authentication. `/v1/complete` answers 403 `agent_not_allowed`.
+  This is a separate API-correctness fix, not a security boundary.
+
