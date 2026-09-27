@@ -301,8 +301,8 @@ Other findings:
 | O10 | Backup policy, RPO/RTO, restore drills | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | Any production deployment |
 | O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
-| O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | No | Product + operations | Real email |
-| O14 | Password reset for production accounts | ADR 0037: none exists | Product + security | Production operations |
+| O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | **RESOLVED — ADR 0055 (Phase 0O.9)**: Lycenza-controlled, deployment-configured sending domain (never a School web domain); closed From mailbox catalog, sanitized School display name, no School Reply-To in v1; one provider-neutral adapter at a time; one durable email layer (message/attempt/event/suppression) beneath invitations (outbox, outside the transaction) and Communications; authenticated, deduplicated provider events; global suppression; SPF/DKIM alignment and DMARC ≥ `p=quarantine` at readiness. **Implementation: Phase 0O.9A (not started)**; deployment evidence outstanding | Product + operations | Real email |
+| O14 | Password reset for production accounts | ADR 0037: none exists. Email transport dependency defined by ADR 0055 §4 (reserved `account_recovery` class; durable, outside-transaction submission; suppression-aware generic outcome); O14 itself not designed | Product + security | Production operations |
 | O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | No | Product | S4 |
 | O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest; repository controls COMPLETE (0O.6F: runtime security contract, approved exceptions `OWNER-0O6E-2026-09-26`), deployment evidence outstanding | Security | Supply chain |
 
@@ -1201,3 +1201,78 @@ ran against the isolated project and the shared database was left untouched.
 
 **Exception clock:** the records expire **2026-10-10** / **2026-10-26**;
 nothing was renewed.
+
+## 32. Phase 0O.9 — Production Email & Deliverability Contract (2026-09-27)
+
+**O13 is RESOLVED as a contract by ADR 0055**
+(`docs/architecture/adr/0055-production-email-deliverability-contract.md`).
+This checkpoint is documentation only: no executable change, no provider
+account or key, no DNS, no SPF/DKIM/DMARC publication, no webhook secret
+and no sending.
+
+**Audit (ADR 0055 §1).**
+- **Two senders exist.** The Guardian account invitation and the
+  Communication Hub email channel. There are no Laravel mail
+  notifications, no password-reset mail and no security notices; the
+  `NotificationDispatcher` email provider is log-only.
+- **Findings for 0O.9A:**
+  1. the invitation is sent synchronously inside `DB::transaction()`
+     (rule 38), with no delivery record or retry;
+  2. production could silently sink mail: the default `log` mailer,
+     the `hello@example.com` From, an unbounded SMTP timeout, the
+     `failover → log` mailer, and no guard;
+  3. no provider events, bounces, complaints or suppression; email
+     Communications stops at `sent`;
+  4. invitation send and resend are unthrottled.
+- **No verified School address exists** (`schools.email` is free data;
+  contact `verified_at` has no workflow).
+
+**Decision:**
+- **Identity.** Mail comes only from a Lycenza-controlled,
+  deployment-configured sending domain (`MAIL_SENDING_DOMAIN`), From
+  `notifications@` (a closed catalog), display name
+  `"<sanitized School name> via <MAIL_FROM_NAME>"`, and no School Reply-To
+  in v1. An active custom web domain (ADR 0054) authorizes nothing about
+  email.
+- **Classes.** `account_invitation`, `school_communication`, and reserved
+  `account_recovery` (O14) and `security_notice`. Marketing is out of
+  scope.
+- **Provider.** One provider-neutral adapter at a time behind an
+  `OutboundEmailGateway`; frozen provider requirements; no vendor chosen.
+- **Durable layer.** `email_messages`, `email_submission_attempts`,
+  `email_events` and `email_suppressions`.
+  - Invitations write the message in their transaction and submit after
+    commit.
+  - Communications projects the email state onto
+    `communication_deliveries`.
+  - States are monotonic, and submission is never delivery.
+- **Retries.** At most 6 attempts with jittered backoff over about 3 h,
+  under a lease claim. The contract is at-least-once, with provider
+  idempotency where available.
+- **Events.** Platform-host webhook authenticated by the adapter against a
+  1–2 secret ring, bounded, deduplicated on (`provider`, `event_key`); the
+  School comes from the stored message only.
+- **Suppression.** Global, HMAC-keyed: hard bounces suppress all classes;
+  complaints suppress standard or all classes. Critical mail never
+  bypasses it.
+- **Authentication.** SPF, aligned DKIM, and DMARC staged
+  `none → quarantine → reject`; at least `p=quarantine` is needed for
+  readiness.
+- **Operations.** Per-School submission budgets and an in-flight cap,
+  tracking disabled, text-first content, conceptual metrics and alerts
+  (IDs assigned in 0O.9A), and a production guard.
+
+**Next:** Phase 0O.9A — Production Email & Deliverability Foundation
+(repository only; ADR 0055 §23). **Not started.**
+
+**Shared test database:** the drifted `school_os_app=UC` grant on the shared
+`school_os_test` (§31) was **not** touched by this docs-only phase.
+
+**Exception clock:** the VERIFIED artifacts' exception records expire
+**2026-10-10** and **2026-10-26**; nothing is renewed.
+
+- Decisions **O1, O2, O14, O15** remain open.
+- Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- The **real restore drill is still outstanding**.

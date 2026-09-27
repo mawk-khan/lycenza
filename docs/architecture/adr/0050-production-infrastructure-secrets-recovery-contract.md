@@ -208,7 +208,7 @@ Secret inventory:
 | `AI_GATEWAY_CONTEXT_SIGNING_KEY` | Laravel only | Fails closed (0O.1); custody target below |
 | Laravel↔Gateway service credential | Laravel, Gateway, `service_identities` hash | Issued by `platform:service-identity-issue`; rotation is O5 |
 | `CONTACT_LOOKUP_HMAC_KEY`, `STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY` (+ versions) | Laravel | Versioned per row |
-| `MAIL_*` credentials | Laravel | Only once O13 chooses a provider |
+| `MAIL_*` credentials | Laravel | Only once a provider is chosen (O13 resolved provider-neutrally by ADR 0055; custody §7 there: `app_runtime`, web and workers only, webhook secrets as a 1–2 ring, a dedicated suppression HMAC key) |
 | Webhook signing secrets, partner/human API credentials | database (encrypted or hashed) | Rotation already built (webhooks, partner keys) |
 
 ### 5. Rotation and key custody boundary

@@ -1579,6 +1579,25 @@ Remaining open: O1, O2, O13, O14, O15. The next step is chosen by inspecting
 the repository among O13 (production email), O14 (account recovery) and
 O2/O15 (external/payment integrations) — not started.
 
+**0O.9 — Production Email & Deliverability Contract (2026-09-27,
+documentation only).** ADR 0055 resolves O13.
+- **Identity:** mail is sent only from a Lycenza-controlled,
+  deployment-configured sending domain with a closed From mailbox catalog
+  and a sanitized School display name, and no School Reply-To in v1. A
+  School web domain (ADR 0054) authorizes nothing about email.
+- **Provider:** one provider-neutral adapter at a time; no vendor chosen.
+- **Durable email layer:** messages, attempts, events and suppression
+  beneath both senders. The invitation leaves its business transaction
+  (outbox), and Communications projects delivered/bounced state.
+- **Deliverability:** authenticated, deduplicated provider events;
+  monotonic states; global suppression; SPF, aligned DKIM and DMARC
+  staged to at least `p=quarantine` before readiness.
+- **Operations:** per-School budgets, tracking off, and a production
+  guard.
+
+Remaining open: O1, O2, O14, O15. Next: **0O.9A — Production Email &
+Deliverability Foundation** (repository only) — not started.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

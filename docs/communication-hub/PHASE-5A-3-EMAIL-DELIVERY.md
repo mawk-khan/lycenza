@@ -425,6 +425,22 @@ explicitly still deferred from this checkpoint specifically:
   `DeliverWebhookJob::handleResponse()`'s HTTP-status-based
   classification) once one is actually integrated.
 
+> **Amended by ADR 0055 (Phase 0O.9, 2026-09-27).** The production email
+> contract decides the deferred items above:
+> - the platform sender model (Lycenza sending domain, closed From
+>   mailbox catalog, no School Reply-To in v1, no School-owned sending
+>   domain in v1);
+> - one durable email layer beneath this driver: `email_messages`, with
+>   `communication_deliveries` projected from it and email retries owned
+>   there, not by this job;
+> - the idempotency key (the message id, reused across attempts);
+> - the transient/permanent classification;
+> - authenticated provider-event ingestion, bounces, complaints and
+>   suppression.
+>
+> Implementation is Phase 0O.9A; until then this document describes the
+> code as it is.
+
 ## Recommended next checkpoint
 
 **Phase 5A.4 — Communication Templates & Scheduling Foundation**, not

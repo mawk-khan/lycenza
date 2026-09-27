@@ -246,3 +246,31 @@ secrets (`contents: read`, no `pull_request_target`); signing and publish
 authority exists only in a trusted release context on protected `main`.
 Vulnerability exceptions are validated records of a human security decision,
 never silent suppression.
+
+## Inbound email provider events (ADR 0055, Phase 0O.9 — contract; built in 0O.9A)
+
+No inbound provider endpoint exists today. The contract, ADR 0055 §11:
+- **Route.** One endpoint, `POST /api/integrations/email-provider/events`,
+  on the platform host only (a School host answers 404), with no session
+  and no School derived from the Host.
+- **Authentication.** Done by the one configured provider adapter before
+  parsing: the provider's signature, or its shared secret over TLS where
+  that is the vendor's only mechanism.
+  - Keys come from a configured 1–2 secret ring (rotation overlap), with a
+    timestamp tolerance of ≤ 5 minutes where the scheme carries one.
+  - Never source IP alone, and never a key fetched from a caller-supplied
+    URL.
+  - An unauthenticated request gets a uniform 401, and its body is neither
+    processed nor stored.
+- **Bounds.** Body ≤ 256 KiB, the declared content type only, JSON depth
+  ≤ 32, ≤ 100 events per request, per-source rate limiting. Application of
+  events is queued.
+- **Deduplication.** Unique (`provider`, `event_key`), using the provider's
+  event id or a documented fingerprint. States move monotonically, so
+  replays and out-of-order events are safe.
+- **Tenancy.** The School always comes from the stored message found by
+  provider message id, never from the payload. Unknown message ids are
+  recorded as `ignored`.
+
+This is separate from outbound webhooks (ADR 0026/0027, rules 35–49) and
+from payment-provider callbacks (rule 34).

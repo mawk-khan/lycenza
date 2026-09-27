@@ -347,3 +347,29 @@ Log lines `domains.check` / `domains.transition` carry the domain id and
 closed codes; `session_handoff.failed` carries a closed outcome only. The
 scheduled task `domains-check` is a minute-cadence heartbeat task. One
 School's domain problem never changes readiness.
+
+## Production email (ADR 0055, Phase 0O.9 — contract; built in 0O.9A)
+
+Nothing below exists yet. Today email is visible only through the
+Communications metrics and OBS-17/OBS-18, and the Guardian invitation has
+no delivery record at all.
+
+The contract, ADR 0055 §16:
+- **Metrics** (closed labels only: `message_class`, `outcome`, normalized
+  event; never a School, recipient, domain, provider message id or
+  template):
+  - `lycenza_email_messages_total`;
+  - `lycenza_email_submission_attempts_total`;
+  - `lycenza_email_webhook_requests_total`;
+  - `lycenza_email_pending_messages`;
+  - `lycenza_email_oldest_pending_age_seconds`;
+  - `lycenza_email_last_event_timestamp_seconds`.
+- **Alerts** (conceptual; OBS ids are assigned in 0O.9A, after OBS-30):
+  - SEV-2: critical-class backlog age, provider authentication failures,
+    a complaint spike;
+  - SEV-3: standard backlog, submission failure ratio, event staleness, a
+    hard-bounce spike, webhook authentication failures.
+
+  None is SEV-1.
+- **Operations Status:** an `email` component that is `Degraded` at worst,
+  never calls the provider live, and never touches readiness (rules 55/56).
