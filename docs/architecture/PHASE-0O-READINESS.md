@@ -1342,3 +1342,37 @@ recovery flow must require `EmailProviderResolver::criticalEmailAvailable()`.
 - Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
   REQUIRED**.
 - The **real restore drill is still outstanding**.
+
+## 34. Phase 0O.9A — VERIFIED digests (2026-09-27)
+
+Final qualification of the published `main` commit **`5ed2734`**
+(`5ed27344230a`, run `local-20260927T221142Z-77fb979a`; Grype database
+refreshed for the run):
+
+- **Same-run complete regression:** 6,320 tests, 0 failures, only the
+  deliberate ESI-12 skip (121 new tests since 0O.8A).
+- **Gates:** Pint, Larastan, vue-tsc, ESLint, Prettier, the frontend build,
+  Gateway ruff/format/mypy/pytest and the release tooling tests all pass.
+- **`verify-images.sh`:** 133/133 checks (126 before). New: production
+  refuses the fake email provider, the fake event adapter, tracking and a
+  failover default mailer; an enabled SMTP setup without a sending domain,
+  TLS, credentials or a real suppression key is refused without printing
+  the key; there is no log-only email notification provider.
+- **Language audits:** 0 advisories. **Secret scans:** 0 findings.
+
+| Image | Manifest digest | Config digest | `verify-artifact` |
+|---|---|---|---|
+| Application | `sha256:36a40be3ceb33ae33d9cdce4c0f6f7e0dfa5c7e14df56738a0ab68d6f03364aa` | `sha256:5da40917…eda7` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 48 excepted |
+| AI Gateway | `sha256:7e284a3fdb42b49d2c739e2dabe2687ee0de1d9510f4de681d4c9b56f60f37c7` | `sha256:03f2e35f…5eb2` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 49 excepted |
+
+- **Residual findings:** both sets are the reviewed `OWNER-0O6E-2026-09-26`
+  records (same counts as 0O.8A). The email layer adds no dependency.
+- **Evidence bundle:** sha256
+  `2e98563d7a783e4c1447c48c9c85e7a0cff875a8580570a615cfbdfee0dbcbba`,
+  signed with an ephemeral **non-production** key.
+- **PUBLISHED = NONE, PROMOTED = NONE.**
+- **Exception clock:** the records expire **2026-10-10** / **2026-10-26**;
+  nothing was renewed.
+- **Shared test database:** the shared `school-os` Compose test database's
+  drifted `school_os_app=UC` public-schema grant (§31) was not touched; all
+  runs used the isolated project.
