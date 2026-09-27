@@ -109,6 +109,9 @@ class DomainUrlsAndObservabilityTest extends TestCase
     #[Test]
     public function domain_metrics_carry_closed_labels_only_and_never_touch_readiness(): void
     {
+        // The check below starts an indeterminate streak (no route, so no
+        // probe); a frozen clock makes its scrape-time age exactly 0.
+        $this->freezeSecond();
         $school = $this->createSchool();
         $domain = $this->createSchoolDomain($school, 'erp.northfield.org');
         $this->createSchoolDomain($school, 'held.northfield.org', DomainState::Suspended);
