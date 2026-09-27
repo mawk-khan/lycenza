@@ -544,3 +544,20 @@ none added, no-new-privileges, the image's existing non-root user
 `docs/operations/PRODUCTION-IMAGES-AND-PROCESSES.md`). It is required for
 every role of both images on any platform. A read-only root filesystem
 is recorded as future work, not required.
+
+**Note (Phase 0O.7, 2026-09-27):** O5 is resolved by **ADR 0053**. The
+§4 inventory row "Laravel↔Gateway service credential" becomes, after
+Phase 0O.7A:
+- the `platform` Ed25519 private signing key (Laravel web and workers only);
+- the `ai-gateway` Ed25519 private signing key (the Gateway only);
+- the public verification rings (deployment configuration).
+
+All of them come from the managed secret store and stay out of the database
+and images. §5's "service-to-service credential rotation — O5, open" is now
+**decided** as follows; implementation is Phase 0O.7A:
+- staged rotation with at most 24 h of overlap;
+- a 90-day key life;
+- emergency revocation by removing the key.
+
+The AI context signing key remains a separate secret with its own future
+custody (§5).
