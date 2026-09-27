@@ -169,6 +169,8 @@ class DashboardController extends Controller
                 'canViewAutomation' => $school !== null && $capabilities->canInSchool($user, 'automation.view', $school),
                 // Phase 0O.3: Integrations -- partner API clients.
                 'canViewApiClients' => $school !== null && $capabilities->canInSchool($user, 'integrations.api_clients.view', $school),
+                // Phase 0O.8A: the School's custom domains (ADR 0054).
+                'canViewDomains' => $school !== null && $capabilities->canInSchool($user, 'school.domains.view', $school),
             ],
         ]);
     }

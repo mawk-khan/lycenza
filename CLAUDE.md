@@ -865,6 +865,24 @@ docs/roadmap             MASTER-ROADMAP.md
     one value, scoped to one gitleaks rule). `SupplyChainGuardTest` and
     `infrastructure/release/tests` enforce this.
 
+88. **Every request Host is classified exactly, and a Host is intent, never
+    authority (ADR 0054).** `App\Http\Middleware\ClassifyRequestHost` runs
+    right after trusted-proxy handling: platform (APP_URL + exact aliases),
+    `INTERNAL_HOSTS`, an ACTIVE custom School domain, an alias (308 to the
+    stored primary) or the probe path -- everything else is one fixed 421
+    before any session/CSRF/School/URL logic; never add a regex, wildcard or
+    "first School" fallback. A School host serves only the closed
+    `SchoolHostSurface` (no platform, Group, API, internal, health or storage
+    route) and sets `TenantContext` only for a signed-in ACTIVE member. Only
+    `SchoolDomainService`/`SchoolDomainCheckService` write `school_domains`;
+    every writer takes the School's advisory lock (`lockSchool()`) before any
+    row lock; `active` is reached only on evidence (no force-activate). Absolute
+    School URLs come only from `App\Support\Domains\CanonicalOrigin`, never
+    a request Host. Cookies stay host-only (`SESSION_DOMAIN` empty); crossing
+    origins uses the one-time `CrossHostHandoff` ticket, which is continuity,
+    never authority, and is never logged. The DNS/TLS fakes exist only behind
+    `DOMAIN_FAKES_ENABLED` AND local/testing.
+
 ## Running things locally
 
 ```bash

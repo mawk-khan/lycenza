@@ -582,6 +582,36 @@ export, cross-School Analytics, Compliance beyond the School audit log (0L.4), A
 reporting (0N, D15), School archive/delete and break-glass administrative
 recovery; external surface / production readiness (0O); portal logins.
 
+### Custom School domains (Phase 0O.8A, ADR 0054)
+
+DDEV runs custom domains with the **fake** DNS resolver and TLS prober
+(`DOMAIN_FAKES_ENABLED`, local only) -- no real DNS, TLS or `/etc/hosts`
+change. After `ddev restart` (to load `.ddev/config.yaml`'s domain settings):
+
+1. Sign in as a School Admin with an MFA factor; open **Custom domains** from
+   the dashboard (`/app/settings/domains`); add e.g. `erp.northfield-demo.org`
+   with a current code. The row shows "Waiting for DNS verification" and the
+   exact TXT record.
+2. Publish the fake records: `ddev exec php artisan platform:domain-fake-dns
+   erp.northfield-demo.org publish`, then **Check now** (queued; refresh).
+   The domain walks to **Active** (DNS verified → Preparing secure connection
+   → Active) on evidence alone.
+3. Simulate the custom host without touching `/etc/hosts`:
+   `ddev exec "curl -s -o /dev/null -w '%{http_code}' -H 'Host: erp.northfield-demo.org' http://127.0.0.1/login"`
+   answers 200 (the sign-in page carries the School's name); an unknown
+   Host answers **421**; `/app/platform/schools` on that Host answers 404.
+4. Drift: `platform:domain-fake-dns erp.northfield-demo.org txt-mismatch`,
+   then two checks at least an hour apart suspend it (or use the test suite:
+   `SchoolDomainCheckTest` drives time).
+5. School switching to a School whose primary is a custom domain navigates
+   to `https://<domain>/session/handoff?ticket=…`; in DDEV that origin is not
+   routed by the DDEV router, so review the handoff with the test suite
+   (`CrossHostHandoffTest`) or a browser with a host-resolver rule to the web
+   container.
+6. Remove the domain (fresh code) -- it is 421 at once.
+
+`platform:domains-edge-desired --json` shows what a real edge would serve.
+
 ## 16. Running tests inside DDEV
 
 ```bash

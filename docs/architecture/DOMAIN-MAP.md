@@ -66,7 +66,7 @@ Layer 6  External-facing    Integrations · AI Platform · Multi-School
 |---|---|---|---|
 | **Platform** | Shared kernel: request lifecycle, audit primitives (ADR 0017), domain-event infrastructure (ADR 0010), config | — | Not a business module; every other module depends on it. |
 | **Identity & Access** | User accounts (all actor categories, see `docs/security/AUTHORIZATION.md`), authentication, capability/permission grants | Platform | No module may implement its own authentication or ad hoc permission checks — all authorization goes through this module's policies/capabilities. |
-| **Tenancy** | Tenant (School) resolution and isolation mechanics (ADR 0004): RLS session context, tenant-aware queue/cache/log plumbing | Platform | Distinct from the "Schools" *business* module below — this module is pure isolation infrastructure. |
+| **Tenancy** | Tenant (School) resolution and isolation mechanics (ADR 0004): RLS session context, tenant-aware queue/cache/log plumbing | Platform | Distinct from the "Schools" *business* module below — this module is pure isolation infrastructure. **Custom School domains (ADR 0054, Phase 0O.8A):** the Host boundary and host → School resolution live here (`App\Support\Domains`, `ClassifyRequestHost`, `ResolveSchoolContext`); the domain lifecycle is platform-owned (`App\Domain\Platform\Application\Domains`, platform table `school_domains`, no RLS). A domain names a School but grants nothing: membership stays Identity & Access's. |
 
 ## Layer 1 — Organizational structure
 

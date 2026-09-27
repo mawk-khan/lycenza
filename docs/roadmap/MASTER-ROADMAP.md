@@ -1551,8 +1551,33 @@ only).** ADR 0054 resolves O9.
   membership-still-required tenancy; canonical-origin URL generation that
   closes Host-header poisoning.
 
-Remaining open: O1, O2, O13, O14, O15. Next proposed: **0O.8A — Custom
-School Domains & TLS Foundation**, not started.
+Remaining open: O1, O2, O13, O14, O15.
+
+**0O.8A — Custom School Domains & TLS Foundation (2026-09-27, COMPLETE —
+repository).** ADR 0054 implemented (implementation amendment in the ADR).
+- **Host boundary:** exact classification right after trusted proxies;
+  unknown and non-active Hosts answer one fixed 421 before any session;
+  aliases 308 to the stored primary; the School host serves a closed browser
+  surface (platform, Group, API, internal, health, storage: 404).
+- **Domains:** normalized ASCII-only hostnames, the pinned Public Suffix List
+  (`jeremykendall/php-domain-parser` 6.4.0), reserved hosts; one claiming row
+  per hostname and at most 3 per School (database-enforced, raced with real
+  processes); the database-enforced lifecycle and primary invariant
+  (deferred constraint trigger under a per-School advisory lock).
+- **Proof:** persistent DNS TXT ownership (`mikepultz/netdns2` 2.0.8,
+  bounded), separate routing validation, an IP-pinned TLS probe with a
+  per-deployment HMAC; drift suspension and automatic recovery.
+- **Sessions:** host-only cookies kept; a one-time, 60 s, server-side
+  cross-host sign-in handoff for School switches; canonical-origin URLs (the
+  invitation Host-poisoning finding fixed).
+- **Operations:** `school.domains.view`/`.manage` (fresh MFA), queued
+  rate-limited checks, operator commands, OBS-28–30, the CUSTOM-DOMAINS
+  runbook, production guards; disabled by default.
+
+O9 repository implementation complete; deployment evidence outstanding.
+Remaining open: O1, O2, O13, O14, O15. The next step is chosen by inspecting
+the repository among O13 (production email), O14 (account recovery) and
+O2/O15 (external/payment integrations) — not started.
 
 ## Cross-cutting, ongoing (not a single phase)
 

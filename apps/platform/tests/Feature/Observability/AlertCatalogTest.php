@@ -78,10 +78,10 @@ class AlertCatalogTest extends TestCase
     }
 
     #[Test]
-    public function the_catalog_is_exactly_obs_01_to_obs_27_with_existing_runbooks(): void
+    public function the_catalog_is_exactly_obs_01_to_obs_30_with_existing_runbooks(): void
     {
         $ids = array_map(fn (AlertRule $r) => $r->id, AlertCatalog::all());
-        $this->assertSame(array_map(fn ($n) => sprintf('OBS-%02d', $n), range(1, 27)), $ids);
+        $this->assertSame(array_map(fn ($n) => sprintf('OBS-%02d', $n), range(1, 30)), $ids);
 
         foreach (AlertCatalog::all() as $rule) {
             $this->assertFileExists(dirname(base_path(), 2).'/docs/operations/'.$rule->runbook, "{$rule->id} runbook");
@@ -92,6 +92,32 @@ class AlertCatalogTest extends TestCase
                     $base = (string) preg_replace('/_(bucket|sum|count)$/', '', $name);
                     $this->assertArrayHasKey($base, MetricCatalog::definitions(), "{$rule->id} uses {$name}");
                 }
+            }
+        }
+    }
+
+    #[Test]
+    public function custom_domain_alerts_warn_and_escalate_but_never_page(): void
+    {
+        $suspended = fn (float $n) => $this->snapshot([], [['1h', 'lycenza_domain_transitions_total', ['to' => 'suspended'], $n]]);
+        $days = fn (float $d) => $this->snapshot([['lycenza_domain_certificate_min_days_remaining', [], $d]]);
+        $stuck = fn (float $s) => $this->snapshot([['lycenza_domain_indeterminate_max_age_seconds', [], $s]]);
+
+        $this->assertNull($this->rule('OBS-28')->evaluate($suspended(0)));
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-28')->evaluate($suspended(1)));
+
+        $this->assertNull($this->rule('OBS-29')->evaluate($days(22)));
+        $this->assertNull($this->rule('OBS-29')->evaluate($this->snapshot([])), 'no active certificate recorded: nothing to warn about');
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-29')->evaluate($days(21)));
+        $this->assertSame(Severity::Sev2, $this->rule('OBS-29')->evaluate($days(7)));
+        $this->assertSame(Severity::Sev2, $this->rule('OBS-29')->evaluate($days(-1)));
+
+        $this->assertNull($this->rule('OBS-30')->evaluate($stuck(3 * 86400 - 1)));
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-30')->evaluate($stuck(3 * 86400)));
+
+        foreach (['OBS-28', 'OBS-29', 'OBS-30'] as $id) {
+            foreach ($this->rule($id)->tiers as $tier) {
+                $this->assertNotSame(Severity::Sev1, $tier['severity'], "{$id}: one School's domain is never the platform");
             }
         }
     }
@@ -252,7 +278,7 @@ class AlertCatalogTest extends TestCase
         ]]);
 
         preg_match_all('/- alert: (\S+)/', (new AlertRulesExporter)->yaml(), $names);
-        $this->assertCount(40, $names[1]); // 38 + the two OBS-27 tiers (ADR 0053)
+        $this->assertCount(44, $names[1]); // 38 + the two OBS-27 tiers (ADR 0053) + OBS-28, two OBS-29 tiers and OBS-30 (ADR 0054)
         $this->assertSame($names[1], array_values(array_unique($names[1])));
     }
 

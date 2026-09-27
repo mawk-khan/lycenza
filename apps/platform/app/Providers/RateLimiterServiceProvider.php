@@ -77,6 +77,16 @@ class RateLimiterServiceProvider extends ServiceProvider
         RateLimiter::for('credential-management', fn (Request $request) => Limit::perMinute(8)
             ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
 
+        // Phase 0O.8A (ADR 0054): custom-domain changes (claim, regenerate,
+        // primary, revoke -- each also needs a fresh MFA code), the public
+        // probe endpoint, and redeeming a cross-host sign-in handoff. The
+        // manual DNS "check now" limits are per School and per domain
+        // (DomainCheckLimiter, after the School is known -- rule 61).
+        RateLimiter::for('domain-management', fn (Request $request) => Limit::perMinute(8)
+            ->by('domain-management:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
+        RateLimiter::for('domain-probe', fn (Request $request) => Limit::perMinute(60)->by('domain-probe:'.$request->ip()));
+        RateLimiter::for('session-handoff', fn (Request $request) => Limit::perMinute(30)->by('session-handoff:'.$request->ip()));
+
         // Webhook administration specifically (section 31): tighter
         // than general School mutations -- creating an endpoint,
         // rotating a secret, or forcing a redelivery are inherently

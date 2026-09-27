@@ -101,3 +101,14 @@ Schedule::command('platform:webhook-deliveries-prune')
     ->dailyAt('02:20')
     ->withoutOverlapping()
     ->name('webhook-deliveries-prune');
+
+// Phase 0O.8A (ADR 0054 section 7.1): custom-domain checks -- queues due
+// domains (pending ~15 min, live daily, 1 h after a failure), bounded per run
+// by DOMAIN_CHECKS_PER_RUN; the DNS/TLS work runs in queue workers, never in
+// the scheduler. A no-op while custom domains are disabled. Each row is
+// claimed (next_check_at) before it is queued, so an overlapping run is
+// harmless; withoutOverlapping() is an efficiency safeguard only.
+Schedule::command('platform:domains-check')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('domains-check');

@@ -29,6 +29,7 @@ use App\Http\Controllers\App\Canteen\CanteenOutletController;
 use App\Http\Controllers\App\Compliance\AuditLogController;
 use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\DashboardController;
+use App\Http\Controllers\App\Domains\SchoolDomainController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
@@ -113,6 +114,7 @@ use App\Http\Controllers\App\VisitorController;
 use App\Http\Controllers\App\VisitorVisitController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\MfaChallengeController;
+use App\Http\Controllers\Auth\SessionHandoffController;
 use App\Http\Controllers\Identity\InvitationAcceptanceController;
 use App\Http\Controllers\Internal\MfaDemoController;
 use App\Http\Controllers\SystemStatusController;
@@ -160,6 +162,15 @@ Route::middleware('throttle:guardian-invitation-accept')->group(function (): voi
     Route::get('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'show'])->middleware('private-no-store')->name('invitations.show');
     Route::post('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'store'])->name('invitations.store');
 });
+
+// Phase 0O.8A (ADR 0054 amendment): redeems a one-time cross-host sign-in
+// handoff on the TARGET origin of a School switch (see
+// SessionHandoffController). Neither `guest` nor `auth`: it establishes the
+// login itself after its own checks. `private-no-store`; the controller also
+// sends Referrer-Policy: no-referrer and redirects to a clean URL at once.
+Route::get('/session/handoff', SessionHandoffController::class)
+    ->middleware(['throttle:session-handoff', 'private-no-store'])
+    ->name('session.handoff');
 
 // Signed-in routes that need NO School context (Phase 0N.1, D9(a)/D10(a)):
 // the /app landing (School selection, or the neutral state for an
@@ -351,6 +362,25 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     Route::get('/app/settings', [SchoolSettingsController::class, 'show'])
         ->middleware('capability:school.settings.view')
         ->name('app.settings.show');
+
+    // Phase 0O.8A (ADR 0054 section 10): the School's custom domains. View:
+    // school.domains.view; add/regenerate/primary/remove: .manage + a fresh
+    // MFA code; check now: .manage, per-School/per-domain limits, queued.
+    // All checked in SchoolDomainController and SchoolDomainService.
+    Route::prefix('app/settings/domains')->name('app.settings.domains.')->group(function (): void {
+        Route::get('/', [SchoolDomainController::class, 'index'])->name('index');
+        Route::post('/', [SchoolDomainController::class, 'store'])
+            ->middleware('throttle:domain-management')
+            ->name('store');
+        Route::post('/{domain}/challenge', [SchoolDomainController::class, 'regenerate'])
+            ->whereUuid('domain')->middleware('throttle:domain-management')->name('challenge');
+        Route::post('/{domain}/primary', [SchoolDomainController::class, 'primary'])
+            ->whereUuid('domain')->middleware('throttle:domain-management')->name('primary');
+        Route::post('/{domain}/revoke', [SchoolDomainController::class, 'revoke'])
+            ->whereUuid('domain')->middleware('throttle:domain-management')->name('revoke');
+        Route::post('/{domain}/check', [SchoolDomainController::class, 'check'])
+            ->whereUuid('domain')->name('check');
+    });
 
     // Phase 0O.3 (ADR 0049 section 3): School Integrations -- partner API
     // clients of the SELECTED School only. View: capability + current MFA

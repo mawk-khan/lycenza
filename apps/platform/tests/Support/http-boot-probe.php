@@ -7,7 +7,9 @@
 
 $_SERVER['REQUEST_URI'] = getenv('PROBE_URI') ?: '/login';
 $_SERVER['REQUEST_METHOD'] = 'GET';
-$_SERVER['HTTP_HOST'] = 'localhost';
+// Phase 0O.8A: the Host boundary serves production pages only on the
+// platform host (PROBE_HOST, normally the APP_URL host).
+$_SERVER['HTTP_HOST'] = getenv('PROBE_HOST') ?: 'localhost';
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 
 chdir(__DIR__.'/../../public');

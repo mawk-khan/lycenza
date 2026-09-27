@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DomainProbeController;
 use App\Http\Middleware\Api\EnforceApiCredentialScope;
 use App\Http\Middleware\Api\EnsurePrivateNoStoreResponse;
 use App\Http\Middleware\Api\EnsureSchoolMembershipContext;
@@ -10,6 +11,7 @@ use App\Http\Middleware\ApplySecurityHeaders;
 use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\AssignTraceContext;
 use App\Http\Middleware\AuthenticateServiceAssertion;
+use App\Http\Middleware\ClassifyRequestHost;
 use App\Http\Middleware\DevOnlySchoolHeaderResolver;
 use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureIdempotent;
@@ -33,11 +35,19 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull;
+use Illuminate\Foundation\Http\Middleware\InvokeDeferredCallbacks;
+use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
+use Illuminate\Foundation\Http\Middleware\TrimStrings;
+use Illuminate\Http\Middleware\HandleCors;
 use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Http\Middleware\ValidatePathEncoding;
+use Illuminate\Http\Middleware\ValidatePostSize;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -46,11 +56,36 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Phase 0O.8A (ADR 0054 section 6.2): the TLS readiness probe answers
+        // on custom-domain Hosts only (ClassifyRequestHost) and belongs to no
+        // middleware group -- no session, no cookie, no CSRF.
+        then: function (): void {
+            Route::get('.well-known/lycenza-domain-probe', DomainProbeController::class)
+                ->middleware('throttle:domain-probe')
+                ->name('domains.probe');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Phase 0O.4A (ADR 0050 section 2): only the explicitly configured
         // proxies (TRUSTED_PROXIES) are believed -- never `*`.
         $middleware->replace(TrustProxies::class, TrustConfiguredProxies::class);
+        // Phase 0O.8A (ADR 0054 section 8.1): the Host boundary runs right
+        // after trusted-proxy processing -- before CORS, maintenance mode and
+        // every web/api group middleware -- so an unexpected Host is refused
+        // (421) before any session, cookie, CSRF, School or URL logic. The
+        // framework's default global list, with that one insertion (asserted
+        // by Tests\Feature\CustomDomains\HostBoundaryArchitectureTest).
+        $middleware->use([
+            ValidatePathEncoding::class,
+            InvokeDeferredCallbacks::class,
+            TrustProxies::class,
+            ClassifyRequestHost::class,
+            HandleCors::class,
+            PreventRequestsDuringMaintenance::class,
+            ValidatePostSize::class,
+            TrimStrings::class,
+            ConvertEmptyStringsToNull::class,
+        ]);
         // Phase 0O.4A (ADR 0050 section 13, CLAUDE.md rule 55): liveness
         // stays 200 during a maintenance window -- the process is alive and
         // must not be restarted. Readiness answers 503 itself

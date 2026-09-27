@@ -10,10 +10,12 @@
         "ext-bcmath": "*",
         "bacon/bacon-qr-code": "^3.1",
         "inertiajs/inertia-laravel": "^3.3",
+        "jeremykendall/php-domain-parser": "^6.4",
         "laravel/framework": "^13.17",
         "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.0",
+        "mikepultz/netdns2": "^2.0.8",
         "pragmarx/google2fa": "^9.1",
         "predis/predis": "^3.6",
         "symfony/uid": "^7.4"

@@ -92,6 +92,9 @@ class TrustedProxyTest extends TestCase
     public function a_configured_proxy_is_believed(): void
     {
         config(['trustedproxy.proxies' => ['10.0.0.0/8']]);
+        // Phase 0O.8A (ADR 0054 section 8.1): a believed forwarded Host is then
+        // classified like any other -- here it is a configured platform alias.
+        config(['domains.platform_aliases' => ['spoofed.example.com']]);
 
         $this->fromAddress(self::TRUSTED_PROXY)->withHeaders($this->forwarded())->getJson('http://localhost/_proxy-echo')
             ->assertExactJson(['ip' => '203.0.113.9', 'secure' => true, 'host' => 'spoofed.example.com', 'port' => 443]);

@@ -7,6 +7,7 @@ use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Domains\DomainDirectory;
 use App\Support\Tenancy\SchoolStatus;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -112,6 +113,9 @@ class SchoolLifecycleService
         });
 
         $this->failAfterTransaction($request, $actor, $operation, $school, $failure);
+        // ADR 0054 section 8.8: a custom domain resolves only while its School
+        // is active -- the Host cache must not outlive the change.
+        app(DomainDirectory::class)->forgetSchool($school->id);
     }
 
     /**
@@ -153,6 +157,9 @@ class SchoolLifecycleService
         });
 
         $this->failAfterTransaction($request, $actor, $operation, $school, $failure);
+        // ADR 0054 section 8.8: a custom domain resolves only while its School
+        // is active -- the Host cache must not outlive the change.
+        app(DomainDirectory::class)->forgetSchool($school->id);
     }
 
     /**
@@ -182,6 +189,9 @@ class SchoolLifecycleService
         });
 
         $this->failAfterTransaction($request, $actor, $operation, $school, $failure);
+        // ADR 0054 section 8.8: a custom domain resolves only while its School
+        // is active -- the Host cache must not outlive the change.
+        app(DomainDirectory::class)->forgetSchool($school->id);
     }
 
     /**

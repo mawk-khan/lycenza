@@ -63,6 +63,11 @@ class CapabilityAndRoleSeeder extends Seeder
             // rotate and revoke additionally need a fresh MFA code.
             ['key' => 'integrations.api_clients.view', 'label' => 'View partner API clients', 'namespace' => 'school'],
             ['key' => 'integrations.api_clients.manage', 'label' => 'Issue, rotate and revoke partner API clients', 'namespace' => 'school'],
+            // Phase 0O.8A (ADR 0054 section 10.1): the School's custom domains.
+            // Add, regenerate, primary and remove also need a fresh MFA code;
+            // activation is never a School action (it follows the probe).
+            ['key' => 'school.domains.view', 'label' => 'View the School\'s custom domains', 'namespace' => 'school'],
+            ['key' => 'school.domains.manage', 'label' => 'Add, verify, choose and remove the School\'s custom domains', 'namespace' => 'school'],
             ['key' => 'platform.feature_flags.view', 'label' => 'View feature flags (platform)', 'namespace' => 'platform'],
             ['key' => 'platform.feature_flags.manage', 'label' => 'Manage feature flags (platform)', 'namespace' => 'platform'],
 
@@ -831,6 +836,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'school.audit.view',
                     'integrations.webhooks.view', 'integrations.webhooks.manage',
                     'integrations.api_clients.view', 'integrations.api_clients.manage',
+                    'school.domains.view', 'school.domains.manage',
                     'school.profile.view', 'school.profile.manage',
                     'school.campuses.view', 'school.campuses.manage',
                     'academics.structure.view', 'academics.structure.manage',

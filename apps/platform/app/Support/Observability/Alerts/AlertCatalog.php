@@ -227,6 +227,23 @@ final class AlertCatalog
                 self::tier(Severity::Sev3, 'max(lycenza_service_signing_key_age_days) >= 76 or max(lycenza_service_verification_key_max_age_days) >= 76', 0,
                     fn (MetricSnapshot $s) => max(self::maxOf($s, 'lycenza_service_signing_key_age_days'), self::maxOf($s, 'lycenza_service_verification_key_max_age_days')) >= 76, 'KeyAge'),
             ]),
+            // ADR 0054 (Phase 0O.8A): custom School domains. One School's domain
+            // is never the platform: nothing here pages as SEV-1, and none of
+            // it touches readiness.
+            self::rule('OBS-28', 'A custom School domain was suspended (ownership, routing or TLS drift confirmed).', 'A', 'CUSTOM-DOMAINS.md', [
+                self::tier(Severity::Sev3, 'sum(increase(lycenza_domain_transitions_total{to="suspended"}[1h])) > 0', 0,
+                    fn (MetricSnapshot $s) => $s->increase('lycenza_domain_transitions_total', '1h', ['to' => 'suspended']) > 0),
+            ]),
+            self::rule('OBS-29', 'An active custom domain\'s certificate is close to expiry (edge renewal not happening).', 'A', 'CUSTOM-DOMAINS.md', [
+                self::tier(Severity::Sev3, 'min(lycenza_domain_certificate_min_days_remaining) <= 21', 0,
+                    fn (MetricSnapshot $s) => ($s->value('lycenza_domain_certificate_min_days_remaining') ?? INF) <= 21),
+                self::tier(Severity::Sev2, 'min(lycenza_domain_certificate_min_days_remaining) <= 7', 0,
+                    fn (MetricSnapshot $s) => ($s->value('lycenza_domain_certificate_min_days_remaining') ?? INF) <= 7),
+            ]),
+            self::rule('OBS-30', 'Custom-domain checks indeterminate for 3 days (resolver or network trouble; never suspends).', 'A', 'CUSTOM-DOMAINS.md', [
+                self::tier(Severity::Sev3, 'max(lycenza_domain_indeterminate_max_age_seconds) >= 259200', 0,
+                    fn (MetricSnapshot $s) => ($s->value('lycenza_domain_indeterminate_max_age_seconds') ?? 0) >= 3 * self::DAY),
+            ]),
         ];
     }
 

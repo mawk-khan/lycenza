@@ -5,12 +5,13 @@ namespace Tests\Feature\Platform\Elevation;
 use App\Domain\Platform\Application\Elevation\ElevationAudit;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
-use App\Models\SchoolDomain;
 use App\Models\SchoolElevation;
 use App\Models\SchoolMembership;
+use App\Support\Domains\DomainState;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CreatesSchoolDomains;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class SchoolElevationStartTest extends TestCase
 {
-    use CreatesTenancyFixtures, ElevationTestHelpers;
+    use CreatesSchoolDomains, CreatesTenancyFixtures, ElevationTestHelpers;
 
     #[Test]
     public function a_platform_admin_enters_one_school_for_exactly_thirty_minutes_with_an_audited_start(): void
@@ -65,14 +66,14 @@ class SchoolElevationStartTest extends TestCase
     }
 
     #[Test]
-    public function the_confirmation_page_names_the_school_only_after_an_exact_match_by_uuid_or_verified_domain(): void
+    public function the_confirmation_page_names_the_school_only_after_an_exact_match_by_uuid_or_active_domain(): void
     {
         $school = $this->createSchool(['name' => 'Domain School']);
-        SchoolDomain::query()->create(['school_id' => $school->id, 'domain' => 'domain-school.example.test', 'verified_at' => now()]);
+        $this->createSchoolDomain($school, 'erp.domain-school.org');
         $admin = $this->platformAdmin();
         $this->actingAs($admin);
 
-        foreach ([$school->id, strtoupper($school->id), 'domain-school.example.test', 'DOMAIN-SCHOOL.example.test'] as $target) {
+        foreach ([$school->id, strtoupper($school->id), 'erp.domain-school.org', 'ERP.DOMAIN-SCHOOL.org', 'erp.domain-school.org.'] as $target) {
             $this->post('/app/platform/elevation/confirm', ['target' => $target, 'reason_code' => 'incident_response'])
                 ->assertOk()
                 ->assertInertia(fn (AssertableInertia $page) => $page
@@ -92,18 +93,20 @@ class SchoolElevationStartTest extends TestCase
     public function no_partial_unverified_or_malformed_target_resolves_and_the_refusal_is_uniform_and_audited(): void
     {
         $school = $this->createSchool(['name' => 'Hidden School']);
-        SchoolDomain::query()->create(['school_id' => $school->id, 'domain' => 'hidden.example.test', 'verified_at' => now()]);
-        SchoolDomain::query()->create(['school_id' => $school->id, 'domain' => 'unverified.example.test', 'verified_at' => null]);
+        $this->createSchoolDomain($school, 'erp.hidden-school.org');
+        $this->createSchoolDomain($school, 'erp.unverified-school.org', DomainState::PendingVerification);
+        $this->createSchoolDomain($school, 'erp.suspended-school.org', DomainState::Suspended);
         $admin = $this->platformAdmin();
         $this->actingAs($admin);
 
         $cases = [
             'hidden' => 'target_malformed',                 // not a domain, not a UUID
-            'hidden.example' => 'target_not_found',          // partial domain
-            'unverified.example.test' => 'target_not_found', // unverified domain
+            'hidden-school.org' => 'target_not_found',       // partial domain
+            'erp.unverified-school.org' => 'target_not_found', // pending (unverified) domain
+            'erp.suspended-school.org' => 'target_not_found',  // suspended domain: only ACTIVE resolves
             (string) Str::uuid() => 'target_not_found',      // unknown School id
             'Hidden School' => 'target_malformed',           // a name is never searched
-            'hidden.example.test%' => 'target_malformed',
+            'erp.hidden-school.org%' => 'target_malformed',
         ];
 
         foreach ($cases as $target => $outcome) {

@@ -293,7 +293,7 @@ Phase 0O.5A implements the repository side. In short:
 - **Heartbeats:** process-class, not replica: scheduler task heartbeats
   (all tasks) and per-queue canary jobs for `default`, `integrations` and
   `notifications`.
-- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-27 (OBS-27: ADR 0053 service authentication) (OBS-28–OBS-30 are reserved by ADR 0054 for custom-domain ownership/routing/TLS suspension, certificate expiry and indeterminate DNS; added in 0O.8A) with thresholds derived from
+- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-30 (OBS-27: ADR 0053 service authentication; OBS-28–OBS-30, Phase 0O.8A / ADR 0054: a custom domain suspended — SEV-3; a custom-domain certificate ≤ 21 days from expiry — SEV-3, ≤ 7 days — SEV-2; custom-domain checks indeterminate for 3 days — SEV-3; runbook `docs/operations/CUSTOM-DOMAINS.md`; none pages as SEV-1 and none touches readiness) with thresholds derived from
   this file's cadences and ADR 0050's recovery objectives.
 - **Operations status** stays the operator view over the same checks,
   complete (all heartbeats, all three queues, Communications, Automation,
@@ -329,3 +329,21 @@ reference:
 The queue-health model changed: with a per-minute canary on every required
 queue, a stale `queue:{name}` heartbeat now means the worker class is not
 processing (`stalled`), whether or not other work is waiting.
+
+## Custom School domains (ADR 0054, Phase 0O.8A)
+
+Closed labels only -- never a hostname, School, domain id, token or ticket:
+
+| Metric | Type | Labels |
+|---|---|---|
+| `lycenza_host_responses_total` | counter | `outcome` = `misdirected` (421), `not_served` (health on a named non-platform host), `surface_not_found` (outside the School surface), `alias_redirect` (308) |
+| `lycenza_domain_checks_total` | counter | `check` = `ownership`/`routing`/`tls`; `outcome` = `match`/`mismatch`/`absent`/`indeterminate`/`pass`/`fail` |
+| `lycenza_domain_transitions_total` | counter | `to` = the target lifecycle state |
+| `lycenza_school_domains` | gauge (scrape) | `state` |
+| `lycenza_domain_certificate_min_days_remaining` | gauge (scrape) | none (absent when no active certificate is recorded) |
+| `lycenza_domain_indeterminate_max_age_seconds` | gauge (scrape) | none |
+
+Log lines `domains.check` / `domains.transition` carry the domain id and
+closed codes; `session_handoff.failed` carries a closed outcome only. The
+scheduled task `domains-check` is a minute-cadence heartbeat task. One
+School's domain problem never changes readiness.

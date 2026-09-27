@@ -87,6 +87,15 @@ class ProductionBootSmokeTest extends TestCase
             'AWS_ACCESS_KEY_ID' => '',
             'AWS_SECRET_ACCESS_KEY' => '',
             'TRUSTED_PROXIES' => '10.0.0.0/8',
+            // ADR 0054 (Phase 0O.8A): custom domains off (a complete, safe
+            // mode), no development host or fake -- phpunit.xml turns those
+            // on for the suite -- and a Redis handoff store by configuration
+            // only (nothing here connects to it).
+            'CUSTOM_DOMAINS_ENABLED' => 'false',
+            'DOMAIN_FAKES_ENABLED' => 'false',
+            'DOMAIN_ALLOW_DEVELOPMENT_HOSTS' => 'false',
+            'SESSION_HANDOFF_STORE' => 'redis',
+            'PROBE_HOST' => 'erp.example.org',
             'APP_CONFIG_CACHE' => $this->dir.'/config.php',
             'APP_ROUTES_CACHE' => $this->dir.'/routes.php',
             ...$overrides,
@@ -310,6 +319,7 @@ class ProductionBootSmokeTest extends TestCase
             'AI_GATEWAY_SERVICE_SIGNING_KEY' => $this->privateJwk($platform),
             'AI_GATEWAY_INBOUND_VERIFICATION_KEYS' => $this->ring([$this->publicJwk($gateway)]),
             'AI_GATEWAY_REPLAY_STORE' => 'redis',
+            'INTERNAL_HOSTS' => 'platform-internal.lycenza.example',
         ]);
 
         $outputs = '';

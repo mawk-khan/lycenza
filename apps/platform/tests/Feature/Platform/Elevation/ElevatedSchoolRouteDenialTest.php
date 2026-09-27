@@ -5,7 +5,6 @@ namespace Tests\Feature\Platform\Elevation;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
 use App\Models\SchoolAuditEvent;
-use App\Models\SchoolDomain;
 use App\Support\Ai\AiGatewayAuthorizationException;
 use App\Support\Ai\AiGatewayClient;
 use App\Support\Audit\AuditRecorder;
@@ -18,6 +17,7 @@ use Illuminate\Support\Facades\Route as RouteFacade;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CreatesSchoolDomains;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -29,7 +29,7 @@ use Tests\TestCase;
  */
 class ElevatedSchoolRouteDenialTest extends TestCase
 {
-    use CreatesTenancyFixtures, ElevationTestHelpers;
+    use CreatesSchoolDomains, CreatesTenancyFixtures, ElevationTestHelpers;
 
     protected function setUp(): void
     {
@@ -159,7 +159,7 @@ class ElevatedSchoolRouteDenialTest extends TestCase
     }
 
     #[Test]
-    public function a_verified_domain_or_the_local_header_naming_another_school_blocks_any_school_context(): void
+    public function the_local_header_naming_another_school_blocks_school_context_and_no_custom_domain_serves_elevation(): void
     {
         $school = $this->createSchool();
         $other = $this->createSchool();
@@ -172,13 +172,17 @@ class ElevatedSchoolRouteDenialTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('error.code', RequireSchoolContext::ELEVATION_NOT_PERMITTED);
 
-        // A verified domain for another School on this host.
-        SchoolDomain::query()->create(['school_id' => $other->id, 'domain' => 'localhost', 'verified_at' => now()]);
-        $this->getJson('/__test/elevation-safe')->assertForbidden();
-
-        // Same School by domain: still exactly that School.
-        SchoolDomain::query()->where('domain', 'localhost')->update(['school_id' => $school->id]);
+        // Phase 0O.8A (ADR 0054 sections 8.2, 8.5): a custom School domain is
+        // never an elevation surface -- not the other School's, and not the
+        // elevation target's own: the Host boundary answers before any School
+        // or elevation logic runs.
+        // On the platform host the elevation resolves exactly its School.
         $this->getJson('/__test/elevation-safe')->assertOk()->assertJsonPath('school', $school->id);
+
+        $this->createSchoolDomain($other, 'erp.other-elevation-school.org');
+        $this->createSchoolDomain($school, 'erp.target-elevation-school.org');
+        $this->getJson('http://erp.other-elevation-school.org/__test/elevation-safe')->assertNotFound();
+        $this->getJson('http://erp.target-elevation-school.org/__test/elevation-safe')->assertNotFound();
     }
 
     #[Test]

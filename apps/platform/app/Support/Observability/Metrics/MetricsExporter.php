@@ -2,6 +2,7 @@
 
 namespace App\Support\Observability\Metrics;
 
+use App\Support\Domains\DomainSignals;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Observability\OperationalStatus;
 use App\Support\Observability\OperationalStatusService;
@@ -159,6 +160,17 @@ final class MetricsExporter
             }
             $this->gauge('lycenza_automation_overdue_executions', [], $automation->overdue);
             $this->gauge('lycenza_automation_oldest_overdue_age_seconds', [], $automation->oldestOverdueAgeSeconds);
+        });
+
+        // Phase 0O.8A (ADR 0054 section 12): custom domains -- School-specific
+        // health for OBS-28..30, never part of readiness.
+        $this->collect('domains', function (): void {
+            $domains = app(DomainSignals::class);
+            foreach ($domains->countsByState() as $state => $count) {
+                $this->gauge('lycenza_school_domains', ['state' => $state], $count);
+            }
+            $this->gauge('lycenza_domain_certificate_min_days_remaining', [], $domains->certificateMinDaysRemaining());
+            $this->gauge('lycenza_domain_indeterminate_max_age_seconds', [], $domains->indeterminateMaxAgeSeconds());
         });
 
         $this->collect('evidence', fn () => $this->evidenceSamples());

@@ -93,8 +93,6 @@ class ProductionConfigurationGuardTest extends TestCase
             'proxies trust all (ipv4 any)' => [['trustedproxy.proxies' => ['10.0.0.0/8', '0.0.0.0/0']], 'trusted_proxies_unsafe'],
             'proxies trust all (ipv6 any)' => [['trustedproxy.proxies' => ['::/0']], 'trusted_proxies_unsafe'],
             'proxies not a list' => [['trustedproxy.proxies' => null], 'trusted_proxies_unsafe'],
-            'app url localhost' => [['app.url' => 'http://localhost'], 'environment_not_separated'],
-            'app url missing' => [['app.url' => null], 'environment_not_separated'],
             'app url ddev' => [['app.url' => 'https://lycenza.ddev.site'], 'environment_not_separated'],
             'app url dot test' => [['app.url' => 'https://erp.test'], 'environment_not_separated'],
             'test database (runtime)' => [['database.connections.pgsql.database' => 'school_os_test'], 'environment_not_separated'],
@@ -155,6 +153,66 @@ class ProductionConfigurationGuardTest extends TestCase
     }
 
     /**
+     * Phase 0O.8A (ADR 0054): the platform origin, host-only cookies and the
+     * Host boundary's own switches.
+     */
+    #[Test]
+    public function the_host_boundary_and_cookie_scope_are_enforced(): void
+    {
+        $violations = fn (array $overrides) => (new ProductionConfigurationGuard($this->config($overrides)))->violations();
+
+        $this->assertSame(['environment_not_separated', 'platform_url_invalid'], $violations(['app.url' => 'http://localhost']));
+        $this->assertSame(['environment_not_separated', 'platform_url_invalid'], $violations(['app.url' => null]));
+        $this->assertSame(['platform_url_invalid'], $violations(['app.url' => 'http://erp.example.org']), 'the platform origin is https');
+        $this->assertSame(['platform_url_invalid'], $violations(['app.url' => 'https://10.0.0.5']), 'the platform origin is a hostname');
+        $this->assertSame(['session_domain_shared'], $violations(['session.domain' => '.example.org']), 'no parent-domain cookie');
+        $this->assertSame([], $violations(['session.domain' => null]));
+        $this->assertSame(['domain_development_hosts_enabled'], $violations(['domains.allow_development_hosts' => true]));
+        $this->assertSame(['domain_fakes_enabled'], $violations(['domains.fakes' => true]));
+        $this->assertSame(['domain_host_list_invalid'], $violations(['domains.platform_aliases' => ['*.example.org']]));
+        $this->assertSame(['domain_host_list_invalid'], $violations(['domains.internal_hosts' => ['web']]), 'single-label names are local-only');
+        $this->assertSame(['domain_host_list_invalid'], $violations(['domains.reserved_suffixes' => ['Example.ORG']]), 'lists are written canonically');
+        $this->assertSame(['session_handoff_store_not_redis'], $violations(['domains.handoff_store' => 'array']));
+        $this->assertSame([], $violations(['domains.platform_aliases' => ['www.example.org'], 'domains.internal_hosts' => ['platform-internal.svc.example']]));
+    }
+
+    /**
+     * Enabled custom domains need the edge, a real probe key and public
+     * resolvers; disabled is a complete mode that needs none of them.
+     */
+    #[Test]
+    public function enabled_custom_domains_need_edge_probe_key_and_public_resolvers(): void
+    {
+        $violations = fn (array $overrides) => (new ProductionConfigurationGuard($this->config(['domains.enabled' => true, ...$overrides])))->violations();
+        $sound = [
+            'domains.edge.cname_target' => 'edge.lycenza-cdn.example',
+            'domains.edge.addresses' => ['198.41.0.4'],
+            'domains.probe_key' => str_repeat('probe-canary-', 4),
+            'domains.dns.resolvers' => ['9.9.9.9', '2620:fe::fe'],
+        ];
+
+        $this->assertSame([], $violations($sound));
+        $this->assertSame([], (new ProductionConfigurationGuard($this->config(['domains.enabled' => false])))->violations(), 'disabled needs nothing');
+        $this->assertSame(['domain_edge_target_missing'], $violations([...$sound, 'domains.edge.cname_target' => null, 'domains.edge.addresses' => []]));
+        $this->assertSame(['domain_edge_target_invalid'], $violations([...$sound, 'domains.edge.cname_target' => 'https://edge.example']));
+        $this->assertSame(['domain_edge_addresses_invalid'], $violations([...$sound, 'domains.edge.addresses' => ['10.1.2.3']]), 'never a private edge');
+        $this->assertSame(['domain_probe_key_invalid'], $violations([...$sound, 'domains.probe_key' => null]));
+        $this->assertSame(['domain_probe_key_invalid'], $violations([...$sound, 'domains.probe_key' => 'short']));
+        $this->assertSame(['domain_probe_key_invalid'], $violations([...$sound, 'domains.probe_key' => 'dev-local-only-domain-probe-key-change-me-0000']));
+        $this->assertSame(['domain_dns_resolvers_missing'], $violations([...$sound, 'domains.dns.resolvers' => []]));
+        $this->assertSame(['domain_dns_resolvers_invalid'], $violations([...$sound, 'domains.dns.resolvers' => ['10.0.0.2']]), 'never a split-horizon resolver');
+        $this->assertSame(['domain_dns_resolvers_invalid'], $violations([...$sound, 'domains.dns.resolvers' => ['resolver.example']]));
+
+        try {
+            $canary = 'dev-'.str_repeat('probe-canary-', 3);
+            (new ProductionConfigurationGuard($this->config(['domains.enabled' => true, ...$sound, 'domains.probe_key' => $canary])))->assertSafe();
+            $this->fail('refused');
+        } catch (ProductionConfigurationException $e) {
+            $this->assertStringNotContainsString('probe-canary', $e->getMessage());
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $overrides
      */
     #[Test]
@@ -185,7 +243,7 @@ class ProductionConfigurationGuardTest extends TestCase
             ])))->assertSafe();
             $this->fail('An unsafe configuration must be refused.');
         } catch (ProductionConfigurationException $e) {
-            $this->assertSame(['app_debug_enabled', 'app_key_invalid', 'session_cookie_not_secure', 'ai_legacy_service_token_configured', 'ai_gateway_url_not_https', 'ai_service_signing_key_expired', 'ai_service_verification_keys_missing'], $e->violations);
+            $this->assertSame(['app_debug_enabled', 'app_key_invalid', 'session_cookie_not_secure', 'ai_legacy_service_token_configured', 'ai_gateway_url_not_https', 'ai_service_signing_key_expired', 'ai_service_verification_keys_missing', 'internal_hosts_missing'], $e->violations);
             foreach ([$appKeyCanary, $tokenCanary, self::CANARY_SIGNING_KEY, 'redis-canary-5d1e', 'scrape-canary-2f6b9d1e4a7c0b3d5e8f1a2c4b6d8e0f', $key['d'], $key['x']] as $secret) {
                 $this->assertStringNotContainsString($secret, $e->getMessage());
             }
@@ -207,6 +265,9 @@ class ProductionConfigurationGuardTest extends TestCase
             'services.ai_gateway.service_signing_key' => $this->privateJwk($this->platformKey),
             'services.ai_gateway.inbound_verification_keys' => $this->ring([$this->publicJwk($this->gatewayKey)]),
             'services.ai_gateway.replay_store' => null,
+            // ADR 0054 section 8.3: the Gateway calls the internal routes on a
+            // private internal host, which the Host boundary must know.
+            'domains.internal_hosts' => ['platform-internal.lycenza.example'],
             ...$overrides,
         ];
     }
