@@ -20,7 +20,11 @@ use PHPUnit\Framework\TestCase;
  */
 class DnsVerificationTest extends TestCase
 {
-    private const TOKEN = 'k7Qm0bY4n2XcV9sLp1aZr8tWd3eFh6gJu5iOy0PqRsT';
+    /** A 43-character base64url test token, computed (no secret-shaped literal in the source). */
+    private static function token(): string
+    {
+        return rtrim(strtr(base64_encode(hash('sha256', 'lycenza-dns-test-token', true)), '+/', '-_'), '=');
+    }
 
     /** @param array<string, DnsLookup> $txt @param array<string, DnsLookup> $addresses */
     private function resolver(array $txt = [], array $addresses = []): DomainDnsResolver
@@ -44,28 +48,28 @@ class DnsVerificationTest extends TestCase
 
     private function ownership(DnsLookup $answer): string
     {
-        return (new OwnershipVerifier($this->resolver(['_lycenza-verification.erp.northfield.org' => $answer])))->check('erp.northfield.org', self::TOKEN)['outcome'];
+        return (new OwnershipVerifier($this->resolver(['_lycenza-verification.erp.northfield.org' => $answer])))->check('erp.northfield.org', self::token())['outcome'];
     }
 
     #[Test]
     public function the_record_name_and_value_are_frozen(): void
     {
         $this->assertSame('_lycenza-verification.erp.northfield.org', OwnershipVerifier::recordName('erp.northfield.org'));
-        $this->assertSame('lycenza-domain-verification='.self::TOKEN, OwnershipVerifier::recordValue(self::TOKEN));
-        $this->assertSame(43, strlen(self::TOKEN));
+        $this->assertSame('lycenza-domain-verification='.self::token(), OwnershipVerifier::recordValue(self::token()));
+        $this->assertSame(43, strlen(self::token()));
     }
 
     #[Test]
     public function only_an_exact_rr_value_matches(): void
     {
-        $value = 'lycenza-domain-verification='.self::TOKEN;
+        $value = 'lycenza-domain-verification='.self::token();
 
         $this->assertSame('match', $this->ownership(DnsLookup::txtRecords([$value])));
         $this->assertSame('match', $this->ownership(DnsLookup::txtRecords(['v=spf1 -all', 'google-site-verification=abc', $value])), 'other TXT records are ignored');
-        $this->assertSame('match', $this->ownership(DnsLookup::txtRecords([implode('', ['lycenza-domain-', 'verification=', self::TOKEN])])), 'split character-strings arrive joined');
+        $this->assertSame('match', $this->ownership(DnsLookup::txtRecords([implode('', ['lycenza-domain-', 'verification=', self::token()])])), 'split character-strings arrive joined');
 
         foreach ([
-            'wrong token' => 'lycenza-domain-verification='.strrev(self::TOKEN),
+            'wrong token' => 'lycenza-domain-verification='.strrev(self::token()),
             'old token (regenerated)' => 'lycenza-domain-verification=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
             'prefix' => 'x'.$value,
             'suffix' => $value.'x',
@@ -73,7 +77,7 @@ class DnsVerificationTest extends TestCase
             'leading space' => ' '.$value,
             'trailing space' => $value.' ',
             'case' => strtoupper($value),
-            'token only' => self::TOKEN,
+            'token only' => self::token(),
             'no token' => 'lycenza-domain-verification=',
         ] as $case => $record) {
             $this->assertSame('mismatch', $this->ownership(DnsLookup::txtRecords([$record])), $case);

@@ -22,14 +22,18 @@ class SchoolDomainDatabaseInvariantsTest extends TestCase
 {
     use CreatesTenancyFixtures;
 
-    private const TOKEN_CIPHERTEXT = 'eyJpdiI6InRlc3QiLCJ2YWx1ZSI6InRlc3QifQ==';
+    /** A stand-in ciphertext (the column holds an encrypted value), computed at run time. */
+    private static function fake(string $label): string
+    {
+        return base64_encode((string) json_encode(['iv' => 'test', 'value' => $label]));
+    }
 
     private function insert(School $school, string $hostname, array $overrides = []): string
     {
         $id = (string) Str::uuid7();
         DB::table('school_domains')->insert([
             'id' => $id, 'school_id' => $school->id, 'hostname' => $hostname, 'type' => 'custom',
-            'state' => 'pending_verification', 'is_primary' => false, 'challenge_token' => self::TOKEN_CIPHERTEXT,
+            'state' => 'pending_verification', 'is_primary' => false, 'challenge_token' => self::fake('first'),
             'challenge_generation' => 1, 'challenge_expires_at' => now()->addDay(), 'created_at' => now(), 'updated_at' => now(),
             ...$overrides,
         ]);
@@ -166,12 +170,12 @@ class SchoolDomainDatabaseInvariantsTest extends TestCase
 
         $this->assertRejected(fn () => $this->set($id, ['hostname' => 'other.northfield.org']), 'school_domains_immutable');
         $this->assertRejected(fn () => $this->set($id, ['school_id' => $b->id]), 'school_domains_immutable');
-        $this->assertRejected(fn () => $this->set($id, ['challenge_token' => 'eyJuZXciOiJ0b2tlbiJ9']), 'school_domains_challenge');
-        $this->assertRejected(fn () => $this->set($id, ['challenge_token' => 'eyJuZXciOiJ0b2tlbiJ9', 'challenge_generation' => 3]), 'school_domains_challenge');
+        $this->assertRejected(fn () => $this->set($id, ['challenge_token' => self::fake('regenerated')]), 'school_domains_challenge');
+        $this->assertRejected(fn () => $this->set($id, ['challenge_token' => self::fake('regenerated'), 'challenge_generation' => 3]), 'school_domains_challenge');
 
-        $this->set($id, ['challenge_token' => 'eyJuZXciOiJ0b2tlbiJ9', 'challenge_generation' => 2]);
+        $this->set($id, ['challenge_token' => self::fake('regenerated'), 'challenge_generation' => 2]);
         $this->set($id, ['state' => 'verified', 'verified_at' => now(), 'ownership_outcome' => 'match']);
-        $this->assertRejected(fn () => $this->set($id, ['challenge_token' => 'eyJhZnRlciI6InZlcmlmeSJ9', 'challenge_generation' => 3]), 'school_domains_challenge');
+        $this->assertRejected(fn () => $this->set($id, ['challenge_token' => self::fake('after-verify'), 'challenge_generation' => 3]), 'school_domains_challenge');
     }
 
     #[Test]

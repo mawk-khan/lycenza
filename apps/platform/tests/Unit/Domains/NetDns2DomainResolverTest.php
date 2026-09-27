@@ -17,7 +17,11 @@ use Symfony\Component\Process\Process;
  */
 class NetDns2DomainResolverTest extends TestCase
 {
-    private const TOKEN = 'k7Qm0bY4n2XcV9sLp1aZr8tWd3eFh6gJu5iOy0PqRsT';
+    /** A 43-character base64url test token, computed (no secret-shaped literal in the source). */
+    private static function token(): string
+    {
+        return rtrim(strtr(base64_encode(hash('sha256', 'lycenza-dns-test-token', true)), '+/', '-_'), '=');
+    }
 
     private static ?Process $server = null;
 
@@ -26,7 +30,7 @@ class NetDns2DomainResolverTest extends TestCase
     public static function setUpBeforeClass(): void
     {
         $portFile = sys_get_temp_dir().'/dns-port-'.bin2hex(random_bytes(4));
-        self::$server = new Process(['php', dirname(__DIR__, 2).'/Support/fake-dns-server.php', $portFile, self::TOKEN]);
+        self::$server = new Process(['php', dirname(__DIR__, 2).'/Support/fake-dns-server.php', $portFile, self::token()]);
         self::$server->start();
 
         $deadline = microtime(true) + 20;
@@ -53,7 +57,7 @@ class NetDns2DomainResolverTest extends TestCase
     #[Test]
     public function txt_character_strings_are_joined_and_every_rr_is_returned(): void
     {
-        $value = 'lycenza-domain-verification='.self::TOKEN;
+        $value = 'lycenza-domain-verification='.self::token();
 
         $this->assertSame([$value], $this->resolver()->txt('txt-ok.test')->txt);
         $this->assertSame([$value], $this->resolver()->txt('txt-split.test')->txt, 'two character-strings, one logical value');
