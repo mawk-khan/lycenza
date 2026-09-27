@@ -301,7 +301,7 @@ Other findings:
 | O10 | Backup policy, RPO/RTO, restore drills | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | Any production deployment |
 | O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
-| O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | **RESOLVED — ADR 0055 (Phase 0O.9)**: Lycenza-controlled, deployment-configured sending domain (never a School web domain); closed From mailbox catalog, sanitized School display name, no School Reply-To in v1; one provider-neutral adapter at a time; one durable email layer (message/attempt/event/suppression) beneath invitations (outbox, outside the transaction) and Communications; authenticated, deduplicated provider events; global suppression; SPF/DKIM alignment and DMARC ≥ `p=quarantine` at readiness. **Implementation: Phase 0O.9A (not started)**; deployment evidence outstanding | Product + operations | Real email |
+| O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | **RESOLVED — ADR 0055 (Phase 0O.9)**: Lycenza-controlled, deployment-configured sending domain (never a School web domain); closed From mailbox catalog, sanitized School display name, no School Reply-To in v1; one provider-neutral adapter at a time; one durable email layer (message/attempt/event/suppression) beneath invitations (outbox, outside the transaction) and Communications; authenticated, deduplicated provider events; global suppression; SPF/DKIM alignment and DMARC ≥ `p=quarantine` at readiness. **Repository implementation COMPLETE (Phase 0O.9A, §33)**; deployment evidence outstanding | Product + operations | Real email |
 | O14 | Password reset for production accounts | ADR 0037: none exists. Email transport dependency defined by ADR 0055 §4 (reserved `account_recovery` class; durable, outside-transaction submission; suppression-aware generic outcome); O14 itself not designed | Product + security | Production operations |
 | O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | No | Product | S4 |
 | O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest; repository controls COMPLETE (0O.6F: runtime security contract, approved exceptions `OWNER-0O6E-2026-09-26`), deployment evidence outstanding | Security | Supply chain |
@@ -1270,6 +1270,72 @@ and no sending.
 
 **Exception clock:** the VERIFIED artifacts' exception records expire
 **2026-10-10** and **2026-10-26**; nothing is renewed.
+
+- Decisions **O1, O2, O14, O15** remain open.
+- Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- The **real restore drill is still outstanding**.
+
+## 33. Phase 0O.9A — Production Email & Deliverability Foundation (COMPLETE — repository, 2026-09-27)
+
+ADR 0055 is **implemented in the repository**. The implementation amendment is
+in the ADR, the runbook is `docs/operations/EMAIL-DELIVERABILITY.md`, and the
+rule is CLAUDE.md rule 89. There is no vendor, credential, DNS record,
+webhook exposure or real send.
+
+**The four 0O.9 findings are closed:**
+1. The invitation email is an outbox row in the invitation's own
+   transaction, submitted after commit. A provider outage never fails the
+   invitation.
+2. Production cannot silently sink mail:
+   - `MAIL_PROVIDER=none` is an explicit disabled mode;
+   - log/array/failover defaults, the fake, Mailpit/local hosts, plaintext
+     SMTP, an unbounded timeout, the placeholder From, tracking, a missing
+     sending domain and a bad suppression key ring are all refused by
+     `ProductionConfigurationGuard`;
+   - SMTP has a 5 s bound.
+3. Provider events, bounces, complaints and suppression exist.
+   Communications `sent` now means "the provider accepted it" and later
+   becomes `delivered`/`bounced`/`rejected` from provider evidence.
+4. Invitation send/resend is limited to 10 per minute per admin and 200 per
+   day per School.
+
+**Built:**
+- **Data.** Tables `email_messages` (RLS, trigger-enforced graph, immutable
+  identity, database-enforced content purge), `email_submission_attempts`
+  (RLS, append-only), `email_events` and `email_suppressions` (platform) and
+  `email_provider_references` (platform routing index). There is one
+  gateway for both producers.
+- **Adapters and events.** The fake and hardened SMTP adapters. A
+  provider-event webhook on the platform host only (bounded, authenticated
+  by the adapter, deduplicated, School from stored data) with a test-only
+  fake event adapter. Production event ingestion answers 404 until a
+  vendor adapter exists.
+- **Suppression.** Global HMAC suppression with a current + previous key
+  ring.
+- **Fairness.** Budgets with a reserved critical in-flight slot.
+- **Operator commands.** `platform:mail-status`, `mail-verify-domain`,
+  `mail-retry`, `mail-suppression-release`, `mail-suppression-rekey`,
+  `email-messages-redispatch` and `email-prune`.
+- **Observability.** Six metrics, alerts **OBS-31..OBS-38**, and an `email`
+  Operations Status component (Degraded at worst; never readiness).
+- **Local.** DDEV sends through the same layer to Mailpit, with the fake,
+  signed event feed.
+
+**Deployment evidence outstanding:**
+- a selected provider account and adapter;
+- the real sending domain, with SPF, DKIM and DMARC at `p=quarantine` or
+  stricter after 14 days of aligned DKIM;
+- credential custody and real webhook authentication;
+- delivery, soft/hard bounce and complaint drills;
+- a credential rotation;
+- deliverability monitoring;
+- the legal retention period (`MAIL_RETENTION_DAYS`, **[LEGAL REVIEW
+  REQUIRED]**).
+
+**O14 dependency:** `account_recovery` is a reserved purpose only. A future
+recovery flow must require `EmailProviderResolver::criticalEmailAvailable()`.
 
 - Decisions **O1, O2, O14, O15** remain open.
 - Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.

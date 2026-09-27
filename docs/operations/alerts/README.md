@@ -1,4 +1,4 @@
-# Alert index (OBS-01 … OBS-27)
+# Alert index (OBS-01 … OBS-38)
 
 ADR 0051 §14. The rules are generated from
 `App\Support\Observability\Alerts\AlertCatalog` into
@@ -41,6 +41,17 @@ source: **A** contract, **B** runtime cadence, **C** operator value.
 | OBS-25 | Security-boundary stress | SEV-3 (C; disabled until set) | [INTEGRATION-SECURITY](../../security/INTEGRATION-SECURITY.md) |
 | OBS-26 | Telemetry collection failing | SEV-2 (C: for 300 s) | [TELEMETRY-COLLECTION](../TELEMETRY-COLLECTION.md) |
 | OBS-27 | Service-to-service authentication failing (unknown kid, bad signature, expired key, or the peer refusing our assertions), or a service key ≥ 76 days old (ADR 0053) | SEV-3 only (A); never pages -- the AI Gateway is optional | [SERVICE-KEY-ROTATION](../SERVICE-KEY-ROTATION.md) |
+| OBS-28 | A custom School domain was suspended (ADR 0054) | SEV-3 (A) | [CUSTOM-DOMAINS](../CUSTOM-DOMAINS.md) |
+| OBS-29 | A custom-domain certificate close to expiry | SEV-3 ≤ 21 days, SEV-2 ≤ 7 days (A) | [CUSTOM-DOMAINS](../CUSTOM-DOMAINS.md) |
+| OBS-30 | Custom-domain checks indeterminate for 3 days | SEV-3 (A) | [CUSTOM-DOMAINS](../CUSTOM-DOMAINS.md) |
+| OBS-31 | Critical email (invitations) waiting too long to reach the provider (ADR 0055) | SEV-2 > 1800 s (B) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
+| OBS-32 | Standard email (School communications) backlog too old | SEV-3 > 1800 s (B) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
+| OBS-33 | Email submission failure ratio | SEV-3 (C; disabled until set) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
+| OBS-34 | Email provider refusing credentials or TLS (sending paused) | SEV-2 any in 15 min (A) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
+| OBS-35 | No provider email events for 24 h while mail is submitted | SEV-3 (A; only with an event adapter) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
+| OBS-36 | Hard-bounce spike | SEV-3 (C; disabled until set) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
+| OBS-37 | Complaint spike (sending reputation) | SEV-2 (C; disabled until set) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
+| OBS-38 | Email provider-event webhook authentication failures | SEV-3 (C; disabled until set) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
 
 Operator values (`ALERT_*`, `config/observability.php` `alerts`): unset
 means the tier is **disabled** and the exported file says so; a value

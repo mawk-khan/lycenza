@@ -14,10 +14,10 @@ use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -30,7 +30,7 @@ use Tests\TestCase;
  */
 class AnnouncementPolicyIntegrationTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -51,7 +51,7 @@ class AnnouncementPolicyIntegrationTest extends TestCase
     public function optional_communication_with_email_preference_disabled_creates_in_app_but_suppresses_email(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
@@ -72,14 +72,14 @@ class AnnouncementPolicyIntegrationTest extends TestCase
         $this->assertSame('email', $decisions->first()->channel);
         $this->assertSame('recipient_preference_disabled', $decisions->first()->reason);
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function required_communication_bypasses_a_disabled_email_preference_when_school_policy_permits(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
@@ -94,14 +94,14 @@ class AnnouncementPolicyIntegrationTest extends TestCase
             ->pluck('channel')->sort()->values()->all());
 
         $this->assertSame(['email', 'in_app'], $channels);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function required_communication_is_still_suppressed_when_school_required_policy_denies_email(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(), $school);
@@ -115,14 +115,14 @@ class AnnouncementPolicyIntegrationTest extends TestCase
             ->pluck('channel')->all());
 
         $this->assertSame(['in_app'], $channels);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function three_recipients_with_different_states_are_each_handled_distinctly(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
 
@@ -167,7 +167,7 @@ class AnnouncementPolicyIntegrationTest extends TestCase
     public function scenario_a_disabling_a_preference_after_publish_does_not_change_the_historical_delivery(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
@@ -197,7 +197,7 @@ class AnnouncementPolicyIntegrationTest extends TestCase
     public function scenario_b_enabling_a_preference_after_a_suppressed_publish_does_not_retroactively_send_the_old_message(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
@@ -220,6 +220,6 @@ class AnnouncementPolicyIntegrationTest extends TestCase
             ->where('channel', 'email')->count());
 
         $this->assertSame(0, $deliveryCountAfter, 'Re-enabling a preference must never retroactively create a delivery for an already-published message.');
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 }

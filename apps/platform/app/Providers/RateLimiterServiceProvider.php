@@ -173,6 +173,11 @@ class RateLimiterServiceProvider extends ServiceProvider
         // identity yet. The token itself (32 bytes, hashed at rest) is
         // already infeasible to guess; this is defense-in-depth against
         // sheer request volume, not the primary control.
+        // Phase 0O.9A (ADR 0055 section 11.2): the email provider's event
+        // webhook -- per source address (a provider has no principal before
+        // its signature is checked), generous for legitimate batches.
+        RateLimiter::for('email-provider-events', fn (Request $request) => Limit::perMinute((int) config('email.events.per_minute'))->by('email-provider-events:'.$request->ip()));
+
         RateLimiter::for('guardian-invitation-accept', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
 
         // Phase 0H.4D-P1 section 14/23: MFA has three separate attack

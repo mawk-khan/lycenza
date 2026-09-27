@@ -35,6 +35,7 @@ class OperationalSignals
         'webhook' => 'webhook-deliveries-redispatch',
         'communication' => 'communication-deliveries-redispatch',
         'automation' => 'automation-executions-redispatch',
+        'email' => 'email-messages-redispatch',
     ];
 
     /**

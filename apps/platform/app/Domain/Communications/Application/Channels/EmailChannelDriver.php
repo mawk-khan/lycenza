@@ -5,9 +5,9 @@ namespace App\Domain\Communications\Application\Channels;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use Throwable;
+use App\Support\Email\EmailPurpose;
+use App\Support\Email\OutboundEmailGateway;
+use App\Support\Email\Providers\EmailProviderResolver;
 
 /**
  * Phase 5A.3 §6: the EMAIL implementation of
@@ -16,8 +16,7 @@ use Throwable;
  * App\Domain\Communications\Application\Channels\CommunicationChannelRegistry
  * exactly like InAppChannelDriver -- reached ONLY through
  * App\Jobs\ProcessCommunicationDeliveryJob, never called directly by a
- * controller/service (brief §6/§23: no external mail I/O inside a
- * database transaction, always after-commit + queued).
+ * controller/service.
  *
  * Destination resolution (brief §7/§8): this driver NEVER re-resolves
  * a live User.email at send time -- it reads
@@ -26,9 +25,25 @@ use Throwable;
  * (App\Domain\Communications\Application\AnnouncementService::publish()),
  * so a later change to the recipient's account email cannot alter a
  * historical delivery record's destination.
+ *
+ * Phase 0O.9A (ADR 0055 section 9.5): the driver no longer talks to a mail
+ * transport. It HANDS the delivery to the platform email layer
+ * (OutboundEmailGateway: one sealed `school_communication` message per
+ * delivery, idempotent per delivery) and reports `accepted` -- handed over,
+ * never "sent" or "delivered". From then on the email layer owns every
+ * retry (rule 59: one retry owner) and its state is projected back onto
+ * the delivery by CommunicationDeliveryEmailSource: submitted -> `sent`,
+ * delivered -> `delivered`, bounced/complained -> `bounced`, suppressed or
+ * provider-rejected -> `rejected`, expired -> `expired`, other failures ->
+ * `failed`.
  */
 final class EmailChannelDriver implements CommunicationChannelDriver
 {
+    public function __construct(
+        private readonly OutboundEmailGateway $email,
+        private readonly EmailProviderResolver $providers,
+    ) {}
+
     public function channel(): CommunicationChannel
     {
         return CommunicationChannel::Email;
@@ -38,9 +53,10 @@ final class EmailChannelDriver implements CommunicationChannelDriver
     {
         // Re-checked at send time, not just at delivery-creation time
         // (brief §9's `email_channel_disabled` code exists for exactly
-        // this race: enabled when the Announcement was published,
-        // disabled by an operator before the queued job actually runs).
-        if (! (bool) config('communications.channels.email.enabled')) {
+        // this race). `MAIL_PROVIDER=none` (email explicitly disabled on
+        // this deployment) is the same honest refusal -- never a silent
+        // "sent".
+        if (! (bool) config('communications.channels.email.enabled') || ! $this->providers->enabled()) {
             return CommunicationDeliveryResult::failed(
                 'email_channel_disabled',
                 'Communication Hub email delivery is not currently enabled.',
@@ -69,11 +85,10 @@ final class EmailChannelDriver implements CommunicationChannelDriver
         // Phase 5A.6 §29: a SEPARATE, smaller threshold from the
         // canonical `attachments.max_total_size_mb` storage limit --
         // exceeding it fails ONLY this channel, deterministically and
-        // before any transport call is attempted, with a stable
-        // machine-readable code (brief §52). IN_APP remains unaffected
-        // (it renders the same canonical attachments independently --
-        // see InAppChannelDriver/the Announcement Show page) and no
-        // email is ever sent with attachments silently dropped.
+        // before anything is queued, with a stable machine-readable code
+        // (brief §52). No email is ever sent with attachments silently
+        // dropped. Attachments stay private-storage objects (never a
+        // filesystem path), streamed by the provider adapter.
         $attachments = $message->attachments;
         $totalBytes = $attachments->sum('size_bytes');
         $maxBytes = (int) config('communications.attachments.email_max_total_size_mb') * 1024 * 1024;
@@ -85,56 +100,25 @@ final class EmailChannelDriver implements CommunicationChannelDriver
             );
         }
 
-        $payload = new CommunicationEmailPayload(
-            subject: $this->subjectFor($message),
-            bodyText: $message->body,
-            fromAddress: (string) config('mail.from.address'),
-            // Brief §13: incorporates the School name into the DISPLAY
-            // name only -- never forges a from address in the
-            // School's own domain. Custom verified sender domains are
-            // explicitly deferred (brief §13, phase doc §7).
-            fromName: "{$school->name} via ".(string) config('mail.from.name'),
+        $subject = $this->subjectFor($message);
+
+        $queued = $this->email->queue(
+            school: $school,
+            purpose: EmailPurpose::SchoolCommunication,
+            sourceId: $delivery->id,
+            recipient: $email,
+            subject: $subject,
+            text: view('emails.communications.message', ['bodyText' => $message->body])->render(),
+            html: view('emails.communications.message-html', ['bodyText' => $message->body, 'subject' => $subject])->render(),
             attachments: $attachments->map(fn ($a) => [
                 'disk' => $a->storage_disk,
                 'path' => $a->storage_path,
-                'displayName' => $a->safe_display_name,
-                'mimeType' => $a->mime_type,
-            ])->all(),
+                'name' => $a->safe_display_name,
+                'mime' => $a->mime_type,
+            ])->values()->all(),
         );
 
-        try {
-            Mail::mailer(config('communications.channels.email.mailer'))
-                ->to($email)
-                ->send(new CommunicationMail($payload));
-        } catch (Throwable $e) {
-            // Never logs the exception message/trace -- it may embed
-            // provider request/response detail (brief §9/§20/§27).
-            Log::warning('communications.delivery.email.transport_failed', [
-                'school_id' => $delivery->school_id,
-                'delivery_id' => $delivery->id,
-                'channel' => 'email',
-            ]);
-
-            // Broad and conservative: any transport exception is
-            // treated as transient/retryable (bounded by
-            // config('communications.delivery.max_attempts')) since a
-            // generic Mailable/transport failure cannot be reliably
-            // classified as permanent from here (brief §21). A future
-            // provider-specific adapter can narrow this.
-            return CommunicationDeliveryResult::failed(
-                'email_transport_unavailable',
-                'The configured mail transport rejected the send attempt.',
-                retryable: true,
-            );
-        }
-
-        // Brief §19/§22: SENT means "the configured application mail
-        // transport accepted the send operation without throwing" --
-        // it does NOT mean mailbox delivery, and no provider message
-        // id is fabricated when the underlying transport (e.g. the
-        // `log`/`array` transports used in dev/test) doesn't supply
-        // one of its own.
-        return CommunicationDeliveryResult::sent();
+        return CommunicationDeliveryResult::accepted($queued->id);
     }
 
     private function subjectFor(CommunicationMessage $message): string

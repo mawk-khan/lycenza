@@ -18,7 +18,6 @@ use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Identity\Application\AccountInvitationService;
 use App\Domain\Identity\Infrastructure\GuardianAccountInvitation;
-use App\Domain\Identity\Mail\GuardianAccountInvitationMail;
 use App\Jobs\ProcessCommunicationDeliveryJob;
 use App\Models\DomainEventOutbox;
 use App\Models\Notification;
@@ -40,12 +39,12 @@ use App\Support\Webhooks\WebhookSubscriptionService;
 use Database\Seeders\Demo\DemoDataBuilder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\Concerns\SignsServiceAssertions;
 use Tests\TestCase;
 
@@ -58,7 +57,7 @@ use Tests\TestCase;
  */
 class SchoolSuspensionEnforcementTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures, SignsServiceAssertions;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail, SignsServiceAssertions;
 
     private function in(School $school, callable $callback): mixed
     {
@@ -318,12 +317,12 @@ class SchoolSuspensionEnforcementTest extends TestCase
     #[Test]
     public function a_guardian_invitation_into_a_suspended_school_is_unusable_and_left_intact(): void
     {
-        Mail::fake();
+        $this->fakeEmail();
         [$admin, $school] = $this->createSchoolAdmin('school_admin');
         $guardian = $this->createGuardian($school);
         $this->createGuardianContact($guardian, ContactType::Email, 'held.guardian@example.com');
         app(AccountInvitationService::class)->invite($school, $guardian, $admin);
-        preg_match('#/invitations/[^\s<"]+#', Mail::sent(GuardianAccountInvitationMail::class)->first()->render(), $m);
+        preg_match('#/invitations/[^\s<"]+#', $this->lastAcceptedEmail()->text, $m);
         $path = $m[0];
 
         $this->suspend($school);

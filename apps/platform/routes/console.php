@@ -42,6 +42,14 @@ Schedule::command('platform:communication-deliveries-redispatch')
     ->withoutOverlapping()
     ->name('communication-deliveries-redispatch');
 
+// Phase 0O.9A (ADR 0055 section 10): the email layer's recovery sweep --
+// due/abandoned messages, content expiry, unapplied provider events. The
+// submission job's own claim is the correctness guarantee.
+Schedule::command('platform:email-messages-redispatch')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('email-messages-redispatch');
+
 // Phase 5A.4 (brief §20/§21): same reasoning again --
 // AnnouncementService::publish()'s own atomic conditional UPDATE is
 // the real concurrency guarantee (see its docblock), so
@@ -101,6 +109,14 @@ Schedule::command('platform:webhook-deliveries-prune')
     ->dailyAt('02:20')
     ->withoutOverlapping()
     ->name('webhook-deliveries-prune');
+
+// Phase 0O.9A (ADR 0055 section 21): email metadata retention,
+// MAIL_RETENTION_DAYS -- no default ([LEGAL REVIEW REQUIRED]); until it is
+// configured this run deletes nothing and logs `platform.email_prune.unconfigured`.
+Schedule::command('platform:email-prune')
+    ->dailyAt('02:30')
+    ->withoutOverlapping()
+    ->name('email-prune');
 
 // Phase 0O.8A (ADR 0054 section 7.1): custom-domain checks -- queues due
 // domains (pending ~15 min, live daily, 1 h after a failure), bounded per run

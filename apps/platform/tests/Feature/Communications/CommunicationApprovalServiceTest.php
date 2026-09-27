@@ -26,11 +26,11 @@ use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -46,7 +46,7 @@ use Tests\TestCase;
  */
 class CommunicationApprovalServiceTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     protected function setUp(): void
     {
@@ -677,7 +677,7 @@ class CommunicationApprovalServiceTest extends TestCase
         $this->createApprovalPolicy($school, ['require_school_wide_approval' => true]);
 
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $announcement = $this->announcements()->createDraft(
             $school, $creator, 'T', 'B', CommunicationPriority::Normal, CommunicationAudienceType::SchoolWide,
@@ -691,7 +691,7 @@ class CommunicationApprovalServiceTest extends TestCase
             $this->assertSame('draft', $this->freshAnnouncement($school, $announcement)->status);
             $recipientCount = app(TenantContext::class)->withSchool($school, fn () => CommunicationRecipient::query()->count());
             $this->assertSame(0, $recipientCount);
-            Mail::assertNothingSent();
+            $this->assertNoEmailAccepted();
         }
     }
 
@@ -701,7 +701,7 @@ class CommunicationApprovalServiceTest extends TestCase
     public function an_approved_announcement_publishes_through_the_full_existing_pipeline(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         ['admin' => $admin, 'school' => $school, 'announcement' => $announcement] = $this->approvedSchoolWideAnnouncement();
 

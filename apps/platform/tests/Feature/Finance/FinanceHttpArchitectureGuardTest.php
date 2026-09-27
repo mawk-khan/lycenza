@@ -105,7 +105,10 @@ class FinanceHttpArchitectureGuardTest extends TestCase
     public function no_public_provider_callback_route_exists(): void
     {
         $routes = collect(Route::getRoutes())
-            ->filter(fn ($route) => str_contains($route->uri(), 'provider') || str_contains($route->uri(), 'webhook-events') || str_contains($route->uri(), 'callback'));
+            ->filter(fn ($route) => str_contains($route->uri(), 'provider') || str_contains($route->uri(), 'webhook-events') || str_contains($route->uri(), 'callback'))
+            // Phase 0O.9A: the one ADR 0055 email provider-event endpoint -- not a
+            // payment callback; authenticated by its provider adapter, 404 without one.
+            ->reject(fn ($route) => $route->getName() === 'api.integrations.email-provider.events');
 
         $this->assertCount(0, $routes, 'No generic provider-callback/ingestion route may be publicly registered in 0G.6.');
     }

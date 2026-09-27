@@ -3,21 +3,21 @@
 namespace Tests\Feature\Communications;
 
 use App\Domain\Communications\Application\AnnouncementService;
-use App\Domain\Communications\Application\Channels\CommunicationMail;
 use App\Domain\Communications\Application\CommunicationAttachmentService;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
+use App\Support\Email\Providers\OutboundEmail;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -29,7 +29,7 @@ use Tests\TestCase;
  */
 class AnnouncementAttachmentEmailDeliveryTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     protected function setUp(): void
     {
@@ -53,7 +53,7 @@ class AnnouncementAttachmentEmailDeliveryTest extends TestCase
     {
         Config::set('communications.channels.email.enabled', true);
         Config::set('communications.attachments.email_max_total_size_mb', 5);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(['email' => 'member@school-os.test']), $school);
@@ -66,7 +66,7 @@ class AnnouncementAttachmentEmailDeliveryTest extends TestCase
 
         $published = $this->announcements()->publish($announcement, $creator);
 
-        Mail::assertSent(CommunicationMail::class, fn (CommunicationMail $mail) => count($mail->attachments()) === 1);
+        $this->assertEmailAccepted(fn (OutboundEmail $email) => count($email->attachments) === 1);
 
         $context = app(TenantContext::class);
         $emailDelivery = $context->withSchool($school, fn () => CommunicationDelivery::query()
@@ -87,7 +87,7 @@ class AnnouncementAttachmentEmailDeliveryTest extends TestCase
         Config::set('communications.attachments.max_file_size_mb', 20);
         Config::set('communications.attachments.max_total_size_mb', 20);
         Config::set('communications.attachments.email_max_total_size_mb', 1);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(['email' => 'member@school-os.test']), $school);
@@ -102,7 +102,7 @@ class AnnouncementAttachmentEmailDeliveryTest extends TestCase
 
         $published = $this->announcements()->publish($announcement, $creator);
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
 
         $context = app(TenantContext::class);
         $deliveries = $context->withSchool($school, fn () => CommunicationDelivery::query()
@@ -124,7 +124,7 @@ class AnnouncementAttachmentEmailDeliveryTest extends TestCase
     public function an_in_app_only_announcement_with_an_attachment_never_sends_email(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(), $school);
@@ -137,14 +137,14 @@ class AnnouncementAttachmentEmailDeliveryTest extends TestCase
 
         $this->announcements()->publish($announcement, $creator);
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function the_global_email_gate_disabled_sends_no_mail_even_with_an_attachment(): void
     {
         Config::set('communications.channels.email.enabled', false);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(['email' => 'member@school-os.test']), $school);
@@ -162,14 +162,14 @@ class AnnouncementAttachmentEmailDeliveryTest extends TestCase
 
         $this->announcements()->publish($announcement, $creator);
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function republishing_does_not_duplicate_the_attachment_email(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(['email' => 'member@school-os.test']), $school);
@@ -183,6 +183,6 @@ class AnnouncementAttachmentEmailDeliveryTest extends TestCase
         $first = $this->announcements()->publish($announcement, $creator);
         $this->announcements()->publish($first, $creator);
 
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 }

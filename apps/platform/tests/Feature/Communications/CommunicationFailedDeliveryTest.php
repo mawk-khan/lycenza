@@ -9,10 +9,10 @@ use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -22,7 +22,7 @@ use Tests\TestCase;
  */
 class CommunicationFailedDeliveryTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function announcements(): AnnouncementService
     {
@@ -43,7 +43,7 @@ class CommunicationFailedDeliveryTest extends TestCase
     public function an_announcement_with_a_real_failed_delivery_appears(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         // No usable email -- EmailChannelDriver fails this delivery
@@ -90,7 +90,7 @@ class CommunicationFailedDeliveryTest extends TestCase
     public function a_policy_suppressed_channel_is_not_mislabeled_as_failed(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser(['email' => 'member@school-os.test']);
@@ -137,7 +137,7 @@ class CommunicationFailedDeliveryTest extends TestCase
     public function school_a_cannot_see_school_bs_failed_deliveries(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creatorB, $schoolB] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(['email' => 'still-not-valid']), $schoolB);

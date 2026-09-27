@@ -22,6 +22,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'ProcessOutboxEventJob.php',     // routes to consumers, which gate their own effects
         'RecordSchoolAuditPingJob.php',  // Phase 0B demo: writes audit evidence only
         'WorkerCanaryJob.php',           // Phase 0O.5A: no-op worker-class heartbeat, no School
+        'ApplyEmailEventJob.php',        // Phase 0O.9A: records provider evidence and suppression; never sends
     ];
 
     /** Business jobs and where their execution-time lifecycle check lives. */
@@ -31,6 +32,8 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'RunAutomationExecutionJob.php' => 'app/Domain/Automation/Application/AutomationExecutionService.php',
         // Phase 0O.8A: a non-active School's domain checks are skipped (ADR 0054 section 7.1).
         'CheckSchoolDomainJob.php' => 'app/Domain/Platform/Application/Domains/SchoolDomainCheckService.php',
+        // Phase 0O.9A: a non-active School's email waits (ADR 0055 section 10).
+        'SubmitEmailMessageJob.php' => 'app/Support/Email/EmailSubmissionService.php',
     ];
 
     /** Commands that walk every School and why they may include non-active ones. */
@@ -38,6 +41,11 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'RedispatchDueAutomationExecutions.php', // an execution of a suspended School becomes terminal `skipped`
         'PruneWebhookDeliveries.php',            // retention maintenance
         'PruneIdempotencyRecords.php',           // retention maintenance
+        'RedispatchDueEmailMessages.php',        // expiry purges sealed email content on time; submits only for active Schools
+        'PruneEmailRecords.php',                 // retention maintenance
+        'RetryMailMessage.php',                  // one named School; the submission claim re-checks the lifecycle
+        'RekeyMailSuppressions.php',             // reads a stored recipient to re-key suppression; no School effect
+        'SendFakeEmailEvent.php',                // local/testing only; one named School
     ];
 
     #[Test]

@@ -612,6 +612,50 @@ change. After `ddev restart` (to load `.ddev/config.yaml`'s domain settings):
 
 `platform:domains-edge-desired --json` shows what a real edge would serve.
 
+### Production email & deliverability (Phase 0O.9A, ADR 0055)
+
+DDEV sends every email through the real email layer to **Mailpit**, using the
+hardened SMTP adapter. Plaintext is allowed for Mailpit in local only.
+Provider events come from a **fake, signed feed** (`MAIL_PROVIDER_EVENTS=fake`).
+Nothing leaves the machine. After `ddev restart` (to load the email settings)
+and `ddev demo-reset`:
+
+1. **Invitation.** Open `ddev mailpit`. The demo's pending Guardian
+   invitation (guardian02) arrives from
+   `Lycenza Demo School via Lycenza <notifications@notify.lycenza.ddev.site>`.
+   Check:
+   - no Reply-To, Cc or Bcc;
+   - `Message-ID: <id@notify.lycenza.ddev.site>` and
+     `Auto-Submitted: auto-generated`;
+   - a text part and an escaped HTML part with no images;
+   - the canonical link.
+
+   The demo's other invitation was activated before sending, so its email
+   is `cancelled` (`source_withdrawn`) and was never sent.
+2. **Status.** `ddev exec php artisan platform:mail-status` shows the
+   provider, backlog, suppressions and retention (unconfigured,
+   [LEGAL REVIEW REQUIRED]).
+3. **Communication Hub** (enabled in DDEV; it can only reach Mailpit).
+   Publish an announcement with the Email channel. Each recipient gets one
+   message, and each delivery becomes `sent` (the provider accepted it —
+   never "delivered" without evidence).
+4. **Provider events** through the real webhook route:
+   `ddev exec php artisan platform:mail-fake-event <schoolId> <messageId> delivered`,
+   then `deferred`, which is recorded as stale — a delivered message never
+   moves backward. Then try `hard_bounce --bounce-class=mailbox_unknown`
+   and `complaint`.
+   - A hard bounce suppresses the address for all mail.
+   - A complaint suppresses standard mail, or all mail when the email was
+     critical (an invitation).
+   - The Communication delivery shows `bounced`.
+5. **Suppression.** Resend an invitation to a suppressed address. The
+   Guardian page shows the email as not sent (blocked), and nothing reaches
+   Mailpit. Release it with
+   `ddev exec php artisan platform:mail-suppression-release --reason=mailbox_repaired`.
+6. **Disabled mode.** With `MAIL_PROVIDER=none` in `.ddev/config.yaml`,
+   invitations are still created. Their email waits (`email_disabled`) and
+   the page says why.
+
 ## 16. Running tests inside DDEV
 
 ```bash

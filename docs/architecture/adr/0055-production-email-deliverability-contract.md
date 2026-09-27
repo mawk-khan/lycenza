@@ -825,3 +825,168 @@ health monitoring. 0O.9A plus the deployment evidence removes each of these.
   complained.
 - O14 is unblocked on the transport side (§4) but remains open.
 - Still open: **O1, O2, O14, O15**.
+
+## Amendment — Phase 0O.9A implementation (2026-09-27)
+
+ADR 0055 is **implemented in the repository**. Nothing here chooses a vendor,
+creates a credential, touches DNS, exposes a webhook to a real provider or
+sends real email. What the implementation decided, where the contract left
+room:
+
+1. **Five tables, not four.**
+   - `email_messages` and `email_submission_attempts` are tenant tables
+     (forced RLS; attempts append-only).
+   - `email_events` and `email_suppressions` are platform tables (no
+     School, no address).
+   - A fifth, `email_provider_references` (provider, provider message id,
+     message id, School id — ids only, listed in
+     `DatabaseRoleVerifier::NON_RLS_SCHOOL_TABLES`), is written by the worker
+     that records an acceptance.
+   - It is how a provider event, which arrives with no School context, finds
+     its School from **stored** data without an RLS bypass and without
+     trusting the payload.
+   - `email_messages.school_id` is `NOT NULL`: v1 has no platform (School-less)
+     mail.
+2. **The state graph, exactly** (`EmailState`, and the identical database
+   function `email_messages_transition_allowed()`, guard-tested
+   cell-by-cell):
+   - `pending` → `submitting` | `suppressed` | `cancelled` | `failed`
+   - `submitting` → `submitted` | `pending` (retry scheduled) | `failed`
+   - `submitted` → `deferred` | `delivered` | `bounced` | `complained` | `failed`
+   - `deferred` → `delivered` | `bounced` | `complained` | `failed`
+   - `delivered` → `bounced` | `complained`
+   - Every other change is refused by trigger. Same-state updates (lease,
+     deferral) are allowed.
+   - `failed` is also reached after acceptance, on a provider `rejected`
+     event (`status_code = provider_rejected`).
+   - A soft bounce is recorded as `deferred`.
+   - Three different notions of "final":
+     - submission: only `pending`/`submitting` are ever submitted;
+     - content: sealed content exists only in those two states — the
+       trigger purges it on any other state, and the sweeper cancels at
+       `expires_at`;
+     - observation: `submitted`/`deferred`/`delivered` still take events.
+3. **Identifiers.**
+   - The internal id is a UUIDv7.
+   - The RFC Message-ID `<id@sending-domain>` is fixed at creation, or at the
+     first claim when the domain was not yet configured, then immutable.
+   - The provider idempotency key is `lycenza-email-<id>`.
+   - The provider message id is set once on acceptance.
+4. **Adapters.**
+   - `none`: disabled, the default. Nothing is submitted and messages wait
+     with `email_disabled`.
+   - `fake`: local/testing only; never resolved elsewhere and refused at
+     boot.
+   - `smtp`: the hardened baseline — required TLS via STARTTLS
+     (`requireTls`) or implicit TLS, peer verification, auth, and the 5 s
+     socket timeout that Symfony applies to the connect and to each
+     response. Plaintext exists only for Mailpit in local/testing.
+   - SMTP carries no delivery events, so SMTP-sent mail stays `submitted`.
+   - The event side is `EmailEventAdapter` (authenticate + normalize). Only
+     the test/local `FakeEmailEventAdapter` exists. Production event
+     ingestion answers 404 until a vendor adapter is written with the vendor
+     selection.
+5. **Communications mapping.** The driver returns `accepted` (handed over).
+   The email layer projects its state onto the delivery:
+
+   | Email state | Delivery status |
+   |---|---|
+   | `submitted`, `deferred` | `sent` |
+   | `delivered` | `delivered` |
+   | `bounced`, `complained` | `bounced` |
+   | `suppressed` | `rejected` |
+   | `failed` with `provider_rejected` | `rejected` |
+   | `failed` (other) | `failed` |
+   | `cancelled` with `expired` | `expired` |
+   | `cancelled` (other) | `cancelled` |
+
+   - A projection never moves a delivery backward.
+   - Communications' own retry no longer applies to email.
+   - The finished metric counts `sent` once and failure outcomes; not
+     `delivered`.
+6. **Retries.**
+   - Backoff: 30 s, 2 min, 10 min, 30 min, 2 h, ±20 % (injectable random);
+     at most 6 counted attempts and never past `expires_at`.
+   - An authentication/TLS refusal opens a platform-wide 15-minute pause
+     (`ProviderAuthPause`, shared cache). Every other message defers without
+     contacting the provider. Auth attempts count toward the six.
+   - The claim lease is 120 s, the job timeout 30 s, the queue `retry_after`
+     90 s.
+   - `platform:mail-retry` restores the budget once, for a waiting message
+     only. A finished message's content is gone: the product re-issues it.
+7. **Fairness.**
+   - Per School and globally, one in-flight slot is reserved for critical
+     mail: defaults 5 per School and 50 globally, with standard mail using
+     at most cap − 1.
+   - Separate critical/standard rate buckets:
+     - per School: 60/min and 5,000/day standard, 20/min and 1,000/day
+       critical;
+     - global: 600/min standard, 120/min critical.
+   - Claims serialize on one advisory lock so the counts are exact.
+   - Over budget defers, never fails.
+8. **Suppression key ring** (amending §12.3).
+   - `MAIL_SUPPRESSION_HMAC_KEY` / `_KEY_ID` (current) plus an optional
+     `_PREVIOUS_KEY` / `_PREVIOUS_KEY_ID`, with stable ids. Every row records
+     its key id.
+   - Lookups try every ring key. A match under the previous key is
+     re-recorded under the current key on observation.
+   - `platform:mail-suppression-rekey` re-keys what it can reconstruct (the
+     source message still holds its encrypted recipient) and reports the
+     rest. An HMAC cannot be reversed, so those rows stay under the previous
+     key: keep that key in the ring until they are released or re-observed.
+   - `platform:mail-status` reports rows under a key no longer in the ring
+     (never silently dropped).
+9. **Guards and deferrals.**
+   - `sending_domain_not_reserved`: in production nothing is submitted
+     unless the sending domain is under the platform domain or a
+     `DOMAIN_RESERVED_SUFFIXES` entry, i.e. no School can ever claim it.
+   - `sending_not_verified`: nothing is submitted without the
+     `MAIL_SENDING_VERIFIED` attestation. It records evidence; it proves
+     nothing (§18).
+   - The production guard codes are listed in
+     `docs/architecture/PRODUCTION-RELEASE.md`.
+   - Laravel re-merges its own default mailers, so the guard refuses a
+     failover/roundrobin/sendmail **default** rather than their presence.
+10. **Throttle.** `GuardianInvitationSendLimiter` allows 10 per minute per
+    administrator and 200 per day per School, for invite and resend
+    together. It is evaluated in the service once the School is known
+    (rule 61) and answers one generic message.
+11. **`NotificationDispatcher`.** The Phase 0C log-only `email` provider and
+    the fake SMS/WhatsApp/push providers are registered in local/testing
+    only. Elsewhere an `email` notification has no provider and is refused —
+    never "sent" to a log.
+12. **O14 dependency.**
+    - `EmailPurpose::AccountRecovery` exists as a name only: the database
+      and the gateway refuse it.
+    - `EmailProviderResolver::criticalEmailAvailable()` is the readiness
+      signal a future recovery flow must require before it is offered or
+      declared production-ready.
+13. **Observability.**
+    - Six metrics with the `message_class` label.
+    - Alerts OBS-31..OBS-38, runbook `docs/operations/EMAIL-DELIVERABILITY.md`:
+
+      | Alert | Severity |
+      |---|---|
+      | OBS-31 critical backlog | SEV-2 |
+      | OBS-32 standard backlog | SEV-3 |
+      | OBS-33 failure ratio | SEV-3, operator value |
+      | OBS-34 provider auth | SEV-2 |
+      | OBS-35 event staleness | SEV-3 |
+      | OBS-36 hard-bounce spike | SEV-3, operator value |
+      | OBS-37 complaint spike | SEV-2, operator value |
+      | OBS-38 webhook auth failures | SEV-3, operator value |
+
+      None is SEV-1.
+    - An `email` Operations Status component that is `Degraded` at worst.
+    - Scheduled tasks `email-messages-redispatch` (every minute) and
+      `email-prune` (daily; nothing is deleted while `MAIL_RETENTION_DAYS`
+      is unset — [LEGAL REVIEW REQUIRED]).
+14. **Impossible without a chosen provider** (deployment evidence, ADR 0055
+    §23):
+    - a real provider event feed and its authentication;
+    - provider-side suppression visibility;
+    - provider idempotency;
+    - `delivered`/`bounced`/`complained` for real mail;
+    - provider domain verification;
+    - the DMARC aggregate history;
+    - a delivery/bounce/complaint drill against a real sandbox.

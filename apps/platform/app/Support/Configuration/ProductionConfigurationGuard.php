@@ -4,6 +4,11 @@ namespace App\Support\Configuration;
 
 use App\Support\Domains\HostnameNormalizer;
 use App\Support\Domains\PublicAddress;
+use App\Support\Email\Events\EmailEventAdapterResolver;
+use App\Support\Email\Providers\EmailProviderResolver;
+use App\Support\Email\Providers\SmtpEmailProvider;
+use App\Support\Email\SenderIdentity;
+use App\Support\Email\Suppression\SuppressionKeyRing;
 use App\Support\ServiceAuth\ServiceAuthContract;
 use App\Support\ServiceAuth\ServiceKeyConfigException;
 use App\Support\ServiceAuth\ServiceKeyRing;
@@ -37,6 +42,15 @@ use Illuminate\Encryption\Encrypter;
  * custom domains are enabled -- a missing/invalid edge target, probe key
  * or public DNS resolver set.
  *
+ * Phase 0O.9A (ADR 0055 section 20): email never silently sinks. Always:
+ * no fake provider or fake event adapter, no provider debug, no open/click
+ * tracking, no failover/roundrobin/sendmail framework default mailer. When email is
+ * enabled (MAIL_PROVIDER other than `none`, the explicit disabled mode):
+ * a valid Lycenza sending domain, the catalog From address, a valid
+ * suppression HMAC key ring, no log/array framework default, and for SMTP
+ * a non-local host, required TLS, credentials and a bounded timeout; an
+ * event adapter needs a valid 1-2 entry secret ring.
+ *
  * The exception names violation codes only, never a value.
  */
 final class ProductionConfigurationGuard
@@ -58,6 +72,9 @@ final class ProductionConfigurationGuard
 
     /** Host suffixes that only ever name a developer machine or DDEV (ADR 0050 section 16). */
     public const LOCAL_URL_HOST_SUFFIXES = ['.ddev.site', '.test', '.local', '.localhost'];
+
+    /** Phase 0O.9A (ADR 0055 section 6): framework mailers that can silently swallow or bypass email. */
+    public const SINKING_MAILER_TRANSPORTS = ['failover', 'roundrobin', 'sendmail'];
 
     /** Trust-all proxy values (TrustedProxyList already refuses them; checked again here). */
     public const TRUST_ALL_PROXIES = ['*', '**', '0.0.0.0/0', '::/0'];
@@ -92,7 +109,7 @@ final class ProductionConfigurationGuard
             $violations[] = 'ai_legacy_service_token_configured';
         }
 
-        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations(), ...$this->hostViolations()];
+        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations(), ...$this->hostViolations(), ...$this->emailViolations()];
     }
 
     public function assertSafe(): void
@@ -356,6 +373,114 @@ final class ProductionConfigurationGuard
         }
 
         return $violations;
+    }
+
+    /**
+     * Phase 0O.9A (ADR 0055 section 20). Codes only.
+     *
+     * @return list<string>
+     */
+    private function emailViolations(): array
+    {
+        $violations = [];
+        // Absent configuration is the explicit disabled mode (config/email.php's default).
+        $mode = (string) ($this->config->get('email.provider') ?? 'none');
+
+        if (! in_array($mode, EmailProviderResolver::PROVIDERS, true)) {
+            $violations[] = 'mail_provider_invalid';
+        } elseif ($mode === 'fake') {
+            $violations[] = 'mail_provider_fake';
+        }
+
+        // Laravel merges its own default mailer definitions (failover,
+        // roundrobin, sendmail, ...) into the configuration; what matters is
+        // that none of them can be the default -- the failover mailer falls
+        // back to `log`, a silent sink.
+        $default = $this->config->get('mail.default');
+        if (in_array($default, self::SINKING_MAILER_TRANSPORTS, true)
+            || in_array($this->config->get("mail.mailers.{$default}.transport"), self::SINKING_MAILER_TRANSPORTS, true)) {
+            $violations[] = 'mail_unsafe_mailer_default';
+        }
+
+        $events = (string) ($this->config->get('email.events.adapter') ?? 'none');
+        if (! in_array($events, EmailEventAdapterResolver::ADAPTERS, true)) {
+            $violations[] = 'mail_events_adapter_invalid';
+        } elseif ($events === 'fake') {
+            $violations[] = 'mail_events_adapter_fake';
+        }
+
+        if ((bool) $this->config->get('email.debug')) {
+            $violations[] = 'mail_provider_debug_enabled';
+        }
+
+        if ((bool) $this->config->get('email.tracking.opens') || (bool) $this->config->get('email.tracking.clicks')) {
+            $violations[] = 'mail_tracking_enabled';
+        }
+
+        if ($mode === 'none') {
+            return $violations;
+        }
+
+        if (in_array($this->config->get('mail.default'), ['log', 'array', ...self::SINKING_MAILER_TRANSPORTS], true)) {
+            $violations[] = 'mail_laravel_default_is_sink';
+        }
+
+        $rawDomain = trim((string) $this->config->get('email.sending_domain'));
+        $domain = SenderIdentity::validSendingDomain($rawDomain);
+        if ($rawDomain === '') {
+            $violations[] = 'mail_sending_domain_missing';
+        } elseif ($domain === null || self::isLocalHost($domain)) {
+            $violations[] = 'mail_sending_domain_invalid';
+        }
+
+        if ($domain !== null && strtolower((string) $this->config->get('mail.from.address')) !== SenderIdentity::DEFAULT_MAILBOX.'@'.$domain) {
+            $violations[] = 'mail_from_not_catalog';
+        }
+
+        $ring = new SuppressionKeyRing($this->config);
+        if ($ring->violation() !== null || preg_match('/^(dev|test|local|changeme|example)/i', (string) $this->config->get('email.suppression.key')) === 1
+            || preg_match('/^(dev|test|local|changeme|example)/i', (string) $this->config->get('email.suppression.previous_key')) === 1) {
+            $violations[] = 'mail_suppression_keys_invalid';
+        }
+
+        if ($mode === 'smtp') {
+            $host = strtolower(trim((string) $this->config->get('email.smtp.host')));
+            if ($host === '') {
+                $violations[] = 'mail_smtp_host_missing';
+            } elseif (self::isLocalHost($host) || in_array($host, ['mailpit', 'mailhog'], true)) {
+                $violations[] = 'mail_smtp_host_local';
+            }
+
+            if (! in_array($this->config->get('email.smtp.tls'), ['required', 'implicit'], true)) {
+                $violations[] = 'mail_smtp_tls_not_required';
+            }
+
+            if (trim((string) $this->config->get('email.smtp.username')) === '' || trim((string) $this->config->get('email.smtp.password')) === '') {
+                $violations[] = 'mail_smtp_credentials_missing';
+            }
+
+            $timeout = (int) $this->config->get('email.smtp.timeout_seconds');
+            if ($timeout < 1 || $timeout > SmtpEmailProvider::MAX_TIMEOUT_SECONDS) {
+                $violations[] = 'mail_smtp_timeout_unbounded';
+            }
+        }
+
+        if ($events !== 'none') {
+            $secrets = (array) $this->config->get('email.events.secrets', []);
+            $invalid = array_filter($secrets, fn ($secret) => ! is_string($secret) || strlen($secret) < 32 || preg_match('/^(dev|test|local|changeme|example)/i', $secret) === 1);
+            if ($secrets === [] || count($secrets) > 2 || $invalid !== []) {
+                $violations[] = 'mail_event_secrets_invalid';
+            }
+        }
+
+        return $violations;
+    }
+
+    private static function isLocalHost(string $host): bool
+    {
+        return in_array($host, ['localhost', '127.0.0.1', '::1', '[::1]'], true)
+            || str_starts_with($host, '127.')
+            || array_filter(self::LOCAL_URL_HOST_SUFFIXES, fn (string $suffix) => str_ends_with($host, $suffix)) !== [];
     }
 
     /**

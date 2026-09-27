@@ -105,14 +105,23 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
         if ($result->success) {
             $status = $result->status ?? 'delivered';
             $this->recordAttempt($delivery, $attemptNumber, $startedAt, 'success', $result->providerReference, null, null);
-            $delivery->update([
+
+            // Phase 0O.9A (ADR 0055 section 9.5): email is `accepted` (handed
+            // to the email layer), never "sent" here. Conditional on
+            // `sending`: the email layer may already have projected a later
+            // state (it runs after its own commit), which must not be undone.
+            CommunicationDelivery::query()->whereKey($delivery->id)->where('status', 'sending')->update([
                 'status' => $status,
                 'attempts' => $attemptNumber,
-                'sent_at' => $delivery->sent_at ?? now(),
+                'sent_at' => $status === 'accepted' ? $delivery->sent_at : ($delivery->sent_at ?? now()),
                 'delivered_at' => $status === 'delivered' ? now() : null,
                 'processing_lease_expires_at' => null,
             ]);
-            self::finished($delivery, $status);
+            CommunicationDelivery::query()->whereKey($delivery->id)->where('attempts', '<', $attemptNumber)->update(['attempts' => $attemptNumber]);
+
+            if ($status !== 'accepted') {
+                self::finished($delivery, $status);
+            }
 
             return;
         }

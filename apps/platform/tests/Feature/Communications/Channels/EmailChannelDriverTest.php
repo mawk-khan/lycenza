@@ -3,15 +3,14 @@
 namespace Tests\Feature\Communications\Channels;
 
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
-use App\Domain\Communications\Application\Channels\CommunicationMail;
 use App\Domain\Communications\Application\Channels\EmailChannelDriver;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -24,7 +23,7 @@ use Tests\TestCase;
  */
 class EmailChannelDriverTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     #[Test]
     public function the_email_driver_is_registered_for_the_email_channel(): void
@@ -39,7 +38,7 @@ class EmailChannelDriverTest extends TestCase
     public function the_driver_refuses_to_send_when_the_channel_is_disabled(): void
     {
         Config::set('communications.channels.email.enabled', false);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$sender, $school] = $this->createSchoolAdmin('school_admin');
         $recipientUser = $this->createUser(['email' => 'recipient@school-os.test']);
@@ -57,14 +56,14 @@ class EmailChannelDriverTest extends TestCase
         $this->assertFalse($result->success);
         $this->assertSame('email_channel_disabled', $result->failureCode);
         $this->assertFalse($result->retryable);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function the_driver_fails_deterministically_and_non_retryably_when_no_destination_email_was_snapshotted(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$sender, $school] = $this->createSchoolAdmin('school_admin');
         $recipientUser = $this->createUser();
@@ -79,14 +78,14 @@ class EmailChannelDriverTest extends TestCase
         $this->assertFalse($result->success);
         $this->assertSame('recipient_email_missing', $result->failureCode);
         $this->assertFalse($result->retryable);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function the_driver_fails_deterministically_when_the_snapshotted_email_is_not_a_valid_address(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$sender, $school] = $this->createSchoolAdmin('school_admin');
         $recipientUser = $this->createUser();
@@ -104,14 +103,14 @@ class EmailChannelDriverTest extends TestCase
         $this->assertFalse($result->success);
         $this->assertSame('recipient_email_invalid', $result->failureCode);
         $this->assertFalse($result->retryable);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function the_driver_sends_to_the_delivery_destination_snapshot_not_the_recipients_live_email(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$sender, $school] = $this->createSchoolAdmin('school_admin');
         $recipientUser = $this->createUser(['email' => 'live-current-address@school-os.test']);
@@ -134,16 +133,16 @@ class EmailChannelDriverTest extends TestCase
         $result = app(TenantContext::class)->withSchool($school, fn () => app(EmailChannelDriver::class)->send($delivery));
 
         $this->assertTrue($result->success);
-        $this->assertSame('sent', $result->status);
-        Mail::assertSent(CommunicationMail::class, fn ($mail) => $mail->hasTo('snapshotted-address@school-os.test'));
-        Mail::assertNotSent(CommunicationMail::class, fn ($mail) => $mail->hasTo('live-current-address@school-os.test'));
+        $this->assertSame('accepted', $result->status);
+        $this->assertEmailAcceptedTo('snapshotted-address@school-os.test');
+        $this->assertEmailNotAcceptedTo('live-current-address@school-os.test');
     }
 
     #[Test]
-    public function a_successful_send_returns_sent_never_delivered(): void
+    public function a_successful_hand_off_returns_accepted_never_sent_or_delivered(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$sender, $school] = $this->createSchoolAdmin('school_admin');
         $recipientUser = $this->createUser();
@@ -158,10 +157,11 @@ class EmailChannelDriverTest extends TestCase
 
         $result = app(TenantContext::class)->withSchool($school, fn () => app(EmailChannelDriver::class)->send($delivery));
 
-        // Brief §19: SENT means the transport accepted the send
-        // operation -- it must never claim DELIVERED/READ for a real
-        // external channel with no provider-level evidence.
-        $this->assertSame('sent', $result->status);
-        $this->assertNotSame('delivered', $result->status);
+        // Brief §19, Phase 0O.9A (ADR 0055 section 9.5): the driver only HANDS
+        // the delivery to the email layer -- `accepted`. SENT (the provider
+        // accepted it) and DELIVERED (provider evidence) come later, from the
+        // email layer's own state, never from the driver.
+        $this->assertSame('accepted', $result->status);
+        $this->assertNotContains($result->status, ['sent', 'delivered']);
     }
 }

@@ -438,8 +438,14 @@ explicitly still deferred from this checkpoint specifically:
 > - authenticated provider-event ingestion, bounces, complaints and
 >   suppression.
 >
-> Implementation is Phase 0O.9A; until then this document describes the
-> code as it is.
+> **Implemented by Phase 0O.9A.** `EmailChannelDriver` now hands the delivery to
+> `App\Support\Email\OutboundEmailGateway` and returns `accepted`; the email
+> layer owns retries and projects `sent`/`delivered`/`bounced`/`rejected`/
+> `failed`/`expired` back (ADR 0055 implementation amendment, item 5).
+> `CommunicationMail`, `CommunicationEmailPayload` and
+> `COMMUNICATION_EMAIL_MAILER` were removed. Sections above describing the
+> direct `Mail` transport, the `sent`-on-transport-acceptance status and
+> the email retry via this job are historical.
 
 ## Recommended next checkpoint
 

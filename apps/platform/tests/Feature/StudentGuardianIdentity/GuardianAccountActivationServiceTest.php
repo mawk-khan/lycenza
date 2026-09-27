@@ -15,10 +15,10 @@ use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -29,12 +29,12 @@ use Tests\TestCase;
  */
 class GuardianAccountActivationServiceTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Mail::fake();
+        $this->fakeEmail();
     }
 
     private function invitations(): AccountInvitationService

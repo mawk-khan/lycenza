@@ -14,10 +14,10 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -32,7 +32,7 @@ use Tests\TestCase;
  */
 class CommunicationDeliveryAnalyticsReadModelTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function announcements(): AnnouncementService
     {
@@ -48,7 +48,7 @@ class CommunicationDeliveryAnalyticsReadModelTest extends TestCase
     public function a_summary_buckets_read_unread_sent_failed_and_suppressed_exactly_once(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
 
@@ -102,7 +102,7 @@ class CommunicationDeliveryAnalyticsReadModelTest extends TestCase
     public function a_quiet_hours_deferred_delivery_is_never_counted_as_failed(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -134,14 +134,14 @@ class CommunicationDeliveryAnalyticsReadModelTest extends TestCase
         $this->assertSame(1, $summary['channels']['email']['inProgress']);
         $this->assertSame(1, $summary['deferredQuietHours']['email']);
         $this->assertSame([], $summary['failures']);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function an_emergency_bypass_is_visible_as_governance_evidence_not_a_success_metric(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -177,7 +177,7 @@ class CommunicationDeliveryAnalyticsReadModelTest extends TestCase
         // Bypassed, so sent immediately -- never counted as deferred.
         $this->assertSame(0, $summary['deferredQuietHours']['email'] ?? 0);
         $this->assertSame(1, $summary['channels']['email']['sent']);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     /**
@@ -240,7 +240,7 @@ class CommunicationDeliveryAnalyticsReadModelTest extends TestCase
     public function school_overview_aggregates_across_announcements_and_never_leaks_across_schools(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creatorA, $schoolA] = $this->createSchoolAdmin('school_admin');
         $memberA = $this->createUser(['email' => 'a@school-os.test']);
@@ -279,7 +279,7 @@ class CommunicationDeliveryAnalyticsReadModelTest extends TestCase
     public function summary_and_overview_queries_are_bounded_regardless_of_recipient_volume(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         foreach (range(1, 25) as $i) {

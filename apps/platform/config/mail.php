@@ -29,9 +29,15 @@ return [
     | when delivering an email. You may specify which one you're using for
     | your mailers below. You may also add additional mailers if needed.
     |
-    | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
-    |            "postmark", "resend", "log", "array",
-    |            "failover", "roundrobin"
+    | ADR 0055 (Phase 0O.9A): application email is NOT sent through these
+    | mailers. Every business email goes through
+    | App\Support\Email\OutboundEmailGateway (config/email.php). Only
+    | `smtp`, `log` and `array` are defined here, for framework internals
+    | and local work; the `failover` (smtp -> log, a silent sink),
+    | `roundrobin`, `sendmail` and vendor stubs are no longer defined by
+    | this application (Laravel still merges its own defaults), and
+    | production refuses any of them -- or log/array while email is enabled --
+    | as the default mailer (ProductionConfigurationGuard).
     |
     */
 
@@ -45,29 +51,11 @@ return [
             'port' => env('MAIL_PORT', 2525),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
-            'timeout' => null,
+            // ADR 0055 (Phase 0O.9A): never unbounded. Business email does not
+            // use Laravel's mailers at all (App\Support\Email\OutboundEmailGateway);
+            // this bound protects any framework-level send.
+            'timeout' => 5,
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
-        ],
-
-        'ses' => [
-            'transport' => 'ses',
-        ],
-
-        'postmark' => [
-            'transport' => 'postmark',
-            // 'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),
-            // 'client' => [
-            //     'timeout' => 5,
-            // ],
-        ],
-
-        'resend' => [
-            'transport' => 'resend',
-        ],
-
-        'sendmail' => [
-            'transport' => 'sendmail',
-            'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
         ],
 
         'log' => [
@@ -77,24 +65,6 @@ return [
 
         'array' => [
             'transport' => 'array',
-        ],
-
-        'failover' => [
-            'transport' => 'failover',
-            'mailers' => [
-                'smtp',
-                'log',
-            ],
-            'retry_after' => 60,
-        ],
-
-        'roundrobin' => [
-            'transport' => 'roundrobin',
-            'mailers' => [
-                'ses',
-                'postmark',
-            ],
-            'retry_after' => 60,
         ],
 
     ],

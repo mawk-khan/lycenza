@@ -2,6 +2,7 @@
 
 namespace App\Support\Observability;
 
+use App\Support\Email\EmailStatus;
 use App\Support\Observability\Signals\OperationalSignals;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -257,6 +258,16 @@ class OperationalStatusService
         return $this->backlogComponent('automation', 'automation', OperationalStatus::Degraded);
     }
 
+    /**
+     * Phase 0O.9A (ADR 0055 section 16): email is Degraded at worst -- a
+     * provider outage or disabled email never makes the ERP unready -- and
+     * no live provider call is made.
+     */
+    public function email(): ComponentStatus
+    {
+        return $this->guarded('email', fn () => app(EmailStatus::class)->component())[0];
+    }
+
     public function aiGateway(): ComponentStatus
     {
         // ADR 0053: the Gateway integration is enabled only by its base URL.
@@ -303,6 +314,7 @@ class OperationalStatusService
             $this->webhooks(),
             $this->communications(),
             $this->automation(),
+            $this->email(),
             $this->aiGateway(),
         ];
     }

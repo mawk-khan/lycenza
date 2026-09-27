@@ -10,10 +10,10 @@ use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -28,7 +28,7 @@ use Tests\TestCase;
  */
 class AnnouncementEmailDeliveryTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -39,7 +39,7 @@ class AnnouncementEmailDeliveryTest extends TestCase
     public function an_in_app_only_announcement_creates_no_email_delivery(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
@@ -57,14 +57,14 @@ class AnnouncementEmailDeliveryTest extends TestCase
             ->pluck('channel')->all());
 
         $this->assertSame(['in_app'], $channels);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function requesting_email_creates_exactly_one_email_delivery_per_recipient_alongside_in_app(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $memberA = $this->createUser(['email' => 'a@school-os.test']);
@@ -88,14 +88,14 @@ class AnnouncementEmailDeliveryTest extends TestCase
         $emailDeliveries = $deliveries->where('channel', 'email');
         $this->assertSame(2, $emailDeliveries->count());
         $this->assertTrue($emailDeliveries->every(fn (CommunicationDelivery $d) => $d->status === 'sent'));
-        Mail::assertSentCount(2);
+        $this->assertEmailAcceptedCount(2);
     }
 
     #[Test]
     public function republishing_does_not_duplicate_the_email_delivery(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser(['email' => 'member@school-os.test']);
@@ -114,14 +114,14 @@ class AnnouncementEmailDeliveryTest extends TestCase
             ->where('channel', 'email')->count());
 
         $this->assertSame(1, $emailCount);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function one_recipients_email_failure_does_not_affect_another_recipients_successful_in_app_delivery(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         // No email override -- User factory always produces a
@@ -175,7 +175,7 @@ class AnnouncementEmailDeliveryTest extends TestCase
         // invalid address still produces a durable, visible delivery
         // record, not a silent skip.
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser(['email' => 'still-not-valid']);

@@ -78,10 +78,10 @@ class AlertCatalogTest extends TestCase
     }
 
     #[Test]
-    public function the_catalog_is_exactly_obs_01_to_obs_30_with_existing_runbooks(): void
+    public function the_catalog_is_exactly_obs_01_to_obs_38_with_existing_runbooks(): void
     {
         $ids = array_map(fn (AlertRule $r) => $r->id, AlertCatalog::all());
-        $this->assertSame(array_map(fn ($n) => sprintf('OBS-%02d', $n), range(1, 30)), $ids);
+        $this->assertSame(array_map(fn ($n) => sprintf('OBS-%02d', $n), range(1, 38)), $ids);
 
         foreach (AlertCatalog::all() as $rule) {
             $this->assertFileExists(dirname(base_path(), 2).'/docs/operations/'.$rule->runbook, "{$rule->id} runbook");
@@ -94,6 +94,38 @@ class AlertCatalogTest extends TestCase
                 }
             }
         }
+    }
+
+    #[Test]
+    public function email_alerts_never_page_and_fire_on_their_conditions(): void
+    {
+        config(['observability.alerts' => [...config('observability.alerts'),
+            'email_failure_ratio_per_hour' => 0.5, 'email_hard_bounces_per_hour' => 10, 'email_complaints_per_hour' => 2, 'email_webhook_auth_failures_per_15m' => 20,
+        ]]);
+
+        foreach (range(31, 38) as $n) {
+            foreach ($this->rule("OBS-{$n}")->tiers as $tier) {
+                $this->assertNotSame(Severity::Sev1, $tier['severity'], "OBS-{$n} must never page as SEV-1");
+            }
+            $this->assertSame('EMAIL-DELIVERABILITY.md', $this->rule("OBS-{$n}")->runbook);
+        }
+
+        $gauge = fn (string $class, float $age) => $this->snapshot([['lycenza_email_oldest_pending_age_seconds', ['message_class' => $class], $age]]);
+        $this->assertNull($this->rule('OBS-31')->evaluate($gauge('account_invitation', 1800)));
+        $this->assertSame(Severity::Sev2, $this->rule('OBS-31')->evaluate($gauge('account_invitation', 1801)));
+        $this->assertNull($this->rule('OBS-31')->evaluate($gauge('school_communication', 99999)), 'standard mail never raises the critical alert');
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-32')->evaluate($gauge('school_communication', 1801)));
+
+        $this->assertSame(Severity::Sev2, $this->rule('OBS-34')->evaluate($this->snapshot([], [['15m', 'lycenza_email_submission_attempts_total', ['message_class' => 'account_invitation', 'outcome' => 'auth_failure'], 1]])));
+        $this->assertNull($this->rule('OBS-37')->evaluate($this->snapshot([], [['1h', 'lycenza_email_messages_total', ['message_class' => 'school_communication', 'outcome' => 'complained'], 2]])));
+        $this->assertSame(Severity::Sev2, $this->rule('OBS-37')->evaluate($this->snapshot([], [['1h', 'lycenza_email_messages_total', ['message_class' => 'school_communication', 'outcome' => 'complained'], 3]])));
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-36')->evaluate($this->snapshot([], [['1h', 'lycenza_email_messages_total', ['message_class' => 'school_communication', 'outcome' => 'bounced'], 11]])));
+
+        // Event staleness only when an event feed exists and mail is being submitted.
+        $submitted = [['1h', 'lycenza_email_messages_total', ['message_class' => 'school_communication', 'outcome' => 'submitted'], 5]];
+        $this->assertNull($this->rule('OBS-35')->evaluate($this->snapshot([], $submitted)), 'no event feed configured (SMTP): no staleness alert');
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-35')->evaluate($this->snapshot([['lycenza_email_last_event_timestamp_seconds', [], self::NOW - 86401]], $submitted)));
+        $this->assertNull($this->rule('OBS-35')->evaluate($this->snapshot([['lycenza_email_last_event_timestamp_seconds', [], self::NOW - 86401]])));
     }
 
     #[Test]
@@ -275,10 +307,11 @@ class AlertCatalogTest extends TestCase
         config(['observability.alerts' => [...config('observability.alerts'),
             'failed_jobs_high_per_15m' => 20, 'webhook_final_failures_per_hour' => 25, 'communication_failure_ratio_per_hour' => 0.2,
             'storage_failures_per_15m' => 5, 'security_rejections_per_15m' => 500,
+            'email_failure_ratio_per_hour' => 0.2, 'email_hard_bounces_per_hour' => 50, 'email_complaints_per_hour' => 5, 'email_webhook_auth_failures_per_15m' => 100,
         ]]);
 
         preg_match_all('/- alert: (\S+)/', (new AlertRulesExporter)->yaml(), $names);
-        $this->assertCount(44, $names[1]); // 38 + the two OBS-27 tiers (ADR 0053) + OBS-28, two OBS-29 tiers and OBS-30 (ADR 0054)
+        $this->assertCount(52, $names[1]); // 38 + the two OBS-27 tiers (ADR 0053) + OBS-28, two OBS-29 tiers and OBS-30 (ADR 0054) + OBS-31..38 (ADR 0055)
         $this->assertSame($names[1], array_values(array_unique($names[1])));
     }
 

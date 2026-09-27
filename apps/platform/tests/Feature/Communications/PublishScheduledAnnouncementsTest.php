@@ -12,10 +12,10 @@ use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -29,7 +29,7 @@ use Tests\TestCase;
  */
 class PublishScheduledAnnouncementsTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -66,9 +66,9 @@ class PublishScheduledAnnouncementsTest extends TestCase
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
         $this->createMembership($member, $school);
-        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addSeconds(1));
+        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addMinute());
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
 
         $context = app(TenantContext::class);
@@ -84,9 +84,9 @@ class PublishScheduledAnnouncementsTest extends TestCase
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $member = $this->createUser();
         $this->createMembership($member, $school);
-        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addSeconds(1));
+        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addMinute());
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
 
@@ -111,9 +111,9 @@ class PublishScheduledAnnouncementsTest extends TestCase
     {
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(), $school);
-        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addSeconds(1), [CommunicationChannel::InApp]);
+        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addMinute(), [CommunicationChannel::InApp]);
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
 
         $context = app(TenantContext::class);
@@ -129,13 +129,13 @@ class PublishScheduledAnnouncementsTest extends TestCase
     public function an_in_app_plus_email_schedule_creates_both_channel_deliveries_safely(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(['email' => 'member@school-os.test']), $school);
-        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addSeconds(1), [CommunicationChannel::InApp, CommunicationChannel::Email]);
+        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addMinute(), [CommunicationChannel::InApp, CommunicationChannel::Email]);
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
 
         $context = app(TenantContext::class);
@@ -145,7 +145,7 @@ class PublishScheduledAnnouncementsTest extends TestCase
             ->pluck('channel')->sort()->values()->all());
 
         $this->assertSame(['email', 'in_app'], $channels);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
@@ -157,14 +157,14 @@ class PublishScheduledAnnouncementsTest extends TestCase
         $this->createMembership($memberA, $school);
         $membershipB = $this->createMembership($memberB, $school);
 
-        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addSeconds(1));
+        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addMinute());
 
         // Member B becomes inactive AFTER scheduling but BEFORE the
         // scheduled time is due.
         $context = app(TenantContext::class);
         $context->withSchool($school, fn () => $membershipB->update(['status' => 'suspended']));
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
 
         $fresh = $context->withSchool($school, fn () => $scheduled->fresh());
@@ -182,13 +182,13 @@ class PublishScheduledAnnouncementsTest extends TestCase
         $memberA = $this->createUser();
         $this->createMembership($memberA, $school);
 
-        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addSeconds(1));
+        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addMinute());
 
         // A brand new member joins AFTER scheduling but BEFORE due time.
         $memberC = $this->createUser();
         $this->createMembership($memberC, $school);
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
 
         $context = app(TenantContext::class);
@@ -209,10 +209,10 @@ class PublishScheduledAnnouncementsTest extends TestCase
         $this->createMembership($memberB1, $schoolB);
         $this->createMembership($memberB2, $schoolB);
 
-        $scheduledA = $this->scheduleSchoolWide($schoolA, $creatorA, now()->addSeconds(1));
-        $scheduledB = $this->scheduleSchoolWide($schoolB, $creatorB, now()->addSeconds(1));
+        $scheduledA = $this->scheduleSchoolWide($schoolA, $creatorA, now()->addMinute());
+        $scheduledB = $this->scheduleSchoolWide($schoolB, $creatorB, now()->addMinute());
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
 
         $context = app(TenantContext::class);
@@ -231,9 +231,9 @@ class PublishScheduledAnnouncementsTest extends TestCase
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         // No other members -- school-wide resolves empty (creator is
         // always excluded from their own audience).
-        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addSeconds(1));
+        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addMinute());
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
         $this->artisan('communications:publish-scheduled')->assertExitCode(0);
 
         $context = app(TenantContext::class);
@@ -250,9 +250,9 @@ class PublishScheduledAnnouncementsTest extends TestCase
     {
         [$creator, $school] = $this->createSchoolAdmin('school_admin');
         $this->createMembership($this->createUser(), $school);
-        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addSeconds(1));
+        $scheduled = $this->scheduleSchoolWide($school, $creator, now()->addMinute());
 
-        $this->travel(2)->seconds();
+        $this->travel(61)->seconds();
 
         // Simulates two overlapping scheduler workers both attempting
         // to publish the same due announcement -- AnnouncementService::publish()'s

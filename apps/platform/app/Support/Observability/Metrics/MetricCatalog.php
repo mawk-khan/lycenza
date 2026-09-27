@@ -5,6 +5,7 @@ namespace App\Support\Observability\Metrics;
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Support\Domains\DomainState;
 use App\Support\Domains\DomainTelemetry;
+use App\Support\Email\EmailTelemetry;
 use App\Support\Observability\QueueName;
 use App\Support\ServiceAuth\ServiceAuthContract;
 use App\Support\ServiceAuth\ServiceAuthTelemetry;
@@ -34,13 +35,15 @@ final class MetricCatalog
         'direction', 'service',
         // ADR 0054: custom-domain lifecycle target state (closed).
         'to',
+        // ADR 0055: the closed email purpose catalog.
+        'message_class',
     ];
 
     public const REQUEST_SURFACES = ['web', 'api_v1', 'api_partner', 'api_internal', 'health'];
 
     public const REJECTION_CODES = ['401', '403', '404', '419', '429'];
 
-    public const RECOVERY_SOURCES = ['outbox', 'webhook', 'communication', 'automation'];
+    public const RECOVERY_SOURCES = ['outbox', 'webhook', 'communication', 'automation', 'email'];
 
     /** PostgreSQL SQLSTATE classes worth distinguishing; anything else is `other`. */
     public const SQLSTATE_CLASSES = ['08', '22', '23', '25', '28', '40', '42', '53', '54', '55', '57', '58', 'XX', 'P0', 'other'];
@@ -127,6 +130,15 @@ final class MetricCatalog
             'lycenza_communication_attempts_total' => self::counter('Communication delivery attempts.', ['delivery_channel' => $channels, 'outcome' => ['success', 'transient_failure', 'permanent_failure']]),
             'lycenza_communication_deliveries_finished_total' => self::counter('Communication deliveries reaching a final state.', ['delivery_channel' => $channels, 'outcome' => ['accepted', 'sent', 'delivered', 'read', 'failed', 'bounced', 'rejected', 'expired', 'cancelled']]),
 
+            // Email (ADR 0055 section 16; never School, recipient, domain,
+            // provider message id, internal message id or template)
+            'lycenza_email_messages_total' => self::counter('Email messages by purpose and closed outcome (queued, submitted -- never "delivered" unless the provider said so -- and provider/terminal outcomes).', ['message_class' => EmailTelemetry::messageClasses(), 'outcome' => EmailTelemetry::MESSAGE_OUTCOMES]),
+            'lycenza_email_submission_attempts_total' => self::counter('Email provider submission attempts by purpose and closed outcome.', ['message_class' => EmailTelemetry::messageClasses(), 'outcome' => EmailTelemetry::ATTEMPT_OUTCOMES]),
+            'lycenza_email_webhook_requests_total' => self::counter('Email provider-event webhook requests by closed outcome.', ['outcome' => EmailTelemetry::WEBHOOK_OUTCOMES]),
+            'lycenza_email_pending_messages' => self::gauge('Email messages not yet accepted by the provider (pending or submitting), by purpose (computed at scrape).', ['message_class' => EmailTelemetry::messageClasses()]),
+            'lycenza_email_oldest_pending_age_seconds' => self::gauge('How long the oldest not-yet-accepted email has existed, by purpose (0 when none).', ['message_class' => EmailTelemetry::messageClasses()]),
+            'lycenza_email_last_event_timestamp_seconds' => self::gauge('Unix time the last provider event was received (only while a provider event adapter is configured; 0 when none yet).', []),
+
             // Automation (never rule, School or subject)
             'lycenza_automation_executions_total' => self::counter('Automation executions by outcome.', ['outcome' => ['started', 'succeeded', 'skipped', 'failed', 'abandoned']]),
             'lycenza_automation_pending_executions' => self::gauge('Pending or running Automation executions.', ['state' => ['pending', 'running']]),
@@ -144,7 +156,7 @@ final class MetricCatalog
             'lycenza_restore_drill_last_result' => self::gauge('Deployment evidence: 1 PASS / 0 FAIL of the last drill.', []),
 
             // Telemetry about telemetry
-            'lycenza_metrics_collection_errors_total' => self::counter('Metric writes or scrape-time collections that failed (best effort).', ['component' => ['recorder', 'queues', 'outbox', 'backlog', 'heartbeats', 'failed_jobs', 'readiness', 'ai_gateway', 'evidence', 'domains']]),
+            'lycenza_metrics_collection_errors_total' => self::counter('Metric writes or scrape-time collections that failed (best effort).', ['component' => ['recorder', 'queues', 'outbox', 'backlog', 'heartbeats', 'failed_jobs', 'readiness', 'ai_gateway', 'evidence', 'domains', 'email']]),
         ];
     }
 
@@ -166,11 +178,12 @@ final class MetricCatalog
             'outbox-dispatch', 'webhook-deliveries-redispatch', 'communication-deliveries-redispatch',
             'communications-publish-scheduled', 'automation-executions-redispatch', 'expire-school-elevations',
             'worker-canaries', 'idempotency-prune', 'webhook-deliveries-prune', 'domains-check',
+            'email-messages-redispatch', 'email-prune',
         ];
     }
 
     /** Daily tasks (their staleness window is a day, not minutes). */
-    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune'];
+    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune'];
 
     /**
      * @param  array<string, string>  $labels

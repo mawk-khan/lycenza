@@ -10,7 +10,7 @@ use Carbon\Carbon;
  * (Conversation, Announcement) produced it. A named value object
  * (matching this module's existing convention --
  * CommunicationDeliveryResult, ConversationThreadSummary,
- * CommunicationEmailPayload) rather than a loose array.
+ * App\Support\Email\Providers\OutboundEmail) rather than a loose array.
  *
  * This is presentation-only: it never becomes a persisted row, and
  * fields that don't apply to a given `$type` are simply null (brief

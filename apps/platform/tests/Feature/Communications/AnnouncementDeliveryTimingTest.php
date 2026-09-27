@@ -15,10 +15,10 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -29,7 +29,7 @@ use Tests\TestCase;
  */
 class AnnouncementDeliveryTimingTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     private function service(): AnnouncementService
     {
@@ -47,7 +47,7 @@ class AnnouncementDeliveryTimingTest extends TestCase
     public function manual_publish_during_quiet_hours_publishes_immediately_and_only_defers_email(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -81,14 +81,14 @@ class AnnouncementDeliveryTimingTest extends TestCase
             ->where('communication_delivery_id', $deliveries['email']->id)->count());
         $this->assertSame(0, $attemptCount, 'A deferred delivery must not have a fake attempt recorded.');
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function scheduled_publication_inside_quiet_hours_defers_email_and_redispatch_sends_it_exactly_once(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -117,7 +117,7 @@ class AnnouncementDeliveryTimingTest extends TestCase
         $this->assertSame('delivered', $deliveries['in_app']->status);
         $this->assertSame('queued', $deliveries['email']->status);
 
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
 
         // Move past quiet-hours end and let the existing redispatch
         // pipeline pick it up, unmodified -- no quiet-hours-specific
@@ -125,19 +125,19 @@ class AnnouncementDeliveryTimingTest extends TestCase
         $this->travelTo(Carbon::parse('2026-08-24 07:00:01', 'Asia/Kolkata'));
         $this->artisan('platform:communication-deliveries-redispatch')->assertExitCode(0);
 
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
 
         // Idempotency (brief §26): running redispatch again must not
         // send a second time.
         $this->artisan('platform:communication-deliveries-redispatch')->assertExitCode(0);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function optional_email_disabled_by_preference_is_suppressed_before_timing_is_ever_considered(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -174,7 +174,7 @@ class AnnouncementDeliveryTimingTest extends TestCase
     public function a_required_communication_still_defers_email_during_quiet_hours(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -202,14 +202,14 @@ class AnnouncementDeliveryTimingTest extends TestCase
         $this->assertArrayHasKey('email', $deliveries, 'Required bypasses the preference opt-out, so a delivery row must exist.');
         $this->assertSame('queued', $deliveries['email']->status, 'Required does NOT bypass quiet-hours timing.');
         $this->assertNotNull($deliveries['email']->next_attempt_at);
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function critical_priority_does_not_bypass_quiet_hours(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -231,14 +231,14 @@ class AnnouncementDeliveryTimingTest extends TestCase
         $deliveries = $this->deliveriesByChannel($context, $school, $published->message_id);
 
         $this->assertSame('queued', $deliveries['email']->status, 'CRITICAL priority must not silently become an emergency bypass.');
-        Mail::assertNothingSent();
+        $this->assertNoEmailAccepted();
     }
 
     #[Test]
     public function a_disabled_timing_policy_matches_pre_5a9_immediate_send_behavior(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();
@@ -261,14 +261,14 @@ class AnnouncementDeliveryTimingTest extends TestCase
         $deliveries = $this->deliveriesByChannel($context, $school, $published->message_id);
 
         $this->assertSame('sent', $deliveries['email']->status);
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function a_multi_school_users_email_is_deferred_for_one_school_and_immediate_for_another_at_the_same_moment(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $sharedUser = $this->createUser();
 
@@ -306,14 +306,14 @@ class AnnouncementDeliveryTimingTest extends TestCase
 
         $this->assertSame('queued', $deliveriesA['email']->status, 'School A email deferred by its own quiet-hours policy.');
         $this->assertSame('sent', $deliveriesB['email']->status, 'School B has no quiet-hours policy -- unaffected by School A.');
-        Mail::assertSentCount(1);
+        $this->assertEmailAcceptedCount(1);
     }
 
     #[Test]
     public function timing_policy_lookup_is_not_repeated_once_per_recipient(): void
     {
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
 
         $school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
         $creator = $this->createUser();

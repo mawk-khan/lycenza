@@ -255,6 +255,100 @@ class ProductionConfigurationGuardTest extends TestCase
      *
      * @return array<string, mixed>
      */
+    /** A throwaway canary assembled at run time (no secret-shaped literal in the source). */
+    private static function emailCanary(string $prefix): string
+    {
+        return $prefix.'-canary-'.substr(hash('sha256', $prefix), 0, 24);
+    }
+
+    /**
+     * Phase 0O.9A (ADR 0055 section 20): a sound production SMTP email setup.
+     *
+     * @return array<string, mixed>
+     */
+    private function emailEnabled(array $overrides = []): array
+    {
+        return [
+            'email.provider' => 'smtp',
+            'email.sending_domain' => 'notify.lycenza.example',
+            'mail.default' => 'smtp',
+            'mail.mailers' => ['smtp' => ['transport' => 'smtp'], 'log' => ['transport' => 'log'], 'failover' => ['transport' => 'failover', 'mailers' => ['smtp', 'log']]],
+            'mail.from.address' => 'notifications@notify.lycenza.example',
+            'email.suppression' => ['key' => self::emailCanary('prod-suppression'), 'key_id' => 'k-2026-10', 'previous_key' => null, 'previous_key_id' => null],
+            'email.smtp' => ['host' => 'smtp.provider.example', 'port' => 587, 'username' => 'lycenza', 'password' => self::emailCanary('smtp'), 'tls' => 'required', 'timeout_seconds' => 5],
+            'email.events' => ['adapter' => 'none', 'secrets' => []],
+            'email.tracking' => ['opens' => false, 'clicks' => false],
+            'email.debug' => false,
+            ...$overrides,
+        ];
+    }
+
+    #[Test]
+    public function disabled_email_is_a_complete_safe_mode_and_a_sound_smtp_setup_passes(): void
+    {
+        $this->assertSame([], (new ProductionConfigurationGuard($this->config(['email.provider' => 'none', 'mail.default' => 'log'])))->violations());
+        $this->assertSame([], (new ProductionConfigurationGuard($this->config($this->emailEnabled())))->violations());
+    }
+
+    /** @return array<string, array{0: array<string, mixed>, 1: string}> */
+    public static function unsafeEmail(): array
+    {
+        return [
+            'fake provider' => [['email.provider' => 'fake'], 'mail_provider_fake'],
+            'unknown provider' => [['email.provider' => 'ses'], 'mail_provider_invalid'],
+            'failover default mailer' => [['mail.default' => 'failover'], 'mail_unsafe_mailer_default'],
+            'log default while enabled' => [['mail.default' => 'log'], 'mail_laravel_default_is_sink'],
+            'array default while enabled' => [['mail.default' => 'array'], 'mail_laravel_default_is_sink'],
+            'fake event adapter' => [['email.events' => ['adapter' => 'fake', 'secrets' => [self::emailCanary('event-secret')]]], 'mail_events_adapter_fake'],
+            'provider debug' => [['email.debug' => true], 'mail_provider_debug_enabled'],
+            'open tracking' => [['email.tracking' => ['opens' => true, 'clicks' => false]], 'mail_tracking_enabled'],
+            'click tracking' => [['email.tracking' => ['opens' => false, 'clicks' => true]], 'mail_tracking_enabled'],
+            'missing sending domain' => [['email.sending_domain' => ''], 'mail_sending_domain_missing'],
+            'local sending domain' => [['email.sending_domain' => 'notify.lycenza.test', 'mail.from.address' => 'notifications@notify.lycenza.test'], 'mail_sending_domain_invalid'],
+            'placeholder from' => [['mail.from.address' => 'hello@example.com'], 'mail_from_not_catalog'],
+            'from outside the catalog' => [['mail.from.address' => 'ceo@notify.lycenza.example'], 'mail_from_not_catalog'],
+            'no suppression key' => [['email.suppression' => ['key' => null, 'key_id' => null]], 'mail_suppression_keys_invalid'],
+            'placeholder suppression key' => [['email.suppression' => ['key' => 'dev-local-only-mail-suppression-hmac-key-change-me', 'key_id' => 'dev-1']], 'mail_suppression_keys_invalid'],
+            'mailpit host' => [['email.smtp' => ['host' => 'mailpit', 'port' => 1025, 'username' => 'u', 'password' => 'p', 'tls' => 'required', 'timeout_seconds' => 5]], 'mail_smtp_host_local'],
+            'loopback host' => [['email.smtp' => ['host' => '127.0.0.1', 'port' => 1025, 'username' => 'u', 'password' => 'p', 'tls' => 'required', 'timeout_seconds' => 5]], 'mail_smtp_host_local'],
+            'plaintext smtp' => [['email.smtp' => ['host' => 'smtp.provider.example', 'port' => 25, 'username' => 'u', 'password' => 'p', 'tls' => 'none', 'timeout_seconds' => 5]], 'mail_smtp_tls_not_required'],
+            'no credentials' => [['email.smtp' => ['host' => 'smtp.provider.example', 'port' => 587, 'username' => null, 'password' => null, 'tls' => 'required', 'timeout_seconds' => 5]], 'mail_smtp_credentials_missing'],
+            'unbounded timeout' => [['email.smtp' => ['host' => 'smtp.provider.example', 'port' => 587, 'username' => 'u', 'password' => 'p', 'tls' => 'required', 'timeout_seconds' => 0]], 'mail_smtp_timeout_unbounded'],
+            'slow timeout' => [['email.smtp' => ['host' => 'smtp.provider.example', 'port' => 587, 'username' => 'u', 'password' => 'p', 'tls' => 'required', 'timeout_seconds' => 30]], 'mail_smtp_timeout_unbounded'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('unsafeEmail')]
+    public function each_unsafe_email_value_is_refused_with_its_code(array $overrides, string $code): void
+    {
+        $this->assertContains($code, (new ProductionConfigurationGuard($this->config($this->emailEnabled($overrides))))->violations());
+    }
+
+    #[Test]
+    public function an_event_adapter_needs_a_bounded_secret_ring(): void
+    {
+        // The only adapter today is the fake (refused); the ring rule is still
+        // enforced for whichever adapter a vendor selection adds.
+        foreach ([[], ['short'], [self::emailCanary('event-a'), self::emailCanary('event-b'), self::emailCanary('event-c')]] as $ring) {
+            $violations = (new ProductionConfigurationGuard($this->config($this->emailEnabled(['email.events' => ['adapter' => 'fake', 'secrets' => $ring]]))))->violations();
+            $this->assertContains('mail_event_secrets_invalid', $violations, json_encode(count($ring)));
+        }
+    }
+
+    #[Test]
+    public function email_refusals_name_codes_only_never_a_value(): void
+    {
+        try {
+            (new ProductionConfigurationGuard($this->config($this->emailEnabled(['email.smtp' => ['host' => 'mailpit', 'port' => 1025, 'username' => 'u', 'password' => self::emailCanary('smtp'), 'tls' => 'none', 'timeout_seconds' => 5]]))))->assertSafe();
+            $this->fail('unsafe email configuration must be refused');
+        } catch (ProductionConfigurationException $e) {
+            $this->assertStringNotContainsString('smtp-canary', $e->getMessage());
+            $this->assertStringNotContainsString('mailpit', $e->getMessage());
+            $this->assertStringNotContainsString('prod-suppression-canary', $e->getMessage());
+        }
+    }
+
     private function gatewayConfigured(array $overrides = []): array
     {
         $this->platformKey ??= $this->serviceKey('platform-20260901-1', CarbonImmutable::now('UTC')->subDays(30)->toDateString());

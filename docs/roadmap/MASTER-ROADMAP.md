@@ -1596,7 +1596,27 @@ documentation only).** ADR 0055 resolves O13.
   guard.
 
 Remaining open: O1, O2, O14, O15. Next: **0O.9A — Production Email &
-Deliverability Foundation** (repository only) — not started.
+Deliverability Foundation** (repository only).
+
+**0O.9A — Production Email & Deliverability Foundation (2026-09-27, COMPLETE —
+repository).** ADR 0055 implemented (implementation amendment in the ADR).
+- **Outbox:** invitations queue their email in their own transaction and
+  submit it after commit; Communications hands off (`accepted`), with state
+  projected back.
+- **Durable layer:** messages, attempts, events and suppression, with a
+  trigger-enforced state graph and content purge.
+- **Adapters:** the fake and a hardened SMTP adapter; `MAIL_PROVIDER=none`
+  is an explicit disabled mode.
+- **Events:** a bounded, authenticated, deduplicated webhook (fake adapter
+  only until a vendor exists).
+- **Suppression:** a global suppression list with an HMAC key ring.
+- **Fairness and throttles:** budgets with a reserved critical slot; the
+  invitation throttle.
+- **Operations:** the production guard, OBS-31..38 and operator commands.
+
+Repository implementation complete; deployment evidence outstanding.
+Remaining open: O1, O2, O14, O15. Recommended next: **0O.10 — Account
+Recovery Contract (O14)** — not started.
 
 ## Cross-cutting, ongoing (not a single phase)
 

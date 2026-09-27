@@ -106,6 +106,24 @@
         <env name="DB_URL" value="" force="true"/>
         <env name="INERTIA_SSR_ENABLED" value="false" force="true"/>
         <env name="MAIL_MAILER" value="array" force="true"/>
+        <!-- Phase 0O.9A (ADR 0055): the deterministic fake provider and fake
+             event feed, never a network; test-only keys, never real. -->
+        <env name="MAIL_PROVIDER" value="fake" force="true"/>
+        <env name="MAIL_SENDING_DOMAIN" value="notify.lycenza-suite.test" force="true"/>
+        <env name="MAIL_FROM_NAME" value="Lycenza" force="true"/>
+        <env name="MAIL_FROM_ADDRESS" value="notifications@notify.lycenza-suite.test" force="true"/>
+        <env name="MAIL_SENDING_VERIFIED" value="false" force="true"/>
+        <env name="MAIL_PROVIDER_EVENTS" value="fake" force="true"/>
+        <env name="MAIL_PROVIDER_EVENT_SECRET" value="phpunit-only-mail-provider-event-secret-0001" force="true"/>
+        <env name="MAIL_PROVIDER_EVENT_PREVIOUS_SECRET" value="" force="true"/>
+        <env name="MAIL_SUPPRESSION_HMAC_KEY" value="phpunit-only-mail-suppression-hmac-key-0001" force="true"/>
+        <env name="MAIL_SUPPRESSION_HMAC_KEY_ID" value="suite-1" force="true"/>
+        <env name="MAIL_SUPPRESSION_HMAC_PREVIOUS_KEY" value="" force="true"/>
+        <env name="MAIL_SUPPRESSION_HMAC_PREVIOUS_KEY_ID" value="" force="true"/>
+        <env name="MAIL_PROVIDER_OPEN_TRACKING" value="false" force="true"/>
+        <env name="MAIL_PROVIDER_CLICK_TRACKING" value="false" force="true"/>
+        <env name="MAIL_PROVIDER_DEBUG" value="false" force="true"/>
+        <env name="MAIL_RETENTION_DAYS" value="" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>
         <env name="PULSE_ENABLED" value="false" force="true"/>

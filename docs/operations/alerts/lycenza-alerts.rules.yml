@@ -49,7 +49,7 @@ groups:
           summary: 'AI Gateway not ready (optional subsystem; never pages).'
           runbook: 'docs/operations/PRODUCTION-IMAGES-AND-PROCESSES.md'
       - alert: LycenzaOBS05High
-        expr: 'min by () (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"}) > 300 or absent(lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"})'
+        expr: 'min by () (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check|email-messages-redispatch"}) > 300 or absent(lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check|email-messages-redispatch"})'
         labels:
           severity: high
           sev: SEV-2
@@ -59,7 +59,7 @@ groups:
           summary: 'Scheduler stopped: every minute-cadence task heartbeat is stale.'
           runbook: 'docs/operations/MAINTENANCE-WINDOW-RELEASE.md'
       - alert: LycenzaOBS05Critical
-        expr: 'min by () (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"}) > 1800'
+        expr: 'min by () (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check|email-messages-redispatch"}) > 1800'
         labels:
           severity: critical
           sev: SEV-1
@@ -69,7 +69,7 @@ groups:
           summary: 'Scheduler stopped: every minute-cadence task heartbeat is stale.'
           runbook: 'docs/operations/MAINTENANCE-WINDOW-RELEASE.md'
       - alert: LycenzaOBS06Warning
-        expr: '(time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"}) > 300 or (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"idempotency-prune|webhook-deliveries-prune"}) > 93600'
+        expr: '(time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check|email-messages-redispatch"}) > 300 or (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"idempotency-prune|webhook-deliveries-prune|email-prune"}) > 93600'
         labels:
           severity: warning
           sev: SEV-3
@@ -79,7 +79,7 @@ groups:
           summary: 'A scheduled task is stale while the scheduler runs.'
           runbook: 'docs/operations/PRODUCTION-IMAGES-AND-PROCESSES.md'
       - alert: LycenzaOBS07Warning
-        expr: 'max by (scheduled_task) (rate(lycenza_scheduler_task_runs_total{outcome="success",scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check"}[10m])) * 60 > 1.5'
+        expr: 'max by (scheduled_task) (rate(lycenza_scheduler_task_runs_total{outcome="success",scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check|email-messages-redispatch"}[10m])) * 60 > 1.5'
         labels:
           severity: warning
           sev: SEV-3
@@ -403,3 +403,47 @@ groups:
         annotations:
           summary: 'Custom-domain checks indeterminate for 3 days (resolver or network trouble; never suspends).'
           runbook: 'docs/operations/CUSTOM-DOMAINS.md'
+      - alert: LycenzaOBS31High
+        expr: 'max(lycenza_email_oldest_pending_age_seconds{message_class=~"account_invitation|account_recovery|security_notice"}) > 1800'
+        labels:
+          severity: high
+          sev: SEV-2
+          obs_id: OBS-31
+          threshold_source: 'B'
+        annotations:
+          summary: 'Critical email (account invitations) waiting too long to reach the provider.'
+          runbook: 'docs/operations/EMAIL-DELIVERABILITY.md'
+      - alert: LycenzaOBS32Warning
+        expr: 'max(lycenza_email_oldest_pending_age_seconds{message_class="school_communication"}) > 1800'
+        labels:
+          severity: warning
+          sev: SEV-3
+          obs_id: OBS-32
+          threshold_source: 'B'
+        annotations:
+          summary: 'Standard email (School communications) backlog too old.'
+          runbook: 'docs/operations/EMAIL-DELIVERABILITY.md'
+      # OBS-33 DISABLED: operator value ALERT_EMAIL_FAILURE_RATIO_PER_HOUR not set
+      - alert: LycenzaOBS34High
+        expr: 'sum(increase(lycenza_email_submission_attempts_total{outcome="auth_failure"}[15m])) > 0'
+        labels:
+          severity: high
+          sev: SEV-2
+          obs_id: OBS-34
+          threshold_source: 'A'
+        annotations:
+          summary: 'Email provider refusing the configured credentials or TLS (sending paused).'
+          runbook: 'docs/operations/EMAIL-DELIVERABILITY.md'
+      - alert: LycenzaOBS35Warning
+        expr: '(time() - max(lycenza_email_last_event_timestamp_seconds)) > 86400 and sum(increase(lycenza_email_messages_total{outcome="submitted"}[1h])) > 0'
+        labels:
+          severity: warning
+          sev: SEV-3
+          obs_id: OBS-35
+          threshold_source: 'A'
+        annotations:
+          summary: 'No provider email events while email is being submitted (event feed stale).'
+          runbook: 'docs/operations/EMAIL-DELIVERABILITY.md'
+      # OBS-36 DISABLED: operator value ALERT_EMAIL_HARD_BOUNCES_PER_HOUR not set
+      # OBS-37 DISABLED: operator value ALERT_EMAIL_COMPLAINTS_PER_HOUR not set
+      # OBS-38 DISABLED: operator value ALERT_EMAIL_WEBHOOK_AUTH_FAILURES_PER_15M not set

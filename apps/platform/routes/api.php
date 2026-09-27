@@ -92,6 +92,7 @@ use App\Domain\Transport\Http\Controllers\TransportStudentAssignmentController;
 use App\Domain\Transport\Http\Controllers\TransportVehicleController;
 use App\Domain\Visitor\Http\Controllers\VisitorController;
 use App\Domain\Visitor\Http\Controllers\VisitorVisitController;
+use App\Http\Controllers\Api\Integrations\EmailProviderEventController;
 use App\Http\Controllers\Api\Internal\AiAuditController;
 use App\Http\Controllers\Api\Internal\AiCompletionAuthorizationController;
 use App\Http\Controllers\Api\Internal\AiToolController;
@@ -2069,6 +2070,16 @@ Route::prefix('internal/ai')->middleware(['service-auth', 'throttle:internal-ser
     Route::post('/completions/authorize', [AiCompletionAuthorizationController::class, 'authorizeCompletion'])
         ->name('api.internal.ai.completions.authorize');
 });
+
+// Phase 0O.9A (ADR 0055 section 11.2): the email provider's event webhook.
+// A system integration boundary on the platform host only (the Host
+// boundary answers 404 on School and internal hosts): not /api/v1, no
+// session, no School resolution, authenticated by the configured provider
+// adapter (EmailProviderEventController), 600 requests/minute per source.
+Route::post('integrations/email-provider/events', EmailProviderEventController::class)
+    ->middleware('throttle:email-provider-events')
+    ->withoutMiddleware([ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class])
+    ->name('api.integrations.email-provider.events');
 
 // Phase 0O.3 (ADR 0049 section 7): no unthrottled `/api/v1` route. A route
 // without its own named limiter gets the default class for its method --

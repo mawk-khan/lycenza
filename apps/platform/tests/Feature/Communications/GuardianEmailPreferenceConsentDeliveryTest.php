@@ -22,10 +22,10 @@ use App\Domain\Identity\Application\AccountLinkService;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\FakesEmail;
 use Tests\TestCase;
 
 /**
@@ -38,7 +38,7 @@ use Tests\TestCase;
  */
 class GuardianEmailPreferenceConsentDeliveryTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, FakesEmail;
 
     protected function setUp(): void
     {
@@ -47,7 +47,7 @@ class GuardianEmailPreferenceConsentDeliveryTest extends TestCase
         // Matches StudentGuardianAudienceServiceTest's established
         // convention for exercising the REAL email send path in tests.
         Config::set('communications.channels.email.enabled', true);
-        Mail::fake();
+        $this->fakeEmail();
     }
 
     private function announcements(): AnnouncementService

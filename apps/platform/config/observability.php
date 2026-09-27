@@ -158,6 +158,12 @@ return [
         'storage_failures_per_15m' => env('ALERT_STORAGE_FAILURES_PER_15M'),
         'security_rejections_per_15m' => env('ALERT_SECURITY_REJECTIONS_PER_15M'),
         'telemetry_down_for_seconds' => env('ALERT_TELEMETRY_DOWN_FOR_SECONDS', 300),
+        // Phase 0O.9A (ADR 0055 section 16): operator baselines (C); unset
+        // leaves that alert tier explicitly disabled.
+        'email_failure_ratio_per_hour' => env('ALERT_EMAIL_FAILURE_RATIO_PER_HOUR'),
+        'email_hard_bounces_per_hour' => env('ALERT_EMAIL_HARD_BOUNCES_PER_HOUR'),
+        'email_complaints_per_hour' => env('ALERT_EMAIL_COMPLAINTS_PER_HOUR'),
+        'email_webhook_auth_failures_per_15m' => env('ALERT_EMAIL_WEBHOOK_AUTH_FAILURES_PER_15M'),
     ],
 
 ];
