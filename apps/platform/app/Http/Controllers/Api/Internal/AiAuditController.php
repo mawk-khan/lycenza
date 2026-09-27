@@ -22,10 +22,11 @@ use Illuminate\Http\Request;
  * Reuses the SAME signed AiContextTokenService envelope the AI tool
  * boundary already uses (ADR 0023) to identify which School/actor the
  * action concerns -- this endpoint does not mint or need a separate
- * credential type. The `ai-service:ai.audit.write` middleware
- * (App\Http\Middleware\VerifyAiGatewayServiceToken) separately proves
- * the CALLER (the AI Gateway service identity) is entitled to write
- * audit entries at all; the context token proves WHICH School/actor
+ * credential type. The `service-auth` middleware
+ * (App\Http\Middleware\AuthenticateServiceAssertion, ADR 0053) separately
+ * proves the CALLER (the `ai-gateway` service identity, scope
+ * `ai.audit.write`) is entitled to write audit entries at all; the
+ * context token proves WHICH School/actor
  * the entry is about. Neither check alone is sufficient.
  */
 class AiAuditController extends Controller

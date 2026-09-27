@@ -1,7 +1,7 @@
 import logging
 import time
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -12,7 +12,7 @@ from app.audit.ledger import AuditEntry, audit_ledger
 from app.core.config import settings
 from app.core.health import router as health_router
 from app.core.logging import configure_logging
-from app.core.security import require_service_token
+from app.core.security import ServiceAuthMiddleware
 from app.core.startup import assert_safe_configuration
 from app.core.trace import TraceContext
 from app.gateway.completion_auth import CompletionAuthorizationError, authorize_completion
@@ -37,12 +37,17 @@ configure_logging(settings.environment, settings.log_format.strip().lower())
 # selection time).
 model_router.assert_fail_closed()
 
-# Phase 0O.1: refuse to start without a service token, or with the public
-# development token outside local/testing (app.core.startup).
+# Phase 0O.1 / 0O.7A: refuse to start without valid ADR 0053 service keys,
+# with a development key outside local/testing, or with the retired shared
+# token configured (app.core.startup).
 assert_safe_configuration(settings)
 
 app = FastAPI(title="School OS AI Gateway", version="0.0.1-phase-0b")
 app.include_router(health_router)
+# ADR 0053 (Phase 0O.7A): every business route is authenticated by a signed
+# `platform` service assertion before routing or body parsing. Health stays
+# unauthenticated (private network only).
+app.add_middleware(ServiceAuthMiddleware)
 
 
 @app.exception_handler(RequestValidationError)
@@ -118,7 +123,6 @@ def _refuse(status_code: int, code: str) -> HTTPException:
 @app.post(
     "/v1/complete",
     response_model=CompletionApiResponse,
-    dependencies=[Depends(require_service_token)],
 )
 async def complete(
     request: CompletionApiRequest, traceparent: str | None = Header(default=None)
@@ -234,7 +238,6 @@ class ToolInvokeApiResponse(BaseModel):
 @app.post(
     "/v1/tools/invoke",
     response_model=ToolInvokeApiResponse,
-    dependencies=[Depends(require_service_token)],
 )
 async def invoke_tool(
     request: ToolInvokeApiRequest, traceparent: str | None = Header(default=None)

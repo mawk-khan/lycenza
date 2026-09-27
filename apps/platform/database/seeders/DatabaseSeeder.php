@@ -21,11 +21,9 @@ class DatabaseSeeder extends Seeder
         $this->call(StatutoryRuleVersionSeeder::class);
 
         // Local development / test conveniences only -- never in a real
-        // deployment: the development AI Gateway identity (from the public
-        // dev token) and a test user.
+        // deployment: a test user. (Service identities are a closed code
+        // catalog with configured keys since ADR 0053; nothing is seeded.)
         if (app()->environment(['local', 'testing'])) {
-            $this->call(ServiceIdentitySeeder::class);
-
             User::factory()->create([
                 'name' => 'Test User',
                 'email' => 'test@example.com',

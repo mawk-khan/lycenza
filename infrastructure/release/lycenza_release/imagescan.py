@@ -33,13 +33,21 @@ CANARIES = (
     "dev-local-only-context-signing-key-change-me",
     "dev-local-only-contact-lookup-hmac-key-change-me",
     "dev-local-only-statutory-identifier-lookup-hmac-key-change-me",
+    # ADR 0053: the committed DEVELOPMENT service keys' private seeds (JWK "d"):
+    # no image may carry them, not even in a guard (guards match public keys).
+    "XZoBPMZruZQzihxKjIBvRRf7cuG1E1zAoq2IWtvQgKI",
+    "MhiOdGyb6F13Ihhk_t67ucjsE1sR9lpjRcHBzTcrSBE",
 )
 
 # Exact file -> the canaries it may contain: each is a guard that REFUSES the
 # value at start-up (ProductionConfigurationGuard; the Gateway's startup check).
 CANARY_ALLOWED = {
-    "app": {"/var/www/app/app/Support/Configuration/ProductionConfigurationGuard.php": set(CANARIES) - {"Demo1234!", "school_os_app_local_only_password"}},
-    "ai-gateway": {"/srv/ai/app/core/startup.py": {"dev-local-only-token"}},
+    "app": {
+        "/var/www/app/app/Support/Configuration/ProductionConfigurationGuard.php": {
+            c for c in CANARIES if c.startswith("dev-local-only-") or c in {"school_os_secret", "minioadmin"}
+        }
+    },
+    "ai-gateway": {},
 }
 
 # Credential SHAPES (never literal values): the application's own personal
@@ -48,6 +56,8 @@ SHAPES = {
     "application_credential": re.compile(rb"lyc_(?:pat|pk)_[A-Za-z0-9]{16,}"),
     "app_key_value": re.compile(rb"APP_KEY=base64:[A-Za-z0-9+/]{40,}={0,2}"),
     "private_key_material": re.compile(rb"-----BEGIN [A-Z ]*PRIVATE KEY-----\s*[A-Za-z0-9+/=\r\n]{64,}"),
+    # ADR 0053: any Ed25519 private JWK (a service signing key) -- dev, test or real.
+    "ed25519_private_jwk": re.compile(rb'"crv"\s*:\s*"Ed25519"[^{}]{0,300}?"d"\s*:\s*"[A-Za-z0-9_-]{43}"'),
 }
 
 _SECRET_NAME = re.compile(r"(^|_)(PASSWORD|PASSWD|PASSPHRASE|SECRET|SECRETS|TOKEN|TOKENS|KEY|KEYS|CREDENTIAL|CREDENTIALS|PRIVATE)(_|$)")

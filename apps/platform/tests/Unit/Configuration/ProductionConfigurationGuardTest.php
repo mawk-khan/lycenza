@@ -4,10 +4,13 @@ namespace Tests\Unit\Configuration;
 
 use App\Support\Configuration\ProductionConfigurationException;
 use App\Support\Configuration\ProductionConfigurationGuard;
+use App\Support\ServiceAuth\ServiceAuthContract;
+use Carbon\CarbonImmutable;
 use Illuminate\Config\Repository;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Tests\Concerns\GeneratesServiceKeys;
 
 /**
  * Phase 0O.1: the production configuration guard, against an isolated
@@ -17,6 +20,8 @@ use PHPUnit\Framework\TestCase;
  */
 class ProductionConfigurationGuardTest extends TestCase
 {
+    use GeneratesServiceKeys;
+
     private const CANARY_SIGNING_KEY = 'canary-signing-key-7f3a9c1e5b2d4f6a8c0e';
 
     /**
@@ -27,7 +32,8 @@ class ProductionConfigurationGuardTest extends TestCase
         $config = new Repository([
             'app' => ['url' => 'https://erp.example.org', 'debug' => false, 'key' => 'base64:'.base64_encode(str_repeat('k', 32)), 'cipher' => 'AES-256-CBC', 'maintenance' => ['driver' => 'cache', 'store' => 'database']],
             'session' => ['secure' => true],
-            'services' => ['ai_gateway' => ['context_signing_key' => self::CANARY_SIGNING_KEY, 'service_token' => null]],
+            'services' => ['ai_gateway' => ['context_signing_key' => self::CANARY_SIGNING_KEY, 'legacy_service_token_configured' => false, 'base_url' => null]],
+            'cache' => ['default' => 'redis', 'stores' => ['redis' => ['driver' => 'redis'], 'array' => ['driver' => 'array']]],
             // Phase 0O.4A infrastructure baseline (ADR 0050 sections 2, 7, 8, 15).
             'trustedproxy' => ['proxies' => ['10.0.0.0/8']],
             // Phase 0O.5A (ADR 0051 §5, §9).
@@ -57,8 +63,8 @@ class ProductionConfigurationGuardTest extends TestCase
         $this->assertSame([], $guard->violations());
         $guard->assertSafe();
 
-        // A real (non-development) service token is fine; so is none (the Gateway is optional).
-        $this->assertSame([], (new ProductionConfigurationGuard($this->config(['services.ai_gateway.service_token' => 'a-real-token-value'])))->violations());
+        // ADR 0053: a configured Gateway with sound service keys is fine too.
+        $this->assertSame([], (new ProductionConfigurationGuard($this->config($this->gatewayConfigured())))->violations());
     }
 
     /**
@@ -81,7 +87,7 @@ class ProductionConfigurationGuardTest extends TestCase
             'signing key blank' => [['services.ai_gateway.context_signing_key' => '  '], 'ai_context_signing_key_missing'],
             'signing key dev placeholder' => [['services.ai_gateway.context_signing_key' => 'dev-local-only-context-signing-key-change-me'], 'ai_context_signing_key_placeholder'],
             'signing key test placeholder' => [['services.ai_gateway.context_signing_key' => 'test-only-context-signing-key'], 'ai_context_signing_key_placeholder'],
-            'dev service token' => [['services.ai_gateway.service_token' => 'dev-local-only-token'], 'ai_service_token_development_value'],
+            'legacy shared service token set (ADR 0053)' => [['services.ai_gateway.legacy_service_token_configured' => true], 'ai_legacy_service_token_configured'],
             // Phase 0O.4A (ADR 0050 section 15).
             'proxies trust all (star)' => [['trustedproxy.proxies' => ['*']], 'trusted_proxies_unsafe'],
             'proxies trust all (ipv4 any)' => [['trustedproxy.proxies' => ['10.0.0.0/8', '0.0.0.0/0']], 'trusted_proxies_unsafe'],
@@ -166,20 +172,83 @@ class ProductionConfigurationGuardTest extends TestCase
     {
         $appKeyCanary = 'canary-app-key-value-3c5e7a9b';
         $tokenCanary = 'dev-local-only-token';
+        $key = $this->serviceKey('platform-canary-1');
 
         try {
             (new ProductionConfigurationGuard($this->config([
                 'app.debug' => true,
                 'app.key' => $appKeyCanary,
                 'session.secure' => false,
-                'services.ai_gateway.service_token' => $tokenCanary,
+                'services.ai_gateway.legacy_service_token_configured' => true,
+                'services.ai_gateway.base_url' => 'http://gateway.internal:8100',
+                'services.ai_gateway.service_signing_key' => $this->privateJwk($key, ['created' => '2020-01-01']),
             ])))->assertSafe();
             $this->fail('An unsafe configuration must be refused.');
         } catch (ProductionConfigurationException $e) {
-            $this->assertSame(['app_debug_enabled', 'app_key_invalid', 'session_cookie_not_secure', 'ai_service_token_development_value'], $e->violations);
-            foreach ([$appKeyCanary, $tokenCanary, self::CANARY_SIGNING_KEY, 'redis-canary-5d1e', 'scrape-canary-2f6b9d1e4a7c0b3d5e8f1a2c4b6d8e0f'] as $secret) {
+            $this->assertSame(['app_debug_enabled', 'app_key_invalid', 'session_cookie_not_secure', 'ai_legacy_service_token_configured', 'ai_gateway_url_not_https', 'ai_service_signing_key_expired', 'ai_service_verification_keys_missing'], $e->violations);
+            foreach ([$appKeyCanary, $tokenCanary, self::CANARY_SIGNING_KEY, 'redis-canary-5d1e', 'scrape-canary-2f6b9d1e4a7c0b3d5e8f1a2c4b6d8e0f', $key['d'], $key['x']] as $secret) {
                 $this->assertStringNotContainsString($secret, $e->getMessage());
             }
         }
+    }
+
+    /**
+     * ADR 0053 section 7: a configured AI Gateway with runtime-generated keys.
+     *
+     * @return array<string, mixed>
+     */
+    private function gatewayConfigured(array $overrides = []): array
+    {
+        $this->platformKey ??= $this->serviceKey('platform-20260901-1', CarbonImmutable::now('UTC')->subDays(30)->toDateString());
+        $this->gatewayKey ??= $this->serviceKey('ai-gateway-20260901-1', CarbonImmutable::now('UTC')->subDays(30)->toDateString());
+
+        return [
+            'services.ai_gateway.base_url' => 'https://gateway.internal',
+            'services.ai_gateway.service_signing_key' => $this->privateJwk($this->platformKey),
+            'services.ai_gateway.inbound_verification_keys' => $this->ring([$this->publicJwk($this->gatewayKey)]),
+            'services.ai_gateway.replay_store' => null,
+            ...$overrides,
+        ];
+    }
+
+    /** @var array{kid: string, created: string, x: string, d: string}|null */
+    private ?array $platformKey = null;
+
+    /** @var array{kid: string, created: string, x: string, d: string}|null */
+    private ?array $gatewayKey = null;
+
+    #[Test]
+    public function a_configured_ai_gateway_needs_sound_service_authentication(): void
+    {
+        $old = $this->serviceKey('platform-old-1', CarbonImmutable::now('UTC')->subDays(91)->toDateString());
+        $dev = $this->serviceKey('dev-local-only-platform-9');
+        $devRing = $this->serviceKey('dev-local-only-ai-gateway-9');
+        $a = $this->serviceKey('ai-gateway-a');
+        $b = $this->serviceKey('ai-gateway-b');
+        $soon = CarbonImmutable::now('UTC')->addHour()->format('Y-m-d\TH:i:s\Z');
+        $tooFar = CarbonImmutable::now('UTC')->addHours(25)->format('Y-m-d\TH:i:s\Z');
+
+        $cases = [
+            'ai_gateway_url_not_https' => ['services.ai_gateway.base_url' => 'http://gateway.internal:8100'],
+            'ai_service_signing_key_missing' => ['services.ai_gateway.service_signing_key' => null],
+            'ai_service_signing_key_invalid' => ['services.ai_gateway.service_signing_key' => '{"kty":"OKP"}'],
+            'ai_service_signing_key_development' => ['services.ai_gateway.service_signing_key' => $this->privateJwk($dev)],
+            'ai_service_signing_key_expired' => ['services.ai_gateway.service_signing_key' => $this->privateJwk($old)],
+            'ai_service_verification_keys_missing' => ['services.ai_gateway.inbound_verification_keys' => ''],
+            'ai_service_verification_keys_development' => ['services.ai_gateway.inbound_verification_keys' => $this->ring([$this->publicJwk($devRing)])],
+            'ai_service_verification_keys_too_many' => ['services.ai_gateway.inbound_verification_keys' => $this->ring([$this->publicJwk($a), $this->publicJwk($b, ['not_after' => $soon]), $this->publicJwk($this->serviceKey('ai-gateway-c'), ['not_after' => $soon])])],
+            'ai_service_verification_keys_duplicate_kid' => ['services.ai_gateway.inbound_verification_keys' => $this->ring([$this->publicJwk($a), $this->publicJwk($a, ['not_after' => $soon])])],
+            'ai_service_verification_key_transition_too_long' => ['services.ai_gateway.inbound_verification_keys' => $this->ring([$this->publicJwk($a), $this->publicJwk($b, ['not_after' => $tooFar])])],
+            'ai_service_verification_keys_private_material' => ['services.ai_gateway.inbound_verification_keys' => $this->ring([[...$this->publicJwk($a), 'd' => $a['d']]])],
+            'ai_service_replay_store_not_redis' => ['services.ai_gateway.replay_store' => 'array'],
+        ];
+
+        foreach ($cases as $code => $overrides) {
+            $this->assertSame([$code], (new ProductionConfigurationGuard($this->config($this->gatewayConfigured($overrides))))->violations(), $code);
+        }
+
+        // The committed development PUBLIC keys are refused under any kid.
+        $committed = $this->ring([['kty' => 'OKP', 'crv' => 'Ed25519', 'kid' => 'renamed-1', 'x' => ServiceAuthContract::DEVELOPMENT_PUBLIC_KEYS[1], 'created' => '2026-09-27']]);
+        $this->assertSame(['ai_service_verification_keys_development'], (new ProductionConfigurationGuard($this->config($this->gatewayConfigured(['services.ai_gateway.inbound_verification_keys' => $committed]))))->violations());
     }
 }

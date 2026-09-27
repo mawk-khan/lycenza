@@ -65,10 +65,6 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'integrations.api_clients.manage', 'label' => 'Issue, rotate and revoke partner API clients', 'namespace' => 'school'],
             ['key' => 'platform.feature_flags.view', 'label' => 'View feature flags (platform)', 'namespace' => 'platform'],
             ['key' => 'platform.feature_flags.manage', 'label' => 'Manage feature flags (platform)', 'namespace' => 'platform'],
-            ['key' => 'platform.service_identities.view', 'label' => 'View service identities (platform)', 'namespace' => 'platform'],
-            ['key' => 'platform.service_identities.manage', 'label' => 'Manage service identities (platform)', 'namespace' => 'platform'],
-            ['key' => 'ai.tools.invoke', 'label' => 'AI Gateway may invoke internal AI tool contracts', 'namespace' => 'platform'],
-            ['key' => 'ai.audit.write', 'label' => 'AI Gateway may write durable audit entries to Laravel', 'namespace' => 'platform'],
 
             // Phase 0C.4 (section 52/53) -- cross-tenant operational
             // diagnostics. Platform-scoped only: no School role may
@@ -791,7 +787,6 @@ class CapabilityAndRoleSeeder extends Seeder
                 'capabilities' => [
                     'platform.schools.view', 'platform.schools.manage',
                     'platform.feature_flags.view', 'platform.feature_flags.manage',
-                    'platform.service_identities.view', 'platform.service_identities.manage',
                     'platform.operations.view',
                     'platform.users.mfa.reset',
                     'platform.schools.elevate',

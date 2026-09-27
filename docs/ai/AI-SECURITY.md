@@ -171,10 +171,10 @@ Two different questions get two different mechanisms, and both are
 required on every internal call.
 
 **1. Which internal service sent this request?**
-- **Today:** one shared token, `X-Service-Token` or `Bearer`, used in both
-  directions.
-- **After Phase 0O.7A:** a per-request Ed25519 **service assertion** in
-  `Authorization: Lycenza-Service …`:
+- **Before Phase 0O.7A:** one shared token, `X-Service-Token` or `Bearer`,
+  used in both directions (removed).
+- **Since Phase 0O.7A (implemented):** a per-request Ed25519 **service
+  assertion** in `Authorization: Lycenza-Service …`:
   - signed by the caller's own private key: `platform` for Laravel →
     Gateway, `ai-gateway` for Gateway → Laravel;
   - verified against a public ring the receiver holds, so the receiver
@@ -194,6 +194,10 @@ Consequences:
   (`NullProvider` stays; Phase 0M is blocked).
 - The two keys are separate, rotated separately and revoked separately.
 - The two tokens are never merged.
+
+`ResolveSchoolContext` resolves no School (neither from a verified domain
+nor from a session) on a service route, and the development-only
+`X-School-Id` resolver never applies there.
 
 Receivers check, in order:
 1. the assertion;

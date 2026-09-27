@@ -112,7 +112,15 @@
         <env name="TELESCOPE_ENABLED" value="false" force="true"/>
         <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
         <env name="TENANCY_ALLOW_DEV_HEADER_OVERRIDE" value="true" force="true"/>
-        <env name="AI_GATEWAY_SERVICE_TOKEN" value="dev-local-only-token" force="true"/>
+        <!-- ADR 0053 (Phase 0O.7A): no AI Gateway and no service keys unless a
+             test configures them (runtime-generated keys, never the committed
+             development ones); an ambient developer .env value (including the
+             retired shared token) must never leak in. -->
+        <env name="AI_GATEWAY_BASE_URL" value="" force="true"/>
+        <env name="AI_GATEWAY_SERVICE_SIGNING_KEY" value="" force="true"/>
+        <env name="AI_GATEWAY_INBOUND_VERIFICATION_KEYS" value="" force="true"/>
+        <env name="AI_GATEWAY_REPLAY_STORE" value="" force="true"/>
+        <env name="AI_GATEWAY_SERVICE_TOKEN" value="" force="true"/>
         <env name="AI_GATEWAY_CONTEXT_SIGNING_KEY" value="test-only-context-signing-key" force="true"/>
         <env name="CONTACT_LOOKUP_HMAC_KEY" value="test-only-contact-lookup-hmac-key" force="true"/>
         <env name="CONTACT_LOOKUP_HMAC_KEY_VERSION" value="1" force="true"/>

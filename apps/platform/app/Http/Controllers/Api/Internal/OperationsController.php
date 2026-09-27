@@ -18,7 +18,7 @@ use Illuminate\Http\JsonResponse;
  * capability could legitimately grant access to).
  *
  * Human platform-capability auth (`platform.operations.view`), not
- * internal-service auth (`ai-service:`-style) -- the intended caller
+ * internal-service auth (`service-auth`, ADR 0053) -- the intended caller
  * is a platform operator/dashboard, not another service acting on its
  * own behalf; there is no service identity that has a legitimate
  * reason to read this today. If a future service genuinely needs

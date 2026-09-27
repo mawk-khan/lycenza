@@ -9,6 +9,7 @@ use App\Http\Middleware\Api\ThrottleFailedApiAuthentication;
 use App\Http\Middleware\ApplySecurityHeaders;
 use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\AssignTraceContext;
+use App\Http\Middleware\AuthenticateServiceAssertion;
 use App\Http\Middleware\DevOnlySchoolHeaderResolver;
 use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureIdempotent;
@@ -20,7 +21,6 @@ use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
 use App\Http\Middleware\ResolveSchoolContext;
 use App\Http\Middleware\TrustConfiguredProxies;
-use App\Http\Middleware\VerifyAiGatewayServiceToken;
 use App\Support\Api\ApiAuthFailureLimiter;
 use App\Support\Auth\SessionEndedResponder;
 use App\Support\Observability\Metrics\MetricCatalog;
@@ -69,7 +69,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'capability' => EnsureCapability::class,
-            'ai-service' => VerifyAiGatewayServiceToken::class,
+            'service-auth' => AuthenticateServiceAssertion::class,
             'school-membership' => EnsureSchoolMembershipContext::class,
             'idempotent' => EnsureIdempotent::class,
             'private-no-store' => EnsurePrivateNoStoreResponse::class,

@@ -2,6 +2,11 @@
 
 namespace App\Support\Configuration;
 
+use App\Support\ServiceAuth\ServiceAuthContract;
+use App\Support\ServiceAuth\ServiceKeyConfigException;
+use App\Support\ServiceAuth\ServiceKeyRing;
+use App\Support\ServiceAuth\ServiceSigningKey;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Encryption\Encrypter;
 
@@ -16,9 +21,13 @@ use Illuminate\Encryption\Encrypter;
  *
  * Refuses: debug on; a missing or unusable application key; a session
  * cookie that is not Secure; a missing, blank or committed placeholder AI
- * context signing key; the public development AI Gateway service token.
- * An absent service token is allowed (the AI Gateway is optional, CLAUDE.md
- * rule 56) -- only the known development value is refused.
+ * context signing key; the retired shared AI Gateway service token (ADR
+ * 0053: any value, so a leftover can never become a fallback). When the
+ * optional AI Gateway is configured (`services.ai_gateway.base_url`, CLAUDE.md
+ * rule 56), its ADR 0053 service authentication must be sound: an https URL,
+ * a valid `platform` signing key and `ai-gateway` verification ring (neither
+ * a committed development key, the signing key at most 90 days old, the ring
+ * within its 1-2 key / 24 h transition rules) and a Redis replay store.
  *
  * The exception names violation codes only, never a value.
  */
@@ -29,9 +38,6 @@ final class ProductionConfigurationGuard
         'dev-local-only-context-signing-key-change-me',
         'test-only-context-signing-key',
     ];
-
-    /** The public local development service token (`.env.example`, `.ddev`, the AI Gateway's former default). */
-    public const DEVELOPMENT_SERVICE_TOKEN = 'dev-local-only-token';
 
     /** Phase 0O.4A (ADR 0050): PostgreSQL sslmodes that encrypt the connection. */
     public const SECURE_DB_SSLMODES = ['require', 'verify-ca', 'verify-full'];
@@ -74,11 +80,11 @@ final class ProductionConfigurationGuard
             $violations[] = 'ai_context_signing_key_placeholder';
         }
 
-        if ($this->config->get('services.ai_gateway.service_token') === self::DEVELOPMENT_SERVICE_TOKEN) {
-            $violations[] = 'ai_service_token_development_value';
+        if ($this->config->get('services.ai_gateway.legacy_service_token_configured') === true) {
+            $violations[] = 'ai_legacy_service_token_configured';
         }
 
-        return [...$violations, ...$this->infrastructureViolations()];
+        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations()];
     }
 
     public function assertSafe(): void
@@ -88,6 +94,65 @@ final class ProductionConfigurationGuard
         if ($violations !== []) {
             throw new ProductionConfigurationException($violations);
         }
+    }
+
+    /**
+     * ADR 0053 section 7: only when the AI Gateway is configured. Codes only.
+     *
+     * @return list<string>
+     */
+    private function serviceAuthViolations(): array
+    {
+        $baseUrl = trim((string) $this->config->get('services.ai_gateway.base_url'));
+        if ($baseUrl === '') {
+            return [];
+        }
+
+        $violations = [];
+        $now = CarbonImmutable::now('UTC');
+
+        if (! str_starts_with($baseUrl, 'https://')) {
+            $violations[] = 'ai_gateway_url_not_https';
+        }
+
+        $signingKey = trim((string) $this->config->get('services.ai_gateway.service_signing_key'));
+        if ($signingKey === '') {
+            $violations[] = 'ai_service_signing_key_missing';
+        } else {
+            try {
+                $key = ServiceSigningKey::fromJwk($signingKey, $now);
+                if (ServiceAuthContract::isDevelopmentKey($key->kid, $key->publicKey)) {
+                    $violations[] = 'ai_service_signing_key_development';
+                } elseif ($key->ageDays($now) > ServiceAuthContract::MAX_KEY_AGE_DAYS) {
+                    $violations[] = 'ai_service_signing_key_expired';
+                }
+            } catch (ServiceKeyConfigException $e) {
+                $violations[] = 'ai_service_'.$e->violation;
+            }
+        }
+
+        $ring = trim((string) $this->config->get('services.ai_gateway.inbound_verification_keys'));
+        if ($ring === '') {
+            $violations[] = 'ai_service_verification_keys_missing';
+        } else {
+            try {
+                foreach (ServiceKeyRing::fromJson($ring, $now)->keys() as $key) {
+                    if (ServiceAuthContract::isDevelopmentKey($key->kid, $key->publicKey)) {
+                        $violations[] = 'ai_service_verification_keys_development';
+                        break;
+                    }
+                }
+            } catch (ServiceKeyConfigException $e) {
+                $violations[] = 'ai_service_'.$e->violation;
+            }
+        }
+
+        $store = $this->config->get('services.ai_gateway.replay_store') ?? $this->config->get('cache.default');
+        if ($this->config->get("cache.stores.{$store}.driver") !== 'redis') {
+            $violations[] = 'ai_service_replay_store_not_redis';
+        }
+
+        return $violations;
     }
 
     /**

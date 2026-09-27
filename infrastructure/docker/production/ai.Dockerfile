@@ -3,9 +3,11 @@
 # Phase 0O.4A (ADR 0050 section 12): the PRODUCTION AI Gateway image.
 # NullProvider only -- no provider SDK, hostname or credential exists in
 # this codebase, and REAL_PROVIDERS_ENABLED stays unset (Phase 0M blocked).
-# The Gateway refuses to start without SERVICE_TOKEN, or with the public
-# development token outside local/testing (Phase 0O.1); ENVIRONMENT
-# defaults to production. Runtime dependencies only, non-root.
+# The Gateway refuses to start without its ADR 0053 service keys
+# (SERVICE_SIGNING_KEY, PLATFORM_VERIFICATION_KEYS), with the committed
+# development keys or a plaintext Laravel URL outside local/testing, or with
+# the retired SERVICE_TOKEN set (Phase 0O.1/0O.7A); ENVIRONMENT defaults to
+# production. Runtime dependencies only, non-root.
 #
 # Build (context = services/ai):
 #   docker build -f infrastructure/docker/production/ai.Dockerfile \

@@ -1,0 +1,11 @@
+# Phase 0O.7A (ADR 0053): DEVELOPMENT-ONLY Ed25519 service keys for DDEV,
+# identical to apps/platform/.env.example -- public in this repository and
+# refused in production by kid prefix (dev-local-only-) and public-key
+# fingerprint. JSON values need real YAML quoting, which web_environment in
+# config.yaml cannot provide. Laravel's own `platform` signing key, and the
+# ring of the (locally run) Gateway's `ai-gateway` PUBLIC keys.
+services:
+  web:
+    environment:
+      AI_GATEWAY_SERVICE_SIGNING_KEY: '{"kty":"OKP","crv":"Ed25519","kid":"dev-local-only-platform-1","x":"kV3ZvDdDEsrXYdor998DAGfkdizSSsRSzKHycfGuEUQ","d":"XZoBPMZruZQzihxKjIBvRRf7cuG1E1zAoq2IWtvQgKI","created":"2026-09-27"}'
+      AI_GATEWAY_INBOUND_VERIFICATION_KEYS: '[{"kty":"OKP","crv":"Ed25519","kid":"dev-local-only-ai-gateway-1","x":"WibFMaiB1A6KTbuNEVn8oOm2Qg1pUy1upMSmLbIy1tE","created":"2026-09-27"}]'

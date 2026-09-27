@@ -51,7 +51,14 @@ class ResolveSchoolContext
             $context->setActor($user);
         }
 
-        $school = $this->resolveViaVerifiedDomain($request) ?? $this->resolveViaActiveSession($request);
+        // ADR 0053 section 6.3: an internal service route (`service-auth`)
+        // takes its School ONLY from the separately verified AI context token
+        // -- never from the Host (a verified School domain) or a session --
+        // and nothing about a School is looked up before the calling
+        // service has authenticated.
+        $school = $this->isServiceRoute($request)
+            ? null
+            : $this->resolveViaVerifiedDomain($request) ?? $this->resolveViaActiveSession($request);
 
         if ($school !== null && $school->isActive()) {
             $context->set($school);
@@ -63,6 +70,11 @@ class ResolveSchoolContext
     public function terminate(Request $request, Response $response): void
     {
         app(TenantContext::class)->clearAll();
+    }
+
+    private function isServiceRoute(Request $request): bool
+    {
+        return in_array('service-auth', $request->route()?->gatherMiddleware() ?? [], true);
     }
 
     private function resolveViaVerifiedDomain(Request $request): ?School

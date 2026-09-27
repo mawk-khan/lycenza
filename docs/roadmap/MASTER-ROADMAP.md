@@ -1519,9 +1519,24 @@ documentation only).** ADR 0053 resolves O5.
 - **Separation:** the service assertion is strictly separate from the AI
   context token and never sets School context.
 
-Next proposed: **0O.7A — Service-to-Service Authentication & Rotation
-Foundation**, not started. It covers repository implementation only: no
-real key and no deployment. Remaining open: O1, O2, O9, O13, O14, O15.
+**0O.7A — Service-to-Service Authentication & Rotation Foundation
+(COMPLETE, 2026-09-27).** ADR 0053 is implemented in both services.
+- **Assertions:** per-request, request-bound Ed25519 assertions, with one
+  keypair per calling service.
+- **Shared token removed:** a closed route and scope map, with the service
+  scopes out of the human capability catalog (database CHECK).
+- **Replay:** Laravel's jti is consumed once in Redis; the Gateway's
+  cross-replica replay is a recorded residual.
+- **Key lifecycle:** rotation, rollback and revocation are tested, with
+  90-day keys and OBS-27.
+- **Hardening and tooling:** a `ResolveSchoolContext` leak on service
+  routes was fixed, and operator tooling plus a runbook were added.
+- **Proof:** `verify-images.sh` has 111 checks, including both directions
+  across real containers.
+
+O5 repository portion complete; deployment evidence outstanding. Remaining
+open: O1, O2, O9, O13, O14, O15. Next proposed: **0O.8 — Custom School
+Domains & TLS Contract (O9)**, not started.
 
 ## Cross-cutting, ongoing (not a single phase)
 

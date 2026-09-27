@@ -4,6 +4,8 @@ namespace App\Support\Observability\Metrics;
 
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Support\Observability\QueueName;
+use App\Support\ServiceAuth\ServiceAuthContract;
+use App\Support\ServiceAuth\ServiceAuthTelemetry;
 
 /**
  * Phase 0O.5A (ADR 0051 §10-§13): the CLOSED catalog of every metric the
@@ -26,6 +28,8 @@ final class MetricCatalog
     public const LABELS = [
         'queue', 'scheduled_task', 'request_surface', 'status_class', 'code', 'outcome', 'delivery_channel',
         'recovery_source', 'backup_store', 'state', 'dependency', 'operation', 'sqlstate_class', 'check', 'result', 'component',
+        // ADR 0053: service-to-service authentication (closed catalogs).
+        'direction', 'service',
     ];
 
     public const REQUEST_SURFACES = ['web', 'api_v1', 'api_partner', 'api_internal', 'health'];
@@ -56,6 +60,11 @@ final class MetricCatalog
             'lycenza_http_rejections_total' => self::counter('Rejected HTTP requests (401/403/404/419/429) by surface.', ['request_surface' => self::REQUEST_SURFACES, 'code' => self::REJECTION_CODES]),
             'lycenza_http_request_duration_seconds' => self::histogram('HTTP request duration by surface.', ['request_surface' => self::REQUEST_SURFACES]),
             'lycenza_partner_auth_failures_total' => self::counter('Partner API authentication failures by closed outcome code.', ['outcome' => self::PARTNER_AUTH_OUTCOMES]),
+            // ADR 0053 (Phase 0O.7A): service-to-service authentication. Closed
+            // labels only -- never kid, School, User or request id.
+            'lycenza_service_auth_total' => self::counter('Service-assertion authentication outcomes by direction, calling service and closed outcome code.', ['direction' => [ServiceAuthTelemetry::INBOUND, ServiceAuthTelemetry::OUTBOUND], 'service' => [...ServiceAuthContract::SERVICES, 'unknown'], 'outcome' => ServiceAuthTelemetry::OUTCOMES]),
+            'lycenza_service_signing_key_age_days' => self::gauge('Age in days of this process\'s own service signing key (hard limit 90; alert from 76). Only when the AI Gateway is configured.', ['service' => [ServiceAuthContract::PLATFORM]]),
+            'lycenza_service_verification_key_max_age_days' => self::gauge('Age in days of the oldest key in the verification ring for a calling service. Only when the AI Gateway is configured.', ['service' => [ServiceAuthContract::AI_GATEWAY]]),
             'lycenza_api_token_operation_errors_total' => self::counter('Human API token issue/revoke operations that failed unexpectedly.', ['operation' => ['issue', 'revoke']]),
             'lycenza_idempotency_requests_total' => self::counter('Idempotency-Key outcomes (formerly idempotency_{outcome}_total log lines).', ['outcome' => ['new', 'replay', 'conflict', 'in_progress', 'failed']]),
 

@@ -2042,25 +2042,31 @@ Route::prefix('internal/operations')->middleware(['auth:sanctum', 'throttle:inte
 // ADR 0023). Deliberately NOT under /api/v1 -- this is a
 // service-to-service boundary, never called by a browser/mobile client
 // directly. See docs/ai/AI-PLATFORM.md.
-Route::prefix('internal/ai')->group(function (): void {
+//
+// ADR 0053 (Phase 0O.7A): every route is authenticated by a per-request
+// `ai-gateway` Ed25519 service assertion (`service-auth`), and each route
+// NAME maps to exactly one service scope in the closed catalog
+// App\Support\ServiceAuth\ServiceAuthContract::ROUTE_SCOPES -- a route
+// missing from it is refused (403), never allowed by default:
+//   tools/school-echo      -> ai.tools.invoke
+//   completions/authorize  -> ai.completions.authorize
+//   audit                  -> ai.audit.write
+// Service authentication never establishes School or actor context; each
+// controller verifies the separate ADR 0023 context token for that.
+// The development-only X-School-Id resolver never applies here either.
+Route::prefix('internal/ai')->middleware(['service-auth', 'throttle:internal-service'])->withoutMiddleware([DevOnlySchoolHeaderResolver::class])->group(function (): void {
     Route::post('/tools/school-echo', [AiToolController::class, 'schoolEcho'])
-        ->middleware(['ai-service:ai.tools.invoke', 'throttle:internal-service'])
         ->name('api.internal.ai.tools.school-echo');
 
-    // Durable-audit write-back (Phase 0C section 58/69): a DIFFERENT,
-    // narrower capability than tool invocation -- a service identity
-    // entitled to invoke tools is not automatically entitled to write
-    // audit entries, and vice versa. See AiAuditController.
+    // Durable-audit write-back (Phase 0C section 58/69): its own scope --
+    // relaying a tool call does not entitle writing audit entries.
     Route::post('/audit', [AiAuditController::class, 'store'])
-        ->middleware(['ai-service:ai.audit.write', 'throttle:internal-service'])
         ->name('api.internal.ai.audit.store');
 
     // Gap G1 (AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md): the gateway must have
     // Laravel verify a signed context token before running ANY model
-    // completion. Same service capability as tool invocation -- both are
-    // the gateway acting for a verified human in one School.
+    // completion -- its own scope since ADR 0053 (Phase 0O.7A).
     Route::post('/completions/authorize', [AiCompletionAuthorizationController::class, 'authorizeCompletion'])
-        ->middleware(['ai-service:ai.tools.invoke', 'throttle:internal-service'])
         ->name('api.internal.ai.completions.authorize');
 });
 

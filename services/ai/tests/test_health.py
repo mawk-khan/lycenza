@@ -17,12 +17,16 @@ def test_readiness_returns_ok_when_configuration_is_valid() -> None:
     assert response.json()["status"] == "ok"
 
 
-def test_complete_requires_service_token() -> None:
+def test_complete_requires_a_service_assertion_but_health_does_not() -> None:
     response = client.post(
         "/v1/complete",
         json={"agent": "phase0b-proof-agent", "context_token": "t", "prompt": "hello"},
     )
     assert response.status_code == 401
+    assert response.json() == {"error": {"code": "service_authentication_failed"}}
+    # ADR 0053 section 10.2: probes need no credential (private network only).
+    assert client.get("/health/live").status_code == 200
+    assert client.get("/health/ready").status_code == 200
 
 
 # The old "service token alone is enough" test is gone on purpose: that was

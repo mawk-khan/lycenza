@@ -18,8 +18,9 @@ use Illuminate\Http\Request;
  * envelope the tool contracts verify -- and gets back the only
  * authoritative School and actor for the call.
  *
- * In order: the `ai-service:ai.tools.invoke` middleware proves the caller
- * is the gateway's service identity; the token's signature and expiry are
+ * In order: the `service-auth` middleware proves the caller is the
+ * gateway's service identity holding `ai.completions.authorize` (ADR 0053);
+ * the context token's signature and expiry are
  * verified; the capability the agent needs must be in the token's claim;
  * an optional caller-named School must match the token; and the actor must
  * STILL hold that capability in that School now (CapabilityResolver --

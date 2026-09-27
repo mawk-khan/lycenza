@@ -5,6 +5,7 @@ string is planted in prompts, provider output and provider/Laravel error
 bodies, and must surface in no response, log record or audit payload."""
 
 import importlib.metadata
+import json
 import logging
 import re
 import socket
@@ -21,9 +22,9 @@ from app.gateway.router import ModelRouter, ProviderNotAllowedError, model_route
 from app.main import app
 from app.providers.base import CompletionRequest, CompletionResult, ModelProvider
 from app.providers.null_provider import NullProvider
+from tests.service_keys import signed
 
 client = TestClient(app)
-AUTH = {"X-Service-Token": "dev-local-only-token"}
 CANARY = "SHOULD-NOT-APPEAR-IN-LOG"
 SCHOOL = "0199aaaa-0000-7000-8000-000000000001"
 OTHER_SCHOOL = "0199bbbb-0000-7000-8000-000000000002"
@@ -48,7 +49,7 @@ class Laravel:
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
     async def post(self, url: str, **kwargs: Any) -> httpx.Response:
-        self.calls.append((url, kwargs.get("json") or {}))
+        self.calls.append((url, json.loads(kwargs.get("content") or b"{}")))
         answer = self.authorize if url == "/completions/authorize" else self.audit
         if isinstance(answer, Exception):
             raise answer
@@ -62,7 +63,7 @@ def _complete(laravel: Laravel, **overrides: Any) -> httpx.Response:
     body = {"agent": "phase0b-proof-agent", "context_token": "tok", "prompt": f"hi {CANARY}"}
     body.update(overrides)
     with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=laravel.post)):
-        return client.post("/v1/complete", json=body, headers=AUTH)
+        return client.post("/v1/complete", **signed("/v1/complete", body))
 
 
 @pytest.fixture
@@ -151,11 +152,12 @@ def test_missing_token_and_unknown_or_unentitled_agents_never_reach_laravel(prov
     assert provider_spy == []
 
 
-def test_the_service_token_alone_is_not_enough() -> None:
+def test_a_valid_service_assertion_alone_is_not_enough() -> None:
     laravel = Laravel()
     with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=laravel.post)):
         response = client.post(
-            "/v1/complete", json={"agent": "phase0b-proof-agent", "prompt": "x"}, headers=AUTH
+            "/v1/complete",
+            **signed("/v1/complete", {"agent": "phase0b-proof-agent", "prompt": "x"}),
         )
     assert response.status_code == 422
     assert laravel.calls == []
@@ -251,13 +253,15 @@ def test_tool_relay_errors_never_carry_the_laravel_body(caplog) -> None:
     with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=failing)):
         response = client.post(
             "/v1/tools/invoke",
-            json={
-                "school_id": SCHOOL,
-                "agent": "phase0b-proof-agent",
-                "tool": "school.echo",
-                "context_token": "tok",
-            },
-            headers=AUTH,
+            **signed(
+                "/v1/tools/invoke",
+                {
+                    "school_id": SCHOOL,
+                    "agent": "phase0b-proof-agent",
+                    "tool": "school.echo",
+                    "context_token": "tok",
+                },
+            ),
         )
     assert response.status_code == 502
     assert CANARY not in response.text
@@ -322,7 +326,8 @@ def test_the_shipped_router_has_only_the_offline_provider() -> None:
 
 # --- No SDK, no secret, no outbound call -------------------------------------
 
-ALLOWED_RUNTIME = {"fastapi", "uvicorn", "pydantic", "pydantic-settings", "httpx"}
+# cryptography: the ADR 0053 Ed25519 primitive (Phase 0O.7A) -- not a provider SDK.
+ALLOWED_RUNTIME = {"fastapi", "uvicorn", "pydantic", "pydantic-settings", "httpx", "cryptography"}
 ALLOWED_DEV = {"pytest", "pytest-asyncio", "ruff", "mypy"}
 PROVIDER_PACKAGES = {
     "anthropic",
@@ -373,10 +378,18 @@ def test_no_provider_sdk_is_installed() -> None:
 def test_no_provider_credential_or_host_in_configuration() -> None:
     example = (ROOT / ".env.example").read_text()
     keys = {line.split("=", 1)[0] for line in example.splitlines() if "=" in line}
-    assert keys == {"ENVIRONMENT", "SERVICE_TOKEN", "ERP_CONTRACT_BASE_URL"}
+    assert keys == {
+        "ENVIRONMENT",
+        "SERVICE_SIGNING_KEY",
+        "PLATFORM_VERIFICATION_KEYS",
+        "ERP_CONTRACT_BASE_URL",
+    }
     assert set(type(settings).model_fields) == {
         "service_name",
         "environment",
+        # ADR 0053: service keys; service_token is read only to refuse it.
+        "service_signing_key",
+        "platform_verification_keys",
         "service_token",
         "erp_contract_base_url",
         "real_providers_enabled",
@@ -408,8 +421,9 @@ def test_a_completion_opens_no_socket_and_talks_only_to_laravel(monkeypatch) -> 
 
     response = client.post(
         "/v1/complete",
-        json={"agent": "phase0b-proof-agent", "context_token": "tok", "prompt": "hi"},
-        headers=AUTH,
+        **signed(
+            "/v1/complete", {"agent": "phase0b-proof-agent", "context_token": "tok", "prompt": "hi"}
+        ),
     )
 
     assert response.status_code == 200

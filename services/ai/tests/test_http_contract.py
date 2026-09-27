@@ -9,9 +9,9 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.service_keys import platform_signer, signed
 
 client = TestClient(app)
-AUTH = {"X-Service-Token": "dev-local-only-token"}
 SECRET_INPUT = "canary-context-token-value-0o6b"
 POST_ENDPOINTS = ["/v1/complete", "/v1/tools/invoke"]
 
@@ -30,9 +30,7 @@ def test_the_route_table_is_unchanged() -> None:
 
 @pytest.mark.parametrize("path", POST_ENDPOINTS)
 def test_validation_errors_report_location_and_type_only(path: str) -> None:
-    response = client.post(
-        path, headers=AUTH, json={"context_token": SECRET_INPUT, "unexpected": 1}
-    )
+    response = client.post(path, **signed(path, {"context_token": SECRET_INPUT, "unexpected": 1}))
     assert response.status_code == 422
     body = response.json()
     assert set(body) == {"detail"}
@@ -45,10 +43,16 @@ def test_validation_errors_report_location_and_type_only(path: str) -> None:
 
 @pytest.mark.parametrize("path", POST_ENDPOINTS)
 def test_malformed_json_is_a_422_with_the_same_shape(path: str) -> None:
+    body = b'{"agent": "x", ' + SECRET_INPUT.encode()
     response = client.post(
         path,
-        headers={**AUTH, "Content-Type": "application/json"},
-        content=b'{"agent": "x", ' + SECRET_INPUT.encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": platform_signer().authorization(
+                "POST", "http://gateway.test" + path, body
+            ),
+        },
+        content=body,
     )
     assert response.status_code == 422
     assert all(set(error) == {"loc", "type"} for error in response.json()["detail"])
@@ -56,15 +60,18 @@ def test_malformed_json_is_a_422_with_the_same_shape(path: str) -> None:
 
 
 @pytest.mark.parametrize("path", POST_ENDPOINTS)
-def test_a_wrong_service_token_is_401_with_a_fixed_detail(path: str) -> None:
-    response = client.post(path, headers={"X-Service-Token": "wrong"}, json={})
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid service token"}
+def test_a_missing_or_wrong_service_credential_is_401_with_a_fixed_body(path: str) -> None:
+    """ADR 0053: authentication precedes parsing -- even malformed JSON from an
+    unauthenticated caller is the uniform 401, never a 422."""
+    for headers in ({}, {"X-Service-Token": "wrong"}, {"Authorization": "Bearer wrong"}):
+        response = client.post(path, headers=headers, content=b"{not json")
+        assert response.status_code == 401
+        assert response.json() == {"error": {"code": "service_authentication_failed"}}
 
 
 def test_unknown_paths_and_methods() -> None:
     assert client.get("/v1/unknown").status_code == 404
-    assert client.get("/v1/complete", headers=AUTH).status_code == 405
+    assert client.get("/v1/complete").status_code == 405
     assert client.post("/health/live").status_code == 405
 
 

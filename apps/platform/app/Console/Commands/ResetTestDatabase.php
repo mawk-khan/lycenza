@@ -68,10 +68,8 @@ class ResetTestDatabase extends Command
 
         // The FULL canonical testing seed set (Database\Seeders\
         // DatabaseSeeder), not just CapabilityAndRoleSeeder alone --
-        // the Phase 0C.3 incident this closes left AiToolControllerTest/
-        // AiAuditControllerTest/AiGatewayClientTest failing because
-        // ServiceIdentitySeeder never ran. See section 9 of the 0C.3A
-        // brief.
+        // the Phase 0C.3 incident this closes left unrelated suites failing
+        // because a seeder never ran. See section 9 of the 0C.3A brief.
         $this->call('db:seed', ['--force' => true]);
 
         $this->info('Testing database reset complete.');

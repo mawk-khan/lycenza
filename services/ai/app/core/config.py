@@ -17,9 +17,15 @@ class Settings(BaseSettings):
     service_name: str = "school-os-ai-gateway"
     environment: str = "production"
 
-    # Shared secret the platform (Laravel) and this service use to
-    # authenticate service-to-service calls in both directions.
-    # See docs/ai/AI-SECURITY.md. Required: never defaulted (Phase 0O.1).
+    # ADR 0053 (Phase 0O.7A): this service's own `ai-gateway` Ed25519 private
+    # signing key (one RFC 8037 OKP JWK, from the managed secret store) for
+    # Gateway -> Laravel calls, and the ring of `platform` PUBLIC keys it
+    # verifies Laravel -> Gateway calls against. Never defaulted.
+    service_signing_key: str = ""
+    platform_verification_keys: str = ""
+
+    # Retired shared token (ADR 0053 section 11): read ONLY so that a leftover
+    # value refuses startup (app.core.startup); it authenticates nothing.
     service_token: str = ""
 
     # Base URL of the Laravel application's internal "ERP tool" contracts

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lycenza_release.imagescan import apply_allowlist, scan_config, scan_rootfs
+from lycenza_release.imagescan import CANARIES, apply_allowlist, scan_config, scan_rootfs
 from lycenza_release.util import sha256_file
 
 # Canary values are assembled at run time, so the repository source itself
@@ -97,6 +97,26 @@ class RootfsScanTest(unittest.TestCase):
         self.put(guard, b"'Demo1234!'")
         self.assertEqual([i["where"] for i in scan_rootfs(self.root, "app")], [guard], "the demo password is not guard-allowed")
         self.assertTrue(scan_rootfs(self.root, "ai-gateway"), "the app guard path is not allowed in the Gateway image")
+
+    def test_service_private_keys_never_pass(self) -> None:
+        """ADR 0053: an Ed25519 private JWK (dev, test or real) is reported anywhere, and
+        the committed development seeds even inside the guard; public keys are fine."""
+        import base64
+        import os
+
+        seed = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=")
+        public = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=")
+        jwk = b'{"kty":"OKP","crv":"Ed25519","kid":"platform-1","x":"' + public + b'","d":"' + seed + b'","created":"2026-10-01"}'
+        self.put("/srv/ai/app/keys.json", jwk)
+        self.put("/srv/ai/app/ring.json", jwk.replace(b',"d":"' + seed + b'"', b""))
+        self.assertEqual([(i["code"], i["where"]) for i in scan_rootfs(self.root, "ai-gateway")], [("ed25519_private_jwk", "/srv/ai/app/keys.json")])
+
+        (self.root / "srv/ai/app/keys.json").unlink()
+        dev_seeds = [c for c in CANARIES if not c.startswith(("dev-", "Demo", "school_os", "minio"))]
+        self.assertEqual(len(dev_seeds), 2)
+        guard = "/var/www/app/app/Support/Configuration/ProductionConfigurationGuard.php"
+        self.put(guard, dev_seeds[0].encode())
+        self.assertEqual([i["where"] for i in scan_rootfs(self.root, "app")], [guard], "a dev seed is never guard-allowed")
 
     def test_the_allowlist_is_exact_path_code_and_content(self) -> None:
         pem = (PEM_BEGIN.format("") + "\n" + "MIIBVA" * 20 + "\n").encode()

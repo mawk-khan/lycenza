@@ -72,6 +72,10 @@ _SENSITIVE_WORDS = (
     "service_token",
     "context_token",
     "signing_key",
+    "verification_keys",
+    "assertion",
+    "jti",
+    "bsh",
     "prompt",
     "completion",
     "output",
@@ -84,6 +88,13 @@ _SENSITIVE_WORDS = (
 
 _VALUE_PATTERNS = (
     (re.compile(r"\bBearer\s+[A-Za-z0-9._~+/|=-]+", re.IGNORECASE), "Bearer " + REDACTED),
+    # ADR 0053: a service assertion (any JWS-shaped value) and private JWK material.
+    (
+        re.compile(r"\bLycenza-Service\s+[A-Za-z0-9._~+/|=-]+", re.IGNORECASE),
+        "Lycenza-Service " + REDACTED,
+    ),
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{16,}"), REDACTED),
+    (re.compile(r'"d"\s*:\s*"[A-Za-z0-9_-]{16,}"'), '"d":"' + REDACTED + '"'),
     (re.compile(r"\blyc_(pat|pk)_[A-Za-z0-9._|-]+"), r"lyc_\1_" + REDACTED),
     (re.compile(r"\bbase64:[A-Za-z0-9+/=]{16,}"), "base64:" + REDACTED),
     (
