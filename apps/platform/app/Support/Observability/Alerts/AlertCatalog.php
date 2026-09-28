@@ -9,7 +9,8 @@ use App\Support\Observability\Metrics\MetricCatalog;
 /**
  * Phase 0O.5A (ADR 0051 §14.4): the required alerts as deterministic
  * definitions -- OBS-01..OBS-26 (ADR 0051), OBS-27 (ADR 0053), OBS-28..30
- * (ADR 0054) and OBS-31..38 (ADR 0055, production email). The application sends NO notification:
+ * (ADR 0054), OBS-31..38 (ADR 0055, production email) and OBS-39..41
+ * (ADR 0056, account recovery). The application sends NO notification:
  * the deployment's backend evaluates the exported rules
  * (AlertRulesExporter) and routes them.
  *
@@ -52,6 +53,8 @@ final class AlertCatalog
         $emailHardBounces = self::operator('email_hard_bounces_per_hour', 1, 1000000);
         $emailComplaints = self::operator('email_complaints_per_hour', 1, 1000000);
         $emailWebhookAuth = self::operator('email_webhook_auth_failures_per_15m', 1, 1000000);
+        $recoveryRequests = self::operator('account_recovery_requests_per_hour', 1, 10000000);
+        $recoveryInvalid = self::operator('account_recovery_invalid_resets_per_hour', 1, 10000000);
 
         $minuteTasks = array_values(array_diff(MetricCatalog::scheduledTasks(), MetricCatalog::DAILY_TASKS));
         $minuteRegex = implode('|', $minuteTasks);
@@ -294,6 +297,19 @@ final class AlertCatalog
                 self::tier(Severity::Sev3, "sum(increase(lycenza_email_webhook_requests_total{outcome=\"unauthenticated\"}[15m])) > {$emailWebhookAuth}", 0,
                     fn (MetricSnapshot $s) => $s->increase('lycenza_email_webhook_requests_total', '15m', ['outcome' => 'unauthenticated']) > $emailWebhookAuth),
             ], $emailWebhookAuth === null ? 'operator value ALERT_EMAIL_WEBHOOK_AUTH_FAILURES_PER_15M not set' : null),
+            // ADR 0056 (Phase 0O.10A): account recovery. Never SEV-1, never readiness.
+            self::rule('OBS-39', 'Account-recovery request spike above the operator baseline (enumeration or abuse attempt).', 'C', 'ACCOUNT-RECOVERY.md', $recoveryRequests === null ? [] : [
+                self::tier(Severity::Sev3, "sum(increase(lycenza_account_recovery_requests_total[1h])) > {$recoveryRequests}", 0,
+                    fn (MetricSnapshot $s) => $s->increase('lycenza_account_recovery_requests_total', '1h') > $recoveryRequests),
+            ], $recoveryRequests === null ? 'operator value ALERT_ACCOUNT_RECOVERY_REQUESTS_PER_HOUR not set' : null),
+            self::rule('OBS-40', 'Invalid password-reset submissions above the operator baseline.', 'C', 'ACCOUNT-RECOVERY.md', $recoveryInvalid === null ? [] : [
+                self::tier(Severity::Sev3, "sum(increase(lycenza_account_recovery_resets_total{outcome=\"invalid\"}[1h])) > {$recoveryInvalid}", 0,
+                    fn (MetricSnapshot $s) => $s->increase('lycenza_account_recovery_resets_total', '1h', ['outcome' => 'invalid']) > $recoveryInvalid),
+            ], $recoveryInvalid === null ? 'operator value ALERT_ACCOUNT_RECOVERY_INVALID_RESETS_PER_HOUR not set' : null),
+            self::rule('OBS-41', 'Account recovery is enabled but critical email is unavailable (no recovery email can be sent).', 'A', 'ACCOUNT-RECOVERY.md', [
+                self::tier(Severity::Sev2, 'max(lycenza_account_recovery_enabled{state="enabled"}) == 1 and max(lycenza_account_recovery_enabled{state="available"}) == 0', 300,
+                    fn (MetricSnapshot $s) => $s->value('lycenza_account_recovery_enabled', ['state' => 'enabled']) === 1.0 && $s->value('lycenza_account_recovery_enabled', ['state' => 'available']) === 0.0),
+            ]),
         ];
     }
 

@@ -9,6 +9,7 @@ use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\AssuranceFreshness;
+use App\Support\Auth\CredentialSession;
 use App\Support\Auth\CrossHostHandoff;
 use App\Support\Auth\HandoffUnavailable;
 use App\Support\Domains\CanonicalOrigin;
@@ -70,7 +71,7 @@ class SessionHandoffController extends Controller
 
         $user = User::query()->find($ticket['user_id']);
 
-        if (! $user instanceof User || $user->isDisabled()) {
+        if (! $user instanceof User || $user->isDisabled() || (int) ($ticket['credential_version'] ?? 0) !== CredentialSession::current($user)) {
             return $this->fail($request, 'user');
         }
 
@@ -116,6 +117,7 @@ class SessionHandoffController extends Controller
         $request->session()->invalidate();
         Auth::guard('web')->login($user);
         $request->session()->regenerateToken();
+        CredentialSession::stamp($request->session(), $user);
 
         if ($school !== null) {
             $request->session()->put(RequireSchoolContext::SESSION_KEY, $school->id);

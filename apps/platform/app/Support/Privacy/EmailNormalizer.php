@@ -29,9 +29,21 @@ use InvalidArgumentException;
  */
 class EmailNormalizer
 {
+    /**
+     * Phase 0O.10A (ADR 0056 section 4.4): THE canonical form of a human
+     * account email -- trim, lowercase, nothing else (no provider-specific
+     * aliasing, no Unicode rewriting). Login, recovery and every User
+     * writer use it; `users_email_canonical_check` enforces it in the
+     * database. No validation here: callers validate format separately.
+     */
+    public static function canonical(string $rawValue): string
+    {
+        return strtolower(trim($rawValue));
+    }
+
     public function normalize(string $rawValue): string
     {
-        $trimmedLower = strtolower(trim($rawValue));
+        $trimmedLower = self::canonical($rawValue);
 
         if (filter_var($trimmedLower, FILTER_VALIDATE_EMAIL) === false) {
             throw new InvalidArgumentException("Invalid email address: {$rawValue}");

@@ -656,6 +656,46 @@ and `ddev demo-reset`:
    invitations are still created. Their email waits (`email_disabled`) and
    the page says why.
 
+### Account recovery (Phase 0O.10A, ADR 0056)
+
+`ACCOUNT_RECOVERY_ENABLED=true` in DDEV only. Recovery email goes to
+Mailpit through the same email layer. After `ddev restart` and
+`ddev demo-reset`:
+
+1. **Generic response.** Open https://lycenza.ddev.site/login and follow
+   **Forgot password?**. Submit `teacher@example.test`, then
+   `nobody@example.test`, then `platform.admin@example.test` (root). Each
+   shows the same message. Only the teacher receives an email
+   ("Reset your Lycenza password").
+2. **The link.** It has the form
+   `https://lycenza.ddev.site/account-recovery/<selector>#<secret>`.
+   Open it with the browser's network panel open:
+   - the GET request carries **no** fragment (browsers never send it);
+   - the address bar loses the `#…` part as soon as the page loads;
+   - the response has `Cache-Control: no-store` and
+     `Referrer-Policy: no-referrer`.
+3. **Reset.** Sign in as `teacher@example.test` in a second browser (or a
+   private window) first. Then choose a new password in the first one:
+   - it lands on `/login` with "Your password was changed" (no automatic
+     sign-in);
+   - Mailpit shows the "password was changed" notice;
+   - the second browser's next click signs it out.
+4. **Used, expired or edited link.** Submitting the same link again, or a
+   link whose fragment was edited, shows "invalid or has expired".
+5. **MFA preserved.** Recover `platform.auditor@example.test` (MFA is
+   required for its audit page) and confirm MFA is unchanged.
+6. **Custom host.** With the active fake custom domain from "Custom School
+   domains" above,
+   `ddev exec "curl -s -o /dev/null -w '%{http_code}' -H 'Host: erp.northfield-demo.org' http://127.0.0.1/account-recovery"`
+   answers **404**, and an unknown Host answers **421**. A second-host
+   sign-out is proven by `CredentialVersionTest` (the DDEV router does not
+   route a custom origin to a browser).
+7. **Operator console.**
+   - `ddev exec php artisan platform:account-recovery-status teacher@example.test`
+     shows metadata only.
+   - `ddev exec php artisan platform:user-password-reset teacher@example.test`
+     takes hidden prompts and signs every session out.
+
 ## 16. Running tests inside DDEV
 
 ```bash

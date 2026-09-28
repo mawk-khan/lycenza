@@ -8,9 +8,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\ResolveSchoolContext;
 use App\Models\School;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\CredentialSession;
+use App\Support\Auth\IdentityFingerprint;
 use App\Support\Auth\Mfa\MfaChallengeService;
 use App\Support\Auth\SessionEndedResponder;
 use App\Support\Demo\DemoLoginPanel;
+use App\Support\Domains\CanonicalOrigin;
+use App\Support\Privacy\EmailNormalizer;
 use App\Support\Tenancy\ElevationContext;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
@@ -49,7 +53,7 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
  */
 class LoginController extends Controller
 {
-    public function create(Request $request, DemoLoginPanel $demoPanel): Response
+    public function create(Request $request, DemoLoginPanel $demoPanel, CanonicalOrigin $origins): Response
     {
         // `demo` is null everywhere except a local DDEV demo environment
         // (see DemoLoginPanel); it only prefills this same form.
@@ -65,17 +69,29 @@ class LoginController extends Controller
             'demo' => $demoPanel->forCurrentEnvironment(),
             'sessionEnded' => $request->session()->get(SessionEndedResponder::FLASH_KEY) === true,
             'hostSchool' => $hostSchool !== null ? ['name' => $hostSchool->name] : null,
+            // Phase 0O.10A (ADR 0056 section 9.1): recovery lives on the
+            // canonical PLATFORM origin -- also from a School's own host.
+            'recoveryUrl' => (bool) config('account_recovery.enabled') ? $origins->platformUrl('account-recovery') : null,
+            'statusMessage' => $request->session()->get('status_message'),
         ]);
     }
 
-    public function store(Request $request, AuditRecorder $audit, MfaChallengeService $mfa): RedirectResponse
+    public function store(Request $request, AuditRecorder $audit, MfaChallengeService $mfa, IdentityFingerprint $fingerprints): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        $throttleKey = strtolower($credentials['email']).'|'.$request->ip();
+        // Phase 0O.10A (ADR 0056 section 4.4): the ONE canonical email form
+        // (trim + lowercase), as every User is stored -- `User@Example.COM`
+        // signs in exactly like `user@example.com`. The failure below stays
+        // the same generic message either way.
+        $credentials['email'] = EmailNormalizer::canonical($credentials['email']);
+
+        // Keyed fingerprint, never the address (in the limiter key or the audit).
+        $identity = $fingerprints->of(IdentityFingerprint::LOGIN, $credentials['email']);
+        $throttleKey = 'login:'.$identity.'|'.$request->ip();
 
         if (RateLimiter::tooManyAttempts($throttleKey, 6)) {
             event(new Lockout($request));
@@ -89,10 +105,13 @@ class LoginController extends Controller
         if (! Auth::attempt($credentials, remember: false)) {
             RateLimiter::hit($throttleKey, 60);
 
+            // Phase 0O.10A (ADR 0056 section 17, finding 2): bounded evidence
+            // only -- a keyed identity fingerprint for correlation, never the
+            // attempted address.
             $audit->platform('auth.login_failed', metadata: [
-                'email' => $credentials['email'],
-                'ip' => $request->ip(),
-            ]);
+                'outcome' => 'invalid_credentials',
+                'identity_fingerprint' => $identity,
+            ], ipAddress: $request->ip());
 
             throw ValidationException::withMessages([
                 'email' => 'These credentials do not match our records.',
@@ -119,11 +138,13 @@ class LoginController extends Controller
             Auth::logout();
             $request->session()->regenerate();
             $request->session()->put('mfa_pending_user_id', $user->id);
+            $request->session()->put('mfa_pending_credential_version', CredentialSession::current($user));
 
             return redirect('/login/mfa');
         }
 
         $request->session()->regenerate();
+        CredentialSession::stamp($request->session(), $user);
 
         $audit->platform('auth.login_succeeded', actor: $user, ipAddress: $request->ip(), userAgent: $request->userAgent());
 

@@ -3,6 +3,7 @@
 namespace App\Support\Observability;
 
 use App\Support\Email\EmailStatus;
+use App\Support\Email\Providers\EmailProviderResolver;
 use App\Support\Observability\Signals\OperationalSignals;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -268,6 +269,25 @@ class OperationalStatusService
         return $this->guarded('email', fn () => app(EmailStatus::class)->component())[0];
     }
 
+    /**
+     * Phase 0O.10A (ADR 0056 section 15): self-service account recovery --
+     * `disabled` (the default mode), `unavailable` (enabled, but critical
+     * email cannot carry it) or healthy. Degraded at worst; never readiness;
+     * no provider call.
+     */
+    public function accountRecovery(): ComponentStatus
+    {
+        return $this->guarded('account_recovery', function (): ComponentStatus {
+            if (! (bool) config('account_recovery.enabled')) {
+                return new ComponentStatus('account_recovery', OperationalStatus::Degraded, 'disabled');
+            }
+
+            return app(EmailProviderResolver::class)->criticalEmailAvailable()
+                ? new ComponentStatus('account_recovery', OperationalStatus::Healthy)
+                : new ComponentStatus('account_recovery', OperationalStatus::Degraded, 'unavailable');
+        })[0];
+    }
+
     public function aiGateway(): ComponentStatus
     {
         // ADR 0053: the Gateway integration is enabled only by its base URL.
@@ -315,6 +335,7 @@ class OperationalStatusService
             $this->communications(),
             $this->automation(),
             $this->email(),
+            $this->accountRecovery(),
             $this->aiGateway(),
         ];
     }

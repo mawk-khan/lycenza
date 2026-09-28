@@ -40,6 +40,9 @@ class LogSanitizer
         'verification_keys', 'assertion', 'jti', 'bsh',
         // ADR 0054: the cross-host sign-in ticket and the domain probe key.
         'ticket', 'probe_key',
+        // ADR 0056: account recovery credentials and links (`password`
+        // and `secret` above already cover new passwords and the secret).
+        'recovery_token', 'recovery_selector', 'recovery_link', 'recovery_url', 'reset_link', 'reset_url',
     ];
 
     /**
@@ -67,6 +70,10 @@ class LogSanitizer
         // ADR 0054: a domain ownership TXT value and a handoff ticket in a URL.
         '/\blycenza-domain-verification=[A-Za-z0-9_-]+/' => 'lycenza-domain-verification='.self::REDACTED,
         '/([?&]ticket=)[^&\s"\']+/' => '$1'.self::REDACTED,
+        // ADR 0056: an account recovery link -- its selector path segment
+        // and its `#secret` fragment -- and any secret-shaped fragment.
+        '/(\/account-recovery\/)[A-Za-z0-9_-]{22}(?:#[A-Za-z0-9_-]*)?/' => '$1'.self::REDACTED,
+        '/#[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/' => '#'.self::REDACTED,
     ];
 
     /**

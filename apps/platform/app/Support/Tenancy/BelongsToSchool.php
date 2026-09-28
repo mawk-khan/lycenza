@@ -3,6 +3,7 @@
 namespace App\Support\Tenancy;
 
 use App\Models\School;
+use App\Support\Email\PlatformEmailScope;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -26,7 +27,9 @@ trait BelongsToSchool
         static::addGlobalScope(new SchoolScope);
 
         static::creating(function ($model): void {
-            if (empty($model->school_id)) {
+            // Phase 0O.10A: an identity-level row (no School) is created only
+            // inside the platform email scope.
+            if (empty($model->school_id) && ! ($model instanceof AllowsIdentityLevelRows && app(PlatformEmailScope::class)->active())) {
                 $context = app(TenantContext::class);
                 $model->school_id = $context->requireSchool()->id;
             }

@@ -85,6 +85,9 @@ web_environment:
     - MAIL_SUPPRESSION_HMAC_KEY=dev-local-only-mail-suppression-hmac-key-change-me
     - MAIL_SUPPRESSION_HMAC_KEY_ID=dev-1
     - COMMUNICATION_EMAIL_ENABLED=true
+    # Phase 0O.10A (ADR 0056): self-service recovery, rehearsed against
+    # Mailpit (docs/development/DDEV-DEMO-REVIEW.md).
+    - ACCOUNT_RECOVERY_ENABLED=true
     # Local disk storage -- Documents and Communication attachments
     # already default to the `local` disk (config/documents.php,
     # config/communications.php), so no MinIO/S3 service is needed.

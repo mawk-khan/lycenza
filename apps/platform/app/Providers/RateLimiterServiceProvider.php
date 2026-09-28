@@ -178,6 +178,21 @@ class RateLimiterServiceProvider extends ServiceProvider
         // its signature is checked), generous for legitimate batches.
         RateLimiter::for('email-provider-events', fn (Request $request) => Limit::perMinute((int) config('email.events.per_minute'))->by('email-provider-events:'.$request->ip()));
 
+        // Phase 0O.10A (ADR 0056 sections 5.3, 8.3): account recovery. The
+        // request: 10 per 15 minutes per IP and 1,000 per hour overall
+        // (generic 429); the silent per-identity limit is applied in the
+        // application (AccountRecoveryIdentityLimiter). The reset: 20 per 15
+        // minutes per IP and 5 per 15 minutes per selector (hashed; never
+        // the secret).
+        RateLimiter::for('account-recovery-request', fn (Request $request) => [
+            Limit::perMinutes(15, (int) config('account_recovery.limits.per_ip_per_15_minutes'))->by('account-recovery-ip:'.$request->ip()),
+            Limit::perHour((int) config('account_recovery.limits.global_per_hour'))->by('account-recovery-global'),
+        ]);
+        RateLimiter::for('account-recovery-reset', fn (Request $request) => [
+            Limit::perMinutes(15, (int) config('account_recovery.limits.reset_per_ip_per_15_minutes'))->by('account-recovery-reset-ip:'.$request->ip()),
+            Limit::perMinutes(15, (int) config('account_recovery.limits.reset_per_selector_per_15_minutes'))->by('account-recovery-reset-selector:'.hash('sha256', (string) $request->route('selector'))),
+        ]);
+
         RateLimiter::for('guardian-invitation-accept', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
 
         // Phase 0H.4D-P1 section 14/23: MFA has three separate attack

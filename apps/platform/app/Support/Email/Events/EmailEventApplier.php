@@ -10,6 +10,7 @@ use App\Support\Email\EmailKind;
 use App\Support\Email\EmailSources;
 use App\Support\Email\EmailState;
 use App\Support\Email\EmailTelemetry;
+use App\Support\Email\PlatformEmailScope;
 use App\Support\Email\Suppression\EmailSuppressionService;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +42,7 @@ final class EmailEventApplier
         private readonly EmailSuppressionService $suppressions,
         private readonly EmailSources $sources,
         private readonly EmailTelemetry $telemetry,
+        private readonly PlatformEmailScope $platform,
     ) {}
 
     public function apply(string $eventId): void
@@ -62,15 +64,19 @@ final class EmailEventApplier
             ->where('provider_message_id', $event->provider_message_id)
             ->first();
 
-        $school = $reference === null ? null : School::query()->find($reference->school_id);
+        $school = $reference?->school_id === null ? null : School::query()->find($reference->school_id);
 
-        if ($reference === null || $school === null) {
+        if ($reference === null || ($reference->school_id !== null && $school === null)) {
             $this->close($event, 'unknown_message');
 
             return;
         }
 
-        $changed = $this->context->withSchool($school, fn () => DB::transaction(function () use ($event, $reference): ?EmailMessage {
+        // The stored School -- or, for an identity-level message (ADR 0056),
+        // the platform email scope. Never anything from the payload.
+        $inScope = fn (callable $work) => $school !== null ? $this->context->withSchool($school, $work) : $this->platform->run($work);
+
+        $changed = $inScope(fn () => DB::transaction(function () use ($event, $reference): ?EmailMessage {
             $message = EmailMessage::query()->whereKey($reference->email_message_id)->lockForUpdate()->first();
 
             // Claim the event itself inside the same transaction.
@@ -115,7 +121,7 @@ final class EmailEventApplier
                 default => 'none',
             });
 
-            $this->context->withSchool($school, fn () => $this->sources->for($changed->source_type)?->project($changed));
+            $inScope(fn () => $this->sources->for($changed->source_type)?->project($changed));
         }
     }
 

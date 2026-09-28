@@ -5,6 +5,7 @@ namespace App\Support\Observability\Metrics;
 use App\Support\Domains\DomainSignals;
 use App\Support\Email\EmailSignals;
 use App\Support\Email\Events\EmailEventAdapterResolver;
+use App\Support\Email\Providers\EmailProviderResolver;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Observability\OperationalStatus;
 use App\Support\Observability\OperationalStatusService;
@@ -186,6 +187,14 @@ final class MetricsExporter
             if (app(EmailEventAdapterResolver::class)->active() !== null) {
                 $this->gauge('lycenza_email_last_event_timestamp_seconds', [], $signals->lastEventAt()?->getTimestamp() ?? 0);
             }
+        });
+
+        // Phase 0O.10A (ADR 0056 section 15): account recovery is enabled, and
+        // whether critical email can actually carry it (no provider call).
+        $this->collect('account_recovery', function (): void {
+            $enabled = (bool) config('account_recovery.enabled');
+            $this->gauge('lycenza_account_recovery_enabled', ['state' => 'enabled'], $enabled ? 1 : 0);
+            $this->gauge('lycenza_account_recovery_enabled', ['state' => 'available'], $enabled && app(EmailProviderResolver::class)->criticalEmailAvailable() ? 1 : 0);
         });
 
         $this->collect('evidence', fn () => $this->evidenceSamples());

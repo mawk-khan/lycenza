@@ -37,6 +37,7 @@ final class OutboundEmailGateway
         private readonly SenderIdentity $sender,
         private readonly EmailNormalizer $normalizer,
         private readonly EmailTelemetry $telemetry,
+        private readonly PlatformEmailScope $scope,
     ) {}
 
     /**
@@ -57,17 +58,55 @@ final class OutboundEmailGateway
         array $attachments = [],
         ?CarbonInterface $expiresAt = null,
     ): EmailMessage {
-        if (! $purpose->isImplemented()) {
-            throw new InvalidArgumentException("Email purpose '{$purpose->value}' is reserved and cannot be sent.");
+        if ($purpose->isIdentityLevel()) {
+            throw new InvalidArgumentException("Email purpose '{$purpose->value}' is identity-level: use queueForIdentity().");
         }
 
+        return $this->create($school, $purpose, $sourceId, $recipient, $subject, $text, $html, $attachments, $expiresAt);
+    }
+
+    /**
+     * ADR 0056 section 9.3: an IDENTITY-level message (account recovery,
+     * security notice) -- no School, no School name, created inside the
+     * platform email scope (it may run inside the caller's transaction).
+     */
+    public function queueForIdentity(
+        EmailPurpose $purpose,
+        string $sourceId,
+        string $recipient,
+        string $subject,
+        string $text,
+        ?string $html,
+        CarbonInterface $expiresAt,
+    ): EmailMessage {
+        if (! $purpose->isIdentityLevel()) {
+            throw new InvalidArgumentException("Email purpose '{$purpose->value}' belongs to a School.");
+        }
+
+        return $this->scope->run(fn () => $this->create(null, $purpose, $sourceId, $recipient, $subject, $text, $html, [], $expiresAt));
+    }
+
+    /**
+     * @param  list<array{disk: string, path: string, name: string, mime: string}>  $attachments
+     */
+    private function create(
+        ?School $school,
+        EmailPurpose $purpose,
+        string $sourceId,
+        string $recipient,
+        string $subject,
+        string $text,
+        ?string $html,
+        array $attachments,
+        ?CarbonInterface $expiresAt,
+    ): EmailMessage {
         // Critical mail carries access links: its content lifetime is the
         // link's, which only the producer knows (ADR 0055 section 9.4).
         if ($purpose->kind() === EmailKind::Critical && $expiresAt === null) {
             throw new InvalidArgumentException('Critical email needs the lifetime of the link it carries.');
         }
 
-        $sourceType = (string) $purpose->sourceType();
+        $sourceType = $purpose->sourceType();
         $address = $this->normalizer->normalize($recipient);
         $id = (string) new UuidV7;
         $domain = $this->sender->sendingDomain();
@@ -75,14 +114,14 @@ final class OutboundEmailGateway
         try {
             $message = DB::transaction(fn () => EmailMessage::query()->create([
                 'id' => $id,
-                'school_id' => $school->id,
+                'school_id' => $school?->id,
                 'purpose' => $purpose,
                 'kind' => $purpose->kind(),
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
                 'recipient_encrypted' => $address,
                 'from_mailbox' => SenderIdentity::DEFAULT_MAILBOX,
-                'from_display_name' => $this->sender->displayName($school->name),
+                'from_display_name' => $this->sender->displayName($school?->name),
                 'subject' => HeaderValue::subject($subject, 'Message from '.$this->sender->platformName()),
                 'sealed_content' => ['text' => $text, 'html' => $html, 'attachments' => $attachments],
                 // Fixed now when the sending domain is known, else at the first
@@ -98,7 +137,7 @@ final class OutboundEmailGateway
 
         $this->telemetry->message($purpose, 'queued');
 
-        SubmitEmailMessageJob::dispatch($school->id, $message->id)
+        SubmitEmailMessageJob::dispatch($school?->id, $message->id)
             ->onQueue(QueueName::Notifications->value)
             ->afterCommit();
 

@@ -127,7 +127,9 @@ final class EmailSubmissionService
                 return $this->finish($message, EmailState::Cancelled, 'source_withdrawn');
             }
 
-            if (! $this->schools->holdOperational($message->school_id)) {
+            // ADR 0056 section 9.3: an identity-level message has no School;
+            // a School's lifecycle is never authority over an identity.
+            if ($message->school_id !== null && ! $this->schools->holdOperational($message->school_id)) {
                 // Waits until the School is RESUMED; the sweeper skips
                 // non-active Schools, so this does not loop.
                 return $this->defer($message, $now, 'school_not_operational');

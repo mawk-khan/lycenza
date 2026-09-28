@@ -302,7 +302,7 @@ Other findings:
 | O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | **RESOLVED — ADR 0055 (Phase 0O.9)**: Lycenza-controlled, deployment-configured sending domain (never a School web domain); closed From mailbox catalog, sanitized School display name, no School Reply-To in v1; one provider-neutral adapter at a time; one durable email layer (message/attempt/event/suppression) beneath invitations (outbox, outside the transaction) and Communications; authenticated, deduplicated provider events; global suppression; SPF/DKIM alignment and DMARC ≥ `p=quarantine` at readiness. **Repository implementation COMPLETE (Phase 0O.9A, §33)**; deployment evidence outstanding | Product + operations | Real email |
-| O14 | Password reset for production accounts | **RESOLVED — ADR 0056 (Phase 0O.10)**: identity-level self-service password recovery on the canonical platform host only; eligible = active, non-root human Users with a local password (root stays console/operator-only); enumeration-resistant generic response with asynchronous issuance; 256-bit selector+secret credential (SHA-256 stored, secret in the URL fragment), 30 min, single-use, ≤ 3 active, never consumed by GET; ADR 0055 critical `account_recovery` email only when critical email is available; the reset bumps `users.credential_version` (every session on every host ends), revokes human personal access tokens and elevations, preserves MFA, never auto-logs in. **Implementation: Phase 0O.10A (not started)** | Product + security | Production operations |
+| O14 | Password reset for production accounts | **RESOLVED — ADR 0056 (Phase 0O.10)**: identity-level self-service password recovery on the canonical platform host only; eligible = active, non-root human Users with a local password (root stays console/operator-only); enumeration-resistant generic response with asynchronous issuance; 256-bit selector+secret credential (SHA-256 stored, secret in the URL fragment), 30 min, single-use, ≤ 3 active, never consumed by GET; ADR 0055 critical `account_recovery` email only when critical email is available; the reset bumps `users.credential_version` (every session on every host ends), revokes human personal access tokens and elevations, preserves MFA, never auto-logs in. **Implemented in the repository by Phase 0O.10A** (§36); deployment evidence (ADR 0056 §20) outstanding | Product + security | Production operations |
 | O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | No | Product | S4 |
 | O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest; repository controls COMPLETE (0O.6F: runtime security contract, approved exceptions `OWNER-0O6E-2026-09-26`), deployment evidence outstanding | Security | Supply chain |
 
@@ -1449,6 +1449,77 @@ staff-account onboarding path exists (ADR 0056 §17).
   **[LEGAL REVIEW REQUIRED]**; not resolved here.
 - **Exception clock:** the VERIFIED artifacts' exception records expire
   **2026-10-10** and **2026-10-26**; nothing is renewed.
+- Decisions **O1, O2, O15** remain open.
+- Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- The **real restore drill is still outstanding**.
+
+## 36. Phase 0O.10A — Account Recovery Foundation (COMPLETE — repository, 2026-09-28)
+
+ADR 0056 is **implemented in the repository**. The implementation amendment
+is ADR 0056 §24, the runbook is `docs/operations/ACCOUNT-RECOVERY.md` and
+the rule is CLAUDE.md rule 90. `ACCOUNT_RECOVERY_ENABLED` is `false`
+everywhere except DDEV. There is no real email, provider or production
+enablement.
+
+**Built:**
+- **Identity.**
+  - One canonical email form, enforced by `users_email_canonical_check`
+    (the migration audits first and refuses on violating data).
+  - Login now accepts any case.
+  - A failed login audits a keyed fingerprint, never the typed address.
+- **Recovery flow.**
+  - Platform-host-only pages (404 on School hosts, 421 on unknown hosts)
+    with one generic response for every case.
+  - IP and global 429 limits; silent per-address limits keyed by an HKDF
+    derivation of `APP_KEY`.
+  - Encrypted asynchronous issuance; `account_recovery_requests`
+    (selector + SHA-256 of a 256-bit fragment secret, 30 min, single use,
+    at most 3 open, never invalidating older ones).
+  - A GET never consumes; the reset is a CSRF-protected POST behind its
+    own IP + selector limit.
+- **Revocation.**
+  - `users.credential_version`, bumped by the database on password, email
+    or disable, which voids open credentials with a reason.
+  - Stamped at every sign-in path; the global `EnforceCredentialVersion`
+    signs stale sessions out on every host (the cross-host handoff and a
+    pending MFA challenge included).
+- **One password writer.** `CredentialChangeService`: remember token,
+  human personal access tokens (partner/service untouched), elevation
+  `credential_reset`, MFA untouched.
+- **Notice and email.** A post-commit `security_notice`. Identity-level
+  email (nullable `school_id`, `PlatformEmailScope`, its own RLS policy
+  mode and fairness bucket).
+- **Operator.** `platform:user-password-reset` (root's only path),
+  `platform:account-recovery-status`, hourly `platform:account-recovery-prune`.
+- **Observability.** Three counters and an enabled/available gauge;
+  alerts **OBS-39..OBS-41**; the `account_recovery` Operations Status
+  component (Degraded at worst; never readiness); a production guard
+  (`account_recovery_email_disabled`).
+- **Legacy removed.** Laravel's stock reset broker (table, default broker,
+  notification; architecture-tested).
+- **Tests.** Real-process concurrency for the same link, two links, and a
+  reset racing a disable, an email change, an operator reset and a
+  personal-access-token use.
+
+**Findings (ADR 0056 §17):** case-sensitive login and the raw address in
+failed-login audits are **fixed**; global session revocation is **fixed**.
+**Recorded debt:** a signed-in password change UI (must call
+`CredentialChangeService`), self-service lost-MFA recovery, and production
+staff/School-admin account provisioning.
+
+**Deployment evidence outstanding (ADR 0056 §20):**
+- production critical email under ADR 0055 (O13 evidence);
+- a deliberate `ACCOUNT_RECOVERY_ENABLED=true` on the real platform origin;
+- a non-production drill (success, expiry, replay, concurrency, two-host
+  sign-out, MFA still required);
+- routed alerts and an exercised operator runbook.
+
+- **O14:** repository implementation **COMPLETE**; deployment evidence
+  **OUTSTANDING**.
+- **O13 legal retention:** `MAIL_RETENTION_DAYS` remains
+  **[LEGAL REVIEW REQUIRED]**.
 - Decisions **O1, O2, O15** remain open.
 - Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
 - Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS

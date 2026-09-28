@@ -887,8 +887,9 @@ docs/roadmap             MASTER-ROADMAP.md
     never silently sinks (ADR 0055).** Business code never calls Laravel's
     `Mail`, a Mailable or a mail transport: it queues through
     `App\Support\Email\OutboundEmailGateway` with a purpose from the closed
-    `EmailPurpose` catalog (reserved `account_recovery`/`security_notice`
-    have no producer until their own contract) -- in the caller's
+    `EmailPurpose` catalog (the identity-level `account_recovery`/
+    `security_notice` go only through `queueForIdentity()`, with no School,
+    inside `App\Support\Email\PlatformEmailScope` -- ADR 0056) -- in the caller's
     transaction, submitted only after commit by `SubmitEmailMessageJob`.
     From is `notifications@MAIL_SENDING_DOMAIN` (a Lycenza, reserved domain,
     never a School web domain) with a sanitized "<School> via <platform>"
@@ -902,6 +903,27 @@ docs/roadmap             MASTER-ROADMAP.md
     released only by `platform:mail-suppression-release`; critical mail never
     bypasses it. `MAIL_PROVIDER=none` is the explicit disabled mode; the
     fake provider and fake event adapter exist only in local/testing.
+
+90. **Account recovery is identity-level, platform-host-only and
+    enumeration-resistant; every credential change bumps
+    `users.credential_version` (ADR 0056).** Emails are canonical (trim +
+    lowercase, `EmailNormalizer::canonical()`, database-checked). Recovery
+    answers ONE generic response for every well-formed address, does no
+    account lookup on the request path (the encrypted
+    `IssueAccountRecoveryJob` decides), never serves a School host, never
+    accepts a return URL, and is off unless `ACCOUNT_RECOVERY_ENABLED` (production
+    refuses it without critical email). Root never recovers by email --
+    only `platform:user-password-reset`. The secret lives only in the link's
+    `#fragment` and as SHA-256; a GET never consumes; every failure is the
+    same "invalid or expired". A password is written ONLY by
+    `CredentialChangeService` (version bump, remember token, human personal
+    access tokens, elevation `credential_reset`; MFA never touched), inside
+    a transaction that locked the User row first. Every path that signs a
+    browser in stamps the version (`CredentialSession::stamp`), and
+    `EnforceCredentialVersion` signs out any session whose stamp is missing
+    or stale on every host. Never reintroduce Laravel's stock reset broker,
+    never log/audit an address, selector, secret, link or password, and
+    never let a new request invalidate an older one.
 
 ## Running things locally
 

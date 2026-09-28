@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $provider
  * @property string $provider_message_id
  * @property string $email_message_id
- * @property string $school_id
+ * @property string|null $school_id (null for identity-level email, ADR 0056)
  */
 class EmailProviderReference extends Model
 {

@@ -7,6 +7,7 @@ use App\Http\Middleware\RequireSchoolContext;
 use App\Models\PlatformAuditEvent;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\CredentialSession;
 use App\Support\Auth\CrossHostHandoff;
 use App\Support\Domains\DomainDirectory;
 use App\Support\Observability\LogSanitizer;
@@ -51,7 +52,7 @@ class CrossHostHandoffTest extends TestCase
         /** @var SessionGuard $guard */
         $guard = Auth::guard('web');
 
-        return $this->actingAs($user)->withSession([$guard->getName() => $user->id]);
+        return $this->actingAs($user)->withSession([$guard->getName() => $user->id, CredentialSession::KEY => CredentialSession::current($user)]);
     }
 
     /** Switch on the platform host and return the handoff URL the browser is sent to. */

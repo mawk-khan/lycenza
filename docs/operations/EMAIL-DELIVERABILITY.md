@@ -181,6 +181,10 @@ is true.
 - A post-reset `security_notice` follows.
 - Both are identity-level (no School). They use a separate `platform`
   budget bucket and a sanctioned platform-email RLS scope.
+- Operating recovery (enablement, OBS-39..41, the operator reset) is in
+  [ACCOUNT-RECOVERY](ACCOUNT-RECOVERY.md). `platform:mail-retry` and
+  `platform:mail-fake-event` take the School argument `platform` for
+  identity-level mail; the redispatch sweep covers it automatically.
 
 ## Provider-side suppression
 

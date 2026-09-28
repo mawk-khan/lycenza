@@ -137,6 +137,9 @@ return [
         'global_standard_per_minute' => (int) env('MAIL_GLOBAL_PER_MINUTE', 600),
         'global_critical_per_minute' => (int) env('MAIL_GLOBAL_CRITICAL_PER_MINUTE', 120),
         'global_max_in_flight' => (int) env('MAIL_GLOBAL_MAX_IN_FLIGHT', 50),
+        // ADR 0056: identity-level mail (account recovery, security notices).
+        'platform_critical_per_minute' => (int) env('MAIL_PLATFORM_CRITICAL_PER_MINUTE', 120),
+        'platform_critical_per_day' => (int) env('MAIL_PLATFORM_CRITICAL_PER_DAY', 20000),
         // In-flight slots only critical mail may use (per School and globally).
         'critical_reserved_in_flight' => 1,
     ],

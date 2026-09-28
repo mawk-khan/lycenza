@@ -293,7 +293,7 @@ Phase 0O.5A implements the repository side. In short:
 - **Heartbeats:** process-class, not replica: scheduler task heartbeats
   (all tasks) and per-queue canary jobs for `default`, `integrations` and
   `notifications`.
-- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-38 (OBS-31–OBS-38, Phase 0O.9A / ADR 0055: production email — see "Production email" below; OBS-27: ADR 0053 service authentication; OBS-28–OBS-30, Phase 0O.8A / ADR 0054: a custom domain suspended — SEV-3; a custom-domain certificate ≤ 21 days from expiry — SEV-3, ≤ 7 days — SEV-2; custom-domain checks indeterminate for 3 days — SEV-3; runbook `docs/operations/CUSTOM-DOMAINS.md`; none pages as SEV-1 and none touches readiness) with thresholds derived from
+- **Alerts:** SEV-1/2/3 catalog OBS-01…OBS-41 (OBS-39–OBS-41, Phase 0O.10A / ADR 0056: account recovery — see "Account recovery" below; OBS-31–OBS-38, Phase 0O.9A / ADR 0055: production email — see "Production email" below; OBS-27: ADR 0053 service authentication; OBS-28–OBS-30, Phase 0O.8A / ADR 0054: a custom domain suspended — SEV-3; a custom-domain certificate ≤ 21 days from expiry — SEV-3, ≤ 7 days — SEV-2; custom-domain checks indeterminate for 3 days — SEV-3; runbook `docs/operations/CUSTOM-DOMAINS.md`; none pages as SEV-1 and none touches readiness) with thresholds derived from
   this file's cadences and ADR 0050's recovery objectives.
 - **Operations status** stays the operator view over the same checks,
   complete (all heartbeats, all three queues, Communications, Automation,
@@ -386,20 +386,33 @@ None pages as SEV-1. The runbook is
 - Scheduled tasks: `email-messages-redispatch` (every minute; recovery
   source `email`) and `email-prune` (daily).
 
-## Account recovery (ADR 0056, Phase 0O.10 — contract; built in 0O.10A)
+## Account recovery (ADR 0056, Phase 0O.10 — contract; built in Phase 0O.10A)
 
-Nothing below exists yet.
 - **Metrics** (closed labels only; never email, user, School, selector, IP
   or token):
-  - `lycenza_account_recovery_requests_total{outcome}`;
-  - `lycenza_account_recovery_issuance_total{outcome}`;
-  - `lycenza_account_recovery_resets_total{outcome}`;
-  - the `lycenza_account_recovery_enabled` gauge.
-- **Alerts** (conceptual; OBS ids are assigned in 0O.10A after OBS-38):
-  - a request spike (SEV-3, operator value);
-  - an invalid-reset spike (SEV-3, operator value);
-  - recovery enabled while critical email is unavailable (SEV-2).
+  - `lycenza_account_recovery_requests_total{outcome}`: `accepted`,
+    `rate_limited_identity`, `dispatch_failed` (the IP and global 429s are
+    route throttles, visible as HTTP 4xx);
+  - `lycenza_account_recovery_issuance_total{outcome}`: `issued`,
+    `unknown`, `ineligible`, `active_limit`, `email_unavailable`,
+    `disabled` (aggregate, operator-only; never per account);
+  - `lycenza_account_recovery_resets_total{outcome}`: `succeeded`,
+    `invalid`, `policy_rejected`;
+  - `lycenza_account_recovery_enabled{state="enabled"|"available"}`.
+- **Alerts** (runbook `docs/operations/ACCOUNT-RECOVERY.md`; none pages as
+  SEV-1, none touches readiness):
+  - OBS-39: request spike (SEV-3; operator value
+    `ALERT_ACCOUNT_RECOVERY_REQUESTS_PER_HOUR`);
+  - OBS-40: invalid-reset spike (SEV-3; operator value
+    `ALERT_ACCOUNT_RECOVERY_INVALID_RESETS_PER_HOUR`);
+  - OBS-41: recovery enabled while critical email is unavailable (SEV-2,
+    for 5 minutes).
 
-  Recovery-email backlog is OBS-31.
-- **Operations Status:** an `account_recovery` component (`disabled`,
+  Recovery-email backlog is OBS-31 (critical class).
+- **Operations Status:** the `account_recovery` component (`disabled`,
   `unavailable`, healthy). Degraded at worst; never readiness.
+- **Logs:** `auth.account_recovery.reset` (outcome only),
+  `auth.account_recovery.dispatch_failed`, `auth.session_revoked`
+  (reason only). `LogSanitizer` redacts the recovery keys and any recovery
+  link or 43-character fragment.
+- **Scheduled task:** `account-recovery-prune` (hourly).

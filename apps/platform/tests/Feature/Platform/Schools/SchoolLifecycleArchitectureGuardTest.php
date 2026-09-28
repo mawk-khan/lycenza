@@ -23,6 +23,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'RecordSchoolAuditPingJob.php',  // Phase 0B demo: writes audit evidence only
         'WorkerCanaryJob.php',           // Phase 0O.5A: no-op worker-class heartbeat, no School
         'ApplyEmailEventJob.php',        // Phase 0O.9A: records provider evidence and suppression; never sends
+        'IssueAccountRecoveryJob.php',   // Phase 0O.10A: identity-level (ADR 0056), no School; its email is submitted by SubmitEmailMessageJob
     ];
 
     /** Business jobs and where their execution-time lifecycle check lives. */

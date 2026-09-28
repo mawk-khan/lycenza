@@ -284,6 +284,14 @@ strip dots or `+tags`, and does **not** apply any provider-specific
 aliasing (e.g. Gmail's dot-insensitivity) — `a.b@x.com` and `ab@x.com`
 are never treated as the same identity.
 
+Phase 0O.10A (ADR 0056 §4.4): `EmailNormalizer::canonical()` (trim +
+lowercase, no validation) is the ONE canonical form of a User's email.
+The `User` model writes it, login compares with it, and the database
+refuses anything else (`users_email_canonical_check`). A Guardian who
+activates an account therefore signs in with any case of the address, and
+can recover a lost password on the platform host
+(`docs/operations/ACCOUNT-RECOVERY.md`) once recovery is enabled.
+
 `App\Support\Privacy\PhoneNormalizer`: requires canonical **E.164**
 input at the normalization boundary
 (`/^\+[1-9]\d{7,14}$/` — a leading `+`, non-zero first digit, 8-15

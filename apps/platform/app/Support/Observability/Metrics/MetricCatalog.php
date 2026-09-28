@@ -3,6 +3,7 @@
 namespace App\Support\Observability\Metrics;
 
 use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Domain\Identity\Application\AccountRecovery\AccountRecoveryTelemetry;
 use App\Support\Domains\DomainState;
 use App\Support\Domains\DomainTelemetry;
 use App\Support\Email\EmailTelemetry;
@@ -139,6 +140,13 @@ final class MetricCatalog
             'lycenza_email_oldest_pending_age_seconds' => self::gauge('How long the oldest not-yet-accepted email has existed, by purpose (0 when none).', ['message_class' => EmailTelemetry::messageClasses()]),
             'lycenza_email_last_event_timestamp_seconds' => self::gauge('Unix time the last provider event was received (only while a provider event adapter is configured; 0 when none yet).', []),
 
+            // Account recovery (ADR 0056 section 15; never email, User, School,
+            // selector, IP or token)
+            'lycenza_account_recovery_requests_total' => self::counter('Password-recovery requests answered (every one gets the same generic response) by closed outcome.', ['outcome' => AccountRecoveryTelemetry::REQUEST_OUTCOMES]),
+            'lycenza_account_recovery_issuance_total' => self::counter('Password-recovery issuance decisions (operator-only view) by closed outcome.', ['outcome' => AccountRecoveryTelemetry::ISSUANCE_OUTCOMES]),
+            'lycenza_account_recovery_resets_total' => self::counter('Password-reset submissions by closed outcome (invalid covers every credential failure).', ['outcome' => AccountRecoveryTelemetry::RESET_OUTCOMES]),
+            'lycenza_account_recovery_enabled' => self::gauge('1 when self-service account recovery is enabled; with `available` 0 while critical email is not available.', ['state' => ['enabled', 'available']]),
+
             // Automation (never rule, School or subject)
             'lycenza_automation_executions_total' => self::counter('Automation executions by outcome.', ['outcome' => ['started', 'succeeded', 'skipped', 'failed', 'abandoned']]),
             'lycenza_automation_pending_executions' => self::gauge('Pending or running Automation executions.', ['state' => ['pending', 'running']]),
@@ -156,7 +164,7 @@ final class MetricCatalog
             'lycenza_restore_drill_last_result' => self::gauge('Deployment evidence: 1 PASS / 0 FAIL of the last drill.', []),
 
             // Telemetry about telemetry
-            'lycenza_metrics_collection_errors_total' => self::counter('Metric writes or scrape-time collections that failed (best effort).', ['component' => ['recorder', 'queues', 'outbox', 'backlog', 'heartbeats', 'failed_jobs', 'readiness', 'ai_gateway', 'evidence', 'domains', 'email']]),
+            'lycenza_metrics_collection_errors_total' => self::counter('Metric writes or scrape-time collections that failed (best effort).', ['component' => ['recorder', 'queues', 'outbox', 'backlog', 'heartbeats', 'failed_jobs', 'readiness', 'ai_gateway', 'evidence', 'domains', 'email', 'account_recovery']]),
         ];
     }
 
@@ -178,12 +186,12 @@ final class MetricCatalog
             'outbox-dispatch', 'webhook-deliveries-redispatch', 'communication-deliveries-redispatch',
             'communications-publish-scheduled', 'automation-executions-redispatch', 'expire-school-elevations',
             'worker-canaries', 'idempotency-prune', 'webhook-deliveries-prune', 'domains-check',
-            'email-messages-redispatch', 'email-prune',
+            'email-messages-redispatch', 'email-prune', 'account-recovery-prune',
         ];
     }
 
     /** Daily tasks (their staleness window is a day, not minutes). */
-    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune'];
+    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune'];
 
     /**
      * @param  array<string, string>  $labels

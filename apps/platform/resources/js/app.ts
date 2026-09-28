@@ -1,8 +1,12 @@
 import { createApp, h, type DefineComponent } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import AccountLayout from './Layouts/AccountLayout.vue';
+import { captureRecoveryFragment } from './support/recoveryFragment';
 
 const appName = import.meta.env.VITE_APP_NAME || 'School OS';
+
+// Before Inertia reads the URL (ADR 0056 section 8.1).
+captureRecoveryFragment();
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

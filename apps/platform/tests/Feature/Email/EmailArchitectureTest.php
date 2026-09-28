@@ -100,11 +100,21 @@ class EmailArchitectureTest extends TestCase
         $this->assertStringContainsString('CommunicationDeliveryResult::accepted(', $driver);
         $this->assertStringNotContainsString('CommunicationDeliveryResult::sent(', $driver);
 
-        // Reserved purposes have no producer (O14 is not implemented here).
+        // Phase 0O.10A (ADR 0056): the identity-level purposes have exactly
+        // one producer each, through queueForIdentity() -- nothing else
+        // names them.
+        $producers = [
+            'EmailPurpose::AccountRecovery' => 'app/Domain/Identity/Application/AccountRecovery/AccountRecoveryIssuer.php',
+            'EmailPurpose::SecurityNotice' => 'app/Domain/Identity/Application/AccountRecovery/SecurityNoticeService.php',
+        ];
+        foreach ($producers as $purpose => $producer) {
+            $this->assertStringContainsString('->queueForIdentity(', (string) file_get_contents(base_path($producer)), $producer);
+        }
         foreach ($this->appSources() as $path => $source) {
-            if ($path !== 'app/Support/Email/EmailPurpose.php') {
-                $this->assertStringNotContainsString('EmailPurpose::AccountRecovery', $source, $path);
-                $this->assertStringNotContainsString('EmailPurpose::SecurityNotice', $source, $path);
+            foreach ($producers as $purpose => $producer) {
+                if (! in_array($path, ['app/Support/Email/EmailPurpose.php', $producer], true)) {
+                    $this->assertStringNotContainsString($purpose, $source, $path);
+                }
             }
         }
     }
@@ -143,7 +153,7 @@ class EmailArchitectureTest extends TestCase
     #[Test]
     public function o14_can_only_rely_on_email_when_the_critical_substrate_is_available(): void
     {
-        $this->assertFalse(EmailPurpose::AccountRecovery->isImplemented(), 'O14 is not implemented by 0O.9A');
+        $this->assertTrue(EmailPurpose::AccountRecovery->isImplemented(), 'O14 is implemented by 0O.10A');
         $this->assertSame('critical', EmailPurpose::AccountRecovery->kind()->value);
 
         $resolver = app(EmailProviderResolver::class);

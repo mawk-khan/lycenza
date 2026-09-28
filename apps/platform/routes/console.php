@@ -110,6 +110,13 @@ Schedule::command('platform:webhook-deliveries-prune')
     ->withoutOverlapping()
     ->name('webhook-deliveries-prune');
 
+// Phase 0O.10A (ADR 0056 section 13): ended password-recovery credentials
+// are deleted 24 hours later (technical data; the audit is separate).
+Schedule::command('platform:account-recovery-prune')
+    ->hourly()
+    ->withoutOverlapping()
+    ->name('account-recovery-prune');
+
 // Phase 0O.9A (ADR 0055 section 21): email metadata retention,
 // MAIL_RETENTION_DAYS -- no default ([LEGAL REVIEW REQUIRED]); until it is
 // configured this run deletes nothing and logs `platform.email_prune.unconfigured`.

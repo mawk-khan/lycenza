@@ -124,6 +124,9 @@
         <env name="MAIL_PROVIDER_CLICK_TRACKING" value="false" force="true"/>
         <env name="MAIL_PROVIDER_DEBUG" value="false" force="true"/>
         <env name="MAIL_RETENTION_DAYS" value="" force="true"/>
+        <!-- Phase 0O.10A (ADR 0056): recovery is off by default; tests
+             that need it enable it explicitly through config. -->
+        <env name="ACCOUNT_RECOVERY_ENABLED" value="false" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>
         <env name="PULSE_ENABLED" value="false" force="true"/>

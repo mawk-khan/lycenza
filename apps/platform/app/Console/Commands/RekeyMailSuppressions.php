@@ -6,6 +6,7 @@ use App\Models\EmailMessage;
 use App\Models\EmailProviderReference;
 use App\Models\EmailSuppression;
 use App\Models\School;
+use App\Support\Email\PlatformEmailScope;
 use App\Support\Email\Suppression\EmailSuppressionService;
 use App\Support\Email\Suppression\SuppressionKeyRing;
 use App\Support\Tenancy\TenantContext;
@@ -46,9 +47,16 @@ class RekeyMailSuppressions extends Command
         foreach ($rows as $row) {
             $reference = $row->source_email_message_id === null ? null
                 : EmailProviderReference::query()->where('email_message_id', $row->source_email_message_id)->first();
-            $school = $reference === null ? null : School::query()->find($reference->school_id);
+            $school = $reference?->school_id === null ? null : School::query()->find($reference->school_id);
+            $find = fn () => EmailMessage::query()->find($row->source_email_message_id)?->recipient();
 
-            $address = $school === null ? null : $context->withSchool($school, fn () => EmailMessage::query()->find($row->source_email_message_id)?->recipient());
+            // An identity-level message (ADR 0056) is read in the platform email scope.
+            $address = match (true) {
+                $reference === null => null,
+                $reference->school_id === null => app(PlatformEmailScope::class)->run($find),
+                $school === null => null,
+                default => $context->withSchool($school, $find),
+            };
 
             if ($address === null) {
                 $unrecoverable++;

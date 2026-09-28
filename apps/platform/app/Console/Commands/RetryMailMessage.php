@@ -7,6 +7,7 @@ use App\Models\EmailMessage;
 use App\Models\School;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Email\EmailSubmissionService;
+use App\Support\Email\PlatformEmailScope;
 use App\Support\Observability\QueueName;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
@@ -23,21 +24,26 @@ use Illuminate\Console\Command;
  */
 class RetryMailMessage extends Command
 {
-    protected $signature = 'platform:mail-retry {school : School id} {message : Email message id}';
+    protected $signature = 'platform:mail-retry {school : School id, or the word platform for an identity-level message} {message : Email message id}';
 
     protected $description = 'Make one waiting email message due now (ADR 0055; operator only, audited).';
 
     public function handle(TenantContext $context, EmailSubmissionService $submissions, AuditRecorder $audit): int
     {
-        $school = School::query()->find((string) $this->argument('school'));
+        // `platform` addresses an identity-level message (ADR 0056: account
+        // recovery, security notice), processed in the platform email scope.
+        $identityLevel = $this->argument('school') === 'platform';
+        $school = $identityLevel ? null : School::query()->find((string) $this->argument('school'));
 
-        if ($school === null) {
+        if (! $identityLevel && $school === null) {
             $this->error('No such School.');
 
             return self::FAILURE;
         }
 
-        $outcome = $context->withSchool($school, function () use ($submissions): string {
+        $inScope = fn (callable $work) => $school !== null ? $context->withSchool($school, $work) : app(PlatformEmailScope::class)->run($work);
+
+        $outcome = $inScope(function () use ($submissions): string {
             $message = EmailMessage::query()->find((string) $this->argument('message'));
 
             if ($message === null) {
@@ -48,7 +54,7 @@ class RetryMailMessage extends Command
         });
 
         $audit->platform('platform.email_message.retry_requested', metadata: [
-            'school_id' => $school->id,
+            'school_id' => $school?->id,
             'email_message_id' => (string) $this->argument('message'),
             'outcome' => explode(':', $outcome)[0],
         ]);
@@ -59,7 +65,7 @@ class RetryMailMessage extends Command
             return self::FAILURE;
         }
 
-        SubmitEmailMessageJob::dispatch($school->id, (string) $this->argument('message'))->onQueue(QueueName::Notifications->value);
+        SubmitEmailMessageJob::dispatch($school?->id, (string) $this->argument('message'))->onQueue(QueueName::Notifications->value);
         $this->info('Retry scheduled.');
 
         return self::SUCCESS;

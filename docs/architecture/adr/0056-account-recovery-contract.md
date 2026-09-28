@@ -1,6 +1,7 @@
 # ADR 0056: Account Recovery Contract
 
-- Status: Accepted (contract only; implementation is Phase 0O.10A)
+- Status: Accepted; **implemented in the repository by Phase 0O.10A**
+  (§24). Deployment evidence (§20) is outstanding.
 - Date: 2026-09-28 (Phase 0O.10)
 - Resolves: **O14** (`docs/architecture/PHASE-0O-READINESS.md` §8)
 - Consumes:
@@ -842,3 +843,71 @@ secure recovery, or while recovery could:
 - ADR 0054's School surface is unchanged: recovery is platform-host only.
 - ADR 0021/0022 gain one sanctioned `TenantRls` helper mode (§9.3).
 - Deploying 0O.10A signs every user out once (§11.2).
+
+## 24. Implementation (Phase 0O.10A, 2026-09-28)
+
+The contract is implemented as written, with the deviations and
+clarifications below. Deployment evidence (§20) remains **OUTSTANDING**:
+`ACCOUNT_RECOVERY_ENABLED` stays `false` in every deployed environment.
+
+### 24.1 Where it lives
+
+| Concern | Implementation |
+|---|---|
+| Canonical email (§4.4) | `EmailNormalizer::canonical()` (trim + lowercase; no provider tricks); `User` email mutator; `users_email_canonical_check`, whose migration audits first and refuses (counts only) on non-canonical rows or case collisions |
+| Eligibility (§4) | `AccountRecoveryEligibility` — at issuance, at reset and in the email source's `isStillWanted()` |
+| Request (§5) | `AccountRecoveryController::store` (normalize, per-address limiter, one encrypted `IssueAccountRecoveryJob` on `notifications`); `AccountRecoveryIssuer` decides off the request path |
+| Limits (§5.3) | route limiter `account-recovery-request` (IP 10/15 min, global 1,000/h → 429); `AccountRecoveryIdentityLimiter` (3/h, 10/day, silent) keyed by `IdentityFingerprint` (HMAC, HKDF from `APP_KEY`, info `lycenza/account-recovery-rate-limit/v1`); `account-recovery-reset` (IP 20 and selector 5 per 15 min) |
+| Credential (§6–7) | `RecoveryCredential` (16-byte selector, 32-byte secret, base64url, SHA-256); `account_recovery_requests` with database checks (30-minute bound, consumed XOR invalidated, immutable identity, ended stays ended) |
+| Reset (§8, §10) | `AccountRecoveryResetService` (User lock, then request lock); `CredentialChangeService` is the one password writer (password, version, remember token, human PATs, elevation `credential_reset`) |
+| Revocation (§11) | `users.credential_version` + `trg_users_credential_version_guard` (never decreases; bumps on password, email, disable) + `trg_users_invalidate_account_recovery` (reasons `credential_changed`, `email_changed`, `account_ineligible`); `CredentialSession` stamps at login, MFA completion, invitation acceptance and handoff redemption; `EnforceCredentialVersion` (web group, before School resolution) |
+| Identity email (§9.3) | `OutboundEmailGateway::queueForIdentity()`; `PlatformEmailScope` (`app.platform_email_scope`); `TenantRls::enableWithPlatformScope()`; `AllowsIdentityLevelRows`; `email_messages_identity_level_check`; a `platform` fairness bucket |
+| Operator (§14) | `platform:user-password-reset`, `platform:account-recovery-status`, `platform:account-recovery-prune` |
+| Observability (§15) | metrics below; OBS-39/40/41; Operations Status `account_recovery`; runbook `docs/operations/ACCOUNT-RECOVERY.md` |
+| Legacy (§16) | `password_reset_tokens` dropped (`down()` recreates it); `auth.defaults.passwords = null` (Laravel re-merges its framework `passwords.users` entry, so the null default is what makes `Password::broker()` fail closed); `sendPasswordResetNotification()` throws; architecture-tested |
+
+### 24.2 Deviations and clarifications
+
+1. **Metric outcomes.** `requests_total` counts `accepted`,
+   `rate_limited_identity` and `dispatch_failed`; `resets_total` counts
+   `succeeded`, `invalid` and `policy_rejected`. The IP, global and reset
+   throttles answer 429 in route middleware, before the controller, and
+   appear in `lycenza_http_requests_total{status_class="4xx"}` rather than
+   as `rate_limited_ip` / `rate_limited` outcomes.
+2. **Prune cadence.** `account-recovery-prune` runs **hourly** (the §13
+   24-hour bound is unchanged). Its heartbeat uses the daily staleness
+   threshold, which is lenient for an hourly task.
+3. **Operator reset connection.** `platform:user-password-reset` runs on the
+   ordinary runtime connection from the operator console, not
+   `pgsql_admin`. The runtime role may already write `users.password`, and
+   the database triggers apply to every role. It has no HTTP route and is
+   interactive only (hidden prompts, confirmation).
+4. **Root grant after issuance.** Granting root (only possible out of band)
+   does not mark open requests invalidated. The reset re-checks eligibility
+   and answers `invalid`, and the email source cancels the undelivered
+   message.
+5. **Operations Status `disabled`** is reported as Degraded with reason
+   `disabled` (the same convention as the email component's disabled mode).
+6. **Log sanitizer.** The recovery keys are `recovery_token`,
+   `recovery_selector`, `recovery_link`, `recovery_url`, `reset_link` and
+   `reset_url` (plus the existing `password` and `secret` words), and two
+   value patterns (a `/account-recovery/<selector>#…` link and any
+   43-character `#fragment`). A bare `selector` key is deliberately not
+   redacted, because a DKIM selector is public configuration.
+7. **§17.3.** The central password writer is
+   `CredentialChangeService::setPassword()` (the contract's
+   `CredentialSecurity::bump()`). A future signed-in password change must
+   call it.
+8. **Existing sessions at deploy.** A session with no stamp is signed out
+   (§11.2 by design), so the deploy of 0O.10A signs every browser out once.
+
+### 24.3 Findings (§17) — disposition
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | Case-sensitive login | **Fixed** (canonical form at login; database check) |
+| 2 | Raw email and IP in `auth.login_failed` | **Fixed** (keyed `identity_fingerprint`; the IP stays in the audit envelope's own column, not metadata) |
+| 3 | No signed-in password change | **Debt** (must use `CredentialChangeService`) |
+| 4 | No global session revocation | **Fixed** (`credential_version`) |
+| 5 | No self-service lost-MFA recovery | **Debt** (unchanged procedure: `platform.users.mfa.reset`) |
+| 6 | No production staff/School-admin provisioning | **Debt** (onboarding, roadmap) |
