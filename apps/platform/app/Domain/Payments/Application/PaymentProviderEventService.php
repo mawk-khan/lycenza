@@ -2,26 +2,13 @@
 
 namespace App\Domain\Payments\Application;
 
-use App\Domain\Fees\Application\ChargeAllocationSnapshot;
-use App\Domain\Fees\Application\ChargeService;
-use App\Domain\Finance\Application\JournalLineData;
-use App\Domain\Finance\Application\LedgerService;
-use App\Domain\Finance\Application\PostJournalEntryData;
-use App\Domain\Finance\Domain\JournalSide;
-use App\Domain\Payments\Application\Exceptions\AllocationDoesNotSumToPaymentAmountException;
-use App\Domain\Payments\Application\Exceptions\ChargeAllocationExceedsChargeAmountException;
-use App\Domain\Payments\Application\Exceptions\ChargeIsCancelledException;
 use App\Domain\Payments\Application\Exceptions\DuplicateProviderPaymentReferenceException;
-use App\Domain\Payments\Application\Exceptions\InvalidSettlementDataException;
 use App\Domain\Payments\Application\Exceptions\ProviderEventContentConflictException;
 use App\Domain\Payments\Application\Exceptions\UnsupportedProviderEventTypeException;
-use App\Domain\Payments\Events\PaymentSettled;
 use App\Domain\Payments\Infrastructure\Payment;
-use App\Domain\Payments\Infrastructure\PaymentAllocation;
 use App\Domain\Payments\Infrastructure\PaymentProviderEvent;
 use App\Models\School;
 use App\Models\User;
-use App\Support\Audit\AuditRecorder;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -88,17 +75,22 @@ use Illuminate\Support\Facades\DB;
  * Charge (rule 48) and a concurrent over-allocation race (rule 31/63)
  * resolve to one coherent outcome rather than corrupt state,
  * independent of Application-layer discipline.
+ *
+ * Phase 0O.11A (ADR 0031 implementation amendment section 1): the steps
+ * after the provider-event claim -- Charge locking, allocation checks,
+ * ledger posting, Payment/allocation rows, audit, outbox -- moved
+ * unchanged into `SettledPaymentRecorder`, which the manual/offline
+ * ingress (`ManualPaymentRecordingService`) shares. This class keeps the
+ * provider-specific parts: the event claim, provider-reference
+ * uniqueness, and replay/conflict resolution. A manual Payment never
+ * passes through here and never creates a `payment_provider_events` row.
  */
 class PaymentProviderEventService
 {
     private const SUPPORTED_EVENT_TYPE = 'payment.settled';
 
-    private const SUPPORTED_CURRENCY = 'INR';
-
     public function __construct(
-        private readonly LedgerService $ledger,
-        private readonly ChargeService $charges,
-        private readonly AuditRecorder $audit,
+        private readonly SettledPaymentRecorder $recorder,
         private readonly TenantContext $context,
     ) {}
 
@@ -142,84 +134,22 @@ class PaymentProviderEventService
             'occurred_at' => $event->occurredAt,
         ]);
 
-        // Ascending order (rule 33): deterministic lock order across
-        // every Charge this settlement touches, avoiding deadlock
-        // against a concurrent operation locking the same Charges in
-        // any order (this is the only place in this checkpoint that
-        // locks more than one Charge at a time).
-        $chargeIds = collect($data->allocations)->pluck('chargeId')->unique()->sort()->values();
-
-        /** @var array<string, ChargeAllocationSnapshot> $snapshots */
-        $snapshots = [];
-        foreach ($chargeIds as $chargeId) {
-            $snapshot = $this->charges->lockChargeForAllocation($school, $chargeId);
-
-            if ($snapshot->isCancelled) {
-                throw new ChargeIsCancelledException($chargeId);
-            }
-
-            $snapshots[$chargeId] = $snapshot;
-        }
-
-        foreach ($data->allocations as $allocation) {
-            $snapshot = $snapshots[$allocation->chargeId];
-            $alreadyAllocated = $this->sumExistingAllocations($allocation->chargeId, $event->amount->currency());
-            $projected = $alreadyAllocated->add($allocation->amount);
-            $remaining = $snapshot->amount->add($projected->negated());
-
-            if ($remaining->isNegative()) {
-                throw new ChargeAllocationExceedsChargeAmountException($allocation->chargeId, $projected->amount(), $snapshot->amount->amount());
-            }
-        }
-
-        $lines = [new JournalLineData($data->settlementLedgerAccountId, JournalSide::Debit, $event->amount)];
-        foreach ($data->allocations as $allocation) {
-            $lines[] = new JournalLineData($snapshots[$allocation->chargeId]->receivableLedgerAccountId, JournalSide::Credit, $allocation->amount);
-        }
-
-        $posted = $this->ledger->post($school, new PostJournalEntryData(
-            currency: $event->amount->currency(),
-            description: "Payment settlement: {$event->provider}/{$event->providerPaymentReference}",
-            lines: $lines,
-        ), $actor);
-
-        $payment = Payment::query()->create([
-            'school_id' => $school->id,
-            'provider' => $event->provider,
-            'provider_payment_reference' => $event->providerPaymentReference,
-            'amount' => $event->amount->amount(),
+        // Phase 0O.11A: everything after the provider-event claim is the
+        // shared settled-payment core, unchanged from 0G.5 (ADR 0031
+        // implementation amendment section 1).
+        $payment = $this->recorder->record($school, new SettledPaymentData(
+            amount: $event->amount,
+            settlementLedgerAccountId: $data->settlementLedgerAccountId,
+            allocations: $data->allocations,
+            settledAt: $event->occurredAt,
+            journalDescription: "Payment settlement: {$event->provider}/{$event->providerPaymentReference}",
+            provenance: PaymentProvenance::provider($event->provider, $event->providerPaymentReference, $providerEvent->id),
+        ), 'payment.settled', [
             'currency' => $event->amount->currency(),
-            'settlement_ledger_account_id' => $data->settlementLedgerAccountId,
-            'journal_entry_id' => $posted->journalEntryId,
-            'provider_event_id' => $providerEvent->id,
-            'settled_at' => $event->occurredAt,
-        ]);
-
-        foreach ($data->allocations as $allocation) {
-            PaymentAllocation::query()->create([
-                'school_id' => $school->id,
-                'payment_id' => $payment->id,
-                'charge_id' => $allocation->chargeId,
-                'amount' => $allocation->amount->amount(),
-                'currency' => $allocation->amount->currency(),
-            ]);
-        }
-
-        $this->audit->school($school, 'payment.settled', actor: $actor, subject: $payment, metadata: [
-            'currency' => $payment->currency,
             'allocationCount' => count($data->allocations),
-        ]);
+        ], $actor);
 
-        event(new PaymentSettled($school->id, $payment->id, $posted->journalEntryId, $payment->currency, count($data->allocations)));
-
-        return new PaymentProviderEventResult(PaymentProviderEventOutcome::Recognized, $payment->id, $posted->journalEntryId);
-    }
-
-    private function sumExistingAllocations(string $chargeId, string $currency): Money
-    {
-        $sum = PaymentAllocation::query()->where('charge_id', $chargeId)->sum('amount');
-
-        return Money::of((string) $sum, $currency);
+        return new PaymentProviderEventResult(PaymentProviderEventOutcome::Recognized, $payment->id, $payment->journal_entry_id);
     }
 
     private function resolveExistingEvent(School $school, NormalizedProviderEvent $event): PaymentProviderEventResult
@@ -268,43 +198,7 @@ class PaymentProviderEventService
 
     private function assertValidSettlementShape(RecordSettlementData $data): void
     {
-        $event = $data->event;
-
-        if (! $event->amount->isPositive()) {
-            throw new InvalidSettlementDataException("Settlement amount must be strictly positive, got '{$event->amount->amount()}'.");
-        }
-
-        if ($event->amount->currency() !== self::SUPPORTED_CURRENCY) {
-            throw new InvalidSettlementDataException("Unsupported currency '{$event->amount->currency()}': Phase 0G supports only ".self::SUPPORTED_CURRENCY.'.');
-        }
-
-        if (count($data->allocations) === 0) {
-            throw new InvalidSettlementDataException('At least one charge allocation is required to record a settlement.');
-        }
-
-        $chargeIds = collect($data->allocations)->pluck('chargeId');
-        if ($chargeIds->unique()->count() !== $chargeIds->count()) {
-            throw new InvalidSettlementDataException('A settlement may not allocate to the same charge more than once in a single operation.');
-        }
-
-        $total = Money::of('0', $event->amount->currency());
-        foreach ($data->allocations as $allocation) {
-            if (! $allocation->amount->isPositive()) {
-                throw new InvalidSettlementDataException("Allocation amount must be strictly positive, got '{$allocation->amount->amount()}'.");
-            }
-
-            if ($allocation->amount->currency() !== $event->amount->currency()) {
-                throw new InvalidSettlementDataException(
-                    "Allocation currency '{$allocation->amount->currency()}' does not match the settlement's currency '{$event->amount->currency()}'."
-                );
-            }
-
-            $total = $total->add($allocation->amount);
-        }
-
-        if (! $total->equals($event->amount)) {
-            throw new AllocationDoesNotSumToPaymentAmountException($total->amount(), $event->amount->amount());
-        }
+        $this->recorder->assertValidShape($data->event->amount, $data->allocations);
     }
 
     private function violatesConstraint(UniqueConstraintViolationException $e, string $constraintName): bool

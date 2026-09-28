@@ -87,6 +87,13 @@ class RateLimiterServiceProvider extends ServiceProvider
         RateLimiter::for('domain-probe', fn (Request $request) => Limit::perMinute(60)->by('domain-probe:'.$request->ip()));
         RateLimiter::for('session-handoff', fn (Request $request) => Limit::perMinute(30)->by('session-handoff:'.$request->ip()));
 
+        // Phase 0O.11A: recording an offline payment (session route, no
+        // School route parameter -- keyed by the signed-in User, rule 61).
+        // Generous enough for a cashier's queue; a bound, not a workflow
+        // limit. Duplicate submissions are handled by the idempotency key.
+        RateLimiter::for('finance-payment-recording', fn (Request $request) => Limit::perMinute(30)
+            ->by('finance-payment-recording:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
+
         // Webhook administration specifically (section 31): tighter
         // than general School mutations -- creating an endpoint,
         // rotating a secret, or forcing a redelivery are inherently

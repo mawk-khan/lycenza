@@ -373,3 +373,29 @@ repository still has one implementation checkpoint before O1 closeout:
   - environment-gate `platform.webhook_test.v1` subscribability (§5.2);
   - a partner write would need an `api_client` idempotency actor (ADR 0049
     already anticipates this).
+
+## Implementation note — Phase 0O.11A (2026-09-28)
+
+§3 is implemented. The design is ADR 0031's "Implementation amendment —
+manual / offline settlement recording".
+
+- **Closed catalog:** `cash`, `bank_transfer`, `cheque`.
+- **Capability:** `finance.payments.record`.
+- **Idempotency:** a server-issued form key.
+- **Dates:** `occurred_at` (the School-local date) versus the server-set
+  `recorded_at`.
+- **Provenance:** `recorded_by_user_id`.
+- **Audit:** `payment.recorded_manually`.
+- **Model:** the same immutable settlement, allocation and ledger model,
+  through a shared core with the provider ingress. No provider event is
+  ever manufactured.
+
+**§3 "Corrections":** no already-authorized mechanism satisfies both "never
+an edit of posted history" and §4's "no payment reversal". The project owner
+therefore accepted **immutable posted manual Payments with no correction
+action in v1** (2026-09-28). The append-only correction contract remains an
+open Finance follow-up. Payment-owned journal entries can no longer be
+reversed through the generic ledger action (owner decision, same date).
+
+§4 is unchanged: no refund, void, chargeback or payment reversal, and no
+reconciliation. O2 stays resolved (gateway deferred); O15 stays resolved.

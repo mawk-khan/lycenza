@@ -28,6 +28,7 @@ class FinanceController extends Controller
                 'viewCharges' => $capabilities->canInSchool($user, 'finance.charges.view', $school),
                 'manageCharges' => $capabilities->canInSchool($user, 'finance.charges.manage', $school),
                 'viewPayments' => $capabilities->canInSchool($user, 'finance.payments.view', $school),
+                'recordPayments' => $capabilities->canInSchool($user, 'finance.payments.record', $school),
             ],
         ]);
     }

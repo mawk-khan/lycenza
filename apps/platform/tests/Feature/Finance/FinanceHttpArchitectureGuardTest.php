@@ -30,13 +30,17 @@ class FinanceHttpArchitectureGuardTest extends TestCase
             $base.'/app/Domain/Finance/Http/Controllers/JournalEntryController.php',
             $base.'/app/Domain/Fees/Http/Controllers/ChargeController.php',
             $base.'/app/Domain/Payments/Http/Controllers/PaymentController.php',
+            // Phase 0O.11A: the browser Payments controllers, including the
+            // one human payment write (manual/offline recording).
+            $base.'/app/Http/Controllers/App/Finance/PaymentController.php',
+            $base.'/app/Http/Controllers/App/Finance/ManualPaymentController.php',
         ], 'file_exists');
     }
 
     #[Test]
     public function every_finance_http_controller_exists(): void
     {
-        $this->assertCount(4, $this->controllerFiles(), 'All four 0G.6 Finance/Fees/Payments controllers must exist.');
+        $this->assertCount(6, $this->controllerFiles(), 'The four 0G.6 Finance/Fees/Payments controllers and the two 0O.11A browser Payments controllers must exist.');
     }
 
     #[Test]
@@ -46,6 +50,7 @@ class FinanceHttpArchitectureGuardTest extends TestCase
             'App\Domain\Finance\Application\LedgerService',
             'App\Domain\Fees\Application\ChargeService',
             'App\Domain\Payments\Application\PaymentProviderEventService',
+            'App\Domain\Payments\Application\SettledPaymentRecorder',
         ];
 
         foreach ($this->controllerFiles() as $file) {
@@ -92,13 +97,24 @@ class FinanceHttpArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function no_payment_mutation_route_exists_anywhere_in_the_api(): void
+    public function the_only_payment_mutation_route_is_the_browser_offline_recording_route(): void
     {
         $routes = collect(Route::getRoutes())
             ->filter(fn ($route) => str_contains($route->uri(), 'payments'))
-            ->filter(fn ($route) => in_array('POST', $route->methods(), true) || in_array('PATCH', $route->methods(), true) || in_array('DELETE', $route->methods(), true));
+            ->filter(fn ($route) => array_intersect(['POST', 'PUT', 'PATCH', 'DELETE'], $route->methods()) !== [])
+            ->values();
 
-        $this->assertCount(0, $routes, 'No POST/PATCH/DELETE route may exist under any "payments" URI -- there is no finance.payments.manage capability.');
+        // Phase 0O.11A (ADR 0031 implementation amendment section 9): exactly
+        // one Payment write exists -- recording an offline payment from a
+        // School browser session. No /api/v1 write, no edit/delete/refund,
+        // no provider callback; finance.payments.manage still does not exist.
+        $this->assertCount(1, $routes, 'Exactly one Payment mutation route may exist.');
+        $route = $routes->first();
+        $this->assertSame('app.finance.payments.record.store', $route->getName());
+        $this->assertSame(['POST'], $route->methods());
+        $this->assertContains('web', $route->gatherMiddleware(), 'The recording route must run in the web group (session + CSRF).');
+        $this->assertContains('throttle:finance-payment-recording', $route->gatherMiddleware());
+        $this->assertStringStartsNotWith('api/', $route->uri());
     }
 
     #[Test]

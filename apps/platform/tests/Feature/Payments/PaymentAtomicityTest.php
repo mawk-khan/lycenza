@@ -43,6 +43,9 @@ class PaymentAtomicityTest extends TestCase
 
     private ?School $school = null;
 
+    /** @var list<string> Phase 0O.11A: committed recorder Users to remove. */
+    private array $userIds = [];
+
     protected function tearDown(): void
     {
         if ($this->school !== null) {
@@ -54,6 +57,8 @@ class PaymentAtomicityTest extends TestCase
             // fixed --batch window.
             DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
             $this->deleteSchoolAsAdmin($this->school);
+            DB::connection('pgsql_admin')->table('school_memberships')->whereIn('user_id', $this->userIds)->delete();
+            DB::connection('pgsql_admin')->table('users')->whereIn('id', $this->userIds)->delete();
         }
 
         parent::tearDown();
@@ -195,5 +200,43 @@ class PaymentAtomicityTest extends TestCase
             DomainEventOutbox::query()->where('school_id', $this->school->id)->where('event_type', 'payment.settled.v1')->count(),
             'The successful retry must produce exactly one payment.settled outbox event.',
         );
+    }
+
+    #[Test]
+    public function a_forced_allocation_failure_rolls_back_a_manual_payment_its_ledger_posting_audit_and_outbox(): void
+    {
+        // Phase 0O.11A (ADR 0031 implementation amendment section 1): the
+        // manual ingress commits through the same one transaction.
+        $this->school = $this->createSchool();
+        $context = app(TenantContext::class);
+
+        $student = $this->createStudent($this->school);
+        $year = $this->createAcademicYear($this->school);
+        $receivable = $this->createLedgerAccount($this->school, ['type' => 'asset']);
+        $revenue = $this->createLedgerAccount($this->school, ['type' => 'income']);
+        $settlement = $this->createLedgerAccount($this->school, ['type' => 'asset']);
+        $charge = $this->assessCharge($this->school, $student, $year, $receivable, $revenue, '500.00');
+        $recorder = $this->createPaymentRecorder($this->school);
+        $this->userIds[] = $recorder->id;
+        $key = (string) Str::uuid();
+
+        try {
+            $this->withFailingInsertTrigger('payment_allocations', function () use ($settlement, $charge, $recorder, $key) {
+                $this->recordManualPayment($this->school, $recorder, $settlement->id, [[$charge, '500.00']], '500.00', idempotencyKey: $key);
+            });
+            $this->fail('Expected the injected payment_allocations insert failure to propagate.');
+        } catch (QueryException) {
+            // Expected
+        }
+
+        $this->assertSame(0, $context->withSchool($this->school, fn () => Payment::query()->count()));
+        $this->assertSame(0, $context->withSchool($this->school, fn () => PaymentAllocation::query()->count()));
+        $this->assertSame(0, $context->withSchool($this->school, fn () => JournalEntry::query()->where('id', '!=', $charge->journal_entry_id)->count()));
+        $this->assertSame(0, $context->withSchool($this->school, fn () => SchoolAuditEvent::query()->where('event_type', 'payment.recorded_manually')->count()));
+        $this->assertSame(0, DomainEventOutbox::query()->where('school_id', $this->school->id)->where('event_type', 'payment.settled.v1')->count());
+
+        // The request key was never claimed: the same submission can be retried.
+        $retry = $this->recordManualPayment($this->school, $recorder, $settlement->id, [[$charge, '500.00']], '500.00', idempotencyKey: $key);
+        $this->assertSame('recorded', $retry->outcome->value);
     }
 }

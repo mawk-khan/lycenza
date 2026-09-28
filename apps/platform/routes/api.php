@@ -1126,6 +1126,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // remains the trusted `PaymentProviderEventService`
             // boundary, reached only by a future provider adapter, not
             // by this human administrative API.
+            // Phase 0O.11A: recording an offline payment
+            // (finance.payments.record) is a School browser action only
+            // (routes/web.php app/finance/payments/record) -- still no
+            // Payment write here.
             Route::get('/ledger-accounts', [LedgerAccountController::class, 'index'])
                 ->middleware('capability:finance.ledger.view')
                 ->name('schools.ledger-accounts.index');

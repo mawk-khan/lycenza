@@ -561,6 +561,37 @@ capability, Group, platform authority or elevation, and never sets
     (architecture-tested); a pending MFA challenge started before a reset
     cannot complete.
 
+## Manual / offline payment recording (ADR 0031 amendment — built in Phase 0O.11A)
+
+`finance.payments.record` (School namespace) is the one human Payment
+write. It records a cash, bank transfer or cheque payment the School has
+already received.
+
+- **Grant.** School Admin only, by default. A School may grant it to a
+  cashier-style role of its own; the demo's `demo.finance_officer` holds it.
+- **What does not imply it:** `finance.payments.view`, `finance.charges.*`
+  and `finance.ledger.*`. `finance.payments.manage` does not exist.
+- **Double check.** The Inertia controller checks it, and
+  `ManualPaymentRecordingService::record()` checks it again with the actor
+  it is given.
+- **Order:** membership/TenantContext → capability → operational School
+  (inside the transaction) → idempotency key. A replay never skips
+  authorization (rule 32).
+- **Other authority.**
+  - Group authority has no School capability (rule 84).
+  - An elevated platform session is refused with 403 on the route
+    (rule 83; no `school-context:elevated`).
+  - A platform role without a membership has no School context (409).
+- **Payment-owned journal entries.** `finance.ledger.reverse` no longer
+  reaches them. The Payments-owned
+  `journal_entries_payment_reversal_guard` refuses the reversal for every
+  role, and the API answers 409 `JOURNAL_ENTRY_NOT_REVERSIBLE`.
+- **Tests.** `Tests\Feature\App\ManualPaymentUiTest` covers allow and
+  deny over the real role catalog: principal, role-less members (Guardian
+  accounts and ordinary staff), payments viewer, charges/ledger manager,
+  non-member, platform root (plain and elevated), Group admin (plain and
+  Group-derived elevation), and a recorder of another School.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles, a UI for managing role assignments (only the data

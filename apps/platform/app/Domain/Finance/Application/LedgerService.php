@@ -6,6 +6,7 @@ use App\Domain\Finance\Application\Exceptions\InvalidJournalCurrencyException;
 use App\Domain\Finance\Application\Exceptions\InvalidJournalEntryException;
 use App\Domain\Finance\Application\Exceptions\JournalEntryAlreadyReversedException;
 use App\Domain\Finance\Application\Exceptions\JournalEntryNotFoundException;
+use App\Domain\Finance\Application\Exceptions\JournalEntryNotReversibleException;
 use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Application\Exceptions\UnbalancedJournalEntryException;
 use App\Domain\Finance\Domain\JournalSide;
@@ -18,6 +19,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +57,8 @@ class LedgerService
     private const SUPPORTED_CURRENCY = 'INR';
 
     private const MAX_DESCRIPTION_LENGTH = 255;
+
+    private const SUBLEDGER_REVERSAL_GUARD_SQLSTATE = '23001';
 
     public function __construct(
         private readonly AuditRecorder $audit,
@@ -195,7 +199,19 @@ class LedgerService
 
                     return JournalEntryResult::fromModel($reversal->refresh(), $original->lines->count());
                 });
-            } catch (UniqueConstraintViolationException) {
+            } catch (QueryException $e) {
+                // Phase 0O.11A: a subledger guard trigger (today
+                // journal_entries_payment_reversal_guard) refuses the
+                // reversal of an entry it owns with restrict_violation.
+                // Finance recognizes only the SQLSTATE, never the owner.
+                if ($e->getCode() === self::SUBLEDGER_REVERSAL_GUARD_SQLSTATE) {
+                    throw new JournalEntryNotReversibleException($original->id);
+                }
+
+                if (! $e instanceof UniqueConstraintViolationException) {
+                    throw $e;
+                }
+
                 // Genuine concurrent race: the sequential pre-check
                 // above passed for two racing callers, but the
                 // database's own partial unique index
@@ -242,6 +258,28 @@ class LedgerService
         }
 
         return $this->reverse($original, $actor, $reason);
+    }
+
+    /**
+     * Phase 0O.11A: a trusted lookup (no capability check -- the caller
+     * authorizes, exactly like `post()`) of the School's ACTIVE ledger
+     * accounts of one ADR 0030 type, ordered by code -- e.g. the `asset`
+     * accounts a manually recorded payment may be received into.
+     *
+     * @return Collection<int, LedgerAccountSummary>
+     */
+    public function activeAccountsOfType(School $school, string $type): Collection
+    {
+        return $this->context->withSchool($school, fn () => LedgerAccount::query()
+            ->where('school_id', $school->id)
+            ->where('type', $type)
+            ->where('status', 'active')
+            ->where('currency', self::SUPPORTED_CURRENCY)
+            ->orderBy('code')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (LedgerAccount $account) => LedgerAccountSummary::fromModel($account))
+            ->values());
     }
 
     /**

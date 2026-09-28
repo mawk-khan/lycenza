@@ -1694,6 +1694,32 @@ after a read-only audit.
 Remaining open: **O1** only. Next: **0O.11A — Manual / Offline Payment
 Recording Foundation** — not started.
 
+**0O.11A — Manual / Offline Payment Recording Foundation (2026-09-28,
+COMPLETE — repository).** An authorized School Finance user
+(`finance.payments.record`, School Admin by default) records cash, bank
+transfer or cheque money the School has **already received**. Lycenza moves
+no money.
+- **Shared core.** `SettledPaymentRecorder` serves both the verified
+  provider ingress (unchanged) and the new `ManualPaymentRecordingService`.
+  Manual Payments carry their own provenance (`source`, method, reference,
+  recorded-by, idempotency key) and never manufacture a provider event.
+- **Invariants and flow.** The same immutable allocation and ledger
+  invariants apply: several Charges per payment, an active asset account,
+  INR only. The flow ends in a pre-post confirmation, and a suspended School
+  is refused.
+- **Owner decisions:** posted manual Payments have **no correction action in
+  v1** (the correction contract is an open Finance follow-up). Payment-owned
+  journal entries can no longer be reversed through the generic ledger
+  action.
+- **Records.** ADR 0031 implementation amendment; CLAUDE.md rule 91; runbook
+  `docs/operations/MANUAL-PAYMENT-RECORDING.md`; PHASE-0O-READINESS §39.
+
+O2 stays **RESOLVED — real payment gateway deferred**; O15 stays
+**RESOLVED**. Remaining open: **O1** only. Next: a fresh **read-only O1
+production-readiness closeout audit** against the repository and the
+deployment-evidence register — not started. Phase 0O is not complete merely
+because repository implementation is finished.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

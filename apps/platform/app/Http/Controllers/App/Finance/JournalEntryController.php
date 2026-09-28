@@ -6,6 +6,7 @@ use App\Domain\Finance\Application\Exceptions\FinanceException;
 use App\Domain\Finance\Application\Exceptions\InvalidJournalCurrencyException;
 use App\Domain\Finance\Application\Exceptions\JournalEntryAlreadyReversedException;
 use App\Domain\Finance\Application\Exceptions\JournalEntryNotFoundException;
+use App\Domain\Finance\Application\Exceptions\JournalEntryNotReversibleException;
 use App\Domain\Finance\Application\JournalEntryDetail;
 use App\Domain\Finance\Application\JournalEntryQuery;
 use App\Domain\Finance\Application\JournalEntrySummary;
@@ -182,7 +183,7 @@ class JournalEntryController extends Controller
             $result = $service->reverse($school, $journalEntry, $context->actor(), $validated['reason'] ?? null);
         } catch (JournalEntryNotFoundException) {
             throw new NotFoundHttpException;
-        } catch (JournalEntryAlreadyReversedException $e) {
+        } catch (JournalEntryAlreadyReversedException|JournalEntryNotReversibleException $e) {
             return redirect("/app/finance/journal-entries/{$journalEntry}")->withErrors(['reversal' => $e->getMessage()]);
         }
 

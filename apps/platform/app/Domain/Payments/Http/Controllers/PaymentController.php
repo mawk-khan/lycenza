@@ -25,6 +25,13 @@ use Illuminate\Http\Request;
  * creation transaction identifier, a provider payload, or a provider
  * secret -- `PaymentDetail`/
  * `PaymentSummary` structurally cannot carry any of those.
+ *
+ * Phase 0O.11A: still read-only. Manual/offline recording
+ * (`finance.payments.record`) is a session-authenticated School browser
+ * action only (App\Http\Controllers\App\Finance\ManualPaymentController),
+ * never an /api/v1 write; this API only exposes the resulting provenance
+ * (`source`, `method`, `manualReference`, `recordedByUserId`,
+ * `recordedAt`).
  */
 class PaymentController extends Controller
 {
@@ -68,10 +75,13 @@ class PaymentController extends Controller
     {
         return [
             'id' => $payment->paymentId,
+            'source' => $payment->source,
             'provider' => $payment->provider,
+            'method' => $payment->method,
             'amount' => $payment->amount,
             'currency' => $payment->currency,
             'settledAt' => $payment->settledAt->toIso8601String(),
+            'recordedAt' => $payment->recordedAt->toIso8601String(),
         ];
     }
 
@@ -82,13 +92,18 @@ class PaymentController extends Controller
     {
         return [
             'id' => $payment->paymentId,
+            'source' => $payment->source,
             'provider' => $payment->provider,
             'providerPaymentReference' => $payment->providerPaymentReference,
+            'method' => $payment->method,
+            'manualReference' => $payment->manualReference,
+            'recordedByUserId' => $payment->recordedByUserId,
             'amount' => $payment->amount,
             'currency' => $payment->currency,
             'settlementLedgerAccountId' => $payment->settlementLedgerAccountId,
             'journalEntryId' => $payment->journalEntryId,
             'settledAt' => $payment->settledAt->toIso8601String(),
+            'recordedAt' => $payment->recordedAt->toIso8601String(),
             'allocations' => $payment->allocations,
         ];
     }

@@ -294,7 +294,7 @@ Other findings:
 | # | Decision | Existing decision? | Owner | Blocks |
 |---|---|---|---|---|
 | O1 | Phase 0O definition of done per scope item | No | Product | Phase closure, not 0O.1 |
-| O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | **RESOLVED — ADR 0057 (Phase 0O.11)**: the first real payment gateway is **DEFERRED** from Phase 0 / production v1 (no processor, checkout, callback, credential, refund or PCI-bearing UI; its own future ADR). Manual/offline payment recording is a **required v1 Finance correction**, Phase 0O.11A (not started) | Product | S4 |
+| O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | **RESOLVED — ADR 0057 (Phase 0O.11)**: the first real payment gateway is **DEFERRED** from Phase 0 / production v1 (no processor, checkout, callback, credential, refund or PCI-bearing UI; its own future ADR). Manual/offline payment recording is a **required v1 Finance correction**, **implemented in Phase 0O.11A (COMPLETE — repository, §39)** | Product | S4 |
 | O3 | Hosting / deployment model (and therefore process manager, container runtime, Terraform target) | **RESOLVED — ADR 0050 (Phase 0O.4)** | Product + operations | S3 infrastructure, images, runbook |
 | O4 | Secrets manager or host secret injection | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
 | O5 | Service-to-service auth: keep the shared token (with rotation) or move to per-request signed tokens / mTLS | **RESOLVED — ADR 0053 (Phase 0O.7)**: per-request Ed25519 service assertions, one keypair per calling service, 24 h rotation overlap, 90-day keys; **repository implementation COMPLETE (Phase 0O.7A)**, deployment evidence outstanding | Security | S3 (AI Gateway deployment) |
@@ -322,7 +322,7 @@ No vendor or provider is chosen by this audit.
 | S3 Production secrets | Env-only; unsafe AI fallbacks; no validation; no rotation for service identities or signing key | PARTIAL | Fail-closed checks (0O.1); secrets manager integration | O4, O5 |
 | S3 Production infrastructure | No production image, no IaC, no runbook, no backup | BLOCKED + DEPLOY-GATED | Hosting model, images, runbook, backup | O3, O8, O10, rule 16 |
 | S3 Root provisioning (ADR 0046 §2) | Built in 0O.1 (`platform:provision-root`); database-enforced boundary and first-boot `platform:bootstrap-root` in 0O.1A | **DONE (0O.1 + 0O.1A)** | — | none |
-| S4 Broader third-party integrations | Outbound webhooks production-grade; email implemented (O13); no other provider; no production partner scope | **SCOPE RESOLVED (ADR 0057)**: email in v1, every other category deferred / not in v1 / cancelled | 0O.11A manual/offline payment recording (a Finance correction, not an integration) | none for the scope; legal for any future provider |
+| S4 Broader third-party integrations | Outbound webhooks production-grade; email implemented (O13); no other provider; no production partner scope | **SCOPE RESOLVED (ADR 0057)**: email in v1, every other category deferred / not in v1 / cancelled | none — 0O.11A manual/offline payment recording is **COMPLETE (repository, §39)**; it is a Finance correction, not an integration | none for the scope; legal for any future provider |
 
 ## 10. Proposed sequence (not started)
 
@@ -1642,3 +1642,112 @@ change. The documentation is corrected.
 - Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
   REQUIRED**.
 - The **real restore drill is still outstanding**.
+
+## 39. Phase 0O.11A — Manual / Offline Payment Recording Foundation (COMPLETE — repository, 2026-09-28)
+
+ADR 0057 §3's required v1 Finance correction is **implemented in the
+repository**. The design is ADR 0031's "Implementation amendment — manual /
+offline settlement recording", the runbook is
+`docs/operations/MANUAL-PAYMENT-RECORDING.md` and the rule is CLAUDE.md rule
+91.
+
+- **What it is.** An authorized School Finance user records a payment the
+  School **already received outside Lycenza** (cash, bank transfer, cheque).
+  Lycenza records the financial fact. It moves no money.
+- **What it is not:** a gateway, checkout, card or bank credential
+  collection, refund, void, payment reversal, reconciliation, unapplied
+  cash or multi-currency.
+
+**Owner decisions (2026-09-28):**
+- **Posted manual Payments are immutable, with no correction action in v1.**
+  ADR 0057 §3 requires an append-only correction mechanism that a later
+  contract defines, and none exists. The correction contract is an **open
+  Finance follow-up**.
+- **Payment-owned journal entries can no longer be reversed through the
+  generic ledger reversal.** Before this unit, `finance.ledger.reverse`
+  could detach a Payment from its settlement entry.
+
+**Built:**
+- **Two ingresses, one core.** `SettledPaymentRecorder` is the shared
+  settled-payment core. It was extracted unchanged from
+  `PaymentProviderEventService`, whose behaviour and tests are preserved.
+  `ManualPaymentRecordingService` is the authorized human ingress.
+  - It never creates a `payment_provider_events` row.
+  - `payments_source_shape_check` makes provider and manual provenance
+    mutually exclusive.
+- **Schema** (`2026_10_27_090000`): `payments` gains
+  - `source` (`provider` | `manual`);
+  - `method`, a closed catalog: `cash`, `bank_transfer`, `cheque`;
+  - `manual_reference` (optional, 64 characters, narrow format);
+  - `recorded_by_user_id`;
+  - `idempotency_key` (unique per School);
+  - `journal_entries_payment_reversal_guard`.
+
+  `occurred_at` is `settled_at`: the start of the School-local day, never
+  in the future. `recorded_at` is `created_at`: server-set, append-only.
+- **Authorization.** `finance.payments.record`, granted to School Admin
+  only, re-checked in the service.
+  - Group and platform authority never reach it; an elevated session gets
+    403.
+  - A suspended School is refused, via `SchoolOperationalGuard` inside the
+    transaction.
+- **Duplicates.** A server-issued form key, claimed on the Payment itself,
+  with a transaction advisory lock:
+  - the same key, User and content → replay;
+  - anything else → fail closed.
+
+  No uniqueness on the reference. Real-world duplicate detection for cash
+  is not claimed.
+- **Ledger and events.** The same ledger posting as the provider path:
+  debit a School-chosen **active asset** account, credit each Charge's
+  receivable account. Also:
+  - the audit event `payment.recorded_manually`, with minimal metadata;
+  - `payment.settled.v1` unchanged, not webhook-registered.
+- **Transport.** Browser routes only: `GET/POST /app/finance/payments/record`
+  and a Student search. They use CSRF and the `finance-payment-recording`
+  limiter (30 per minute per User). There is no `/api/v1` write.
+- **UI.** Student → charges (one payment may cover several) → details → a
+  confirmation summary → the immutable Payment, with a one-time notice.
+  - The Payments list and detail show the source (provider or offline).
+  - The API exposes the provenance (`source`, `method`, `manualReference`,
+    `recordedByUserId`, `recordedAt`) but never the key.
+- **Demo.** Offline demo fees are now real manual Payments. The earlier
+  demo used a fake `demo-offline` provider. Four `demo-provider` examples
+  remain.
+- **Tests.**
+  - Service, UI and authorization tests (allow and deny across the real
+    role catalog, Group and elevation).
+  - Raw PostgreSQL schema, RLS and immutability tests.
+  - Atomicity under failure injection.
+  - Real two-process concurrency: duplicate key, conflicting key,
+    over-allocation, opposite multi-charge order, cancel races and suspend
+    races.
+
+**Not changed (existing debt, not opportunistically fixed):**
+- the email webhook reads a chunked body before its own 256 KiB check;
+- the production subscription residue of `platform.webhook_test.v1`;
+- the partner-write idempotency actor is absent;
+- `TRUSTED_PROXIES` dependence.
+
+Also recorded: other subledger-owned journal entries (Charge recognition,
+payroll, canteen) remain reversible through the generic action. A GET of a
+non-UUID `/app/finance/payments/{id}` was a PostgreSQL error before this
+unit and is now a 404.
+
+- **O2:** RESOLVED — REAL PAYMENT GATEWAY DEFERRED (unchanged).
+- **O15:** RESOLVED (unchanged).
+- **Manual/offline recording:** production-v1 Finance capability
+  **COMPLETE (repository)**.
+- **Remaining open decisions: O1 only.**
+- **O13 legal retention:** `MAIL_RETENTION_DAYS` remains
+  **[LEGAL REVIEW REQUIRED]**.
+- **Deployment evidence still outstanding:**
+  - O5 (keys and rings);
+  - O9 (edge, domain and TLS);
+  - O13 (provider, DNS authentication, drills, retention);
+  - O14 (enablement, drills);
+  - O16 (registry, signing, publish, promote);
+  - the **real restore drill**.
+- Phase 0O: **PARTIALLY READY — O1 CLOSEOUT STILL BLOCKED**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.

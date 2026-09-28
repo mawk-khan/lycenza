@@ -272,8 +272,10 @@ deployment evidence outstanding. O2 (the first real payment gateway) and
 O15 (broader third-party integrations and production partner API scopes)
 were resolved by ADR 0057 (Phase 0O.11), mostly by explicit deferral. Its
 one required v1 correction, manual/offline payment recording, is Phase
-0O.11A, not started. Still open: O1 (definition of done — including a real
-restore drill).
+0O.11A — **COMPLETE (repository)**. It is an ordinary authenticated School
+browser action: no provider, credential, callback or configuration switch
+to deploy, and no new production environment variable. Still open: O1
+(definition of done — including a real restore drill).
 
 (Corrected 2026-09-28: this section previously said O14's implementation
 had not started and called O15 "partner integrations".)

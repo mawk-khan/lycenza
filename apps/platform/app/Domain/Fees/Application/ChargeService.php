@@ -22,6 +22,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -278,6 +279,30 @@ class ChargeService
                 isCancelled: $charge->isCancelled(),
             );
         });
+    }
+
+    /**
+     * Phase 0O.11A: a trusted, read-only lookup (no capability check --
+     * the caller authorizes, exactly like `lockChargeForAllocation()`) of
+     * one Student's uncancelled Charges in this School, oldest first,
+     * bounded by `$limit` -- the candidates a manually recorded payment
+     * may be allocated to. A cross-School Student id simply returns no
+     * rows (School-scoped query under the School's TenantContext).
+     *
+     * @return Collection<int, ChargeSummary>
+     */
+    public function uncancelledChargesForStudent(School $school, string $studentId, int $limit = 100): Collection
+    {
+        return $this->context->withSchool($school, fn () => Charge::query()
+            ->where('school_id', $school->id)
+            ->where('student_id', $studentId)
+            ->whereNull('cancelled_at')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Charge $charge) => ChargeSummary::fromModel($charge))
+            ->values());
     }
 
     private function violatesConstraint(QueryException $e, string $constraintName): bool

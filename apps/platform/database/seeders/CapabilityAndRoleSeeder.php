@@ -443,6 +443,13 @@ class CapabilityAndRoleSeeder extends Seeder
             // only once a real human-facing "record a manual payment"
             // or similar action actually exists.
             ['key' => 'finance.payments.view', 'label' => 'View Payments', 'namespace' => 'school'],
+            // Phase 0O.11A (ADR 0031 implementation amendment section 7):
+            // the one human payment write -- recording a cash/bank
+            // transfer/cheque payment the School ALREADY received outside
+            // Lycenza (ManualPaymentRecordingService). Deliberately narrow:
+            // no `finance.payments.manage`, no refund/void/reversal, and
+            // viewing Payments does not imply it.
+            ['key' => 'finance.payments.record', 'label' => 'Record offline payments (cash, bank transfer, cheque)', 'namespace' => 'school'],
 
             // Phase 10D (docs/modules/HOSTEL.md "Capabilities") --
             // mirrors Visitor's directory/visits split exactly:
@@ -943,8 +950,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     'finance.charges.view', 'finance.charges.manage',
                     // Phase 0G.5: same default-grant logic as Ledger/
                     // Charges above. NOT granted to Principal below, for
-                    // the identical reason.
-                    'finance.payments.view',
+                    // the identical reason. Phase 0O.11A: recording an
+                    // offline payment follows the same rule -- School
+                    // Admin already holds every Finance mutation
+                    // (ledger post/reverse, charge assess/cancel).
+                    'finance.payments.view', 'finance.payments.record',
                     // Phase 10D: same day-to-day operational parity
                     // reasoning as Visitor/Transport/Library above --
                     // managing Hostel structure and Student residency

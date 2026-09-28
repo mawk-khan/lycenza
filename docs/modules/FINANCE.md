@@ -4376,7 +4376,9 @@ checkpoint. (Historical: publication happened — `c4652ca` on `main`.)
   - A future gateway needs its own ADR (ADR 0057 §2 lists what it must
     resolve).
 - **Manual/offline payment recording: REQUIRED for v1**, as a Finance
-  correction (Phase 0O.11A, not started). An authorized Finance user
+  correction (Phase 0O.11A — implemented, see "0O.11A as-built" below;
+  its owner decision replaced "corrects mistakes append-only" with "no
+  correction action in v1"). An authorized Finance user
   records a payment that already happened outside Lycenza.
   - It reuses the immutable settlement, allocation and ledger model.
   - It has a dedicated capability and a closed method catalog.
@@ -4390,3 +4392,75 @@ checkpoint. (Historical: publication happened — `c4652ca` on `main`.)
   - payment reversal, refunds, voids and provider reconciliation do not,
     and 0O.11A adds none of them;
   - INR only.
+
+## 0O.11A as-built (Manual / Offline Payment Recording, 2026-09-28)
+
+Design: ADR 0031 "Implementation amendment — manual / offline settlement
+recording". Runbook: `docs/operations/MANUAL-PAYMENT-RECORDING.md`.
+CLAUDE.md rule 91.
+
+- **Purpose.** An authorized School user records a payment the School
+  **already received outside Lycenza** (cash, bank transfer, cheque).
+  Lycenza moves no money. This is **not** a gateway, checkout, refund,
+  void, payment reversal or reconciliation.
+- **Two ingresses, one core.** `Payments\Application\SettledPaymentRecorder`
+  is the shared core: Charge locks in ascending id order, allocation checks,
+  ledger posting, Payment and allocation rows, the caller-named audit event,
+  and `PaymentSettled`.
+  - `PaymentProviderEventService` (trusted SYSTEM, unrouted) and
+    `ManualPaymentRecordingService` (`finance.payments.record`) both call
+    it.
+  - A manual Payment never creates a `payment_provider_events` row.
+- **Provenance.**
+  - `payments.source` is `provider` or `manual`
+    (`payments_source_shape_check`).
+  - A manual row has `method`, an optional `manual_reference`,
+    `recorded_by_user_id` and `idempotency_key`, and no provider column.
+  - No payer column: the Charge's Student is the identity truth.
+- **Method catalog (closed):** `cash`, `bank_transfer`, `cheque`, enforced
+  by `ManualPaymentMethod` and `payments_method_check`.
+- **Dates.**
+  - `settled_at` is the occurred-at instant: the start of the School-local
+    calendar day entered, never in the future, with no lower bound (no
+    accounting-period contract).
+  - `created_at` is recorded-at: server-set.
+- **Amount.** Positive, INR, an exact decimal string. Allocations sum
+  exactly to it, across one or more of the School's uncancelled Charges; no
+  Charge is over-allocated. No unapplied cash, credit or negative
+  allocation.
+- **Ledger.** The same posting as the provider path:
+  - debit the chosen settlement account, which must be an **active `asset`
+    ledger account** of the School (e.g. Cash in Hand, Bank);
+  - credit each Charge's receivable account.
+- **Reference.** Optional for every method. It holds 1–64 characters of
+  letters, digits, space and `. / _ -`, starting and ending alphanumeric.
+  - It must never hold card or bank credentials or a full account number.
+  - It is never logged, never in audit metadata and never in the outbox.
+  - It has no uniqueness rule.
+- **Idempotency.** The form carries a server-issued UUID, claimed on the
+  Payment itself (`payments_manual_idempotency_unique`).
+  - Same-key requests serialize on a transaction advisory lock.
+  - The same User and identical content → `duplicate_replay`; anything else
+    → 409 `MANUAL_PAYMENT_IDEMPOTENCY_CONFLICT`.
+  - Amount, date and Charge never infer a duplicate.
+- **Immutability.** The row is append-only, and the allocation set is frozen
+  at commit. There is no edit, delete or correction action (owner decision:
+  the correction contract is an open follow-up).
+- **Journal reversal.** `journal_entries_payment_reversal_guard` refuses a
+  generic reversal of any Payment's settlement entry (manual or provider),
+  as 409 `JOURNAL_ENTRY_NOT_REVERSIBLE`.
+- **Lifecycle.** A suspended or non-operational School is refused
+  (`SchoolOperationalGuard` inside the transaction).
+- **Audit and events.** `payment.recorded_manually` with `method`,
+  `currency`, `occurredOn`, `allocationCount`, `hasReference`: no amount,
+  reference or key. `payment.settled.v1` is unchanged and not
+  webhook-registered.
+- **Surfaces.**
+  - `GET/POST /app/finance/payments/record` and
+    `GET /app/finance/payments/record/students/search`, through CSRF and the
+    `finance-payment-recording` limiter. There is no `/api/v1` write.
+  - The Payments list and detail (browser and API) show the provenance.
+  - The Charge page links to recording.
+- **No receipt.** The success page is the immutable Payment record, not a
+  statutory or formal receipt (receipts stay deferred).
+- **No metrics.** Finance has no operational metrics today.

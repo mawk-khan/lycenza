@@ -927,6 +927,27 @@ docs/roadmap             MASTER-ROADMAP.md
     never log/audit an address, selector, secret, link or password, and
     never let a new request invalidate an older one.
 
+91. **Manual/offline payment recording records money already received;
+    it never moves money and never fakes provider evidence (ADR 0031
+    implementation amendment, Phase 0O.11A).** Both ingresses write
+    Payments only through `SettledPaymentRecorder` (one core: Charge locks,
+    allocation, ledger, audit, outbox) -- never duplicate its invariants.
+    A manual Payment (`payments.source = 'manual'`) never creates a
+    `payment_provider_events` row or carries a provider column
+    (`payments_source_shape_check`); the method catalog is closed (`cash`,
+    `bank_transfer`, `cheque`); it needs `finance.payments.record`, an
+    operational School (`SchoolOperationalGuard` inside the transaction)
+    and a server-issued idempotency key claimed on the Payment itself
+    (same User + identical content replays, anything else fails closed).
+    The settlement account is an active School `asset` account; `settled_at`
+    is the School-local occurred date, `created_at` the recorded-at. Posted
+    Payments are immutable with NO correction action in v1 -- never add an
+    edit, delete, refund, void, negative Payment or "correction" without an
+    approved Finance correction contract, and never reverse a Payment's
+    journal entry (`journal_entries_payment_reversal_guard`). Never log or
+    audit the reference, key or form payload, and never accept card or
+    bank credentials.
+
 ## Running things locally
 
 ```bash

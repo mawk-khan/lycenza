@@ -172,7 +172,7 @@ the dataset is 2026-09-22.
 | Syllabus / delivery | 5 units each for English, Mathematics, Science per grade; Section A: 2 units completed, 1 in progress; Section B: Mathematics 4 completed, Science 1 completed + 1 in progress, English not started (Hindi, Social Studies, Computer Science have no syllabus) |
 | Examinations | Unit Test 1 (July) and Term 1 Examination (28 Sept - 6 Oct), 30 papers each; active 8-band grade scale + a draft Pass/Fail scale |
 | Communications | 2 templates; 2 published announcements (school-wide; Grade 8 guardians) + 1 draft; 2 conversations (staff; guardian) |
-| Finance | 11 ledger accounts, opening and stationery journal entries, 36 Term-1 tuition charges, 30 payments (full and part), canteen charges |
+| Finance | 12 ledger accounts (incl. Cash in Hand), opening and stationery journal entries, 36 Term-1 tuition charges, 30 payments (full and part): 26 recorded offline by the School Admin (cash / bank transfer / cheque, Phase 0O.11A) and 4 `demo-provider` examples, canteen charges |
 | Payroll | 3 components, active structure, 8 compensation assignments; **August 2026 run posted**, **September 2026 run calculated** (awaiting approval) |
 | Library | 6 titles, 12 copies, 4 active loans + 1 returned |
 | Transport | North Route (3 stops), 2 buses, driver assignment, 8 students assigned |
@@ -242,7 +242,7 @@ minute.
 
 | Persona | Email | Purpose | Main access | Known limitations |
 |---|---|---|---|---|
-| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (111 capabilities): all modules incl. Finance and Payroll administration | HR departments/positions/categories, payslips and statutory screens are 403 (no system role holds them) |
+| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (116 capabilities): all modules incl. Finance and Payroll administration | HR departments/positions/categories, payslips and statutory screens are 403 (no system role holds them) |
 | Principal | `principal@example.test` | Academic administration | `principal` system role (80): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403 |
 | HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
@@ -253,7 +253,7 @@ minute.
 | Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
 | Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: same as Teacher |
 | Guardian | `guardian01@example.test` | Current parent experience | Member with no role, linked to Guardian Priya Sharma (activated via the real invitation flow) | **No parent/guardian portal exists**: same as Teacher |
-| Finance Officer *(demo-only role)* | `finance.officer@example.test` | Finance in isolation | `demo.finance_officer`: only `finance.*` (6) -- ledger, journals, charges, payments | Everything else 403 |
+| Finance Officer *(demo-only role)* | `finance.officer@example.test` | Finance in isolation | `demo.finance_officer`: only `finance.*` (7) -- ledger, journals, charges, payments, offline payment recording | Everything else 403 |
 | Librarian *(demo-only role)* | `library.operator@example.test` | Library in isolation | `demo.librarian`: only `library.*` (4) | No menu link: use `/app/library/titles`, `/app/library/circulation` |
 | Transport Coordinator *(demo-only role)* | `transport.operator@example.test` | Transport in isolation | `demo.transport_coordinator`: only `transport.*` (6) | No menu link: use `/app/transport/routes` |
 | Reception / Visitor Desk *(demo-only role)* | `reception@example.test` | Visitors in isolation | `demo.reception`: only `visitor.*` (4) | No menu link: use `/app/visitor/directory`, `/app/visitor/visits` |
@@ -329,7 +329,14 @@ Platform Admin (there is no platform UI to review).
    conversations (staff + guardian thread), templates, approvals,
    analytics.
 5. **Finance**: ledger accounts, journal entries, charges (paid / part-paid
-   / outstanding), payments.
+   / outstanding), payments (source **Offline** vs **Provider**).
+   **Record an offline payment** (Phase 0O.11A): open an outstanding charge
+   -> "Record offline payment" -> method, reference, Received into -> Review
+   -> Record payment. You land on the immutable Payment ("Payment
+   recorded"). Its journal entry debits the chosen account and credits Fees
+   Receivable, and "Reverse journal entry" on it is refused. Submitting the
+   same form twice records once. A Principal gets 403 on
+   `/app/finance/payments/record`.
 6. **HR**: employees -> an employee profile. **Payroll**: structures,
    compensation, periods -> August (posted) and September (calculated) runs.
 7. Type these URLs (implemented but **not linked from any menu**):

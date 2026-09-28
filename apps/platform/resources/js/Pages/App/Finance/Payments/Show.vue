@@ -8,8 +8,15 @@ interface PaymentAllocation {
 
 interface PaymentDetail {
     id: string;
-    provider: string;
-    providerPaymentReference: string;
+    source: 'provider' | 'manual';
+    provider: string | null;
+    providerPaymentReference: string | null;
+    method: string | null;
+    methodLabel: string | null;
+    manualReference: string | null;
+    recordedByName: string | null;
+    occurredOn: string;
+    recordedAt: string;
     amount: string;
     currency: string;
     settlementLedgerAccountId: string;
@@ -20,6 +27,7 @@ interface PaymentDetail {
 
 interface Props {
     payment: PaymentDetail;
+    recordedOutcome: 'recorded' | 'duplicate_replay' | null;
 }
 
 defineProps<Props>();
@@ -29,10 +37,30 @@ defineProps<Props>();
     <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/finance/payments">← Payments</a>
 
-        <h1 class="mt-2 text-xl font-semibold">Payment</h1>
+        <p
+            v-if="recordedOutcome === 'recorded'"
+            role="status"
+            class="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+        >
+            Payment recorded. It is now part of this School's permanent Finance record.
+        </p>
+        <p
+            v-else-if="recordedOutcome === 'duplicate_replay'"
+            role="status"
+            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+        >
+            This payment was already recorded -- nothing new was created.
+        </p>
+
+        <h1 class="mt-2 text-xl font-semibold">
+            {{ payment.source === 'manual' ? 'Offline payment' : 'Payment' }}
+        </h1>
         <p class="mt-1 text-sm text-slate-500">
-            {{ payment.provider }} · settled {{ payment.settledAt }}. Read-only -- Payments cannot
-            be edited, settled, allocated, or refunded from this screen.
+            <template v-if="payment.source === 'manual'">
+                {{ payment.methodLabel }} · received {{ payment.occurredOn }}.
+            </template>
+            <template v-else> {{ payment.provider }} · settled {{ payment.occurredOn }}. </template>
+            Payments cannot be edited, deleted or refunded.
         </p>
 
         <dl class="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -41,6 +69,39 @@ defineProps<Props>();
                 <dd class="font-mono">{{ formatMoney(payment.amount, payment.currency) }}</dd>
             </div>
             <div>
+                <dt class="text-slate-500">Source</dt>
+                <dd>
+                    {{
+                        payment.source === 'manual'
+                            ? 'Recorded offline in Lycenza'
+                            : 'Payment provider'
+                    }}
+                </dd>
+            </div>
+            <template v-if="payment.source === 'manual'">
+                <div>
+                    <dt class="text-slate-500">Method</dt>
+                    <dd>{{ payment.methodLabel }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Reference</dt>
+                    <dd>{{ payment.manualReference ?? '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Received on</dt>
+                    <dd>{{ payment.occurredOn }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-500">Recorded</dt>
+                    <dd>
+                        {{ payment.recordedAt }}
+                        <span v-if="payment.recordedByName" class="block text-slate-500"
+                            >by {{ payment.recordedByName }}</span
+                        >
+                    </dd>
+                </div>
+            </template>
+            <div v-else>
                 <dt class="text-slate-500">Provider reference</dt>
                 <dd>{{ payment.providerPaymentReference }}</dd>
             </div>

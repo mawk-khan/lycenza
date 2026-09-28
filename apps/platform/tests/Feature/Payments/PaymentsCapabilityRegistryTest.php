@@ -16,7 +16,8 @@ use Tests\TestCase;
  */
 class PaymentsCapabilityRegistryTest extends TestCase
 {
-    private const array PAYMENTS_CAPABILITY_KEYS = ['finance.payments.view'];
+    // Phase 0O.11A: finance.payments.record -- recording an offline payment.
+    private const array PAYMENTS_CAPABILITY_KEYS = ['finance.payments.view', 'finance.payments.record'];
 
     #[Test]
     public function every_approved_payments_capability_is_registered(): void
@@ -34,7 +35,7 @@ class PaymentsCapabilityRegistryTest extends TestCase
     {
         $this->assertFalse(
             Capability::query()->where('key', 'finance.payments.manage')->exists(),
-            'finance.payments.manage must not be registered in 0G.5 -- no human-triggered payment write action exists to gate (rule 53).'
+            'finance.payments.manage must not be registered -- the only human payment write is the narrow finance.payments.record (Phase 0O.11A); there is no edit/refund/void action to gate (rule 53).'
         );
     }
 

@@ -1947,7 +1947,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reverses a posted journal entry via LedgerAdministrationService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires finance.ledger.reverse (a separate capability from finance.ledger.post). NOT a generic HTTP-idempotent endpoint -- reversal has its own structural at-most-once semantics (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat). */
+        /** Reverses a posted journal entry via LedgerAdministrationService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires finance.ledger.reverse (a separate capability from finance.ledger.post). NOT a generic HTTP-idempotent endpoint -- reversal has its own structural at-most-once semantics (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat). Phase 0O.11A: a Payment's settlement journal entry is refused with JOURNAL_ENTRY_NOT_REVERSIBLE (409) -- reversing it directly would leave the Payment posted against a reversed entry. */
         post: operations["reverseJournalEntry"];
         delete?: never;
         options?: never;
@@ -2014,7 +2014,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Lists a School's recognized Payments (READ ONLY -- there is no finance.payments.manage capability and no human Payment mutation route exists anywhere; settlement recognition belongs exclusively to the trusted, not-yet-HTTP-exposed PaymentProviderEventService boundary). Requires finance.payments.view. */
+        /** Lists a School's recognized Payments (READ ONLY -- there is no finance.payments.manage capability and no Payment mutation in this API; provider settlement belongs to the trusted, not-yet-HTTP-exposed PaymentProviderEventService boundary, and Phase 0O.11A offline recording (finance.payments.record) is a School browser action only). Requires finance.payments.view. */
         get: operations["listPayments"];
         put?: never;
         post?: never;
@@ -4019,22 +4019,36 @@ export interface components {
             chargeId: string;
             amount: string;
         };
+        /** @description Phase 0O.11A: `source` is `provider` (recognized from a verified provider event) or `manual` (an offline cash/bank transfer/cheque payment recorded by a School user). `provider` is null for a manual Payment and `method` null for a provider one. `settledAt` is when the money was received; `recordedAt` when Lycenza committed the record. */
         PaymentSummary: {
             /** Format: uuid */
             id: string;
-            provider: string;
+            /** @enum {string} */
+            source: "provider" | "manual";
+            provider: string | null;
+            /** @enum {string|null} */
+            method: "cash" | "bank_transfer" | "cheque" | null;
             amount: string;
             /** @example INR */
             currency: string;
             /** Format: date-time */
             settledAt: string;
+            /** Format: date-time */
+            recordedAt: string;
         };
-        /** @description Never includes creation_txid, a raw provider payload, or any provider secret/signature material -- structurally impossible, this projection carries only normalized, safe fields. */
+        /** @description Never includes creation_txid, a raw provider payload, any provider secret/signature material, or a manual Payment's idempotency key -- structurally impossible, this projection carries only normalized, safe fields. Phase 0O.11A: provider fields are null for a `manual` Payment; `method`, `manualReference` (an optional cheque number or bank transfer reference -- never a card or account number) and `recordedByUserId` are null for a `provider` one. */
         PaymentDetail: {
             /** Format: uuid */
             id: string;
-            provider: string;
-            providerPaymentReference: string;
+            /** @enum {string} */
+            source: "provider" | "manual";
+            provider: string | null;
+            providerPaymentReference: string | null;
+            /** @enum {string|null} */
+            method: "cash" | "bank_transfer" | "cheque" | null;
+            manualReference: string | null;
+            /** Format: uuid */
+            recordedByUserId: string | null;
             amount: string;
             /** @example INR */
             currency: string;
@@ -4044,6 +4058,8 @@ export interface components {
             journalEntryId: string;
             /** Format: date-time */
             settledAt: string;
+            /** Format: date-time */
+            recordedAt: string;
             allocations: components["schemas"]["PaymentAllocationEntry"][];
         };
         /** @description Never includes the signing secret (see the create/rotate-secret responses for the one-time exception). */
@@ -12604,7 +12620,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description JOURNAL_ENTRY_ALREADY_REVERSED. */
+            /** @description JOURNAL_ENTRY_ALREADY_REVERSED or JOURNAL_ENTRY_NOT_REVERSIBLE (a Payment-owned entry). */
             409: {
                 headers: {
                     [name: string]: unknown;

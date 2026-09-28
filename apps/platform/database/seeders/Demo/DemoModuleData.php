@@ -43,9 +43,12 @@ use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryTitle;
 use App\Domain\Payments\Application\ChargeAllocationInput;
+use App\Domain\Payments\Application\ManualPaymentRecordingService;
 use App\Domain\Payments\Application\NormalizedProviderEvent;
 use App\Domain\Payments\Application\PaymentProviderEventService;
+use App\Domain\Payments\Application\RecordManualPaymentData;
 use App\Domain\Payments\Application\RecordSettlementData;
+use App\Domain\Payments\Domain\ManualPaymentMethod;
 use App\Domain\Payroll\Application\AddStructureComponentData;
 use App\Domain\Payroll\Application\CompensationService;
 use App\Domain\Payroll\Application\FixedComponentValueInput;
@@ -71,6 +74,7 @@ use App\Models\User;
 use App\Support\Money\Money;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Module-level demo records for every published module with a
@@ -388,6 +392,7 @@ final class DemoModuleData
 
         foreach ([
             'BANK' => ['1000', 'Bank -- Current Account', 'asset'],
+            'CASH' => ['1010', 'Cash in Hand', 'asset'],
             'FEES_AR' => ['1100', 'Fees Receivable', 'asset'],
             'CANTEEN_AR' => ['1200', 'Canteen Receivable', 'asset'],
             'SAL_PAYABLE' => ['2100', 'Salaries Payable', 'liability'],
@@ -430,6 +435,8 @@ final class DemoModuleData
 
         $charges = app(ChargeService::class);
         $payments = app(PaymentProviderEventService::class);
+        $offline = app(ManualPaymentRecordingService::class);
+        $methods = [ManualPaymentMethod::Cash, ManualPaymentMethod::BankTransfer, ManualPaymentMethod::Cheque];
 
         foreach ($d->students as $i => $student) {
             $result = $charges->assess($d->school, new AssessChargeData(
@@ -449,21 +456,49 @@ final class DemoModuleData
                 default => null,
             };
 
-            if ($paid !== null) {
-                $payments->recordSettlement($d->school, new RecordSettlementData(
-                    event: new NormalizedProviderEvent(
-                        provider: 'demo-offline',
-                        providerEventId: sprintf('demo-evt-%04d', $i + 1),
-                        providerPaymentReference: sprintf('DEMO-RCPT-%04d', $i + 1),
-                        eventType: 'payment.settled',
-                        amount: Money::of($paid, 'INR'),
-                        occurredAt: Carbon::parse('2026-04-10')->addDays($i),
-                    ),
-                    settlementLedgerAccountId: $this->ledger['BANK']->id,
-                    allocations: [new ChargeAllocationInput($result->chargeId, Money::of($paid, 'INR'))],
-                ), $d->admin);
+            if ($paid === null) {
+                continue;
             }
 
+            $occurredAt = Carbon::parse('2026-04-10')->addDays($i);
+            $allocations = [new ChargeAllocationInput($result->chargeId, Money::of($paid, 'INR'))];
+
+            // Phase 0O.11A: most demo fees were paid offline, recorded by
+            // the School Admin through the real manual recording service
+            // (cash into Cash in Hand, bank transfer/cheque into Bank). A
+            // few stay provider-derived so the two sources can be compared
+            // -- 'demo-provider' is demo data only, never a real gateway.
+            if (in_array($i % 6, [2, 3], true) && $i < 12) {
+                $payments->recordSettlement($d->school, new RecordSettlementData(
+                    event: new NormalizedProviderEvent(
+                        provider: 'demo-provider',
+                        providerEventId: sprintf('demo-evt-%04d', $i + 1),
+                        providerPaymentReference: sprintf('DEMO-PSP-%04d', $i + 1),
+                        eventType: 'payment.settled',
+                        amount: Money::of($paid, 'INR'),
+                        occurredAt: $occurredAt,
+                    ),
+                    settlementLedgerAccountId: $this->ledger['BANK']->id,
+                    allocations: $allocations,
+                ), $d->admin);
+
+                continue;
+            }
+
+            $method = $methods[$i % 3];
+            $offline->record($d->school, new RecordManualPaymentData(
+                method: $method,
+                amount: Money::of($paid, 'INR'),
+                occurredOn: $occurredAt->toDateString(),
+                reference: match ($method) {
+                    ManualPaymentMethod::Cash => null,
+                    ManualPaymentMethod::BankTransfer => sprintf('DEMOUTR%08d', $i + 1),
+                    ManualPaymentMethod::Cheque => sprintf('%06d', 400100 + $i),
+                },
+                settlementLedgerAccountId: $this->ledger[$method === ManualPaymentMethod::Cash ? 'CASH' : 'BANK']->id,
+                allocations: $allocations,
+                idempotencyKey: (string) Str::uuid(),
+            ), $d->admin);
         }
     }
 
