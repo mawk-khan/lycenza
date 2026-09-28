@@ -234,6 +234,37 @@ class SupplyChainGuardTest extends TestCase
         }
     }
 
+    /**
+     * verify-images.sh runs throwaway helper containers (Redis, a TLS test
+     * server, an S3 server) next to the images under test. A tag-only helper
+     * broke qualification when minio/minio's public images were withdrawn
+     * (2026-09): every helper is image:version@sha256:digest, so a moved or
+     * vanished tag fails loudly and never silently changes the evidence.
+     */
+    #[Test]
+    public function every_verify_images_helper_image_is_pinned_by_digest(): void
+    {
+        $script = str_replace("\\\n", ' ', $this->repo('infrastructure/docker/production/verify-images.sh'));
+
+        $helpers = [];
+        foreach (preg_split('/\R/', $script) as $line) {
+            if (str_starts_with(ltrim($line), '#') || preg_match('/\bdocker (run|create|pull)\b/', $line) !== 1) {
+                continue;
+            }
+            preg_match_all('/(?<=\s)([a-z0-9][a-z0-9.\/_-]*:[A-Za-z0-9][A-Za-z0-9._-]*)(@sha256:[0-9a-f]{64})?(?=\s)/', $line, $images, PREG_SET_ORDER);
+            foreach ($images as $image) {
+                $this->assertNotEmpty($image[2] ?? '', "verify-images.sh: helper {$image[1]} must be image:version@sha256:digest");
+                $this->assertStringNotContainsString(':latest', $image[1]);
+                $helpers[] = $image[1];
+            }
+        }
+
+        $this->assertContains('redis:7.4.11-alpine', $helpers);
+        $this->assertContains('versity/versitygw:v1.8.0', $helpers);
+        $this->assertCount(3, $helpers, 'Redis, the TLS test server and the S3 server');
+        $this->assertStringNotContainsString('minio/minio', $script, 'the withdrawn MinIO images are not a helper');
+    }
+
     #[Test]
     public function the_release_policy_names_no_registry_and_no_signing_identity(): void
     {
