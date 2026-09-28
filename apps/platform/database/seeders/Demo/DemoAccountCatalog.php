@@ -34,6 +34,7 @@ final class DemoAccountCatalog
             'capabilities' => [
                 'finance.ledger.view', 'finance.ledger.post', 'finance.ledger.reverse',
                 'finance.charges.view', 'finance.charges.manage', 'finance.payments.view',
+                'finance.payments.record',
             ],
         ],
         'demo.librarian' => [
@@ -128,7 +129,7 @@ final class DemoAccountCatalog
         ];
 
         $operationsHints = [
-            'demo.finance_officer' => 'Ledger accounts, journal entries, fee charges, payments (Dashboard > Finance).',
+            'demo.finance_officer' => 'Ledger accounts, journal entries, fee charges, payments and offline payment recording (Dashboard > Finance).',
             'demo.librarian' => 'Catalogue and circulation at /app/library/titles and /app/library/circulation (no menu link).',
             'demo.transport_coordinator' => 'Routes, vehicles, operations and assignments at /app/transport/routes (no menu link).',
             'demo.reception' => 'Visitor directory and check-in/out at /app/visitor/directory and /app/visitor/visits (no menu link).',

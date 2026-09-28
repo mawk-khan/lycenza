@@ -6,6 +6,7 @@ interface Props {
         viewCharges: boolean;
         manageCharges: boolean;
         viewPayments: boolean;
+        recordPayments: boolean;
     };
 }
 
@@ -44,13 +45,21 @@ defineProps<Props>();
             <li v-if="can.viewPayments" class="px-4 py-3">
                 <a class="text-sm font-medium underline" href="/app/finance/payments">Payments</a>
                 <p class="mt-1 text-sm text-slate-500">
-                    Read-only Payment records and allocations.
+                    Payment records and how each was applied to charges.
+                </p>
+            </li>
+            <li v-if="can.recordPayments" class="px-4 py-3">
+                <a class="text-sm font-medium underline" href="/app/finance/payments/record"
+                    >Record an offline payment</a
+                >
+                <p class="mt-1 text-sm text-slate-500">
+                    Record cash, bank transfer or cheque money the School has already received.
                 </p>
             </li>
         </ul>
 
         <p
-            v-if="!can.viewLedger && !can.viewCharges && !can.viewPayments"
+            v-if="!can.viewLedger && !can.viewCharges && !can.viewPayments && !can.recordPayments"
             class="mt-6 text-sm text-slate-500"
         >
             You don't have access to any Finance area yet.

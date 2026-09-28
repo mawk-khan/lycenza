@@ -222,9 +222,12 @@ class ChargeServiceTest extends TestCase
         // (Phase 0G.5) is a read+lock accessor for the sanctioned
         // cross-module Payments caller (App\Domain\Payments\Application\PaymentProviderEventService)
         // -- it returns a typed ChargeAllocationSnapshot, never a write
-        // path, so it does not weaken this invariant.
+        // path, so it does not weaken this invariant. Phase 0O.11A:
+        // uncancelledChargesForStudent() is a read-only lookup for the
+        // manual payment form (a list of ChargeSummary), likewise no
+        // write path.
         $this->assertFalse(method_exists(ChargeService::class, 'update'));
-        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation'], array_values(array_filter(
+        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'uncancelledChargesForStudent'], array_values(array_filter(
             array_map(fn ($m) => $m->name, (new \ReflectionClass(ChargeService::class))->getMethods(\ReflectionMethod::IS_PUBLIC)),
             fn ($name) => $name !== '__construct',
         )));

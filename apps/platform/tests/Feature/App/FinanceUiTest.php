@@ -449,20 +449,22 @@ class FinanceUiTest extends TestCase
     }
 
     #[Test]
-    public function no_human_payment_mutation_route_exists(): void
+    public function no_payment_edit_delete_or_generic_create_route_exists(): void
     {
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $this->activate($user, $school);
 
-        // No POST/PATCH/DELETE route is registered for /app/finance/payments
-        // at all -- the router correctly returns 405 (the route exists,
-        // the verb does not), never a real endpoint that merely denies
-        // authorization. There is no finance.payments.manage capability
-        // and no route a School Admin -- however privileged -- could use
-        // to fabricate a settled Payment through this UI.
+        // No generic POST and no PATCH/DELETE route is registered for
+        // /app/finance/payments -- the router returns 405 (the route
+        // exists, the verb does not). There is no finance.payments.manage
+        // capability. Phase 0O.11A: the one Payment write is recording an
+        // offline payment (POST /app/finance/payments/record, covered by
+        // Tests\Feature\App\ManualPaymentUiTest); a recorded Payment
+        // still has no edit, delete or refund route.
         $this->post('/app/finance/payments', [])->assertStatus(405);
         $this->patch('/app/finance/payments/anything', [])->assertStatus(405);
         $this->delete('/app/finance/payments/anything')->assertStatus(405);
+        $this->put('/app/finance/payments/record', [])->assertStatus(405);
     }
 
     // --- Navigation ----------------------------------------------------------

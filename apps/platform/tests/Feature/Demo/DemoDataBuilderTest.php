@@ -5,6 +5,8 @@ namespace Tests\Feature\Demo;
 use App\Domain\Analytics\Application\AnalyticsReadGate;
 use App\Domain\Analytics\Application\ReadModels\CurriculumCoverageReadModel;
 use App\Domain\Identity\Infrastructure\StudentGuardianAccountLink;
+use App\Domain\Payments\Infrastructure\Payment;
+use App\Domain\Payments\Infrastructure\PaymentProviderEvent;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\GroupRoleAssignment;
 use App\Models\PlatformRoleAssignment;
@@ -115,18 +117,32 @@ class DemoDataBuilderTest extends TestCase
         $this->assertSame([], $resolver->groupCapabilities($platformAdmin, $group), 'Platform authority is not Group authority.');
         $this->assertSame($platformAdmin->id, GroupRoleAssignment::query()->where('user_id', $groupAdmin->id)->value('granted_by_user_id'));
 
+        // Phase 0O.11A: offline demo fees are manual Payments recorded by the
+        // School Admin -- never fake provider events; a few provider-derived
+        // examples remain, each backed by exactly one provider event.
+        $payments = app(TenantContext::class)->withSchool($school, fn () => Payment::query()->get());
+        $manual = $payments->where('source', 'manual');
+        $this->assertNotEmpty($manual);
+        $this->assertTrue($manual->every(fn (Payment $p) => $p->provider === null && $p->provider_event_id === null && $p->recorded_by_user_id === $this->user('school.admin@example.test')->id));
+        $this->assertSame(
+            $payments->where('source', 'provider')->count(),
+            app(TenantContext::class)->withSchool($school, fn () => PaymentProviderEvent::query()->count()),
+        );
+
         // --- Capability separation (real seeded roles) --------------------
         $admin = $this->user('school.admin@example.test');
         $principal = $this->user('principal@example.test');
         $hrPayroll = $this->user('hr.payroll@example.test');
 
         $this->assertTrue($resolver->canInSchool($admin, 'finance.ledger.view', $school));
+        $this->assertTrue($resolver->canInSchool($admin, 'finance.payments.record', $school));
         $this->assertTrue($resolver->canInSchool($admin, 'students.manage', $school));
         $this->assertFalse($resolver->canInSchool($admin, 'payroll.compensation.sensitive.view', $school));
         $this->assertFalse($resolver->canInSchool($admin, 'students.view', $annexe));
 
         $this->assertTrue($resolver->canInSchool($principal, 'students.view', $school));
         $this->assertFalse($resolver->canInSchool($principal, 'finance.ledger.view', $school));
+        $this->assertFalse($resolver->canInSchool($principal, 'finance.payments.record', $school));
         $this->assertFalse($resolver->canInSchool($principal, 'payroll.runs.view', $school));
 
         $this->assertTrue($resolver->canInSchool($hrPayroll, 'payroll.compensation.sensitive.view', $school));
@@ -190,10 +206,12 @@ class DemoDataBuilderTest extends TestCase
 
         $this->assertPageStatus('school.admin@example.test', $school, '/app/students', 200);
         $this->assertPageStatus('school.admin@example.test', $school, '/app/finance/charges', 200);
+        $this->assertPageStatus('school.admin@example.test', $school, '/app/finance/payments/record', 200);
         $this->assertPageStatus('school.admin@example.test', $school, "/app/students/{$demoStudent->id}", 200);
 
         $this->assertPageStatus('principal@example.test', $school, '/app/students', 200);
         $this->assertPageStatus('principal@example.test', $school, '/app/finance/ledger-accounts', 403);
+        $this->assertPageStatus('principal@example.test', $school, '/app/finance/payments/record', 403);
 
         $this->assertPageStatus('hr.payroll@example.test', $school, '/app/payroll/structures', 200);
         $this->assertPageStatus('hr.payroll@example.test', $school, '/app/students', 403);

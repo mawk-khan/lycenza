@@ -25,6 +25,7 @@ interface ChargeDetail {
 interface Props {
     charge: ChargeDetail;
     canManage: boolean;
+    canRecordPayment: boolean;
 }
 
 const props = defineProps<Props>();
@@ -124,6 +125,21 @@ function cancel(): void {
                 </dd>
             </div>
         </dl>
+
+        <section
+            v-if="canRecordPayment && !charge.cancelledAt"
+            class="mt-8 border-t border-slate-200 pt-6"
+        >
+            <h2 class="text-sm font-medium text-slate-900">Payment received?</h2>
+            <p class="mt-1 text-sm text-slate-500">
+                Record cash, bank transfer or cheque money already received against this charge.
+            </p>
+            <a
+                class="mt-3 inline-block rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                :href="`/app/finance/payments/record?student_id=${charge.studentId}&charge_id=${charge.id}`"
+                >Record offline payment</a
+            >
+        </section>
 
         <section
             v-if="canManage && !charge.cancelledAt"

@@ -217,6 +217,9 @@ class ChargeController extends Controller
                 'academicYearName' => $academicYear?->name,
             ],
             'canManage' => $capabilities->canInSchool($context->actor(), 'finance.charges.manage', $school),
+            // Phase 0O.11A: a link to record an offline payment for this
+            // Charge's Student; the recording route re-checks everything.
+            'canRecordPayment' => $capabilities->canInSchool($context->actor(), 'finance.payments.record', $school),
         ]);
     }
 

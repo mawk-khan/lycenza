@@ -41,6 +41,7 @@ use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
+use App\Http\Controllers\App\Finance\ManualPaymentController as FinanceManualPaymentController;
 use App\Http\Controllers\App\Finance\PaymentController as FinancePaymentController;
 use App\Http\Controllers\App\Groups\GroupReportController;
 use App\Http\Controllers\App\Groups\SchoolGroupController;
@@ -932,9 +933,9 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // the Bearer-token JSON API under /api/v1 that 0G.6 built (that
     // surface exists for Flutter/external consumers). Capability checks
     // live inside each controller (AuthorizesCapability trait), same as
-    // every other module. Payments is read-only throughout -- no
-    // `finance.payments.manage` capability exists and no mutation route
-    // is registered for it.
+    // every other module. Payments has no edit/delete/refund route and
+    // no `finance.payments.manage` capability; since Phase 0O.11A its one
+    // write is recording an offline payment (payments/record below).
     Route::prefix('app/finance')->name('app.finance.')->group(function (): void {
         Route::get('/', [FinanceController::class, 'index'])->name('index');
 
@@ -959,6 +960,18 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/charges', [FinanceChargeController::class, 'store'])->name('charges.store');
         Route::get('/charges/{charge}', [FinanceChargeController::class, 'show'])->name('charges.show');
         Route::post('/charges/{charge}/cancel', [FinanceChargeController::class, 'cancel'])->name('charges.cancel');
+
+        // Phase 0O.11A (ADR 0031 implementation amendment): recording an
+        // OFFLINE payment the School already received (cash, bank
+        // transfer, cheque) -- finance.payments.record, checked in the
+        // controller and again in ManualPaymentRecordingService. Browser
+        // only (web group: session + CSRF); no /api/v1 write. Registered
+        // BEFORE the '/{payment}' wildcard, same reasoning as
+        // 'charges/create' above.
+        Route::get('/payments/record', [FinanceManualPaymentController::class, 'create'])->name('payments.record.create');
+        Route::get('/payments/record/students/search', [FinanceManualPaymentController::class, 'searchStudents'])->name('payments.record.students.search');
+        Route::post('/payments/record', [FinanceManualPaymentController::class, 'store'])
+            ->middleware('throttle:finance-payment-recording')->name('payments.record.store');
 
         Route::get('/payments', [FinancePaymentController::class, 'index'])->name('payments.index');
         Route::get('/payments/{payment}', [FinancePaymentController::class, 'show'])->name('payments.show');

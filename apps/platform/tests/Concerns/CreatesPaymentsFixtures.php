@@ -4,12 +4,17 @@ namespace Tests\Concerns;
 
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Payments\Application\ChargeAllocationInput;
+use App\Domain\Payments\Application\ManualPaymentRecordingService;
+use App\Domain\Payments\Application\ManualPaymentResult;
 use App\Domain\Payments\Application\NormalizedProviderEvent;
 use App\Domain\Payments\Application\PaymentProviderEventResult;
 use App\Domain\Payments\Application\PaymentProviderEventService;
+use App\Domain\Payments\Application\RecordManualPaymentData;
 use App\Domain\Payments\Application\RecordSettlementData;
+use App\Domain\Payments\Domain\ManualPaymentMethod;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Models\School;
+use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
@@ -55,6 +60,49 @@ trait CreatesPaymentsFixtures
             settlementLedgerAccountId: $settlementLedgerAccountId,
             allocations: $allocationInputs,
         ));
+    }
+
+    /**
+     * Phase 0O.11A: records an offline payment through the real
+     * `ManualPaymentRecordingService` (authorization included -- $actor
+     * must hold finance.payments.record in $school).
+     *
+     * @param  array<int, array{0: Charge, 1: string}>  $allocations
+     */
+    protected function recordManualPayment(
+        School $school,
+        User $actor,
+        string $settlementLedgerAccountId,
+        array $allocations,
+        string $amount,
+        ManualPaymentMethod $method = ManualPaymentMethod::Cash,
+        ?string $reference = null,
+        ?string $occurredOn = null,
+        ?string $idempotencyKey = null,
+    ): ManualPaymentResult {
+        $allocationInputs = [];
+        foreach ($allocations as [$charge, $chargeAmount]) {
+            $allocationInputs[] = new ChargeAllocationInput($charge->id, Money::of($chargeAmount, 'INR'));
+        }
+
+        return app(ManualPaymentRecordingService::class)->record($school, new RecordManualPaymentData(
+            method: $method,
+            amount: Money::of($amount, 'INR'),
+            occurredOn: $occurredOn ?? Carbon::now($school->timezone)->toDateString(),
+            reference: $reference,
+            settlementLedgerAccountId: $settlementLedgerAccountId,
+            allocations: $allocationInputs,
+            idempotencyKey: $idempotencyKey ?? (string) Str::uuid(),
+        ), $actor);
+    }
+
+    /** Phase 0O.11A: a User holding the seeded school_admin role in $school. */
+    protected function createPaymentRecorder(School $school): User
+    {
+        $user = $this->createUser();
+        $this->assignSchoolRole($this->createMembership($user, $school), 'school_admin');
+
+        return $user;
     }
 
     protected function findPayment(School $school, string $paymentId): Payment

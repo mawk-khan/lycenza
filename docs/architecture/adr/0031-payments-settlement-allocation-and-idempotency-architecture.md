@@ -340,3 +340,227 @@ exactly as ADR 0030 anticipated for the ledger itself.
   - a correction is never an `UPDATE`.
 
   It introduces no refund, void or payment reversal.
+
+## Implementation amendment — manual / offline settlement recording (Phase 0O.11A, 2026-09-28)
+
+ADR 0057 §3 requires manual/offline payment recording for production v1. This
+amendment is its design. ADR 0057 remains authoritative for v1 scope.
+
+### 1. Two ingresses, one settled-payment core
+
+- **Manual recording is a trusted human/application ingress.** An
+  authenticated School user records a payment that has **already happened
+  outside Lycenza** (cash, an offline bank transfer, a cheque). Lycenza moves
+  no money, contacts no bank or processor, and holds no payment credential.
+- **Provider settlement ingress stays separate and unchanged.**
+  `PaymentProviderEventService::recordSettlement()` keeps its trusted SYSTEM
+  boundary, its `payment_provider_events` claim, its provider-reference
+  uniqueness and its replay/conflict semantics.
+- **Both ingresses call one internal core,
+  `App\Domain\Payments\Application\SettledPaymentRecorder`** ("record an
+  already-settled payment"). Before this amendment that logic was inside the
+  provider service. The core:
+  - locks every named Charge in ascending id order;
+  - refuses cancelled and over-allocated Charges;
+  - posts the settlement `JournalEntry`;
+  - creates the `Payment` and its allocations;
+  - writes the caller-named audit event;
+  - dispatches `PaymentSettled`.
+
+  The core never authorizes, never verifies a provider, and never knows how
+  its caller established authority. It must run inside the caller's
+  transaction and `TenantContext`.
+- **Manual recording never manufactures a payment-provider event.**
+  `payment_provider_events` means external-provider evidence only. A manual
+  Payment has `provider`, `provider_payment_reference` and `provider_event_id`
+  all `NULL`, enforced by the database (§3).
+
+### 2. Semantics kept from this ADR
+
+- **Posting and immutability.** A manual Payment is posted like any other:
+  immediate recognition, with no draft or pending state.
+  - `payments` and `payment_allocations` stay append-only
+    (`TenantRls::makeAppendOnly()`).
+  - The allocation set is frozen at commit (`creation_txid`).
+  - Allocations sum exactly to the amount; no Charge is ever over-allocated;
+    nothing is allocated to a cancelled Charge (all database-enforced).
+  - There is no edit, PATCH or delete path.
+- **No correction action in v1 (owner decision, 2026-09-28).** There is no
+  refund, void, payment reversal or "correction" action, and no negative
+  Payment. ADR 0057 §3 requires an append-only correction mechanism that a
+  later contract defines, and none exists. The project owner accepted
+  immutable posted manual Payments without a correction action for 0O.11A.
+  The correction contract is an explicit open Finance follow-up. Mitigation:
+  the pre-post confirmation step (§8).
+- **Payment-owned journal entries are not reversible directly (owner
+  decision, 2026-09-28).** Before this amendment, `finance.ledger.reverse`
+  could reverse a Payment's settlement `JournalEntry` through the generic
+  journal-reversal action. That left the Payment and its allocations intact
+  and detached from the ledger. Now:
+  - Payments owns the trigger `journal_entries_payment_reversal_guard`
+    (`BEFORE INSERT ON journal_entries`). It refuses any reversal of a journal
+    entry named by `payments.journal_entry_id`, for every role.
+  - `LedgerService::reverse()` maps the refusal to
+    `JournalEntryNotReversibleException` (409
+    `JOURNAL_ENTRY_NOT_REVERSIBLE`).
+  - Charge cancellation and ordinary journal reversal are unaffected.
+  - The same class of gap for other subledger-owned entries (Charge
+    recognition, payroll, canteen) is recorded as existing debt.
+- **Ledger posting** is identical for both ingresses:
+  - debit the explicit settlement asset account;
+  - credit each allocated Charge's receivable account.
+
+  For manual recording the School user chooses the settlement account. It
+  must be an **active `asset` ledger account** of the School, in INR (e.g. the
+  School's own "Cash" or "Bank" account). No clearing, cash or bank account
+  is invented. The provider path keeps its trusted-caller account semantics
+  unchanged.
+
+### 3. Schema (`2026_10_27_090000_add_manual_payment_recording`)
+
+`payments` gains:
+
+| Column | Type | Rule |
+|---|---|---|
+| `source` | `provider` \| `manual` | Defaults to `provider`, so existing rows and every 0G.5-shaped insert stay valid; the shape check means a manual row can never pass as `provider` |
+| `method` | varchar | Closed catalog (§4) |
+| `manual_reference` | varchar(64) | Optional; bounded format (§5) |
+| `recorded_by_user_id` | FK `users`, `RESTRICT` | The recording User |
+| `idempotency_key` | uuid | §6 |
+
+- **`provider`, `provider_payment_reference` and `provider_event_id` become
+  nullable.** `payments_source_shape_check` makes the two shapes exclusive:
+  - a `provider` row has every provider column and no manual column;
+  - a `manual` row has `method`, `recorded_by_user_id` and `idempotency_key`
+    and no provider column.
+- **Existing constraints are unchanged.** Provider-reference and
+  provider-event uniqueness never see manual rows, because `NULL`s are
+  distinct.
+- **`occurred_at` is the existing `settled_at` column.** It is when the School
+  says the money was received.
+  - Manual entry is a calendar date. It is stored as the start of that day in
+    the School's timezone.
+  - The date must not be later than today in the School's timezone. There is
+    no historical lower bound, because Finance has no accounting-period
+    contract.
+  - It is never replaced with "now".
+- **`recorded_at` is the existing `created_at`.** It is server-set in the
+  committing transaction and immutable (append-only). It is never
+  user-supplied.
+- **No payer column.** Every Charge already names its Student, and Guardian
+  context derives from the Student. A payer column would duplicate identity
+  truth.
+
+### 4. Payment-method catalog (closed)
+
+`cash`, `bank_transfer`, `cheque` — `App\Domain\Payments\Domain\ManualPaymentMethod`,
+mirrored by the database CHECK.
+
+- There is no card, wallet, UPI-provider, online-gateway or processor method.
+- There is no free-form method.
+- Adding a method needs an amendment here.
+
+### 5. Reference
+
+- **One optional bounded reference, for every method** — for example a cheque
+  number or a bank transfer UTR.
+- **Format:** 1–64 characters, `^[A-Za-z0-9]([A-Za-z0-9 ./_-]*[A-Za-z0-9])?$`,
+  enforced in the application and the database.
+- **Not mandatory for any method.** No repository product rule establishes a
+  mandatory reference per method.
+- **It is not a provider transaction id.** It must never hold card data, bank
+  credentials or a full account number: the form says so, the character set
+  keeps it narrow, and it is classified Highly Sensitive like all financial
+  data.
+- **It is never logged, and never written to audit metadata or the outbox.**
+- **No uniqueness is enforced on it.** Cheque numbers repeat across banks, and
+  no evidence supports a rule that could reject a legitimate payment.
+
+### 6. Request idempotency and duplicate guarantees
+
+- **Every manual record carries a server-issued opaque UUID `idempotency_key`.**
+  - It is issued when the recording form is rendered and reused for every
+    retry of that form.
+  - It is stored on the Payment itself, under `payments_manual_idempotency_unique
+    (school_id, idempotency_key)`.
+  - It is atomic with the Payment by construction, so there is no crash window
+    (rule 33). This is the ADR 0031 dedicated-claim pattern (rule 34), not the
+    generic `Idempotency-Key` middleware.
+- **Order: authentication → membership/TenantContext → capability →
+  operational School → idempotency** (rule 32).
+- **Inside the transaction** the service:
+  1. takes `SchoolOperationalGuard::requireOperational()` (FOR SHARE);
+  2. takes a transaction-scoped advisory lock on (School, key), so two
+     requests with the same key serialize;
+  3. looks the key up.
+- **Outcomes for a key that already exists:**
+  - same School, same recording User and identical content (amount, method,
+    reference, occurred date, settlement account, allocation set) → the
+    existing Payment is returned (`duplicate_replay`), with no new effect;
+  - any difference, including a different User → fail closed
+    (`ManualPaymentIdempotencyConflictException`, 409).
+- **The unique constraint remains the authoritative guarantee** (rule 30). A
+  violation is resolved the same way.
+- **What this guarantees.** One logical recording request (double click,
+  network retry, browser resubmit) records at most once. It does **not**
+  detect a real-world payment recorded twice through two separate forms.
+  Duplicates are never inferred from amount, date or Charge.
+
+### 7. Authorization, tenancy, lifecycle
+
+- **Capability `finance.payments.record`** (school namespace) is granted by
+  default to `school_admin` only, the same as every other Finance mutation
+  capability.
+  - It is not `finance.payments.view`, and `finance.payments.manage` does not
+    exist.
+  - Group and platform authority never grant it (ADR 0044/0045). An elevated
+    platform session is refused on every School route.
+- **Requirements:** an authenticated User, an active membership, the
+  session-resolved `TenantContext` and the capability.
+  - No `school_id` is accepted from input.
+  - Every Charge and the settlement account are resolved inside the School.
+    Cross-School ids behave exactly like nonexistent ones.
+- **A suspended or non-operational School refuses manual recording**
+  (`SchoolOperationalGuard` inside the transaction). The ADR 0047 exception
+  for future provider evidence does not apply to human entry.
+
+### 8. Audit, events, receipts
+
+- **One School audit event, `payment.recorded_manually`**, with the Payment
+  as subject. Metadata: `method`, `currency`, `occurredOn`,
+  `allocationCount`, `hasReference`.
+  - There is no amount, reference value, idempotency key or payload, mirroring
+    `payment.settled`'s minimization.
+  - The actor is the recording User.
+- **`recorded_by_user_id` on the Payment is the single payment-level
+  provenance.** Provider Payments never gain a User.
+- **`PaymentSettled` (`payment.settled.v1`) is dispatched unchanged for both
+  ingresses.** It is not webhook-registered, and no new external event is
+  added (O15 not broadened).
+- **The UI confirms before posting,** showing a summary of amount, method,
+  date, reference and allocations. After success it shows the immutable
+  Payment. This is not a statutory or formal receipt; receipts stay deferred
+  (0G).
+
+### 9. Transport
+
+- **Session-authenticated Inertia routes only:**
+  - `GET /app/finance/payments/record`;
+  - `GET /app/finance/payments/record/students/search`;
+  - `POST /app/finance/payments/record` — `web` group, CSRF, throttle
+    `finance-payment-recording` at 30 per minute per User.
+- There is no `/api/v1` write, partner route, provider callback or
+  integration route.
+
+### 10. Concurrency
+
+- **Charges** are locked in ascending id order (the core), so two recordings
+  over overlapping Charges serialize without deadlock. The allocation trigger
+  remains the backstop.
+- **The same key** serializes on the advisory lock.
+- **Suspension** serializes with recording on the School row (FOR SHARE vs
+  UPDATE).
+- **Charge cancellation** serializes with recording on the Charge row lock.
+
+Real two-process PostgreSQL tests prove each case
+(`Tests\Feature\Payments\ManualPaymentConcurrencyTest`).

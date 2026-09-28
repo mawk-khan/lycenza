@@ -3717,8 +3717,9 @@ paths:
   # never the trusted cores (LedgerService/ChargeService/
   # PaymentProviderEventService) or a raw Eloquent model. Money is
   # always an exact decimal STRING (never a JSON number) -- see the
-  # `Money` schema below. No Payment mutation path exists anywhere (no
-  # `finance.payments.manage` capability, ADR 0031) and no provider
+  # `Money` schema below. No Payment mutation path exists in this API (no
+  # `finance.payments.manage` capability, ADR 0031; Phase 0O.11A offline
+  # recording is a School browser action only) and no provider
   # callback/webhook path is documented -- that HTTP adapter remains
   # explicitly deferred (docs/modules/FINANCE.md "0G.6 as-built").
   /schools/{schoolId}/ledger-accounts:
@@ -3852,7 +3853,10 @@ paths:
         finance.ledger.reverse (a separate capability from
         finance.ledger.post). NOT a generic HTTP-idempotent endpoint --
         reversal has its own structural at-most-once semantics
-        (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat).
+        (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat). Phase 0O.11A:
+        a Payment's settlement journal entry is refused with
+        JOURNAL_ENTRY_NOT_REVERSIBLE (409) -- reversing it directly would
+        leave the Payment posted against a reversed entry.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/JournalEntryId" }
@@ -3883,7 +3887,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: JOURNAL_ENTRY_ALREADY_REVERSED.
+          description: JOURNAL_ENTRY_ALREADY_REVERSED or JOURNAL_ENTRY_NOT_REVERSIBLE (a Payment-owned entry).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -4040,11 +4044,11 @@ paths:
       operationId: listPayments
       summary: >
         Lists a School's recognized Payments (READ ONLY -- there is no
-        finance.payments.manage capability and no human Payment
-        mutation route exists anywhere; settlement recognition belongs
-        exclusively to the trusted, not-yet-HTTP-exposed
-        PaymentProviderEventService boundary). Requires
-        finance.payments.view.
+        finance.payments.manage capability and no Payment mutation in
+        this API; provider settlement belongs to the trusted,
+        not-yet-HTTP-exposed PaymentProviderEventService boundary, and
+        Phase 0O.11A offline recording (finance.payments.record) is a
+        School browser action only). Requires finance.payments.view.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: provider_payment_reference, in: query, required: false, schema: { type: string } }
@@ -9217,30 +9221,50 @@ components:
 
     PaymentSummary:
       type: object
-      required: [id, provider, amount, currency, settledAt]
+      required: [id, source, provider, method, amount, currency, settledAt, recordedAt]
+      description: >
+        Phase 0O.11A: `source` is `provider` (recognized from a verified
+        provider event) or `manual` (an offline cash/bank transfer/cheque
+        payment recorded by a School user). `provider` is null for a
+        manual Payment and `method` null for a provider one. `settledAt`
+        is when the money was received; `recordedAt` when Lycenza
+        committed the record.
       properties:
         id: { type: string, format: uuid }
-        provider: { type: string }
+        source: { type: string, enum: [provider, manual] }
+        provider: { type: string, nullable: true }
+        method: { type: string, nullable: true, enum: [cash, bank_transfer, cheque] }
         amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
         currency: { type: string, example: INR }
         settledAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time }
 
     PaymentDetail:
       type: object
-      required: [id, provider, providerPaymentReference, amount, currency, settlementLedgerAccountId, journalEntryId, settledAt, allocations]
+      required: [id, source, provider, providerPaymentReference, method, manualReference, recordedByUserId, amount, currency, settlementLedgerAccountId, journalEntryId, settledAt, recordedAt, allocations]
       description: >
-        Never includes creation_txid, a raw provider payload, or any
-        provider secret/signature material -- structurally impossible,
-        this projection carries only normalized, safe fields.
+        Never includes creation_txid, a raw provider payload, any
+        provider secret/signature material, or a manual Payment's
+        idempotency key -- structurally impossible, this projection
+        carries only normalized, safe fields. Phase 0O.11A: provider
+        fields are null for a `manual` Payment; `method`,
+        `manualReference` (an optional cheque number or bank transfer
+        reference -- never a card or account number) and
+        `recordedByUserId` are null for a `provider` one.
       properties:
         id: { type: string, format: uuid }
-        provider: { type: string }
-        providerPaymentReference: { type: string }
+        source: { type: string, enum: [provider, manual] }
+        provider: { type: string, nullable: true }
+        providerPaymentReference: { type: string, nullable: true }
+        method: { type: string, nullable: true, enum: [cash, bank_transfer, cheque] }
+        manualReference: { type: string, nullable: true, maxLength: 64 }
+        recordedByUserId: { type: string, format: uuid, nullable: true }
         amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
         currency: { type: string, example: INR }
         settlementLedgerAccountId: { type: string, format: uuid }
         journalEntryId: { type: string, format: uuid }
         settledAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time }
         allocations: { type: array, items: { $ref: "#/components/schemas/PaymentAllocationEntry" } }
 
     WebhookEndpoint:

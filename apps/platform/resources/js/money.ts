@@ -56,3 +56,16 @@ export function sumAmounts(amounts: string[]): string {
     }, 0n);
     return fromCents(totalCents);
 }
+
+/**
+ * Phase 0O.11A: `minuend - subtrahend` as an exact decimal string, via
+ * `BigInt` cents -- a PREVIEW for the offline payment form's "left to
+ * apply" hint, never authoritative. Returns `null` while either value is
+ * not yet a valid amount.
+ */
+export function subtractAmounts(minuend: string, subtrahend: string): string | null {
+    const a = toCents(minuend);
+    const b = toCents(subtrahend);
+    if (a === null || b === null) return null;
+    return fromCents(a - b);
+}
