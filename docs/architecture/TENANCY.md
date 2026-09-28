@@ -496,3 +496,9 @@ purposes (`email_messages_identity_level_check`).
   constraint.
 - **Identity resolution.** A School never supplies a `user_id`; identity is
   resolved server-side by canonical email.
+- **`membership_role_assignments` (Phase 0O.12B)** keeps history.
+  Revocation fields are immutable once set, there is one active grant per
+  membership and role, and the runtime role has no DELETE. It stays
+  forced-RLS. Staff access changes run under a transaction-scoped advisory
+  lock per School (`staff-access:<school_id>`) inside that School's
+  `TenantContext`.

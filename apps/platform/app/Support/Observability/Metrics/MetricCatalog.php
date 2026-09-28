@@ -187,11 +187,12 @@ final class MetricCatalog
             'communications-publish-scheduled', 'automation-executions-redispatch', 'expire-school-elevations',
             'worker-canaries', 'idempotency-prune', 'webhook-deliveries-prune', 'domains-check',
             'email-messages-redispatch', 'email-prune', 'account-recovery-prune',
+            'staff-account-credentials-prune',
         ];
     }
 
     /** Daily tasks (their staleness window is a day, not minutes). */
-    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune'];
+    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune'];
 
     /**
      * @param  array<string, string>  $labels

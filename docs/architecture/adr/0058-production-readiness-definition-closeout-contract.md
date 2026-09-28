@@ -694,3 +694,25 @@ qualified (ADR 0059 §23).
 action suspends a staff membership or revokes a School role. The owner
 decides whether it joins 0O.12B or becomes its own row. It is **not** added
 to the register silently.
+
+## Note — Phase 0O.12B (owner decision and implementation, 2026-09-28)
+
+**E24 is amended by the owner. It now covers the complete production
+staff-account lifecycle:**
+- first-School bootstrap;
+- staff provisioning;
+- School-role assignment;
+- staff off-boarding (membership suspension);
+- role revocation with history.
+
+Off-boarding gets no separate register row. The ADR 0059 §22 "DECISION
+REQUIRED" finding is resolved by this amendment and by the ADR 0059
+owner amendment.
+
+**Status.** E24 is implemented in Phase 0O.12B. It becomes
+**REPOSITORY_COMPLETE** when that phase's full regression and O16
+qualification of both images are recorded (`PHASE-0O-READINESS.md` §43).
+
+**E02 still stands.** The final O1 qualification must run on protected
+`main` after every mandatory executable tail, including the email provider
+tail. The 0O.12B qualification does not satisfy E02 by itself.

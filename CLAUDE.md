@@ -948,6 +948,30 @@ docs/roadmap             MASTER-ROADMAP.md
     audit the reference, key or form payload, and never accept card or
     bank credentials.
 
+92. **Staff and School-admin accounts are provisioned only through the ADR
+    0059 paths, and School access is revoked by suspension, never by
+    deleting anything.**
+    - **The first School administrator** comes from
+      `platform:provision-school-admin-account`: interactive console only;
+      a credential-less User (`password` NULL, never a placeholder); a
+      one-time activation link shown once. School authority still comes
+      only from the ADR 0047 create/replace path, and activation needs an
+      activated administrator.
+    - **Staff** join only by School invitation (Settings → Staff accounts:
+      `school.members.manage` + `school.roles.manage`, fresh MFA, critical
+      email, closed School role catalog within the issuer's capabilities).
+    - **Off-boarding** suspends the membership and revokes its School
+      roles. It never disables, deletes or signs the User out elsewhere,
+      and never touches an Employee.
+    - **`membership_role_assignments` keeps history.** Revoke, never
+      DELETE; revoked rows are immutable; re-grants are new rows.
+    - **Never** administer your own access, and never leave a School
+      without a qualifying administrator
+      (`App\Support\Authorization\SchoolAdministrators`, serialized per
+      School).
+    - **Never** add a platform, elevation or Group path that creates Users
+      or changes School staff access after activation (ADR 0047 D13).
+
 ## Running things locally
 
 ```bash

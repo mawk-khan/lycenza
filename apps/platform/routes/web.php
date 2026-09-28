@@ -97,6 +97,7 @@ use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
+use App\Http\Controllers\App\Staff\StaffAccountController;
 use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
@@ -113,11 +114,13 @@ use App\Http\Controllers\App\TransportStudentAssignmentController;
 use App\Http\Controllers\App\TransportVehicleController;
 use App\Http\Controllers\App\VisitorController;
 use App\Http\Controllers\App\VisitorVisitController;
+use App\Http\Controllers\Auth\AccountActivationController;
 use App\Http\Controllers\Auth\AccountRecoveryController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\MfaChallengeController;
 use App\Http\Controllers\Auth\SessionHandoffController;
 use App\Http\Controllers\Identity\InvitationAcceptanceController;
+use App\Http\Controllers\Identity\StaffInvitationAcceptanceController;
 use App\Http\Controllers\Internal\MfaDemoController;
 use App\Http\Controllers\SystemStatusController;
 use Illuminate\Support\Facades\Route;
@@ -168,6 +171,15 @@ Route::middleware(['private-no-store', 'no-referrer'])->group(function (): void 
     Route::post('/account-recovery/{selector}', [AccountRecoveryController::class, 'update'])
         ->where('selector', '[A-Za-z0-9_-]{22}')
         ->middleware('throttle:account-recovery-reset')->name('account-recovery.update');
+
+    // Phase 0O.12B (ADR 0059 section 5): a bootstrap account's one-time
+    // activation -- the same platform-host-only shape as recovery (the
+    // secret is the link's #fragment; only the POST consumes).
+    Route::get('/account-activation/{selector}', [AccountActivationController::class, 'edit'])
+        ->where('selector', '[A-Za-z0-9_-]{22}')->name('account-activation.edit');
+    Route::post('/account-activation/{selector}', [AccountActivationController::class, 'update'])
+        ->where('selector', '[A-Za-z0-9_-]{22}')
+        ->middleware('throttle:account-activation')->name('account-activation.update');
 });
 
 // Phase 5D.3 -- the Guardian account-invitation acceptance page.
@@ -180,6 +192,19 @@ Route::middleware(['private-no-store', 'no-referrer'])->group(function (): void 
 Route::middleware('throttle:guardian-invitation-accept')->group(function (): void {
     Route::get('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'show'])->middleware('private-no-store')->name('invitations.show');
     Route::post('/invitations/{school}/{token}', [InvitationAcceptanceController::class, 'store'])->name('invitations.store');
+});
+
+// Phase 0O.12B (ADR 0059 section 6.3): accepting a STAFF account invitation
+// -- its own route pair under the same `invitations/{school}/` School-host
+// surface. The secret is the link's #fragment (never the path); only the
+// CSRF-protected POST consumes. no-store + no-referrer; the POST is throttled
+// per IP and per selector.
+Route::middleware(['private-no-store', 'no-referrer'])->group(function (): void {
+    Route::get('/invitations/{school}/staff/{selector}', [StaffInvitationAcceptanceController::class, 'show'])
+        ->whereUuid('school')->where('selector', '[A-Za-z0-9_-]{22}')->name('staff-invitations.show');
+    Route::post('/invitations/{school}/staff/{selector}', [StaffInvitationAcceptanceController::class, 'store'])
+        ->whereUuid('school')->where('selector', '[A-Za-z0-9_-]{22}')
+        ->middleware('throttle:staff-invitation-accept')->name('staff-invitations.store');
 });
 
 // Phase 0O.8A (ADR 0054 amendment): redeems a one-time cross-host sign-in
@@ -386,6 +411,30 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // school.domains.view; add/regenerate/primary/remove: .manage + a fresh
     // MFA code; check now: .manage, per-School/per-domain limits, queued.
     // All checked in SchoolDomainController and SchoolDomainService.
+    // Phase 0O.12B (ADR 0059 section 23, owner amendment): Settings -> Staff
+    // accounts -- invite, resend/revoke an invitation, off-board (suspend),
+    // reactivate, grant/revoke a role. View: school.members.view; every
+    // mutation: its capabilities + a fresh MFA code (StaffAccountController),
+    // re-checked in the Staff services with the last-administrator invariant.
+    Route::prefix('app/settings/staff')->name('app.settings.staff.')->group(function (): void {
+        Route::get('/', [StaffAccountController::class, 'index'])->name('index');
+        Route::middleware('throttle:staff-account-management')->group(function (): void {
+            Route::post('/invitations', [StaffAccountController::class, 'invite'])->name('invitations.store');
+            Route::post('/invitations/{invitation}/resend', [StaffAccountController::class, 'resendInvitation'])
+                ->whereUuid('invitation')->name('invitations.resend');
+            Route::post('/invitations/{invitation}/revoke', [StaffAccountController::class, 'revokeInvitation'])
+                ->whereUuid('invitation')->name('invitations.revoke');
+            Route::post('/members/{membership}/suspend', [StaffAccountController::class, 'suspend'])
+                ->whereUuid('membership')->name('members.suspend');
+            Route::post('/members/{membership}/reactivate', [StaffAccountController::class, 'reactivate'])
+                ->whereUuid('membership')->name('members.reactivate');
+            Route::post('/members/{membership}/roles', [StaffAccountController::class, 'grantRole'])
+                ->whereUuid('membership')->name('members.roles.store');
+            Route::post('/members/{membership}/roles/{role}/revoke', [StaffAccountController::class, 'revokeRole'])
+                ->whereUuid('membership')->where('role', '[a-z0-9_-]{1,100}')->name('members.roles.revoke');
+        });
+    });
+
     Route::prefix('app/settings/domains')->name('app.settings.domains.')->group(function (): void {
         Route::get('/', [SchoolDomainController::class, 'index'])->name('index');
         Route::post('/', [SchoolDomainController::class, 'store'])

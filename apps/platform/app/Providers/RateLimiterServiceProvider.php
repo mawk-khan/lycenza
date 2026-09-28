@@ -202,6 +202,21 @@ class RateLimiterServiceProvider extends ServiceProvider
 
         RateLimiter::for('guardian-invitation-accept', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
 
+        // Phase 0O.12B (ADR 0059 section 19): the one-time credential POSTs
+        // (bootstrap activation, staff invitation acceptance) -- per IP and
+        // per selector, the account-recovery-reset shape; the School's staff
+        // account mutations -- per signed-in User, never per IP.
+        RateLimiter::for('account-activation', fn (Request $request) => [
+            Limit::perMinutes(15, 20)->by('account-activation-ip:'.$request->ip()),
+            Limit::perMinutes(15, 5)->by('account-activation-selector:'.hash('sha256', (string) $request->route('selector'))),
+        ]);
+        RateLimiter::for('staff-invitation-accept', fn (Request $request) => [
+            Limit::perMinutes(15, 20)->by('staff-invitation-accept-ip:'.$request->ip()),
+            Limit::perMinutes(15, 5)->by('staff-invitation-accept-selector:'.hash('sha256', (string) $request->route('selector'))),
+        ]);
+        RateLimiter::for('staff-account-management', fn (Request $request) => Limit::perMinute(20)
+            ->by('staff-account-management:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
+
         // Phase 0H.4D-P1 section 14/23: MFA has three separate attack
         // surfaces, each its own dedicated limiter (never the existing
         // `login` limiter reused) -- login-stage code guessing,

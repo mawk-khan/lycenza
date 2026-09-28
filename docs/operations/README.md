@@ -17,6 +17,7 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 | [RELEASE-QUALIFICATION.md](RELEASE-QUALIFICATION.md) | Release order, qualification to VERIFIED, exceptions, rollback re-verification, evidence retention, the scheduled re-scan (ADR 0052) |
 | [CUSTOM-PHP-RUNTIME.md](CUSTOM-PHP-RUNTIME.md) | The repository-built PHP runtime (curl/libxml2): pins, ownership, rebuild triggers, update procedure |
 | [SUPPLY-CHAIN-INCIDENTS.md](SUPPLY-CHAIN-INCIDENTS.md) | Compromised dependency, compromised CI action, leaked signing key/identity, malicious artifact, Critical CVE after deployment |
+| [STAFF-ACCOUNTS.md](STAFF-ACCOUNTS.md) | The first School administrator (operator console, one-time activation link), School staff invitations, off-boarding and reactivation, role grants (Phase 0O.12B, ADR 0059) |
 | [MANUAL-PAYMENT-RECORDING.md](MANUAL-PAYMENT-RECORDING.md) | Recording an offline (cash/bank transfer/cheque) payment already received: who can, the flow, immutability, duplicates, diagnostics (Phase 0O.11A) |
 
 Observability and alerting are contracted by ADR 0051

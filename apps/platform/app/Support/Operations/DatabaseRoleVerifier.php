@@ -31,6 +31,7 @@ class DatabaseRoleVerifier
     public const NO_RUNTIME_DELETE = [
         'schools', 'platform_role_assignments', 'school_groups', 'api_clients', 'api_client_credentials',
         'platform_audit_events', 'school_audit_events', 'email_suppressions',
+        'membership_role_assignments',
     ];
 
     /**

@@ -269,7 +269,8 @@ class SchoolContextRequiredTest extends TestCase
     {
         [$user, $school, $membership] = $this->selectedMember();
 
-        $membership->roleAssignments()->delete();
+        // Role grants are history (Phase 0O.12B): the runtime role cannot
+        // delete one; the membership's own deletion cascades to them.
         $membership->delete();
 
         $this->assertStaleSelectionHandled($user);

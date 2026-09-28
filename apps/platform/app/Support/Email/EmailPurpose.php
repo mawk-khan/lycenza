@@ -5,8 +5,9 @@ namespace App\Support\Email;
 /**
  * ADR 0055 section 3: the CLOSED message-purpose catalog. The purpose is
  * set by the producer in code, never by a School or a request. Since Phase
- * 0O.10A (ADR 0056) all four are implemented; `account_recovery` and
- * `security_notice` are identity-level (no School).
+ * 0O.10A (ADR 0056) all are implemented; `account_recovery` and
+ * `security_notice` are identity-level (no School). Phase 0O.12B (ADR 0059)
+ * adds the School-scoped `staff_account_invitation`.
  *
  * Marketing and commercial bulk mail are out of scope for v1.
  */
@@ -18,6 +19,8 @@ enum EmailPurpose: string
     case AccountRecovery = 'account_recovery';
     /** ADR 0056 (Phase 0O.10A): the post-reset "your password was changed" notice. Identity-level. */
     case SecurityNotice = 'security_notice';
+    /** ADR 0059 (Phase 0O.12B): a School's staff account invitation. School-scoped, critical. */
+    case StaffAccountInvitation = 'staff_account_invitation';
 
     public function kind(): EmailKind
     {
@@ -37,6 +40,7 @@ enum EmailPurpose: string
             self::SchoolCommunication => 'communication_delivery',
             self::AccountRecovery => 'account_recovery_request',
             self::SecurityNotice => 'user_security_notice',
+            self::StaffAccountInvitation => 'staff_account_invitation',
         };
     }
 

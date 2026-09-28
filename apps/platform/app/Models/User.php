@@ -31,6 +31,7 @@ use LogicException;
  * @property string $id UUIDv7 (ADR 0019).
  * @property string $name
  * @property string $email
+ * @property string|null $password NULL: a credential-less bootstrap account (ADR 0059 section 4).
  * @property bool $is_disabled
  * @property int $credential_version ADR 0056: the security generation every session carries.
  */
@@ -75,6 +76,18 @@ class User extends Authenticatable
     public function sendPasswordResetNotification($token): void
     {
         throw new LogicException('Laravel password-reset notifications are disabled; use account recovery (ADR 0056).');
+    }
+
+    /**
+     * Phase 0O.12B (ADR 0059 section 4): whether this User has an established
+     * local password. An operator-provisioned bootstrap account has none
+     * (`password` NULL) until its one-time activation: it cannot sign in, is
+     * not recovery-eligible and never counts as a qualifying School
+     * administrator.
+     */
+    public function hasLocalCredential(): bool
+    {
+        return $this->password !== null && $this->password !== '';
     }
 
     /** @return HasMany<SchoolMembership, $this> */

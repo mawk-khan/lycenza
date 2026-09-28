@@ -256,7 +256,7 @@ class AutomationExecutionPipelineTest extends TestCase
             'owner lost automation.manage' => [function (DemoBuildResult $w, User $owner): void {
                 app(TenantContext::class)->withSchool($w->school, function () use ($w, $owner): void {
                     $membership = SchoolMembership::query()->where('user_id', $owner->id)->where('school_id', $w->school->id)->firstOrFail();
-                    MembershipRoleAssignment::query()->where('school_membership_id', $membership->id)->delete();
+                    MembershipRoleAssignment::query()->where('school_membership_id', $membership->id)->active()->update(['revoked_at' => now(), 'revocation_reason' => MembershipRoleAssignment::REASON_REVOKED]);
                     MembershipRoleAssignment::query()->create([
                         'school_membership_id' => $membership->id,
                         'role_id' => Role::query()->where('key', 'principal')->value('id'),

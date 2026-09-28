@@ -71,6 +71,7 @@ class SchoolBootstrapAdministrationService
             $hasRole = MembershipRoleAssignment::query()
                 ->where('school_membership_id', $membership->id)
                 ->where('role_id', $role->id)
+                ->active()
                 ->exists();
 
             if (! $hasRole) {
@@ -109,8 +110,9 @@ class SchoolBootstrapAdministrationService
 
     /**
      * Before first activation only: ends the current bootstrap membership
-     * (status `suspended` -- kept, with its role assignment, as history;
-     * nothing deleted) and establishes $identifier's account instead.
+     * (status `suspended`; its role assignment revoked and kept as history
+     * since Phase 0O.12B -- nothing deleted) and establishes $identifier's
+     * account instead.
      */
     public function replace(Request $request, User $actor, School $school, mixed $identifier, mixed $confirmed, mixed $code): SchoolMembership
     {
@@ -143,7 +145,18 @@ class SchoolBootstrapAdministrationService
             $previous = $this->currentAdministrators($locked);
 
             foreach ($previous as $old) {
-                $old->update(['status' => 'suspended']);
+                $old->update(['status' => SchoolMembership::STATUS_SUSPENDED]);
+                // Phase 0O.12B: a suspended membership keeps no active grant --
+                // its School roles are revoked (kept as history), so a later
+                // reactivation never silently restores them.
+                $this->context->withSchool($locked, fn () => MembershipRoleAssignment::query()
+                    ->where('school_membership_id', $old->id)
+                    ->active()
+                    ->update([
+                        'revoked_at' => now(),
+                        'revoked_by_user_id' => $actor->id,
+                        'revocation_reason' => MembershipRoleAssignment::REASON_MEMBERSHIP_SUSPENDED,
+                    ]));
                 $this->authority->forgetCapabilities($old->user, $locked);
             }
 

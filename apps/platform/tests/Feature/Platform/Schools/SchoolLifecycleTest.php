@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Platform\Schools;
 
+use App\Domain\Identity\Application\Staff\BootstrapAccountProvisioningService;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleAudit;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleAuthority;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleDeniedException;
@@ -188,6 +189,28 @@ class SchoolLifecycleTest extends TestCase
     }
 
     #[Test]
+    public function activation_needs_an_administrator_who_has_activated_their_account(): void
+    {
+        // Phase 0O.12B (ADR 0059 section 7.3): a credential-less bootstrap
+        // account (operator-provisioned, not yet activated) is a valid
+        // bootstrap target but not a qualifying administrator.
+        $root = $this->platformAdmin();
+        $issued = app(BootstrapAccountProvisioningService::class)->provision('pending.admin@example.test', 'Pending Admin', null);
+        $school = $this->provisionSchool($root, $issued->user);
+
+        $this->lifecycleAction($root, $school, 'activate')
+            ->assertSessionHasErrors(['school' => 'The School\'s administrator has not activated their account yet. They must set their password with their activation link first.']);
+        $this->assertSame('provisioning', $school->fresh()->status);
+        $this->assertEquals([['operation' => 'activate', 'outcome_code' => 'admin_not_activated']], $this->lifecycleDenials($root));
+
+        preg_match('#/account-activation/([A-Za-z0-9_-]{22})\#([A-Za-z0-9_-]{43})#', $issued->link, $m);
+        $this->post("http://localhost/account-activation/{$m[1]}", ['secret' => $m[2], 'password' => 'pending-admin-password-1', 'password_confirmation' => 'pending-admin-password-1'])->assertRedirect();
+
+        $this->lifecycleAction($root, $school, 'activate')->assertSessionHasNoErrors();
+        $this->assertSame('active', $school->fresh()->status);
+    }
+
+    #[Test]
     public function activation_needs_a_qualifying_administrator_and_then_opens_the_school(): void
     {
         $root = $this->platformAdmin();
@@ -272,7 +295,10 @@ class SchoolLifecycleTest extends TestCase
         $this->assertSame('active', $firstMembership->fresh()->status);
         $this->assertSame('suspended', $secondMembership->fresh()->status);
         $this->assertSame(2, SchoolMembership::query()->where('school_id', $school->id)->count());
-        $this->assertSame(1, app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->where('school_membership_id', $firstMembership->id)->count()));
+        // Phase 0O.12B: the earlier grant was revoked when the membership was
+        // suspended and stays as history; returning grants a NEW row.
+        $this->assertSame(2, app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->where('school_membership_id', $firstMembership->id)->count()));
+        $this->assertSame(1, app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->where('school_membership_id', $firstMembership->id)->active()->count()));
     }
 
     #[Test]

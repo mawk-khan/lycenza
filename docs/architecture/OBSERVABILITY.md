@@ -429,3 +429,16 @@ real environment:
 - backup freshness fed through the evidence file (OBS-20–22);
 - OBS-23 (restore drill overdue) active;
 - collector health monitored (OBS-26).
+
+## Staff accounts (ADR 0059, Phase 0O.12B)
+
+- **Email.** The new critical, School-scoped purpose
+  `staff_account_invitation` joins the email metrics and the
+  critical-backlog alert (OBS-31–38, `message_class` label).
+- **Scheduler.** The scheduled task `staff-account-credentials-prune`
+  (hourly) is covered by OBS-06 with the daily-cadence window.
+- **Logs.** `auth.account_activation` and
+  `identity.staff_invitation.accept` carry an outcome code only: never an
+  email, selector, secret, link or password.
+- **Audit, not metrics.** Staff access changes are audited in the School
+  ledger. No per-School or per-User metric labels are added.

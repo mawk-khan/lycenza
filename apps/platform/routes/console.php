@@ -117,6 +117,14 @@ Schedule::command('platform:account-recovery-prune')
     ->withoutOverlapping()
     ->name('account-recovery-prune');
 
+// Phase 0O.12B (ADR 0059 section 21): ended bootstrap activation credentials
+// (24 h) and ended staff invitations (7 days) -- technical cleanup; the audit
+// ledgers are the record and are never touched.
+Schedule::command('platform:staff-account-credentials-prune')
+    ->hourly()
+    ->withoutOverlapping()
+    ->name('staff-account-credentials-prune');
+
 // Phase 0O.9A (ADR 0055 section 21): email metadata retention,
 // MAIL_RETENTION_DAYS -- no default ([LEGAL REVIEW REQUIRED]); until it is
 // configured this run deletes nothing and logs `platform.email_prune.unconfigured`.

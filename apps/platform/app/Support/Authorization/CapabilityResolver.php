@@ -96,6 +96,9 @@ class CapabilityResolver
                     $school,
                     fn () => MembershipRoleAssignment::query()
                         ->where('school_membership_id', $membership->id)
+                        // Revoked grants are history, never authority
+                        // (Phase 0O.12B, ADR 0059 owner amendment).
+                        ->active()
                         ->with('role.capabilities')
                         ->get()
                         ->flatMap(fn ($assignment) => $assignment->role->capabilities->pluck('key'))

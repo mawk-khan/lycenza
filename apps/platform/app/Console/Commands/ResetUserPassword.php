@@ -54,6 +54,14 @@ class ResetUserPassword extends Command
             return self::FAILURE;
         }
 
+        // ADR 0059 section 13: an account that has never set a password gets
+        // its FIRST credential only from its one-time activation link.
+        if (! $user->hasLocalCredential()) {
+            $this->error('Refused: this account has not been activated yet. Re-issue its activation link with platform:provision-school-admin-account instead.');
+
+            return self::FAILURE;
+        }
+
         try {
             $password = (string) $this->secret('New password (hidden)', false);
             $confirmation = (string) $this->secret('Confirm new password (hidden)', false);

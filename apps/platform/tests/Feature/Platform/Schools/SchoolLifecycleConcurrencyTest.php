@@ -5,6 +5,7 @@ namespace Tests\Feature\Platform\Schools;
 use App\Domain\Automation\Infrastructure\AutomationExecution;
 use App\Domain\Automation\Infrastructure\AutomationRuleInstance;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
+use App\Domain\Identity\Application\Staff\BootstrapAccountProvisioningService;
 use App\Models\School;
 use App\Models\SchoolElevation;
 use App\Models\SchoolMembership;
@@ -114,6 +115,30 @@ class SchoolLifecycleConcurrencyTest extends TestCase
         $this->assertSame('rejected:invalid_transition', $contender);
         $this->assertSame('active', $school->fresh()->status);
         $this->assertSame(1, DB::table('platform_audit_events')->where('subject_id', $school->id)->where('event_type', 'platform.school.activated')->count());
+    }
+
+    #[Test]
+    public function an_activation_racing_a_replacement_with_an_unactivated_account_is_refused(): void
+    {
+        // Phase 0O.12B (ADR 0059 section 7.3): the School row lock serializes
+        // them; after the replacement commits, the only administrator is a
+        // credential-less bootstrap account, so activation is refused.
+        $school = $this->provisioningSchoolWithAdmin();
+        $issued = app(BootstrapAccountProvisioningService::class)->provision('race.pending.admin@example.test', 'Pending Admin', null);
+        $this->track($issued->user);
+        [$rootA, $codeA] = $this->root();
+        [$rootB, $codeB] = $this->root();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('replace', $rootA->id, $school->id, $issued->user->email, $codeA),
+            $this->script('activate', $rootB->id, $school->id, $codeB),
+        );
+
+        $this->assertSame('replaced', $holder);
+        $this->assertSame('rejected:admin_not_activated', $contender);
+        $this->assertSame('provisioning', $school->fresh()->status);
+        DB::connection('pgsql_admin')->table('account_activation_credentials')->where('user_id', $issued->user->id)->delete();
+        DB::connection('pgsql_admin')->table('platform_audit_events')->where('subject_id', $issued->user->id)->delete();
     }
 
     #[Test]

@@ -219,7 +219,7 @@ class HrMutationAuthorizationTest extends TestCase
         app(TenantContext::class)->withSchool($school, function () use ($actor, $school) {
             MembershipRoleAssignment::query()
                 ->whereHas('membership', fn ($q) => $q->where('user_id', $actor->id)->where('school_id', $school->id))
-                ->delete();
+                ->active()->update(['revoked_at' => now(), 'revocation_reason' => MembershipRoleAssignment::REASON_REVOKED]);
         });
         app(CapabilityResolver::class)->forgetCache($actor, $school);
 

@@ -55,7 +55,7 @@ class HostBoundaryArchitectureTest extends TestCase
     /** Non-School routes a School host may serve, by name (everything else admitted must be a `school-context` route). */
     private const SCHOOL_HOST_NON_SCHOOL_ROUTES = [
         'system.status', 'login', 'login.store', 'login.mfa', 'login.mfa.store', 'logout',
-        'invitations.show', 'invitations.store', 'session.handoff', 'app.dashboard', 'app.schools.activate',
+        'invitations.show', 'invitations.store', 'staff-invitations.show', 'staff-invitations.store', 'session.handoff', 'app.dashboard', 'app.schools.activate',
         'app.account.security.show', 'app.account.security.password-confirmation', 'app.account.security.mfa.begin',
         'app.account.security.mfa.confirm', 'app.account.security.mfa.recovery-codes.regenerate', 'app.account.security.mfa.disable',
     ];

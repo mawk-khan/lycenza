@@ -1972,3 +1972,63 @@ decides whether it joins 0O.12B or becomes its own ADR 0058 row.
 **Next (not started):** **Phase 0O.12B — Staff / School-Admin Account
 Provisioning Foundation**, one checkpoint (ADR 0059 §23), once the owner
 has decided whether it includes staff off-boarding.
+
+## 43. Phase 0O.12B — Staff / School-Admin Account Provisioning Foundation (2026-09-28)
+
+ADR 0059 is implemented, plus the owner's off-boarding amendment. E24 now
+covers the whole production staff-account lifecycle; there is no separate
+register row. Executable unit: migrations, services, routes, UI and
+tests.
+
+**Before the fix (verified at `e65927c`):**
+- no School route or service suspended, reactivated or revoked staff
+  access;
+- the only membership-status and role-grant writer was the platform
+  bootstrap service, and only while a School was `provisioning`;
+- `membership_role_assignments` had no revocation history (hard delete);
+- `CapabilityResolver` already required an ACTIVE membership, and
+  `AUTHORIZATION.md` already gave add/remove and grant/revoke to the School
+  after activation.
+
+**Built (ADR 0059 owner and implementation amendment):**
+- **Flow A.** `platform:provision-school-admin-account` creates a
+  credential-less User (password NULL, never a placeholder) and shows its
+  activation link once. Activation happens at
+  `/account-activation/{selector}` on the platform host. School activation
+  refuses a credential-less administrator (`admin_not_activated`).
+- **Flow B.** Settings → Staff accounts: invite, resend and revoke (fresh
+  MFA, critical email, closed School role catalog within the issuer's
+  capabilities). Acceptance at `/invitations/{school}/staff/{selector}`
+  handles a new User (`CredentialChangeService`, no auto-login) or an
+  existing User who is signed in.
+- **Off-boarding and roles:**
+  - suspend (membership `suspended`, all grants revoked as history);
+  - explicit reactivation with newly chosen roles;
+  - grant and revoke one role, with a re-grant as a new row;
+  - no self-administration;
+  - a concurrency-safe last-qualifying-administrator invariant (per-School
+    advisory lock, evaluated after the change);
+  - no global session or token revocation; Employee untouched.
+- **Role-grant history.** Revoked rows are immutable, one active grant per
+  membership and role, and the runtime role cannot DELETE.
+- **Technical cleanup.** `platform:staff-account-credentials-prune`,
+  hourly.
+
+**Proof:**
+- the fresh-install scenario through the real operator console;
+- real-PostgreSQL races, including two administrators removing each other;
+- raw-SQL invariants and RLS;
+- authorization allow/deny, sessions, human PAT, and the platform/Group
+  boundary;
+- a DDEV smoke (16 checks) and a browser review of the three new pages
+  (fragment capture, no CSP violations).
+
+**Status:**
+- **E24:** implemented. It becomes REPOSITORY_COMPLETE with this unit's
+  full regression and O16 qualification (recorded in the follow-up
+  section).
+- **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+- **Phase 0O:** CLOSEOUT BLOCKED — the remaining deployment, legal,
+  governance and provider evidence.
+- **Phase 0M:** BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED.

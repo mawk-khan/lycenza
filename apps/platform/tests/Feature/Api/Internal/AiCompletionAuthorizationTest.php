@@ -130,7 +130,7 @@ class AiCompletionAuthorizationTest extends TestCase
 
         app(TenantContext::class)->withSchool($school, function () use ($user, $school): void {
             $membership = SchoolMembership::query()->where('user_id', $user->id)->where('school_id', $school->id)->firstOrFail();
-            MembershipRoleAssignment::query()->where('school_membership_id', $membership->id)->delete();
+            MembershipRoleAssignment::query()->where('school_membership_id', $membership->id)->active()->update(['revoked_at' => now(), 'revocation_reason' => MembershipRoleAssignment::REASON_REVOKED]);
         });
 
         $this->authorizeWith($token)->assertForbidden()->assertExactJson(['error' => ['code' => 'capability_revoked']]);

@@ -3,11 +3,11 @@
 namespace App\Domain\Platform\Application\Schools;
 
 use App\Models\School;
-use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\MfaReverificationService;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\SchoolAdministrators;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -30,10 +30,11 @@ class SchoolLifecycleAuthority
     public const CAPABILITY = 'platform.schools.manage';
 
     /** The capabilities that let a School administer itself after activation. */
-    public const ADMINISTRATOR_CAPABILITIES = ['school.members.manage', 'school.roles.manage'];
+    public const ADMINISTRATOR_CAPABILITIES = SchoolAdministrators::CAPABILITIES;
 
     public function __construct(
         private readonly CapabilityResolver $capabilities,
+        private readonly SchoolAdministrators $administrators,
         private readonly MfaReverificationService $mfa,
         private readonly AuditRecorder $audit,
     ) {}
@@ -117,30 +118,27 @@ class SchoolLifecycleAuthority
     }
 
     /**
-     * Non-disabled users with an ACTIVE membership in $school whose roles
-     * grant every ADMINISTRATOR_CAPABILITIES key -- a capability test, not
-     * a role name (CLAUDE.md rule 24). Read fresh (cache forgotten).
+     * The School's qualifying administrators (App\Support\Authorization\
+     * SchoolAdministrators): enabled, with an established credential (ADR
+     * 0059 section 7.3), an ACTIVE membership and active grants giving every
+     * ADMINISTRATOR_CAPABILITIES key -- a capability test, not a role name
+     * (CLAUDE.md rule 24). Read fresh (cache forgotten).
      *
      * @return Collection<int, User>
      */
     public function qualifyingAdministrators(School $school): Collection
     {
-        return SchoolMembership::query()->active()
-            ->where('school_id', $school->id)
-            ->with('user')
-            ->get()
-            ->map(fn (SchoolMembership $m) => $m->user)
-            ->filter(function (?User $user) use ($school): bool {
-                if ($user === null || $user->isDisabled()) {
-                    return false;
-                }
+        return $this->administrators->qualifying($school);
+    }
 
-                $this->capabilities->forgetCache($user, $school);
-                $held = $this->capabilities->schoolCapabilities($user, $school);
-
-                return array_diff(self::ADMINISTRATOR_CAPABILITIES, $held) === [];
-            })
-            ->values();
+    /**
+     * Why activation is refused when nobody qualifies: `admin_not_activated`
+     * when an administrator exists who has not activated their account yet
+     * (ADR 0059 section 7.3), `admin_missing` otherwise.
+     */
+    public function missingAdministratorOutcome(School $school): string
+    {
+        return $this->administrators->holdingAuthority($school)->isEmpty() ? 'admin_missing' : 'admin_not_activated';
     }
 
     public function forgetCapabilities(User $user, School $school): void

@@ -729,3 +729,18 @@ not built.
 - **New account path.** The new operator console command (ADR 0059 §5)
   creates only a credential-less User. School authority still comes from
   this ADR's create or replace path.
+
+### Implementation note — Phase 0O.12B (2026-09-28)
+
+**Built:**
+- `admin_not_activated`: a credential-less administrator does not qualify
+  (`App\Support\Authorization\SchoolAdministrators`);
+- the bootstrap-admin replacement now also revokes the replaced
+  administrator's School role grant (`revocation_reason =
+  membership_suspended`), because grants keep history (ADR 0059 owner
+  amendment).
+
+**Unchanged:**
+- the path, its capability and fresh MFA;
+- D13: no ongoing platform membership administration. Staff access after
+  activation is the School's own (ADR 0059 flow B and off-boarding).

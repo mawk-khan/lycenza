@@ -47,6 +47,8 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'RetryMailMessage.php',                  // one named School; the submission claim re-checks the lifecycle
         'RekeyMailSuppressions.php',             // reads a stored recipient to re-key suppression; no School effect
         'SendFakeEmailEvent.php',                // local/testing only; one named School
+        'ProvisionSchoolAdminAccount.php',       // one named School, which must be `provisioning` (ADR 0059 section 5)
+        'PruneStaffAccountCredentials.php',      // technical credential cleanup (ADR 0059 section 21)
     ];
 
     #[Test]

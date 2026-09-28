@@ -6,6 +6,7 @@ use App\Domain\Communications\Application\Channels\CommunicationDeliveryEmailSou
 use App\Domain\Identity\Application\AccountRecovery\AccountRecoveryEmailSource;
 use App\Domain\Identity\Application\AccountRecovery\SecurityNoticeEmailSource;
 use App\Domain\Identity\Application\GuardianInvitationEmailSource;
+use App\Domain\Identity\Application\Staff\StaffInvitationEmailSource;
 use App\Support\Email\EmailSources;
 use App\Support\Email\PlatformEmailScope;
 use App\Support\Email\Providers\FakeEmailProvider;
@@ -35,6 +36,8 @@ class EmailServiceProvider extends ServiceProvider
             // ADR 0056 (Phase 0O.10A): identity-level email.
             $sources->register($app->make(AccountRecoveryEmailSource::class));
             $sources->register($app->make(SecurityNoticeEmailSource::class));
+            // ADR 0059 (Phase 0O.12B): staff account invitations.
+            $sources->register($app->make(StaffInvitationEmailSource::class));
 
             return $sources;
         });

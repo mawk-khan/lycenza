@@ -70,6 +70,7 @@ interface Props {
         canViewAutomation: boolean;
         canViewApiClients: boolean;
         canViewDomains: boolean;
+        canViewStaffAccounts: boolean;
     };
 }
 
@@ -283,6 +284,9 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewDomains">
                     <a class="underline" href="/app/settings/domains">Custom domains</a>
+                </li>
+                <li v-if="nav.canViewStaffAccounts">
+                    <a class="underline" href="/app/settings/staff">Staff accounts</a>
                 </li>
             </ul>
         </nav>

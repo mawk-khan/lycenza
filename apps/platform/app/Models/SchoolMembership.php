@@ -25,6 +25,14 @@ class SchoolMembership extends Model
 {
     use GeneratesUuidV7;
 
+    /** The closed status set (`school_memberships_status_check`, Phase 0O.12B). */
+    public const STATUS_INVITED = 'invited';
+
+    public const STATUS_ACTIVE = 'active';
+
+    /** The School-access kill switch: off-boarding (ADR 0059 owner amendment). */
+    public const STATUS_SUSPENDED = 'suspended';
+
     protected $fillable = ['user_id', 'school_id', 'status', 'invited_at', 'joined_at'];
 
     protected function casts(): array

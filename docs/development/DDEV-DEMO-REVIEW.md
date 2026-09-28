@@ -703,6 +703,34 @@ Mailpit through the same email layer. After `ddev restart` and
    - `ddev exec php artisan platform:user-password-reset teacher@example.test`
      takes hidden prompts and signs every session out.
 
+### Staff accounts (Phase 0O.12B, ADR 0059)
+
+Sign in as `school.admin@example.test`, select the Demo School and open
+**Staff accounts** from the dashboard. It lists active and suspended staff
+with their School roles, pending invitations and an invite form.
+
+**MFA.** Every change needs a fresh authentication code, so enroll MFA
+under Account security first. For a quick local review, recovery codes can
+be created with `ddev exec php artisan tinker`
+(`App\Models\UserMfaRecoveryCode::create([...])`).
+
+**Review:**
+- **Invite** an address. The email arrives in Mailpit (`ddev mailpit`),
+  and its link carries the secret after `#`. Open it, choose a name and
+  password: you are sent to sign-in (no auto-login).
+- **Off-board.** Remove the new person's access: their next request to the
+  School is refused. Reactivate them with a role chosen again.
+- **Refusals.** Removing your own access, or the School's last
+  administrator, is refused.
+- **Bootstrap account (operator console):**
+  `echo you@example.test | ddev exec php artisan platform:provision-school-admin-account you@example.test --name=You`
+  prints a one-time activation link, which opens on the platform host.
+
+**Without ddev-router.** If ddev-router cannot bind its ports, reach the
+web container directly over HTTPS with
+`--resolve lycenza.ddev.site:443:127.0.0.1`. In a browser, send
+`X-Forwarded-Proto: https`.
+
 ## 16. Running tests inside DDEV
 
 ```bash

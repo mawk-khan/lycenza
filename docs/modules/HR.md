@@ -60,6 +60,11 @@ beyond HR.
 > provisioning a User never creates an Employee. `employees.user_id` stays
 > an optional, explicit link under the existing linkage rules, available
 > once the User holds a membership in the School.
+>
+> **Phase 0O.12B:** off-boarding a staff member suspends their School
+> membership and revokes their School roles. It never changes an Employee,
+> employment, payroll or HR status. An HR lifecycle action never removes
+> account access either, unless a separately approved contract says so.
 
 ```
 School (Phase 0B/0D)

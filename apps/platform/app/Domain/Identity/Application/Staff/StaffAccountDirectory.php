@@ -1,0 +1,86 @@
+<?php
+
+namespace App\Domain\Identity\Application\Staff;
+
+use App\Domain\Identity\Infrastructure\StaffAccountInvitation;
+use App\Domain\Identity\Infrastructure\StaffAccountInvitationRole;
+use App\Models\MembershipRoleAssignment;
+use App\Models\School;
+use App\Models\SchoolMembership;
+use App\Support\Tenancy\TenantContext;
+
+/**
+ * Phase 0O.12B (ADR 0059 section 23, owner amendment): the Staff accounts
+ * page's read model -- this School's OWN facts only. A staff account is a
+ * membership that has held a School role (active or revoked); a Guardian's
+ * membership never appears. Shown: name, the address the School invited or
+ * its member's address, status, active roles, and pending/recent
+ * invitations. Never another School, a platform or Group role, a password,
+ * a token or HR data.
+ */
+final class StaffAccountDirectory
+{
+    public function __construct(private readonly TenantContext $context) {}
+
+    /**
+     * @return array{staff: list<array<string, mixed>>, invitations: list<array<string, mixed>>}
+     */
+    public function for(School $school): array
+    {
+        return $this->context->withSchool($school, function () use ($school): array {
+            $grants = MembershipRoleAssignment::query()
+                ->where('school_id', $school->id)
+                ->with('role')
+                ->get()
+                ->groupBy('school_membership_id');
+
+            $memberships = SchoolMembership::query()
+                ->where('school_id', $school->id)
+                ->whereIn('id', $grants->keys()->all())
+                ->with('user')
+                ->get()
+                ->sortBy(fn (SchoolMembership $m) => [$m->status !== SchoolMembership::STATUS_ACTIVE, mb_strtolower((string) $m->user?->name)])
+                ->values();
+
+            $staff = $memberships->map(function (SchoolMembership $m) use ($grants): array {
+                $active = $grants->get($m->id, collect())->filter(fn (MembershipRoleAssignment $g) => $g->isActive());
+
+                return [
+                    'membershipId' => $m->id,
+                    'userId' => $m->user_id,
+                    'name' => $m->user?->name,
+                    'email' => $m->user?->email,
+                    'status' => $m->status,
+                    'roles' => $active->map(fn (MembershipRoleAssignment $g) => ['key' => $g->role->key, 'name' => $g->role->name])->sortBy('name')->values()->all(),
+                    'joinedAt' => $m->joined_at?->toIso8601String(),
+                ];
+            })->all();
+
+            $invitations = StaffAccountInvitation::query()
+                ->where('school_id', $school->id)
+                ->where(fn ($q) => $q->where('status', StaffAccountInvitation::STATUS_PENDING)
+                    ->orWhere('updated_at', '>=', now()->subDays(7)))
+                ->orderByDesc('created_at')
+                ->limit(200)
+                ->get();
+
+            $roleNames = StaffAccountInvitationRole::query()
+                ->whereIn('staff_account_invitation_id', $invitations->pluck('id')->all())
+                ->with('role')
+                ->get()
+                ->groupBy('staff_account_invitation_id');
+
+            return [
+                'staff' => $staff,
+                'invitations' => $invitations->map(fn (StaffAccountInvitation $i) => [
+                    'id' => $i->id,
+                    'email' => $i->destination_email,
+                    'status' => $i->effectiveStatus(),
+                    'roles' => $roleNames->get($i->id, collect())->map(fn (StaffAccountInvitationRole $r) => $r->role->name)->sort()->values()->all(),
+                    'expiresAt' => $i->expires_at->toIso8601String(),
+                    'createdAt' => $i->created_at->toIso8601String(),
+                ])->values()->all(),
+            ];
+        });
+    }
+}

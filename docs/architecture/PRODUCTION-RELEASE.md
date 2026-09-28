@@ -255,26 +255,33 @@ the database refuses a grantor-less grant from anything else (Phase
 `ACCOUNT_RECOVERY_ENABLED` is deployed with its evidence, by self-service
 email recovery.
 
-**Contracted, not built (ADR 0059, Phase 0O.12A → 0O.12B):**
-- **The operator bootstrap-account command** (provisional
-  `platform:provision-school-admin-account`):
-  - interactive only; no `--force`;
+**Built in Phase 0O.12B (ADR 0059):**
+- **The operator bootstrap-account command,
+  `platform:provision-school-admin-account {email} [--name=] [--school=] [--hours=24]`:**
+  - interactive only (no `--force`); runs only where the operator (admin)
+    database connection is configured;
   - typed-email confirmation;
-  - creates one credential-less User;
-  - displays one activation link (secret in the fragment, ≤ 72 h,
-    default 24 h) once, on the terminal only;
-  - no membership, role or Employee;
-  - audit `platform.account.provisioned`.
-- **First-School sequence** (ADR 0059 §8):
+  - creates one credential-less User, or re-issues the link for one still
+    credential-less;
+  - displays one activation link (secret in the fragment, 1–72 h, default
+    24 h) once, on the terminal only;
+  - no membership, role, Employee, password or grant;
+  - audit `platform.account.provisioned` /
+    `platform.account.activation_reissued` (actor null, ids only);
+  - runbook: `docs/operations/STAFF-ACCOUNTS.md`.
+- **First-School sequence** (ADR 0059 §8, proven by
+  `FreshInstallProvisioningTest`):
   1. `platform:bootstrap-root`, then root MFA;
   2. the bootstrap-account command, and its activation;
   3. root creates the School naming that account;
-  4. root activates it (needs an activated administrator);
+  4. root activates it (needs an activated administrator,
+     `admin_not_activated` otherwise);
   5. the School Admin signs in and enrolls MFA;
-  6. staff are invited through School staff invitations (O13 email).
-
-Until 0O.12B ships, a fresh production install **cannot create its first
-School** (ADR 0058 E24).
+  6. staff are invited through Settings → Staff accounts (O13 email).
+- **Staff off-boarding** (Settings → Staff accounts): suspension revokes the
+  School roles; reactivation grants newly chosen roles. No platform path
+  after activation.
+- **New scheduled task:** `staff-account-credentials-prune` (hourly).
 
 ## 6. Seeding: production-safe versus demo
 

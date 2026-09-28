@@ -102,15 +102,15 @@ class HrCapabilityCacheHardeningTest extends TestCase
         app(EmployeeDirectoryService::class)->search($school, new EmployeeDirectoryQuery, $actor);
 
         // Revoke via the ONLY mechanism this codebase currently has for
-        // it -- direct model mutation (there is no production
-        // controller/service to call instead; see this class's
-        // docblock). Deliberately do NOT call forgetCache() here --
+        // it -- direct model mutation (a revocation, since Phase 0O.12B
+        // grants keep history; StaffAccessService forgets the cache
+        // itself -- this measures the resolver's own TTL behaviour). Deliberately do NOT call forgetCache() here --
         // this test measures the CURRENT, undocumented-until-now,
         // retained gap itself.
         app(TenantContext::class)->withSchool($school, function () use ($actor, $school) {
             MembershipRoleAssignment::query()
                 ->whereHas('membership', fn ($q) => $q->where('user_id', $actor->id)->where('school_id', $school->id))
-                ->delete();
+                ->active()->update(['revoked_at' => now(), 'revocation_reason' => MembershipRoleAssignment::REASON_REVOKED]);
         });
 
         // The stale grant is still served from cache -- this IS the
@@ -131,7 +131,7 @@ class HrCapabilityCacheHardeningTest extends TestCase
         app(TenantContext::class)->withSchool($school, function () use ($actor, $school) {
             MembershipRoleAssignment::query()
                 ->whereHas('membership', fn ($q) => $q->where('user_id', $actor->id)->where('school_id', $school->id))
-                ->delete();
+                ->active()->update(['revoked_at' => now(), 'revocation_reason' => MembershipRoleAssignment::REASON_REVOKED]);
         });
 
         // The mechanism ITSELF is correct and ready -- proves

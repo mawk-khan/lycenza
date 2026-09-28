@@ -37,7 +37,8 @@ class SchoolWideAudienceResolver implements CommunicationAudienceResolver
             $rows = DB::table('school_memberships as sm')
                 ->leftJoin('membership_role_assignments as mra', function ($join) use ($announcement): void {
                     $join->on('mra.school_membership_id', '=', 'sm.id')
-                        ->where('mra.school_id', $announcement->school_id);
+                        ->where('mra.school_id', $announcement->school_id)
+                        ->whereNull('mra.revoked_at');
                 })
                 ->leftJoin('roles as r', 'r.id', '=', 'mra.role_id')
                 ->where('sm.school_id', $announcement->school_id)

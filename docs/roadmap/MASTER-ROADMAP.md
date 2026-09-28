@@ -1774,6 +1774,23 @@ docs-only, ADR 0059).** This decides ADR 0058 row E24.
 Next: **0O.12B — Staff / School-Admin Account Provisioning Foundation**
 (one checkpoint) — not started. E24 stays blocking until then.
 
+**0O.12B — Staff / School-Admin Account Provisioning Foundation (2026-09-28,
+executable).** ADR 0059 is implemented, and off-boarding is added by owner
+decision. E24 now covers the full staff-account lifecycle.
+- **Onboarding:** a console-provisioned, credential-less bootstrap
+  administrator with a one-time activation link; School activation needs an
+  activated administrator; School staff invitations use fresh MFA and
+  critical email; acceptance handles new or existing (signed-in) Users.
+- **Off-boarding:** suspension revokes every School role grant; explicit
+  reactivation grants newly chosen roles; role grants keep history; a
+  concurrency-safe last-administrator invariant; no self-administration.
+- **Proof:** a fresh-install scenario through the real console, plus real
+  PostgreSQL races. E24 becomes REPOSITORY_COMPLETE with this unit's full
+  regression and O16 qualification.
+
+Next: a fresh O1 evidence-register review (which blockers can proceed in
+parallel, and the email provider tail) — not started.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Support\Email\PlatformEmailScope;
 use App\Support\Email\Suppression\EmailSuppressionService;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
@@ -64,8 +63,8 @@ class AccountRecoveryRequestTest extends TestCase
         $disabled = $this->createUser(['email' => 'disabled@example.test']);
         $disabled->forceFill(['is_disabled' => true, 'disabled_at' => now()])->save();
         $root = $this->createPlatformRoot(['email' => 'root-person@example.test']);
-        $noPassword = $this->createUser(['email' => 'no-password@example.test']);
-        DB::table('users')->where('id', $noPassword->id)->update(['password' => '']);
+        // Phase 0O.12B (ADR 0059 section 4): "no local credential" is NULL.
+        $noPassword = $this->createUser(['email' => 'no-password@example.test', 'password' => null]);
 
         $shapes = [];
         foreach (['eligible@example.test', 'nobody@example.test', 'disabled@example.test', 'root-person@example.test', 'no-password@example.test'] as $i => $email) {

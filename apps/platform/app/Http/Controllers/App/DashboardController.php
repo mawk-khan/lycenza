@@ -171,6 +171,8 @@ class DashboardController extends Controller
                 'canViewApiClients' => $school !== null && $capabilities->canInSchool($user, 'integrations.api_clients.view', $school),
                 // Phase 0O.8A: the School's custom domains (ADR 0054).
                 'canViewDomains' => $school !== null && $capabilities->canInSchool($user, 'school.domains.view', $school),
+                // Phase 0O.12B: Settings -> Staff accounts (ADR 0059).
+                'canViewStaffAccounts' => $school !== null && $capabilities->canInSchool($user, 'school.members.view', $school),
             ],
         ]);
     }

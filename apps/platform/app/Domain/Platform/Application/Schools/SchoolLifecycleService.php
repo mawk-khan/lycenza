@@ -90,7 +90,7 @@ class SchoolLifecycleService
         $this->requireStatus($request, $actor, $operation, $school, SchoolStatus::Provisioning);
 
         if ($this->authority->qualifyingAdministrators($school)->isEmpty()) {
-            $this->denyAdminMissing($request, $actor, $school);
+            $this->denyAdminMissing($request, $actor, $school, $this->authority->missingAdministratorOutcome($school));
         }
 
         $this->authority->confirmAndReverify($request, $actor, $operation, $school, $confirmed, $code);
@@ -103,7 +103,7 @@ class SchoolLifecycleService
             }
 
             if ($this->authority->qualifyingAdministrators($locked)->isEmpty()) {
-                return 'admin_missing';
+                return $this->authority->missingAdministratorOutcome($locked);
             }
 
             $locked->update(['status' => SchoolStatus::Active->value]);
@@ -234,16 +234,18 @@ class SchoolLifecycleService
         }
     }
 
-    private function denyAdminMissing(Request $request, User $actor, School $school): never
+    private function denyAdminMissing(Request $request, User $actor, School $school, string $outcome = 'admin_missing'): never
     {
-        $this->authority->deny($request, $actor, SchoolLifecycleOperation::Activate, $school, 'admin_missing', 422, 'school', 'The School needs an active administrator before it can be activated.');
+        $outcome === 'admin_not_activated'
+            ? $this->authority->deny($request, $actor, SchoolLifecycleOperation::Activate, $school, $outcome, 422, 'school', 'The School\'s administrator has not activated their account yet. They must set their password with their activation link first.')
+            : $this->authority->deny($request, $actor, SchoolLifecycleOperation::Activate, $school, 'admin_missing', 422, 'school', 'The School needs an active administrator before it can be activated.');
     }
 
     private function failAfterTransaction(Request $request, User $actor, SchoolLifecycleOperation $operation, School $school, ?string $failure): void
     {
         match ($failure) {
             null => null,
-            'admin_missing' => $this->denyAdminMissing($request, $actor, $school),
+            'admin_missing', 'admin_not_activated' => $this->denyAdminMissing($request, $actor, $school, $failure),
             default => $this->authority->deny($request, $actor, $operation, $school, $failure, 409, 'school', 'That change is not possible from the School\'s current status.'),
         };
     }

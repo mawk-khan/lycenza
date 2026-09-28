@@ -517,6 +517,18 @@ ADR 0045.
     and existing members of that School are refused generically.
   - **Never:** elevation (rule 83), Group authority (rule 84), or a
     platform HTTP endpoint that creates Users.
+  - **Off-boarding and roles (built in 0O.12B, owner amendment):**
+    - Suspend and reactivate need `school.members.manage` +
+      `school.roles.manage`; granting or revoking one role needs
+      `school.roles.manage`; every change needs fresh MFA.
+    - Suspension revokes every active role grant, kept as history.
+      Reactivation grants newly chosen roles only.
+    - Nobody changes their own access here.
+    - No change may leave the School without a qualifying administrator
+      (`App\Support\Authorization\SchoolAdministrators`, serialized per
+      School).
+    - Revoked grants never authorize: `CapabilityResolver` reads active
+      grants only, and the runtime role cannot DELETE one.
 - A suspended or provisioning School must grant nothing through any
   path: membership-derived capabilities still resolve, so every entry
   point refuses a non-`active` School — web, API and elevation (per

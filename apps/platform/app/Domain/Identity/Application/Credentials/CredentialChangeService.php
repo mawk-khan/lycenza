@@ -31,6 +31,12 @@ use LogicException;
  * - terminates the User's active elevation (`credential_reset`).
  *
  * MFA factors, secrets and recovery codes are NEVER touched.
+ *
+ * Phase 0O.12B (ADR 0059 section 10): establishInitialPassword() is the one
+ * place a FIRST password is written -- for a credential-less account at its
+ * activation, or a brand-new staff User at invitation acceptance. It refuses
+ * an account that already has a credential, so activation can never act as
+ * a password reset.
  */
 final class CredentialChangeService
 {
@@ -52,5 +58,29 @@ final class CredentialChangeService
         $endedElevation = $this->elevations->finishActiveFor($lockedUser, ElevationEndReason::CredentialReset);
 
         return new CredentialChangeResult((int) $revokedTokens, $endedElevation);
+    }
+
+    /**
+     * The FIRST password of a credential-less account (the caller holds the
+     * User row lock, or has just created the row, inside its transaction).
+     * The credential version moves on (every activation credential still
+     * open ends in the database); there is no session, token or elevation
+     * to end -- a credential-less account can hold none.
+     */
+    public function establishInitialPassword(User $lockedUser, string $plainPassword): void
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('A credential change runs inside the caller\'s transaction, with the User locked.');
+        }
+
+        if ($lockedUser->hasLocalCredential()) {
+            throw new LogicException('This account already has a credential; an initial password is never a reset.');
+        }
+
+        $lockedUser->forceFill([
+            'password' => $plainPassword,
+            'credential_version' => $lockedUser->credential_version + 1,
+            'remember_token' => Str::random(60),
+        ])->save();
     }
 }

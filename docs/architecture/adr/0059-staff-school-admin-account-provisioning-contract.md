@@ -790,3 +790,126 @@ no demo data):
 - One new O1 decision is recorded: staff off-boarding.
 - No code, configuration, route, GitHub setting or infrastructure is
   changed by this ADR.
+
+## Owner amendment and implementation note — Phase 0O.12B (2026-09-28)
+
+### Owner decision: off-boarding is part of 0O.12B
+
+This resolves the §22 "staff off-boarding — DECISION REQUIRED" finding. It
+lives in ADR 0058 row **E24**, which now covers the complete production
+staff-account lifecycle (§E24 note there). There is no separate register
+row.
+
+- **Off-boarding.** An ACTIVE School membership becomes SUSPENDED, and
+  every active School role grant on it is revoked. The operation never:
+  - deletes or disables the User;
+  - deletes the membership;
+  - changes the password, MFA, `credential_version` or human API tokens;
+  - touches another School's membership, platform or Group authority, or
+    any Employee record.
+
+  `suspended` is the existing authorization kill switch. Every request
+  re-checks an active membership, and the target's capability cache is
+  forgotten in the transaction and again after commit.
+- **Capabilities.** The existing ones are reused, with no new capability.
+  Every mutation also needs a fresh MFA code.
+
+  | Action | Capabilities |
+  |---|---|
+  | Suspend, reactivate | `school.members.manage` + `school.roles.manage` |
+  | Grant or revoke one role | `school.roles.manage` |
+  | Resend or revoke an invitation | `school.members.manage` |
+
+- **No self-administration.** Your own membership and your own roles are
+  refused (`self_administration`). Another School Admin acts.
+- **Last qualifying administrator: a hard invariant.** No suspension or
+  revocation may leave an active School with zero qualifying
+  administrators, as defined in §7.3 and now in
+  `App\Support\Authorization\SchoolAdministrators`. The invariant is
+  evaluated after the change, inside the transaction.
+- **Role grants keep history** (the `platform_role_assignments` /
+  `group_role_assignments` pattern):
+  - `membership_role_assignments` gains `revoked_at`, `revoked_by_user_id`
+    and a closed `revocation_reason` (`revoked`, `membership_suspended`,
+    `reactivation_reset`);
+  - one active grant per membership and role (partial unique index);
+  - revoked rows are immutable (trigger);
+  - a re-grant inserts a new row;
+  - the runtime role cannot DELETE;
+  - authorization reads active rows only;
+  - existing rows became active grants.
+- **Reactivation** takes an explicit role selection from the closed
+  catalog, within the issuer's own capabilities. Previously revoked roles
+  never return: new grant rows are inserted. Any grant still active on a
+  suspended membership (possible only in data written before
+  off-boarding) is revoked (`reactivation_reset`).
+- **Pending invitations** keep using the invitation revoke action.
+  Off-boarding applies only to an existing active membership.
+
+### As built
+
+- **Schema (migrations `2026_10_28_090000`–`090500`):**
+  - `users.password` is nullable, NULL is the only credential-less form,
+    and a credential is never removed (`trg_users_password_never_cleared`);
+  - `school_memberships_status_check`;
+  - role-grant history, as described above;
+  - `account_activation_credentials`;
+  - `staff_account_invitations` and `staff_account_invitation_roles`;
+  - the `staff_account_invitation` email purpose.
+- **Flow A:**
+  - the command is `platform:provision-school-admin-account`
+    (interactive only, no `--force`, operator-connection check, typed-email
+    confirmation, `--hours` 1–72, default 24);
+  - activation is `GET/POST /account-activation/{selector}`, on the
+    platform host only.
+- **Flow B:**
+  - Settings → Staff accounts is at `/app/settings/staff`;
+  - acceptance is `GET/POST /invitations/{school}/staff/{selector}`.
+- **Services** (`App\Domain\Identity\Application\Staff`):
+  - `StaffInvitationService`, `StaffInvitationAcceptanceService`;
+  - `StaffAccessService` (off-boarding, reactivation, grant and revoke,
+    with a transaction-scoped advisory lock per School);
+  - `BootstrapAccountProvisioningService`, `AccountActivationService`.
+
+  `CredentialChangeService::establishInitialPassword()` is the initial
+  password writer.
+- **Limiters:**
+  - `staff-account-management`: 20 per minute per User;
+  - `staff-invitation-accept` and `account-activation`: 20 per 15 minutes
+    per IP and 5 per 15 minutes per selector;
+  - the application send limiter: 10 per minute per administrator and 200
+    per day per School.
+- **Cleanup.** `platform:staff-account-credentials-prune`, hourly,
+  removes activation credentials 24 h after they end and invitations 7
+  days after.
+- **Audit (as named):**
+  - School ledger: `staff.account_invited`,
+    `staff.account_invitation_revoked`, `staff.account_activated`,
+    `staff.account_linked_existing`, `school.membership.role_assigned`,
+    `school.membership.role_revoked`, `school.membership.suspended`,
+    `school.membership.reactivated`;
+  - platform ledger: `platform.account.provisioned`,
+    `platform.account.activation_reissued`, `auth.account_activated`,
+    `staff.account_invitation_refused_protected`, and the lifecycle
+    denial outcome `admin_not_activated`.
+
+  Metadata holds ids, role keys and bounded codes only.
+- **ADR 0047 bootstrap replace.** It now also revokes the replaced
+  administrator's role grant (`membership_suspended`), kept as history
+  instead of left active on a suspended membership. A later
+  re-establishment inserts a new grant.
+
+**Proof:**
+- the fresh-install scenario (`FreshInstallProvisioningTest`), which drives
+  the real operator console as a subprocess;
+- real-PostgreSQL overlap races (`StaffAccountConcurrencyTest`,
+  `SchoolLifecycleConcurrencyTest`);
+- raw-SQL invariants and RLS (`StaffAccountDatabaseInvariantsTest`);
+- the service, HTTP, session and PAT tests under
+  `tests/Feature/Identity/Staff`;
+- the architecture guards (`StaffAccountArchitectureGuardTest`);
+- a DDEV smoke and browser review.
+
+E24 is **implemented**. It becomes **REPOSITORY_COMPLETE** once the full
+regression and both images' O16 qualification are recorded
+(`PHASE-0O-READINESS.md`).

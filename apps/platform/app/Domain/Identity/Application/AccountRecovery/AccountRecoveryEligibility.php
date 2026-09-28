@@ -12,7 +12,9 @@ use Illuminate\Support\Facades\DB;
  * evaluated at issuance AND again at reset. A User is eligible only when:
  *
  * 1. not disabled;
- * 2. holding a local password credential;
+ * 2. holding a local password credential -- a credential-less bootstrap
+ *    account (ADR 0059 section 4) never is, so recovery can never act as
+ *    its activation;
  * 3. carrying a canonical authoritative email;
  * 4. NOT root -- no active grant of a role holding the root-reserved
  *    `platform.role_grants.manage` (ADR 0046). Root recovery stays on the
@@ -27,7 +29,7 @@ final class AccountRecoveryEligibility
     public function isEligible(User $user): bool
     {
         return ! $user->isDisabled()
-            && $user->getAuthPassword() !== ''
+            && $user->hasLocalCredential()
             && $user->email !== ''
             && ! $this->isRoot($user);
     }
