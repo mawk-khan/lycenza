@@ -224,10 +224,14 @@ under `/api/v1/schools/{schoolId}/webhook-endpoints` and
 `/webhook-deliveries` (capability-gated: `integrations.webhooks.view`/
 `.manage`; endpoint creation, secret rotation, and manual redelivery
 are `idempotent`-middleware-protected). **Inbound** webhooks (an
-external system, e.g. a payment gateway, notifying School OS) remain
-not yet implemented — dedicated, per-provider-authenticated endpoints
-outside the general `/api/v1` surface, with mandatory idempotent
-handling, per ADR 0018; no such integration exists yet.
+external system notifying School OS) are dedicated,
+per-provider-authenticated endpoints outside the general `/api/v1`
+surface, with mandatory idempotent handling, per ADR 0018.
+- **Implemented:** exactly one, the ADR 0055 email provider-event
+  endpoint `POST /api/integrations/email-provider/events` (Phase 0O.9A;
+  404 without a configured adapter).
+- **Not implemented:** a payment-gateway callback. The real gateway is
+  deferred from Phase 0 / production v1 by ADR 0057.
 
 ## API audit
 

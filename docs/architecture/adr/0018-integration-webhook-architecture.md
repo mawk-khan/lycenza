@@ -105,3 +105,20 @@ If outbound webhook volume/reliability requirements later exceed what a
 Redis-backed queue comfortably handles, that delivery mechanism can be
 swapped for a more specialized delivery service without changing the
 subscription model (event-type based) integrations are built against.
+
+## Amendment — production v1 scope (ADR 0057, Phase 0O.11, 2026-09-28)
+
+The pattern above stands unchanged: per-provider authentication, no
+generic relay, idempotent inbound handling, adapters in each module's
+Infrastructure layer. ADR 0057 fixes which categories are in production
+v1:
+- **Email:** in v1 (ADR 0055).
+- **Payment gateway:** deferred. The Phase 0G ingestion foundation stays
+  unrouted.
+- **SMS, WhatsApp, push, government/board systems, Tally/accounting and
+  other school software:** deferred.
+- **SSO:** not in v1.
+- **LMS interoperability:** cancelled.
+
+The "first real integration" is still to come. When it does, it follows
+this ADR under its own contract.

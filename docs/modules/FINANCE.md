@@ -22,7 +22,7 @@ it.
 0G.5  Payments / Allocation / Idempotent Provider Integration   (payment records, provider-event idempotency, allocation)   [implemented]
 0G.6  HTTP/API Transport                           (thin controllers over 0G.2-0G.5 services)          [implemented]
 0G.7  UI / Finance Workspace                       (Inertia pages: chart of accounts, ledger, receivables)   [implemented]
-0G.8  Hardening & Closure                          (cross-tenant tests, full regression, closure report)   [not started]
+0G.8  Hardening & Closure                          (cross-tenant tests, full regression, closure report)   [implemented; published as c4652ca]
 ```
 
 This sequence refines, rather than blindly copies, the tentative shape
@@ -135,6 +135,13 @@ receivable definitions and invoicing that post through the ledger
 (0G.4), payment recording and the first real payment-gateway
 integration with inbound-webhook idempotency (0G.5), API/UI transport
 for all of the above (0G.6/0G.7), and phase closure (0G.8).
+
+> **Correction (2026-09-28, ADR 0057).** The plan above was not delivered
+> as written. 0G.5 built the provider-event **ingestion foundation** but no
+> gateway and no human payment recording. The real gateway is **deferred**
+> from Phase 0 / production v1. Manual/offline payment recording is the
+> required v1 correction (Phase 0O.11A). See "Phase 0O.11 amendment" at the
+> end of this document.
 
 **In scope for this checkpoint (0G.0) specifically:** architecture and
 domain-contract decisions only — no schema, code, capability, route, or
@@ -4356,4 +4363,30 @@ Fees**. Phase 0G's feature work (0G.0 through 0G.8) is complete and
 validated; final publication (pushing the feature branch and
 integrating into `main`) is a separate, explicitly authorized gate —
 see the corresponding `MASTER-ROADMAP.md` edit in this same
-checkpoint.
+checkpoint. (Historical: publication happened — `c4652ca` on `main`.)
+
+## Phase 0O.11 amendment (ADR 0057, 2026-09-28)
+
+- **Real payment gateway: DEFERRED** from Phase 0 / production v1.
+  - Phase 0 adds no processor, SDK, checkout, card or bank charging,
+    callback route, provider credential, provider refund, chargeback,
+    payout reconciliation or PCI-bearing UI.
+  - `PaymentProviderEventService` stays an unrouted, trusted ingestion
+    foundation.
+  - A future gateway needs its own ADR (ADR 0057 §2 lists what it must
+    resolve).
+- **Manual/offline payment recording: REQUIRED for v1**, as a Finance
+  correction (Phase 0O.11A, not started). An authorized Finance user
+  records a payment that already happened outside Lycenza.
+  - It reuses the immutable settlement, allocation and ledger model.
+  - It has a dedicated capability and a closed method catalog.
+  - It records a `recorded_by` actor and separates `occurred_at` from
+    `recorded_at`.
+  - It is audited, prevents duplicates, and corrects mistakes append-only.
+  - It never records card or bank credentials.
+  - Its detailed design becomes an amendment to ADR 0031 in 0O.11A.
+- **Unchanged:**
+  - internal ledger reversal exists;
+  - payment reversal, refunds, voids and provider reconciliation do not,
+    and 0O.11A adds none of them;
+  - INR only.

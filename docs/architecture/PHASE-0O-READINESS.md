@@ -70,6 +70,10 @@ route exists (`FinanceHttpArchitectureGuardTest` asserts none), and
 Whether the first real payment gateway belongs to Phase 0O is an owner
 decision (O2).
 
+(2026-09-28: resolved by ADR 0057. The gateway is deferred from Phase 0 /
+production v1; manual/offline payment recording is the required v1
+correction, Phase 0O.11A.)
+
 **Stop gate (CLAUDE.md rule 16 and the roadmap's "Explicit stop gates"):**
 no phase deploys, provisions cloud resources, purchases services,
 configures production secrets, sends real external communications or
@@ -290,7 +294,7 @@ Other findings:
 | # | Decision | Existing decision? | Owner | Blocks |
 |---|---|---|---|---|
 | O1 | Phase 0O definition of done per scope item | No | Product | Phase closure, not 0O.1 |
-| O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | No | Product | S4 |
+| O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | **RESOLVED — ADR 0057 (Phase 0O.11)**: the first real payment gateway is **DEFERRED** from Phase 0 / production v1 (no processor, checkout, callback, credential, refund or PCI-bearing UI; its own future ADR). Manual/offline payment recording is a **required v1 Finance correction**, Phase 0O.11A (not started) | Product | S4 |
 | O3 | Hosting / deployment model (and therefore process manager, container runtime, Terraform target) | **RESOLVED — ADR 0050 (Phase 0O.4)** | Product + operations | S3 infrastructure, images, runbook |
 | O4 | Secrets manager or host secret injection | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
 | O5 | Service-to-service auth: keep the shared token (with rotation) or move to per-request signed tokens / mTLS | **RESOLVED — ADR 0053 (Phase 0O.7)**: per-request Ed25519 service assertions, one keypair per calling service, 24 h rotation overlap, 90-day keys; **repository implementation COMPLETE (Phase 0O.7A)**, deployment evidence outstanding | Security | S3 (AI Gateway deployment) |
@@ -303,7 +307,7 @@ Other findings:
 | O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | **RESOLVED — ADR 0055 (Phase 0O.9)**: Lycenza-controlled, deployment-configured sending domain (never a School web domain); closed From mailbox catalog, sanitized School display name, no School Reply-To in v1; one provider-neutral adapter at a time; one durable email layer (message/attempt/event/suppression) beneath invitations (outbox, outside the transaction) and Communications; authenticated, deduplicated provider events; global suppression; SPF/DKIM alignment and DMARC ≥ `p=quarantine` at readiness. **Repository implementation COMPLETE (Phase 0O.9A, §33)**; deployment evidence outstanding | Product + operations | Real email |
 | O14 | Password reset for production accounts | **RESOLVED — ADR 0056 (Phase 0O.10)**: identity-level self-service password recovery on the canonical platform host only; eligible = active, non-root human Users with a local password (root stays console/operator-only); enumeration-resistant generic response with asynchronous issuance; 256-bit selector+secret credential (SHA-256 stored, secret in the URL fragment), 30 min, single-use, ≤ 3 active, never consumed by GET; ADR 0055 critical `account_recovery` email only when critical email is available; the reset bumps `users.credential_version` (every session on every host ends), revokes human personal access tokens and elevations, preserves MFA, never auto-logs in. **Implemented in the repository by Phase 0O.10A** (§36); deployment evidence (ADR 0056 §20) outstanding | Product + security | Production operations |
-| O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | No | Product | S4 |
+| O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | **RESOLVED — ADR 0057 (Phase 0O.11)**: covers the ADR 0018 categories **and** production partner API scopes. Email in v1 (O13); SMS, WhatsApp, push, government/board, Tally/accounting and other school software DEFERRED; SSO not in v1; LMS interoperability CANCELLED; **no production partner scope** (catalog stays empty) | Product | S4 |
 | O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest; repository controls COMPLETE (0O.6F: runtime security contract, approved exceptions `OWNER-0O6E-2026-09-26`), deployment evidence outstanding | Security | Supply chain |
 
 No vendor or provider is chosen by this audit.
@@ -318,7 +322,7 @@ No vendor or provider is chosen by this audit.
 | S3 Production secrets | Env-only; unsafe AI fallbacks; no validation; no rotation for service identities or signing key | PARTIAL | Fail-closed checks (0O.1); secrets manager integration | O4, O5 |
 | S3 Production infrastructure | No production image, no IaC, no runbook, no backup | BLOCKED + DEPLOY-GATED | Hosting model, images, runbook, backup | O3, O8, O10, rule 16 |
 | S3 Root provisioning (ADR 0046 §2) | Built in 0O.1 (`platform:provision-root`); database-enforced boundary and first-boot `platform:bootstrap-root` in 0O.1A | **DONE (0O.1 + 0O.1A)** | — | none |
-| S4 Broader third-party integrations | Outbound webhooks production-grade; no inbound provider endpoint; no provider chosen | BLOCKED | Provider choice and integration list | O2, O13, O15, legal |
+| S4 Broader third-party integrations | Outbound webhooks production-grade; email implemented (O13); no other provider; no production partner scope | **SCOPE RESOLVED (ADR 0057)**: email in v1, every other category deferred / not in v1 / cancelled | 0O.11A manual/offline payment recording (a Finance correction, not an integration) | none for the scope; legal for any future provider |
 
 ## 10. Proposed sequence (not started)
 
@@ -1557,3 +1561,84 @@ fix was published as `9ece2d8` / `361c4b7` and qualified from scratch.
 - **Exception clock:** the records expire **2026-10-10** / **2026-10-26**;
   nothing was renewed.
 - **Full-regression checkpoint:** `361c4b7` (cadence counter reset).
+
+## 38. Phase 0O.11 — Broader Third-Party Integrations & Payment Gateway Scope Contract (2026-09-28)
+
+**O2 and O15 are RESOLVED by ADR 0057**
+(`docs/architecture/adr/0057-broader-integrations-payment-gateway-scope-contract.md`).
+This checkpoint is documentation only: no code, route, credential or
+provider.
+
+**Audit (read-only, `origin/main` `48f4f3d`):**
+- **Payments.** The Phase 0G foundation is internal only. The trusted,
+  idempotent, INR-only `PaymentProviderEventService::recordSettlement()` has
+  no route, no adapter and no signature verification, and its only
+  non-test caller is the DDEV demo seeder.
+- **No real money movement exists:** no processor, checkout, card or bank
+  data, token, callback, refund, reconciliation or provider selection.
+- **No human can record any payment**, not even cash:
+  `finance.payments.manage` was deliberately never created.
+- **Integrations.** Email and storage are implemented; outbound webhooks are
+  implemented; the partner API is foundation only (empty production
+  catalog). SMS, WhatsApp and push are local/testing fakes. Government,
+  board and accounting systems are named only. SSO is absent; LMS
+  interoperability is cancelled.
+
+**Decisions:**
+- **O2:** the first real payment gateway is **deferred** from Phase 0 /
+  production v1. A future gateway needs its own ADR: provider, merchant
+  scope, jurisdiction, PCI-DSS, hosted versus embedded checkout,
+  idempotency, callback authentication, refunds and disputes,
+  reconciliation, fees, suspended-School behaviour, evidence.
+- **Manual/offline payment recording** is **required for v1**, as a Finance
+  correction. It uses the existing immutable settlement, allocation and
+  ledger model; a dedicated capability; a closed method catalog;
+  `recorded_by`; `occurred_at` versus `recorded_at`; audit; duplicate
+  prevention; append-only corrections. It never collects card or bank
+  credentials. Implementation: **Phase 0O.11A**.
+- **Refunds, voids, chargebacks and payment reversal** are not introduced.
+  Only internal ledger reversal exists. There is no provider
+  reconciliation.
+- **O15** covers the ADR 0018 categories **and** production partner scopes:
+  - email: IN V1 (O13);
+  - payment gateway: DEFERRED (O2);
+  - SMS, WhatsApp, push: DEFERRED;
+  - government/board (UDISE+, DigiLocker, APAAR): DEFERRED; the statutory
+    payroll exports are not integrations;
+  - Tally/accounting and other school software: DEFERRED;
+  - SSO: NOT IN V1;
+  - LMS interoperability: CANCELLED;
+  - **production partner scopes: none**. Issuance stays refused, with no
+    partner writes, no partner webhooks and no `api_client` idempotency
+    actor.
+- **No generic provider relay.** Each future provider defines its own
+  authentication and reuses the established patterns.
+- **Credentials.** No new provider credential. The future merchant-account
+  scope (platform, per School or other) is **undecided**.
+- **Jurisdiction.** INR and Indian statutory/system references are facts.
+  Merchant jurisdiction, business entity and payment tax (GST) treatment are
+  not frozen, so provider selection is blocked.
+- **PCI-DSS** stays **[LEGAL/COMPLIANCE REVIEW REQUIRED]** for a real
+  gateway.
+
+**Finding:** `platform.webhook_test.v1` can be subscribed to in production
+(only its emitting route is local/testing). It is inert and a low-severity
+implementation debt, to be environment-gated by a later executable webhook
+change. The documentation is corrected.
+
+- **O1 contribution:**
+  - in v1: the ledger and Charges, manual/offline payment recording, email,
+    and the surfaces completed elsewhere;
+  - not required for v1: an online gateway, SMS, WhatsApp, push,
+    government and accounting integration, partner scopes, SSO and LMS
+    interoperability.
+- **Remaining open decisions: O1 only.** Next: **Phase 0O.11A — Manual /
+  Offline Payment Recording Foundation** (not started).
+- **O13 legal retention:** `MAIL_RETENTION_DAYS` remains
+  **[LEGAL REVIEW REQUIRED]**.
+- **Exception clock:** records expire **2026-10-10** / **2026-10-26**;
+  nothing is renewed.
+- Phase 0O: **PARTIALLY READY — O1 CLOSEOUT STILL BLOCKED**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- The **real restore drill is still outstanding**.

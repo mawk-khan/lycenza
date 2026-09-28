@@ -713,3 +713,15 @@ custom-domain CORS, §11/V5 HSTS, §12 host allowlisting) are decided by
 - **Hosts:** allowlisting is an exact host classification (platform,
   `active` custom, internal, probe, health), with 421 otherwise and no
   wildcard.
+
+## O15 partner-scope note (ADR 0057, Phase 0O.11, 2026-09-28)
+
+- **O15 is resolved: no production partner scope is approved for v1.**
+  - `PartnerScopeRegistry::PRODUCTION` stays empty.
+  - Production client issuance stays refused.
+  - There are no partner writes, no partner webhooks and no `api_client`
+    idempotency actor.
+- **The partner substrate built in 0O.3 stays intact.**
+- **A future production scope** requires a new approved integration or
+  product decision, or an explicit amendment of this ADR, together with
+  the OpenAPI/API.md documentation this ADR already requires.

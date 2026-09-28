@@ -206,10 +206,14 @@ client cannot spoof its address for rate limiting or audit.
 
 ## What this document does not cover
 
-- **Inbound webhooks** (a payment gateway calling School OS) are a
-  separate, not-yet-implemented mechanism per ADR 0018 — dedicated,
-  per-provider-authenticated endpoints outside `/api/v1`, never this
-  outbound contract reused in reverse.
+- **Inbound webhooks** are a separate mechanism per ADR 0018 —
+  dedicated, per-provider-authenticated endpoints outside `/api/v1`, never
+  this outbound contract reused in reverse.
+  - One exists: the ADR 0055 email provider-event endpoint (Phase 0O.9A),
+    covered below.
+  - No payment-gateway callback exists. The real gateway is deferred from
+    Phase 0 / production v1 (ADR 0057).
+  - Every other provider callback is future work, under its own contract.
 - **Payment-provider transaction/reference uniqueness** is a distinct
   idempotency concern from both this document and
   `docs/architecture/RELIABILITY.md`'s client `Idempotency-Key`

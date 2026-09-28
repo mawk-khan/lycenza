@@ -320,3 +320,23 @@ not need to rewrite `payment_provider_events`/`payments`/
 `payment_allocations`' own immutability guarantees, which remain valid
 regardless of what compensating mechanism is layered on top later,
 exactly as ADR 0030 anticipated for the ledger itself.
+
+## Amendment note (ADR 0057, Phase 0O.11, 2026-09-28)
+
+- **This ADR is the payment-provider ingestion foundation. No real gateway
+  exists.**
+  - ADR 0057 defers the first real gateway from Phase 0 / production v1.
+  - `PaymentProviderEventService::recordSettlement()` stays a trusted,
+    unrouted boundary.
+  - Provider signature verification remains deferred to that future
+    gateway's own ADR.
+- **ADR 0057 also requires manual/offline payment recording for v1** — a
+  human path, unlike the provider boundary. Phase 0O.11A will record its
+  design as an amendment here before any code. It must keep this ADR's
+  database-enforced invariants:
+  - immutable settlement;
+  - exact allocation;
+  - ledger posting in the same transaction;
+  - a correction is never an `UPDATE`.
+
+  It introduces no refund, void or payment reversal.

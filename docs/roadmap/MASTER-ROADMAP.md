@@ -237,6 +237,15 @@ financial-correctness rules in `docs/architecture/ARCHITECTURE.md` §10
 from day one. This is a security- and correctness-critical phase;
 expect the heaviest testing and review bar of any phase so far.
 
+> **Correction (2026-09-28, ADR 0057, Phase 0O.11).** No real payment
+> gateway was ever integrated in Phase 0G. It delivered the ledger,
+> Charges, and the idempotent payment-provider **ingestion foundation**
+> (ADR 0031: trusted `PaymentProviderEventService::recordSettlement()`, no
+> route, no adapter). The first real gateway is **deferred** from Phase 0 /
+> production v1. Manual/offline payment recording, which 0G deferred, is a
+> required v1 Finance correction: Phase 0O.11A. The text below is the
+> historical record.
+
 **0G.0 — Finance Architecture & Module Plan (implemented):**
 architecture/domain-contract checkpoint, no code. Settled the one
 decision `ARCHITECTURE.md` §10 left open — Finance is a true
@@ -1335,6 +1344,11 @@ lands), production secrets/infrastructure (ADR 0016,
 `infrastructure/terraform`), and broader third-party integrations
 (ADR 0018) beyond the payment gateway from Phase 0G.
 
+> **Correction (2026-09-28, ADR 0057).** The premise "the payment gateway
+> from Phase 0G" was false: no gateway exists. O2 defers the first real
+> gateway from Phase 0 / production v1. O15 fixes the v1 status of every
+> other ADR 0018 category and of production partner API scopes.
+
 **Readiness audit recorded 2026-09-25 — PARTIALLY READY; SOME
 CHECKPOINTS MAY START.** `docs/architecture/PHASE-0O-READINESS.md` maps
 the four scope items against what exists (a production-grade outbound
@@ -1657,6 +1671,28 @@ password change, self-service lost-MFA recovery, and production staff
 account provisioning. Remaining open: O1, O2, O15. Recommended next: a fresh
 repository audit of O2 and O15 together, proposing the next contract
 checkpoint.
+
+**0O.11 — Broader Third-Party Integrations & Payment Gateway Scope
+Contract (2026-09-28, documentation only).** ADR 0057 resolves O2 and O15
+after a read-only audit.
+- **O2:** the first real payment gateway is **deferred** from Phase 0 /
+  production v1. No processor, checkout, callback, credential, refund or
+  PCI-bearing UI. A future gateway needs its own ADR (provider, merchant
+  scope, jurisdiction, PCI, reconciliation…).
+- **Manual/offline payment recording** is a **required v1 Finance
+  correction**. Staff record a payment that already happened outside
+  Lycenza, through the existing immutable settlement model. It is not a
+  provider integration.
+- **O15:** email is in v1 (O13). SMS, WhatsApp, push, government/board
+  systems, Tally/accounting and other school software are **deferred**; SSO
+  is not in v1; LMS interoperability stays cancelled. **No production
+  partner API scope** is approved.
+- **Documentation drift corrected:** Phase 0G premise, FINANCE.md 0G.8,
+  PRODUCTION-RELEASE §7, inbound-webhook statements, rule 34 wording, and
+  the webhook test event.
+
+Remaining open: **O1** only. Next: **0O.11A — Manual / Offline Payment
+Recording Foundation** — not started.
 
 ## Cross-cutting, ongoing (not a single phase)
 

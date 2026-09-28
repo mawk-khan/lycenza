@@ -325,8 +325,11 @@ Documented distinctions for future modules, not implemented here:
   transaction/reference uniqueness** — a payment callback needs its
   own idempotent-handling contract keyed on the provider's own
   delivery/transaction identifiers, independent of whether the
-  original client request also carried an `Idempotency-Key`. A future
-  Fees/Payments module needs both.
+  original client request also carried an `Idempotency-Key`. The
+  Payments foundation (ADR 0031) already dedupes provider events; a
+  future real payment gateway (deferred by ADR 0057) and the manual
+  payment-recording correction (Phase 0O.11A) each still need their own
+  duplicate-prevention contract.
 - **Webhook delivery idempotency** (Phase 0C.3, `webhook_deliveries`'
   `(webhook_endpoint_id, event_id)` uniqueness — full design in
   `docs/architecture/INTEGRATIONS.md`) is a **separate** mechanism from

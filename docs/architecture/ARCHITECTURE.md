@@ -168,7 +168,10 @@ is built against a different assumption:
    `Idempotency-Key` API contract (`docs/architecture/RELIABILITY.md`)
    — a payment callback needs its own idempotent-handling contract
    keyed on the provider's own delivery/transaction identifiers, not
-   a client-supplied header. A future Fees/Payments module needs both.
+   a client-supplied header. The existing Payments foundation already
+   keys provider events on `(school_id, provider, provider_event_id)`
+   (ADR 0031). A future real payment gateway — deferred from Phase 0 by
+   ADR 0057 — still needs both, plus its own callback contract.
 6. **Reconciliation is a first-class concern**: every module that
    records a payment must be designed, from the start, to support
    matching internal records against a payment gateway's/bank's

@@ -287,8 +287,10 @@ docs/roadmap             MASTER-ROADMAP.md
     own idempotent-handling contract keyed on the provider's own
     delivery/transaction identifiers — a client also sending an
     `Idempotency-Key` on the originating request does not satisfy this.
-    A future Fees/Payments module needs both (ARCHITECTURE.md §10,
-    RELIABILITY.md "Payment and webhook readiness").
+    The existing Payments foundation keys provider events on
+    `(school_id, provider, provider_event_id)` (ADR 0031); the future real
+    gateway (deferred from Phase 0 by ADR 0057) needs both
+    (ARCHITECTURE.md §10, RELIABILITY.md "Payment and webhook readiness").
 
 35. **Webhook delivery idempotency is separate from the client API
     `Idempotency-Key` contract.** `webhook_deliveries`'
