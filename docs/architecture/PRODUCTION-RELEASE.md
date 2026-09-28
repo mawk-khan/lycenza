@@ -277,6 +277,19 @@ browser action: no provider, credential, callback or configuration switch
 to deploy, and no new production environment variable. Still open: O1
 (definition of done — including a real restore drill).
 
+**O1 (Phase 0O.12, ADR 0058, 2026-09-28): defined, not satisfied.**
+ADR 0058 §5 is the definition of done and §6 the evidence register. Before
+any production publication or promotion:
+- **`main` must actually be protected on GitHub.** On 2026-09-28 it was not
+  (`"protected": false`, no rulesets). The release workflow proves only
+  that a commit is on `main`.
+- **A fresh qualification must run after protection is active.** The
+  `c4b1b6c` artifacts are not the release to promote. Their vulnerability
+  exceptions expire 2026-10-10 / 2026-10-26, with no automatic renewal.
+
+Closing Phase 0O never authorizes go-live: that is a separate rule-16
+decision.
+
 (Corrected 2026-09-28: this section previously said O14's implementation
 had not started and called O15 "partner integrations".)
 

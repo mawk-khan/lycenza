@@ -416,3 +416,16 @@ None pages as SEV-1. The runbook is
   (reason only). `LogSanitizer` redacts the recovery keys and any recovery
   link or 43-character fragment.
 - **Scheduled task:** `account-recovery-prune` (hourly).
+
+## O1 operational evidence (ADR 0058, Phase 0O.12)
+
+S2's repository portion is complete. Phase 0O cannot close on local metrics,
+log tests or fixture evidence files. ADR 0058 §4.3 (row E07) requires, in a
+real environment:
+- telemetry reaching a real external backend;
+- logs kept ≥ 30 days and metrics ≥ 90 days;
+- the OBS rules loaded and evaluated;
+- alert routing proven by a test notification;
+- backup freshness fed through the evidence file (OBS-20–22);
+- OBS-23 (restore drill overdue) active;
+- collector health monitored (OBS-26).

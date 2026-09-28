@@ -1009,3 +1009,21 @@ are identity-level. In 0O.10A:
   (30 minutes).
 
 Nothing else in this contract changes.
+
+## Note — Phase 0O.12 (ADR 0058, 2026-09-28)
+
+For O1, the "SMTP baseline used knowingly (no events)" option is **not
+sufficient**. Readiness needs authenticated provider events, and today only
+the `none` and `fake` event adapters exist. Once a provider is selected, a
+bounded checkpoint adds:
+- the smallest provider-specific event-authentication and normalization
+  adapter;
+- an HTTPS sending adapter only if that provider requires it or clearly
+  benefits from it.
+
+That checkpoint needs its own tests, full regression and O16
+requalification (ADR 0058 §4.11, rows E17–E20).
+
+`MAIL_RETENTION_DAYS` remains **[LEGAL REVIEW REQUIRED]**. The retention
+decision is now mandatory before Phase 0O closeout (ADR 0058 §4.12, option
+A).

@@ -7,6 +7,8 @@
   send yet (rule 16). The provider-neutral hardened SMTP adapter exists;
   a vendor's HTTPS API and event adapter is written when a vendor is
   selected.
+- **O1 (ADR 0058):** email is mandatory for v1. O1 cannot close with
+  `MAIL_PROVIDER=none` or fake delivery (evidence rows E17–E20).
 
 Every business email goes through the durable email layer
 (`App\Support\Email\OutboundEmailGateway`):
@@ -74,6 +76,9 @@ prints codes only.
 1. A provider is selected under the ADR 0055 §5 requirements, and the legal
    and processor review is complete. Its adapter is written (API and event
    feed), or the SMTP baseline is used knowingly (no events).
+   **For O1 (ADR 0058 §4.11), the no-events baseline is not enough:** the
+   provider-specific event adapter is a mandatory repository tail. Its
+   sending adapter stays SMTP unless the provider needs HTTPS.
 2. The sending domain is configured and reserved; the provider has verified
    it.
 3. SPF, DKIM and DMARC pass `platform:mail-verify-domain`.

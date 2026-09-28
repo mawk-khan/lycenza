@@ -911,3 +911,15 @@ clarifications below. Deployment evidence (§20) remains **OUTSTANDING**:
 | 4 | No global session revocation | **Fixed** (`credential_version`) |
 | 5 | No self-service lost-MFA recovery | **Debt** (unchanged procedure: `platform.users.mfa.reset`) |
 | 6 | No production staff/School-admin provisioning | **Debt** (onboarding, roadmap) |
+
+## Note — Phase 0O.12 (ADR 0058, 2026-09-28)
+
+§17 item 6 ("No production path creates staff/School-admin Users") is
+**promoted from roadmap debt to an O1 blocker** (ADR 0058 §4.14, row E24).
+The audit found that a fresh production install cannot create its first
+School either. The fix is its own contract-first checkpoint
+(provisionally 0O.12A). It is not an account-recovery change.
+
+§20's two-host drill needs one real non-production custom School domain.
+That exercise is mandatory for O1 even if production launches with
+`CUSTOM_DOMAINS_ENABLED=false` (ADR 0058 §4.10, rows E22–E23).

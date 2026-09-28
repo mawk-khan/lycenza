@@ -3,6 +3,8 @@
 - Status: Accepted (contract only — nothing implemented; Phase 0O.3
   implements it). Five numeric values are **owner values still required**
   before 0O.3 can freeze its configuration (section 13).
+  **Note (2026-09-28, ADR 0058):** V1–V5 were approved and frozen on
+  2026-09-25 (see "Implementation amendment"); none is still required.
 - Date: 2026-09-25
 - Resolves: Phase 0O decisions **O7** (API client/token model, partner API
   keys) and **O11** (browser security headers and CORS)

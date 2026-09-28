@@ -6,6 +6,12 @@
   production critical email (ADR 0055), which has no provider, sending
   domain or DNS yet. `ACCOUNT_RECOVERY_ENABLED` stays `false` in every
   deployed environment until the checklist below holds (rule 16).
+- **O1 (ADR 0058 §4.13, row E23):** this checklist, run in the production-
+  equivalent validation environment, is mandatory for Phase 0O closeout.
+  - The two-host step needs one real non-production custom School domain
+    (row E22), even if production keeps `CUSTOM_DOMAINS_ENABLED=false`.
+  - The operator reset (`platform:user-password-reset`) and the lost-MFA
+    escalation are exercised too.
 
 ## What it is
 

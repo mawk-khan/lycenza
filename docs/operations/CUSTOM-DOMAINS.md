@@ -100,3 +100,12 @@ None of the following has been done; no deployment exists (rule 16):
 - private-key custody proven outside the application;
 - DNS/TLS drift monitoring active;
 - one revoke/re-add drill completed.
+
+**O1 (ADR 0058 §4.10):**
+- **Production enablement is conditional.** Production may launch with
+  `CUSTOM_DOMAINS_ENABLED=false`. If it enables custom domains, the whole
+  list above is required there **before** enablement.
+- **One real non-production exercise is mandatory for O1** (row E22),
+  because the account-recovery drill must sign out a session on a custom
+  School host. That exercise covers every item above, using a non-production
+  domain.

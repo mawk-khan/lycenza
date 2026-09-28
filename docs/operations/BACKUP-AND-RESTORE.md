@@ -31,6 +31,10 @@ state how copies inside it are handled.
 4. Retention: 35 days of PITR.
 5. **Monitoring (O12 open):** until an alerting vendor exists, the
    operator checks backup status on a schedule and records it.
+   *(Corrected 2026-09-28: O12 was resolved by ADR 0051. Backup freshness
+   reaches monitoring through the deployment evidence file (OBS-20–22,
+   "Feeding backup and drill evidence to monitoring" below). A manual
+   schedule is only a stopgap until a real backend is active.)*
 
 Checklist for the operator configuring it: PITR enabled ☐ · archive
 interval ≤ 15 min ☐ · encrypted ☐ · separate credentials ☐ · deletion
@@ -97,6 +101,17 @@ same steps; a real recovery then repoints traffic (deploy-gated).
 Every quarter, one drill per ADR 0050 §11, recorded with the template. The
 first successful drill in a real non-production environment is part of
 the Phase 0O definition of done (ADR 0050 §20) and is **outstanding**.
+
+**O1 hard blocker (ADR 0058 §4.5, row E11).** A local or simulated run
+never counts. The drill must restore PostgreSQL from PITR or a snapshot, and
+restore or reconcile objects from the independent copy or versioning. It
+must then:
+- boot the application against the restored environment;
+- pass `platform:verify-restore` and `platform:verify-database`;
+- validate a Document sample;
+- measure the achieved recovery point and the RPO/RTO outcome;
+- append the result to `RESTORE-DRILL-RECORD.md` (evidence only);
+- set `restore_drill` in the evidence file so OBS-23 clears.
 
 ## Feeding backup and drill evidence to monitoring (Phase 0O.5A)
 

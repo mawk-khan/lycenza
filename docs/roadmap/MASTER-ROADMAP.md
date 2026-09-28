@@ -1720,6 +1720,41 @@ production-readiness closeout audit** against the repository and the
 deployment-evidence register — not started. Phase 0O is not complete merely
 because repository implementation is finished.
 
+**0O.12 — Production Readiness Definition & Closeout Contract (2026-09-28,
+docs-only, ADR 0058).** O1 is **RESOLVED AS DEFINITION OF DONE — NOT
+SATISFIED**.
+- **Meaning.** Phase 0O complete means the repository and readiness evidence
+  are complete enough to authorize a **separate** production deployment
+  decision. It never means go-live, real School data or Phase 0M.
+- **Register.** One evidence register (E01–E29) supersedes
+  `PHASE-0O-READINESS.md` §9.
+- **Findings:**
+  - `main` is **not protected** on GitHub; protection plus a fresh
+    qualification are required before the first promotion;
+  - a fresh production install **cannot create its first School**; no path
+    provisions staff or School-admin logins (now an O1 blocker);
+  - email has no vendor event adapter yet (a mandatory provider tail).
+- **Owner decisions:**
+  - legal retention for v1 categories is required **before** closeout
+    (option A);
+  - the AI Gateway and production custom domains are **not** required;
+  - one non-production custom-domain exercise **is** required, for O14;
+  - email is mandatory;
+  - manual-payment correction stays debt.
+- **Mandatory evidence outstanding:**
+  - protected `main`;
+  - the ADR 0050 environment and a **real restore drill**;
+  - the observability backend and routing;
+  - registry, signing and promotion;
+  - email provider, DNS authentication and drills;
+  - O14 drills;
+  - legal retention;
+  - staff/School-admin provisioning.
+
+Phase 0O: **CLOSEOUT BLOCKED — DEPLOYMENT / LEGAL / GOVERNANCE /
+PROVISIONING EVIDENCE OUTSTANDING**. Recommended next: **0O.12A —
+Staff / School-Admin Account Provisioning** (contract first) — not started.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

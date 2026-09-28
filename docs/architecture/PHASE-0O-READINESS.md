@@ -293,17 +293,17 @@ Other findings:
 
 | # | Decision | Existing decision? | Owner | Blocks |
 |---|---|---|---|---|
-| O1 | Phase 0O definition of done per scope item | No | Product | Phase closure, not 0O.1 |
+| O1 | Phase 0O definition of done per scope item | **RESOLVED AS DEFINITION OF DONE — NOT SATISFIED — ADR 0058 (Phase 0O.12, §41)**: one authoritative definition and evidence register (E01–E29) supersedes §9; closure needs repository, provider, deployment, legal and governance evidence, including a real restore drill, protected `main` and a staff/School-admin provisioning path | Product | Phase closure |
 | O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | **RESOLVED — ADR 0057 (Phase 0O.11)**: the first real payment gateway is **DEFERRED** from Phase 0 / production v1 (no processor, checkout, callback, credential, refund or PCI-bearing UI; its own future ADR). Manual/offline payment recording is a **required v1 Finance correction**, **implemented in Phase 0O.11A (COMPLETE — repository, §39)** | Product | S4 |
 | O3 | Hosting / deployment model (and therefore process manager, container runtime, Terraform target) | **RESOLVED — ADR 0050 (Phase 0O.4)** | Product + operations | S3 infrastructure, images, runbook |
 | O4 | Secrets manager or host secret injection | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
 | O5 | Service-to-service auth: keep the shared token (with rotation) or move to per-request signed tokens / mTLS | **RESOLVED — ADR 0053 (Phase 0O.7)**: per-request Ed25519 service assertions, one keypair per calling service, 24 h rotation overlap, 90-day keys; **repository implementation COMPLETE (Phase 0O.7A)**, deployment evidence outstanding | Security | S3 (AI Gateway deployment) |
 | O6 | Runtime role name: keep `school_os_app` as a production contract, or generalize the code | **RESOLVED — ADR 0050 (Phase 0O.4)** | Engineering | Production DB provisioning |
-| O7 | API client model: who gets `/api/v1` tokens and how (mobile login token endpoint? partner keys? OAuth?), expiry, abilities | **RESOLVED — ADR 0049 (Phase 0O.2)**; lifetimes V1–V4 are owner values still required | Product + security | S1 |
+| O7 | API client model: who gets `/api/v1` tokens and how (mobile login token endpoint? partner keys? OAuth?), expiry, abilities | **RESOLVED — ADR 0049 (Phase 0O.2)**; lifetimes V1–V4 approved and frozen 2026-09-25 (30 / 90 / 90 / 365 days; ADR 0049 implementation amendment; corrected 2026-09-28) | Product + security | S1 |
 | O8 | Object storage: provider, region, encryption, versioning, lifecycle | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
 | O9 | Custom School domains in production: ownership verification, TLS | **RESOLVED — ADR 0054 (Phase 0O.8)**: browser-only School surface; persistent DNS TXT ownership; explicit lifecycle; edge-owned TLS proven by a domain probe; host-only sessions; 421 for unknown/non-active hosts. **Repository implementation COMPLETE (Phase 0O.8A, §30)**; deployment evidence outstanding | Product + operations | Domain routing in production |
 | O10 | Backup policy, RPO/RTO, restore drills | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | Any production deployment |
-| O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
+| O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) approved and frozen 2026-09-25 (31,536,000; corrected 2026-09-28) | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | **RESOLVED — ADR 0055 (Phase 0O.9)**: Lycenza-controlled, deployment-configured sending domain (never a School web domain); closed From mailbox catalog, sanitized School display name, no School Reply-To in v1; one provider-neutral adapter at a time; one durable email layer (message/attempt/event/suppression) beneath invitations (outbox, outside the transaction) and Communications; authenticated, deduplicated provider events; global suppression; SPF/DKIM alignment and DMARC ≥ `p=quarantine` at readiness. **Repository implementation COMPLETE (Phase 0O.9A, §33)**; deployment evidence outstanding | Product + operations | Real email |
 | O14 | Password reset for production accounts | **RESOLVED — ADR 0056 (Phase 0O.10)**: identity-level self-service password recovery on the canonical platform host only; eligible = active, non-root human Users with a local password (root stays console/operator-only); enumeration-resistant generic response with asynchronous issuance; 256-bit selector+secret credential (SHA-256 stored, secret in the URL fragment), 30 min, single-use, ≤ 3 active, never consumed by GET; ADR 0055 critical `account_recovery` email only when critical email is available; the reset bumps `users.credential_version` (every session on every host ends), revokes human personal access tokens and elevations, preserves MFA, never auto-logs in. **Implemented in the repository by Phase 0O.10A** (§36); deployment evidence (ADR 0056 §20) outstanding | Product + security | Production operations |
@@ -313,6 +313,10 @@ Other findings:
 No vendor or provider is chosen by this audit.
 
 ## 9. Readiness matrix (roadmap items)
+
+> **Superseded 2026-09-28 by ADR 0058** (Phase 0O.12, §41). This table
+> records the pre-0O.1 baseline and its proposed definition of done. The
+> authoritative definition of done and evidence register are ADR 0058 §5–§6.
 
 | Requirement | Evidence | Status | Missing work | Gate |
 |---|---|---|---|---|
@@ -1804,3 +1808,100 @@ Results on `c4b1b6c`:
 - **Exception clock:** the records expire **2026-10-10** / **2026-10-26**;
   nothing was renewed.
 - **Full-regression checkpoint:** `c4b1b6c` (cadence counter 0/5).
+
+## 41. Phase 0O.12 — Production Readiness Definition & Closeout Contract (O1, 2026-09-28)
+
+**ADR 0058** resolves O1 **as a definition of done**. It supersedes the §9
+matrix and gathers every ADR's "contribution to O1" into one evidence
+register (E01–E29). Documentation only: no code, configuration, workflow,
+GitHub setting or infrastructure changed.
+
+**What "Phase 0O complete" means.** The repository and readiness evidence
+are complete enough to **authorize a separate production deployment
+decision**. It never means production is live, real School data is
+connected, optional features are on, or Phase 0M is unblocked. Go-live stays
+a separate rule-16 authorization.
+
+**Findings (each verified on 2026-09-28):**
+- **`main` is not protected.** The GitHub API reports
+  `"protected": false`, no rulesets and no rules for `main`. The release
+  workflow and `verify-artifact` prove ancestry of `main`, never protection.
+  Protection must be real, and a fresh qualification after it is active is
+  required before the first promotion (ADR 0058 §4.6).
+- **A fresh production install cannot create its first School.** The only
+  production User factories are the first root and Guardian activation. A
+  School needs an existing, non-operator bootstrap administrator, and
+  activation needs a qualifying one. No path provisions staff or
+  School-admin logins. This is now an **O1 blocker** (ADR 0058 §4.14).
+- **Email is provider-neutral only.** There is no vendor event adapter, so
+  the provider-event route answers 404. A bounded provider tail is mandatory
+  once a provider is selected (ADR 0058 §4.11).
+- **`TRUSTED_PROXIES` may be empty in production.** The guard refuses only
+  trust-all. Real edge addresses are deployment evidence (§4.2).
+
+**Owner decisions frozen by ADR 0058:**
+- **Retention, option A.** Legal retention decisions for the categories
+  used in v1 (mail, webhook deliveries, Documents, audit and others) are
+  **mandatory before Phase 0O closeout**. `MAIL_RETENTION_DAYS` stays
+  **[LEGAL REVIEW REQUIRED]**.
+- **AI Gateway: not required for O1.** It stays not configured. If it is
+  ever enabled, all of ADR 0053 §15 comes first.
+- **Custom domains: not required in production.** Production may launch
+  with `CUSTOM_DOMAINS_ENABLED=false`. One real **non-production** O9
+  exercise is still mandatory, because O14's two-host drill needs it.
+- **Email is mandatory for v1.** `MAIL_PROVIDER=none` or fake delivery
+  cannot close O1.
+- **Staff/School-admin provisioning is an O1 blocker.** Employee is not
+  User, and Guardian activation is never a workaround.
+- **Manual-payment correction stays recorded debt,** not a blocker.
+- **The `c4b1b6c` artifacts are not indefinitely promotable.** Their
+  exceptions expire 2026-10-10 / 2026-10-26, with no automatic renewal.
+
+**Corrections recorded here (history above is not rewritten):**
+- **V1–V5 are resolved.** The §8 rows O7 and O11 now say "approved and
+  frozen 2026-09-25". §15's "owner values still required" is the historical
+  0O.2 record. §16's "trusted-proxy configuration remains with O3" was
+  resolved by ADR 0050 §2 and 0O.4A (`TrustedProxyList`).
+- **§9 is superseded** (a note under its heading).
+- **Operations README.** The "release qualification" row still named the
+  0O.6F qualification (`93b72e5`). The current one is §40 (`c4b1b6c`).
+
+**Mandatory blockers** (ADR 0058 §6):
+- E02 — final qualification on protected `main`;
+- E03 — `main` protection;
+- E05 — S1 edge evidence;
+- E07 — S2 backend and routing;
+- E08 — secret store;
+- E09 — ADR 0050 environment;
+- E10 — backup policy;
+- E11 — **real restore drill**;
+- E12 — Redis reconciliation and window release;
+- E13–E15 — registry, signing and promotion;
+- E16 — exception validity;
+- E17–E20 — email provider, adapter tail, DNS authentication, drills;
+- E21 — **legal retention**;
+- E22 — O9 non-production exercise;
+- E23 — O14 drills;
+- E24 — **staff/School-admin provisioning**;
+- E29 — evidence hygiene.
+
+**Conditional (disabled):**
+- E26 — AI Gateway;
+- E27 — production custom domains;
+- E28 — deferred integrations.
+
+**Status:**
+- **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+- **O2–O16:** resolved (unchanged).
+- **Phase 0O:** **CLOSEOUT BLOCKED — DEPLOYMENT / LEGAL / GOVERNANCE /
+  PROVISIONING EVIDENCE OUTSTANDING**.
+- **Phase 0M:** **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- **Regression:** checkpoint `c4b1b6c`; this docs-only unit is #1 since it.
+
+**Next (not started):**
+1. **Phase 0O.12A — Staff / School-Admin Account Provisioning**: contract
+   first, recovered from the Identity/HR boundaries, then implementation.
+2. In parallel, outside the repository, the owner can begin the provider
+   and infrastructure decisions for the evidence program and activate
+   `main` protection.

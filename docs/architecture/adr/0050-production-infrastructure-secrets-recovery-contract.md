@@ -574,3 +574,16 @@ custody (§5).
 - **New configuration:** `DOMAIN_EDGE_CNAME_TARGET`,
   `DOMAIN_EDGE_ADDRESSES`, `DOMAIN_DNS_RESOLVERS` and `INTERNAL_HOSTS`, plus
   the secret `DOMAIN_PROBE_KEY`.
+
+**Clarification (Phase 0O.12, 2026-09-28, ADR 0058).** The deployment model
+above lists the AI Gateway because a deployment may run it. It is **not
+required** for Phase 0O closeout:
+- ADR 0053 made the production default "not configured";
+- an unset `AI_GATEWAY_BASE_URL` needs no service keys, and readiness is
+  unaffected (rule 56);
+- enabling it in any production environment first needs all of ADR 0053
+  §15.
+
+This section's O1 contribution (§20), including one successful restore drill
+in a real, isolated non-production environment, is now evidence rows
+E08–E12 of ADR 0058 §6. O1 is defined, **not satisfied**.

@@ -106,6 +106,9 @@
   it is designed deliberately once the first module handling
   Sensitive/Highly Sensitive data is built, rather than defaulting to
   "keep everything forever" by omission.
+  *Cross-reference (2026-09-28):* ADR 0058 §4.12 makes the retention
+  decisions for the categories used in v1 a **mandatory Phase 0O closeout
+  item** (evidence row E21). This document still records no period.
 - **Aggregation/derivation:** a derived value's classification tracks
   its source data (see the "Aggregated / derived / statistical data"
   row above) — building an Analytics/reporting feature does not create

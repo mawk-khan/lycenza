@@ -141,3 +141,9 @@ None of the following has been done; no deployment exists (rule 16):
 - one routine rotation (§1) performed in a non-production environment;
 - one emergency revocation (§3) demonstrated;
 - the real private TLS network, including TLS in front of the Gateway.
+
+**O1 (ADR 0058 §4.9): conditional.** The AI Gateway is **not required** for
+Phase 0O closeout. With `AI_GATEWAY_BASE_URL` unset, no real keys, rotation
+drill, revocation drill or private Gateway TLS are needed. The evidence above
+becomes mandatory **before** any production environment enables the
+Gateway. This does not unblock Phase 0M.

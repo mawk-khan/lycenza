@@ -8,6 +8,24 @@
 
 Tooling reference: `infrastructure/release/README.md`.
 
+> **O1 (ADR 0058, 2026-09-28).** "Protected `main`" is not yet true: GitHub
+> reported `main` as unprotected, with no rulesets. The lineage check
+> (`source_not_on_protected_main`) proves ancestry of `origin/main`, never
+> branch protection. Before the first production publication or promotion:
+> - `main` is protected in reality (a branch protection rule or ruleset;
+>   force-push and deletion refused);
+> - a **fresh** qualification runs from that protected boundary.
+>
+> A VERIFIED digest from before protection (such as `c4b1b6c`) is progress
+> evidence, not the release to promote. Exceptions must be valid on the
+> qualification **and** promotion dates. They are never renewed
+> automatically.
+>
+> A local `qualify` run needs Docker's **classic** image store. With the
+> containerd image store, `docker load` reports the manifest digest and the
+> build stage fails with `loaded_image_mismatch`
+> (`PHASE-0O-READINESS.md` §40).
+
 ## Release order (amends ADR 0050 §14; ADR 0052 §3.19)
 
 1. **Qualify the candidate — BUILT → VERIFIED.** Dispatch the *Release
