@@ -8,7 +8,8 @@ security-specific companion to this document).
 
 This subsystem is **infrastructure only** — no real external
 integration (payment gateway, Tally, DigiLocker, UDISE+, APAAR,
-WhatsApp/SMS provider, ...) is implemented here. It exists so a future
+WhatsApp/SMS provider, ...) is implemented here. ADR 0057 (2026-09-28)
+defers all of those from Phase 0 / production v1. It exists so a future
 business module only ever needs to do one thing: **emit an approved
 domain event**. The module never knows which webhook URLs exist, how
 they're signed, how retries work, or how delivery history is stored.
@@ -68,8 +69,11 @@ ever fanning an event out (defense in depth: even a row that
 theoretically bypassed the subscribe-time check couldn't reach
 delivery). Currently registered: `school.setting.changed.v1` (the
 Phase 0C demonstration event) and `platform.webhook_test.v1` (a
-synthetic, local/testing-only event for proving this subsystem end to
-end without a real ERP business event — see "Test event" below).
+synthetic event for proving this subsystem end to end without a real ERP
+business event — see "Test event" below). Only its **emission** is
+local/testing-only. The registry currently accepts subscriptions to it in
+every environment. That is inert in production, and ADR 0057 §5.2 records
+it as low-severity implementation debt to environment-gate.
 
 ## Payload minimization and immutability
 

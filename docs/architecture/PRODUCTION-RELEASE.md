@@ -266,18 +266,21 @@ email recovery.
 
 ## 7. What stays open
 
-O3–O14 and O16 are resolved (ADR 0049, ADR 0050, ADR 0051, ADR 0052,
-ADR 0053, ADR 0054, ADR 0055, ADR 0056). O9's and O13's repository
-implementations are Phases 0O.8A and 0O.9A, with deployment evidence
-outstanding; O14's is Phase 0O.10A, not started. Still open: O1 (definition
-of done — including a real restore drill), O2 (payments) and O15 (partner
-integrations).
+O2–O16 are resolved (ADR 0049 to ADR 0057). O9's, O13's and O14's
+repository implementations are Phases 0O.8A, 0O.9A and 0O.10A, with
+deployment evidence outstanding. O2 (the first real payment gateway) and
+O15 (broader third-party integrations and production partner API scopes)
+were resolved by ADR 0057 (Phase 0O.11), mostly by explicit deferral. Its
+one required v1 correction, manual/offline payment recording, is Phase
+0O.11A, not started. Still open: O1 (definition of done — including a real
+restore drill).
 
-**Account recovery (ADR 0056, contract only).** Production has **no
-self-service password recovery** today, and lost root passwords have no
-path at all until 0O.10A adds `platform:user-password-reset`.
+(Corrected 2026-09-28: this section previously said O14's implementation
+had not started and called O15 "partner integrations".)
 
-When 0O.10A lands:
+**Account recovery (ADR 0056, implemented in 0O.10A).** Self-service
+recovery exists but is off by default. `platform:user-password-reset` is the
+operator console path, and root's only one:
 - `ACCOUNT_RECOVERY_ENABLED` is `false` by default;
 - enabling it in production is refused while critical email is disabled
   (`account_recovery_email_disabled`);
