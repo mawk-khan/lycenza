@@ -4,6 +4,7 @@ namespace Tests\Feature\Identity\AccountRecovery;
 
 use App\Domain\Identity\Application\AccountRecovery\RecoveryCredential;
 use App\Domain\Identity\Infrastructure\AccountRecoveryRequest;
+use App\Http\Controllers\Auth\AccountRecoveryController;
 use App\Models\EmailMessage;
 use App\Models\PlatformAuditEvent;
 use App\Models\User;
@@ -371,7 +372,7 @@ class AccountRecoveryPlatformTest extends TestCase
         // ADR 0056 section 5.2: the response time never depends on the
         // account -- the controller's request action only normalizes, counts
         // and dispatches; every lookup happens in IssueAccountRecoveryJob.
-        $method = new \ReflectionMethod(\App\Http\Controllers\Auth\AccountRecoveryController::class, 'store');
+        $method = new \ReflectionMethod(AccountRecoveryController::class, 'store');
         $lines = file((string) $method->getFileName());
         $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
 
