@@ -1751,3 +1751,56 @@ unit and is now a 404.
 - Phase 0O: **PARTIALLY READY — O1 CLOSEOUT STILL BLOCKED**.
 - Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
   REQUIRED**.
+
+## 40. Phase 0O.11A — VERIFIED digests (2026-09-28)
+
+Final qualification of the published `main` commit **`c4b1b6c`**
+(`c4b1b6c094ea`, run `local-20260928T193902Z-8df07380`; Grype database
+refreshed for the run). Three earlier attempts did not reach VERIFIED:
+
+- **`04e0392`:** the tag-only `verify-images.sh` S3 helper
+  (`minio/minio:RELEASE.2025-04-08T15-41-24Z`) could no longer be pulled from
+  any registry. The helpers were repinned by digest (`versity/versitygw`,
+  `redis:7.4.11-alpine`) in `fc64a29` / `7c32f56`, with a
+  `SupplyChainGuardTest` rule that every helper is `image:version@sha256`.
+- **`7c32f56`, first run:** the build stage stopped with
+  `loaded_image_mismatch`. This was a host change, not a repository defect:
+  Docker Desktop had restarted on the containerd image store, where
+  `docker load` reports the manifest digest, not the config digest.
+  **Qualification needs Docker's classic image store** until the tooling
+  supports the containerd store (follow-up, not done here).
+- **`7c32f56`, resumed on the classic store:** one `verify-images.sh` check,
+  "worker-default role stays running", failed deterministically. It was a
+  harness race: the unreachable database makes a worker exit after its 5 s
+  connect timeout, and the check sampled after that. The four role
+  containers now run with `DB_CONNECT_TIMEOUT=30` (`c4b1b6c`). The images
+  themselves were unchanged. Both images failed only because the
+  runtime-hardening-conditional exceptions were withdrawn; there were no new
+  advisories.
+
+Results on `c4b1b6c`:
+
+- **Same-run complete regression:** 6,445 tests, 0 failures, only the
+  deliberate ESI-12 skip.
+- **Gates:** Pint, Larastan, vue-tsc, ESLint, Prettier, the frontend build,
+  Gateway ruff/format/mypy/pytest and the release tooling tests all pass.
+- **`verify-images.sh`:** 133/133 checks.
+- **Language audits:** 0 advisories. **Secret scans:** 0 findings (source
+  and both images).
+
+| Image | Manifest digest | Config digest | `verify-artifact` |
+|---|---|---|---|
+| Application | `sha256:b7638488850a1dc511408850726b67c0b8be826d007a2b3c3dc79368a1eff804` | `sha256:5d6ca334…9dec` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 48 excepted |
+| AI Gateway | `sha256:f46ef81166502864eeea0136a3cc3607edfcaa89d8a47a4d48a7898365f73905` | `sha256:68b71f7f…f5f` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 49 excepted |
+
+- **Residual findings:** both sets are the reviewed `OWNER-0O6E-2026-09-26`
+  records (the same counts as 0O.10A). Manual payment recording adds no
+  dependency.
+- **Evidence bundle:** sha256
+  `550a6c13f94686cdfe667a113f262446146fddfdc8c8c6f70275bbf2bf85c154`,
+  signed with an ephemeral **non-production** key.
+- **PUBLISHED = NONE, PROMOTED = NONE.** No payment provider, merchant
+  account, real integration, registry push or deployment.
+- **Exception clock:** the records expire **2026-10-10** / **2026-10-26**;
+  nothing was renewed.
+- **Full-regression checkpoint:** `c4b1b6c` (cadence counter 0/5).
