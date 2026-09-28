@@ -54,6 +54,13 @@ beyond HR.
 
 ## Entity model
 
+> **Note (2026-09-28, ADR 0059):** staff login accounts are provisioned by
+> Identity: an operator bootstrap account, or a School staff invitation.
+> **Never by HR.** Creating an Employee never creates a User, and
+> provisioning a User never creates an Employee. `employees.user_id` stays
+> an optional, explicit link under the existing linkage rules, available
+> once the User holds a membership in the School.
+
 ```
 School (Phase 0B/0D)
   └─ Campus (Phase 0B/0D)

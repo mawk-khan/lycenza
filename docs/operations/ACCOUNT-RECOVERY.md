@@ -144,3 +144,13 @@ stops brute force, so the risk is noise, not compromise.
   selector, a secret, a link or a password.
 - The request counters are keyed by an HMAC fingerprint, never the address.
 - Failed sign-in audits record a fingerprint, never the typed address.
+
+## Activation is not recovery (ADR 0059, contracted)
+
+- An operator-provisioned bootstrap account has **no password** until its
+  one-time activation link is used. Recovery treats it as unknown.
+- A recovery link never activates an account, and an activation link never
+  resets a password.
+- **Stuck bootstrap account** (activation link lost or expired): the
+  operator re-issues it with the bootstrap-account command. Never use
+  recovery or `platform:user-password-reset`.

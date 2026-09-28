@@ -678,3 +678,19 @@ E26–E28.
   required.
 - No code, configuration, workflow, GitHub setting or infrastructure is
   changed by this ADR.
+
+## Note — Phase 0O.12A (ADR 0059, 2026-09-28)
+
+**E24's decision is made.** ADR 0059 contracts two flows:
+- the platform-assisted bootstrap account, from the console, displayed
+  once;
+- School staff invitations, using `school.members.manage` +
+  `school.roles.manage`, fresh MFA and critical email.
+
+E24 **still blocks O1** until **Phase 0O.12B** is implemented and
+qualified (ADR 0059 §23).
+
+**New finding: staff off-boarding is DECISION REQUIRED.** No School-side
+action suspends a staff membership or revokes a School role. The owner
+decides whether it joins 0O.12B or becomes its own row. It is **not** added
+to the register silently.

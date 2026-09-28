@@ -1905,3 +1905,70 @@ a separate rule-16 authorization.
 2. In parallel, outside the repository, the owner can begin the provider
    and infrastructure decisions for the evidence program and activate
    `main` protection.
+
+## 42. Phase 0O.12A — Staff / School-Admin Account Provisioning Contract (2026-09-28)
+
+**ADR 0059** makes the **decision** for ADR 0058 row **E24**. Documentation
+only: no code, route, configuration or GitHub setting changed. E24 still
+blocks O1 until **Phase 0O.12B** is built and qualified.
+
+**Before-fix audit (verified in code):**
+- Production creates Users only through `platform:bootstrap-root` (the
+  first root) and Guardian invitation acceptance (active Schools only).
+- `provision-root`, platform role grants, the operator password reset and
+  the School bootstrap service all act on **existing** Users only.
+- `EmployeeService` never creates Users.
+- The deadlock:
+  1. creating a School needs an existing, non-self, enabled bootstrap
+     administrator;
+  2. the only ordinary-User factory needs an active School;
+  3. activation needs an administrator.
+
+**Decisions:**
+- **Flow A — platform-assisted bootstrap account.**
+  - An interactive operator console command (no `--force`, typed-email
+    confirmation) creates a **credential-less** User.
+  - It displays a one-time activation link **once** (fragment secret,
+    ≤ 72 h, default 24 h). No email is needed, so it works before O13.
+  - No membership, role, Employee or platform grant. School authority
+    still comes only from root's ADR 0047 create/replace path.
+- **ADR 0047 amendment.** A qualifying administrator must have an
+  established credential (`admin_not_activated`). MFA is still not
+  required for activation.
+- **Flow B — School staff invitations.**
+  - Issuing needs `school.members.manage` + `school.roles.manage` (both
+    existing, `school_admin` only), fresh MFA and critical email (refused
+    with `email_unavailable` otherwise).
+  - Roles come from the closed School-scope catalog, within the issuer's
+    own capabilities.
+  - Each invitation is School-owned (RLS), bound to one canonical email,
+    one pending per email, 7 days.
+  - Acceptance on the School origin creates an `active` membership and the
+    roles. A new User sets a password through `CredentialChangeService`
+    with no auto-login; an existing User must be signed in.
+  - Disabled Users, platform-role holders and existing members of that
+    School are refused generically.
+- **Anti-enumeration.** A School learns only its own members and
+  invitations. Every other identity state gives the same accepted result.
+- **Unchanged:** elevation (rule 83), Group authority (rule 84), ADR 0047
+  D13, User ≠ Employee.
+- **Credential-less Users** cannot sign in, are not recovery-eligible, and
+  are refused by `platform:user-password-reset`.
+
+**New O1 finding: staff off-boarding is DECISION REQUIRED.** No School-side
+action suspends a staff membership or revokes a School role. The owner
+decides whether it joins 0O.12B or becomes its own ADR 0058 row.
+
+**Status:**
+- **E24:** decision made; implementation (0O.12B) outstanding; still
+  blocking.
+- **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+- **Phase 0O:** CLOSEOUT BLOCKED — DEPLOYMENT / LEGAL / GOVERNANCE /
+  PROVISIONING EVIDENCE OUTSTANDING.
+- **Phase 0M:** BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED.
+- **Regression:** checkpoint `c4b1b6c`; this docs-only unit is #2 since it.
+
+**Next (not started):** **Phase 0O.12B — Staff / School-Admin Account
+Provisioning Foundation**, one checkpoint (ADR 0059 §23), once the owner
+has decided whether it includes staff off-boarding.

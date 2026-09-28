@@ -923,3 +923,20 @@ School either. The fix is its own contract-first checkpoint
 §20's two-host drill needs one real non-production custom School domain.
 That exercise is mandatory for O1 even if production launches with
 `CUSTOM_DOMAINS_ENABLED=false` (ADR 0058 §4.10, rows E22–E23).
+
+## Note — Phase 0O.12A (ADR 0059, 2026-09-28)
+
+**Credential-less Users** (ADR 0059 §4): an operator-provisioned bootstrap
+account that has not yet activated.
+- They have no local password.
+- They stay **ineligible** for recovery, and a request for them gets the
+  generic "unknown" treatment.
+- A recovery credential never activates an account.
+- An activation credential never resets an established password.
+
+**Staff invitations** follow §4.3 exactly as Guardian invitations do: a
+pending invitation is not a User, and recovery never touches it.
+
+**Password writes.** `CredentialChangeService` gains an "establish initial
+password" operation, which requires the credential-less state. It remains
+the only password writer outside the root bootstrap command.

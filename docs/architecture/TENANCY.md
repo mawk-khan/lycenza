@@ -481,3 +481,18 @@ purposes (`email_messages_identity_level_check`).
   `App\Support\Tenancy\AllowsIdentityLevelRows` sees and creates
   School-less rows only inside that scope (`SchoolScope`, `BelongsToSchool`).
 - **Adoption.** No other table uses this mode. Adding one needs its own ADR.
+
+## Staff account provisioning tables (ADR 0059 — contract Phase 0O.12A)
+
+- **`staff_account_invitations`** and its role child table are
+  School-owned. They use `BelongsToSchool` plus `TenantRls::enable`,
+  composite `(id, school_id)` foreign keys (rule 70), and raw-SQL
+  isolation tests (rule 28).
+- **`account_activation_credentials`** is identity-level (no `school_id`,
+  no RLS), exactly like `account_recovery_requests`. It holds only the
+  one-time credential for a credential-less User.
+- **`school_memberships`** stays central discovery data (no RLS). Its
+  documented `invited|active|suspended` convention becomes a CHECK
+  constraint.
+- **Identity resolution.** A School never supplies a `user_id`; identity is
+  resolved server-side by canonical email.

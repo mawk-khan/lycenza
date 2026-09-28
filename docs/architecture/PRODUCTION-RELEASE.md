@@ -255,6 +255,27 @@ the database refuses a grantor-less grant from anything else (Phase
 `ACCOUNT_RECOVERY_ENABLED` is deployed with its evidence, by self-service
 email recovery.
 
+**Contracted, not built (ADR 0059, Phase 0O.12A → 0O.12B):**
+- **The operator bootstrap-account command** (provisional
+  `platform:provision-school-admin-account`):
+  - interactive only; no `--force`;
+  - typed-email confirmation;
+  - creates one credential-less User;
+  - displays one activation link (secret in the fragment, ≤ 72 h,
+    default 24 h) once, on the terminal only;
+  - no membership, role or Employee;
+  - audit `platform.account.provisioned`.
+- **First-School sequence** (ADR 0059 §8):
+  1. `platform:bootstrap-root`, then root MFA;
+  2. the bootstrap-account command, and its activation;
+  3. root creates the School naming that account;
+  4. root activates it (needs an activated administrator);
+  5. the School Admin signs in and enrolls MFA;
+  6. staff are invited through School staff invitations (O13 email).
+
+Until 0O.12B ships, a fresh production install **cannot create its first
+School** (ADR 0058 E24).
+
 ## 6. Seeding: production-safe versus demo
 
 | Seeder | Production | Local / testing |

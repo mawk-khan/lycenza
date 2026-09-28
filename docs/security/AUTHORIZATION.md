@@ -498,6 +498,25 @@ ADR 0045.
   stay with the School (`school.members.*`, `school.roles.*`). Creating a
   School never makes its creator a School member; a School that later
   loses every admin awaits a future break-glass decision.
+- **Staff and School-admin account provisioning (ADR 0059, contract
+  Phase 0O.12A; built in 0O.12B).** Two flows:
+  - **Bootstrap accounts.** An interactive operator console command creates
+    a *credential-less* User. The one-time activation link is displayed
+    once. The command writes no membership, role or Employee, and School
+    authority still comes only from the bootstrap exception above.
+    Activation additionally needs the administrator to have an established
+    credential (`admin_not_activated`).
+  - **Staff invitations.** Inside an active School, issuing needs
+    `school.members.manage` **and** `school.roles.manage` plus fresh MFA.
+    Resend and revoke need `school.members.manage`, listing needs
+    `school.members.view`.
+  - **Roles.** Only School-scope roles, and only ones whose capabilities
+    the issuer already holds.
+  - **Acceptance** creates an `active` membership and the roles. An
+    existing User must be signed in; disabled Users, platform-role holders
+    and existing members of that School are refused generically.
+  - **Never:** elevation (rule 83), Group authority (rule 84), or a
+    platform HTTP endpoint that creates Users.
 - A suspended or provisioning School must grant nothing through any
   path: membership-derived capabilities still resolve, so every entry
   point refuses a non-`active` School — web, API and elevation (per

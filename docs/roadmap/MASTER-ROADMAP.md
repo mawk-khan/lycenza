@@ -1755,6 +1755,25 @@ Phase 0O: **CLOSEOUT BLOCKED — DEPLOYMENT / LEGAL / GOVERNANCE /
 PROVISIONING EVIDENCE OUTSTANDING**. Recommended next: **0O.12A —
 Staff / School-Admin Account Provisioning** (contract first) — not started.
 
+**0O.12A — Staff / School-Admin Account Provisioning Contract (2026-09-28,
+docs-only, ADR 0059).** This decides ADR 0058 row E24.
+- **Flow A:** an interactive operator console command creates a
+  credential-less bootstrap User and displays a one-time activation link
+  once, with no email. Root still grants School authority through the
+  ADR 0047 path, and activation now needs an activated administrator.
+- **Flow B:** an active School invites staff. Issuing needs
+  `school.members.manage` + `school.roles.manage`, fresh MFA and critical
+  email. Roles come from the closed School catalog, within the issuer's
+  own capabilities. Invitations are School-owned and bound to one email.
+  Acceptance creates an active membership and the roles; an existing User
+  must be signed in. The flow never reveals anything about other Schools.
+- **Unchanged:** User ≠ Employee; no elevation, Group or platform staff
+  management after activation.
+- **New O1 finding:** staff off-boarding is **DECISION REQUIRED**.
+
+Next: **0O.12B — Staff / School-Admin Account Provisioning Foundation**
+(one checkpoint) — not started. E24 stays blocking until then.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

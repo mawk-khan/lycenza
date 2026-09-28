@@ -711,3 +711,21 @@ not built.
    (Confidential metadata; the bootstrap administrator, Sensitive, is
    shown only while `provisioning`) -- like the Group pages, no MFA
    assurance for reads; every change needs a fresh code.
+
+## Note — Phase 0O.12A (ADR 0059, 2026-09-28)
+
+- **Qualifying administrator amendment.** A User who has no established
+  local credential (the credential-less state ADR 0059 §4 introduces) never
+  counts as a qualifying administrator. Activation refuses with a new
+  bounded outcome, `admin_not_activated`. This is not an invented setup
+  step: an administrator who can never sign in would strand an active
+  School, because this bootstrap path closes for good. MFA is still not
+  required for activation.
+- **Unchanged:**
+  - `create` still requires an existing, enabled, non-self target;
+  - the bootstrap service is still the only platform writer of memberships
+    and School role assignments;
+  - D13 still forbids ongoing platform membership administration.
+- **New account path.** The new operator console command (ADR 0059 §5)
+  creates only a credential-less User. School authority still comes from
+  this ADR's create or replace path.
