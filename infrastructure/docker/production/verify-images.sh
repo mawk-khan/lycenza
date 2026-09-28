@@ -320,9 +320,12 @@ statuses_ok() {
         END { exit (bad || n == 0) }'
 }
 proc_statuses() { docker exec "$1" sh -c 'for s in /proc/[0-9]*/status; do cat "$s" 2>/dev/null; echo; done'; }
-# The worker and scheduler roles exit a few seconds after start in this
-# harness (the database is deliberately unreachable), so their process
-# evidence is captured as soon as the role's PHP process is running.
+# The worker and scheduler roles exit once their first database call times
+# out in this harness (the database is deliberately unreachable), so their
+# process evidence is captured as soon as the role's PHP process is running.
+# DB_CONNECT_TIMEOUT=30 keeps that exit well outside the "stays running"
+# window below: with the 5 s default the first-launched worker exited at
+# ~5.9 s, racing the check (0O.11A qualification of 7c32f56).
 declare -A ROLE_STATUS=()
 role_status() { # container
     local i out
@@ -337,7 +340,7 @@ role_status() { # container
 for role in "worker default" "worker integrations" "worker notifications" scheduler; do
     name="${RUN_ID}-$(tr ' ' '-' <<<"$role")"
     # shellcheck disable=SC2086
-    drun -d --name "$name" --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$APP_IMAGE" $role >/dev/null
+    drun -d --name "$name" --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e DB_CONNECT_TIMEOUT=30 "$APP_IMAGE" $role >/dev/null
 done
 # (captured in the background so the "stays running" timing below is unchanged)
 for role in worker-default worker-integrations worker-notifications scheduler; do
