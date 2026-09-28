@@ -1525,3 +1525,36 @@ staff/School-admin account provisioning.
 - Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
   REQUIRED**.
 - The **real restore drill is still outstanding**.
+
+## 37. Phase 0O.10A — VERIFIED digests (2026-09-28)
+
+Final qualification of the published `main` commit **`361c4b7`**
+(`361c4b76cadb`, run `local-20260928T075015Z-83104eec`; Grype database
+refreshed for the run). The first qualification of `90f2a37` stopped at its
+Pint gate (a test added after the last local Pint run); the one-line style
+fix was published as `9ece2d8` / `361c4b7` and qualified from scratch.
+
+- **Same-run complete regression:** 6,375 tests, 0 failures, only the
+  deliberate ESI-12 skip (55 new tests since 0O.9A).
+- **Gates:** Pint, Larastan, vue-tsc, ESLint, Prettier, the frontend build,
+  Gateway ruff/format/mypy/pytest and the release tooling tests all pass.
+- **`verify-images.sh`:** 133/133 checks.
+- **Language audits:** 0 advisories. **Secret scans:** 0 findings (source
+  and both images).
+
+| Image | Manifest digest | Config digest | `verify-artifact` |
+|---|---|---|---|
+| Application | `sha256:d2a2d0376189ccd7959d7a998e543158e6691f4c084c9f2d60f722d980882bd9` | `sha256:996d8ac0…7dff` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 48 excepted |
+| AI Gateway | `sha256:67ec20ad2e5925fa474f1d9be11f236af7881939fa122d707d01846d070bc0ae` | `sha256:bab95799…4f2b` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 49 excepted |
+
+- **Residual findings:** both sets are the reviewed `OWNER-0O6E-2026-09-26`
+  records (the same counts as 0O.9A). Account recovery adds no dependency.
+- **Evidence bundle:** sha256
+  `23fba74c7cf86330d118d7909abe51f10215045fd8a78293cc9c19cc6fc8e00c`,
+  signed with an ephemeral **non-production** key.
+- **PUBLISHED = NONE, PROMOTED = NONE.** No real provider, no production
+  recovery enablement, no real email or DNS change.
+- **Exception clock:** the records expire **2026-10-10** / **2026-10-26**;
+  nothing was renewed.
+- **Full-regression checkpoint:** `361c4b7` (cadence counter reset).
+
