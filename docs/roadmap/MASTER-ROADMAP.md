@@ -1637,6 +1637,27 @@ Remaining open: O1, O2, O15. Next: **0O.10A — Account Recovery Foundation**
 (repository only) — not started. O2 and O15 are best reviewed together
 afterwards.
 
+**0O.10A — Account Recovery Foundation (2026-09-28, COMPLETE — repository).**
+ADR 0056 implemented (implementation amendment §24; runbook
+`docs/operations/ACCOUNT-RECOVERY.md`; CLAUDE.md rule 90).
+- **Identity:** canonical, database-checked emails; case-insensitive login;
+  failed logins audit a keyed fingerprint only.
+- **Recovery:** platform-host-only, generic responses, keyed limits,
+  encrypted asynchronous issuance, fragment secrets, a POST-only reset.
+- **Revocation:** `users.credential_version` with database triggers, stamped
+  at every sign-in path and enforced on every host; one password writer
+  (`CredentialChangeService`); MFA preserved.
+- **Operations:** the operator console reset (root's only path), status and
+  prune commands, identity-level email, OBS-39..41, a production guard.
+- **Legacy:** the stock Laravel reset broker was removed.
+
+Repository implementation complete; deployment evidence outstanding
+(`ACCOUNT_RECOVERY_ENABLED=false` until then). Recorded debt: a signed-in
+password change, self-service lost-MFA recovery, and production staff
+account provisioning. Remaining open: O1, O2, O15. Recommended next: a fresh
+repository audit of O2 and O15 together, proposing the next contract
+checkpoint.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

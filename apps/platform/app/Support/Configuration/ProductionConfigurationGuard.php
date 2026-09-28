@@ -51,6 +51,9 @@ use Illuminate\Encryption\Encrypter;
  * a non-local host, required TLS, credentials and a bounded timeout; an
  * event adapter needs a valid 1-2 entry secret ring.
  *
+ * Phase 0O.10A (ADR 0056): enabled account recovery needs critical email
+ * configured (`account_recovery_email_disabled`).
+ *
  * The exception names violation codes only, never a value.
  */
 final class ProductionConfigurationGuard
@@ -109,7 +112,7 @@ final class ProductionConfigurationGuard
             $violations[] = 'ai_legacy_service_token_configured';
         }
 
-        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations(), ...$this->hostViolations(), ...$this->emailViolations()];
+        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations(), ...$this->hostViolations(), ...$this->emailViolations(), ...$this->accountRecoveryViolations()];
     }
 
     public function assertSafe(): void
@@ -474,6 +477,29 @@ final class ProductionConfigurationGuard
         }
 
         return $violations;
+    }
+
+    /**
+     * Phase 0O.10A (ADR 0056 section 16): enabling self-service recovery
+     * requires the critical email substrate to be configured -- a feature
+     * that issues links nobody could receive is refused. (Disabled needs
+     * nothing; the platform URL is already enforced; the credential-version
+     * middleware and the absence of a stock reset path are structural,
+     * architecture-tested.) At run time an unverified or unreserved
+     * sending domain issues nothing and shows as `unavailable`.
+     *
+     * @return list<string>
+     */
+    private function accountRecoveryViolations(): array
+    {
+        if (! (bool) $this->config->get('account_recovery.enabled')) {
+            return [];
+        }
+
+        $mode = (string) ($this->config->get('email.provider') ?? 'none');
+        $domain = SenderIdentity::validSendingDomain(trim((string) $this->config->get('email.sending_domain')));
+
+        return in_array($mode, ['none', 'fake'], true) || $domain === null ? ['account_recovery_email_disabled'] : [];
     }
 
     private static function isLocalHost(string $host): bool

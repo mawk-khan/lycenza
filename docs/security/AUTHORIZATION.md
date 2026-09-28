@@ -529,7 +529,7 @@ ADR 0045.
   `.manage` are held by `school_admin` only; the partner surface has **no
   production route** (the production scope catalog is empty, O15).
 
-## Account recovery (ADR 0056 — contract Phase 0O.10; built in 0O.10A)
+## Account recovery (ADR 0056 — contract Phase 0O.10; built in Phase 0O.10A)
 
 Password recovery is **identity-level**. It grants no School, membership,
 capability, Group, platform authority or elevation, and never sets
@@ -537,7 +537,7 @@ capability, Group, platform authority or elevation, and never sets
 
 - **Eligibility.** Active, non-root human Users with a local password.
   **Root** (`platform_super_admin`) has no public email path: its password
-  is reset only by `platform:user-password-reset` on the admin console,
+  is reset only by `platform:user-password-reset` on the operator console,
   and its MFA only by another root (`platform.users.mfa.reset`, ADR 0046).
 - **What a reset does.** It preserves MFA, never auto-logs in, and bumps
   `users.credential_version`, which ends every browser session on every
@@ -546,6 +546,20 @@ capability, Group, platform authority or elevation, and never sets
   service identities are separate principals and are never touched.
 - **What it never accepts as identity proof:** a Host, custom-domain
   ownership, knowledge-based questions or helpdesk disclosure.
+- **As built (0O.10A).**
+  - The recovery routes are public by design (a person who lost a password
+    has no session) and carry no capability. Their protection is the
+    closed eligibility rule (checked at issuance AND at reset), the
+    generic response, the limits and the possession of the emailed secret.
+  - `platform:user-password-reset` and `platform:account-recovery-status`
+    are operator-console only (no HTTP route) and platform-audited
+    (`auth.password_reset_by_operator`, `auth.account_recovery_status_viewed`).
+  - `EnforceCredentialVersion` runs before School, elevation and page
+    logic, so a signed-out stale session never reaches an authorization
+    check as its old User.
+  - Every browser sign-in path stamps the credential version
+    (architecture-tested); a pending MFA challenge started before a reset
+    cannot complete.
 
 ## What is NOT yet implemented
 

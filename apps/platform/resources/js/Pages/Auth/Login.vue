@@ -21,6 +21,10 @@ const props = defineProps<{
     // Phase 0O.8A (ADR 0054 section 8.5): on a School's own web address, that
     // School's name (branding only -- signing in still needs membership).
     hostSchool?: { name: string } | null;
+    // Phase 0O.10A (ADR 0056): the platform recovery page, or null when
+    // account recovery is not enabled.
+    recoveryUrl?: string | null;
+    statusMessage?: string | null;
 }>();
 
 const form = useForm({
@@ -71,6 +75,15 @@ function submit() {
             Your session has ended. Please sign in again.
         </p>
 
+        <p
+            v-if="statusMessage"
+            role="status"
+            class="mt-4 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+            data-testid="status-message"
+        >
+            {{ statusMessage }}
+        </p>
+
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
                 <label class="block text-sm text-slate-600" for="email">Email</label>
@@ -106,6 +119,12 @@ function submit() {
                 Sign in
             </button>
         </form>
+
+        <p v-if="recoveryUrl" class="mt-4 text-sm">
+            <a :href="recoveryUrl" class="text-slate-700 underline" data-testid="forgot-password"
+                >Forgot password?</a
+            >
+        </p>
 
         <section
             v-if="demo && demo.accounts.length > 0"

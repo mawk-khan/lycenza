@@ -13,9 +13,11 @@ use App\Http\Middleware\AssignTraceContext;
 use App\Http\Middleware\AuthenticateServiceAssertion;
 use App\Http\Middleware\ClassifyRequestHost;
 use App\Http\Middleware\DevOnlySchoolHeaderResolver;
+use App\Http\Middleware\EnforceCredentialVersion;
 use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureIdempotent;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\NoReferrer;
 use App\Http\Middleware\PreventAuthenticatedPageCaching;
 use App\Http\Middleware\RecordHttpMetrics;
 use App\Http\Middleware\RequireMfa;
@@ -108,6 +110,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'school-membership' => EnsureSchoolMembershipContext::class,
             'idempotent' => EnsureIdempotent::class,
             'private-no-store' => EnsurePrivateNoStoreResponse::class,
+            // Phase 0O.10A (ADR 0056 section 8.4): account-recovery pages.
+            'no-referrer' => NoReferrer::class,
             // Phase 0H.4D-P1: opt-in per-route MFA assurance gate,
             // never global -- see App\Http\Middleware\RequireMfa's
             // docblock.
@@ -133,8 +137,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // PreventAuthenticatedPageCaching: signed-in HTML/Inertia pages
         // are `no-store, private` so Back after logout cannot restore
         // them from the HTTP or back/forward cache (see its docblock).
+        // Phase 0O.10A (ADR 0056 section 11.2): a session whose credential
+        // version is stale ends here -- before any School, elevation or page
+        // resolution (pinned right after StartSession below).
         $middleware->web(
-            append: [ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, ResolvePlatformElevation::class, HandleInertiaRequests::class, PreventAuthenticatedPageCaching::class],
+            append: [EnforceCredentialVersion::class, ResolveSchoolContext::class, DevOnlySchoolHeaderResolver::class, ResolvePlatformElevation::class, HandleInertiaRequests::class, PreventAuthenticatedPageCaching::class],
         );
 
         $middleware->api(
@@ -160,6 +167,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->appendToPriorityList(
             after: StartSession::class,
+            append: EnforceCredentialVersion::class,
+        );
+
+        $middleware->appendToPriorityList(
+            after: EnforceCredentialVersion::class,
             append: ResolveSchoolContext::class,
         );
 

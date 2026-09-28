@@ -30,6 +30,8 @@ final class EmailThroughput
     {
         $reserve = $message->kind === EmailKind::Critical ? 0 : (int) $this->config->get('email.budgets.critical_reserved_in_flight');
 
+        // Tenant-scoped (or, in the platform email scope, identity-level)
+        // messages only: the School's -- or the platform's -- own slots.
         $school = EmailMessage::query()
             ->where('status', EmailState::Submitting->value)
             ->where('processing_lease_expires_at', '>', now())
@@ -59,7 +61,13 @@ final class EmailThroughput
         $kind = $message->kind->value;
         $budgets = (array) $this->config->get('email.budgets');
 
-        $buckets = [
+        // ADR 0056 section 9.3: identity-level mail (no School) has its own
+        // `platform` bucket; it still shares the global critical bucket.
+        $buckets = $message->school_id === null ? [
+            ['email-budget:platform:m', (int) $budgets['platform_critical_per_minute'], 60],
+            ['email-budget:platform:d', (int) $budgets['platform_critical_per_day'], 86400],
+            ["email-budget:global:{$kind}:m", (int) $budgets["global_{$kind}_per_minute"], 60],
+        ] : [
             ["email-budget:school:{$message->school_id}:{$kind}:m", (int) $budgets["school_{$kind}_per_minute"], 60],
             ["email-budget:school:{$message->school_id}:{$kind}:d", (int) $budgets["school_{$kind}_per_day"], 86400],
             ["email-budget:global:{$kind}:m", (int) $budgets["global_{$kind}_per_minute"], 60],

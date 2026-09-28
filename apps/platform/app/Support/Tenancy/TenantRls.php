@@ -52,6 +52,37 @@ class TenantRls
         );
     }
 
+    /**
+     * Phase 0O.10A (ADR 0056 section 9.3; amends ADR 0021/0022): the ONE
+     * sanctioned variant of the tenant policy, for a table that also holds
+     * IDENTITY-level rows (`school_id IS NULL`, e.g. account-recovery and
+     * security-notice email). A School row keeps exactly the ordinary
+     * policy; a School-less row is visible ONLY while the session variable
+     * PLATFORM_EMAIL_SCOPE_VAR is 'on' -- set exclusively by
+     * App\Support\Email\PlatformEmailScope, never together with a School
+     * context. A School context, or no context at all, never sees one.
+     * Replace the ordinary policy with disable() first.
+     */
+    public const PLATFORM_EMAIL_SCOPE_VAR = 'app.platform_email_scope';
+
+    public static function enableWithPlatformScope(string $table, string $column = 'school_id'): void
+    {
+        self::assertSafeIdentifier($table);
+        self::assertSafeIdentifier($column);
+
+        DB::statement("ALTER TABLE {$table} ENABLE ROW LEVEL SECURITY");
+        DB::statement("ALTER TABLE {$table} FORCE ROW LEVEL SECURITY");
+
+        $policy = self::policyName($table);
+        $expression = "({$column} = NULLIF(current_setting('".self::SESSION_VAR."', true), '')::uuid)".
+            " OR ({$column} IS NULL AND current_setting('".self::PLATFORM_EMAIL_SCOPE_VAR."', true) = 'on')";
+
+        DB::statement(
+            "CREATE POLICY {$policy} ON {$table} ".
+            "USING ({$expression}) WITH CHECK ({$expression})"
+        );
+    }
+
     public static function disable(string $table): void
     {
         self::assertSafeIdentifier($table);

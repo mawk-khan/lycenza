@@ -6,10 +6,12 @@ namespace App\Models;
 use App\Support\Api\ApiScope;
 use App\Support\Api\HumanApiTokenLifetime;
 use App\Support\Identifiers\GeneratesUuidV7;
+use App\Support\Privacy\EmailNormalizer;
 use Database\Factories\UserFactory;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -17,6 +19,7 @@ use Illuminate\Notifications\Notifiable;
 use InvalidArgumentException;
 use Laravel\Sanctum\HasApiTokens;
 use Laravel\Sanctum\NewAccessToken;
+use LogicException;
 
 /**
  * Central/platform data: authentication identity only
@@ -29,6 +32,7 @@ use Laravel\Sanctum\NewAccessToken;
  * @property string $name
  * @property string $email
  * @property bool $is_disabled
+ * @property int $credential_version ADR 0056: the security generation every session carries.
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -44,7 +48,33 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_disabled' => 'boolean',
             'disabled_at' => 'datetime',
+            'credential_version' => 'integer',
         ];
+    }
+
+    /**
+     * Phase 0O.10A (ADR 0056 section 4.4): every write stores the ONE
+     * canonical form (trim + lowercase); `users_email_canonical_check`
+     * enforces it in the database.
+     *
+     * @return Attribute<string, string>
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(set: fn (string $value): string => EmailNormalizer::canonical($value));
+    }
+
+    /**
+     * Phase 0O.10A (ADR 0056 section 16): Laravel's stock password-reset
+     * notification is NOT a recovery path here. Account recovery is
+     * App\Domain\Identity\Application\AccountRecovery through the email
+     * layer; this refuses so no caller can use the stock broker by accident.
+     *
+     * @param  string  $token
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        throw new LogicException('Laravel password-reset notifications are disabled; use account recovery (ADR 0056).');
     }
 
     /** @return HasMany<SchoolMembership, $this> */

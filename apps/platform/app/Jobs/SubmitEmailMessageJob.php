@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\School;
 use App\Support\Email\EmailSubmissionService;
+use App\Support\Email\PlatformEmailScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -20,7 +21,8 @@ use Illuminate\Queue\SerializesModels;
  * every retry (rule 59); `$timeout = 30` stays well below the queues'
  * 90 s `retry_after` (rule 58) and below the 120 s claim lease.
  * EmailSubmissionService::claim() re-checks the School lifecycle through
- * SchoolOperationalGuard at execution time (ADR 0047).
+ * SchoolOperationalGuard at execution time (ADR 0047); an identity-level
+ * message has no School (ADR 0056) and runs in PlatformEmailScope.
  */
 class SubmitEmailMessageJob implements ShouldQueue
 {
@@ -31,12 +33,20 @@ class SubmitEmailMessageJob implements ShouldQueue
     public int $timeout = 30;
 
     public function __construct(
-        public readonly string $schoolId,
+        public readonly ?string $schoolId,
         public readonly string $messageId,
     ) {}
 
-    public function handle(EmailSubmissionService $submissions, TenantContext $context): void
+    public function handle(EmailSubmissionService $submissions, TenantContext $context, PlatformEmailScope $platform): void
     {
+        // ADR 0056 section 9.3: an identity-level message (no School) is
+        // processed in the platform email scope, never a School context.
+        if ($this->schoolId === null) {
+            $platform->run(fn () => $submissions->process($this->messageId));
+
+            return;
+        }
+
         $school = School::query()->find($this->schoolId);
 
         if ($school === null) {

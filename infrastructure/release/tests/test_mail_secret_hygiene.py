@@ -46,6 +46,26 @@ class MailSecretHygieneTest(unittest.TestCase):
         self.assertGreater(seen, 0, "the scan must see the committed placeholders")
         self.assertEqual(offenders, [])
 
+    def test_no_account_recovery_link_is_committed(self) -> None:
+        """ADR 0056 (Phase 0O.10A): a recovery link carries a live credential
+        (a 22-character selector and a 43-character `#secret` fragment). No
+        committed file -- fixture, screenshot text, doc or log sample -- may
+        hold one; tests build theirs at run time."""
+        tracked = subprocess.run(["git", "-C", str(REPO_ROOT), "ls-files", "-z"], capture_output=True, check=True).stdout
+        link = re.compile(r"/account-recovery/[A-Za-z0-9_-]{22}#[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])")
+        offenders = []
+        for rel in filter(None, tracked.decode().split("\0")):
+            path = REPO_ROOT / rel
+            if not path.is_file() or path.stat().st_size > 2_000_000:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if link.search(text):
+                offenders.append(rel)  # never the link
+        self.assertEqual(offenders, [])
+
 
 if __name__ == "__main__":
     unittest.main()

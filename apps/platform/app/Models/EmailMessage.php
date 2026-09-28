@@ -6,6 +6,7 @@ use App\Support\Email\EmailKind;
 use App\Support\Email\EmailPurpose;
 use App\Support\Email\EmailState;
 use App\Support\Identifiers\GeneratesUuidV7;
+use App\Support\Tenancy\AllowsIdentityLevelRows;
 use App\Support\Tenancy\BelongsToSchool;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,7 +25,7 @@ use Illuminate\Support\Carbon;
  * the provider's own id is `provider_message_id`, set once on acceptance.
  *
  * @property string $id
- * @property string $school_id
+ * @property string|null $school_id
  * @property EmailPurpose $purpose
  * @property EmailKind $kind
  * @property string $source_type
@@ -54,7 +55,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $last_event_at
  * @property Carbon $created_at
  */
-class EmailMessage extends Model
+class EmailMessage extends Model implements AllowsIdentityLevelRows
 {
     use BelongsToSchool, GeneratesUuidV7;
 

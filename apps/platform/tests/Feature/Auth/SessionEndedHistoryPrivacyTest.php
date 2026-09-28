@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\PlatformAuditEvent;
 use App\Models\User;
+use App\Support\Auth\CredentialSession;
 use App\Support\Auth\SessionEndedResponder;
 use Database\Seeders\Demo\DemoBuildResult;
 use Database\Seeders\Demo\DemoDataBuilder;
@@ -45,7 +46,8 @@ class SessionEndedHistoryPrivacyTest extends TestCase
     private function signIn(string $email): User
     {
         $user = $this->user($email);
-        $this->withSession([Auth::guard('web')->getName() => $user->getAuthIdentifier()]);
+        // Stamped like every real sign-in (ADR 0056, EnforceCredentialVersion).
+        $this->withSession([Auth::guard('web')->getName() => $user->getAuthIdentifier(), CredentialSession::KEY => CredentialSession::current($user)]);
 
         return $user;
     }

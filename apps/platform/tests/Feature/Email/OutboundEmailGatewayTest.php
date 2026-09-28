@@ -68,16 +68,28 @@ class OutboundEmailGatewayTest extends TestCase
     }
 
     #[Test]
-    public function reserved_purposes_cannot_be_sent_and_critical_mail_needs_its_links_lifetime(): void
+    public function identity_purposes_never_go_through_a_school_and_critical_mail_needs_its_links_lifetime(): void
     {
         [, $school] = $this->createSchoolAdmin('school_admin');
         $gateway = app(OutboundEmailGateway::class);
 
-        foreach ([EmailPurpose::AccountRecovery, EmailPurpose::SecurityNotice] as $reserved) {
-            $this->assertFalse($reserved->isImplemented());
+        // Phase 0O.10A (ADR 0056): identity-level purposes are real, but
+        // never School mail -- and School purposes never identity-level.
+        foreach ([EmailPurpose::AccountRecovery, EmailPurpose::SecurityNotice] as $identity) {
+            $this->assertTrue($identity->isImplemented());
+            $this->assertTrue($identity->isIdentityLevel());
             try {
-                $this->inSchool($school, fn () => $gateway->queue($school, $reserved, (string) Str::uuid(), 'a@b.test', 'S', 'T', expiresAt: now()->addHour()));
-                $this->fail("{$reserved->value} must be refused");
+                $this->inSchool($school, fn () => $gateway->queue($school, $identity, (string) Str::uuid(), 'a@b.test', 'S', 'T', expiresAt: now()->addHour()));
+                $this->fail("{$identity->value} must be refused for a School");
+            } catch (InvalidArgumentException) {
+            }
+        }
+
+        foreach ([EmailPurpose::AccountInvitation, EmailPurpose::SchoolCommunication] as $schoolPurpose) {
+            $this->assertFalse($schoolPurpose->isIdentityLevel());
+            try {
+                $gateway->queueForIdentity($schoolPurpose, (string) Str::uuid(), 'a@b.test', 'S', 'T', null, now()->addHour());
+                $this->fail("{$schoolPurpose->value} must be refused as identity-level");
             } catch (InvalidArgumentException) {
             }
         }

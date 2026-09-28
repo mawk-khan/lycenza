@@ -176,7 +176,7 @@ class ProductionProcessManifestTest extends TestCase
         // Framework defaults for services this application does not use, and
         // non-secret settings whose names merely look secret.
         $notSecrets = [
-            'AUTH_PASSWORD_BROKER', 'AUTH_PASSWORD_RESET_TOKEN_TABLE', 'AUTH_PASSWORD_TIMEOUT', 'DB_FOREIGN_KEYS',
+            'AUTH_PASSWORD_TIMEOUT', 'DB_FOREIGN_KEYS',
             'IDEMPOTENCY_KEY_MAX_LENGTH', 'IDEMPOTENCY_KEY_MIN_LENGTH', 'MFA_PASSWORD_CONFIRMATION_WINDOW_MINUTES',
             'CONTACT_LOOKUP_HMAC_KEY_VERSION', 'STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY_VERSION', 'WEBHOOKS_SECRET_ROTATION_OVERLAP_HOURS',
             'MEMCACHED_PASSWORD', 'POSTMARK_API_KEY', 'RESEND_API_KEY', 'SLACK_BOT_USER_OAUTH_TOKEN',

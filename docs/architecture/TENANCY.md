@@ -461,3 +461,24 @@ The rules:
   primary active domain, or else the platform host.
 - **Isolation.** Internal service routes (ADR 0053) and elevation (ADR
   0044) never use domain resolution.
+
+## Identity-level email rows (ADR 0056 — Phase 0O.10A)
+
+Account-recovery and security-notice email belongs to a User, not a School.
+Those `email_messages` / `email_submission_attempts` rows have a NULL
+`school_id`, and the database allows that ONLY for the two identity
+purposes (`email_messages_identity_level_check`).
+
+- **Policy.** `TenantRls::enableWithPlatformScope()` keeps the ordinary
+  School predicate and adds exactly one more: a row with NULL `school_id`
+  is visible only while the session variable `app.platform_email_scope` is
+  `on`. No School context, and no context at all, sees one.
+- **Scope.** Only `App\Support\Email\PlatformEmailScope::run()` sets that
+  variable, and it resets it when the outermost run ends. It refuses to
+  start inside a School `TenantContext`, and `TenantContext::set()` refuses
+  to run inside it, so the two can never be combined.
+- **Model scope.** A model implementing
+  `App\Support\Tenancy\AllowsIdentityLevelRows` sees and creates
+  School-less rows only inside that scope (`SchoolScope`, `BelongsToSchool`).
+- **Adoption.** No other table uses this mode. Adding one needs its own ADR.
+

@@ -164,6 +164,9 @@ return [
         'email_hard_bounces_per_hour' => env('ALERT_EMAIL_HARD_BOUNCES_PER_HOUR'),
         'email_complaints_per_hour' => env('ALERT_EMAIL_COMPLAINTS_PER_HOUR'),
         'email_webhook_auth_failures_per_15m' => env('ALERT_EMAIL_WEBHOOK_AUTH_FAILURES_PER_15M'),
+        // Phase 0O.10A (ADR 0056 section 15): account-recovery baselines (C).
+        'account_recovery_requests_per_hour' => env('ALERT_ACCOUNT_RECOVERY_REQUESTS_PER_HOUR'),
+        'account_recovery_invalid_resets_per_hour' => env('ALERT_ACCOUNT_RECOVERY_INVALID_RESETS_PER_HOUR'),
     ],
 
 ];

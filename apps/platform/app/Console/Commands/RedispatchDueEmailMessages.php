@@ -9,6 +9,7 @@ use App\Models\EmailMessage;
 use App\Models\School;
 use App\Support\Email\EmailState;
 use App\Support\Email\EmailSubmissionService;
+use App\Support\Email\PlatformEmailScope;
 use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\QueueName;
 use App\Support\Observability\RecoveryMetrics;
@@ -61,6 +62,13 @@ class RedispatchDueEmailMessages extends Command
                 }
             });
 
+            // ADR 0056 section 9.3: identity-level messages (no School) in the
+            // platform email scope -- expiry and redispatch alike.
+            app(PlatformEmailScope::class)->run(function () use ($batch, $submissions, &$dispatched, &$expired): void {
+                $expired += $this->expire($submissions, $batch);
+                $dispatched += $this->redispatch(null, $batch);
+            });
+
             $events = EmailEvent::query()->where('result', 'received')
                 ->where('received_at', '<=', now()->subSeconds(60))
                 ->orderBy('received_at')->limit($batch)->pluck('id');
@@ -99,7 +107,7 @@ class RedispatchDueEmailMessages extends Command
         return $ids->count();
     }
 
-    private function redispatch(School $school, int $batch): int
+    private function redispatch(?School $school, int $batch): int
     {
         return DB::transaction(function () use ($school, $batch): int {
             $ids = EmailMessage::query()
@@ -112,7 +120,7 @@ class RedispatchDueEmailMessages extends Command
                 ->pluck('id');
 
             foreach ($ids as $id) {
-                SubmitEmailMessageJob::dispatch($school->id, $id)->onQueue(QueueName::Notifications->value)->afterCommit();
+                SubmitEmailMessageJob::dispatch($school?->id, $id)->onQueue(QueueName::Notifications->value)->afterCommit();
             }
 
             return $ids->count();

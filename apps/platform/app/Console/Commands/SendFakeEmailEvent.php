@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\EmailMessage;
 use App\Models\School;
 use App\Support\Email\Events\FakeEmailEventAdapter;
+use App\Support\Email\PlatformEmailScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\App;
  */
 class SendFakeEmailEvent extends Command
 {
-    protected $signature = 'platform:mail-fake-event {school : School id} {message : Email message id} {type : delivered|deferred|soft_bounce|hard_bounce|complaint|dropped} {--bounce-class= : e.g. mailbox_unknown, provider_suppressed}';
+    protected $signature = 'platform:mail-fake-event {school : School id, or the word platform for an identity-level message} {message : Email message id} {type : delivered|deferred|soft_bounce|hard_bounce|complaint|dropped} {--bounce-class= : e.g. mailbox_unknown, provider_suppressed}';
 
     protected $description = 'LOCAL ONLY: deliver a signed fake provider event for one message (ADR 0055).';
 
@@ -32,8 +33,13 @@ class SendFakeEmailEvent extends Command
             return self::FAILURE;
         }
 
-        $school = School::query()->find((string) $this->argument('school'));
-        $providerId = $school === null ? null : $context->withSchool($school, fn () => EmailMessage::query()->find((string) $this->argument('message'))?->provider_message_id);
+        $find = fn () => EmailMessage::query()->find((string) $this->argument('message'))?->provider_message_id;
+        if ($this->argument('school') === 'platform') {
+            $providerId = app(PlatformEmailScope::class)->run($find);
+        } else {
+            $school = School::query()->find((string) $this->argument('school'));
+            $providerId = $school === null ? null : $context->withSchool($school, $find);
+        }
 
         if ($providerId === null) {
             $this->error('No submitted message with a provider id.');

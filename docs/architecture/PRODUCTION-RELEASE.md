@@ -241,15 +241,19 @@ corrected forward, never rolled back (ARCHITECTURE.md §10).
 | `platform:provision-root {user} [--force]` | `pgsql_admin` | Grants the root platform role to one existing, enabled account named by exact email or id; interactive confirmation (type the account's email) unless `--force`; idempotent | `platform.role_grant.provisioned` (actor null, subject the assignment, `role_key`, `user_id`, `method: console`) |
 | `platform:service-key-generate {platform\|ai-gateway} --output=<dir> [--kid=] [--non-production]` | none | Phase 0O.7A (ADR 0053): one Ed25519 keypair; the private JWK goes **only** to `<dir>/<kid>.private.jwk` (0600), never printed; the directory must be outside the application; never overwrites; `--non-production` forces the `dev-local-only-` prefix that production refuses. Replaces the retired `platform:service-identity-issue/-disable` | none (keys never enter the database; rotation evidence is operator evidence, [SERVICE-KEY-ROTATION](../operations/SERVICE-KEY-ROTATION.md)) |
 | `platform:verify-service-auth` | none | Read-only: legacy token absent; Gateway configured; https; signing kid and age; ring kids, ages and transition end; development keys; Redis replay store; rotation drill = operator evidence. Prints no key material | none |
+| `platform:user-password-reset {user}` | runtime | Phase 0O.10A (ADR 0056 §14): sets a new password for one account named by exact email or id — two hidden prompts, `Password::defaults()`, confirmation; interactive only. Through `CredentialChangeService`: every session on every host ends, the remember token is cycled, human personal access tokens are revoked, an elevation ends (`credential_reset`); MFA is unchanged; a security notice follows. **Root's only recovery path** | `auth.password_reset_by_operator`; never the password |
+| `platform:account-recovery-status {user}` | runtime | Metadata-only view of one account's recovery requests (ids, times, state, reason, email state); never a secret, hash, link or password | `auth.account_recovery_status_viewed` |
 
 None has an HTTP route or UI. A non-interactive run without `--force`
 refuses; `--force` is for trusted operator automation only.
 
 Both root commands write through the migration/admin connection because
 the database refuses a grantor-less grant from anything else (Phase
-0O.1A). First-account bootstrap is not password reset: O14 (reset and
-account recovery) stays open, so an operator who loses the first
-account's password has no in-app recovery yet.
+0O.1A). First-account bootstrap is not password reset. Since Phase 0O.10A
+(ADR 0056) a lost password is recovered with `platform:user-password-reset`
+(root's only path) or, for eligible non-root accounts once
+`ACCOUNT_RECOVERY_ENABLED` is deployed with its evidence, by self-service
+email recovery.
 
 ## 6. Seeding: production-safe versus demo
 

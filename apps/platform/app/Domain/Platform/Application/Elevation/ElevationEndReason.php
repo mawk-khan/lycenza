@@ -26,6 +26,9 @@ enum ElevationEndReason: string
     // Phase 0N.9 (ADR 0047 section 8): the School was suspended -- ended
     // eagerly in the suspension transaction, or on the next request.
     case SchoolSuspended = 'school_suspended';
+    // Phase 0O.10A (ADR 0056 section 10.1): the actor's password was reset
+    // (self-service recovery or operator reset).
+    case CredentialReset = 'credential_reset';
 
     public function status(): string
     {

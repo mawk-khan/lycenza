@@ -78,10 +78,10 @@ class AlertCatalogTest extends TestCase
     }
 
     #[Test]
-    public function the_catalog_is_exactly_obs_01_to_obs_38_with_existing_runbooks(): void
+    public function the_catalog_is_exactly_obs_01_to_obs_41_with_existing_runbooks(): void
     {
         $ids = array_map(fn (AlertRule $r) => $r->id, AlertCatalog::all());
-        $this->assertSame(array_map(fn ($n) => sprintf('OBS-%02d', $n), range(1, 38)), $ids);
+        $this->assertSame(array_map(fn ($n) => sprintf('OBS-%02d', $n), range(1, 41)), $ids);
 
         foreach (AlertCatalog::all() as $rule) {
             $this->assertFileExists(dirname(base_path(), 2).'/docs/operations/'.$rule->runbook, "{$rule->id} runbook");
@@ -302,16 +302,53 @@ class AlertCatalogTest extends TestCase
     }
 
     #[Test]
+    public function account_recovery_alerts_never_page_and_fire_on_their_conditions(): void
+    {
+        config(['observability.alerts' => [...config('observability.alerts'),
+            'account_recovery_requests_per_hour' => 100, 'account_recovery_invalid_resets_per_hour' => 20,
+        ]]);
+
+        foreach (range(39, 41) as $n) {
+            foreach ($this->rule("OBS-{$n}")->tiers as $tier) {
+                $this->assertNotSame(Severity::Sev1, $tier['severity'], "OBS-{$n} must never page as SEV-1");
+            }
+            $this->assertSame('ACCOUNT-RECOVERY.md', $this->rule("OBS-{$n}")->runbook);
+        }
+
+        $requests = fn (float $n) => $this->snapshot([], [['1h', 'lycenza_account_recovery_requests_total', ['outcome' => 'accepted'], $n]]);
+        $this->assertNull($this->rule('OBS-39')->evaluate($requests(100)));
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-39')->evaluate($requests(101)));
+
+        $invalid = fn (float $n) => $this->snapshot([], [['1h', 'lycenza_account_recovery_resets_total', ['outcome' => 'invalid'], $n]]);
+        $this->assertNull($this->rule('OBS-40')->evaluate($invalid(20)));
+        $this->assertSame(Severity::Sev3, $this->rule('OBS-40')->evaluate($invalid(21)));
+
+        $state = fn (float $enabled, float $available) => $this->snapshot([
+            ['lycenza_account_recovery_enabled', ['state' => 'enabled'], $enabled],
+            ['lycenza_account_recovery_enabled', ['state' => 'available'], $available],
+        ]);
+        $this->assertSame(Severity::Sev2, $this->rule('OBS-41')->evaluate($state(1, 0)));
+        $this->assertNull($this->rule('OBS-41')->evaluate($state(1, 1)));
+        $this->assertNull($this->rule('OBS-41')->evaluate($state(0, 0)), 'disabled recovery is a complete, safe mode');
+
+        // Without operator values the spike tiers are explicitly disabled.
+        config(['observability.alerts.account_recovery_requests_per_hour' => null, 'observability.alerts.account_recovery_invalid_resets_per_hour' => null]);
+        $this->assertSame([], $this->rule('OBS-39')->tiers);
+        $this->assertSame([], $this->rule('OBS-40')->tiers);
+    }
+
+    #[Test]
     public function alert_names_stay_unique_with_every_operator_value_enabled(): void
     {
         config(['observability.alerts' => [...config('observability.alerts'),
             'failed_jobs_high_per_15m' => 20, 'webhook_final_failures_per_hour' => 25, 'communication_failure_ratio_per_hour' => 0.2,
             'storage_failures_per_15m' => 5, 'security_rejections_per_15m' => 500,
             'email_failure_ratio_per_hour' => 0.2, 'email_hard_bounces_per_hour' => 50, 'email_complaints_per_hour' => 5, 'email_webhook_auth_failures_per_15m' => 100,
+            'account_recovery_requests_per_hour' => 500, 'account_recovery_invalid_resets_per_hour' => 50,
         ]]);
 
         preg_match_all('/- alert: (\S+)/', (new AlertRulesExporter)->yaml(), $names);
-        $this->assertCount(52, $names[1]); // 38 + the two OBS-27 tiers (ADR 0053) + OBS-28, two OBS-29 tiers and OBS-30 (ADR 0054) + OBS-31..38 (ADR 0055)
+        $this->assertCount(55, $names[1]); // 38 + the two OBS-27 tiers (ADR 0053) + OBS-28, two OBS-29 tiers and OBS-30 (ADR 0054) + OBS-31..38 (ADR 0055) + OBS-39..41 (ADR 0056)
         $this->assertSame($names[1], array_values(array_unique($names[1])));
     }
 

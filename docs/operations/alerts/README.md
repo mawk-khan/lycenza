@@ -1,4 +1,4 @@
-# Alert index (OBS-01 … OBS-38)
+# Alert index (OBS-01 … OBS-41)
 
 ADR 0051 §14. The rules are generated from
 `App\Support\Observability\Alerts\AlertCatalog` into
@@ -52,6 +52,9 @@ source: **A** contract, **B** runtime cadence, **C** operator value.
 | OBS-36 | Hard-bounce spike | SEV-3 (C; disabled until set) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
 | OBS-37 | Complaint spike (sending reputation) | SEV-2 (C; disabled until set) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
 | OBS-38 | Email provider-event webhook authentication failures | SEV-3 (C; disabled until set) | [EMAIL-DELIVERABILITY](../EMAIL-DELIVERABILITY.md) |
+| OBS-39 | Account-recovery request spike (ADR 0056) | SEV-3 (C; disabled until set) | [ACCOUNT-RECOVERY](../ACCOUNT-RECOVERY.md) |
+| OBS-40 | Invalid password-reset submissions | SEV-3 (C; disabled until set) | [ACCOUNT-RECOVERY](../ACCOUNT-RECOVERY.md) |
+| OBS-41 | Account recovery enabled but critical email unavailable | SEV-2 for 5 min (A) | [ACCOUNT-RECOVERY](../ACCOUNT-RECOVERY.md) |
 
 Operator values (`ALERT_*`, `config/observability.php` `alerts`): unset
 means the tier is **disabled** and the exported file says so; a value

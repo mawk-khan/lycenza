@@ -112,6 +112,7 @@ use App\Http\Controllers\App\TransportStudentAssignmentController;
 use App\Http\Controllers\App\TransportVehicleController;
 use App\Http\Controllers\App\VisitorController;
 use App\Http\Controllers\App\VisitorVisitController;
+use App\Http\Controllers\Auth\AccountRecoveryController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\MfaChallengeController;
 use App\Http\Controllers\Auth\SessionHandoffController;
@@ -149,6 +150,23 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login/mfa', [MfaChallengeController::class, 'store'])
         ->middleware('throttle:mfa-challenge')
         ->name('login.mfa.store');
+});
+
+// Phase 0O.10A (ADR 0056): self-service password recovery -- platform host
+// only (not in SchoolHostSurface: 404 on a School host), no School, no
+// TenantContext. no-store + no-referrer on every page; the POSTs are CSRF-
+// protected and throttled (per IP + global; per IP + selector). The GET
+// reset page is never throttled by selector, so a mail scanner's prefetch
+// cannot use up the owner's attempts.
+Route::middleware(['private-no-store', 'no-referrer'])->group(function (): void {
+    Route::get('/account-recovery', [AccountRecoveryController::class, 'create'])->name('account-recovery.create');
+    Route::post('/account-recovery', [AccountRecoveryController::class, 'store'])
+        ->middleware('throttle:account-recovery-request')->name('account-recovery.store');
+    Route::get('/account-recovery/{selector}', [AccountRecoveryController::class, 'edit'])
+        ->where('selector', '[A-Za-z0-9_-]{22}')->name('account-recovery.edit');
+    Route::post('/account-recovery/{selector}', [AccountRecoveryController::class, 'update'])
+        ->where('selector', '[A-Za-z0-9_-]{22}')
+        ->middleware('throttle:account-recovery-reset')->name('account-recovery.update');
 });
 
 // Phase 5D.3 -- the Guardian account-invitation acceptance page.

@@ -69,7 +69,7 @@ groups:
           summary: 'Scheduler stopped: every minute-cadence task heartbeat is stale.'
           runbook: 'docs/operations/MAINTENANCE-WINDOW-RELEASE.md'
       - alert: LycenzaOBS06Warning
-        expr: '(time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check|email-messages-redispatch"}) > 300 or (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"idempotency-prune|webhook-deliveries-prune|email-prune"}) > 93600'
+        expr: '(time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"outbox-dispatch|webhook-deliveries-redispatch|communication-deliveries-redispatch|communications-publish-scheduled|automation-executions-redispatch|expire-school-elevations|worker-canaries|domains-check|email-messages-redispatch"}) > 300 or (time() - lycenza_scheduler_task_last_success_timestamp_seconds{scheduled_task=~"idempotency-prune|webhook-deliveries-prune|email-prune|account-recovery-prune"}) > 93600'
         labels:
           severity: warning
           sev: SEV-3
@@ -447,3 +447,16 @@ groups:
       # OBS-36 DISABLED: operator value ALERT_EMAIL_HARD_BOUNCES_PER_HOUR not set
       # OBS-37 DISABLED: operator value ALERT_EMAIL_COMPLAINTS_PER_HOUR not set
       # OBS-38 DISABLED: operator value ALERT_EMAIL_WEBHOOK_AUTH_FAILURES_PER_15M not set
+      # OBS-39 DISABLED: operator value ALERT_ACCOUNT_RECOVERY_REQUESTS_PER_HOUR not set
+      # OBS-40 DISABLED: operator value ALERT_ACCOUNT_RECOVERY_INVALID_RESETS_PER_HOUR not set
+      - alert: LycenzaOBS41High
+        expr: 'max(lycenza_account_recovery_enabled{state="enabled"}) == 1 and max(lycenza_account_recovery_enabled{state="available"}) == 0'
+        for: 300s
+        labels:
+          severity: high
+          sev: SEV-2
+          obs_id: OBS-41
+          threshold_source: 'A'
+        annotations:
+          summary: 'Account recovery is enabled but critical email is unavailable (no recovery email can be sent).'
+          runbook: 'docs/operations/ACCOUNT-RECOVERY.md'

@@ -61,6 +61,8 @@ final class CrossHostHandoff
                 'target_host' => $targetHost,
                 'purpose' => self::PURPOSE,
                 'mfa_verified_at' => $mfaVerifiedAt,
+                // ADR 0056 section 11.2: redemption refuses a changed credential.
+                'credential_version' => CredentialSession::current($user),
                 'created_at' => $now,
                 'expires_at' => $now + self::LIFETIME_SECONDS,
             ], self::LIFETIME_SECONDS);
@@ -79,7 +81,7 @@ final class CrossHostHandoff
      * Redeems a ticket exactly once. Null when it is malformed, unknown,
      * expired or already redeemed (indistinguishable on purpose).
      *
-     * @return array{user_id: string, source_session: string, school_id: string|null, target_host: string, purpose: string, mfa_verified_at: string|null, created_at: int, expires_at: int}|null
+     * @return array{user_id: string, source_session: string, school_id: string|null, target_host: string, purpose: string, mfa_verified_at: string|null, credential_version?: int, created_at: int, expires_at: int}|null
      *
      * @throws HandoffUnavailable
      */
@@ -108,7 +110,7 @@ final class CrossHostHandoff
             return null;
         }
 
-        /** @var array{user_id: string, source_session: string, school_id: string|null, target_host: string, purpose: string, mfa_verified_at: string|null, created_at: int, expires_at: int} $data */
+        /** @var array{user_id: string, source_session: string, school_id: string|null, target_host: string, purpose: string, mfa_verified_at: string|null, credential_version?: int, created_at: int, expires_at: int} $data */
         return $data;
     }
 

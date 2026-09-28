@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Identifiers\GeneratesUuidV7;
+use App\Support\Tenancy\AllowsIdentityLevelRows;
 use App\Support\Tenancy\BelongsToSchool;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * an SMTP conversation or a provider response body.
  *
  * @property string $id
- * @property string $school_id
+ * @property string|null $school_id
  * @property string $email_message_id
  * @property int $attempt_number
  * @property string $outcome
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $provider_message_id
  * @property int $duration_ms
  */
-class EmailSubmissionAttempt extends Model
+class EmailSubmissionAttempt extends Model implements AllowsIdentityLevelRows
 {
     use BelongsToSchool, GeneratesUuidV7;
 

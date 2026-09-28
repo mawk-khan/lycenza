@@ -7,6 +7,7 @@ use App\Domain\Identity\Application\Exceptions\ExistingAccountConfirmationRequir
 use App\Domain\Identity\Application\GuardianAccountActivationService;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\CredentialSession;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -90,6 +91,7 @@ class InvitationAcceptanceController extends Controller
         if (! $description['accountAlreadyExists']) {
             Auth::login($link->membership->user);
             $request->session()->regenerate();
+            CredentialSession::stamp($request->session(), $link->membership->user);
         }
 
         return redirect('/app');

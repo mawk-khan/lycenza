@@ -5,10 +5,12 @@ namespace App\Support\Tenancy;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Email\PlatformEmailScope;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use LogicException;
 use Throwable;
 
 /**
@@ -44,6 +46,12 @@ class TenantContext
 
     public function set(School $school, ?Campus $campus = null): void
     {
+        // Phase 0O.10A (ADR 0056 section 9.3): never a School inside the
+        // platform email scope (identity-level rows would share the session).
+        if (app(PlatformEmailScope::class)->active()) {
+            throw new LogicException('A School context never starts inside the platform email scope.');
+        }
+
         if ($campus !== null && $campus->school_id !== $school->id) {
             throw new CampusSchoolMismatchException($campus->id, $school->id, $campus->school_id);
         }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\CredentialSession;
 use App\Support\Auth\Mfa\MfaAuditActions;
 use App\Support\Auth\Mfa\MfaChallengeService;
 use App\Support\Auth\Mfa\MfaRecoveryCodeService;
@@ -77,10 +78,18 @@ class MfaChallengeController extends Controller
             ]);
         }
 
+        // ADR 0056 section 11.2: a credential change between the password
+        // step and this one (a reset, an operator reset) voids the pending login.
+        $pendingVersion = $request->session()->pull('mfa_pending_credential_version');
         $request->session()->forget('mfa_pending_user_id');
+
+        if ($pendingVersion !== CredentialSession::current($user)) {
+            return redirect('/login');
+        }
 
         Auth::login($user);
         $request->session()->regenerate();
+        CredentialSession::stamp($request->session(), $user);
         $challenge->establishAssurance($request);
 
         $audit->platform(MfaAuditActions::CHALLENGE_SUCCEEDED, actor: $user);
