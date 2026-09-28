@@ -529,6 +529,24 @@ ADR 0045.
   `.manage` are held by `school_admin` only; the partner surface has **no
   production route** (the production scope catalog is empty, O15).
 
+## Account recovery (ADR 0056 — contract Phase 0O.10; built in 0O.10A)
+
+Password recovery is **identity-level**. It grants no School, membership,
+capability, Group, platform authority or elevation, and never sets
+`TenantContext`. It runs only on the canonical platform host.
+
+- **Eligibility.** Active, non-root human Users with a local password.
+  **Root** (`platform_super_admin`) has no public email path: its password
+  is reset only by `platform:user-password-reset` on the admin console,
+  and its MFA only by another root (`platform.users.mfa.reset`, ADR 0046).
+- **What a reset does.** It preserves MFA, never auto-logs in, and bumps
+  `users.credential_version`, which ends every browser session on every
+  host (the cross-host handoff included). It also revokes the User's human
+  personal access tokens and ends elevations. Partner API clients and
+  service identities are separate principals and are never touched.
+- **What it never accepts as identity proof:** a Host, custom-domain
+  ownership, knowledge-based questions or helpdesk disclosure.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles, a UI for managing role assignments (only the data

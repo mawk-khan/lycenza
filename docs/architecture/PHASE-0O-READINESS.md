@@ -302,7 +302,7 @@ Other findings:
 | O11 | Browser security headers (CSP, HSTS, frame-ancestors…) and CORS policy | **RESOLVED — ADR 0049 (Phase 0O.2)**; HSTS `max-age` (V5) is an owner value still required | Security | S1 hardening |
 | O12 | Observability backend and log/metric retention | **RESOLVED — ADR 0051 (Phase 0O.5)**; vendor-neutral backend, logs 30 d, metrics 90 d, no tracing in v1 | Operations + security | S2 |
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | **RESOLVED — ADR 0055 (Phase 0O.9)**: Lycenza-controlled, deployment-configured sending domain (never a School web domain); closed From mailbox catalog, sanitized School display name, no School Reply-To in v1; one provider-neutral adapter at a time; one durable email layer (message/attempt/event/suppression) beneath invitations (outbox, outside the transaction) and Communications; authenticated, deduplicated provider events; global suppression; SPF/DKIM alignment and DMARC ≥ `p=quarantine` at readiness. **Repository implementation COMPLETE (Phase 0O.9A, §33)**; deployment evidence outstanding | Product + operations | Real email |
-| O14 | Password reset for production accounts | ADR 0037: none exists. Email transport dependency defined by ADR 0055 §4 (reserved `account_recovery` class; durable, outside-transaction submission; suppression-aware generic outcome); O14 itself not designed | Product + security | Production operations |
+| O14 | Password reset for production accounts | **RESOLVED — ADR 0056 (Phase 0O.10)**: identity-level self-service password recovery on the canonical platform host only; eligible = active, non-root human Users with a local password (root stays console/operator-only); enumeration-resistant generic response with asynchronous issuance; 256-bit selector+secret credential (SHA-256 stored, secret in the URL fragment), 30 min, single-use, ≤ 3 active, never consumed by GET; ADR 0055 critical `account_recovery` email only when critical email is available; the reset bumps `users.credential_version` (every session on every host ends), revokes human personal access tokens and elevations, preserves MFA, never auto-logs in. **Implementation: Phase 0O.10A (not started)** | Product + security | Production operations |
 | O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | No | Product | S4 |
 | O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest; repository controls COMPLETE (0O.6F: runtime security contract, approved exceptions `OWNER-0O6E-2026-09-26`), deployment evidence outstanding | Security | Supply chain |
 
@@ -1376,3 +1376,81 @@ refreshed for the run):
 - **Shared test database:** the shared `school-os` Compose test database's
   drifted `school_os_app=UC` public-schema grant (§31) was not touched; all
   runs used the isolated project.
+
+## 35. Phase 0O.10 — Account Recovery Contract (2026-09-28)
+
+**O14 is RESOLVED as a contract by ADR 0056**
+(`docs/architecture/adr/0056-account-recovery-contract.md`).
+This checkpoint is documentation only: no route, code, secret or email.
+
+**Audit (ADR 0056 §1):**
+- **One human model.** Every human (staff, Guardian, Group, platform,
+  root) is one `users` row. There is no SSO; the service and partner
+  principals are not Users.
+- **Emails.** `users.email` is unique, and every writer stores it
+  lowercased and trimmed, so a normalized email names at most one User
+  (the stop condition does not apply).
+- **Laravel's stock broker is dormant.** Its table and config exist, but
+  there is no route or caller.
+- **No password or email change path exists.** The password policy is the
+  default `Password::defaults()` (at least 8 characters).
+- **No remember cookie** is ever issued.
+- **No global per-user session revocation** exists (sessions are host-only
+  and stored in Redis in production).
+- **Lost MFA** is handled by the existing root-only `platform.users.mfa.reset`.
+
+**Decision:**
+- **Scope.** Recovery is identity-level and runs on the canonical platform
+  host only (404 on School hosts).
+- **Eligibility.** Active, non-root human Users with a local password.
+  Root recovery is `platform:user-password-reset` on the admin console.
+- **Request.** One generic response for every well-formed request. The
+  request path does uniform work; an encrypted queued job decides and
+  issues.
+- **Rate limits.** 10 per 15 minutes per IP, 1,000 per hour globally
+  (generic 429); 3 per hour and 10 per day per keyed identity fingerprint
+  (still the generic success response).
+- **Credential.**
+  - A 22-character selector and a 256-bit secret; only SHA-256 is stored.
+  - The link is `/account-recovery/{selector}#{secret}`, so the secret
+    never reaches a server URL, log or Referer.
+  - 30 minutes, single use, at most 3 active.
+  - A new request never kills an old one.
+  - It is invalidated by any credential-version, email or eligibility
+    change.
+  - A GET never consumes it.
+- **Reset.** One transaction, locking the User first. It:
+  - applies `Password::defaults()`;
+  - bumps the new `users.credential_version`, which ends every session on
+    every host, the cross-host handoff included;
+  - cycles the remember token;
+  - revokes human personal access tokens (never partner or service
+    credentials);
+  - ends elevations;
+  - is platform-audited `auth.password_recovered`, with a post-commit
+    `security_notice` email.
+- **MFA** is untouched. There is no auto-login: the browser goes to
+  `/login`.
+- **Email.** ADR 0055 `account_recovery` critical email, expiring with the
+  credential and respecting suppression. Identity-level email rows get a
+  nullable `school_id` and a sanctioned platform-email RLS scope.
+- **Configuration.** `ACCOUNT_RECOVERY_ENABLED=false` by default, with a
+  production guard, and the stock broker is removed.
+
+**Findings for 0O.10A:** login is case-sensitive; a failed login audits the
+raw email; there is no authenticated password change; no global session
+revocation yet; self-service lost-MFA recovery is debt; and no production
+staff-account onboarding path exists (ADR 0056 §17).
+
+**Next:** Phase 0O.10A — Account Recovery Foundation (repository only).
+**Not started.**
+
+- **O13 legal retention:** `MAIL_RETENTION_DAYS` remains
+  **[LEGAL REVIEW REQUIRED]**; not resolved here.
+- **Exception clock:** the VERIFIED artifacts' exception records expire
+  **2026-10-10** and **2026-10-26**; nothing is renewed.
+- Decisions **O1, O2, O15** remain open.
+- Phase 0O: **PARTIALLY READY — SOME CHECKPOINTS MAY START**.
+- Phase 0M: **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- The **real restore drill is still outstanding**.

@@ -385,3 +385,21 @@ None pages as SEV-1. The runbook is
   `email:<purpose>`.
 - Scheduled tasks: `email-messages-redispatch` (every minute; recovery
   source `email`) and `email-prune` (daily).
+
+## Account recovery (ADR 0056, Phase 0O.10 — contract; built in 0O.10A)
+
+Nothing below exists yet.
+- **Metrics** (closed labels only; never email, user, School, selector, IP
+  or token):
+  - `lycenza_account_recovery_requests_total{outcome}`;
+  - `lycenza_account_recovery_issuance_total{outcome}`;
+  - `lycenza_account_recovery_resets_total{outcome}`;
+  - the `lycenza_account_recovery_enabled` gauge.
+- **Alerts** (conceptual; OBS ids are assigned in 0O.10A after OBS-38):
+  - a request spike (SEV-3, operator value);
+  - an invalid-reset spike (SEV-3, operator value);
+  - recovery enabled while critical email is unavailable (SEV-2).
+
+  Recovery-email backlog is OBS-31.
+- **Operations Status:** an `account_recovery` component (`disabled`,
+  `unavailable`, healthy). Degraded at worst; never readiness.

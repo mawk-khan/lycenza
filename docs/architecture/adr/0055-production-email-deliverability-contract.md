@@ -990,3 +990,22 @@ room:
     - provider domain verification;
     - the DMARC aggregate history;
     - a delivery/bounce/complaint drill against a real sandbox.
+
+## Consumer note — ADR 0056 (Phase 0O.10, 2026-09-28)
+
+ADR 0056 (account recovery) activates the reserved purposes
+`account_recovery` (critical, source `account_recovery_request`) and
+`security_notice` (critical; the post-reset notice) in Phase 0O.10A. Both
+are identity-level. In 0O.10A:
+
+- **`school_id`.** `email_messages.school_id` becomes nullable — NULL if
+  and only if the purpose is one of these two — and so does
+  `email_provider_references.school_id`.
+- **RLS.** Those rows are visible only inside an explicit platform-email
+  scope, a new `TenantRls` helper mode, never hand-written SQL.
+- **Budgets.** They use a `platform` budget bucket and skip
+  `SchoolOperationalGuard`.
+- **Expiry.** A recovery message's `expires_at` equals its credential's
+  (30 minutes).
+
+Nothing else in this contract changes.

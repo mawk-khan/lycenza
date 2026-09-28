@@ -262,12 +262,24 @@ account's password has no in-app recovery yet.
 
 ## 7. What stays open
 
-O3, O4, O5, O6, O7, O8, O9, O10, O11, O12, O13 and O16 are resolved (ADR 0049,
-ADR 0050, ADR 0051, ADR 0052, ADR 0053, ADR 0054, ADR 0055; O9's and O13's
-repository implementations are Phases 0O.8A and 0O.9A, and their deployment
-evidence is outstanding). Still
-open: O1 (definition of done — including a real restore drill), O2
-(payments), O14 (password reset) and O15 (partner integrations).
+O3–O14 and O16 are resolved (ADR 0049, ADR 0050, ADR 0051, ADR 0052,
+ADR 0053, ADR 0054, ADR 0055, ADR 0056). O9's and O13's repository
+implementations are Phases 0O.8A and 0O.9A, with deployment evidence
+outstanding; O14's is Phase 0O.10A, not started. Still open: O1 (definition
+of done — including a real restore drill), O2 (payments) and O15 (partner
+integrations).
+
+**Account recovery (ADR 0056, contract only).** Production has **no
+self-service password recovery** today, and lost root passwords have no
+path at all until 0O.10A adds `platform:user-password-reset`.
+
+When 0O.10A lands:
+- `ACCOUNT_RECOVERY_ENABLED` is `false` by default;
+- enabling it in production is refused while critical email is disabled
+  (`account_recovery_email_disabled`);
+- nothing is issued while `criticalEmailAvailable()` is false;
+- deploying it signs every user out once (the credential-version
+  middleware).
 
 **Email (ADR 0055, implemented in 0O.9A).** Every business email goes through
 the durable email layer.

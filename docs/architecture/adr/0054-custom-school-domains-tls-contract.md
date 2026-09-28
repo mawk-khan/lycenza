@@ -796,7 +796,11 @@ regeneration, full `/app` load) is preserved.
   sent only from a Lycenza-controlled sending domain, and an `active`
   School web domain grants no From, DKIM or return-path at that domain.
 - **O14 recovery.** Recovery links (future) use §8.9's canonical origin
-  and never a request host. O14 remains open.
+  and never a request host. O14 remains open. *Resolved by ADR 0056
+  (Phase 0O.10):* recovery runs on the canonical **platform** host only.
+  It is never in `SchoolHostSurface` (404 on a School host), whose login
+  page links to the platform recovery page; a School hostname is never
+  authority over an identity.
 - **Phase 0N governance.** Domain ownership grants no platform, Group or
   elevation authority. Platform-only users gain no School session by
   visiting a custom host.

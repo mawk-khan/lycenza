@@ -1616,7 +1616,26 @@ repository).** ADR 0055 implemented (implementation amendment in the ADR).
 
 Repository implementation complete; deployment evidence outstanding.
 Remaining open: O1, O2, O14, O15. Recommended next: **0O.10 — Account
-Recovery Contract (O14)** — not started.
+Recovery Contract (O14)**.
+
+**0O.10 — Account Recovery Contract (2026-09-28, documentation only).**
+ADR 0056 resolves O14.
+- **Scope:** identity-level self-service password recovery on the
+  canonical platform host only, for active, non-root human Users. Root
+  recovery stays on the operator console.
+- **Request:** enumeration-resistant generic response with asynchronous,
+  encrypted-job issuance and keyed rate limits.
+- **Credential:** a 256-bit selector+secret (secret in the URL fragment,
+  SHA-256 stored), 30 minutes, single use, at most 3 active, never
+  consumed by GET.
+- **Reset:** a transaction that bumps a per-User `credential_version`
+  (every session on every host ends), revokes human personal access
+  tokens and elevations, and preserves MFA, with no auto-login.
+- **Delivery:** ADR 0055 critical email only.
+
+Remaining open: O1, O2, O15. Next: **0O.10A — Account Recovery Foundation**
+(repository only) — not started. O2 and O15 are best reviewed together
+afterwards.
 
 ## Cross-cutting, ongoing (not a single phase)
 

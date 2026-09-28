@@ -170,6 +170,18 @@ The event feed is stale:
 Usually a rotated or mis-set event secret, or internet noise. The endpoint
 never processes an unauthenticated body.
 
+## Account recovery depends on this layer (ADR 0056)
+
+Self-service password recovery (Phase 0O.10A) sends `account_recovery`
+critical email only while `EmailProviderResolver::criticalEmailAvailable()`
+is true.
+- Its messages expire with the 30-minute credential.
+- They respect suppression: a suppressed address simply receives nothing,
+  and the browser never learns it.
+- A post-reset `security_notice` follows.
+- Both are identity-level (no School). They use a separate `platform`
+  budget bucket and a sanctioned platform-email RLS scope.
+
 ## Provider-side suppression
 
 A release here does not clear the provider's own suppression list. Clear
