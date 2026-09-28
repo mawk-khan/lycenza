@@ -481,4 +481,3 @@ purposes (`email_messages_identity_level_check`).
   `App\Support\Tenancy\AllowsIdentityLevelRows` sees and creates
   School-less rows only inside that scope (`SchoolScope`, `BelongsToSchool`).
 - **Adoption.** No other table uses this mode. Adding one needs its own ADR.
-

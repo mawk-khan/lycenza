@@ -1557,4 +1557,3 @@ fix was published as `9ece2d8` / `361c4b7` and qualified from scratch.
 - **Exception clock:** the records expire **2026-10-10** / **2026-10-26**;
   nothing was renewed.
 - **Full-regression checkpoint:** `361c4b7` (cadence counter reset).
-
