@@ -7,8 +7,9 @@
  * HTTP client stack (Laravel HTTP client -> Guzzle -> libcurl, with the
  * webhook delivery options: CURLOPT_RESOLVE pinning, no redirects, connect and
  * total timeouts), TLS verification against a throwaway CA, the AWS SDK
- * against a real MinIO (HTTP + XML parsing), and every PHP XML API -- repeated,
- * so an ABI mismatch shows up as a failure or a crash rather than a pass.
+ * against a real S3-compatible server (HTTP + XML parsing; a wrong SigV4
+ * signature is refused), and every PHP XML API -- repeated, so an ABI mismatch
+ * shows up as a failure or a crash rather than a pass.
  *
  * Never shipped in the image (mounted read-only at run time). Prints one
  * "PASS|FAIL <name>" line per check; exits non-zero on any failure.
@@ -117,9 +118,10 @@ for ($round = 1; $round <= $rounds; $round++) {
     });
 
     // --- S3 over HTTP with XML responses (Documents / attachments) ---------------
-    $run('AWS SDK round trip against MinIO (create, put, list XML, get, error XML, delete)', function () {
-        $s3 = new S3Client(['version' => 'latest', 'region' => 'us-east-1', 'endpoint' => getenv('S3_ENDPOINT'),
-            'use_path_style_endpoint' => true, 'credentials' => ['key' => getenv('S3_KEY'), 'secret' => getenv('S3_SECRET')]]);
+    $run('AWS SDK round trip against a real S3 server (create, put, list XML, get, error XML, signature refusal, delete)', function () {
+        $client = fn (string $secret) => new S3Client(['version' => 'latest', 'region' => 'us-east-1', 'endpoint' => getenv('S3_ENDPOINT'),
+            'use_path_style_endpoint' => true, 'credentials' => ['key' => getenv('S3_KEY'), 'secret' => $secret]]);
+        $s3 = $client((string) getenv('S3_SECRET'));
         $bucket = 'smoke-'.bin2hex(random_bytes(4));
         $s3->createBucket(['Bucket' => $bucket]);
         $s3->putObject(['Bucket' => $bucket, 'Key' => 'a/b.txt', 'Body' => 'native-smoke']);
@@ -131,10 +133,16 @@ for ($round = 1; $round <= $rounds; $round++) {
         } catch (S3Exception $e) {
             $missing = $e->getAwsErrorCode() === 'NoSuchKey';
         }
+        try {
+            $client(getenv('S3_SECRET').'-wrong')->listObjectsV2(['Bucket' => $bucket]);
+            $refused = false;
+        } catch (S3Exception $e) {
+            $refused = $e->getAwsErrorCode() === 'SignatureDoesNotMatch';
+        }
         $s3->deleteObject(['Bucket' => $bucket, 'Key' => 'a/b.txt']);
         $s3->deleteBucket(['Bucket' => $bucket]);
 
-        return $listed === ['a/b.txt'] && $body === 'native-smoke' && $missing;
+        return $listed === ['a/b.txt'] && $body === 'native-smoke' && $missing && $refused;
     });
 
     // --- PHP XML stack -----------------------------------------------------------

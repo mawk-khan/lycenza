@@ -63,7 +63,7 @@ review.
    - that no Debian copy of either library is present;
    - the ELF notes;
    - that no headers or source remain;
-   - the native smoke: the webhook HTTP client stack over real TLS, the AWS SDK against MinIO, and every XML API, repeated, with crash signatures refused.
+   - the native smoke: the webhook HTTP client stack over real TLS, the AWS SDK against a real S3-compatible server (the digest-pinned `versity/versitygw` helper, including refusal of a wrong signature), and every XML API, repeated, with crash signatures refused.
 
    An ABI change (a new soname) needs a new review, like Phase 0O.6C's Step 6 stop.
 6. **Run the full tests:** the complete regression (`SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --reset-db`, then `safe-test`), the quality gates, and the release-tooling tests.

@@ -44,8 +44,15 @@
 #                  headers, source, phpize or PEAR; SIGQUIT stop signal; and a
 #                  native smoke INSIDE the image (runtime-checks/
 #                  php-native-smoke.php): the webhook HTTP client stack over
-#                  real TLS with a throwaway CA, AWS SDK against a real MinIO,
-#                  every PHP XML API -- repeated, crash signatures refused.
+#                  real TLS with a throwaway CA, AWS SDK against a real
+#                  S3-compatible server (versitygw), every PHP XML API --
+#                  repeated, crash signatures refused.
+#   helper images -- every image this script runs besides the two under test
+#                  is pinned image:version@sha256:digest (SupplyChainGuardTest).
+#                  The S3 helper was MinIO until its public images were
+#                  withdrawn (2026-09); versitygw is Apache-2.0, published by
+#                  its maintainers, and rejects a wrong SigV4 signature exactly
+#                  like MinIO did.
 #   runtime security -- (Phase 0O.6F) EVERY container of both images is started
 #                  with the runtime security contract's reference invocation
 #                  (infrastructure/release/runtime-security.json: all
@@ -196,7 +203,8 @@ check "graceful FPM stop signal is SIGQUIT" test "$(docker image inspect -f '{{.
 check "no private-key file in application or configuration paths" test -z "$(in_app 'find /var/www/app /usr/local/etc /etc/nginx \( -name "*.pem" -o -name "*.key" -o -name "id_rsa*" \) -not -path "*/vendor/*" 2>/dev/null')"
 
 docker network create "$NETWORK" >/dev/null
-docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" redis:7-alpine redis-server --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
+docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" \
+    redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 redis-server --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
 
 unsafe_output="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e APP_KEY=canary-unsafe-app-key "$APP_IMAGE" web 2>&1 || true)"
 check "unsafe configuration refuses to start" grep -q "Refusing to start" <<<"$unsafe_output"
@@ -374,8 +382,8 @@ check "unknown role refused (exit 64)" test "$unknown" = "64"
 
 # --- Phase 0O.6D native smoke inside the production image ------------------------
 # Throwaway CA + server certificate (SANs: the pinned test name only), an
-# HTTPS test server and a MinIO, both on the private network; nothing leaves
-# this run.
+# HTTPS test server and an S3-compatible server (versitygw, POSIX backend on a
+# tmpfs), both on the private network; nothing leaves this run.
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=lycenza-verify-ca" -keyout "$SMOKE_DIR/ca.key" -out "$SMOKE_DIR/ca.pem" >/dev/null 2>&1
 openssl req -newkey rsa:2048 -nodes -subj "/CN=pinned.invalid" -keyout "$SMOKE_DIR/server.key" -out "$SMOKE_DIR/server.csr" >/dev/null 2>&1
 printf 'subjectAltName=DNS:pinned.invalid\n' > "$SMOKE_DIR/san.ext"
@@ -402,14 +410,14 @@ PY
 chmod a+r "$SMOKE_DIR"/*
 docker run -d --name "${RUN_ID}-tls" --network "$NETWORK" -v "$SMOKE_DIR:/tls:ro" \
     python:3.14.7-slim-trixie@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d python /tls/server.py >/dev/null
-MINIO_KEY="verify$(random | cut -c1-12)"; MINIO_SECRET="$(random)"
-docker run -d --name "${RUN_ID}-minio" --network "$NETWORK" -e MINIO_ROOT_USER="$MINIO_KEY" -e MINIO_ROOT_PASSWORD="$MINIO_SECRET" \
-    minio/minio:RELEASE.2025-04-08T15-41-24Z server /data >/dev/null
+S3_KEY="verify$(random | cut -c1-12)"; S3_SECRET="$(random)"
+docker run -d --name "${RUN_ID}-s3" --network "$NETWORK" --tmpfs /data -e ROOT_ACCESS_KEY="$S3_KEY" -e ROOT_SECRET_KEY="$S3_SECRET" \
+    versity/versitygw:v1.8.0@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499 posix /data >/dev/null
 tls_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "${RUN_ID}-tls")"
-for _ in $(seq 1 30); do docker exec "${RUN_ID}-minio" sh -c 'exec 3<>/dev/tcp/127.0.0.1/9000' 2>/dev/null && break; sleep 1; done
+for _ in $(seq 1 30); do docker exec "${RUN_ID}-s3" busybox nc -z 127.0.0.1 7070 2>/dev/null && break; sleep 1; done
 smoke() { drun --rm --network "$NETWORK" -v "$ROOT/infrastructure/docker/production/runtime-checks:/checks:ro" -v "$SMOKE_DIR/ca.pem:/checks-ca/ca.pem:ro" \
-    -e TLS_HOST="${RUN_ID}-tls" -e TLS_IP="$tls_ip" -e TLS_CA=/checks-ca/ca.pem -e S3_ENDPOINT="http://${RUN_ID}-minio:9000" \
-    -e S3_KEY="$MINIO_KEY" -e S3_SECRET="$MINIO_SECRET" -e ROUNDS="$1" --entrypoint php "$APP_IMAGE" /checks/php-native-smoke.php 2>&1; }
+    -e TLS_HOST="${RUN_ID}-tls" -e TLS_IP="$tls_ip" -e TLS_CA=/checks-ca/ca.pem -e S3_ENDPOINT="http://${RUN_ID}-s3:7070" \
+    -e S3_KEY="$S3_KEY" -e S3_SECRET="$S3_SECRET" -e ROUNDS="$1" --entrypoint php "$APP_IMAGE" /checks/php-native-smoke.php 2>&1; }
 set +e; smoke_out="$(smoke 3)"; smoke_rc=$?; smoke_again="$(smoke 1)"; again_rc=$?; set -e
 printf '%s\n' "$smoke_out" | sed 's/^/    /'
 check "native smoke passes inside the production image (3 rounds)" test "$smoke_rc" = "0"
