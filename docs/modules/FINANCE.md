@@ -4464,3 +4464,43 @@ CLAUDE.md rule 91.
 - **No receipt.** The success page is the immutable Payment record, not a
   statutory or formal receipt (receipts stay deferred).
 - **No metrics.** Finance has no operational metrics today.
+
+## FEE programme contract — ADR 0062 (FEE.0, 2026-09-29)
+
+This is a current-scope note. Nothing above is rewritten; the 0G.x
+decisions stand as history.
+
+- **Contract.** `docs/architecture/adr/0062-fee-structures-assessment-concessions-receipts-contract.md`
+  (FEE — Fee Management, the first post-foundation product programme). It
+  adds fee heads, fee structures with instalments, assessment runs,
+  concessions/scholarships/waivers, receipts, staff fee statements and late
+  fees.
+- **What it supersedes.** It supersedes, for future checkpoints only:
+  - 0G.4's "No fee-definition/template catalog";
+  - "Generic assessment idempotency: DEFERRED" for structure-generated
+    charges, which become idempotent through
+    `fee_assessments_one_live_per_period`;
+  - the receipt deferrals (0G.7, 0O.11A "No receipt"). Receipts arrive in
+    FEE.4 as a payment acknowledgement; the statutory form is [LEGAL REVIEW
+    REQUIRED].
+- **What stays.**
+  - No `invoices` entity: 0G.4's decision is reaffirmed (ADR 0062 §4).
+  - Existing `charges`, `payments`, `payment_allocations` and journal
+    entries keep their meaning. Ad-hoc charges and Canteen charges are
+    unchanged.
+  - Refunds, payment reversal, manual-payment correction, credit balances
+    and the payment gateway stay deferred (rule 91; ADR 0057).
+- **Payments amendments** planned at build time: allocation capacity counts
+  posted adjustments (FEE.3), and receipts are issued inside
+  `SettledPaymentRecorder` (FEE.4).
+- **Drift found by the FEE.0 audit** (history left as written):
+  - "Every School gets the same seeded set of core accounts" ("Account
+    model") is not as-built: no production path creates ledger accounts.
+    ADR 0062 §6 decision K addresses this.
+  - `Money`'s docblock says "No subtract()/multiply()" although
+    `multiplyByRate()` exists.
+  - The 0G.8 migration inventory predates
+    `2026_10_27_090000_add_manual_payment_recording`.
+  - The Phase 0O.11 amendment bullet "corrects mistakes append-only" was
+    replaced by the owner decision recorded directly above it (no
+    correction action in v1).

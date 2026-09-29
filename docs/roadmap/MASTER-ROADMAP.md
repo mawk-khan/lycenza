@@ -38,6 +38,57 @@ scope is **not** a claim that the deferred capability exists.
   programme.
 - **0O closeout never reopens 0H or 0M.**
 
+**Phase 0O production hardening is PARKED (owner decision, 2026-09-29).**
+Product development resumes. This is scheduling only; nothing below is
+waived or complete.
+- **Parked rows.** ADR 0058 rows E02, E03, E05, E07–E23 and E29 stay open
+  as final-hardening obligations. O16 qualification is not repeated during
+  product development.
+- **E16.** The decision `OWNER-0O-E16-2026-09-29` is historical evidence. It
+  may lapse (2026-10-29); final qualification needs a fresh scan and
+  decision on its own date.
+- **E03 is GOVERNANCE_REQUIRED — DEFERRED TO FINAL PROJECT / PRODUCTION
+  HARDENING.** The temporary `main` ruleset created on 2026-09-29 was
+  removed the same day for active development. The E03 evidence merged by
+  PR #1 was reverted (`5d8dce3`). Final hardening must protect `main`, block
+  force-push and deletion, restore the pull-request path, record E03
+  evidence and run E02 from protected `main`.
+- **Legal and security gates still bind** product work:
+  - the Phase 0M reopening gate;
+  - E17 before any production SendGrid use;
+  - E21 before any retention period;
+  - no real School data to external providers;
+  - no deployment, purchases or production secrets without explicit owner
+    authorization.
+
+## Post-foundation product programmes
+
+Named programmes, not phase numbers: historical Phase 1, 5, 8A, 9 and 10
+numbers are already taken (Phase 1 = 0F, Phase 5 = Communications, 8A/9 =
+0J, 10 = 0K). They are ordered by dependency. Each programme starts with a
+contract checkpoint.
+
+| Order | Programme | Status |
+|---|---|---|
+| 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **ACTIVE** — FEE.0 contract: ADR 0062 |
+| 2 | TCH — Teacher identity & ownership-based authorization | Not started (contract first) |
+| 3 | HRX — Leave & staff attendance | Not started |
+| 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
+| 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
+| 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
+
+**FEE checkpoints (ADR 0062 §25):**
+- **FEE.0 — contract** (docs only).
+- **FEE.1 — fee heads & fee structures**, including minimal ledger-account
+  administration (decision K).
+- **FEE.2 — assessment runs.**
+- **FEE.3 — concessions / scholarships / waivers.**
+- **FEE.4 — receipts & staff fee statements.**
+- **FEE.5 — late fees**, after the fee-regulation legal answer.
+
+FEE.1 starts only after the owner records ADR 0062 decisions A, B, C, E, K
+and L.
+
 ## Phase 0A — Architectural Foundation (complete)
 
 Repository structure, ADRs, domain map, tenancy/API/event/AI/security

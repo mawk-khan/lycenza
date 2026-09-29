@@ -1,0 +1,1149 @@
+# ADR 0062: Fee Structures, Assessment Runs, Concessions and Receipts Contract
+
+- Status: Accepted as a contract (documentation only; nothing is
+  implemented). Implementation starts at FEE.1 **only after** the owner
+  decisions marked "needed for FEE.1" in §2.1 are recorded.
+- Date: 2026-09-29 (FEE.0, the first post-foundation product checkpoint)
+- Programme: **FEE — Fee Management** (`docs/roadmap/MASTER-ROADMAP.md`,
+  "Post-foundation product programmes").
+- Builds on, and does not rewrite:
+  - ADR 0030 (ledger);
+  - ADR 0031 (payments, settlement, allocation; 0O.11A manual recording);
+  - ADR 0057 (payment gateway and refunds deferred);
+  - `docs/modules/FINANCE.md` (0G.0 contract and 0G.1–0G.8 as-built).
+- Will amend, when its checkpoint is built (by note, never by rewrite):
+  - ADR 0031 — the allocation capacity rule counts posted adjustments (FEE.3,
+    §15) and settled Payments issue receipts (FEE.4, §17).
+- Related: ADR 0025 (outbox), ADR 0017 (audit), ADR 0047 (School lifecycle),
+  CLAUDE.md rules 3–11, 17–19, 21, 29–33, 58–60, 70, 74, 82, 86, 91.
+
+## 1. Context — as-built audit (2026-09-29)
+
+Audited on branch `docs/fee-0-fee-structures-assessment-contract`, based on
+`origin/main` `d5d85bc` plus the pending revert `5d8dce3` (documentation
+only; no executable difference from `13cfba3`).
+
+### 1.1 Charges (`App\Domain\Fees`)
+
+- **Entity.** `charges` (migration `2026_09_02_090000_create_charges_table`)
+  is the only receivable entity. Columns: `student_id`, `academic_year_id`,
+  `description`, `amount NUMERIC(14,2)`, `currency`, `due_date` (nullable),
+  `receivable_ledger_account_id`, `revenue_ledger_account_id`,
+  `journal_entry_id` (NOT NULL), `cancelled_at`,
+  `cancellation_journal_entry_id`.
+- **Constraints.** `amount > 0`; `currency = 'INR'`; distinct accounts;
+  cancellation pair set together. Composite FKs to `students`,
+  `academic_years`, `ledger_accounts` and `journal_entries` (the last two
+  pin `currency`). `TenantRls::enable` + `TenantRls::revokeDelete`.
+- **Immutability.** `charges_immutability_trigger` makes every recognized
+  field immutable. The only legal UPDATE is the one-time cancellation pair,
+  which must name the real reversal of the charge's own journal entry.
+- **No idempotency or source columns.** Uniques are only `(id, school_id)`,
+  `(school_id, journal_entry_id)` and `(school_id,
+  cancellation_journal_entry_id)`. FINANCE.md "Generic assessment
+  idempotency: DEFERRED" says no uniqueness exists on purpose.
+- **`ChargeService`** (trusted core, not an authorization boundary):
+  - `assess(School, AssessChargeData, ?User)` posts Dr receivable / Cr
+    revenue through `LedgerService::post()`, inserts the charge, audits
+    `charge.assessed` and emits `ChargeAssessed` (`charge.assessed.v1`), all
+    in one transaction under `TenantContext::withSchool()`.
+  - `cancel(...)` locks the charge `FOR UPDATE`, reverses through
+    `LedgerService::reverseById()`, sets the pair. It is refused when
+    allocations exist (`charges_payment_allocation_guard_trigger`, owned by
+    Payments).
+  - `lockChargeForAllocation(...)` is the one sanctioned way Payments locks
+    and reads a charge. `uncancelledChargesForStudent(...)` lists open
+    charges oldest first.
+- **`AssessChargeData`** carries `studentId`, `academicYearId`,
+  `description`, `amount` (Money), both ledger account ids and `dueDate`.
+  The caller chooses the accounts on every call.
+- **Authorization.** `ChargeAdministrationService` (`finance.charges.manage`)
+  and `ChargeReadService` (`finance.charges.view`).
+- **Consumers.** Staff (web `app/finance/charges*`, API
+  `schools/{school}/charges*`) and Canteen fulfilment
+  (`CanteenOrderService::fulfill()`), whose exactly-once guarantee comes from
+  its own order-row lock and `canteen_orders_charge_id_unique`, not from
+  Fees. Canteen picks accounts from its singleton
+  `canteen_billing_configurations` row and validates asset/income types at
+  run time (`CanteenBillingConfigurationService::resolveValidated()`).
+
+### 1.2 Ledger (`App\Domain\Finance`)
+
+- `ledger_accounts` types `asset|liability|equity|income|expense`, status
+  `active|inactive`, INR only, code unique per School case-insensitively.
+- `journal_entries` and `journal_lines` are append-only. Balance is
+  checked by a deferred constraint trigger. Reversal is a new entry
+  (`journal_entries_reversal_of_unique`). `posted_at` is always now; there
+  is no effective or back-dated posting date.
+- **Journal entries carry no source columns.** A subledger links to its
+  entries only through its own table's `journal_entry_id` column.
+- `LedgerService::post()` does not refuse an inactive account. That
+  decision is deferred (FINANCE.md 0G.2 "Account validation and lookup").
+  `LedgerService::activeAccountsOfType()` exists.
+- **Finding F1 — no production chart of accounts.** No application path
+  creates a `ledger_accounts` row. There is no seed, no CRUD route, and
+  ledger-account CRUD is deferred (FINANCE.md "Deferred register"). Only
+  factories and the DDEV demo seeder create accounts. A production School
+  therefore cannot map a fee to any account today (§6).
+- `Money` (`App\Support\Money\Money`): `of`, `add`, `negated`,
+  `multiplyByRate(rate, scale=2)` (rounds half away from zero), `amount()`
+  as a decimal string. There is no float anywhere.
+
+### 1.3 Payments (`App\Domain\Payments`)
+
+- **Tables.** `payments` is immutable and has no status column. Source is
+  `provider|manual`; manual methods are `cash|bank_transfer|cheque`.
+  `payment_allocations` is append-only and allocations are explicit (no
+  automatic oldest-first).
+- **Allocation rules.** The allocations must sum exactly to the payment
+  amount (`payments_fully_allocated_check`). Cumulative allocations may not
+  exceed the charge amount; cancelled charges are refused
+  (`payments_lock_and_validate_charge_allocation()`, which also locks the
+  charge `FOR UPDATE`). There is no unapplied cash, no overpayment, no
+  refund and no reversal (ADR 0031, ADR 0057, rule 91).
+- **Recording.** `SettledPaymentRecorder::record(...)` is the one settlement
+  core for provider and manual payments: lock charges in ascending id order
+  → check capacity → post Dr settlement / Cr each charge's receivable →
+  insert payment and allocations → audit → `payment.settled.v1`.
+- **Manual idempotency.** `ManualPaymentRecordingService` uses a
+  server-issued key `payments_manual_idempotency_unique (school_id,
+  idempotency_key)` plus a per-key advisory lock and a strict replay.
+- **Outstanding balance is always derived**, never stored
+  (`ManualPaymentRecordingService::outstandingChargesForStudent()`).
+- **No receipt exists.** The success page "is not a statutory or formal
+  receipt (receipts stay deferred)" (FINANCE.md 0O.11A). No receipt,
+  invoice or voucher numbering exists anywhere in Finance, Fees or Payments.
+
+### 1.4 Students and Academic Structure
+
+- **`student_enrollments`.** Status `active|completed|withdrawn|transferred|
+  cancelled`, all terminal except `active`. `starts_on`/`ends_on` are
+  inclusive; every terminal transition sets `ends_on`. There is at most one
+  active enrollment per Student per year
+  (`student_enrollments_one_active_per_student_year`). Context unique
+  `(id, school_id, academic_year_id, campus_id, grade_level_id,
+  section_id)`. There is no admission-date column.
+- **Read services** (authorization-neutral):
+  - `StudentEnrollmentReadService` (`currentFor`, `historyFor`, `detail`,
+    `directory`);
+  - `StudentEnrollmentRosterReadService::membersAsOf(...)` (per **Section**,
+    temporal predicate `starts_on <= d AND (ends_on IS NULL OR ends_on >=
+    d)`).
+  - **No read by AcademicYear × GradeLevel (× Campus) exists**, and Students
+    emits **no** outbox events.
+- **Academic Structure.**
+  - `AcademicYear`: `draft|active|closed`, one active per School.
+  - `AcademicTerm`: dated, sequenced, **no status**.
+  - `GradeLevel` is School-wide with a `sequence` and a status.
+  - `Section` belongs to one year, campus and grade.
+  - `CurrentAcademicYearResolver` is the only published structure read
+    service.
+
+### 1.5 Conventions reused
+
+- **Precedents.**
+  - `EmployeeNumberAllocator`: a per-School counter row locked `FOR UPDATE`
+    inside the caller's transaction, gap-free because a rollback also rolls
+    back the increment. This is the only numbering precedent.
+  - Enrollment rollover plans: `draft → validated → executing →
+    completed|completed_with_errors|cancelled`, `configuration_version`
+    drift detection, per-item uniqueness and status, a conditional-UPDATE
+    claim, bounded batches. This is the run precedent; it is not queued.
+  - Payroll run approval: `payroll_runs_sod_check`, conditional
+    `WHERE status=...` updates.
+  - Communications approval requests.
+- **Primitives.** `TenantLock::forSchool()`, `pg_advisory_xact_lock
+  (hashtextextended(...))`, the `TenantScoped` job trait with `$tries` and
+  `$timeout` (queue `retry_after` is 90), `SchoolOperationalGuard`,
+  `NormalizesCode`/`NormalizesCodeInput`, `TenantRls::enable`/
+  `revokeDelete`/`makeAppendOnly`.
+- **Naming.** Audit `AuditRecorder::school(...)` with names like
+  `charge.assessed`. Outbox types are `<aggregate>.<past_verb>.v1`, and none
+  is webhook-registered.
+- **Capabilities** today: `finance.ledger.view|post|reverse`,
+  `finance.charges.view|manage`, `finance.payments.view|record`. All are
+  granted to `school_admin` and the demo `demo.finance_officer`; **`principal`
+  holds no Finance capability**.
+
+### 1.6 Absent today (none of this exists)
+
+- fee heads, catalogue or templates;
+- fee structures, lines or instalments;
+- bulk or enrolment-based assessment;
+- any assessment idempotency;
+- optional-fee selection;
+- concessions, scholarships, waivers or any adjustment;
+- late fees;
+- receipts or receipt numbering;
+- student fee statements;
+- ledger-account administration;
+- a financial-year or accounting-period concept;
+- GST or tax handling.
+
+An idea found only in a document (for example FINANCE.md's "Every School
+gets the same seeded set of core accounts", which the as-built record
+contradicts) is not treated as an existing requirement.
+
+## 2. Decision summary
+
+- **Charges stay the receivable unit (§4).** FEE adds configuration (fee
+  heads, structures, instalments), generation (assessment runs), adjustments
+  (concessions) and evidence (receipts) around charges. It never edits or
+  reinterprets an existing charge or payment.
+- **Idempotency is a database key per billing period (§11).** Every
+  structure-generated charge is recorded in `fee_assessments` under a unique
+  key over `(school, student, academic year, fee head, billing period)`,
+  among un-voided rows. Repeated or concurrent runs, and amended successor
+  structures, cannot double-bill.
+- **Concessions are approved decisions (§14).** They produce explicit
+  `fee_adjustments`: their own journal entries, cancelled only by reversal.
+  A charge amount is never changed.
+- **Balance-dependent work is owned by Payments (§3).** Outstanding
+  balances, statements, receipts and late-fee evaluation all depend on
+  `payment_allocations`. Payments already depends on Fees, so no reverse
+  dependency is created.
+- **Receipts are issued atomically (§17).** Receipt numbers come from a
+  per-School counter row locked inside the settlement transaction, so they
+  are gap-free by construction. There is never a `MAX()+1`.
+
+### 2.1 Decision register
+
+Status values:
+- **DECIDED** — by this ADR, from repository evidence or engineering
+  necessity.
+- **OWNER DECISION REQUIRED** — the recommendation shown is not adopted
+  until the owner confirms it.
+- **LEGAL REVIEW REQUIRED** — needs a qualified legal answer.
+
+| # | Decision | Status | Recommendation | Needed for |
+|---|---|---|---|---|
+| A | Invoice entity | DECIDED (0G.4 evidence) — owner may override | No `invoices` entity; charges + receipts + statements (§4) | FEE.1 |
+| B | Structure scope | OWNER DECISION REQUIRED | AcademicYear × GradeLevel, optional Campus override; no Section-specific structures (§7.1) | FEE.1 |
+| C | Frequencies | OWNER DECISION REQUIRED | Stored instalments are authoritative; `one_time`/`term`/`monthly` are authoring generators; "optional" is a separate flag (§7.3) | FEE.1 |
+| D | Mid-year admission | OWNER DECISION REQUIRED | No proration in v1; skip instalments whose billing period ended before `starts_on`; current and future periods assessed in full; staff may exclude items at preview (§10.2) | FEE.2 |
+| E | Optional fees | OWNER DECISION REQUIRED | Explicit per-Student selection before assessment (§8) | FEE.1 (schema), FEE.2 |
+| F | Concession approval | OWNER DECISION REQUIRED | Maker/checker mandatory for every concession, database-enforced; no amount thresholds in v1 (§14.4) | FEE.3 |
+| F2 | Concession posting account | OWNER DECISION REQUIRED (accountant) | One School-level `expense` account "Fee concessions and scholarships" (§14.5) | FEE.3 |
+| G | Concession after payment | OWNER DECISION REQUIRED | Capped at the charge's current outstanding; never creates credit or refund (§14.6) | FEE.3 |
+| H | Late-fee policy | OWNER DECISION REQUIRED | Fixed or percentage-of-outstanding, grace days, optional cap, one late fee per overdue charge per rule; no tiers or recurrence in v1 (§16) | FEE.5 |
+| I | Receipt numbering | OWNER DECISION REQUIRED | School + financial year, FY start month configurable (default April), format `<PREFIX>/<FY>/<000001>` (§17.2) | FEE.4 |
+| I2 | Existing payments | OWNER DECISION REQUIRED | Explicit, audited one-time backfill in `settled_at` order (§17.4) | FEE.4 |
+| J | Receipt statutory/GST form | **LEGAL REVIEW REQUIRED** | FEE.4 ships a payment acknowledgement only, with no tax fields (§17.5) | FEE.4 |
+| K | Ledger-account provisioning (finding F1) | OWNER DECISION REQUIRED | FEE.1 includes minimal Finance-owned account administration (§6) | FEE.1 |
+| L | Role grants | OWNER DECISION REQUIRED | `school_admin` gets all; `principal` gets none by default; demo finance officer gets all except approve (§19) | FEE.1 |
+| M | Concession categories and notes | OWNER DECISION REQUIRED | Closed catalogue `concession`, `scholarship`, `waiver`; no free-text note (§14.2) | FEE.3 |
+| N | Percentage rounding | DECIDED | `Money::multiplyByRate`, 2 dp, half away from zero; never exceeds the base (§14.3) | FEE.3/5 |
+
+## 3. Module ownership and dependency directions
+
+The dependency directions in `docs/architecture/DOMAIN-MAP.md` do not
+change.
+
+| Concern | Owner | Why |
+|---|---|---|
+| Fee heads, structures, lines, instalments, optional selections, late-fee rules (configuration) | **Fees** | Receivable configuration; Fees already owns charges |
+| Assessment runs, `fee_assessments`, `fee_concessions`, `fee_adjustments` | **Fees** | Create or adjust charges; need only Students, Academic Structure and Finance |
+| Allocation capacity (charge − posted adjustments ≥ allocations) | **Payments** (database trigger) | Payments already owns `payments_lock_and_validate_charge_allocation()` and `charges_payment_allocation_guard_trigger`; Payments → Fees is the legal direction |
+| Receipts and receipt numbering | **Payments** | Evidence of a settled Payment, issued inside `SettledPaymentRecorder` |
+| Staff student fee statement | **Payments** (read-only composition) | Needs charges, adjustments and allocations; Payments may read Fees through Fees' Application layer |
+| Late-fee evaluation and late-fee runs | **Payments** | "Overdue" needs outstanding balance (allocations). Payments assesses the late-fee charge through `ChargeService` |
+| Ledger-account administration (K) | **Finance** | Finance owns the chart of accounts |
+
+**Rule 4 holds throughout.**
+- Fees never reads `payment_allocations`.
+- Payments never reads Fees' Eloquent models; it uses published Fees
+  Application methods, extended as §15 and §18 describe.
+- Fees reads enrollments only through a new Students-owned read method
+  (§10.1).
+
+## 4. Invoice decision (A)
+
+**Decision:** there is no `invoices` entity. The receivable unit remains the
+charge.
+- One structure-generated charge = one Student × one fee head × one billing
+  period.
+- The parent-facing grouping is the **statement** (§18).
+- The evidence of money received is the **receipt** (§17).
+
+**Evidence.** 0G.4 resolved this question (FINANCE.md 0G.4 "Scope resolution
+…": "No `invoices`/`invoice_lines` entity — `charges` alone is the
+receivables unit … not rejected forever"). Canteen and manual payments
+already depend on charge-level allocation.
+
+| | Charges + statement + receipt (chosen) | Distinct Invoice entity |
+|---|---|---|
+| Existing data | Unchanged | Every existing charge needs an invoice or a nullable link |
+| Allocation | Unchanged (payment → charge) | Either allocate to invoices (rewrites ADR 0031) or keep charges and add a redundant layer |
+| Numbering | Receipts only | Invoice numbers too, which pulls in the statutory tax-invoice question (§17.5) |
+| Parent view | Statement groups charges by year and period | Invoice document per period |
+| Cost | Low | High; touches Payments, Canteen and history |
+
+An invoice-style *document* (a demand notice listing one period's charges)
+can be added later as a **rendering** of the statement without a new
+financial entity. The owner may override A. That would need an ADR 0031
+amendment and is not recommended.
+
+## 5. FeeHead
+
+`fee_heads` is a School-owned reference entity, for example Tuition,
+Admission, Examination, Laboratory, Transport, or the late-fee head (§16).
+
+| Column | Rule |
+|---|---|
+| `id` | UUIDv7 |
+| `school_id` | `BelongsToSchool`; RLS |
+| `code` | `NormalizesCode` (uppercase on assign) + `NormalizesCodeInput`; unique `(school_id, code)` (rule 74) |
+| `name` | Display name, required, ≤ 120 characters |
+| `description` | Optional, ≤ 500 characters, operational text only (never Student data) |
+| `status` | `active|inactive` (CHECK); **deactivate, never delete** (rule 73); `TenantRls::revokeDelete` |
+| `receivable_ledger_account_id` | Composite FK `(id, school_id, currency)` → `ledger_accounts`; must be an **active `asset`** account |
+| `revenue_ledger_account_id` | Same FK shape; must be an **active `income`** account |
+| `currency` | `'INR'` (CHECK); pins both FKs |
+| timestamps | |
+
+- **CHECK:** receivable ≠ revenue.
+- **Account-type validation** follows the Canteen precedent. It runs in the
+  Application layer at create/update through Finance's
+  `LedgerService::activeAccountsOfType()`, and **again at every assessment
+  execution**, where an inactive or wrong-type account fails that item
+  closed. FINANCE.md left type validation open for ad-hoc charges; for fee
+  heads it is decided here because a head is reusable configuration.
+- **Mapping changes are allowed and audited** (before/after account ids).
+  Charges snapshot their account ids at assessment, so history never moves.
+- **No tax classification column.** Any GST/HSN/SAC attribute waits for
+  legal approval (§17.5, §27).
+- **Deactivation:** an inactive head cannot be added to a draft structure
+  and fails an active structure's future assessment items closed. It never
+  touches existing charges.
+
+## 6. Ledger-account prerequisite (K — finding F1)
+
+FEE.1 is unusable in production without ledger accounts. Options:
+
+| Option | Scope | Assessment |
+|---|---|---|
+| **K1 (recommended)** | FEE.1 adds minimal **Finance-owned** administration: create an account (code, name, type from the existing CHECK), activate/deactivate, no delete, no type change after first posting. New capability `finance.accounts.manage`; view stays `finance.ledger.view` | Smallest safe path; Finance keeps ownership; audited `ledger_account.created`/`.status_changed` |
+| K2 | A separate Finance checkpoint before FEE.1 | Same content, one more unit |
+| K3 | Console/seeder-only provisioning | Rejected: operators would need shell access for routine accounting setup |
+
+Not in any option:
+- a School-configurable chart-of-accounts *template*;
+- account hierarchy;
+- accounting periods;
+- `LedgerService::post()` refusing inactive accounts. That stays FINANCE.md's
+  deferred decision; FEE validates status itself (§5).
+
+## 7. Fee structures, lines and instalments (B, C)
+
+### 7.1 FeeStructure
+
+`fee_structures` is School-owned.
+
+| Column | Rule |
+|---|---|
+| `academic_year_id` | Composite FK `(id, school_id)` → `academic_years` |
+| `grade_level_id` | Composite FK → `grade_levels` |
+| `campus_id` | Nullable. NULL = School-wide default for that grade; set = a campus override (composite FK → `campuses`) |
+| `code`, `name` | `NormalizesCode`; unique `(school_id, academic_year_id, code)` |
+| `status` | `draft → active → retired` only (CHECK plus a transition trigger); never back to `draft` |
+| `supersedes_fee_structure_id` | Nullable composite self-FK; the amendment chain |
+| `activated_at`/`activated_by_user_id`, `retired_at`/`retired_by_user_id` | Provenance |
+
+- **One active structure per scope** by construction: a partial unique index
+  on `(school_id, academic_year_id, grade_level_id, COALESCE(campus_id,
+  '00000000-0000-0000-0000-000000000000'::uuid)) WHERE status = 'active'`.
+- **Resolution** for an enrollment `(year, campus, grade)`: the active
+  campus-specific structure if one exists, otherwise the active School-wide
+  default for that grade, otherwise none. No structure means the item is
+  excluded (`no_structure`) at preview.
+- **No Section-specific structures (B).** A Section is a teaching group, and
+  a fee that differs by Section would bill siblings in the same grade
+  differently for the same service. The owner may request them. That would
+  add a nullable `section_id` and change resolution, not the key in §11.
+
+### 7.2 Lines
+
+`fee_structure_lines` has one row per fee head in a structure.
+
+| Column | Rule |
+|---|---|
+| `fee_structure_id` | Composite FK |
+| `fee_head_id` | Composite FK; unique `(fee_structure_id, fee_head_id)` |
+| `is_optional` | Boolean (E, §8) |
+| `amount` | Total for the year: `NUMERIC(14,2)`, `> 0`; `currency = 'INR'` |
+| `frequency` | `one_time|term|monthly|custom`, **descriptive only** (C) |
+
+### 7.3 Instalments
+
+`fee_structure_installments` is the authoritative billing schedule.
+
+| Column | Rule |
+|---|---|
+| `fee_structure_line_id` | Composite FK |
+| `sequence` | Unique per line |
+| `label` | For example "Term 1", "July 2026" |
+| `billing_period_key` | Normalized code, for example `ANNUAL`, `T1`, `2026-07`; unique per line; **the idempotency period (§11)** |
+| `period_starts_on`, `period_ends_on` | Inclusive; must lie inside the AcademicYear; `starts ≤ ends` |
+| `due_date` | Must be `≥ period_starts_on`; copied to the charge |
+| `academic_term_id` | Nullable composite FK; informational for `term` lines |
+| `amount` | `NUMERIC(14,2)`, `> 0` |
+
+- **Frequency (C).** The generators (`one_time` = one instalment,
+  `term` = one per AcademicTerm, `monthly` = one per calendar month of the
+  year) only *propose* instalment rows in the draft editor. Staff may edit
+  them. The stored rows are the truth.
+- **Sum rule.** The instalment amounts of a line must equal the line amount.
+  This is checked at activation by the service **and** by a database guard
+  that refuses `draft → active` when any line's instalment sum differs.
+
+### 7.4 Immutability and amendment
+
+- Lines and instalments are editable **only while the parent is `draft`**,
+  enforced by a trigger that rejects INSERT/UPDATE/DELETE of children of a
+  non-draft structure (the payroll-results precedent).
+- **Amendment = successor.** Copy to a new `draft` with
+  `supersedes_fee_structure_id`, edit it, then activate it. Activation
+  retires the predecessor **in the same transaction**; a unique-violation
+  race becomes a typed conflict (the AcademicYear-activation precedent).
+- **Nothing already assessed changes.** A Student already charged for
+  `(head, period)` under the predecessor is **not** re-charged by the
+  successor, because the §11 key is period-based, not instalment-based.
+  Correcting such a Student is explicit: a concession (§14) or cancel and
+  re-assess (§11.3).
+- `retired` structures cannot be assessed. They remain readable forever.
+
+## 8. Optional fees (E)
+
+A line with `is_optional = true` is assessed **only** for Students with an
+active selection. Recommended; the owner confirms.
+
+- **Table.** `fee_optional_selections`: `student_id`,
+  `fee_structure_line_id`, `academic_year_id`, `status active|withdrawn`,
+  `selected_by_user_id`, `withdrawn_by_user_id`, timestamps.
+- **Invariant.** Partial unique `(school_id, student_id,
+  fee_structure_line_id) WHERE status = 'active'`.
+- **History.** A withdrawal affects only *future* assessment and never
+  cancels an existing charge.
+- **Why explicit.** Inferring selection from another module (Transport
+  assignment, Hostel residency) is the future **OPF** programme, which will
+  create selections through this same service. FEE never reads those
+  modules.
+
+## 9. Assessment runs
+
+### 9.1 Scope of a run
+
+One run = one active FeeStructure × one of its instalment periods
+(`billing_period_key`), covering every line of the structure that has that
+period.
+
+The UI may create many runs at once (for example "Term 1 for every grade"),
+but each run is independent. There is **one open run per (structure,
+period)**, enforced by a partial unique index on `(school_id,
+fee_structure_id, billing_period_key) WHERE status IN
+('draft','previewed','executing')`.
+
+### 9.2 Lifecycle
+
+This follows the rollover precedent.
+
+```
+draft ──preview──► previewed ──execute──► executing ──► completed
+  ▲                    │                     │      └──► completed_with_errors
+  └──── drift ─────────┘                     └──(resumable while executing)
+draft|previewed ──cancel──► cancelled
+```
+
+- **`draft`.** Created with `configuration_version = 1`; nothing is computed.
+- **`preview`** computes and persists one `fee_assessment_run_items` row per
+  (target enrollment × line). Each item records:
+  - `preview_result`: `ready`, `already_assessed`, `excluded`, `blocked`;
+  - `reason` (closed catalogue: `no_structure`, `optional_not_selected`,
+    `period_before_enrollment`, `enrollment_cancelled`, `student_inactive`,
+    `head_inactive`, `account_invalid`, `staff_excluded`);
+  - the computed gross amount, concession adjustments (FEE.3+) and net.
+
+  Preview also stores `previewed_configuration_version` and totals (counts
+  and amounts), then sets `previewed`.
+- **Staff exclusion.** Staff may mark `ready` items `staff_excluded` before
+  execution. This bumps `configuration_version` and returns the run to
+  `draft`, so a fresh preview is required. That is the drift rule.
+- **`execute`.** A claim moves `previewed → executing` by a conditional
+  `UPDATE … WHERE status = 'previewed' AND configuration_version =
+  previewed_configuration_version`. Zero rows means a typed conflict.
+- **Per item,** in its own transaction (§12):
+  - `execution_status`: `pending → succeeded | skipped_already_assessed |
+    failed`;
+  - `failure_reason` from a closed catalogue;
+  - `fee_assessment_id` on success.
+- **Finalize** re-counts under the run lock and sets `completed` (no
+  failures) or `completed_with_errors`. Failed items are reported, never
+  silently retried into a different outcome.
+- **Terminal.** `completed`, `completed_with_errors` and `cancelled` are
+  terminal. A new run for the same (structure, period) may be opened
+  afterwards; items already assessed simply preview as `already_assessed`.
+- **Provenance.** `created_by`, `previewed_by`, `executed_by` and the
+  matching timestamps are stored. Runs are never deleted
+  (`TenantRls::revokeDelete`); items become immutable once the run is
+  terminal (trigger).
+
+## 10. Target population and mid-year admission
+
+### 10.1 Target population (decided)
+
+- **Source.** A new Students-owned read method,
+  `StudentEnrollmentFeeTargetReadService::qualifyingForGradeAsOf(School,
+  academicYearId, gradeLevelId, ?campusId, asOfDate)`, is
+  authorization-neutral like its siblings. It returns DTOs (`enrollmentId`,
+  `studentId`, `campusId`, `sectionId`, `startsOn`, `endsOn`, `status`,
+  `studentIsActive`). Fees never queries `student_enrollments` or
+  `students` (rule 4).
+- **Predicate.** Same School, year and grade (and campus when the structure
+  is a campus override; a School-wide default run excludes campuses that
+  have their own active override). Temporal qualification uses the roster
+  predicate as of the **reference date**: `starts_on ≤ ref AND (ends_on IS
+  NULL OR ends_on ≥ ref)`.
+- **Reference date.** `max(period_starts_on, the run's as-of date)`, with the
+  as-of date defaulting to the execution date.
+- **Excluded:**
+  - `status = 'cancelled'` enrollments regardless of dates (`cancelled` means
+    the enrollment should not have continued; billing it would be wrong),
+    reason `enrollment_cancelled`;
+  - Students whose `students.status = 'inactive'`, reason
+    `student_inactive`. Staff can still bill them with an ad-hoc charge.
+- **Transfers.** A same-year transfer creates a new enrollment. The §11 key
+  is per Student, so a transfer between campuses with different structures
+  can never bill the same `(head, period)` twice.
+
+### 10.2 Mid-year admission (D — OWNER DECISION REQUIRED)
+
+| Option | Behaviour | Assessment |
+|---|---|---|
+| **D1 (recommended)** | Instalments whose `period_ends_on < enrollment.starts_on` are excluded (`period_before_enrollment`). The period containing `starts_on` and all later ones are assessed **in full**. Staff may exclude items at preview | Deterministic; no rounding; matches common school practice; reversible by concession |
+| D2 | Prorate the current period by days | Needs a rounding and day-count rule per head; hard to explain on a receipt; pulls in legal fee-regulation questions |
+| D3 | Staff select instalments per Student | Correct but laborious; a special case of D1's preview exclusion |
+| D4 | School-configured policy per structure (D1/D2) | Most flexible; the largest FEE.2 |
+
+Until D is decided, FEE.2 cannot freeze its preview rules. FEE.1 is
+unaffected.
+
+## 11. Assessment idempotency (by construction)
+
+### 11.1 The invariant
+
+`fee_assessments` is a Fees-owned, append-only-except-void link table:
+- the key columns: `student_id`, `academic_year_id`, `fee_head_id`,
+  `billing_period_key`;
+- `fee_structure_installment_id`, `student_enrollment_id`,
+  `fee_assessment_run_id` (nullable for a future single-Student path);
+- `charge_id`, NOT NULL, unique, composite FK `(charge_id, school_id)` →
+  `charges`;
+- `voided_at`, `void_reason`.
+
+```
+UNIQUE (school_id, student_id, academic_year_id, fee_head_id, billing_period_key)
+  WHERE voided_at IS NULL          -- fee_assessments_one_live_per_period
+```
+
+This is **stronger** than `(school_id, installment_id, student_id)`. It also
+blocks double billing across successor structures, campus overrides and
+transfers.
+
+### 11.2 Why it is idempotent by construction
+
+In each item transaction, `ChargeService::assess()` (ledger post + charge
+insert) and the `fee_assessments` insert happen together. If a concurrent or
+repeated attempt already holds the key, the insert raises
+`UniqueConstraintViolationException`. The whole item transaction rolls back,
+including the journal entry and the charge, and the item is recorded as
+`skipped_already_assessed` in a fresh transaction.
+
+There is **no check-then-insert** (rule 30). The preview's
+`already_assessed` result is advisory only.
+
+### 11.3 Voiding (cancel and re-assess)
+
+Cancelling a structure-generated charge goes through a Fees path that, in
+**one transaction**:
+1. cancels the charge (`ChargeService::cancel`, still refused when
+   allocations exist); and
+2. sets `fee_assessments.voided_at`.
+
+This frees the period key for a deliberate re-assessment. A direct
+`ChargeService::cancel()` of a linked charge without voiding is refused by a
+database guard: a charge with a live `fee_assessments` row may be cancelled
+only when that row is voided in the same transaction, checked by a deferred
+constraint trigger.
+
+### 11.4 Late fees
+
+Late fees use their own key (§16.3).
+
+## 12. Concurrency
+
+- **Run level.**
+  - The claim is a conditional UPDATE (§9.2).
+  - One open run per (structure, period) is enforced by a partial unique
+    index.
+  - Structure activation, retirement and succession lock the structure row
+    `FOR UPDATE`.
+  - Execution re-checks under `FOR SHARE` that the structure is still
+    `active` in each item transaction, so a concurrent retirement stops new
+    items and never produces half-applied items.
+- **Item level.**
+  - `pg_advisory_xact_lock(hashtextextended('fees.assessment:' ||
+    school || ':' || student || ':' || year || ':' || head || ':' || period,
+    0))` serializes identical keys cheaply. The partial unique index remains
+    the **only** authority.
+  - The enrollment is re-read under `FOR SHARE` through a Students-owned
+    method, so a concurrent withdraw/transfer/cancel either commits first
+    (and the item re-evaluates its temporal qualification) or waits.
+  - Charges from different Students never contend.
+- **Lock order** is always: run row → structure row (share) → advisory key
+  → enrollment (share) → ledger (inside `LedgerService`). Concession grants
+  are read-only in this transaction.
+- **`TenantLock`** (a Redis lock) is **not** used for correctness. It may
+  only throttle a second executor.
+- **Required proofs** (real PostgreSQL, separate OS processes, forced overlap
+  as in the existing race tests; never SQLite):
+  1. the same run executed twice concurrently;
+  2. two different runs whose targets overlap (default and campus override;
+     predecessor and successor);
+  3. a retry after a failure partway through a batch;
+  4. an enrollment withdraw/transfer/cancel racing item execution;
+  5. structure retirement racing execution;
+  6. (FEE.3) concession approval racing a payment allocation on the same
+     charge;
+  7. (FEE.4) two settlements issuing receipts concurrently: gap-free and
+     unique;
+  8. (FEE.5) a late-fee run executed twice concurrently.
+
+## 13. Execution and queue (decided)
+
+- **Queued, bounded batches.** `ExecuteFeeAssessmentRunJob`:
+  - uses `TenantScoped`;
+  - `$tries = 1` (the run owns its own resumption; rule 59 forbids stacking
+    queue retries on domain retry);
+  - `$timeout = 60`, below `retry_after = 90` (rule 58);
+  - processes at most 100 pending items, each in its own transaction, then
+    re-dispatches itself while pending items remain.
+
+  A crashed or timed-out job leaves items `pending`. The authorized "resume"
+  action (and each re-dispatch) only ever selects `pending` items, and
+  §11.2 makes any duplicate attempt harmless.
+- **School lifecycle (rule 86).** Each batch calls
+  `SchoolOperationalGuard::requireOperational()` inside its transaction. A
+  suspended School **pauses**: the run stays `executing`, no items change,
+  and it is resumable after reactivation. `SchoolLifecycleArchitectureGuardTest`
+  must list the job with this behaviour.
+- **Durability.** The per-item audit and outbox writes happen in the item's
+  transaction (§20). The run-completion event is written in the finalize
+  transaction.
+- The same job shape serves late-fee runs (§16), which are owned by Payments.
+
+## 14. Concessions, scholarships and waivers (F, F2, G, M)
+
+### 14.1 Model
+
+- **`fee_concessions`** is the approvable decision. Its scope is either:
+  - **standing:** `student_id` + `academic_year_id` + `fee_head_id`
+    (nullable = every head) + `valid_from`/`valid_to` (inclusive, inside the
+    year), applied at assessment time; or
+  - **targeted:** one `charge_id`, applied at approval.
+
+  A CHECK makes the two scopes mutually exclusive. The value is `kind fixed`
+  (`NUMERIC(14,2) > 0`) or `kind percentage` (`NUMERIC(5,2)`, `0 <
+  value ≤ 100`). Targeted concessions are `fixed` only.
+- **`fee_adjustments`** is the financial fact:
+  - `charge_id`, `fee_concession_id`, `amount > 0`, INR;
+  - `debit_ledger_account_id` (the concession account, §14.5) and the
+    credited account = the charge's receivable account;
+  - `journal_entry_id` NOT NULL;
+  - the cancellation pair `cancelled_at`/`cancellation_journal_entry_id`,
+    with the same immutability trigger semantics as `charges` (§1.1);
+  - `TenantRls::revokeDelete`.
+- **Posting.** Each adjustment posts Dr concession account / Cr receivable
+  through `LedgerService::post()`. Cancelling one reverses that entry
+  (`reverseById`). A charge's amount is **never** changed.
+
+### 14.2 Categories and notes (M)
+
+- **Category** comes from a closed catalogue: `concession`, `scholarship`,
+  `waiver` (recommended). Sibling, staff-ward and RTE labels are **not**
+  added without the owner and the legal answer in §27.
+- **No free-text note** (recommended). A reason can reveal a family's
+  financial or personal circumstances (§21). If the owner wants notes, they
+  need a classification decision first.
+
+### 14.3 Amounts (N, decided)
+
+- **Percentage.** `Money::multiplyByRate(value/100, 2)` of the charge amount
+  (half away from zero), capped at the charge amount.
+- **Fixed.** The fixed value, capped the same way.
+- **Several concessions on one charge.** They apply in `approved_at`, then
+  `id`, order, each capped at what remains. Total adjustments can never
+  exceed the charge amount (database guard, §15).
+
+### 14.4 Lifecycle and approval (F — OWNER DECISION REQUIRED)
+
+```
+pending ──approve──► approved ──revoke (standing only)──► revoked
+   ├──reject──► rejected
+   └──withdraw (requester)──► withdrawn
+```
+
+- **Recommended rule.** Every concession needs a second person:
+  - `CHECK (decided_by_user_id IS NULL OR decided_by_user_id <>
+    requested_by_user_id)` (the payroll SoD precedent), plus a typed
+    `SelfApprovalNotAllowedException`;
+  - capability `finance.fee_concessions.approve`;
+  - no amount or percentage thresholds in v1. The owner may ask for
+    thresholds; they would add a School-level setting and a second
+    approval stage.
+- **Decisions** are conditional `UPDATE … WHERE status = 'pending'`
+  statements. Approving a **targeted** concession posts its adjustment in
+  the same transaction.
+- **Revoking** a standing concession stops *future* application only. Posted
+  adjustments stay; undoing one is an explicit adjustment cancellation.
+- **Requests** carry a server-issued idempotency key (the manual-payment
+  precedent): unique `(school_id, idempotency_key)` with a strict replay.
+- **Standing application.** When an assessment item creates a charge for a
+  Student with an approved standing concession covering that head and the
+  instalment's `period_starts_on`, the adjustment is posted **in the same
+  item transaction**. Preview shows gross, adjustment and net.
+
+### 14.5 Posting account (F2 — owner/accountant)
+
+The recommendation is one School-level Fees setting (a singleton
+`fee_settings` row, following the `canteen_billing_configurations`
+precedent) naming an **active `expense`** account.
+
+Contra-income (an `income` account debited) is the alternative. Either way
+the ledger stays balanced, and the choice changes only the reporting
+presentation, so the accountant decides.
+
+### 14.6 Concession after payment (G — OWNER DECISION REQUIRED)
+
+| Option | Behaviour |
+|---|---|
+| **G1 (recommended)** | A targeted concession's amount, and each standing application, is capped at the charge's **current outstanding** (amount − allocations − posted adjustments), computed under the charge row lock. A fully paid charge **refuses** a concession (`ChargeFullyPaidException`). No credit balance, no refund |
+| G2 | Allow a credit exceeding outstanding into a Student credit balance | Needs the unapplied-cash/credit model FINANCE.md deferred, a new liability account type, and Payments changes |
+| G3 | Refund the excess | Out of scope; refunds are deferred (ADR 0057; rule 91) |
+
+History is never mutated under any option.
+
+### 14.7 Charge cancellation with adjustments
+
+Cancelling a charge that has live (uncancelled) adjustments is **refused**
+(database guard, `ChargeHasActiveAdjustmentsException`). Staff cancel the
+adjustments first, each as its own reversal.
+
+## 15. The Payments capacity seam (ADR 0031 amendment, FEE.3)
+
+Today `payments_lock_and_validate_charge_allocation()` enforces
+`SUM(allocations) ≤ charges.amount`. FEE.3 replaces the rule, **inside a
+Payments-owned migration**, with:
+
+```
+SUM(allocations) + SUM(uncancelled fee_adjustments) ≤ charges.amount
+```
+
+- **Enforcement.** The rule is enforced at insert of **either** an
+  allocation or an adjustment. Both paths first lock the charge row `FOR
+  UPDATE`, which the existing trigger already does, so the two serialize.
+- **Why Payments owns it.** Payments → Fees is the permitted direction, and
+  Payments already owns the charge-side guard trigger.
+- **Application layer.**
+  - `ChargeAllocationSnapshot` gains the posted-adjustment total, so
+    `SettledPaymentRecorder`'s capacity pre-check and the manual-payment
+    UI's "outstanding" use net amounts.
+  - Fees' adjustment path translates the trigger's error into
+    `ChargeFullyPaidException`/`AdjustmentExceedsOutstandingException`.
+- **Rollback.** `down()` restores the previous function body verbatim.
+- **Proof.** Concurrency proof 6 in §12.
+
+## 16. Late fees (H — OWNER DECISION REQUIRED)
+
+### 16.1 Rules (configuration, Fees-owned)
+
+`fee_late_fee_rules`:
+
+| Column | Rule |
+|---|---|
+| scope | `fee_structure_id` (composite FK) + optional `fee_head_id` (NULL = every line of the structure) |
+| `late_fee_head_id` | A FeeHead whose revenue account receives late fees |
+| `grace_days` | Integer `≥ 0` |
+| `kind` | `fixed` (amount `> 0`) or `percentage` (of the source charge's outstanding at evaluation, `0 < p ≤ 100`) |
+| `max_amount` | Optional cap |
+| `status` | `active|inactive` |
+
+- Rules are editable only while inactive and never deleted.
+- **Recommended v1:** fixed or percentage, grace days and an optional cap;
+  **one late fee per overdue charge per rule**.
+- Tiered and recurring (per-month) late fees are owner options. They would
+  add a `period_key` to §16.3's key.
+
+### 16.2 Execution (explicit, Payments-owned)
+
+- **A late-fee run** is created and executed by staff with an
+  `evaluation_date`. It uses the same lifecycle and job shape as §9 and §13.
+  There is **no scheduler or automation dependency** (ADR 0043 tiers are not
+  involved).
+- **Candidates:** uncancelled structure-generated charges (live
+  `fee_assessments` rows, read through a Fees Application method) with
+  `due_date + grace_days < evaluation_date` and outstanding `> 0`, computed
+  by Payments under the charge lock.
+- **The late fee** is a new charge assessed through `ChargeService::assess()`
+  on the late-fee head's accounts, `due_date` = evaluation date,
+  description `"Late fee: <source label>"`.
+
+### 16.3 Idempotency
+
+`late_fee_assessments` (Payments-owned) holds `source_charge_id`,
+`late_fee_rule_id`, `charge_id` (unique), `run_id` and `voided_at`:
+
+```
+UNIQUE (school_id, source_charge_id, late_fee_rule_id) WHERE voided_at IS NULL
+```
+
+It follows the same insert-rolls-back-everything semantics as §11.2. Voiding
+follows §11.3.
+
+**[LEGAL REVIEW REQUIRED]:** whether state fee-regulation law or RTE limits
+late fees for some Students (§27). FEE.5 must not start until that is
+answered or the owner accepts the risk in writing.
+
+## 17. Receipts (I, I2, J)
+
+### 17.1 What a receipt is
+
+A receipt is **evidence that a Payment was settled**, one per Payment. It is
+never a second ledger: it records no new amount and references
+`payment_id`, from which it reads amount, date, method, allocations and
+Student.
+
+`payment_receipts` (Payments-owned):
+- `payment_id` unique, composite FK;
+- `receipt_number` (text, unique per School);
+- `series_key` (for example `2026-27`);
+- `sequence_value` (bigint);
+- `issued_at`, `issued_by_user_id` (nullable for provider settlements);
+- append-only (`TenantRls::makeAppendOnly`).
+
+### 17.2 Numbering (I — OWNER DECISION REQUIRED)
+
+- **Counter.** `payment_receipt_counters (school_id, series_key,
+  next_value)`, unique `(school_id, series_key)`. It follows
+  `EmployeeNumberAllocator`: `insertOrIgnore` the series row, lock it `FOR
+  UPDATE`, read and increment, **inside the settlement transaction**.
+- **Gap-free by construction.** A rolled-back settlement rolls back its
+  increment. A backstop `unique (school_id, series_key, sequence_value)`
+  exists and is never retried silently. Never `MAX(number)+1`, never a
+  PostgreSQL `SEQUENCE` (sequences are not transactional and leave gaps).
+- **Series (recommended I).** School + financial year. The FY is derived
+  from the Payment's `settled_at` date in the School's timezone and a
+  School-level `financial_year_start_month` setting (default 4 = April).
+  The alternative is a single continuous School-wide series.
+- **Format.** `<PREFIX>/<FY>/<6-digit zero-padded sequence>`, prefix default
+  `RCPT`. Prefix and padding go in `fee_settings`; they may not change once
+  a receipt exists in the series.
+- **Voids.** Payments are immutable and have no void in v1, so receipts have
+  no void or cancel either. If a future correction contract (rule 91) adds
+  one, it must issue a new, linked document and never renumber.
+
+### 17.3 Issuance
+
+`SettledPaymentRecorder::record()` issues the receipt in the same
+transaction for **both** ingresses (manual and a future provider). One
+receipt per payment is enforced by the unique `payment_id`. A replayed
+manual payment returns the existing receipt.
+
+### 17.4 Existing payments (I2 — OWNER DECISION REQUIRED)
+
+Payments settled before FEE.4 have no receipt. The recommendation is an
+explicit, audited, idempotent one-time command,
+`finance:receipts-backfill {school}`. It issues receipts in `(settled_at,
+id)` order, skipping payments that already have one, and records
+`payment_receipt.backfilled`. The alternative is to leave legacy payments
+without receipts.
+
+### 17.5 Statutory form and GST (J — **LEGAL REVIEW REQUIRED**)
+
+Whether a School must issue a specific statutory receipt or tax invoice,
+show a GSTIN, HSN/SAC or tax lines, or treat any fee head as taxable is
+**not decided** and must not be invented.
+
+Until a qualified answer is recorded, FEE.4 renders a **payment
+acknowledgement** only. It shows School name, receipt number, date,
+Student, amount, method, allocations by fee head and period, and no tax
+field. It is labelled "Payment receipt", never "Tax invoice".
+
+## 18. Staff student fee statement
+
+- **Owner.** `StudentFeeStatementReadService` in Payments, read-only. It is
+  computed on read from authoritative rows with **no stored balance**:
+  charges and cancellations, fee head and period from `fee_assessments`,
+  adjustments, allocations with their Payments and receipt numbers, and
+  outstanding per charge and in total (amount − allocations − adjustments).
+- **Scope.** One Student, filterable by AcademicYear.
+- **Authorization.** Both `finance.charges.view` **and**
+  `finance.payments.view`; no new capability.
+- **Audit.** `fee_statement.viewed` (a read audit, following the
+  `charge.detail_viewed` precedent).
+- **Fees side.** Fees exposes the charge, adjustment and assessment facts
+  through Application methods such as
+  `ChargeService::statementLinesForStudent()`. Payments composes them.
+- **Out of scope.** A printable or exported statement and any
+  Guardian/Student-facing view. The portal is the future POR programme.
+
+## 19. Capabilities and roles (L)
+
+All are School-scope `finance.*` keys, following the existing convention
+(Fees already uses `finance.charges.*`; there is no `fees.*` namespace).
+
+| Capability | Grants | Checkpoint |
+|---|---|---|
+| `finance.accounts.manage` | Create and activate/deactivate ledger accounts (K1) | FEE.1 |
+| `finance.fee_structures.view` | Read fee heads, structures, rules, optional selections | FEE.1 |
+| `finance.fee_structures.manage` | Manage fee heads, draft/activate/retire structures, optional selections, late-fee rules | FEE.1 |
+| `finance.fee_assessments.run` | Create, preview, exclude, execute, resume and cancel assessment and late-fee runs | FEE.2 |
+| `finance.fee_concessions.view` | Read concessions (Highly Sensitive, §21) | FEE.3 |
+| `finance.fee_concessions.request` | Create and withdraw concession requests | FEE.3 |
+| `finance.fee_concessions.approve` | Approve, reject, revoke; never one's own request | FEE.3 |
+
+- **Reused, not duplicated:**
+  - run results and charges → `finance.charges.view`;
+  - receipts → `finance.payments.view`;
+  - statements → `finance.charges.view` + `finance.payments.view`.
+- **No candidate** `fees.assessment.view`, `fees.receipts.view` or
+  `fees.statements.view` is created; each is covered above.
+- **Recommended grants (L):**
+  - `school_admin`: all;
+  - `principal`: none by default (principal holds no Finance capability
+    today). The owner may choose `finance.fee_concessions.view` +
+    `.approve` for the principal;
+  - `demo.finance_officer`: all except `.approve`, so the DDEV demo shows
+    maker/checker.
+- **Enforcement.** Every mutation checks its capability in the Application
+  administrative facade (the `ChargeAdministrationService` pattern). API
+  routes add `capability:` middleware. No code branches on a role name
+  (rule 24).
+- **HTTP idempotency (rule 29):**
+  - run execution, concession requests and late-fee execution are
+    idempotent by construction (claims, unique keys);
+  - request creation uses server-issued keys;
+  - no endpoint relies on the generic `idempotent` middleware alone for a
+    financial effect (rule 33).
+
+## 20. Audit and events
+
+**Audit** (`AuditRecorder::school`, metadata ids and codes only, never
+amounts or names):
+- `ledger_account.created`, `ledger_account.status_changed`;
+- `fee_head.created`, `.updated` (with before/after account ids),
+  `.deactivated`;
+- `fee_structure.created`, `.activated`, `.retired`, `.superseded`;
+- `fee_optional_selection.created`, `.withdrawn`;
+- `fee_assessment_run.created`, `.previewed`, `.item_excluded`,
+  `.execution_started`, `.completed`, `.completed_with_errors`,
+  `.cancelled`, `.paused`;
+- `fee_assessment.voided`;
+- `fee_concession.requested`, `.approved`, `.rejected`, `.withdrawn`,
+  `.revoked`;
+- `fee_adjustment.posted`, `.cancelled`;
+- `late_fee_rule.created`, `.status_changed`;
+- `late_fee_run.*` (the same set as assessment runs);
+- `payment_receipt.issued`, `.backfilled`;
+- `fee_statement.viewed`.
+
+The per-charge `charge.assessed` and `journal_entry.posted` audits continue
+unchanged.
+
+**Outbox events** (`ShouldBeOutboxed`, payload ids plus currency only,
+matching the existing Finance events; **none registered in
+`WebhookEventRegistry`**; external publication needs its own reviewed
+decision, rule 45/77):
+
+| Class | Type |
+|---|---|
+| `FeeStructureActivated` | `fee_structure.activated.v1` |
+| `FeeAssessmentRunCompleted` | `fee_assessment_run.completed.v1` (also for `completed_with_errors`, with the status) |
+| `FeeConcessionApproved` / `FeeConcessionRejected` | `fee_concession.approved.v1` / `fee_concession.rejected.v1` |
+| `FeeAdjustmentPosted` / `FeeAdjustmentCancelled` | `fee_adjustment.posted.v1` / `fee_adjustment.cancelled.v1` |
+| `LateFeeAssessed` | `late_fee.assessed.v1` |
+| `PaymentReceiptIssued` | `payment_receipt.issued.v1` |
+
+`charge.assessed.v1` is still emitted per charge. Per-item events are
+emitted inside the item transaction; run events inside the finalize
+transaction.
+
+## 21. Classification and privacy
+
+- **Highly Sensitive.** Charges, adjustments, concessions, receipts,
+  statements and run items are Student-linked financial data (the
+  DATA-CLASSIFICATION "Financial data" and "Children's data" rows).
+  Concessions can additionally reveal a family's circumstances.
+- **Confidential.** Fee heads, structures, instalments and late-fee rules
+  are School operational pricing with no personal data (the Inventory and
+  Canteen catalogue precedent). They are still capability-gated.
+- **Minimized lists.** List views omit money fields where the Canteen
+  precedent does. Run lists show counts and totals only; item lists require
+  `finance.charges.view`.
+- **Never logged or audited:** amounts, Student names, concession reasons,
+  receipt contents.
+- **Implementation.** FEE.1–FEE.4 add their rows to
+  `docs/security/DATA-CLASSIFICATION.md` when built.
+- **Retention.** Governed by the pending E21 legal decision. FEE adds no
+  purge.
+
+## 22. Tenancy and RLS
+
+- **Every new table is School-owned:** `school_id` NOT NULL, `BelongsToSchool`
+  model, `TenantRls::enable()` (RLS enabled **and forced**; rule 18), UUIDv7
+  ids, `unique(id, school_id)` for child FKs.
+- **Cross-School references are structurally impossible.** Every reference
+  is a composite FK `(x_id, school_id)` (rule 70); references to money
+  tables also pin `currency`.
+- **Deletes.** `TenantRls::revokeDelete` on every financial or
+  configuration table. `makeAppendOnly` on `fee_adjustments` history
+  columns and `payment_receipts` where no legitimate UPDATE exists.
+- **Jobs** carry the tenant through `TenantScoped` (rules 5, 21, 57).
+- **Tests** cover Eloquent-layer and raw-PostgreSQL/RLS cross-School denial,
+  and missing tenant context failing closed (rule 28).
+
+## 23. Migration and rollback plan
+
+All migrations are **additive**. No existing column of `charges`,
+`payments`, `payment_allocations`, `journal_*` or `ledger_accounts` changes
+meaning or data.
+
+| Checkpoint | New migrations (in order) |
+|---|---|
+| FEE.1 | (K1: none; ledger accounts table exists) → `fee_heads` → `fee_settings` (singleton: concession account nullable until FEE.3; receipt prefix/FY month nullable until FEE.4) → `fee_structures` (+ transition trigger, active partial unique) → `fee_structure_lines` → `fee_structure_installments` (+ draft-only child trigger, activation sum guard) → `fee_optional_selections` |
+| FEE.2 | `fee_assessment_runs` (+ open-run partial unique) → `fee_assessment_run_items` (+ terminal immutability trigger) → `fee_assessments` (+ live-key partial unique) → charge-void guard (deferred constraint trigger on `charges` cancellation requiring a voided link) |
+| FEE.3 | `fee_concessions` (+ SoD CHECK, scope CHECK, idempotency unique) → `fee_adjustments` (+ immutability trigger, active-adjustment cancellation guard on `charges`) → **Payments-owned** replacement of `payments_lock_and_validate_charge_allocation()` + adjustment-capacity trigger (§15) |
+| FEE.4 | `payment_receipt_counters` → `payment_receipts` |
+| FEE.5 | `fee_late_fee_rules` (Fees) → `late_fee_runs`, `late_fee_run_items`, `late_fee_assessments` (Payments) |
+
+- Each `down()` drops triggers and functions before tables, disables RLS
+  (`TenantRls::disable`) and restores any replaced function body verbatim
+  (rule 10).
+- Every migration runs on `pgsql_admin` (rule 54).
+- Indexes are declared explicitly for every FK and for each run's
+  `(school_id, status)` and `(run_id, execution_status)`.
+
+## 24. Explicitly out of scope (FEE.0–FEE.5)
+
+- Payment reversal, refunds, voids and manual-payment correction (rule 91;
+  its own correction contract).
+- Credit balances, overpayment and unapplied cash.
+- The payment gateway, PCI and provider work (ADR 0057).
+- Any Guardian/Student portal or statement (future POR).
+- Transport fee linkage, Hostel fees and deposits, Library fines and
+  admissions application fees (future OPF). OPF creates optional selections
+  and structures through FEE's services.
+- Tally or any accounting integration.
+- GST or tax calculation.
+- Government integrations.
+- AI.
+- Scheduled or automated runs of any kind.
+- Invoices (§4).
+- Proration unless D2/D4 is chosen.
+- Accounting periods or a chart-of-accounts template.
+- Printable statements and exports.
+- Automation-tier notifications.
+- SMS/WhatsApp/email reminders (E17/E18 and provider gates).
+
+## 25. Checkpoint plan
+
+Each checkpoint follows rule 82 (focused tests, gates, DDEV review, commit,
+publish) and records its unit number since the last full regression.
+
+| | Migrations | Services | Authorization | API / UI | Audit / events | Key tests and proofs |
+|---|---|---|---|---|---|---|
+| **FEE.1 Fee heads & structures** (+ K1) | §23 FEE.1 | `LedgerAccountAdministrationService` (Finance); `FeeHeadService`; `FeeStructureService` (draft edit, generators, activate, retire, successor); `FeeOptionalSelectionService`; `FeeStructureReadService` | `finance.accounts.manage`, `finance.fee_structures.view|manage` | `/api/v1/schools/{school}/fee-heads`, `/fee-structures` (+ lines/installments/activate/retire/succeed), `/fee-optional-selections`; Inertia Finance → Fee setup; no DELETE routes | `fee_head.*`, `fee_structure.*`, `ledger_account.*`; `fee_structure.activated.v1` | allow/deny for every action; cross-School Eloquent + RLS; composite-FK refusal; sum guard; draft-only child trigger; one-active race (two processes); code normalization 422; money precision (14,2, no float) |
+| **FEE.2 Assessment runs** | §23 FEE.2 | Students `StudentEnrollmentFeeTargetReadService`; `FeeAssessmentRunService` (create, preview, exclude, claim, finalize, resume, cancel); `FeeAssessmentItemExecutor`; `ExecuteFeeAssessmentRunJob`; void path | `finance.fee_assessments.run`; view via `finance.charges.view` | runs API + UI (preview totals, item list, execute, progress, resume) | `fee_assessment_run.*`, `fee_assessment.voided`; per-charge `charge.assessed.v1`; `fee_assessment_run.completed.v1` | idempotency (re-execute, re-run, successor structure, transfer); proofs 1–5 (§12); retry after job kill; suspended-School pause; outbox cardinality; D rules |
+| **FEE.3 Concessions** | §23 FEE.3 | `FeeConcessionService` (request/approve/reject/withdraw/revoke); `FeeAdjustmentService` (post/cancel); standing application inside the item executor; Payments trigger amendment; `ChargeAllocationSnapshot` net | `finance.fee_concessions.view|request|approve` | concessions API + UI (request, approval queue, per-charge adjustments) | `fee_concession.*`, `fee_adjustment.*` | SoD CHECK + typed error; G cap; proof 6; cancellation guard; ADR 0031 amendment tests (allocation refused beyond net); rounding (N) |
+| **FEE.4 Receipts & statements** | §23 FEE.4 | `ReceiptIssuer` inside `SettledPaymentRecorder`; `StudentFeeStatementReadService`; backfill command (I2) | `finance.payments.view`; statement = charges.view + payments.view | receipt view/print (acknowledgement, §17.5); statement page | `payment_receipt.*`, `fee_statement.viewed`; `payment_receipt.issued.v1` | proof 7 (gap-free, unique under concurrency, rollback leaves no gap); FY series boundary; replay returns same receipt; statement arithmetic equals ledger |
+| **FEE.5 Late fees** (after the §27 legal answer) | §23 FEE.5 | `LateFeeRuleService` (Fees); `LateFeeRunService` + job (Payments) | `finance.fee_structures.manage` (rules), `finance.fee_assessments.run` (runs) | rules UI; late-fee run UI | `late_fee_rule.*`, `late_fee_run.*`; `late_fee.assessed.v1` | proof 8; grace boundary; cap; percentage of outstanding; void and re-run |
+
+**Next checkpoint: FEE.1**, once A (confirmation), B, C, E, K and L are
+decided. D, F, F2, G, H, I, I2 and M are needed only by their later
+checkpoints.
+
+## 26. Test obligations (every FEE checkpoint)
+
+- Allow **and** deny tests for every capability-gated action and route
+  (rule 13).
+- Cross-School denial at the Eloquent layer **and** the raw
+  PostgreSQL/RLS layer (`RawIsolationTest` pattern), plus missing tenant
+  context failing closed (rule 28).
+- Database invariant tests for every CHECK, trigger, partial unique and
+  composite FK, including raw SQL bypass attempts.
+- Real-process concurrency tests (§12) using the repository's race-script
+  pattern with forced overlap. **No SQLite, no sequential simulation.**
+- Idempotency and retry tests: repeated execution, killed job, resumed run,
+  replayed request.
+- Audit tests (event name, actor, subject, minimized metadata) and outbox
+  tests (type, payload, cardinality, same-transaction rollback).
+- Money precision tests: `NUMERIC(14,2)`, string amounts, no float anywhere
+  in PHP or TypeScript, rounding (N), caps.
+- School lifecycle: suspended-School behaviour for every job and command
+  (rule 86).
+- Architecture guards: Fees never reads `payment_allocations` or
+  `student_enrollments` directly; Payments never reads Fees models; no role
+  branching.
+
+## 27. Legal questions (LEGAL REVIEW REQUIRED)
+
+1. **Receipt form and GST (J).** Is a statutory receipt format or tax
+   invoice required? Are any school fee heads taxable? Which identifiers
+   must appear? This blocks any tax field. FEE.4 ships an acknowledgement
+   only.
+2. **Fee regulation and late fees.** Do applicable state fee-regulation
+   laws cap or prohibit late fees, fee increases within a year, or specific
+   fee heads? This blocks FEE.5.
+3. **RTE and statutory free seats.** Must Students admitted under a
+   statutory quota be excluded from specific heads? Should that be modelled
+   as an exclusion or a 100% waiver category? This must be answered before
+   any RTE-specific category exists; until then, staff use ordinary
+   concessions with no statutory label.
+4. **Retention** of financial records, concessions and receipts: E21, the
+   existing pending decision.
+
+## 28. Documentation drift recorded (not fixed here)
+
+**Finance-related** (noted in `FINANCE.md` by a dated note, history
+unchanged):
+- the design-text claim that every School gets seeded core accounts (§1.2
+  F1);
+- `Money`'s docblock "No subtract()/multiply()" beside `multiplyByRate`;
+- ADR 0031's trigger-function names and its `processSettlement()`
+  reference, which now lives in `SettledPaymentRecorder::record`;
+- the 0G.8 migration inventory missing `2026_10_27_090000`;
+- the 0O.11 bullet still saying "corrects mistakes append-only".
+
+**Outside FEE** (separate cleanup, not done here):
+- `MASTER-ROADMAP.md` GradeScale "NOT YET PUBLISHED" wording;
+- TRANSPORT/HOSTEL/ADMISSIONS saying Finance or Documents are not built;
+- DOMAIN-MAP Admissions/0M/Examinations drift;
+- `docs/product/README.md` and `docs/modules/README.md` "Empty in Phase
+  0A";
+- the 0F promise of Student/Guardian event producers (none exist).
+
+## 29. Consequences
+
+- **Gains.** Schools get year/grade fee structures, bulk billing, approved
+  concessions, receipts and statements without any change to the meaning of
+  existing charges, payments or journal entries.
+- **Double billing is prevented structurally.** One live charge per Student
+  × head × period, across reruns, amendments and transfers.
+- **Payments grows.** It takes a larger read and evidence role (receipts,
+  statements, late-fee evaluation) to keep the dependency direction
+  one-way. Fees stays free of settlement data.
+- **Accepted costs:**
+  - a Payments trigger amendment in FEE.3 (an ADR 0031 note at build time);
+  - a new Students read method in FEE.2;
+  - minimal ledger-account administration in FEE.1 (K1).
+- **Deferred items remain deferred** and are listed in §24: refunds,
+  credits, gateway, portal, OPF integrations and taxes.
