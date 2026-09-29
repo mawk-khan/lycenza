@@ -220,7 +220,7 @@ Status values:
 | A | Invoice entity | **DECIDED — owner confirmed 2026-09-29** | No `invoices` entity; charges + receipts + statements (§4) | FEE.1 |
 | B | Structure scope | **DECIDED — owner confirmed 2026-09-29** | AcademicYear × GradeLevel, optional Campus override; no Section-specific structures (§7.1) | FEE.1 |
 | C | Frequencies | **DECIDED — owner confirmed 2026-09-29** | Stored instalments are authoritative; `one_time`/`term`/`monthly` are authoring generators; "optional" is a separate flag (§7.3) | FEE.1 |
-| D | Mid-year admission | OWNER DECISION REQUIRED | No proration in v1; skip instalments whose billing period ended before `starts_on`; current and future periods assessed in full; staff may exclude items at preview (§10.2) | FEE.2 |
+| D | Mid-year admission | **DECIDED — owner confirmed D1, 2026-09-29** | No proration in v1; skip instalments whose billing period ended before `starts_on`; current and future periods assessed in full; staff may exclude items at preview (§10.2) | FEE.2 |
 | E | Optional fees | **DECIDED — owner confirmed 2026-09-29** | Explicit per-Student selection before assessment (§8) | FEE.1 (schema), FEE.2 |
 | F | Concession approval | OWNER DECISION REQUIRED | Maker/checker mandatory for every concession, database-enforced; no amount thresholds in v1 (§14.4) | FEE.3 |
 | F2 | Concession posting account | OWNER DECISION REQUIRED (accountant) | One School-level `expense` account "Fee concessions and scholarships" (§14.5) | FEE.3 |
@@ -515,7 +515,7 @@ draft|previewed ──cancel──► cancelled
   is per Student, so a transfer between campuses with different structures
   can never bill the same `(head, period)` twice.
 
-### 10.2 Mid-year admission (D — OWNER DECISION REQUIRED)
+### 10.2 Mid-year admission (D — DECIDED: D1, owner confirmed 2026-09-29)
 
 | Option | Behaviour | Assessment |
 |---|---|---|
@@ -524,8 +524,10 @@ draft|previewed ──cancel──► cancelled
 | D3 | Staff select instalments per Student | Correct but laborious; a special case of D1's preview exclusion |
 | D4 | School-configured policy per structure (D1/D2) | Most flexible; the largest FEE.2 |
 
-Until D is decided, FEE.2 cannot freeze its preview rules. FEE.1 is
-unaffected.
+**Decided (owner, 2026-09-29): D1.** The rules FEE.2 implements are in
+"Owner decision D for FEE.2" at the end of this ADR. D2 (proration), D3
+and D4 are not adopted. This paragraph originally read: "Until D is
+decided, FEE.2 cannot freeze its preview rules. FEE.1 is unaffected.".
 
 ## 11. Assessment idempotency (by construction)
 
@@ -1210,3 +1212,47 @@ amend the contract text above:
   - a raw instalment insert racing an activation, refused by the trigger's
     FOR SHARE parent lock.
 - **Not started.** FEE.2 (assessment runs) waits for decision D.
+
+## Owner decision D for FEE.2 (2026-09-29)
+
+The owner confirmed **D1** (§10.2) for FEE.2 assessment eligibility. The
+earlier notes that list D as pending were true when written and stay
+unchanged.
+
+1. **No proration in v1.** No day-, month-, percentage- or formula-based
+   proration exists. Every assessed instalment is charged at its stored
+   amount.
+2. **Periods that ended before enrollment are skipped.** For a Student
+   whose enrollment `starts_on` falls after the AcademicYear begins, an
+   instalment whose `period_ends_on` is before that `starts_on` is not
+   assessed. The preview reason is `period_before_enrollment`. No
+   backdated charge is ever generated for such a period.
+3. **Joining during a period means the full instalment.** If `starts_on`
+   falls inside an instalment's billing period, that instalment is
+   assessed in full.
+4. **Later instalments are assessed in full.**
+5. **Preview before execution.** Every run's preview shows the resulting
+   items (§9.2) before anything is assessed.
+6. **Explicit staff exclusion.** Staff holding `finance.fee_assessments.run`
+   may exclude an individual preview item for an operational exception.
+   The exclusion:
+   - is explicit run state and provenance: the item's `staff_excluded`
+     reason, the actor and the time, plus an audit event;
+   - returns the run to `draft` and requires a fresh preview (§9.2);
+   - never alters the Fee Structure or its instalments;
+   - never creates a prorated or reduced amount.
+7. **Scope.** D decides FEE.2 eligibility only. It does not decide
+   concessions, credits, refunds or adjustments; those remain F, F2, G and
+   the deferred refund/correction contract.
+
+**Still OWNER DECISION REQUIRED:** F, F2, G, H, I, I2 and M, each for its
+own later checkpoint.
+
+**Still [LEGAL REVIEW REQUIRED]** (§27), unchanged by D:
+- the receipt/GST form;
+- fee-regulation limits on late fees and in-year changes;
+- statutory free seats (RTE);
+- retention (E21).
+
+FEE.2 may now start. Proration remains a rejected v1 option, never a
+silent default.

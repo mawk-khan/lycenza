@@ -100,8 +100,18 @@ confirmed. Built:
 
 Configuration only: no charge generation. The as-built record is in
 `docs/modules/FINANCE.md` "FEE.1 as-built" and the ADR 0062 implementation
-note. **Next: FEE.2 — Assessment Runs**, which needs owner decision D
-(mid-year admission) first.
+note. **Next: FEE.2 — Assessment Runs.**
+
+**ADR 0062 decision D confirmed (owner, 2026-09-29): D1.**
+- No proration.
+- Instalments whose billing period ended before enrollment `starts_on` are
+  skipped.
+- The instalment covering `starts_on`, and every later one, is assessed in
+  full.
+- Staff exclusions are explicit preview-item state.
+
+FEE.2 is unblocked. F, F2, G, H, I, I2 and M, and the §27 legal questions,
+remain open.
 
 ## Phase 0A — Architectural Foundation (complete)
 
