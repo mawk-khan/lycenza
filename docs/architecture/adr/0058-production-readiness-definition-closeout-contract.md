@@ -30,6 +30,8 @@
 > - §9 and §11: the blocker list and repository-work count;
 > - §4.6, §4.8 and §11: `c4b1b6c`; the latest qualified commit is
 >   `e52c4c4`.
+> - §4.6 and §9: E03 is EVIDENCE_COMPLETE (2026-09-29): `main` is
+>   protected by an active ruleset (`PHASE-0O-READINESS.md` §49).
 >
 > The provider is selected (ADR 0060). Since 2026-09-29, §9's "Phase 0M:
 > BLOCKED" row is superseded for Phase Zero by ADR 0061. Read the latest
@@ -568,7 +570,7 @@ with secrets.
 |---|---|---|---|---|---|---|---|---|---|
 | E01 | Phase 0O repository foundations (0O.1–0O.11A) | ADRs 0049–0057 | Repository | Mandatory | REPOSITORY_COMPLETE | Implemented, tested, qualified | Readiness §13–§40 | Engineering | No |
 | E02 | Final regression + O16 qualification of the closeout commit | ADR 0052 §3.15; §5 item 1 | Repository | Mandatory | GOVERNANCE_REQUIRED | Fresh qualification of the closeout commit on protected `main`, after: E03 (protection active in reality); E18 (the selected provider's code merged); every other mandatory executable repository change; and E16 (every vulnerability exception valid on the qualification date, or replaced by fixes or a fresh decision). Both images VERIFIED. (Corrected 2026-09-29; read "after E03, E17, E24".) | Future readiness section; `RELEASE-QUALIFICATION.md` | Engineering + Operator | Yes |
-| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused | GitHub settings (not in repo); dated note in readiness | Owner | Yes |
+| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6 | Governance | Mandatory | EVIDENCE_COMPLETE | GitHub API/settings show protection; force-push and deletion refused. **Recorded 2026-09-29:** active repository ruleset `main` (id `24192267`) on `~DEFAULT_BRANCH` with `deletion`, `non_fast_forward` and `pull_request` (0 approvals), no bypass actors. GOVERNANCE_REQUIRED until then | GitHub settings (not in repo); `PHASE-0O-READINESS.md` §49 | Owner | No |
 | E04 | S1 repository hardening, V1–V5 frozen | ADR 0049 §20 + amendment | Repository | Mandatory | REPOSITORY_COMPLETE | Guard tests; throttled `/api/v1`; empty partner catalog | Readiness §16 | Engineering | No |
 | E05 | S1 edge: `TRUSTED_PROXIES`, HTTPS detection, HSTS, client-IP limiting | ADR 0049 §12; ADR 0050 §2 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Real edge addresses configured; the three behaviours demonstrated | Operator evidence record | Operator | Yes |
 | E06 | S2 repository instrumentation and alerts | ADR 0051 §20 items 1–9 | Repository | Mandatory | REPOSITORY_COMPLETE | Metrics, logs, OBS rules, runbooks | Readiness §20 | Engineering | No |
@@ -845,3 +847,43 @@ recorded in `PHASE-0O-READINESS.md` (§47 and the follow-up).
 
 E16 stays DECISION_REQUIRED for the E02/E15 dates. The current decision is
 valid through 2026-10-28.
+
+## Note — E03 protected `main`: EVIDENCE_COMPLETE (2026-09-29)
+
+**E03 moves from GOVERNANCE_REQUIRED to EVIDENCE_COMPLETE.** The evidence
+is `PHASE-0O-READINESS.md` §49. `main` in `mawk-khan/lycenza` is protected by
+the repository ruleset `main` (id `24192267`), created 2026-09-29T16:06:12Z:
+- **Enforcement:** `active`.
+- **Target:** `~DEFAULT_BRANCH` (`refs/heads/main`).
+- **Rules:**
+  - `deletion`: deletion refused;
+  - `non_fast_forward`: force-push refused;
+  - `pull_request`: 0 required approvals; merge, squash and rebase allowed.
+- **Bypass actors:** none, and `current_user_can_bypass: never`.
+
+**Sources:**
+- The public GitHub API, queried 2026-09-29T16:08Z, showed
+  `protected: true` and exactly these three effective rules on `main`.
+- The owner's authenticated ruleset view gives the bypass fields.
+
+**The history stands:**
+- Every earlier statement in this ADR that `main` was unprotected was true
+  on its date.
+- `c4b1b6c`, `e52c4c4` and `be69b55` were qualified before protection.
+- The ruleset did not exist before 2026-09-29.
+
+**§4.6 is met:**
+- changes reach `main` only through the controlled integration path
+  (branch → pull request → GitHub merge → protected `main`);
+- direct pushes to `main` are no longer accepted;
+- the ruleset is not disabled or bypassed for later Phase 0O work.
+
+**E02 is unchanged:** GOVERNANCE_REQUIRED. It needs a fresh qualification
+from protected `main` after E18, every other mandatory executable change,
+and E16 valid on that date.
+
+**Unchanged:**
+- **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+- **Phase 0O:** CLOSEOUT BLOCKED.
+
+**Mandatory blockers now:** E02, E05, E07–E23 and E29.
