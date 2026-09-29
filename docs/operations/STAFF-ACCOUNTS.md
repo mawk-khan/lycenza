@@ -1,6 +1,8 @@
 # Runbook: staff and School-admin accounts (ADR 0059, Phase 0O.12B)
 
-**Status: repository-implemented.** Nothing here has been performed against
+**Status: repository-implemented and qualified.** Main `e52c4c4` has both
+images VERIFIED (`PHASE-0O-READINESS.md` §44), and ADR 0058 E24 is
+REPOSITORY_COMPLETE. Nothing here has been performed against
 a real deployment; every production step is deploy-gated (rule 16).
 
 - **What it is.** How people get, lose and regain login access to a

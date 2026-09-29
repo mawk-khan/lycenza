@@ -1788,6 +1788,23 @@ decision. E24 now covers the full staff-account lifecycle.
   PostgreSQL races. E24 becomes REPOSITORY_COMPLETE with this unit's full
   regression and O16 qualification.
 
+**0O.12B — COMPLETE (qualified 2026-09-29).** O16 run
+`local-20260929T002558Z-08871c71` of `main` `e52c4c4`:
+- the same-run regression passed: 6,500 tests, 0 failures, only the ESI-12
+  skip;
+- `verify-images.sh` passed 133/133;
+- 0 audit advisories and 0 secret findings;
+- the application (`sha256:d03a3e4d…159729`) and AI Gateway
+  (`sha256:db5ae74d…24e502`) images are **VERIFIED**;
+- PUBLISHED = NONE, PROMOTED = NONE.
+
+ADR 0058 row **E24 is REPOSITORY_COMPLETE** (`PHASE-0O-READINESS.md` §44).
+- **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+- **Phase 0O:** CLOSEOUT BLOCKED — DEPLOYMENT / LEGAL / GOVERNANCE /
+  PROVIDER EVIDENCE OUTSTANDING.
+- **Phase 0M:** BLOCKED.
+- **Full-regression checkpoint:** `e52c4c4` (counter 0/5).
+
 Next: a fresh O1 evidence-register review (which blockers can proceed in
 parallel, and the email provider tail) — not started.
 

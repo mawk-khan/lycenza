@@ -293,7 +293,7 @@ Other findings:
 
 | # | Decision | Existing decision? | Owner | Blocks |
 |---|---|---|---|---|
-| O1 | Phase 0O definition of done per scope item | **RESOLVED AS DEFINITION OF DONE — NOT SATISFIED — ADR 0058 (Phase 0O.12, §41)**: one authoritative definition and evidence register (E01–E29) supersedes §9; closure needs repository, provider, deployment, legal and governance evidence, including a real restore drill, protected `main` and a staff/School-admin provisioning path | Product | Phase closure |
+| O1 | Phase 0O definition of done per scope item | **RESOLVED AS DEFINITION OF DONE — NOT SATISFIED — ADR 0058 (Phase 0O.12, §41)**: one authoritative definition and evidence register (E01–E29) supersedes §9; closure needs repository, provider, deployment, legal and governance evidence, including a real restore drill, protected `main` and a staff/School-admin provisioning path (E24 REPOSITORY_COMPLETE, §44) | Product | Phase closure |
 | O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | **RESOLVED — ADR 0057 (Phase 0O.11)**: the first real payment gateway is **DEFERRED** from Phase 0 / production v1 (no processor, checkout, callback, credential, refund or PCI-bearing UI; its own future ADR). Manual/offline payment recording is a **required v1 Finance correction**, **implemented in Phase 0O.11A (COMPLETE — repository, §39)** | Product | S4 |
 | O3 | Hosting / deployment model (and therefore process manager, container runtime, Terraform target) | **RESOLVED — ADR 0050 (Phase 0O.4)** | Product + operations | S3 infrastructure, images, runbook |
 | O4 | Secrets manager or host secret injection | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
@@ -2032,3 +2032,100 @@ tests.
   governance and provider evidence.
 - **Phase 0M:** BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
   REQUIRED.
+
+## 44. Phase 0O.12B — VERIFIED digests; E24 REPOSITORY_COMPLETE (2026-09-29)
+
+Final O16 qualification of the published `main` commit **`e52c4c4`**
+(`e52c4c4c0be88f9b3cbba2684fce78c667727218`).
+
+**The run:**
+- **Run id:** `local-20260929T002558Z-08871c71`.
+- **Timing:** started 2026-09-29T00:25:58Z; both images VERIFIED at
+  2026-09-29T00:53:31Z.
+- **Host:** Docker on the **classic** image store (overlay2, no containerd
+  snapshotter; §40).
+- **Scanner:** the Grype database was refreshed for the run.
+- **No repository change** was made for or during the run. The tree was
+  clean and HEAD was fixed throughout.
+
+Results on `e52c4c4`:
+
+- **Lock integrity:** the Composer, npm and Python (hash-locked,
+  `pip-compile` byte-for-byte) locks are in sync.
+- **Same-run complete regression:** 6,500 tests, 151,403 assertions,
+  0 failures. The only skip is the deliberate ESI-12, the suite's single
+  skip site. It ran through `SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test
+  --reset-db` on real PostgreSQL, Redis and MinIO. The count matches the
+  pre-publication run.
+- **Gates:** all pass:
+  - Pint, Larastan (0 errors), vue-tsc, ESLint, Prettier and the frontend
+    production build;
+  - Gateway ruff, ruff format, mypy and pytest (153 passed);
+  - the release tooling tests (79).
+- **`verify-images.sh`:** 133/133 checks. The runtime security contract,
+  role/process checks, custom PHP runtime, service authentication, secret
+  checks, digest-pinned helpers and the 30 s role-container DB timeout
+  (`c4b1b6c`) all hold.
+- **Language audits:** 0 advisories (Composer, npm, pip-audit). Nothing
+  was changed or auto-fixed.
+- **Secret scans:** 0 findings in source, and 0 in each image
+  (filesystem, config, history and canaries).
+
+| Image | Manifest digest | Config digest | `verify-artifact` |
+|---|---|---|---|
+| Application | `sha256:d03a3e4dd3400f89ea4ed98f94cfe27ecd2b937000dae001e47adfcd80159729` | `sha256:cd9a0d636a57a9054a2eb74cb625974d8ac5fd324924c268a680fe57d5bb4820` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 48 excepted |
+| AI Gateway | `sha256:db5ae74d5a227fd1432d288cab525e3b8a427995207242672e5386de3524e502` | `sha256:6cf56cca3756245816262a708ccdcc8f614801a885d2f680e0164f3ebb4729cd` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 49 excepted |
+
+- **SBOM (SPDX 2.3) sha256:**
+  - app: `b0a9c258cdfc7eb7f8a32e7feec4d8713ab55c515922d2647c5399ac8a37f12c`;
+  - Gateway: `839b73c8c5dcb9e04b7896d53cf8dbecb6c4e9e9e88b60c4c0bb9522f7476406`.
+- **Scan matches:** app 184, Gateway 156.
+- **Residual findings:** both sets are the reviewed `OWNER-0O6E-2026-09-26`
+  records, the same counts as §40. Staff provisioning adds no dependency.
+- **Evidence bundle:** sha256
+  `c96803e05efac9da0fff2d9e3e6109cb3ed405b02572aceb076fc57a4544c580`,
+  signed with an ephemeral **non-production** key. The private key was
+  destroyed; only its public half is kept.
+- **Evidence custody:** kept outside the repository. No key, token,
+  credential or raw scan report is committed.
+- **PUBLISHED = NONE, PROMOTED = NONE.** No registry push, production
+  signing identity, production secret or deployment.
+- **Exception clock:** checked on 2026-09-29. All 97 records are valid:
+  54 expire **2026-10-10** and 43 expire **2026-10-26**. Nothing was
+  renewed.
+
+**E24 → REPOSITORY_COMPLETE.** This is the dated register move required by
+ADR 0058 §6. It is recorded in the ADR 0058 note of 2026-09-29 and the ADR
+0059 implementation amendment. Phase 0O.12B provides:
+- first-School bootstrap account provisioning;
+- ordinary staff invitations;
+- credential activation;
+- School membership and role creation;
+- role-grant history;
+- staff off-boarding by membership suspension;
+- explicit reactivation;
+- the last-qualifying-administrator invariant;
+- tenant/RLS enforcement;
+- the fresh-install proof and concurrency proof (§43).
+
+**Status:**
+- **Phase 0O.12B:** **COMPLETE**.
+- **E24:** **REPOSITORY_COMPLETE**.
+- **O1:** **RESOLVED AS DEFINITION OF DONE — NOT SATISFIED**.
+- **Phase 0O:** **CLOSEOUT BLOCKED — DEPLOYMENT / LEGAL / GOVERNANCE /
+  PROVIDER EVIDENCE OUTSTANDING**. The mandatory blockers are E02, E03,
+  E05, E07–E23 and E29.
+- **Phase 0M:** **BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED**.
+- **The `e52c4c4` digests are not the release to promote.** `main` is
+  still unprotected (E03), and E02 needs a fresh qualification after
+  protection and the email provider tail.
+- **Full-regression checkpoint:** `e52c4c4` (cadence counter **0/5**).
+
+**Next (not started):** a fresh ADR 0058 O1 evidence-register review. It
+separates:
+- repository work;
+- owner/provider choices;
+- governance changes;
+- legal decisions;
+- non-production deployment evidence.

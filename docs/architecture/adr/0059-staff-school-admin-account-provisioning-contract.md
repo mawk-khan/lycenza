@@ -913,3 +913,45 @@ row.
 E24 is **implemented**. It becomes **REPOSITORY_COMPLETE** once the full
 regression and both images' O16 qualification are recorded
 (`PHASE-0O-READINESS.md`).
+
+## Implementation and qualification amendment — Phase 0O.12B (2026-09-29)
+
+This amendment records facts only. The decisions above are unchanged.
+
+- **Implementation commit:** `e52c4c4` on `main` (Phase 0O.12B).
+- **Flow A is implemented:**
+  - `platform:provision-school-admin-account` creates a credential-less
+    bootstrap User and shows its activation link once;
+  - activation is at `/account-activation/{selector}`;
+  - School activation refuses an administrator who has not activated
+    (`admin_not_activated`).
+- **Flow B is implemented:** School staff invitations and acceptance
+  (`/app/settings/staff`, `/invitations/{school}/staff/{selector}`).
+- **Off-boarding is implemented** (owner amendment):
+  - suspension revokes every School role grant;
+  - reactivation is explicit, with newly chosen roles;
+  - single-role grant and revoke;
+  - no self-administration;
+  - no global sign-out;
+  - the Employee is untouched.
+- **Role grants keep history.** `membership_role_assignments` records the
+  revocation (`revoked_at`/by/reason). Revoked rows are immutable, there is
+  one active grant per membership and role, and the runtime role cannot
+  DELETE.
+- **Last-administrator invariant.** It is evaluated after each change,
+  under a per-School transaction-scoped advisory lock. Real-PostgreSQL
+  races prove it, including two administrators removing each other
+  (`StaffAccountConcurrencyTest`).
+- **Fresh install.** `FreshInstallProvisioningTest` covers the §23
+  scenario through the real operator console, on a database with no demo
+  data.
+- **Final regression.** The same-run complete regression inside the O16
+  qualification: 6,500 tests, 0 failures, only the deliberate ESI-12 skip
+  (isolated PostgreSQL, Redis and MinIO).
+- **Artifact qualification.** Run `local-20260929T002558Z-08871c71` of
+  `e52c4c4`: both images **VERIFIED**, with an ephemeral non-production
+  signature; PUBLISHED = NONE, PROMOTED = NONE. The digests are in
+  `PHASE-0O-READINESS.md` §44.
+
+§23 items 1–14 are met. **ADR 0058 row E24 is REPOSITORY_COMPLETE.** O1
+remains **NOT SATISFIED**.

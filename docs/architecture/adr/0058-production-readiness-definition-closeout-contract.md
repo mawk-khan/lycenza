@@ -575,7 +575,7 @@ with secrets.
 | E21 | Retention decisions for v1 categories (mail, webhook deliveries, Documents, audit, others used in v1) | §4.12; ADR 0042; `DATA-CLASSIFICATION.md` | Legal | Mandatory | LEGAL_REVIEW_REQUIRED | Qualified decision recorded; settings implemented where they exist | Future legal record + ADR amendment | Legal + Owner | Yes |
 | E22 | O9 non-production exercise (edge, ownership, certificate, HTTPS redirect, key custody, probe, drift, revoke/re-add) | ADR 0054 §14; §4.10 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Exercise record | `CUSTOM-DOMAINS.md` | Operator | Yes |
 | E23 | O14 drills (success, expiry, replay/concurrency, two-host sign-out, MFA kept), monitoring, operator runbook | ADR 0056 §20 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Drill record; OBS-39–41 active | `ACCOUNT-RECOVERY.md` | Operator | Yes |
-| E24 | Staff/School-admin provisioning path (including first-School bootstrap) | §4.14; ADR 0056 §17 item 6; ADR 0047 D13 | Repository | Mandatory | DECISION_REQUIRED | Contract, then implementation, tests, qualification | Future 0O.12A | Owner + Engineering | Yes |
+| E24 | Staff/School-admin provisioning path (including first-School bootstrap; owner-amended to the full staff-account lifecycle incl. off-boarding) | §4.14; ADR 0056 §17 item 6; ADR 0047 D13; ADR 0059 | Repository | Mandatory | REPOSITORY_COMPLETE | Implemented, tested, qualified (`e52c4c4`) | Readiness §42–§44 | Engineering | No |
 | E25 | Manual/offline payment recording | ADR 0057 §3; ADR 0031 amendment | Repository | Mandatory | REPOSITORY_COMPLETE | Implemented, qualified (`c4b1b6c`) | Readiness §39–§40 | Engineering | No |
 | E26 | AI Gateway in production | ADR 0053 §15; §4.9 | Conditional | Conditional | CONDITIONAL_DISABLED | If enabled: all ADR 0053 §15 evidence before enablement | `SERVICE-KEY-ROTATION.md` | Owner + Operator | No (Yes if enabled) |
 | E27 | Custom domains in production | ADR 0054 §14; §4.10 | Conditional | Conditional | CONDITIONAL_DISABLED | If enabled: all ADR 0054 §14 evidence there before enablement | `CUSTOM-DOMAINS.md` | Owner + Operator | No (Yes if enabled) |
@@ -716,3 +716,32 @@ qualification of both images are recorded (`PHASE-0O-READINESS.md` §43).
 **E02 still stands.** The final O1 qualification must run on protected
 `main` after every mandatory executable tail, including the email provider
 tail. The 0O.12B qualification does not satisfy E02 by itself.
+
+## Note — Phase 0O.12B qualification: E24 REPOSITORY_COMPLETE (2026-09-29)
+
+**E24 moves from DECISION_REQUIRED to REPOSITORY_COMPLETE.** The evidence
+is `PHASE-0O-READINESS.md` §44: the O16 qualification of `main` `e52c4c4`
+(run `local-20260929T002558Z-08871c71`). That run's same-run complete
+regression passed (6,500 tests, 0 failures, only the ESI-12 skip), and
+both images reached **VERIFIED**. PUBLISHED = NONE, PROMOTED = NONE.
+
+The repository now provides:
+- first-School bootstrap account provisioning (ADR 0059 Flow A);
+- ordinary staff invitations (Flow B);
+- credential activation;
+- School membership and role creation;
+- role-grant history (revoke, never delete);
+- staff off-boarding by membership suspension;
+- explicit reactivation;
+- the concurrency-safe last-qualifying-administrator invariant;
+- tenant/RLS enforcement;
+- the fresh-install proof and real-PostgreSQL concurrency proof.
+
+**Nothing else changes:**
+- **O1** stays **RESOLVED AS DEFINITION OF DONE — NOT SATISFIED**.
+- **E02** is still open. The `e52c4c4` digests are progress evidence, not
+  the closeout qualification. E02 needs a fresh qualification on protected
+  `main` after E03, E17 and the E18 provider tail.
+- **Mandatory blockers now:** E02, E03, E05, E07–E23 and E29 (21 rows).
+  Only E02 and E18 still involve repository work.
+- **Conditional (unchanged):** E26–E28.
