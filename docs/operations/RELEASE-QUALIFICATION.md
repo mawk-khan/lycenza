@@ -22,14 +22,6 @@ Tooling reference: `infrastructure/release/README.md`.
 > qualification **and** promotion dates. They are never renewed
 > automatically.
 >
-> **E03 (2026-09-29).** `main` is now protected by the active repository
-> ruleset `main` (id `24192267`): deletion and force-push refused, a pull
-> request required, no bypass actors (`PHASE-0O-READINESS.md` §49). The
-> first bullet above is met. `be69b55` and earlier were qualified before
-> protection, so a **fresh** qualification from protected `main` is still
-> required. Changes reach `main` only by pull request; never push to it
-> directly.
->
 > A local `qualify` run needs Docker's **classic** image store. With the
 > containerd image store, `docker load` reports the manifest digest and the
 > build stage fails with `loaded_image_mismatch`

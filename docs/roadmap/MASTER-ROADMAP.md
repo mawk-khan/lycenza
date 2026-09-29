@@ -1925,19 +1925,6 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
   49 excepted). Regression 6,500 tests with only the ESI-12 skip.
 - **Full-regression checkpoint:** `be69b55` (counter 0/5, readiness §48).
 
-**E03 — protected `main` (2026-09-29, docs-only).** ADR 0058 row **E03 is
-EVIDENCE_COMPLETE** (`PHASE-0O-READINESS.md` §49).
-- **The ruleset:** `main` (id `24192267`), created 2026-09-29.
-  - Enforcement `active` on the default branch.
-  - Deletion and force-push refused; a pull request required (0
-    approvals).
-  - No bypass actors.
-- **Publication path from now on:** branch → pull request → GitHub merge →
-  protected `main`. No direct pushes.
-- **E02 unchanged:** it needs a fresh qualification from protected `main`.
-  The `be69b55` digests remain progress evidence.
-- **Full-regression checkpoint:** `be69b55` (counter 1/5 once merged).
-
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred
 post-v1. **Phase 0O is the only active Phase Zero closeout area.** See
