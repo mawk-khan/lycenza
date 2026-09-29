@@ -4614,3 +4614,91 @@ ADR 0062 ("Owner decisions for FEE.1").
   - Assessment runs and any charge generation (FEE.2).
   - Concessions (FEE.3); receipts and statements (FEE.4); late fees (FEE.5).
   - Proration, invoices, GST, refunds, portal, OPF linkage.
+
+## FEE.2 as-built — Assessment Runs (2026-09-29, ADR 0062, owner decision D1)
+
+Staff-triggered billing of one active fee structure's billing period.
+Existing charges, payments, allocations and journal entries keep their
+meaning. The one change to `charges` is a new guard: a fee-assessed charge
+is cancelled only through the assessment void path.
+
+- **Tables** (migrations `2026_10_30_090000`–`090200`). All are RLS-forced
+  with composite same-School foreign keys.
+  - **`fee_assessment_runs`.** One active structure x one
+    `billing_period_key`.
+    - Lifecycle `draft -> previewed -> executing -> completed |
+      completed_with_errors`, `previewed -> draft` (drift),
+      `draft|previewed -> cancelled`.
+    - Terminal runs are immutable (`fees_validate_fee_assessment_run`).
+    - One open run per structure and period
+      (`fee_assessment_runs_one_open_per_period`).
+    - A run can only be created for an active structure and an existing
+      period.
+    - NUMERIC totals; `configuration_version` implements the drift rule.
+    - Never deleted.
+  - **`fee_assessment_run_items`.** One per Student x line with the period.
+    Provenance: enrollment, campus, grade, enrollment start, line,
+    instalment, fee head, period and the full instalment amount.
+    - Closed `preview_result`/`reason` catalogue; the staff-exclusion actor
+      and time.
+    - Execution state (`pending -> succeeded | skipped_already_assessed |
+      failed`) with a closed failure catalogue.
+    - Phase immutability by trigger (`fees_guard_fee_assessment_run_item`).
+  - **`fee_assessments`.** The live link Student x year x fee head x period
+    → charge, with `fee_assessments_one_live_per_period` (partial unique,
+    `voided_at IS NULL`).
+    - The charge must belong to the same Student and year and be
+      uncancelled.
+    - Append-only except a one-time void (deferred check that the charge was
+      cancelled).
+    - `charges_fee_assessment_guard_trigger` refuses cancelling a charge
+      whose assessment is live.
+    - Never deleted.
+- **Students read boundary.** `StudentEnrollmentFeeTargetReadService`
+  provides `candidatesForGrade()` and `lockForFeeAssessment()`, returning
+  `FeeTargetEnrollment` DTOs (no names or contacts). Fees never reads
+  Students' models or tables.
+- **Services.**
+  - `FeeAssessmentRunService` (`finance.fee_assessments.run`): create,
+    preview, excludeItem, execute, resume, cancel, plus the trusted
+    finalize and recordPaused.
+  - `FeeAssessmentItemExecutor`: per item, one transaction, in the ADR lock
+    order. It re-checks everything and creates the charge through the
+    trusted `ChargeService::assess` together with the `fee_assessments` row
+    in one savepoint; the key decides duplicates.
+  - `ExecuteFeeAssessmentRunJob`: `TenantScoped`, `$tries = 1`,
+    `$timeout = 60`, batches of 100, re-dispatches itself. A
+    non-operational School pauses the run.
+  - `FeeAssessmentRunReadService` (`finance.charges.view`).
+  - `FeeAssessmentService::void` (`finance.charges.manage`).
+  - `FeeStructureResolver`: campus override, else School default; never a
+    Section.
+- **Owner decision D1:**
+  - no proration: every charge is the instalment amount exactly;
+  - periods that ended before the enrollment started are skipped
+    (`period_before_enrollment`), with no backdated charge;
+  - joining during a period, and every later period, is billed in full;
+  - staff exclusions are explicit item state, force a fresh preview, and
+    never touch the structure or amount.
+- **Charge facts.** Amount = instalment amount; due date = instalment due
+  date; accounts = the fee head's mapping at execution (active asset/income
+  re-validated); description `"<fee head> · <instalment label>"`. One
+  journal entry per charge.
+- **Capability.** `finance.fee_assessments.run`, granted to `school_admin`
+  (and the demo finance officer), never to `principal`.
+- **Audit.**
+  - `fee_assessment_run.created`, `.previewed`, `.item_excluded`,
+    `.execution_started`, `.completed`, `.completed_with_errors`,
+    `.cancelled`, `.paused`;
+  - `fee_assessment.voided`;
+  - unchanged `charge.assessed` per charge.
+- **Outbox.** `fee_assessment_run.completed.v1` (ids, status, counts; once,
+  in the finalize transaction) and `charge.assessed.v1` per charge. Neither
+  is webhook-registered.
+- **Surfaces.**
+  - 10 `/api/v1` operations (`FeeAssessmentOpenApiCoverageTest`).
+  - Web pages `/app/finance/fee-runs` and `/app/finance/fee-runs/{run}`
+    (preview, items with reasons, exclude, execute, progress, resume,
+    cancel, void).
+- **Not in FEE.2:** concessions, receipts, statements, late fees, refunds,
+  proration, scheduled runs, portal, OPF linkage.

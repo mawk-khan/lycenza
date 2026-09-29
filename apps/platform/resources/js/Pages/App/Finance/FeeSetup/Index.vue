@@ -137,6 +137,11 @@ const noAccounts = computed(
             Nothing here bills a Student yet.
         </p>
 
+        <p class="mt-2 text-sm">
+            <a class="underline" href="/app/finance/fee-runs">Assessment runs</a> bill an active
+            structure's billing period to Students.
+        </p>
+
         <p v-if="actionError" role="alert" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
             {{ actionError }}
         </p>

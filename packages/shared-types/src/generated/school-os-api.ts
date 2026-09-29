@@ -2286,6 +2286,160 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/fee-assessment-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists assessment runs (newest first, at most 200). Requires finance.charges.view. */
+        get: operations["listFeeAssessmentRuns"];
+        put?: never;
+        /** Creates a DRAFT run for one active fee structure and one of its billing periods. At most one open run per structure and period. Requires finance.fee_assessments.run. */
+        post: operations["createFeeAssessmentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-assessment-runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetches one run with its preview and execution totals. Requires finance.charges.view. */
+        get: operations["getFeeAssessmentRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-assessment-runs/{runId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists a run's items (50 per page) with preview result, reason and execution state. Requires finance.charges.view. */
+        get: operations["listFeeAssessmentRunItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-assessment-runs/{runId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Computes (or recomputes) every item of a draft or previewed run. Creates no charge. Staff exclusions carry over. Requires finance.fee_assessments.run. */
+        post: operations["previewFeeAssessmentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-assessment-runs/{runId}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claims a previewed run whose preview is current and queues its execution. Each ready item becomes exactly one charge, or is skipped when the Student is already assessed for that fee head and period. Requires finance.fee_assessments.run. */
+        post: operations["executeFeeAssessmentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-assessment-runs/{runId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-queues an executing run (after an interruption or a School pause). Only pending items are processed. Requires finance.fee_assessments.run. */
+        post: operations["resumeFeeAssessmentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-assessment-runs/{runId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancels a draft or previewed run. Nothing was charged. Requires finance.fee_assessments.run. */
+        post: operations["cancelFeeAssessmentRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-assessment-runs/{runId}/items/{itemId}/exclude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Excludes one READY item (reason staff_excluded, actor and time recorded). Never changes the fee structure or the amount. Returns the run to draft, so it must be previewed again. Requires finance.fee_assessments.run. */
+        post: operations["excludeFeeAssessmentRunItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-assessments/{assessmentId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Voids a live fee assessment and cancels its charge in one transaction (refused when a payment is allocated). Frees the Student x year x fee head x period key for one deliberate re-assessment. No refund or credit. Requires finance.charges.manage. */
+        post: operations["voidFeeAssessment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/salary-components": {
         parameters: {
             query?: never;
@@ -4325,6 +4479,104 @@ export interface components {
             student_id: string;
             /** Format: uuid */
             fee_structure_line_id: string;
+        };
+        /** @enum {string} */
+        FeeAssessmentRunStatus: "draft" | "previewed" | "executing" | "completed" | "completed_with_errors" | "cancelled";
+        FeeAssessmentRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            feeStructureId: string;
+            billingPeriodKey: string;
+            status: components["schemas"]["FeeAssessmentRunStatus"];
+            configurationVersion: number;
+            /** @description true only when the run is previewed and nothing changed since. */
+            previewIsCurrent: boolean;
+            /** @example INR */
+            currency: string;
+            preview: {
+                readyCount: number;
+                readyAmount: string;
+                excludedCount: number;
+                blockedCount: number;
+                alreadyAssessedCount: number;
+            };
+            execution: {
+                succeededCount: number;
+                skippedCount: number;
+                failedCount: number;
+                assessedAmount: string;
+            };
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            previewedAt: string | null;
+            /** Format: date-time */
+            executionStartedAt: string | null;
+            /** Format: date-time */
+            completedAt: string | null;
+            /** Format: date-time */
+            cancelledAt: string | null;
+        };
+        FeeAssessmentRunItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            studentEnrollmentId: string | null;
+            /** Format: uuid */
+            campusId: string | null;
+            /** Format: date */
+            enrollmentStartsOn: string | null;
+            /** Format: uuid */
+            feeStructureLineId: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            billingPeriodKey: string;
+            /** @description The instalment amount -- never prorated. */
+            amount: string;
+            /** @example INR */
+            currency: string;
+            /** @enum {string} */
+            previewResult: "ready" | "already_assessed" | "excluded" | "blocked";
+            /** @enum {string|null} */
+            reason: "optional_not_selected" | "period_before_enrollment" | "enrollment_cancelled" | "student_inactive" | "staff_excluded" | "no_structure" | "head_inactive" | "account_invalid" | null;
+            /** Format: date-time */
+            excludedAt: string | null;
+            /** @enum {string|null} */
+            executionStatus: "pending" | "succeeded" | "skipped_already_assessed" | "failed" | null;
+            /** @enum {string|null} */
+            failureReason: "structure_not_active" | "structure_not_resolved" | "enrollment_not_qualifying" | "student_inactive" | "optional_not_selected" | "head_inactive" | "account_invalid" | "error" | null;
+            /** Format: uuid */
+            feeAssessmentId: string | null;
+            /** Format: date-time */
+            executedAt: string | null;
+        };
+        FeeAssessment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            billingPeriodKey: string;
+            /** Format: uuid */
+            chargeId: string;
+            /** Format: uuid */
+            feeAssessmentRunId: string | null;
+            /** Format: date-time */
+            voidedAt: string | null;
+        };
+        FeeAssessmentRunCreateInput: {
+            /** Format: uuid */
+            fee_structure_id: string;
+            billing_period_key: string;
+        };
+        FeeAssessmentVoidInput: {
+            reason?: string | null;
         };
         JournalLine: {
             /** Format: uuid */
@@ -14693,6 +14945,593 @@ export interface operations {
                 };
             };
             /** @description FEE_OPTIONAL_SELECTION_NOT_ACTIVE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listFeeAssessmentRuns: {
+        parameters: {
+            query?: {
+                fee_structure_id?: string;
+                status?: components["schemas"]["FeeAssessmentRunStatus"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createFeeAssessmentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeAssessmentRunCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_OPEN_EXISTS. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (structure not active, period not on the structure). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getFeeAssessmentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listFeeAssessmentRunItems: {
+        parameters: {
+            query?: {
+                preview_result?: "ready" | "already_assessed" | "excluded" | "blocked";
+                execution_status?: "pending" | "succeeded" | "skipped_already_assessed" | "failed";
+                page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRunItem"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    previewFeeAssessmentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The structure is no longer active. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    executeFeeAssessmentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_STALE_PREVIEW or FEE_ASSESSMENT_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    resumeFeeAssessmentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cancelFeeAssessmentRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    excludeFeeAssessmentRunItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_NOT_FOUND or FEE_ASSESSMENT_RUN_ITEM_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_ITEM_NOT_EXCLUDABLE or FEE_ASSESSMENT_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    voidFeeAssessment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                assessmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeAssessmentVoidInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_ALREADY_VOIDED or CHARGE_HAS_PAYMENT_ALLOCATIONS. */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -38,6 +38,7 @@ use App\Http\Controllers\App\Examinations\ExaminationController;
 use App\Http\Controllers\App\Examinations\ExaminationPaperController;
 use App\Http\Controllers\App\Examinations\GradeScaleController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
+use App\Http\Controllers\App\Finance\FeeAssessmentRunController as FinanceFeeAssessmentRunController;
 use App\Http\Controllers\App\Finance\FeeSetupController as FinanceFeeSetupController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
@@ -1018,6 +1019,20 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/fee-setup/structures/{feeStructure}/lines/{line}/generate', [FinanceFeeSetupController::class, 'generateInstallments'])->name('fee-setup.lines.generate');
         Route::post('/fee-setup/selections', [FinanceFeeSetupController::class, 'storeSelection'])->name('fee-setup.selections.store');
         Route::post('/fee-setup/selections/{selection}/withdraw', [FinanceFeeSetupController::class, 'withdrawSelection'])->name('fee-setup.selections.withdraw');
+
+        // FEE.2 (ADR 0062 §9): assessment runs. View under
+        // finance.charges.view, every run action under
+        // finance.fee_assessments.run, assessment void under
+        // finance.charges.manage (controller + Application service).
+        Route::get('/fee-runs', [FinanceFeeAssessmentRunController::class, 'index'])->name('fee-runs.index');
+        Route::post('/fee-runs', [FinanceFeeAssessmentRunController::class, 'store'])->name('fee-runs.store');
+        Route::get('/fee-runs/{run}', [FinanceFeeAssessmentRunController::class, 'show'])->name('fee-runs.show');
+        Route::post('/fee-runs/{run}/preview', [FinanceFeeAssessmentRunController::class, 'preview'])->name('fee-runs.preview');
+        Route::post('/fee-runs/{run}/items/{item}/exclude', [FinanceFeeAssessmentRunController::class, 'exclude'])->name('fee-runs.items.exclude');
+        Route::post('/fee-runs/{run}/execute', [FinanceFeeAssessmentRunController::class, 'execute'])->name('fee-runs.execute');
+        Route::post('/fee-runs/{run}/resume', [FinanceFeeAssessmentRunController::class, 'resume'])->name('fee-runs.resume');
+        Route::post('/fee-runs/{run}/cancel', [FinanceFeeAssessmentRunController::class, 'cancel'])->name('fee-runs.cancel');
+        Route::post('/fee-assessments/{assessment}/void', [FinanceFeeAssessmentRunController::class, 'void'])->name('fee-assessments.void');
 
         // 'create' registered BEFORE the '/{journalEntry}' wildcard
         // below, matching this file's own established convention

@@ -22,6 +22,7 @@ use App\Domain\Examinations\Http\Controllers\ExaminationController;
 use App\Domain\Examinations\Http\Controllers\ExaminationPaperController;
 use App\Domain\Examinations\Http\Controllers\GradeScaleController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
+use App\Domain\Fees\Http\Controllers\FeeAssessmentRunController;
 use App\Domain\Fees\Http\Controllers\FeeHeadController;
 use App\Domain\Fees\Http\Controllers\FeeOptionalSelectionController;
 use App\Domain\Fees\Http\Controllers\FeeStructureController;
@@ -1244,6 +1245,44 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/fee-optional-selections/{selection}/withdraw', [FeeOptionalSelectionController::class, 'withdraw'])
                 ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
                 ->name('schools.fee-optional-selections.withdraw');
+
+            // --- FEE.2 (ADR 0062 §9-§13): assessment runs. Reads under
+            // finance.charges.view; every run mutation under
+            // finance.fee_assessments.run; voiding an assessment (which
+            // cancels its charge) under finance.charges.manage. Execution is
+            // idempotent by construction (conditional claim + the
+            // fee_assessments_one_live_per_period key), so no generic
+            // Idempotency-Key middleware is layered on (rule 29 reviewed).
+            Route::get('/fee-assessment-runs', [FeeAssessmentRunController::class, 'index'])
+                ->middleware('capability:finance.charges.view')
+                ->name('schools.fee-assessment-runs.index');
+            Route::post('/fee-assessment-runs', [FeeAssessmentRunController::class, 'store'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
+                ->name('schools.fee-assessment-runs.store');
+            Route::get('/fee-assessment-runs/{run}', [FeeAssessmentRunController::class, 'show'])
+                ->middleware('capability:finance.charges.view')
+                ->name('schools.fee-assessment-runs.show');
+            Route::get('/fee-assessment-runs/{run}/items', [FeeAssessmentRunController::class, 'items'])
+                ->middleware('capability:finance.charges.view')
+                ->name('schools.fee-assessment-runs.items');
+            Route::post('/fee-assessment-runs/{run}/preview', [FeeAssessmentRunController::class, 'preview'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
+                ->name('schools.fee-assessment-runs.preview');
+            Route::post('/fee-assessment-runs/{run}/items/{item}/exclude', [FeeAssessmentRunController::class, 'exclude'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
+                ->name('schools.fee-assessment-runs.items.exclude');
+            Route::post('/fee-assessment-runs/{run}/execute', [FeeAssessmentRunController::class, 'execute'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
+                ->name('schools.fee-assessment-runs.execute');
+            Route::post('/fee-assessment-runs/{run}/resume', [FeeAssessmentRunController::class, 'resume'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
+                ->name('schools.fee-assessment-runs.resume');
+            Route::post('/fee-assessment-runs/{run}/cancel', [FeeAssessmentRunController::class, 'cancel'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
+                ->name('schools.fee-assessment-runs.cancel');
+            Route::post('/fee-assessments/{assessment}/void', [FeeAssessmentRunController::class, 'void'])
+                ->middleware(['capability:finance.charges.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-assessments.void');
 
             // --- Phase 10D: Hostel (Hostel/Room/Bed directory, Student
             // Hostel residency lifecycle). `idempotent` is applied only

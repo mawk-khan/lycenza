@@ -8,6 +8,7 @@ interface Props {
         viewPayments: boolean;
         recordPayments: boolean;
         viewFeeSetup: boolean;
+        viewFeeRuns: boolean;
     };
 }
 
@@ -42,6 +43,14 @@ defineProps<Props>();
                 <p class="mt-1 text-sm text-slate-500">
                     Fee heads, fee structures by year and grade, instalment schedules and optional
                     fees.
+                </p>
+            </li>
+            <li v-if="can.viewFeeRuns" class="px-4 py-3">
+                <a class="text-sm font-medium underline" href="/app/finance/fee-runs"
+                    >Fee assessment runs</a
+                >
+                <p class="mt-1 text-sm text-slate-500">
+                    Preview and bill a fee structure's billing period to its Students.
                 </p>
             </li>
             <li v-if="can.viewCharges" class="px-4 py-3">

@@ -8,6 +8,7 @@ use App\Domain\Fees\Infrastructure\FeeStructure;
 use App\Domain\Fees\Infrastructure\FeeStructureInstallment;
 use App\Domain\Fees\Infrastructure\FeeStructureLine;
 use App\Models\School;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\Feature\Fees\Concerns\CreatesFeeSetupFixtures;
@@ -36,9 +37,26 @@ class FeeStructureConcurrencyTest extends TestCase
 
     private string $activate = __DIR__.'/../../Support/activate-fee-structure.php';
 
+    private ?string $startedAt = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->startedAt = now()->subSecond()->toDateTimeString();
+    }
+
     protected function tearDown(): void
     {
         $this->deleteSchoolAsAdmin($this->school);
+
+        // Committed data (no DatabaseTransactions): the fixture actors'
+        // `test.capability_grant.*` roles outlive the School and would
+        // otherwise leak Finance capabilities into later registry tests
+        // (the GroupReportConcurrencyTest precedent).
+        DB::connection('pgsql_admin')->table('roles')
+            ->where('key', 'like', 'test.capability_grant.%')
+            ->where('created_at', '>=', $this->startedAt)
+            ->delete();
 
         parent::tearDown();
     }

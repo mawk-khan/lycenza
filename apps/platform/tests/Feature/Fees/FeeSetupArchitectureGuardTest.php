@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Fees;
 
+use App\Jobs\ExecuteFeeAssessmentRunJob;
 use App\Support\Webhooks\WebhookEventRegistry;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -30,6 +31,15 @@ class FeeSetupArchitectureGuardTest extends TestCase
         'app/Domain/Fees/Http/Controllers/FeeOptionalSelectionController.php',
         'app/Domain/Finance/Application/LedgerAccountAdministrationService.php',
         'app/Http/Controllers/App/Finance/FeeSetupController.php',
+        // FEE.2
+        'app/Domain/Fees/Application/FeeAssessmentRunService.php',
+        'app/Domain/Fees/Application/FeeAssessmentItemExecutor.php',
+        'app/Domain/Fees/Application/FeeAssessmentRunReadService.php',
+        'app/Domain/Fees/Application/FeeAssessmentService.php',
+        'app/Domain/Fees/Application/FeeStructureResolver.php',
+        'app/Domain/Fees/Http/Controllers/FeeAssessmentRunController.php',
+        'app/Http/Controllers/App/Finance/FeeAssessmentRunController.php',
+        'app/Jobs/ExecuteFeeAssessmentRunJob.php',
     ];
 
     private const MIGRATIONS = [
@@ -53,7 +63,8 @@ class FeeSetupArchitectureGuardTest extends TestCase
             }
         }
 
-        foreach (['resources/js/Pages/App/Finance/FeeSetup/Index.vue', 'resources/js/Pages/App/Finance/FeeSetup/Structure.vue'] as $page) {
+        foreach (['resources/js/Pages/App/Finance/FeeSetup/Index.vue', 'resources/js/Pages/App/Finance/FeeSetup/Structure.vue',
+            'resources/js/Pages/App/Finance/FeeSetup/Runs.vue', 'resources/js/Pages/App/Finance/FeeSetup/Run.vue'] as $page) {
             $code = $this->source($page);
             foreach (['parseFloat', 'Number(', 'toFixed('] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$page} must not use {$forbidden} for money.");
@@ -66,19 +77,37 @@ class FeeSetupArchitectureGuardTest extends TestCase
     {
         foreach (self::FEE_1_FILES as $file) {
             $code = $this->source($file);
-            foreach (['payment_allocations', 'PaymentAllocation', 'student_enrollments', 'StudentEnrollment', "'principal'", "'school_admin'"] as $forbidden) {
+            // Enrollment facts come only through Students' published read
+            // service; never its Eloquent model or table.
+            foreach (['payment_allocations', 'PaymentAllocation', "'student_enrollments'", 'Infrastructure\\StudentEnrollment', "'principal'", "'school_admin'"] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$file} must not reference {$forbidden}.");
             }
         }
     }
 
     #[Test]
-    public function the_activation_event_is_internal_only(): void
+    public function the_fee_events_are_internal_only(): void
     {
         $registry = app(WebhookEventRegistry::class);
 
-        $this->assertFalse($registry->exists('fee_structure.activated.v1'));
-        $this->assertFalse($registry->isSubscribable('fee_structure.activated.v1'));
+        foreach (['fee_structure.activated.v1', 'fee_assessment_run.completed.v1'] as $type) {
+            $this->assertFalse($registry->exists($type), $type);
+            $this->assertFalse($registry->isSubscribable($type), $type);
+        }
+    }
+
+    #[Test]
+    public function fees_reaches_enrollments_only_through_the_students_read_service_and_the_job_is_bounded(): void
+    {
+        $executor = $this->source('app/Domain/Fees/Application/FeeAssessmentItemExecutor.php');
+        $this->assertStringContainsString('StudentEnrollmentFeeTargetReadService', $executor);
+        $this->assertStringContainsString('ChargeService', $executor, 'Charges come only from the trusted ChargeService core.');
+        $this->assertStringNotContainsString('ChargeAdministrationService', $executor, 'The job never goes through a human facade.');
+        $this->assertStringNotContainsString('LedgerService->post', $executor, 'No alternative posting path.');
+
+        $job = new ExecuteFeeAssessmentRunJob('x');
+        $this->assertSame(1, $job->tries);
+        $this->assertLessThan(90, $job->timeout);
     }
 
     #[Test]

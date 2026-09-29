@@ -461,6 +461,11 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'finance.accounts.manage', 'label' => 'Create, activate and deactivate Finance ledger accounts', 'namespace' => 'school'],
             ['key' => 'finance.fee_structures.view', 'label' => 'View fee heads, fee structures and optional-fee selections', 'namespace' => 'school'],
             ['key' => 'finance.fee_structures.manage', 'label' => 'Manage fee heads, fee structures and optional-fee selections', 'namespace' => 'school'],
+            // FEE.2 (ADR 0062 §19): create, preview, exclude items of,
+            // execute, resume and cancel fee assessment runs. Run results are
+            // read under `finance.charges.view`; voiding a fee assessment
+            // cancels its charge under `finance.charges.manage`.
+            ['key' => 'finance.fee_assessments.run', 'label' => 'Run fee assessments (bill a fee structure period to Students)', 'namespace' => 'school'],
 
             // Phase 10D (docs/modules/HOSTEL.md "Capabilities") --
             // mirrors Visitor's directory/visits split exactly:
@@ -972,6 +977,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // capability, the same reasoning as ledger/charges).
                     'finance.accounts.manage',
                     'finance.fee_structures.view', 'finance.fee_structures.manage',
+                    // FEE.2 (ADR 0062 §19): School Admin runs fee assessments;
+                    // never Principal.
+                    'finance.fee_assessments.run',
                     // Phase 10D: same day-to-day operational parity
                     // reasoning as Visitor/Transport/Library above --
                     // managing Hostel structure and Student residency

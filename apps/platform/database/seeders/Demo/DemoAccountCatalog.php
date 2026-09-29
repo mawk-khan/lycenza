@@ -39,6 +39,7 @@ final class DemoAccountCatalog
                 // FEE.3 concession approval stays with School Admin (ADR
                 // 0062 §19 maker/checker separation).
                 'finance.accounts.manage', 'finance.fee_structures.view', 'finance.fee_structures.manage',
+                'finance.fee_assessments.run',
             ],
         ],
         'demo.librarian' => [

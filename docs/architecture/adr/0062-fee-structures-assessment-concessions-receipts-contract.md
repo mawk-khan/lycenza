@@ -1256,3 +1256,57 @@ own later checkpoint.
 
 FEE.2 may now start. Proration remains a rejected v1 option, never a
 silent default.
+
+## Implementation note — FEE.2 as built (2026-09-29)
+
+FEE.2 implements §9–§13 and the §11.3 void path under owner decision D1.
+The full as-built record is in `docs/modules/FINANCE.md` ("FEE.2
+as-built"). Refinements that amend the text above:
+
+- **§10.1 eligibility uses the billing period, not an as-of date.** A
+  single as-of reference date contradicted D1 for periods assessed in
+  advance: a Student joining partway through the period would not qualify
+  on the reference date, although D1 bills that period in full. As built:
+  - Candidates are the grade's enrollments (campus rules as above) that had
+    not ended before the period started.
+  - Per Student and line, the non-cancelled enrollment that **overlaps**
+    the instalment's billing period (latest start) is used.
+  - An enrollment that starts only after the period ended gives
+    `period_before_enrollment`.
+  - Only-cancelled overlapping enrollments give `enrollment_cancelled`.
+  - The Students method is
+    `StudentEnrollmentFeeTargetReadService::candidatesForGrade(...)`, plus
+    `lockForFeeAssessment()` for the execution-time FOR SHARE re-read.
+- **`no_structure`** stays in the reason catalogue but no FEE.2 path
+  produces it. A run is always scoped to one active structure, and its
+  population is the one that structure resolves for: a School-default run
+  excludes campuses with an active override. Resolution drift after the
+  preview fails the item at execution (`structure_not_resolved`).
+- **Execution failure catalogue (closed):**
+  - `structure_not_active`;
+  - `structure_not_resolved`;
+  - `enrollment_not_qualifying`;
+  - `student_inactive`;
+  - `optional_not_selected`;
+  - `head_inactive`;
+  - `account_invalid`;
+  - `error`.
+
+  Execution re-checks every preview fact and fails closed.
+- **Staff exclusion** is stored on the item: `staff_excluded`, actor and
+  time. It carries over into every later preview of that run. A suspended
+  School's pause is an audit event (`fee_assessment_run.paused`), not a
+  status.
+- **§11.3 guards.**
+  - `charges_fee_assessment_guard_trigger` is **immediate** (BEFORE UPDATE
+    of `cancelled_at`): a fee-assessed charge cannot be cancelled while its
+    assessment is live. `ChargeService::cancel` maps it to
+    `ChargeIsFeeAssessedException` (409).
+  - `fee_assessments_void_requires_cancelled_charge` is the **deferred**
+    half: a voided assessment's charge must be cancelled by commit.
+  - The void path (`FeeAssessmentService::void`) voids first, then cancels
+    through `ChargeService::cancel`, under `finance.charges.manage`.
+- **Race proofs.** §12 proofs 1–5 are covered by `FeeAssessmentConcurrencyTest`
+  (real processes, forced and verified overlap), plus concurrent run
+  creation.
+- **Not built:** FEE.3+, proration, automatic or scheduled runs.

@@ -113,6 +113,19 @@ note. **Next: FEE.2 — Assessment Runs.**
 FEE.2 is unblocked. F, F2, G, H, I, I2 and M, and the §27 legal questions,
 remain open.
 
+**FEE.2 — COMPLETE (2026-09-29).** Built:
+- staff-triggered assessment runs (preview, explicit exclusion, queued
+  resumable execution);
+- the Students-owned enrollment read boundary;
+- idempotency through `fee_assessments_one_live_per_period`;
+- the assessment void path.
+
+No proration (D1). The as-built record is in `docs/modules/FINANCE.md`
+"FEE.2 as-built" and the ADR 0062 implementation note.
+
+**Next: FEE.3 — Concessions / Scholarships / Waivers**, which needs owner
+decisions F, F2, G and M first.
+
 ## Phase 0A — Architectural Foundation (complete)
 
 Repository structure, ADRs, domain map, tenancy/API/event/AI/security

@@ -5,6 +5,7 @@ namespace App\Domain\Fees\Application;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
+use App\Domain\Fees\Application\Exceptions\ChargeIsFeeAssessedException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\InvalidChargeException;
 use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
@@ -228,6 +229,12 @@ class ChargeService
                     if ($this->violatesConstraint($e, 'charges_payment_allocation_guard_trigger')
                         || str_contains($e->getMessage(), 'recognized payment allocations exist')) {
                         throw new ChargeHasPaymentAllocationsException($charge->id);
+                    }
+
+                    // FEE.2 (ADR 0062 §11.3): a fee-assessed charge is
+                    // cancelled only through the assessment void path.
+                    if (str_contains($e->getMessage(), 'is fee-assessed; void its fee assessment')) {
+                        throw new ChargeIsFeeAssessedException($charge->id);
                     }
 
                     throw $e;

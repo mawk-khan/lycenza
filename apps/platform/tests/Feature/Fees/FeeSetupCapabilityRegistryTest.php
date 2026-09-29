@@ -52,10 +52,19 @@ class FeeSetupCapabilityRegistryTest extends TestCase
     }
 
     #[Test]
-    public function no_fee_2_or_later_capability_is_registered_yet(): void
+    public function fee_2_registers_only_the_run_capability_and_no_fee_3_capability_exists_yet(): void
     {
-        foreach (['finance.fee_assessments.run', 'finance.fee_concessions.view', 'finance.fee_concessions.request', 'finance.fee_concessions.approve'] as $key) {
-            $this->assertFalse(Capability::query()->where('key', $key)->exists(), "{$key} belongs to FEE.2+.");
+        $run = Capability::query()->where('key', 'finance.fee_assessments.run')->firstOrFail();
+        $this->assertSame('school', $run->namespace);
+
+        $holders = Role::query()->where('scope', 'school')->where('is_system', true)->get()
+            ->filter(fn (Role $role) => $role->capabilities->contains('key', 'finance.fee_assessments.run'))
+            ->pluck('key')->values()->all();
+        $this->assertSame(['school_admin'], $holders, 'Only School Admin runs fee assessments by default; never Principal.');
+        $this->assertContains('finance.fee_assessments.run', DemoAccountCatalog::OPERATIONS_DESK_ROLES['demo.finance_officer']['capabilities']);
+
+        foreach (['finance.fee_concessions.view', 'finance.fee_concessions.request', 'finance.fee_concessions.approve'] as $key) {
+            $this->assertFalse(Capability::query()->where('key', $key)->exists(), "{$key} belongs to FEE.3.");
         }
     }
 

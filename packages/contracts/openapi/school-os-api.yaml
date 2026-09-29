@@ -4848,6 +4848,338 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # FEE.2 (ADR 0062 §9-§13): fee assessment runs. One run = one active fee
+  # structure x one billing period. Preview creates no charge; execution is
+  # queued, resumable, and idempotent by the fee_assessments key (at most
+  # one live assessment per Student x academic year x fee head x billing
+  # period). No proration exists (owner decision D1).
+  /schools/{schoolId}/fee-assessment-runs:
+    get:
+      operationId: listFeeAssessmentRuns
+      summary: >
+        Lists assessment runs (newest first, at most 200). Requires finance.charges.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: fee_structure_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/FeeAssessmentRunStatus" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/FeeAssessmentRun" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createFeeAssessmentRun
+      summary: >
+        Creates a DRAFT run for one active fee structure and one of its billing periods. At most one open run per structure and period. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeAssessmentRunCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessmentRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ASSESSMENT_RUN_OPEN_EXISTS.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (structure not active, period not on the structure).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessment-runs/{runId}:
+    get:
+      operationId: getFeeAssessmentRun
+      summary: >
+        Fetches one run with its preview and execution totals. Requires finance.charges.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessmentRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessment-runs/{runId}/items:
+    get:
+      operationId: listFeeAssessmentRunItems
+      summary: >
+        Lists a run's items (50 per page) with preview result, reason and execution state. Requires finance.charges.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: preview_result, in: query, required: false, schema: { type: string, enum: [ready, already_assessed, excluded, blocked] } }
+        - { name: execution_status, in: query, required: false, schema: { type: string, enum: [pending, succeeded, skipped_already_assessed, failed] } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/FeeAssessmentRunItem" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessment-runs/{runId}/preview:
+    post:
+      operationId: previewFeeAssessmentRun
+      summary: >
+        Computes (or recomputes) every item of a draft or previewed run. Creates no charge. Staff exclusions carry over. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessmentRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ASSESSMENT_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: The structure is no longer active.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessment-runs/{runId}/execute:
+    post:
+      operationId: executeFeeAssessmentRun
+      summary: >
+        Claims a previewed run whose preview is current and queues its execution. Each ready item becomes exactly one charge, or is skipped when the Student is already assessed for that fee head and period. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessmentRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ASSESSMENT_RUN_STALE_PREVIEW or FEE_ASSESSMENT_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessment-runs/{runId}/resume:
+    post:
+      operationId: resumeFeeAssessmentRun
+      summary: >
+        Re-queues an executing run (after an interruption or a School pause). Only pending items are processed. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessmentRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ASSESSMENT_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessment-runs/{runId}/cancel:
+    post:
+      operationId: cancelFeeAssessmentRun
+      summary: >
+        Cancels a draft or previewed run. Nothing was charged. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessmentRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_RUN_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ASSESSMENT_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessment-runs/{runId}/items/{itemId}/exclude:
+    post:
+      operationId: excludeFeeAssessmentRunItem
+      summary: >
+        Excludes one READY item (reason staff_excluded, actor and time recorded). Never changes the fee structure or the amount. Returns the run to draft, so it must be previewed again. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessmentRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_RUN_NOT_FOUND or FEE_ASSESSMENT_RUN_ITEM_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ASSESSMENT_RUN_ITEM_NOT_EXCLUDABLE or FEE_ASSESSMENT_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessments/{assessmentId}/void:
+    post:
+      operationId: voidFeeAssessment
+      summary: >
+        Voids a live fee assessment and cancels its charge in one transaction (refused when a payment is allocated). Frees the Student x year x fee head x period key for one deliberate re-assessment. No refund or credit. Requires finance.charges.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assessmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeAssessmentVoidInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ASSESSMENT_ALREADY_VOIDED or CHARGE_HAS_PAYMENT_ALLOCATIONS.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   # Phase 9.8: Payroll HTTP transport, mirroring the Finance section's
   # exact style. Every path below is authorized through the 9.7
   # Administration/Read boundary (App\Domain\Payroll\Application\*AdministrationService /
@@ -10010,6 +10342,87 @@ components:
       properties:
         student_id: { type: string, format: uuid }
         fee_structure_line_id: { type: string, format: uuid }
+
+    # FEE.2 (ADR 0062) schemas.
+    FeeAssessmentRunStatus:
+      type: string
+      enum: [draft, previewed, executing, completed, completed_with_errors, cancelled]
+    FeeAssessmentRun:
+      type: object
+      required: [id, feeStructureId, billingPeriodKey, status, configurationVersion, previewIsCurrent, currency, preview, execution, createdAt, previewedAt, executionStartedAt, completedAt, cancelledAt]
+      properties:
+        id: { type: string, format: uuid }
+        feeStructureId: { type: string, format: uuid }
+        billingPeriodKey: { type: string }
+        status: { $ref: "#/components/schemas/FeeAssessmentRunStatus" }
+        configurationVersion: { type: integer }
+        previewIsCurrent: { type: boolean, description: "true only when the run is previewed and nothing changed since." }
+        currency: { type: string, example: INR }
+        preview:
+          type: object
+          required: [readyCount, readyAmount, excludedCount, blockedCount, alreadyAssessedCount]
+          properties:
+            readyCount: { type: integer }
+            readyAmount: { type: string, pattern: "^\\d{1,14}(\\.\\d{1,2})?$" }
+            excludedCount: { type: integer }
+            blockedCount: { type: integer }
+            alreadyAssessedCount: { type: integer }
+        execution:
+          type: object
+          required: [succeededCount, skippedCount, failedCount, assessedAmount]
+          properties:
+            succeededCount: { type: integer }
+            skippedCount: { type: integer }
+            failedCount: { type: integer }
+            assessedAmount: { type: string, pattern: "^\\d{1,14}(\\.\\d{1,2})?$" }
+        createdAt: { type: string, format: date-time }
+        previewedAt: { type: string, format: date-time, nullable: true }
+        executionStartedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+    FeeAssessmentRunItem:
+      type: object
+      required: [id, studentId, studentEnrollmentId, campusId, enrollmentStartsOn, feeStructureLineId, feeHeadId, billingPeriodKey, amount, currency, previewResult, reason, excludedAt, executionStatus, failureReason, feeAssessmentId, executedAt]
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        studentEnrollmentId: { type: string, format: uuid, nullable: true }
+        campusId: { type: string, format: uuid, nullable: true }
+        enrollmentStartsOn: { type: string, format: date, nullable: true }
+        feeStructureLineId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        billingPeriodKey: { type: string }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", description: The instalment amount -- never prorated. }
+        currency: { type: string, example: INR }
+        previewResult: { type: string, enum: [ready, already_assessed, excluded, blocked] }
+        reason: { type: string, nullable: true, enum: [optional_not_selected, period_before_enrollment, enrollment_cancelled, student_inactive, staff_excluded, no_structure, head_inactive, account_invalid, null] }
+        excludedAt: { type: string, format: date-time, nullable: true }
+        executionStatus: { type: string, nullable: true, enum: [pending, succeeded, skipped_already_assessed, failed, null] }
+        failureReason: { type: string, nullable: true, enum: [structure_not_active, structure_not_resolved, enrollment_not_qualifying, student_inactive, optional_not_selected, head_inactive, account_invalid, error, null] }
+        feeAssessmentId: { type: string, format: uuid, nullable: true }
+        executedAt: { type: string, format: date-time, nullable: true }
+    FeeAssessment:
+      type: object
+      required: [id, studentId, academicYearId, feeHeadId, billingPeriodKey, chargeId, feeAssessmentRunId, voidedAt]
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        billingPeriodKey: { type: string }
+        chargeId: { type: string, format: uuid }
+        feeAssessmentRunId: { type: string, format: uuid, nullable: true }
+        voidedAt: { type: string, format: date-time, nullable: true }
+    FeeAssessmentRunCreateInput:
+      type: object
+      required: [fee_structure_id, billing_period_key]
+      properties:
+        fee_structure_id: { type: string, format: uuid }
+        billing_period_key: { type: string, maxLength: 32 }
+    FeeAssessmentVoidInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 255, nullable: true }
 
     JournalLine:
       type: object

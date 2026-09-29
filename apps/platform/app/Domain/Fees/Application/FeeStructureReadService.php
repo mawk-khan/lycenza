@@ -33,6 +33,7 @@ class FeeStructureReadService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly FeeStructureResolver $resolver,
     ) {}
 
     /** @return Collection<int, FeeHead> */
@@ -105,22 +106,7 @@ class FeeStructureReadService
     {
         $this->authorize($school, $actor);
 
-        return $this->context->withSchool($school, function () use ($school, $academicYearId, $gradeLevelId, $campusId) {
-            $base = fn () => FeeStructure::query()
-                ->where('school_id', $school->id)
-                ->where('academic_year_id', $academicYearId)
-                ->where('grade_level_id', $gradeLevelId)
-                ->where('status', FeeStructure::STATUS_ACTIVE);
-
-            if ($campusId !== null) {
-                $override = $base()->where('campus_id', $campusId)->first();
-                if ($override !== null) {
-                    return $override;
-                }
-            }
-
-            return $base()->whereNull('campus_id')->first();
-        });
+        return $this->context->withSchool($school, fn () => $this->resolver->activeStructureFor($school, $academicYearId, $gradeLevelId, $campusId));
     }
 
     /**
