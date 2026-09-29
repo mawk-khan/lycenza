@@ -9,6 +9,13 @@
   selected.
 - **O1 (ADR 0058):** email is mandatory for v1. O1 cannot close with
   `MAIL_PROVIDER=none` or fake delivery (evidence rows E17–E20).
+- **Provider (Phase 0O.13, ADR 0060): Twilio SendGrid is selected**
+  (HTTPS Mail Send API; Signed Event Webhook; code name `sendgrid`).
+  - The processor/legal review is **outstanding** (E17).
+  - The adapter (Phase 0O.13A, E18) is not written, and nothing is
+    configured.
+  - ADR 0060 §23 is the E19 start sequence; the SendGrid runbook steps
+    arrive with 0O.13A.
 
 Every business email goes through the durable email layer
 (`App\Support\Email\OutboundEmailGateway`):

@@ -98,6 +98,8 @@ None of the following has been done; no deployment exists (rule 16):
 - an edge certificate issued and renewed;
 - HTTP → HTTPS enforced at the edge;
 - private-key custody proven outside the application;
+- the routing/TLS probe (`platform:domain-probe`) passing against the real
+  edge (ADR 0058 §4.10; added 2026-09-29);
 - DNS/TLS drift monitoring active;
 - one revoke/re-add drill completed.
 

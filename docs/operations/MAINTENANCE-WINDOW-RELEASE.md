@@ -47,8 +47,12 @@ never worked on.
    `database_admin`): `console migrate --database=pgsql_admin --force`,
    then `console db:seed --force`.
 7. **First release only:** `console platform:bootstrap-root`
-   (interactive) and `console platform:service-identity-issue ai-gateway …`
-   (`PRODUCTION-RELEASE.md` step 8).
+   (interactive). **Only if the AI Gateway is deployed:** generate the two
+   ADR 0053 service keys with `console platform:service-key-generate
+   platform|ai-gateway` and install them through the secret store
+   (`PRODUCTION-RELEASE.md` step 8; `SERVICE-KEY-ROTATION.md`).
+   `platform:service-identity-issue` and the symmetric `SERVICE_TOKEN` were
+   retired in Phase 0O.7A. (Corrected 2026-09-29.)
 8. Start the new `web` processes (they build their caches from the
    injected environment; an unsafe configuration refuses here). Liveness
    200, readiness 503 while down.
@@ -56,7 +60,8 @@ never worked on.
 10. Start the new workers (`default`, `integrations`, `notifications`) and
     the single scheduler. `console queue:restart` is only needed if an old
     worker is still running.
-11. Start/restart the AI Gateway if its image or token changed.
+11. If the AI Gateway is deployed: start/restart it if its image, service
+    keys or verification ring changed.
 12. **Verify:** readiness 200 (web and Gateway),
     `console platform:verify-database`, `console platform:operations-status`,
     a sign-in, one queued flow (e.g. a settings change reaching its

@@ -22,6 +22,17 @@
   (the AI Gateway is conditional), ADR 0055 (the provider adapter is
   mandatory for O1), ADR 0056 §17 item 6 (promoted to an O1 blocker).
 
+> **Current status (pointer, 2026-09-29).** This ADR is append-only. The
+> §6 register is authoritative for each row, and the dated notes at the end
+> supersede body text written earlier. Body sections that are now out of
+> date:
+> - §4.14 and §9: E24 is REPOSITORY_COMPLETE (Phase 0O.12B);
+> - §9 and §11: the blocker list and repository-work count;
+> - §4.6, §4.8 and §11: `c4b1b6c`; the latest qualified commit is
+>   `e52c4c4`.
+>
+> The provider is selected (ADR 0060). Read the Phase 0O.13 note last.
+
 ## 1. Context (audited 2026-09-28, `origin/main` `8512701`)
 
 - **Repository.** Phases 0O.1 to 0O.11A are complete (`PHASE-0O-READINESS.md`
@@ -176,8 +187,9 @@ No other wording ("mostly done", "partially ready") describes an O1 item.
 - the integration scope contract;
 - manual/offline payment recording.
 
-This does **not** claim provider-specific tail code (§4.8) or the missing
-provisioning path (§4.10).
+This does **not** claim provider-specific tail code (§4.11) or the
+provisioning path (§4.14; since completed as E24, Phase 0O.12B).
+(Cross-references corrected 2026-09-29; they read §4.8 and §4.10.)
 
 ### 4.2 S1 — API and browser hardening (ADR 0049)
 
@@ -553,7 +565,7 @@ with secrets.
 | ID | Control / evidence | Source | Category | Mandatory? | Status | Required evidence | Evidence location | Owner | Blocks O1 |
 |---|---|---|---|---|---|---|---|---|---|
 | E01 | Phase 0O repository foundations (0O.1–0O.11A) | ADRs 0049–0057 | Repository | Mandatory | REPOSITORY_COMPLETE | Implemented, tested, qualified | Readiness §13–§40 | Engineering | No |
-| E02 | Final regression + O16 qualification of the closeout commit | ADR 0052 §3.15; §5 item 1 | Repository | Mandatory | GOVERNANCE_REQUIRED | Fresh qualification on protected `main` after E03, E17, E24; both images VERIFIED | Future readiness section; `RELEASE-QUALIFICATION.md` | Engineering + Operator | Yes |
+| E02 | Final regression + O16 qualification of the closeout commit | ADR 0052 §3.15; §5 item 1 | Repository | Mandatory | GOVERNANCE_REQUIRED | Fresh qualification of the closeout commit on protected `main`, after: E03 (protection active in reality); E18 (the selected provider's code merged); every other mandatory executable repository change; and E16 (every vulnerability exception valid on the qualification date, or replaced by fixes or a fresh decision). Both images VERIFIED. (Corrected 2026-09-29; read "after E03, E17, E24".) | Future readiness section; `RELEASE-QUALIFICATION.md` | Engineering + Operator | Yes |
 | E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused | GitHub settings (not in repo); dated note in readiness | Owner | Yes |
 | E04 | S1 repository hardening, V1–V5 frozen | ADR 0049 §20 + amendment | Repository | Mandatory | REPOSITORY_COMPLETE | Guard tests; throttled `/api/v1`; empty partner catalog | Readiness §16 | Engineering | No |
 | E05 | S1 edge: `TRUSTED_PROXIES`, HTTPS detection, HSTS, client-IP limiting | ADR 0049 §12; ADR 0050 §2 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Real edge addresses configured; the three behaviours demonstrated | Operator evidence record | Operator | Yes |
@@ -568,8 +580,8 @@ with secrets.
 | E14 | Production signing identity/key custody | ADR 0052 §3, §5 | Governance | Mandatory | GOVERNANCE_REQUIRED | Custody configured; `artifact-policy.json` signing identity set by a reviewed change | `artifact-policy.json` | Owner + Security | Yes |
 | E15 | Signed, stored, verified, explicitly promoted digest; first promotion evidence retained; promoted-only deployment; rollback retention | ADR 0052 §3.14, §3.17, §3.19 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Same VERIFIED digest in registry; promotion event; `retained-releases.json` entry | `retained-releases.json`; `RELEASE-QUALIFICATION.md` | Operator | Yes |
 | E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision (expiries 2026-10-10 / 2026-10-26) | `vulnerability-exceptions.json` | Owner + Security | Yes |
-| E17 | Email provider selected + legal/processor review | ADR 0055 §23; §4.11 | Provider / Legal | Mandatory | PROVIDER_REQUIRED | Selection decision; processor review recorded | ADR 0055 amendment (future) | Owner + Legal | Yes |
-| E18 | Email provider code tail (event auth/normalization; HTTPS sending only if needed) | §4.11 | Provider tail (repository) | Mandatory | PROVIDER_REQUIRED | Adapter, focused tests, full regression, O16 requalification | Future checkpoint | Engineering | Yes |
+| E17 | Email provider selected + legal/processor review | ADR 0055 §23; §4.11 | Provider / Legal | Mandatory | LEGAL_REVIEW_REQUIRED | Selection decision (made: Twilio SendGrid, ADR 0060); processor review recorded | ADR 0060 (§20 legal amendment, future) | Owner + Legal | Yes |
+| E18 | Email provider code tail (event auth/normalization; HTTPS sending only if needed) | §4.11 | Provider tail (repository) | Mandatory | LEGAL_REVIEW_REQUIRED | Adapter per ADR 0060 §22, focused tests, sandbox gates (§21), full regression, O16 requalification | Future Phase 0O.13A | Engineering | Yes |
 | E19 | Sending domain, SPF, aligned DKIM, DMARC ≥ quarantine after ≥ 14 d aligned | ADR 0055 §17 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | DNS evidence; aggregate-report summary; `MAIL_SENDING_VERIFIED` attestation | `EMAIL-DELIVERABILITY.md` checklist | Operator | Yes |
 | E20 | Email drills: delivery, hard bounce, complaint, suppression, rotation, monitoring, authenticated events | ADR 0055 §18, §23 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Drill record per checklist | `EMAIL-DELIVERABILITY.md` | Operator | Yes |
 | E21 | Retention decisions for v1 categories (mail, webhook deliveries, Documents, audit, others used in v1) | §4.12; ADR 0042; `DATA-CLASSIFICATION.md` | Legal | Mandatory | LEGAL_REVIEW_REQUIRED | Qualified decision recorded; settings implemented where they exist | Future legal record + ADR amendment | Legal + Owner | Yes |
@@ -745,3 +757,38 @@ The repository now provides:
 - **Mandatory blockers now:** E02, E03, E05, E07–E23 and E29 (21 rows).
   Only E02 and E18 still involve repository work.
 - **Conditional (unchanged):** E26–E28.
+
+## Note — Phase 0O.13: provider selected, E02 corrected (2026-09-29)
+
+**E17.** Twilio SendGrid is selected under ADR 0060: HTTPS Mail Send API,
+Signed Event Webhook, provider name `sendgrid`. Postmark was rejected;
+Amazon SES is the documented fallback. The processor/legal review is **not**
+done, so:
+- **E17:** PROVIDER_REQUIRED → **LEGAL_REVIEW_REQUIRED**;
+- **E18:** PROVIDER_REQUIRED → **LEGAL_REVIEW_REQUIRED**. It is blocked by
+  E17's review. Its scope is frozen in ADR 0060 §22 as Phase 0O.13A, and it
+  does not start until ADR 0060 records the legal outcome.
+
+**E02 corrected.** "After E03, E17, E24" was stale: E24 is complete, and a
+provider *selection* puts no code into the release. The row now requires:
+- E03;
+- E18;
+- every other mandatory executable repository change;
+- E16 valid on the qualification date.
+
+E02 is **not** complete.
+
+**§4.1 cross-references** now point to §4.11 and §4.14.
+
+**Timing.** ADR 0055 §17's 14-day aligned-DKIM observation places E02
+after both exception expiries (the last passing dates are 2026-10-09 and
+2026-10-25). E16 therefore needs a fresh scan and either a refresh or a
+fresh owner/security decision before E02 (ADR 0060 §24). Nothing is renewed.
+
+**E03** can and should be completed now. It is outside the repository and
+not configured by this change.
+
+**Unchanged:**
+- **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+- **Phase 0O:** CLOSEOUT BLOCKED.
+- **Mandatory blockers:** E02, E03, E05, E07–E23 and E29.

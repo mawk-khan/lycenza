@@ -1027,3 +1027,21 @@ requalification (ADR 0058 §4.11, rows E17–E20).
 `MAIL_RETENTION_DAYS` remains **[LEGAL REVIEW REQUIRED]**. The retention
 decision is now mandatory before Phase 0O closeout (ADR 0058 §4.12, option
 A).
+
+## Note — Phase 0O.13 (ADR 0060, 2026-09-29)
+
+- **Provider.** The provider is selected: **Twilio SendGrid** (ADR 0060),
+  code name `sendgrid`. The processor/legal review is outstanding (ADR 0058
+  E17 `LEGAL_REVIEW_REQUIRED`).
+- **Transport.** The HTTPS Mail Send API, as §6 prefers. The hardened
+  `smtp` adapter stays unchanged; before the adapter lands, it may carry
+  only non-production observation traffic.
+- **§11.2 amended (per-adapter bounds).** An event adapter may declare its
+  own request bounds. `sendgrid`: body ≤ 1 MiB and ≤ 5,000 events, because
+  SendGrid batches up to ~768 KB. Every other adapter keeps 256 KiB and 100
+  events. Authentication still precedes parsing, and one malformed element
+  never rejects its batch (ADR 0060 §12).
+- **§5 as applied to SendGrid:** ADR 0060 §3–§4. There is no provider
+  idempotency key, so §9.3's at-least-once stands.
+- **Retention.** The retention questions stay **[LEGAL REVIEW REQUIRED]**
+  (E21). SendGrid's own metadata retention is part of the E17 legal review.

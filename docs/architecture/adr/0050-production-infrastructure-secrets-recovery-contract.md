@@ -587,3 +587,18 @@ required** for Phase 0O closeout:
 This section's O1 contribution (§20), including one successful restore drill
 in a real, isolated non-production environment, is now evidence rows
 E08–E12 of ADR 0058 §6. O1 is defined, **not satisfied**.
+
+**Correction note (2026-09-29, ADR 0058 review).** §4 still says the
+operator console does "service-identity issuance", and that "the AI Gateway
+receives only `SERVICE_TOKEN`". Its secret table still lists
+`platform:service-identity-issue`. All three are superseded by the Phase
+0O.7 note above and by ADR 0053 (implemented in 0O.7A):
+- **Symmetric token retired.** The `SERVICE_TOKEN` and the
+  `service_identities` hash no longer exist.
+- **Key generation.** Keys are generated with `platform:service-key-generate
+  {platform|ai-gateway}`, and only when the Gateway is deployed.
+- **What the Gateway receives:** its own `SERVICE_SIGNING_KEY` and
+  verification ring, never database credentials (rule 8).
+
+The `§21 … not implemented` heading is historical. The implementation
+amendment above records what was built.

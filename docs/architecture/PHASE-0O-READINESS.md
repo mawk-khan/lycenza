@@ -2129,3 +2129,88 @@ separates:
 - governance changes;
 - legal decisions;
 - non-production deployment evidence.
+
+## 45. Phase 0O.13 — Transactional Email Provider Selection & Integration Contract (E17, 2026-09-29)
+
+Documentation only (ADR 0060). Baseline `origin/main` `4daa955`; the
+executable checkpoint stays `e52c4c4`.
+
+**Selection:**
+- **Evaluated against official documentation:** Amazon SES, Postmark,
+  Twilio SendGrid and Mailgun.
+- **Rejected:** Postmark. Its DKIM is 1024-bit and its webhooks carry no
+  signature.
+- **Selected:** **Twilio SendGrid**, code name `sendgrid`:
+  - HTTPS v3 Mail Send API with a restricted Mail-Send-only key;
+  - Signed Event Webhook: ECDSA/SHA-256 over timestamp + raw body, with an
+    operator-configured public key and a ±300 s window;
+  - `sg_event_id` deduplication (hashed into `event_key`);
+  - `X-Message-Id` → `sg_message_id` prefix linkage;
+  - 24 h provider retries;
+  - automated-security DKIM (a new custom selector, 2048-bit) and a custom
+    return path;
+  - all tracking off, account-wide and per message.
+- **Fallback:** Amazon SES, through a new amendment.
+- **Not decided here:** Lycenza's jurisdiction is not inferred.
+
+**Contract changes:**
+- **ADR 0055 §11.2** gains per-adapter event bounds: `sendgrid` allows
+  1 MiB and 5,000 events, because SendGrid batches up to ~768 KB. One
+  malformed element never rejects a batch.
+- **Idempotency:** none from SendGrid, so at-least-once stands.
+- **Suppression:** two independent lists. Lycenza's table stays
+  authoritative, and a release also clears the SendGrid list (an operator
+  step).
+- **Sandbox gates:** nine NOT VERIFIED facts must be proven in the
+  non-production account before E18 merges (ADR 0060 §21).
+
+**Legal/processor review: OUTSTANDING.**
+- **E17:** PROVIDER_REQUIRED → **LEGAL_REVIEW_REQUIRED**.
+- **E18:** blocked on E17's review. Its scope is frozen as **Phase 0O.13A —
+  SendGrid Transactional Email Adapter** (ADR 0060 §22), and it does not
+  start.
+
+**ADR 0058 corrections:**
+- **E02** now requires E03, E18, every other mandatory executable change,
+  and E16 valid on the date.
+- **§4.1** cross-references now point to §4.11 and §4.14.
+- **Status pointer** added for the out-of-date body sections.
+
+**Drift corrected:**
+- `MAINTENANCE-WINDOW-RELEASE.md`: the retired
+  `platform:service-identity-issue` becomes `platform:service-key-generate`,
+  Gateway only.
+- ADR 0050: a `SERVICE_TOKEN` correction note.
+- `CUSTOM-DOMAINS.md`: the routing/TLS probe exercise item.
+- `TELEMETRY-COLLECTION.md`: the scrape job must be named
+  `lycenza-metrics`.
+- New `OPERATOR-EVIDENCE-RECORD.md` template (E29).
+- **Deferred:** the stale `ExportAlertRules` description and
+  `ApplySecurityHeaders` docblock are executable files. They are left for an
+  executable checkpoint.
+
+**Timing:**
+- **E19** needs ≥ 14 days of 100 % aligned DKIM pass. It can start before
+  or during E18, but only on the owner's rule-16 authorization.
+- **E16:** the exceptions expire 2026-10-10 and 2026-10-26. The last
+  passing dates are 2026-10-09 and 2026-10-25, so E02 will follow both.
+  A fresh scan, then a refresh or a fresh owner/security decision, is
+  required. Nothing is renewed.
+
+**E03 CAN AND SHOULD BE COMPLETED NOW.** Put a real branch protection rule
+or ruleset on `main` that refuses force-pushes and deletion and routes
+changes through the controlled integration path. Then run all future work
+through protected `main`. `main` was unprotected on 2026-09-29 (public
+API: `protected: false`, no rulesets).
+
+**Status:**
+- **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+- **Phase 0O:** CLOSEOUT BLOCKED — DEPLOYMENT / LEGAL / GOVERNANCE /
+  PROVIDER EVIDENCE OUTSTANDING.
+- **Phase 0M:** BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS
+  REQUIRED.
+- **Regression:** checkpoint `e52c4c4`. This docs-only unit is #1 since it
+  (counter **1/5** once published).
+
+**Next (not started):** the qualified legal/processor review of SendGrid,
+recorded as an ADR 0060 amendment. Only then does Phase 0O.13A start.

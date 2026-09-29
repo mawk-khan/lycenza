@@ -1808,6 +1808,32 @@ ADR 0058 row **E24 is REPOSITORY_COMPLETE** (`PHASE-0O-READINESS.md` §44).
 Next: a fresh O1 evidence-register review (which blockers can proceed in
 parallel, and the email provider tail) — not started.
 
+**O1 evidence-register review (2026-09-29, read-only).**
+- **The only mandatory code tail left is E18,** the email provider
+  adapter.
+- **Can start now:** E03 (protect `main`), E16 (the exception clock) and
+  E17/E21 (decisions).
+
+**0O.13 — Transactional Email Provider Selection & Integration Contract
+(2026-09-29, docs-only, ADR 0060).**
+- **Selected: Twilio SendGrid.**
+  - HTTPS Mail Send API; ECDSA-signed Event Webhook; `sg_event_id`
+    deduplication.
+  - Provider-hosted 2048-bit DKIM with a custom return path; tracking off.
+- **Rejected: Postmark** (1024-bit DKIM, unsigned webhooks). **Fallback:**
+  SES.
+- **E17 is LEGAL_REVIEW_REQUIRED:** the processor/legal review is
+  outstanding.
+- **ADR 0058 E02 corrected:** it now requires E03, E18, every other
+  mandatory executable change, and E16.
+- **Drift fixed:** in several runbooks, plus a new operator evidence
+  template.
+
+Next: the legal/processor review of SendGrid. Then **0O.13A — SendGrid
+Transactional Email Adapter** (E18), which is not started. In parallel,
+outside the repository: E03, the E16 plan, and the E19 DKIM clock once the
+owner authorizes the account.
+
 ## Cross-cutting, ongoing (not a single phase)
 
 - Data classification and authorization reviews (root `CLAUDE.md`) on

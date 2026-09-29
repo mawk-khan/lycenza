@@ -16,6 +16,10 @@ ERP, so it must be noticed separately.
   OBS-03); `evidence` = the deployment evidence file is missing or invalid
   (check its schema, `docs/operations/BACKUP-AND-RESTORE.md`); others = a
   database read failed (see OBS-02).
+- **Scrape job name.** OBS-26's rule matches `up{job="lycenza-metrics"}`
+  (`AlertCatalog`). The collector's scrape job for the metrics listener
+  **must** be named `lycenza-metrics`, or OBS-26 cannot see the target
+  going down (E07 evidence).
 - Logs are JSON on stderr, collected by the container runtime; the
   application never ships logs itself.
 
