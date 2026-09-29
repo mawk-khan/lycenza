@@ -123,8 +123,17 @@ remain open.
 No proration (D1). The as-built record is in `docs/modules/FINANCE.md`
 "FEE.2 as-built" and the ADR 0062 implementation note.
 
-**Next: FEE.3 — Concessions / Scholarships / Waivers**, which needs owner
-decisions F, F2, G and M first.
+**ADR 0062 decisions F, F2, G and M confirmed (owner, 2026-09-29):**
+- **F:** maker/checker for every concession, requester ≠ approver
+  (database-enforced).
+- **F2:** one School-level `expense` concession account in `fee_settings`.
+- **G:** adjustments limited to the current outstanding; refused, never
+  reduced; never a credit or refund.
+- **M:** closed categories `concession`/`scholarship`/`waiver`, with no
+  free-text note.
+
+**Next: FEE.3 — Concessions / Scholarships / Waivers.** It is unblocked and
+not started. H, I, I2 and the §27 legal questions remain open.
 
 ## Phase 0A — Architectural Foundation (complete)
 

@@ -222,16 +222,16 @@ Status values:
 | C | Frequencies | **DECIDED — owner confirmed 2026-09-29** | Stored instalments are authoritative; `one_time`/`term`/`monthly` are authoring generators; "optional" is a separate flag (§7.3) | FEE.1 |
 | D | Mid-year admission | **DECIDED — owner confirmed D1, 2026-09-29** | No proration in v1; skip instalments whose billing period ended before `starts_on`; current and future periods assessed in full; staff may exclude items at preview (§10.2) | FEE.2 |
 | E | Optional fees | **DECIDED — owner confirmed 2026-09-29** | Explicit per-Student selection before assessment (§8) | FEE.1 (schema), FEE.2 |
-| F | Concession approval | OWNER DECISION REQUIRED | Maker/checker mandatory for every concession, database-enforced; no amount thresholds in v1 (§14.4) | FEE.3 |
-| F2 | Concession posting account | OWNER DECISION REQUIRED (accountant) | One School-level `expense` account "Fee concessions and scholarships" (§14.5) | FEE.3 |
-| G | Concession after payment | OWNER DECISION REQUIRED | Capped at the charge's current outstanding; never creates credit or refund (§14.6) | FEE.3 |
+| F | Concession approval | **DECIDED — owner confirmed 2026-09-29** | Maker/checker mandatory for every concession, database-enforced; no amount thresholds in v1 (§14.4) | FEE.3 |
+| F2 | Concession posting account | **DECIDED — owner confirmed 2026-09-29** | One School-level `expense` account "Fee concessions and scholarships" (§14.5) | FEE.3 |
+| G | Concession after payment | **DECIDED — owner confirmed G1, 2026-09-29** | Capped at the charge's current outstanding; never creates credit or refund (§14.6) | FEE.3 |
 | H | Late-fee policy | OWNER DECISION REQUIRED | Fixed or percentage-of-outstanding, grace days, optional cap, one late fee per overdue charge per rule; no tiers or recurrence in v1 (§16) | FEE.5 |
 | I | Receipt numbering | OWNER DECISION REQUIRED | School + financial year, FY start month configurable (default April), format `<PREFIX>/<FY>/<000001>` (§17.2) | FEE.4 |
 | I2 | Existing payments | OWNER DECISION REQUIRED | Explicit, audited one-time backfill in `settled_at` order (§17.4) | FEE.4 |
 | J | Receipt statutory/GST form | **LEGAL REVIEW REQUIRED** | FEE.4 ships a payment acknowledgement only, with no tax fields (§17.5) | FEE.4 |
 | K | Ledger-account provisioning (finding F1) | **DECIDED — owner confirmed K1, 2026-09-29** | FEE.1 includes minimal Finance-owned account administration (§6) | FEE.1 |
 | L | Role grants | **DECIDED — owner confirmed 2026-09-29** | `school_admin` gets all; `principal` gets none by default; demo finance officer gets all except approve (§19) | FEE.1 |
-| M | Concession categories and notes | OWNER DECISION REQUIRED | Closed catalogue `concession`, `scholarship`, `waiver`; no free-text note (§14.2) | FEE.3 |
+| M | Concession categories and notes | **DECIDED — owner confirmed 2026-09-29** | Closed catalogue `concession`, `scholarship`, `waiver`; no free-text note (§14.2) | FEE.3 |
 | N | Percentage rounding | DECIDED | `Money::multiplyByRate`, 2 dp, half away from zero; never exceeds the base (§14.3) | FEE.3/5 |
 
 ## 3. Module ownership and dependency directions
@@ -668,7 +668,7 @@ Late fees use their own key (§16.3).
   through `LedgerService::post()`. Cancelling one reverses that entry
   (`reverseById`). A charge's amount is **never** changed.
 
-### 14.2 Categories and notes (M)
+### 14.2 Categories and notes (M — DECIDED, owner confirmed 2026-09-29)
 
 - **Category** comes from a closed catalogue: `concession`, `scholarship`,
   `waiver` (recommended). Sibling, staff-ward and RTE labels are **not**
@@ -686,7 +686,7 @@ Late fees use their own key (§16.3).
   `id`, order, each capped at what remains. Total adjustments can never
   exceed the charge amount (database guard, §15).
 
-### 14.4 Lifecycle and approval (F — OWNER DECISION REQUIRED)
+### 14.4 Lifecycle and approval (F — DECIDED, owner confirmed 2026-09-29)
 
 ```
 pending ──approve──► approved ──revoke (standing only)──► revoked
@@ -714,7 +714,7 @@ pending ──approve──► approved ──revoke (standing only)──► re
   instalment's `period_starts_on`, the adjustment is posted **in the same
   item transaction**. Preview shows gross, adjustment and net.
 
-### 14.5 Posting account (F2 — owner/accountant)
+### 14.5 Posting account (F2 — DECIDED, owner confirmed 2026-09-29: one School-level `expense` account)
 
 The recommendation is one School-level Fees setting (a singleton
 `fee_settings` row, following the `canteen_billing_configurations`
@@ -724,7 +724,7 @@ Contra-income (an `income` account debited) is the alternative. Either way
 the ledger stays balanced, and the choice changes only the reporting
 presentation, so the accountant decides.
 
-### 14.6 Concession after payment (G — OWNER DECISION REQUIRED)
+### 14.6 Concession after payment (G — DECIDED: G1, owner confirmed 2026-09-29)
 
 | Option | Behaviour |
 |---|---|
@@ -1310,3 +1310,127 @@ as-built"). Refinements that amend the text above:
   (real processes, forced and verified overlap), plus concurrent run
   creation.
 - **Not built:** FEE.3+, proration, automatic or scheduled runs.
+
+## Owner decisions F, F2, G and M for FEE.3 (2026-09-29)
+
+The owner confirmed the §14 recommendations for FEE.3. The earlier notes
+listing F, F2, G and M as pending were true when written and stay
+unchanged. Options G2/G3 and contra-income (§14.5) are kept above as
+history and are **not** adopted.
+
+### Request and approval lifecycle (F)
+
+- **Two separate things.** A concession is a request (`fee_concessions`);
+  its financial effect is a separate posted adjustment (`fee_adjustments`,
+  §14.1). The request itself is never a financial posting.
+- **Approval before any effect.** Every request needs approval before it
+  can affect any charge. There is no amount threshold below which approval
+  is skipped, and no automatic approval for any role (School Admin and
+  Principal included).
+- **Lifecycle (§14.4).** `pending -> approved | rejected | withdrawn`;
+  `approved -> revoked` for standing concessions only.
+  - Rejection leaves no financial adjustment.
+  - A requester may withdraw a pending request.
+  - Revocation stops future application only.
+- **Posting on approval.** Approving a targeted concession posts its
+  adjustment through the FEE.3 financial path in the same transaction. An
+  approved standing concession posts its adjustments when assessment
+  creates the matching charges (§14.4).
+- **Out of scope in v1:** multi-stage approval, approval chains and
+  threshold rules.
+
+### Separation of duties (F)
+
+- **Requester ≠ approver, always.** Self-approval is prohibited whatever
+  the actor's roles or capabilities.
+- **Enforced twice:**
+  - the Application service throws a typed `SelfApprovalNotAllowedException`;
+  - the database enforces
+    `CHECK (decided_by_user_id IS NULL OR decided_by_user_id <>
+    requested_by_user_id)` (the `payroll_runs_sod_check` precedent).
+- **Capabilities, never role names.** Authorization is
+  `finance.fee_concessions.request` / `.approve` (§19). No code branches on
+  a role name (rule 24).
+
+### Financial posting (F2)
+
+- **The account.** Each adjustment posts Dr the School's concession
+  account / Cr the charge's own receivable account through
+  `LedgerService::post()`.
+  - The concession account is one School-level **`expense`** account
+    (purpose: "Fee concessions and scholarships"), configured in the FEE.1
+    `fee_settings` singleton (`concession_ledger_account_id`).
+  - It is never inferred from the fee head.
+- **Validated before every posting.** FEE.3 checks the account exists,
+  belongs to the School, is INR, is active and is of type `expense`. A
+  missing or invalid account refuses the posting (fail closed).
+- **History stays put.**
+  - The charge's revenue account (the fee head mapping at assessment) is
+    never changed.
+  - Each adjustment stores its own debit account id, so changing the
+    configured concession account later never moves posted history.
+- **Not in v1:**
+  - per-fee-head, category, grade, campus or Student concession accounts;
+  - a chart-of-accounts template;
+  - any tax treatment through this account.
+
+### Current-outstanding cap (G, option G1)
+
+- **The rule.** An adjustment may be posted only up to the charge's
+  **current outstanding** at posting time: amount − valid payment
+  allocations − already-posted (uncancelled) adjustments. Existing payment
+  allocations take precedence.
+- **Refused, never reduced.** An adjustment that would exceed the
+  outstanding **fails closed** (`ChargeFullyPaidException` /
+  `AdjustmentExceedsOutstandingException`). It is never silently reduced.
+  - This decision fixes how "capped" in §14.1, §14.3 and §14.6 is read: a
+    limit that refuses the posting, not an automatic reduction.
+  - §14.3's percentage arithmetic still computes the requested value
+    exactly (N).
+  - A standing concession whose computed value exceeds what remains
+    refuses its adjustment, and the assessment item fails closed. FEE.3
+    adds the failure reason to the closed catalogue.
+- **Never creates:** a Student credit, an unapplied balance, a refund
+  entitlement or a negative charge balance.
+- **Concurrency is resolved structurally.** The Payments-owned capacity
+  guard (§15), amended in FEE.3 exactly as §15 authorizes, enforces
+  `SUM(allocations) + SUM(uncancelled adjustments) ≤ charges.amount`. Both
+  the allocation path and the adjustment path lock the charge row first, so
+  a payment and a concession can never consume the same outstanding
+  capacity.
+  - Payment ownership does not move into Fees, and Fees never reads
+    `payment_allocations`.
+- **Out of scope in FEE.3:** refunds, payment reversal, credits and
+  overpayments.
+
+### Closed category catalogue (M)
+
+- **Category is required**, from a closed catalogue: `concession`,
+  `scholarship` or `waiver` (a database CHECK). There are no custom or
+  School-configurable categories in v1.
+- **No free-text note or reason** is stored on a concession.
+  - Audit and event metadata carry ids and the closed category only.
+  - Sibling, staff-ward and RTE labels stay out until the owner and the §27
+    legal answer decide them.
+- **Kept distinct.** The ADR's only other free-text "reason" is the
+  existing charge/adjustment **cancellation** reason passed to
+  `LedgerService` reversals (and the FEE.2 assessment `void_reason`). It is
+  a workflow note on a reversal, not a concession category. FEE.3 does not
+  widen it.
+- **Later changes** (configurable categories, narrative notes) need a later
+  explicit decision, and a classification decision for notes.
+
+### Still open
+
+- **OWNER DECISION REQUIRED:**
+  - H (late fees; also behind the fee-regulation legal gate, so FEE.5 does
+    not start);
+  - I (receipt numbering);
+  - I2 (backfilling receipts for existing payments).
+- **[LEGAL REVIEW REQUIRED]** (§27):
+  - the receipt/GST form;
+  - fee-regulation limits on late fees and in-year fee changes;
+  - statutory free seats (RTE);
+  - retention (E21).
+
+**FEE.3 — Concessions / Scholarships / Waivers is unblocked.**
