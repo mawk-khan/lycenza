@@ -1896,7 +1896,8 @@ export interface paths {
         /** Lists a School's chart-of-accounts entries. Requires finance.ledger.view. */
         get: operations["listLedgerAccounts"];
         put?: never;
-        post?: never;
+        /** Creates an INR ledger account (code, name, type). Requires finance.accounts.manage (FEE.1, ADR 0062 K1). Reads stay on finance.ledger.view. */
+        post: operations["createLedgerAccount"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2035,6 +2036,250 @@ export interface paths {
         get: operations["getPayment"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/ledger-accounts/{ledgerAccountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Activates or deactivates a ledger account. Never deletes it and never changes its type. Requires finance.accounts.manage. */
+        patch: operations["updateLedgerAccountStatus"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-heads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists the School's fee heads (inactive included unless include_inactive=false). Requires finance.fee_structures.view. */
+        get: operations["listFeeHeads"];
+        put?: never;
+        /** Creates a fee head mapped to an active asset receivable account and a different active income revenue account. Requires finance.fee_structures.manage. */
+        post: operations["createFeeHead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-heads/{feeHeadId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetches one fee head. Requires finance.fee_structures.view. */
+        get: operations["getFeeHead"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Updates a fee head's name, description or account mapping, or deactivates/reactivates it through status. The code never changes. Requires finance.fee_structures.manage. */
+        patch: operations["updateFeeHead"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists fee structures (without lines). Requires finance.fee_structures.view. */
+        get: operations["listFeeStructures"];
+        put?: never;
+        /** Creates a DRAFT fee structure for one AcademicYear x GradeLevel, optionally one Campus (no Section). Requires finance.fee_structures.manage. */
+        post: operations["createFeeStructure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures/{feeStructureId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fetches one fee structure with its lines and instalment schedules. Requires finance.fee_structures.view. */
+        get: operations["getFeeStructure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Renames or re-codes a DRAFT structure. Requires finance.fee_structures.manage. */
+        patch: operations["updateFeeStructure"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures/{feeStructureId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activates a DRAFT structure. Every line needs instalments summing exactly to its amount. If the draft amends (supersedes) an active structure, that structure is retired in the same transaction. Requires finance.fee_structures.manage. */
+        post: operations["activateFeeStructure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures/{feeStructureId}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retires an ACTIVE structure. It stays readable forever. Requires finance.fee_structures.manage. */
+        post: operations["retireFeeStructure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures/{feeStructureId}/successor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copies an ACTIVE structure (lines and schedules) into a new draft of the same scope that supersedes it. Requires finance.fee_structures.manage. */
+        post: operations["createFeeStructureSuccessor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures/{feeStructureId}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds a fee head line (yearly amount, optional flag) to a DRAFT structure. Requires finance.fee_structures.manage. */
+        post: operations["addFeeStructureLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures/{feeStructureId}/lines/{lineId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes a line from a DRAFT structure (refused by the database once the structure leaves draft, and while optional-fee selections reference the line). Requires finance.fee_structures.manage. */
+        delete: operations["removeFeeStructureLine"];
+        options?: never;
+        head?: never;
+        /** Changes a DRAFT line's yearly amount or optional flag. Requires finance.fee_structures.manage. */
+        patch: operations["updateFeeStructureLine"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures/{feeStructureId}/lines/{lineId}/installments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replaces a DRAFT line's whole instalment schedule (sequence follows the given order). The stored rows are authoritative; the sum must equal the line amount only at activation. Requires finance.fee_structures.manage. */
+        put: operations["replaceFeeStructureInstallments"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-structures/{feeStructureId}/lines/{lineId}/installments/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Writes a generated schedule (one_time, term or monthly) into a DRAFT line, splitting the amount exactly in paise. The draft stays editable. Requires finance.fee_structures.manage. */
+        post: operations["generateFeeStructureInstallments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-optional-selections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists optional-fee selections for one Student or one line (one of the two filters is required). Highly Sensitive; each list is read-audited. Requires finance.fee_structures.view. */
+        get: operations["listFeeOptionalSelections"];
+        put?: never;
+        /** Records a Student's explicit choice of an OPTIONAL line's fee for that academic year. Requires finance.fee_structures.manage. */
+        post: operations["createFeeOptionalSelection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-optional-selections/{selectionId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraws an active selection. Final; affects future assessment only and never an existing charge. Requires finance.fee_structures.manage. */
+        post: operations["withdrawFeeOptionalSelection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3893,6 +4138,193 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        LedgerAccountCreateInput: {
+            /** @description Normalized to uppercase; unique per School case-insensitively. */
+            code: string;
+            name: string;
+            /** @enum {string} */
+            type: "asset" | "liability" | "equity" | "income" | "expense";
+        };
+        LedgerAccountStatusInput: {
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
+        FeeHead: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            description: string | null;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** Format: uuid */
+            receivableLedgerAccountId: string;
+            /** Format: uuid */
+            revenueLedgerAccountId: string;
+            /** @example INR */
+            currency: string;
+        };
+        FeeHeadCreateInput: {
+            code: string;
+            name: string;
+            description?: string | null;
+            /**
+             * Format: uuid
+             * @description An active asset account of this School.
+             */
+            receivable_ledger_account_id: string;
+            /**
+             * Format: uuid
+             * @description A different
+             */
+            revenue_ledger_account_id: string;
+        };
+        FeeHeadUpdateInput: {
+            name?: string;
+            description?: string | null;
+            /** Format: uuid */
+            receivable_ledger_account_id?: string;
+            /** Format: uuid */
+            revenue_ledger_account_id?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        /** @enum {string} */
+        FeeStructureStatus: "draft" | "active" | "retired";
+        FeeStructure: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            academicYearId: string;
+            /** Format: uuid */
+            gradeLevelId: string;
+            /**
+             * Format: uuid
+             * @description null = the School-wide default for this grade.
+             */
+            campusId: string | null;
+            code: string;
+            name: string;
+            status: components["schemas"]["FeeStructureStatus"];
+            /** Format: uuid */
+            supersedesFeeStructureId: string | null;
+            /** Format: date-time */
+            activatedAt: string | null;
+            /** Format: date-time */
+            retiredAt: string | null;
+        };
+        FeeStructureDetail: components["schemas"]["FeeStructure"] & {
+            lines: components["schemas"]["FeeStructureLine"][];
+        };
+        FeeStructureLine: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            isOptional: boolean;
+            /**
+             * @description Descriptive only; the installments are the schedule.
+             * @enum {string}
+             */
+            frequency: "one_time" | "term" | "monthly" | "custom";
+            /** @description The yearly amount. */
+            amount: string;
+            /** @example INR */
+            currency: string;
+            installments: components["schemas"]["FeeStructureInstallment"][];
+        };
+        FeeStructureInstallment: {
+            /** Format: uuid */
+            id: string;
+            sequence: number;
+            label: string;
+            /** @description Normalized period identity (e.g. ANNUAL, T1, 2026-07). */
+            billingPeriodKey: string;
+            /** Format: date */
+            periodStartsOn: string;
+            /** Format: date */
+            periodEndsOn: string;
+            /** Format: date */
+            dueDate: string;
+            /** Format: uuid */
+            academicTermId: string | null;
+            amount: string;
+            /** @example INR */
+            currency: string;
+        };
+        FeeStructureCreateInput: {
+            /** Format: uuid */
+            academic_year_id: string;
+            /** Format: uuid */
+            grade_level_id: string;
+            /** Format: uuid */
+            campus_id?: string | null;
+            code: string;
+            name: string;
+        };
+        FeeStructureUpdateInput: {
+            code?: string;
+            name?: string;
+        };
+        FeeStructureSuccessorInput: {
+            code: string;
+            name?: string;
+        };
+        FeeStructureLineInput: {
+            /** Format: uuid */
+            fee_head_id: string;
+            amount: string;
+            is_optional?: boolean;
+            /** @enum {string} */
+            frequency?: "one_time" | "term" | "monthly" | "custom";
+        };
+        FeeStructureLineUpdateInput: {
+            amount?: string;
+            is_optional?: boolean;
+        };
+        FeeInstallmentScheduleInput: {
+            installments: {
+                label: string;
+                billing_period_key: string;
+                /** Format: date */
+                period_starts_on: string;
+                /** Format: date */
+                period_ends_on: string;
+                /** Format: date */
+                due_date: string;
+                /** Format: uuid */
+                academic_term_id?: string | null;
+                amount: string;
+            }[];
+        };
+        FeeInstallmentGenerateInput: {
+            /** @enum {string} */
+            frequency: "one_time" | "term" | "monthly";
+        };
+        FeeOptionalSelection: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            /** Format: uuid */
+            feeStructureLineId: string;
+            /** @enum {string} */
+            status: "active" | "withdrawn";
+            /** Format: date-time */
+            selectedAt: string;
+            /** Format: date-time */
+            withdrawnAt: string | null;
+        };
+        FeeOptionalSelectionInput: {
+            /** Format: uuid */
+            student_id: string;
+            /** Format: uuid */
+            fee_structure_line_id: string;
         };
         JournalLine: {
             /** Format: uuid */
@@ -12398,6 +12830,69 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    createLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerAccountCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LedgerAccount"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.accounts.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEDGER_ACCOUNT_CODE_TAKEN (a concurrent case-variant duplicate). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error, including a case-insensitive duplicate code. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     listJournalEntries: {
         parameters: {
             query?: {
@@ -12950,6 +13445,1255 @@ export interface operations {
             };
             /** @description PAYMENT_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    updateLedgerAccountStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                ledgerAccountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerAccountStatusInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LedgerAccount"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.accounts.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEDGER_ACCOUNT_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listFeeHeads: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeHead"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeHeadCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeHead"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_HEAD_CODE_TAKEN (a concurrent case-variant duplicate). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error, including a case-insensitive duplicate code or an invalid account mapping. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeHeadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeHead"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_HEAD_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    updateFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeHeadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeHeadUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeHead"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_HEAD_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error or invalid account mapping. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listFeeStructures: {
+        parameters: {
+            query?: {
+                academic_year_id?: string;
+                grade_level_id?: string;
+                campus_id?: string;
+                status?: components["schemas"]["FeeStructureStatus"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructure"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createFeeStructure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeStructureCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_CODE_TAKEN. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (including a case-insensitive duplicate code, or a closed year, inactive grade or campus). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getFeeStructure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    updateFeeStructure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeStructureUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. Or FEE_STRUCTURE_CODE_TAKEN. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    activateFeeStructure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_ILLEGAL_TRANSITION, or FEE_STRUCTURE_ACTIVATION_CONFLICT (another structure is already active for the same year, grade and campus). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_INCOMPLETE (activation only). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    retireFeeStructure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_ILLEGAL_TRANSITION (not active). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createFeeStructureSuccessor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeStructureSuccessorInput"];
+            };
+        };
+        responses: {
+            /** @description Created (the successor draft). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_CODE_TAKEN. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error, or the source is not active. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    addFeeStructureLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeStructureLineInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. Or FEE_STRUCTURE_LINE_DUPLICATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (amount, inactive fee head). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    removeFeeStructureLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+                lineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND or FEE_STRUCTURE_LINE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. Or FEE_STRUCTURE_LINE_HAS_SELECTIONS. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    updateFeeStructureLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+                lineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeStructureLineUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND or FEE_STRUCTURE_LINE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    replaceFeeStructureInstallments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+                lineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeInstallmentScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND or FEE_STRUCTURE_LINE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (dates outside the academic year, duplicate period key, term of another year, amount). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    generateFeeStructureInstallments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                feeStructureId: string;
+                lineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeInstallmentGenerateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeStructureDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_FOUND or FEE_STRUCTURE_LINE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (for example a term schedule for a year without terms). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listFeeOptionalSelections: {
+        parameters: {
+            query?: {
+                student_id?: string;
+                fee_structure_line_id?: string;
+                status?: "active" | "withdrawn";
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeOptionalSelection"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Neither student_id nor fee_structure_line_id given. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createFeeOptionalSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeOptionalSelectionInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeOptionalSelection"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_OPTIONAL_SELECTION_EXISTS (already an active selection for this Student, year and fee head). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (not an optional line; unknown Student). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    withdrawFeeOptionalSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                selectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeOptionalSelection"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_OPTIONAL_SELECTION_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_OPTIONAL_SELECTION_NOT_ACTIVE. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

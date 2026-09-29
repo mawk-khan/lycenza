@@ -38,6 +38,7 @@ use App\Http\Controllers\App\Examinations\ExaminationController;
 use App\Http\Controllers\App\Examinations\ExaminationPaperController;
 use App\Http\Controllers\App\Examinations\GradeScaleController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
+use App\Http\Controllers\App\Finance\FeeSetupController as FinanceFeeSetupController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
@@ -989,6 +990,34 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/', [FinanceController::class, 'index'])->name('index');
 
         Route::get('/ledger-accounts', [FinanceLedgerAccountController::class, 'index'])->name('ledger-accounts.index');
+        // FEE.1 (ADR 0062 §6, K1): create / activate-deactivate only
+        // (finance.accounts.manage). No delete, no type change.
+        Route::post('/ledger-accounts', [FinanceLedgerAccountController::class, 'store'])->name('ledger-accounts.store');
+        Route::post('/ledger-accounts/{ledgerAccount}/status', [FinanceLedgerAccountController::class, 'updateStatus'])->name('ledger-accounts.status');
+
+        // FEE.1 (ADR 0062 §5-§8): Fee setup -- fee heads, fee structures,
+        // instalment schedules, optional-fee selections. View needs
+        // finance.fee_structures.view, every write .manage (checked in
+        // FeeSetupController and again in the Application services).
+        // 'students/search' is registered before the '{feeStructure}'
+        // wildcard, the same convention as 'charges/create' below.
+        Route::get('/fee-setup', [FinanceFeeSetupController::class, 'index'])->name('fee-setup.index');
+        Route::post('/fee-setup/fee-heads', [FinanceFeeSetupController::class, 'storeFeeHead'])->name('fee-setup.fee-heads.store');
+        Route::post('/fee-setup/fee-heads/{feeHead}', [FinanceFeeSetupController::class, 'updateFeeHead'])->name('fee-setup.fee-heads.update');
+        Route::post('/fee-setup/structures', [FinanceFeeSetupController::class, 'storeStructure'])->name('fee-setup.structures.store');
+        Route::get('/fee-setup/students/search', [FinanceFeeSetupController::class, 'searchStudents'])->name('fee-setup.students.search');
+        Route::get('/fee-setup/structures/{feeStructure}', [FinanceFeeSetupController::class, 'showStructure'])->name('fee-setup.structures.show');
+        Route::post('/fee-setup/structures/{feeStructure}', [FinanceFeeSetupController::class, 'updateStructure'])->name('fee-setup.structures.update');
+        Route::post('/fee-setup/structures/{feeStructure}/activate', [FinanceFeeSetupController::class, 'activate'])->name('fee-setup.structures.activate');
+        Route::post('/fee-setup/structures/{feeStructure}/retire', [FinanceFeeSetupController::class, 'retire'])->name('fee-setup.structures.retire');
+        Route::post('/fee-setup/structures/{feeStructure}/successor', [FinanceFeeSetupController::class, 'successor'])->name('fee-setup.structures.successor');
+        Route::post('/fee-setup/structures/{feeStructure}/lines', [FinanceFeeSetupController::class, 'storeLine'])->name('fee-setup.lines.store');
+        Route::post('/fee-setup/structures/{feeStructure}/lines/{line}', [FinanceFeeSetupController::class, 'updateLine'])->name('fee-setup.lines.update');
+        Route::post('/fee-setup/structures/{feeStructure}/lines/{line}/remove', [FinanceFeeSetupController::class, 'removeLine'])->name('fee-setup.lines.remove');
+        Route::post('/fee-setup/structures/{feeStructure}/lines/{line}/installments', [FinanceFeeSetupController::class, 'replaceInstallments'])->name('fee-setup.lines.installments');
+        Route::post('/fee-setup/structures/{feeStructure}/lines/{line}/generate', [FinanceFeeSetupController::class, 'generateInstallments'])->name('fee-setup.lines.generate');
+        Route::post('/fee-setup/selections', [FinanceFeeSetupController::class, 'storeSelection'])->name('fee-setup.selections.store');
+        Route::post('/fee-setup/selections/{selection}/withdraw', [FinanceFeeSetupController::class, 'withdrawSelection'])->name('fee-setup.selections.withdraw');
 
         // 'create' registered BEFORE the '/{journalEntry}' wildcard
         // below, matching this file's own established convention

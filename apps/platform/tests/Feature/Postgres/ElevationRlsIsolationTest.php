@@ -73,8 +73,10 @@ class ElevationRlsIsolationTest extends TestCase
         $this->assertSame([], $unforced);
 
         // 144 through Phase 0O.8A; + email_messages and email_submission_attempts (Phase 0O.9A, ADR 0055);
-        // + staff_account_invitations and staff_account_invitation_roles (Phase 0O.12B, ADR 0059).
-        $this->assertSame(148, (int) DB::connection('pgsql_admin')->selectOne(
+        // + staff_account_invitations and staff_account_invitation_roles (Phase 0O.12B, ADR 0059);
+        // + fee_heads, fee_settings, fee_structures, fee_structure_lines,
+        // fee_structure_installments and fee_optional_selections (FEE.1, ADR 0062).
+        $this->assertSame(154, (int) DB::connection('pgsql_admin')->selectOne(
             "select count(*) as c from pg_class where relrowsecurity and relforcerowsecurity and relnamespace = 'public'::regnamespace",
         )->c, 'No tenant table gained or lost RLS in Phase 0N.3.');
     }

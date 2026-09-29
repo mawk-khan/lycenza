@@ -22,6 +22,9 @@ use App\Domain\Examinations\Http\Controllers\ExaminationController;
 use App\Domain\Examinations\Http\Controllers\ExaminationPaperController;
 use App\Domain\Examinations\Http\Controllers\GradeScaleController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
+use App\Domain\Fees\Http\Controllers\FeeHeadController;
+use App\Domain\Fees\Http\Controllers\FeeOptionalSelectionController;
+use App\Domain\Fees\Http\Controllers\FeeStructureController;
 use App\Domain\Finance\Http\Controllers\JournalEntryController;
 use App\Domain\Finance\Http\Controllers\LedgerAccountController;
 use App\Domain\Guardians\Http\Controllers\GuardianContactController;
@@ -1166,6 +1169,81 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/payments/{payment}', [PaymentController::class, 'show'])
                 ->middleware('capability:finance.payments.view')
                 ->name('schools.payments.show');
+
+            // --- FEE.1 (ADR 0062 §5-§8): ledger-account administration (K1),
+            // fee heads, fee structures (lines, instalments, lifecycle) and
+            // optional-fee selections. Every write is capability-gated here
+            // AND in its Application service. No DELETE for any permanent
+            // record: ledger accounts, fee heads and structures are
+            // deactivated/retired; selections are withdrawn. The one DELETE
+            // removes a DRAFT structure line (refused by the database once
+            // the structure leaves draft).
+            Route::post('/ledger-accounts', [LedgerAccountController::class, 'store'])
+                ->middleware(['capability:finance.accounts.manage', 'throttle:school-api-mutations'])
+                ->name('schools.ledger-accounts.store');
+            Route::patch('/ledger-accounts/{ledgerAccount}', [LedgerAccountController::class, 'update'])
+                ->middleware(['capability:finance.accounts.manage', 'throttle:school-api-mutations'])
+                ->name('schools.ledger-accounts.update');
+
+            Route::get('/fee-heads', [FeeHeadController::class, 'index'])
+                ->middleware('capability:finance.fee_structures.view')
+                ->name('schools.fee-heads.index');
+            Route::post('/fee-heads', [FeeHeadController::class, 'store'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-heads.store');
+            Route::get('/fee-heads/{feeHead}', [FeeHeadController::class, 'show'])
+                ->middleware('capability:finance.fee_structures.view')
+                ->name('schools.fee-heads.show');
+            Route::patch('/fee-heads/{feeHead}', [FeeHeadController::class, 'update'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-heads.update');
+
+            Route::get('/fee-structures', [FeeStructureController::class, 'index'])
+                ->middleware('capability:finance.fee_structures.view')
+                ->name('schools.fee-structures.index');
+            Route::post('/fee-structures', [FeeStructureController::class, 'store'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.store');
+            Route::get('/fee-structures/{feeStructure}', [FeeStructureController::class, 'show'])
+                ->middleware('capability:finance.fee_structures.view')
+                ->name('schools.fee-structures.show');
+            Route::patch('/fee-structures/{feeStructure}', [FeeStructureController::class, 'update'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.update');
+            Route::post('/fee-structures/{feeStructure}/activate', [FeeStructureController::class, 'activate'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.activate');
+            Route::post('/fee-structures/{feeStructure}/retire', [FeeStructureController::class, 'retire'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.retire');
+            Route::post('/fee-structures/{feeStructure}/successor', [FeeStructureController::class, 'successor'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.successor');
+            Route::post('/fee-structures/{feeStructure}/lines', [FeeStructureController::class, 'storeLine'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.lines.store');
+            Route::patch('/fee-structures/{feeStructure}/lines/{line}', [FeeStructureController::class, 'updateLine'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.lines.update');
+            Route::delete('/fee-structures/{feeStructure}/lines/{line}', [FeeStructureController::class, 'destroyLine'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.lines.destroy');
+            Route::put('/fee-structures/{feeStructure}/lines/{line}/installments', [FeeStructureController::class, 'replaceInstallments'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.lines.installments.replace');
+            Route::post('/fee-structures/{feeStructure}/lines/{line}/installments/generate', [FeeStructureController::class, 'generateInstallments'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-structures.lines.installments.generate');
+
+            Route::get('/fee-optional-selections', [FeeOptionalSelectionController::class, 'index'])
+                ->middleware('capability:finance.fee_structures.view')
+                ->name('schools.fee-optional-selections.index');
+            Route::post('/fee-optional-selections', [FeeOptionalSelectionController::class, 'store'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-optional-selections.store');
+            Route::post('/fee-optional-selections/{selection}/withdraw', [FeeOptionalSelectionController::class, 'withdraw'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-optional-selections.withdraw');
 
             // --- Phase 10D: Hostel (Hostel/Room/Bed directory, Student
             // Hostel residency lifecycle). `idempotent` is applied only

@@ -4504,3 +4504,113 @@ decisions stand as history.
   - The Phase 0O.11 amendment bullet "corrects mistakes append-only" was
     replaced by the owner decision recorded directly above it (no
     correction action in v1).
+
+## FEE.1 as-built — Fee Heads & Fee Structures (2026-09-29, ADR 0062)
+
+The first FEE implementation checkpoint. It adds configuration only: no
+charge is generated, nothing is billed, and no existing `charges`,
+`payments`, `payment_allocations`, `journal_*` or `ledger_accounts` row
+changes meaning. Owner decisions A, B, C, E, K1 and L are recorded in
+ADR 0062 ("Owner decisions for FEE.1").
+
+### Ledger-account administration (K1, Finance-owned)
+
+- **Service.** `App\Domain\Finance\Application\LedgerAccountAdministrationService`
+  has `create()` and `changeStatus()` only.
+  - Creates INR accounts with a code (normalized, unique case-insensitively
+    per School), a name and one of the five types.
+  - Activates/deactivates; repeating the current status is a silent no-op.
+- **Capability.** `finance.accounts.manage`. Reads stay on
+  `finance.ledger.view`.
+- **Audit.** `ledger_account.created`, `ledger_account.status_changed`.
+- **Database** (migration `2026_10_29_090000`):
+  - `ledger_accounts_posted_identity_guard` refuses a type, currency or
+    School change once any journal line posts to the account;
+  - the runtime role has no DELETE on `ledger_accounts`.
+- **Unchanged.** `LedgerService::post()` still does not refuse inactive
+  accounts (the deferred 0G.2 decision). No chart-of-accounts template,
+  hierarchy or system-account seeding.
+- **Surfaces.**
+  - `POST /api/v1/schools/{school}/ledger-accounts`,
+    `PATCH .../ledger-accounts/{ledgerAccount}` (status).
+  - Web: the Ledger accounts page gains a create form and
+    Activate/Deactivate for managers.
+
+### Fee heads, structures, schedules, optional selections (Fees-owned)
+
+- **Tables** (migrations `2026_10_29_090100`–`090300`). All are
+  School-owned: UUIDv7, `school_id`, RLS enabled and forced, composite
+  same-School foreign keys, INR checks, `NUMERIC(14,2)` money.
+  - **`fee_heads`.** Code normalized (`^[A-Z0-9][A-Z0-9_-]{0,31}$`, unique
+    per School on `upper(code)`). `active|inactive`, never deleted.
+    Receivable/revenue accounts differ. `fees_validate_fee_head_accounts`
+    requires an asset receivable and an income revenue account, and
+    `ledger_accounts_fee_head_type_guard` refuses a later type change of a
+    mapped account.
+  - **`fee_settings`.** A singleton with FEE.3/FEE.4 columns, all nullable.
+    No writer yet.
+  - **`fee_structures`.** AcademicYear x GradeLevel, `campus_id` NULL = the
+    School default; no Section column.
+    - `draft -> active -> retired` only (`fees_validate_fee_structure_lifecycle`).
+    - Immutable once not a draft.
+    - Activation needs at least one line and every line's instalments
+      summing exactly to its amount.
+    - One active per scope (`fee_structures_one_active_per_scope`).
+    - Successor chain in the same scope, with at most one live successor
+      (`fee_structures_one_live_successor`).
+    - Never deleted.
+  - **`fee_structure_lines`.** One per fee head. `is_optional`, a
+    descriptive `frequency`, and a yearly `amount`.
+  - **`fee_structure_installments`.** Sequence, label, normalized
+    `billing_period_key` (unique per line), a period inside the academic
+    year, a due date not before the period start, an optional term of the
+    same year, and an amount.
+    - Lines and instalments can be written only while the structure is a
+      draft (`fees_reject_non_draft_structure_child_write`, which takes a
+      FOR SHARE lock on the parent).
+    - A School's cascade delete passes at trigger depth > 1.
+  - **`fee_optional_selections`.**
+    - One active selection per Student x year x fee head; the line is kept
+      as provenance only.
+    - The line must be an optional line of that head and year.
+    - `active -> withdrawn` only, final.
+    - Never deleted.
+- **Services.**
+  - `FeeHeadService`: create, update (audited before/after account ids),
+    deactivate, reactivate (re-validates the mapping).
+  - `FeeStructureService`:
+    - createDraft, updateDraft;
+    - addLine, updateLine, removeLine (draft only);
+    - replaceInstallments;
+    - generateInstallments (`one_time`, `term`, `monthly`; the amount is
+      split exactly in paise, with the remainder on the earliest rows);
+    - activate (retires the predecessor in the same transaction), retire,
+      createSuccessor (copies lines and schedules).
+  - `FeeOptionalSelectionService`: select, withdraw.
+  - `FeeStructureReadService`: lists and details, plus
+    `resolveActiveStructure()`, which prefers the campus override and falls
+    back to the School default.
+  - Every service checks its capability.
+- **Capabilities.** `finance.fee_structures.view` / `.manage`, granted to
+  `school_admin` (and the demo finance officer), never to `principal`.
+- **Audit.**
+  - `fee_head.created`, `.updated`, `.deactivated` (a reactivation is
+    `.updated`);
+  - `fee_structure.created`, `.updated` (draft edits), `.activated`,
+    `.retired` (explicit retirement), `.superseded` (retirement by a
+    successor);
+  - `fee_optional_selection.created`, `.withdrawn`, `.list_viewed`.
+- **Outbox.** `fee_structure.activated.v1` (ids only). It is not
+  webhook-registered.
+- **API.** 21 new `/api/v1` operations, documented in
+  `packages/contracts/openapi/school-os-api.yaml` (see
+  `FeeSetupOpenApiCoverageTest`).
+  - The only DELETE removes a DRAFT line.
+  - Write responses return the written record without a second view check.
+- **Web.** `/app/finance/fee-setup` (fee heads, structures) and
+  `/app/finance/fee-setup/structures/{id}` (lines, schedule editor and
+  generators, lifecycle, optional selections).
+- **Not in FEE.1.**
+  - Assessment runs and any charge generation (FEE.2).
+  - Concessions (FEE.3); receipts and statements (FEE.4); late fees (FEE.5).
+  - Proration, invoices, GST, refunds, portal, OPF linkage.

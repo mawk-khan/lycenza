@@ -45,12 +45,18 @@ class FinanceCapabilityRegistryTest extends TestCase
     }
 
     #[Test]
-    public function no_finance_accounts_manage_capability_is_registered(): void
+    public function finance_accounts_manage_is_registered_since_fee_1_and_granted_to_school_admin_only(): void
     {
-        $this->assertFalse(
-            Capability::query()->where('key', 'finance.accounts.manage')->exists(),
-            'finance.accounts.manage must not be registered -- 0G.3 implements no Ledger Account CRUD.',
-        );
+        // 0G.3 deliberately registered no account administration; FEE.1
+        // (ADR 0062 §6, owner decision K1) adds the minimal create /
+        // activate-deactivate path under this one capability.
+        $capability = Capability::query()->where('key', 'finance.accounts.manage')->firstOrFail();
+        $this->assertSame('school', $capability->namespace);
+
+        $holders = Role::query()->where('scope', 'school')->where('is_system', true)->get()
+            ->filter(fn (Role $role) => $role->capabilities->contains('key', 'finance.accounts.manage'))
+            ->pluck('key')->values()->all();
+        $this->assertSame(['school_admin'], $holders);
     }
 
     #[Test]

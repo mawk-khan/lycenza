@@ -217,11 +217,11 @@ Status values:
 
 | # | Decision | Status | Recommendation | Needed for |
 |---|---|---|---|---|
-| A | Invoice entity | DECIDED (0G.4 evidence) — owner may override | No `invoices` entity; charges + receipts + statements (§4) | FEE.1 |
-| B | Structure scope | OWNER DECISION REQUIRED | AcademicYear × GradeLevel, optional Campus override; no Section-specific structures (§7.1) | FEE.1 |
-| C | Frequencies | OWNER DECISION REQUIRED | Stored instalments are authoritative; `one_time`/`term`/`monthly` are authoring generators; "optional" is a separate flag (§7.3) | FEE.1 |
+| A | Invoice entity | **DECIDED — owner confirmed 2026-09-29** | No `invoices` entity; charges + receipts + statements (§4) | FEE.1 |
+| B | Structure scope | **DECIDED — owner confirmed 2026-09-29** | AcademicYear × GradeLevel, optional Campus override; no Section-specific structures (§7.1) | FEE.1 |
+| C | Frequencies | **DECIDED — owner confirmed 2026-09-29** | Stored instalments are authoritative; `one_time`/`term`/`monthly` are authoring generators; "optional" is a separate flag (§7.3) | FEE.1 |
 | D | Mid-year admission | OWNER DECISION REQUIRED | No proration in v1; skip instalments whose billing period ended before `starts_on`; current and future periods assessed in full; staff may exclude items at preview (§10.2) | FEE.2 |
-| E | Optional fees | OWNER DECISION REQUIRED | Explicit per-Student selection before assessment (§8) | FEE.1 (schema), FEE.2 |
+| E | Optional fees | **DECIDED — owner confirmed 2026-09-29** | Explicit per-Student selection before assessment (§8) | FEE.1 (schema), FEE.2 |
 | F | Concession approval | OWNER DECISION REQUIRED | Maker/checker mandatory for every concession, database-enforced; no amount thresholds in v1 (§14.4) | FEE.3 |
 | F2 | Concession posting account | OWNER DECISION REQUIRED (accountant) | One School-level `expense` account "Fee concessions and scholarships" (§14.5) | FEE.3 |
 | G | Concession after payment | OWNER DECISION REQUIRED | Capped at the charge's current outstanding; never creates credit or refund (§14.6) | FEE.3 |
@@ -229,8 +229,8 @@ Status values:
 | I | Receipt numbering | OWNER DECISION REQUIRED | School + financial year, FY start month configurable (default April), format `<PREFIX>/<FY>/<000001>` (§17.2) | FEE.4 |
 | I2 | Existing payments | OWNER DECISION REQUIRED | Explicit, audited one-time backfill in `settled_at` order (§17.4) | FEE.4 |
 | J | Receipt statutory/GST form | **LEGAL REVIEW REQUIRED** | FEE.4 ships a payment acknowledgement only, with no tax fields (§17.5) | FEE.4 |
-| K | Ledger-account provisioning (finding F1) | OWNER DECISION REQUIRED | FEE.1 includes minimal Finance-owned account administration (§6) | FEE.1 |
-| L | Role grants | OWNER DECISION REQUIRED | `school_admin` gets all; `principal` gets none by default; demo finance officer gets all except approve (§19) | FEE.1 |
+| K | Ledger-account provisioning (finding F1) | **DECIDED — owner confirmed K1, 2026-09-29** | FEE.1 includes minimal Finance-owned account administration (§6) | FEE.1 |
+| L | Role grants | **DECIDED — owner confirmed 2026-09-29** | `school_admin` gets all; `principal` gets none by default; demo finance officer gets all except approve (§19) | FEE.1 |
 | M | Concession categories and notes | OWNER DECISION REQUIRED | Closed catalogue `concession`, `scholarship`, `waiver`; no free-text note (§14.2) | FEE.3 |
 | N | Percentage rounding | DECIDED | `Money::multiplyByRate`, 2 dp, half away from zero; never exceeds the base (§14.3) | FEE.3/5 |
 
@@ -1147,3 +1147,66 @@ unchanged):
   - minimal ledger-account administration in FEE.1 (K1).
 - **Deferred items remain deferred** and are listed in §24: refunds,
   credits, gateway, portal, OPF integrations and taxes.
+
+## Owner decisions for FEE.1 (2026-09-29)
+
+The owner confirmed the FEE.1 decisions in §2.1 exactly as recommended:
+- **A.** No invoice entity. Charges, receipts and statements remain the
+  financial model (§4).
+- **B.** AcademicYear × GradeLevel with an optional Campus override. No
+  Section-specific structures (§7.1).
+- **C.** Stored instalment rows are authoritative. `one_time`, `term` and
+  `monthly` are authoring generators only; "optional" is a separate flag
+  (§7.3).
+- **E.** An optional fee is assessed only for Students with an explicit
+  selection (§8).
+- **K.** K1: FEE.1 includes minimal Finance-owned ledger-account
+  administration (§6).
+- **L.** `school_admin` receives the FEE.1 capabilities by default;
+  `principal` receives none. The demo finance officer keeps its documented
+  separation (all Finance capabilities except concession approval, §19).
+
+D, F, F2, G, H, I, I2 and M remain OWNER DECISION REQUIRED for their later
+checkpoints.
+
+## Implementation note — FEE.1 as built (2026-09-29)
+
+FEE.1 implements §5–§8 and §6 (K1) as contracted. The full as-built record
+is in `docs/modules/FINANCE.md` ("FEE.1 as-built"). These refinements
+amend the contract text above:
+
+- **§8 selection identity.** A selection is unique per Student x
+  AcademicYear x **fee head** (`fee_optional_selections_one_active`), not
+  per line. The line is kept as provenance and must be an optional line of
+  that head and year. Keying on the line would have silently dropped every
+  Student's choice when a successor structure replaced the line ids
+  (§7.4).
+- **§7.4 audit semantics.**
+  - Retirement by a successor's activation writes `fee_structure.superseded`
+    (on the predecessor), not `fee_structure.retired`. The latter is
+    reserved for an explicit retirement.
+  - Draft edits write `fee_structure.updated`.
+  - Listing selections writes `fee_optional_selection.list_viewed` (§21's
+    Highly Sensitive read audit).
+- **Successor after an explicit retirement.** A successor whose
+  predecessor was already retired (not superseded) may still activate. It
+  simply retires nothing. At most one successor of a predecessor ever
+  leaves draft (`fee_structures_one_live_successor`).
+- **Draft lines.** The one DELETE route removes a line of a draft
+  structure, refused by the database afterwards and while a selection
+  references it. Row locks (line FOR UPDATE on removal, FOR SHARE on
+  selection) make that check race-free.
+- **K1 database scope.**
+  - An unposted account's type can still change at the database level, but
+    no application path offers a type change.
+  - A posted account's type, currency and School are frozen.
+  - An account mapped by a fee head cannot change type.
+- **Scope checks.** A structure needs a draft or active AcademicYear and an
+  active GradeLevel (and Campus, if given). A schedule has 1–24 rows.
+- **Concurrency.** Proven with real processes and forced, verified overlap
+  (`FeeStructureConcurrencyTest`):
+  - two same-scope activations;
+  - two successor activations;
+  - a raw instalment insert racing an activation, refused by the trigger's
+    FOR SHARE parent lock.
+- **Not started.** FEE.2 (assessment runs) waits for decision D.

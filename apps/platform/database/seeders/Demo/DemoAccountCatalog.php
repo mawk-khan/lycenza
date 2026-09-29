@@ -35,6 +35,10 @@ final class DemoAccountCatalog
                 'finance.ledger.view', 'finance.ledger.post', 'finance.ledger.reverse',
                 'finance.charges.view', 'finance.charges.manage', 'finance.payments.view',
                 'finance.payments.record',
+                // FEE.1: fee setup and ledger-account administration. The
+                // FEE.3 concession approval stays with School Admin (ADR
+                // 0062 §19 maker/checker separation).
+                'finance.accounts.manage', 'finance.fee_structures.view', 'finance.fee_structures.manage',
             ],
         ],
         'demo.librarian' => [

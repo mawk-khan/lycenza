@@ -451,6 +451,17 @@ class CapabilityAndRoleSeeder extends Seeder
             // viewing Payments does not imply it.
             ['key' => 'finance.payments.record', 'label' => 'Record offline payments (cash, bank transfer, cheque)', 'namespace' => 'school'],
 
+            // FEE.1 (ADR 0062 §6/§19, owner decisions K1 and L): minimal
+            // chart-of-accounts administration (create, activate/deactivate;
+            // never delete, never a type change after posting) and fee setup
+            // (fee heads, fee structures, instalment schedules, optional-fee
+            // selections). Reads of ledger accounts stay on
+            // `finance.ledger.view`. Assessment, concession and receipt
+            // capabilities belong to FEE.2+ and are NOT registered yet.
+            ['key' => 'finance.accounts.manage', 'label' => 'Create, activate and deactivate Finance ledger accounts', 'namespace' => 'school'],
+            ['key' => 'finance.fee_structures.view', 'label' => 'View fee heads, fee structures and optional-fee selections', 'namespace' => 'school'],
+            ['key' => 'finance.fee_structures.manage', 'label' => 'Manage fee heads, fee structures and optional-fee selections', 'namespace' => 'school'],
+
             // Phase 10D (docs/modules/HOSTEL.md "Capabilities") --
             // mirrors Visitor's directory/visits split exactly:
             // `.directory.*` covers Hostel/Room/Bed reference records
@@ -955,6 +966,12 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Admin already holds every Finance mutation
                     // (ledger post/reverse, charge assess/cancel).
                     'finance.payments.view', 'finance.payments.record',
+                    // FEE.1 (ADR 0062 §19, owner decision L): School Admin
+                    // holds fee setup and ledger-account administration by
+                    // default. NOT granted to Principal (no Finance
+                    // capability, the same reasoning as ledger/charges).
+                    'finance.accounts.manage',
+                    'finance.fee_structures.view', 'finance.fee_structures.manage',
                     // Phase 10D: same day-to-day operational parity
                     // reasoning as Visitor/Transport/Library above --
                     // managing Hostel structure and Student residency

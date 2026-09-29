@@ -3743,6 +3743,42 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+    post:
+      operationId: createLedgerAccount
+      summary: >
+        Creates an INR ledger account (code, name, type). Requires finance.accounts.manage (FEE.1, ADR 0062 K1). Reads stay on finance.ledger.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LedgerAccountCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LedgerAccount" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.accounts.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEDGER_ACCOUNT_CODE_TAKEN (a concurrent case-variant duplicate).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error, including a case-insensitive duplicate code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/journal-entries:
     get:
       operationId: listJournalEntries
@@ -4096,6 +4132,717 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "404":
           description: PAYMENT_NOT_FOUND -- nonexistent or belongs to a different School (identical response either way).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  # FEE.1 (ADR 0062): ledger-account administration (K1), fee heads, fee
+  # structures (lines, instalment schedule, lifecycle actions) and
+  # optional-fee selections. Money is always a decimal string plus its
+  # currency. No DELETE exists for any permanent record; the one DELETE
+  # removes a DRAFT structure line. Nothing here creates a Charge.
+  /schools/{schoolId}/ledger-accounts/{ledgerAccountId}:
+    patch:
+      operationId: updateLedgerAccountStatus
+      summary: >
+        Activates or deactivates a ledger account. Never deletes it and never changes its type. Requires finance.accounts.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: ledgerAccountId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LedgerAccountStatusInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LedgerAccount" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.accounts.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LEDGER_ACCOUNT_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-heads:
+    get:
+      operationId: listFeeHeads
+      summary: >
+        Lists the School's fee heads (inactive included unless include_inactive=false). Requires finance.fee_structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: include_inactive, in: query, required: false, schema: { type: boolean } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/FeeHead" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createFeeHead
+      summary: >
+        Creates a fee head mapped to an active asset receivable account and a different active income revenue account. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeHeadCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeHead" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_HEAD_CODE_TAKEN (a concurrent case-variant duplicate).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error, including a case-insensitive duplicate code or an invalid account mapping.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-heads/{feeHeadId}:
+    get:
+      operationId: getFeeHead
+      summary: >
+        Fetches one fee head. Requires finance.fee_structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeHeadId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeHead" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_HEAD_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateFeeHead
+      summary: >
+        Updates a fee head's name, description or account mapping, or deactivates/reactivates it through status. The code never changes. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeHeadId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeHeadUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeHead" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_HEAD_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error or invalid account mapping.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures:
+    get:
+      operationId: listFeeStructures
+      summary: >
+        Lists fee structures (without lines). Requires finance.fee_structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: grade_level_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: campus_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/FeeStructureStatus" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/FeeStructure" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createFeeStructure
+      summary: >
+        Creates a DRAFT fee structure for one AcademicYear x GradeLevel, optionally one Campus (no Section). Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeStructureCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_CODE_TAKEN.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (including a case-insensitive duplicate code, or a closed year, inactive grade or campus).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures/{feeStructureId}:
+    get:
+      operationId: getFeeStructure
+      summary: >
+        Fetches one fee structure with its lines and instalment schedules. Requires finance.fee_structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateFeeStructure
+      summary: >
+        Renames or re-codes a DRAFT structure. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeStructureUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. Or FEE_STRUCTURE_CODE_TAKEN.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures/{feeStructureId}/activate:
+    post:
+      operationId: activateFeeStructure
+      summary: >
+        Activates a DRAFT structure. Every line needs instalments summing exactly to its amount. If the draft amends (supersedes) an active structure, that structure is retired in the same transaction. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_ILLEGAL_TRANSITION, or FEE_STRUCTURE_ACTIVATION_CONFLICT (another structure is already active for the same year, grade and campus).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: FEE_STRUCTURE_INCOMPLETE (activation only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures/{feeStructureId}/retire:
+    post:
+      operationId: retireFeeStructure
+      summary: >
+        Retires an ACTIVE structure. It stays readable forever. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_ILLEGAL_TRANSITION (not active).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures/{feeStructureId}/successor:
+    post:
+      operationId: createFeeStructureSuccessor
+      summary: >
+        Copies an ACTIVE structure (lines and schedules) into a new draft of the same scope that supersedes it. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeStructureSuccessorInput" }
+      responses:
+        "201":
+          description: Created (the successor draft).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_CODE_TAKEN.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error, or the source is not active.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures/{feeStructureId}/lines:
+    post:
+      operationId: addFeeStructureLine
+      summary: >
+        Adds a fee head line (yearly amount, optional flag) to a DRAFT structure. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeStructureLineInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND (nonexistent or another School -- identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. Or FEE_STRUCTURE_LINE_DUPLICATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (amount, inactive fee head).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures/{feeStructureId}/lines/{lineId}:
+    patch:
+      operationId: updateFeeStructureLine
+      summary: >
+        Changes a DRAFT line's yearly amount or optional flag. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeStructureLineUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND or FEE_STRUCTURE_LINE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    delete:
+      operationId: removeFeeStructureLine
+      summary: >
+        Removes a line from a DRAFT structure (refused by the database once the structure leaves draft, and while optional-fee selections reference the line). Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND or FEE_STRUCTURE_LINE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited. Or FEE_STRUCTURE_LINE_HAS_SELECTIONS.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures/{feeStructureId}/lines/{lineId}/installments:
+    put:
+      operationId: replaceFeeStructureInstallments
+      summary: >
+        Replaces a DRAFT line's whole instalment schedule (sequence follows the given order). The stored rows are authoritative; the sum must equal the line amount only at activation. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeInstallmentScheduleInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND or FEE_STRUCTURE_LINE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (dates outside the academic year, duplicate period key, term of another year, amount).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-structures/{feeStructureId}/lines/{lineId}/installments/generate:
+    post:
+      operationId: generateFeeStructureInstallments
+      summary: >
+        Writes a generated schedule (one_time, term or monthly) into a DRAFT line, splitting the amount exactly in paise. The draft stays editable. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: feeStructureId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeInstallmentGenerateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeStructureDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_STRUCTURE_NOT_FOUND or FEE_STRUCTURE_LINE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_STRUCTURE_NOT_DRAFT -- only a draft structure can be edited.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (for example a term schedule for a year without terms).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-optional-selections:
+    get:
+      operationId: listFeeOptionalSelections
+      summary: >
+        Lists optional-fee selections for one Student or one line (one of the two filters is required). Highly Sensitive; each list is read-audited. Requires finance.fee_structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: student_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: fee_structure_line_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [active, withdrawn] } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/FeeOptionalSelection" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Neither student_id nor fee_structure_line_id given.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createFeeOptionalSelection
+      summary: >
+        Records a Student's explicit choice of an OPTIONAL line's fee for that academic year. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeOptionalSelectionInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeOptionalSelection" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_OPTIONAL_SELECTION_EXISTS (already an active selection for this Student, year and fee head).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (not an optional line; unknown Student).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-optional-selections/{selectionId}/withdraw:
+    post:
+      operationId: withdrawFeeOptionalSelection
+      summary: >
+        Withdraws an active selection. Final; affects future assessment only and never an existing charge. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: selectionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeOptionalSelection" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_OPTIONAL_SELECTION_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_OPTIONAL_SELECTION_NOT_ACTIVE.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -9096,6 +9843,173 @@ components:
         status: { type: string, enum: [active, inactive] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+
+    # FEE.1 (ADR 0062) schemas.
+    LedgerAccountCreateInput:
+      type: object
+      required: [code, name, type]
+      properties:
+        code: { type: string, maxLength: 32, description: "Normalized to uppercase; unique per School case-insensitively." }
+        name: { type: string, maxLength: 120 }
+        type: { type: string, enum: [asset, liability, equity, income, expense] }
+    LedgerAccountStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [active, inactive] }
+    FeeHead:
+      type: object
+      required: [id, code, name, description, status, receivableLedgerAccountId, revenueLedgerAccountId, currency]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+        receivableLedgerAccountId: { type: string, format: uuid }
+        revenueLedgerAccountId: { type: string, format: uuid }
+        currency: { type: string, example: INR }
+    FeeHeadCreateInput:
+      type: object
+      required: [code, name, receivable_ledger_account_id, revenue_ledger_account_id]
+      properties:
+        code: { type: string, maxLength: 32, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$" }
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 500, nullable: true }
+        receivable_ledger_account_id: { type: string, format: uuid, description: An active asset account of this School. }
+        revenue_ledger_account_id: { type: string, format: uuid, description: A different, active income account of this School. }
+    FeeHeadUpdateInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 500, nullable: true }
+        receivable_ledger_account_id: { type: string, format: uuid }
+        revenue_ledger_account_id: { type: string, format: uuid }
+        status: { type: string, enum: [active, inactive] }
+    FeeStructureStatus:
+      type: string
+      enum: [draft, active, retired]
+    FeeStructure:
+      type: object
+      required: [id, academicYearId, gradeLevelId, campusId, code, name, status, supersedesFeeStructureId, activatedAt, retiredAt]
+      properties:
+        id: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        gradeLevelId: { type: string, format: uuid }
+        campusId: { type: string, format: uuid, nullable: true, description: "null = the School-wide default for this grade." }
+        code: { type: string }
+        name: { type: string }
+        status: { $ref: "#/components/schemas/FeeStructureStatus" }
+        supersedesFeeStructureId: { type: string, format: uuid, nullable: true }
+        activatedAt: { type: string, format: date-time, nullable: true }
+        retiredAt: { type: string, format: date-time, nullable: true }
+    FeeStructureDetail:
+      allOf:
+        - { $ref: "#/components/schemas/FeeStructure" }
+        - type: object
+          required: [lines]
+          properties:
+            lines: { type: array, items: { $ref: "#/components/schemas/FeeStructureLine" } }
+    FeeStructureLine:
+      type: object
+      required: [id, feeHeadId, isOptional, frequency, amount, currency, installments]
+      properties:
+        id: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        isOptional: { type: boolean }
+        frequency: { type: string, enum: [one_time, term, monthly, custom], description: Descriptive only; the installments are the schedule. }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", description: The yearly amount. }
+        currency: { type: string, example: INR }
+        installments: { type: array, items: { $ref: "#/components/schemas/FeeStructureInstallment" } }
+    FeeStructureInstallment:
+      type: object
+      required: [id, sequence, label, billingPeriodKey, periodStartsOn, periodEndsOn, dueDate, academicTermId, amount, currency]
+      properties:
+        id: { type: string, format: uuid }
+        sequence: { type: integer }
+        label: { type: string }
+        billingPeriodKey: { type: string, description: "Normalized period identity (e.g. ANNUAL, T1, 2026-07)." }
+        periodStartsOn: { type: string, format: date }
+        periodEndsOn: { type: string, format: date }
+        dueDate: { type: string, format: date }
+        academicTermId: { type: string, format: uuid, nullable: true }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        currency: { type: string, example: INR }
+    FeeStructureCreateInput:
+      type: object
+      required: [academic_year_id, grade_level_id, code, name]
+      properties:
+        academic_year_id: { type: string, format: uuid }
+        grade_level_id: { type: string, format: uuid }
+        campus_id: { type: string, format: uuid, nullable: true }
+        code: { type: string, maxLength: 32 }
+        name: { type: string, maxLength: 120 }
+    FeeStructureUpdateInput:
+      type: object
+      properties:
+        code: { type: string, maxLength: 32 }
+        name: { type: string, maxLength: 120 }
+    FeeStructureSuccessorInput:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, maxLength: 32 }
+        name: { type: string, maxLength: 120 }
+    FeeStructureLineInput:
+      type: object
+      required: [fee_head_id, amount]
+      properties:
+        fee_head_id: { type: string, format: uuid }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        is_optional: { type: boolean }
+        frequency: { type: string, enum: [one_time, term, monthly, custom] }
+    FeeStructureLineUpdateInput:
+      type: object
+      properties:
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        is_optional: { type: boolean }
+    FeeInstallmentScheduleInput:
+      type: object
+      required: [installments]
+      properties:
+        installments:
+          type: array
+          minItems: 1
+          maxItems: 24
+          items:
+            type: object
+            required: [label, billing_period_key, period_starts_on, period_ends_on, due_date, amount]
+            properties:
+              label: { type: string, maxLength: 64 }
+              billing_period_key: { type: string, maxLength: 32 }
+              period_starts_on: { type: string, format: date }
+              period_ends_on: { type: string, format: date }
+              due_date: { type: string, format: date }
+              academic_term_id: { type: string, format: uuid, nullable: true }
+              amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+    FeeInstallmentGenerateInput:
+      type: object
+      required: [frequency]
+      properties:
+        frequency: { type: string, enum: [one_time, term, monthly] }
+    FeeOptionalSelection:
+      type: object
+      required: [id, studentId, academicYearId, feeHeadId, feeStructureLineId, status, selectedAt, withdrawnAt]
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        feeStructureLineId: { type: string, format: uuid }
+        status: { type: string, enum: [active, withdrawn] }
+        selectedAt: { type: string, format: date-time }
+        withdrawnAt: { type: string, format: date-time, nullable: true }
+    FeeOptionalSelectionInput:
+      type: object
+      required: [student_id, fee_structure_line_id]
+      properties:
+        student_id: { type: string, format: uuid }
+        fee_structure_line_id: { type: string, format: uuid }
 
     JournalLine:
       type: object

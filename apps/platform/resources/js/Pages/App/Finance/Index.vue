@@ -7,6 +7,7 @@ interface Props {
         manageCharges: boolean;
         viewPayments: boolean;
         recordPayments: boolean;
+        viewFeeSetup: boolean;
     };
 }
 
@@ -18,7 +19,7 @@ defineProps<Props>();
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">Finance</h1>
         <p class="mt-1 text-sm text-slate-500">
-            Ledger accounts and journal entries, Fee charges, and Payment records.
+            Ledger accounts and journal entries, fee setup, Fee charges, and Payment records.
         </p>
 
         <ul class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
@@ -34,6 +35,13 @@ defineProps<Props>();
                 >
                 <p class="mt-1 text-sm text-slate-500">
                     Posted ledger history{{ can.postLedger ? ', and post new entries' : '' }}.
+                </p>
+            </li>
+            <li v-if="can.viewFeeSetup" class="px-4 py-3">
+                <a class="text-sm font-medium underline" href="/app/finance/fee-setup">Fee setup</a>
+                <p class="mt-1 text-sm text-slate-500">
+                    Fee heads, fee structures by year and grade, instalment schedules and optional
+                    fees.
                 </p>
             </li>
             <li v-if="can.viewCharges" class="px-4 py-3">
@@ -59,7 +67,13 @@ defineProps<Props>();
         </ul>
 
         <p
-            v-if="!can.viewLedger && !can.viewCharges && !can.viewPayments && !can.recordPayments"
+            v-if="
+                !can.viewLedger &&
+                !can.viewCharges &&
+                !can.viewPayments &&
+                !can.recordPayments &&
+                !can.viewFeeSetup
+            "
             class="mt-6 text-sm text-slate-500"
         >
             You don't have access to any Finance area yet.

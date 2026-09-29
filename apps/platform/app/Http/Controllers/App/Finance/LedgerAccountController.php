@@ -2,30 +2,34 @@
 
 namespace App\Http\Controllers\App\Finance;
 
+use App\Domain\Fees\Http\TranslatesFeeSetupErrors;
+use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
+use App\Domain\Finance\Application\LedgerAccountAdministrationService;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerReadService;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\CapabilityResolver;
+use App\Support\NormalizesCodeInput;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 /**
- * Phase 0G.7: session-authenticated Inertia page for the Ledger
- * Account directory -- the same convention every other App/Finance
- * controller in this namespace follows (NOT the Bearer-token JSON API
- * under /api/v1 that 0G.6 built for Flutter/external consumers; see
- * that checkpoint's LedgerAccountController for the parallel surface).
- * Delegates to `LedgerReadService::listAccounts()` -- the exact same
- * Application-layer service the JSON API controller calls -- never a
- * raw `LedgerAccount` Eloquent query. Read-only: no account CRUD
- * exists in this checkpoint's scope (FINANCE.md 0G.7 rule 53).
+ * The Chart of Accounts page. Reads need finance.ledger.view; since FEE.1
+ * (ADR 0062 §6, K1) a holder of finance.accounts.manage can also create an
+ * account and activate/deactivate one. There is no delete and no type
+ * change.
  */
 class LedgerAccountController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCapability, NormalizesCodeInput, TranslatesFeeSetupErrors;
 
-    public function index(TenantContext $context, LedgerReadService $service): Response
+    public function index(TenantContext $context, LedgerReadService $service, CapabilityResolver $capabilities): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.ledger.view', $school);
@@ -42,6 +46,43 @@ class LedgerAccountController extends Controller
                 'isSystem' => $a->isSystem,
                 'status' => $a->status,
             ])->all(),
+            'types' => LedgerAccountAdministrationService::TYPES,
+            'canManage' => $capabilities->canInSchool($context->actor(), 'finance.accounts.manage', $school),
         ]);
+    }
+
+    public function store(Request $request, TenantContext $context, LedgerAccountAdministrationService $service): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('finance.accounts.manage', $school);
+        $this->normalizeCodeInput($request);
+
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:32', $this->caseInsensitiveUniqueCode('ledger_accounts', $school)],
+            'name' => ['required', 'string', 'max:120'],
+            'type' => ['required', 'string', Rule::in(LedgerAccountAdministrationService::TYPES)],
+        ]);
+
+        $this->translatingFeeSetupErrors(fn () => $service->create($school, $validated, $context->actor()));
+
+        return redirect('/app/finance/ledger-accounts');
+    }
+
+    public function updateStatus(Request $request, TenantContext $context, LedgerAccountAdministrationService $service, string $ledgerAccount): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('finance.accounts.manage', $school);
+
+        $validated = $request->validate([
+            'status' => ['required', 'string', Rule::in(LedgerAccountAdministrationService::STATUSES)],
+        ]);
+
+        try {
+            $service->changeStatus($school, $ledgerAccount, $validated['status'], $context->actor());
+        } catch (LedgerAccountNotFoundException) {
+            throw new NotFoundHttpException;
+        }
+
+        return redirect('/app/finance/ledger-accounts');
     }
 }

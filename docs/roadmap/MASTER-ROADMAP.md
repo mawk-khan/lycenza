@@ -89,6 +89,20 @@ contract checkpoint.
 FEE.1 starts only after the owner records ADR 0062 decisions A, B, C, E, K
 and L.
 
+**FEE.1 — COMPLETE (2026-09-29).** Owner decisions A, B, C, E, K1 and L
+confirmed. Built:
+- ledger-account administration;
+- fee heads;
+- fee structures (draft/active/retired, successor amendment, one active
+  per scope);
+- instalment schedules with generators;
+- optional-fee selections.
+
+Configuration only: no charge generation. The as-built record is in
+`docs/modules/FINANCE.md` "FEE.1 as-built" and the ADR 0062 implementation
+note. **Next: FEE.2 — Assessment Runs**, which needs owner decision D
+(mid-year admission) first.
+
 ## Phase 0A — Architectural Foundation (complete)
 
 Repository structure, ADRs, domain map, tenancy/API/event/AI/security
