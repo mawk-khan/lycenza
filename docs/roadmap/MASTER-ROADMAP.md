@@ -1921,6 +1921,9 @@ same 12 advisories and 97 records, all expiring **2026-10-29** (last passing
 day 2026-10-28). It replaces the `OWNER-0O6E-2026-09-26` records. E16 stays
 DECISION_REQUIRED for the final E02/E15 dates. The O16 qualification of the
 merged commit is in `PHASE-0O-READINESS.md` §47 and after.
+- **Qualified:** `main` `be69b55`, both images VERIFIED (0 blocking; 48 and
+  49 excepted). Regression 6,500 tests with only the ESI-12 skip.
+- **Full-regression checkpoint:** `be69b55` (counter 0/5, readiness §48).
 
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred

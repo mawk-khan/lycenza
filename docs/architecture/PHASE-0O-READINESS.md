@@ -2334,3 +2334,76 @@ the final E02/E15 dates still needs a fix or a further fresh decision.
 
 **Qualification:** the O16 qualification of the `main` commit carrying this
 change follows in the next section.
+
+## 48. Phase 0O / E16 — VERIFIED digests under `OWNER-0O-E16-2026-09-29` (2026-09-29)
+
+Final qualification of the published `main` commit **`be69b55`**
+(`be69b55cef66e98d18bd728851b9a104c52a0580`, the §47 exception
+replacement).
+
+**The run:**
+- **Run id:** `local-20260929T130419Z-6a83ecf8`.
+- **Timing:** started 2026-09-29T13:04:19Z; both images VERIFIED at
+  13:45:39Z.
+- **Host:** Docker on the classic image store.
+- **Scanner:** a fresh Grype database, built 2026-09-29 06:32Z, within the
+  24 h policy.
+- **Changes:** none in the repository during the run.
+
+**Results:**
+- **Same-run complete regression:** 6,500 tests, 152,368 assertions,
+  0 failures, only the deliberate ESI-12 skip. It ran through
+  `SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --reset-db` on real
+  PostgreSQL, Redis and MinIO. The count is unchanged from `e52c4c4`.
+- **Gates:** all pass:
+  - lock integrity;
+  - Pint, Larastan (0 errors), vue-tsc, ESLint, Prettier and the frontend
+    build;
+  - Gateway ruff, format, mypy and pytest (153 passed);
+  - release tooling tests (85, including the 6 new E16 tests).
+- **Language audits:** 0 advisories. **Secret scans:** 0 findings in
+  source and in each image.
+- **`verify-images.sh`:** 133/133.
+- **Successor rule of the E16 decision:** met.
+  - The scanned High/Critical set equals the 97 approved records exactly:
+    0 Critical, 0 High with a fix.
+  - Both images report `exception_conditions_proven` (runtime hardening
+    proven).
+  - The only scan difference from the decision scan is the in-scope Low
+    CVE-2026-97399.
+
+| Image | Manifest digest | Config digest | `verify-artifact` |
+|---|---|---|---|
+| Application | `sha256:39c376fa7eb3e3961ee5d93e95d11d25424e5e8a3de740b23f8d2c3e5b0b35ae` | `sha256:94acbd21cfba6ba6be4ae42868858032365a3108c7a705331b84c7f915051720` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 48 excepted |
+| AI Gateway | `sha256:931a70cb71873c5af4a3d088adef8d66b408b385cf2e112cf11fb765f8ab275b` | `sha256:3267e06b8e73a82533543b4d65110d0bf14eba6178b823077994f5a7349d5518` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 49 excepted |
+
+- **SBOM sha256:**
+  - app: `3fdfe98c0e7d242c492908724fc1a795c80f2ad027c597ae55e210009934b36b`;
+  - Gateway: `7afcaef6042651dcb48a5d86a5cd359fec14c543a87f1b816d11ab3706c6fe87`.
+- **Scan matches:** app 186, Gateway 158 (+2 each: the new Low).
+- **Evidence bundle:** sha256
+  `0f0e58fe02609b15cfda901eb6ddf94a974faec46e72c5affbb6c35c5d895ee1`,
+  signed with an ephemeral **non-production** key. The private key was
+  destroyed.
+- **Evidence custody:** outside the repository.
+- **PUBLISHED = NONE, PROMOTED = NONE.** No registry, production signing
+  identity, secret or deployment.
+
+**Not the final E02.**
+- **E03:** `main` is still unprotected (public API on 2026-09-29:
+  `protected: false`).
+- **E18:** the provider code is not yet in the release.
+- **Promotion:** the `be69b55` digests are progress evidence, not the
+  release to promote.
+
+**Statuses:**
+- **E16:** DECISION_REQUIRED (register vocabulary). The decision is
+  **current and qualified through 2026-10-28**, and E16 must be valid again
+  on the final E02/E15 dates.
+- **E17:** LEGAL_REVIEW_REQUIRED.
+- **E18:** blocked.
+- **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+- **Phase 0O:** ACTIVE — CLOSEOUT BLOCKED.
+- **Phase Zero:** NOT COMPLETE (Phase 0O only).
+
+**Full-regression checkpoint:** `be69b55` (cadence counter **0/5**).

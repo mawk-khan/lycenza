@@ -312,7 +312,7 @@ any production publication or promotion:
   (`"protected": false`, no rulesets). The release workflow proves only
   that a commit is on `main`.
 - **A fresh qualification must run after protection is active.** The
-  `c4b1b6c` and `e52c4c4` (latest, Phase 0O.12B) artifacts are not the
+  `c4b1b6c`, `e52c4c4` and `be69b55` (latest, E16) artifacts are not the
   release to promote. Their vulnerability exceptions (since 2026-09-29,
   `OWNER-0O-E16-2026-09-29`) expire 2026-10-29, with no automatic renewal.
 

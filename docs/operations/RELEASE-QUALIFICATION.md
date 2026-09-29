@@ -17,7 +17,7 @@ Tooling reference: `infrastructure/release/README.md`.
 > - a **fresh** qualification runs from that protected boundary.
 >
 > A VERIFIED digest from before protection (such as `c4b1b6c` or the
-> current latest, `e52c4c4`, `PHASE-0O-READINESS.md` §44) is progress
+> current latest, `be69b55`, `PHASE-0O-READINESS.md` §48) is progress
 > evidence, not the release to promote. Exceptions must be valid on the
 > qualification **and** promotion dates. They are never renewed
 > automatically.

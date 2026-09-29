@@ -199,3 +199,28 @@ these rules.
   **PUBLISHED = NONE, PROMOTED = NONE**.
 - Final E02 (ADR 0058) is not satisfied by this decision. The final
   qualification needs every exception valid **on its own date**.
+
+## 8. Activation and qualified successor (2026-09-29)
+
+**Activation.** The records went live on `main` at
+`be69b55cef66e98d18bd728851b9a104c52a0580`.
+
+**Qualification.** Run `local-20260929T130419Z-6a83ecf8`, with a fresh
+Grype database built 2026-09-29 06:32Z. It is recorded in
+`PHASE-0O-READINESS.md` §48, and it meets all four §5 successor
+conditions:
+1. **Source.** Built from the `main` commit that carries these records and
+   the runtime security contract.
+2. **Exact residual set.** The scanned High/Critical set equals the 97
+   records exactly: 0 Critical, 0 High with a fix. The only difference from
+   the decision scan is the in-scope Low CVE-2026-97399 (§1).
+3. **Runtime hardening proven.** The signed `verify-images.json` shows
+   133/133 checks, and both images report `exception_conditions_proven`.
+4. **VERIFIED:**
+
+   | Image | Manifest digest | Result |
+   |---|---|---|
+   | Application | `sha256:39c376fa7eb3e3961ee5d93e95d11d25424e5e8a3de740b23f8d2c3e5b0b35ae` | 0 blocking, 48 excepted |
+   | Gateway | `sha256:931a70cb71873c5af4a3d088adef8d66b408b385cf2e112cf11fb765f8ab275b` | 0 blocking, 49 excepted |
+
+**PUBLISHED = NONE, PROMOTED = NONE.**

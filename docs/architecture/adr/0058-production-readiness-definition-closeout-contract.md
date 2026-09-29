@@ -834,3 +834,14 @@ E16 needs validity **on the final E02/E15 dates**, and those will fall after
 
 **Qualification.** The O16 qualification of the resulting `main` commit is
 recorded in `PHASE-0O-READINESS.md` (§47 and the follow-up).
+
+**Qualified (2026-09-29).** `main` `be69b55` was qualified under
+`OWNER-0O-E16-2026-09-29` in run `local-20260929T130419Z-6a83ecf8`:
+- **Images:** both VERIFIED with `exception_conditions_proven` and 0
+  blocking (application `sha256:39c376fa…b35ae`, 48 excepted; Gateway
+  `sha256:931a70cb…ab275b`, 49 excepted).
+- **Regression:** 6,500 tests, only the ESI-12 skip.
+- **Details:** `PHASE-0O-READINESS.md` §48.
+
+E16 stays DECISION_REQUIRED for the E02/E15 dates. The current decision is
+valid through 2026-10-28.
