@@ -232,3 +232,10 @@ audit trail, `school_audit_events`, is already durable and RLS-protected
 — see `docs/architecture/adr/0017-audit-architecture.md`). Every one of
 these must be designed and reviewed against this document before the
 first real AI agent ships.
+
+**Status note (2026-09-29, ADR 0061).**
+- **Deferral:** Phase 0M's real providers and agents are deferred post-v1
+  by owner decision (closed for Phase Zero, not complete). The "Phase 0M
+  remains BLOCKED" statements above describe the unchanged gate.
+- **Unchanged:** every control on this page, and no School data may reach
+  a real provider before the gate's section 18 decisions exist.

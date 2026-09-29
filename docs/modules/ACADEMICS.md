@@ -627,3 +627,11 @@ adds no write path, route or event to this module. See
   `curriculum_delivery_id`. Nothing here prevents that; the no-delete
   lifecycle and RESTRICT FKs guarantee a reference target survives.
   Academics itself must never reference them.
+
+**Owner scope decision (2026-09-29, ADR 0061).**
+- **Deferred post-v1:** everything in this section, including Lesson
+  Planning (with every lesson-level field), teacher identity/ownership and
+  elective delivery. It is not required for Phase Zero closure. Phase 0H is
+  CLOSED FOR PHASE ZERO, and Academics is **not** complete.
+- **Reopening:** a post-v1 initiative starts with a fresh audit and needs
+  explicit owner authorization (ADR 0061 §2.5).

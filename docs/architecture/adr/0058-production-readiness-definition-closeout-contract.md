@@ -31,7 +31,9 @@
 > - §4.6, §4.8 and §11: `c4b1b6c`; the latest qualified commit is
 >   `e52c4c4`.
 >
-> The provider is selected (ADR 0060). Read the Phase 0O.13 note last.
+> The provider is selected (ADR 0060). Since 2026-09-29, §9's "Phase 0M:
+> BLOCKED" row is superseded for Phase Zero by ADR 0061. Read the latest
+> dated note last.
 
 ## 1. Context (audited 2026-09-28, `origin/main` `8512701`)
 
@@ -792,3 +794,24 @@ not configured by this change.
 - **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
 - **Phase 0O:** CLOSEOUT BLOCKED.
 - **Mandatory blockers:** E02, E03, E05, E07–E23 and E29.
+
+## Note — Phase Zero scope closure (ADR 0061, 2026-09-29)
+
+The owner deferred Phase 0H's remaining scope and Phase 0M's real providers
+and agents to post-v1.
+
+**Current status.** §9's "Phase 0M: BLOCKED — LEGAL/COMPLIANCE/PRODUCT/
+SECURITY DECISIONS REQUIRED" stays true for its date. The current status is
+**Phase 0M: CLOSED FOR PHASE ZERO — REAL PROVIDERS / REAL AGENTS DEFERRED
+POST-v1**. The AI provider gate itself is not cleared.
+
+**Nothing in this ADR's register changes:**
+- **E26** (AI Gateway in production) stays CONDITIONAL_DISABLED.
+- **O1** is unchanged: RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
+
+**Phase 0O is the only active Phase Zero closeout area.** No 0H or 0M item
+blocks O1, and closing 0O never reopens either.
+
+**E16.** The fresh scan of 2026-09-29 (`PHASE-0O-READINESS.md` §46) found no
+available fix for the 12 excepted advisories. Every one of the 97 records
+needs a fresh owner/security decision before 2026-10-10.

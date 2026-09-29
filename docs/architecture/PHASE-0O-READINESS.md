@@ -2214,3 +2214,75 @@ API: `protected: false`, no rulesets).
 
 **Next (not started):** the qualified legal/processor review of SendGrid,
 recorded as an ADR 0060 amendment. Only then does Phase 0O.13A start.
+
+## 46. Phase Zero scope closure — Phase 0H / Phase 0M post-v1 deferrals (ADR 0061, 2026-09-29)
+
+Documentation only. Baseline `origin/main` `b305b26`; the executable
+checkpoint stays `e52c4c4`.
+
+**Owner decisions (product scope, not completion or legal clearance):**
+- **Phase 0H:** **CLOSED FOR PHASE ZERO — REMAINING SCOPE DEFERRED
+  POST-v1.**
+  - Delivered as built: Timetable, Student class Attendance, Syllabus,
+    Curriculum Delivery, Examination Foundation, ExaminationPaper/Scheduling,
+    GradeScale/GradeBand, Staff MFA and the Student Processing Authorization
+    Registry.
+  - Deferred: Lesson Planning, 0H.4D-P3, StudentMark, results, report cards,
+    transcripts and Student/Guardian-facing surfaces.
+  - The StudentMark determination is unchanged and not widened.
+- **Phase 0M:** **CLOSED FOR PHASE ZERO — REAL PROVIDERS / REAL AGENTS
+  DEFERRED POST-v1.**
+  - The fail-closed `NullProvider` state and all AI hardening stay.
+  - The AI provider legal/compliance gate is **not** cleared. Its section 18
+    decisions are the reopening gate.
+
+**Current-status correction for this document.** Every earlier "Phase 0M:
+BLOCKED — LEGAL/COMPLIANCE/PRODUCT/SECURITY DECISIONS REQUIRED" line (§11
+onward, up to §45) stays true **for its date**. From 2026-09-29 the current
+status is:
+
+> **Phase 0M: CLOSED FOR PHASE ZERO — REAL PROVIDERS / REAL AGENTS DEFERRED
+> POST-v1 BY OWNER DECISION ON 2026-09-29.**
+
+The gate's own status (BLOCKED) is unchanged.
+
+**Effect on Phase 0O:**
+- **Only active area.** Phase 0O is now the **only active Phase Zero
+  closeout area**.
+- **Not reopened by 0O.** No 0H or 0M item is an O1 blocker, and 0O
+  closeout never reopens 0H or 0M.
+- **Unchanged:** E26 (AI Gateway in production) stays
+  CONDITIONAL_DISABLED.
+
+**E16 fresh-scan outcome (read-only audit, 2026-09-29):**
+- **Scan.** The retained `e52c4c4` SBOMs were re-scanned with the newest
+  published Grype database (built 2026-09-28 06:42Z). Both images PASS with
+  0 blocking; the 48 + 49 High findings are identical to qualification.
+- **Language audits:** 0 advisories.
+- **No fix available:**
+  - no newer version in Debian trixie, trixie-updates, trixie-security or
+    trixie-proposed-updates;
+  - the tracker marks them `no-dsa`, postponed or unfixed;
+  - no newer `debian:13-slim` or `python:3.14-slim-trixie` digest exists.
+  - So no legitimate refresh removes any of the 12 advisories.
+- **Expiry is fail-closed** (`exceptions.py`: `expires <= today`), and one
+  expired record invalidates the whole file. All 97 records therefore stop
+  working on 2026-10-10; the last passing day is 2026-10-09.
+- **E16: DECISION_REQUIRED.** A fresh owner/security decision is needed
+  first. Nothing is renewed.
+
+**Current Phase 0O statuses (carried forward):**
+
+| Item | Status |
+|---|---|
+| E03 | GOVERNANCE_REQUIRED: `main` still unprotected (public API 2026-09-29: `protected: false`, 0 rulesets) |
+| E16 | DECISION_REQUIRED (above) |
+| E17 | LEGAL_REVIEW_REQUIRED: Twilio SendGrid selected (ADR 0060); processor/legal review outstanding |
+| E18 | Blocked on E17 (Phase 0O.13A not started) |
+| E21 | LEGAL_REVIEW_REQUIRED |
+| O1 | RESOLVED AS DEFINITION OF DONE — NOT SATISFIED |
+| Phase 0O | ACTIVE — CLOSEOUT BLOCKED (O1 evidence outstanding) |
+| Phase Zero | **NOT COMPLETE** (Phase 0O/O1 remains) |
+
+**Regression:** checkpoint `e52c4c4`. This docs-only unit is #2 since it
+(counter **2/5** once published).

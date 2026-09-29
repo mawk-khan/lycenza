@@ -78,3 +78,23 @@ above. Any future expansion (production enablement, Student-facing or
 Guardian-facing surfaces, result publication, report cards,
 transcripts) requires its own separate, explicit determination from
 the approving authority before implementation begins.
+
+## Project status note (2026-09-29, ADR 0061) — not part of the determination
+
+The project owner deferred StudentMark and the rest of Phase 0H's
+Examinations depth to **post-v1** (a product-scope decision). This note
+records project governance only. It does not change or widen the
+determination above.
+- **Still withheld:** the determination is still limited to architecture
+  and backend scope (internal staff processing, with conditions).
+  Production, Student- and Guardian-facing access, results, report cards and
+  transcripts stay withheld.
+- **Historical input:** it is kept as input for the future post-v1
+  checkpoint, which must first:
+  1. verify with the approving authority that it is still current;
+  2. re-verify the processing-authorization requirement (ADR 0038);
+  3. re-verify the MFA requirement (ADR 0037);
+  4. complete every prerequisite that still applies, including Phase
+     0H.4D-P3;
+  5. obtain every additional determination its scope needs.
+- **Deferral is not legal clearance.**

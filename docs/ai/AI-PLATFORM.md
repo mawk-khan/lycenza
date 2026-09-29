@@ -176,3 +176,13 @@ scope.
   service authentication. `/v1/complete` answers 403 `agent_not_allowed`.
   This is a separate API-correctness fix, not a security boundary.
 
+## Status note — Phase 0M deferred post-v1 (2026-09-29, ADR 0061)
+
+- **Deferral:** the owner deferred real model providers, real agents and AI
+  write tools to post-v1. Phase 0M is **CLOSED FOR PHASE ZERO**; it is not
+  complete, and the provider legal/compliance gate is not cleared.
+- **Unchanged:** everything above, including `NullProvider` only,
+  `REAL_PROVIDERS_ENABLED` off, the context token, capability checks,
+  durable audit and service authentication.
+- **Reopening:** `docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md`
+  section 18 is the reopening gate.

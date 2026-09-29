@@ -681,3 +681,20 @@ ships fully independently of that blocker, as anticipated.
   transcripts** (PROVISIONAL): recording a fact, deriving a result,
   publishing it and generating a document are four different things and
   are unlikely to belong in one checkpoint.
+
+**Owner scope decision (2026-09-29, ADR 0061).** Examinations is **not**
+complete: its foundations (§1–§19) are delivered as built.
+- **Deferred post-v1, not required for Phase Zero closure** (Phase 0H is
+  CLOSED FOR PHASE ZERO):
+  - Phase 0H.4D-P3 elective historical eligibility;
+  - StudentMark / marks entry;
+  - grading beyond GradeScale/GradeBand;
+  - result calculation;
+  - result publication or revocation;
+  - report cards;
+  - transcripts;
+  - Student/Guardian-facing surfaces;
+  - any dependent Documents/report generation.
+- **StudentMark determination:** unchanged and not widened. It must be
+  revalidated when StudentMark is reopened (ADR 0061 §2.4).
+- **Nothing resumes automatically** (ADR 0061 §2.5).

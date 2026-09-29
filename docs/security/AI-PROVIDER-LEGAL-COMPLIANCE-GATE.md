@@ -14,6 +14,25 @@ only; no provider, SDK or credential was added. That does not unblock
 Phase 0M: every provider/legal and product decision in section 18 is
 still open, and the status below is unchanged.
 
+> **OWNER PRODUCT DECISION — POST-v1 DEFERRAL (2026-09-29, ADR 0061).**
+> The owner deferred Phase 0M's real model providers, real agents and AI
+> write tools to post-v1. Phase 0M is **CLOSED FOR PHASE ZERO — REAL
+> PROVIDERS / REAL AGENTS DEFERRED POST-v1**. The deferral is a product
+> decision only.
+> - **This gate is not passed or cleared.** Every section 18 decision
+>   (18A, 18B and the open 18C rows) stays unresolved and becomes the
+>   **required reopening gate** for any post-v1 AI initiative (ADR 0061
+>   §3.5).
+> - **The fail-closed state of section 3 stays in force:** `NullProvider`
+>   only, no SDK or credentials, no production caller,
+>   `REAL_PROVIDERS_ENABLED` off, no real agent or AI write tool.
+> - **No School data may reach a real provider** until this gate's
+>   decisions are recorded in the form section 20 requires.
+>
+> The status line above cites "section 19" for that form. Section 20
+> ("Required form of approval") is the correct reference; the line is left
+> unedited.
+
 Sources: `docs/roadmap/MASTER-ROADMAP.md` ("Phase 0M — AI Platform: Real
 Agents"), ADR 0013 (provider-independent AI Gateway), ADR 0014
 (capability-gated tool/action boundary), ADR 0023 (signed context
@@ -433,3 +452,8 @@ provider-key custody and rotation, Prompt Registry and output
 validation). The provider-neutral hardening G1–G4 is complete
 (2026-09-24); it does not unblock Phase 0M, which is about a real
 provider and a real agent.
+
+**Addendum (2026-09-29, ADR 0061).** Post-v1 product deferral. The BLOCKED
+status above remains the state of this gate. Phase 0M is closed for Phase
+Zero **only** as a scope decision. Reopening requires this gate's section
+18 decisions (ADR 0061 §3.4–§3.5).

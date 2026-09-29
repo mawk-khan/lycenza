@@ -684,3 +684,8 @@ contract is met.**
 - **Phase 0M:** BLOCKED.
 - **Code.** None in this checkpoint. The executable checkpoint stays
   `e52c4c4`.
+
+**Status correction (2026-09-29, ADR 0061).** §26's "Phase 0M: BLOCKED"
+was true on its date. The current status is **CLOSED FOR PHASE ZERO — REAL
+PROVIDERS / REAL AGENTS DEFERRED POST-v1**. Nothing else in this ADR
+changes.

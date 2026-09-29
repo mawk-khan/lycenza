@@ -7,6 +7,37 @@ records its own status; a phase with no recorded status or
 implementation notes has not been started. Nothing here is a
 commitment to timing, only to order and scope.
 
+## Phase Zero closeout status (authoritative; ADR 0061, 2026-09-29)
+
+Phase Zero is complete only when every active phase below is complete or
+closed under its accepted scope decisions (including accepted deferrals)
+**and** Phase 0O/O1 is satisfied (ADR 0058). A closed phase with deferred
+scope is **not** a claim that the deferred capability exists.
+
+| Phase | Phase Zero status |
+|---|---|
+| 0A | COMPLETE |
+| 0B | COMPLETE |
+| 0C | COMPLETE |
+| 0D | COMPLETE |
+| 0E | COMPLETE |
+| 0F | COMPLETE / PUBLISHED |
+| 0G | COMPLETE |
+| 0H | **CLOSED FOR PHASE ZERO** — active foundation scope delivered; remaining Academic / Examination depth (Lesson Planning, StudentMark, results, report cards, transcripts, 0H.4D-P3) deferred post-v1 (ADR 0061) |
+| 0I | COMPLETE — Submission cancelled / out of scope |
+| 0J | ENGINEERING COMPLETE — the recorded ESI disability-threshold legal deferral stands (ADR 0036) |
+| 0K | CLOSED — Health / Safety deferred behind their recorded gates |
+| 0L | COMPLETE — optional / gated future scope preserved |
+| 0M | **CLOSED FOR PHASE ZERO** — real model providers, real agents and AI write tools deferred post-v1 (ADR 0061); fail-closed `NullProvider` state preserved |
+| 0N | COMPLETE |
+| 0O | **ACTIVE — CLOSEOUT BLOCKED**: O1 evidence outstanding (ADR 0058 §6) |
+
+**Phase Zero: NOT COMPLETE.** Phase 0O/O1 remains.
+- **Only 0O is active.** No other Phase Zero product implementation phase
+  is required for closure beyond the accepted Phase 0O work and evidence
+  programme.
+- **0O closeout never reopens 0H or 0M.**
+
 ## Phase 0A — Architectural Foundation (complete)
 
 Repository structure, ADRs, domain map, tenancy/API/event/AI/security
@@ -662,6 +693,26 @@ Employee attendance remains outside this Phase 0H checkpoint and
 belongs to the separately-scoped HR/Phase 0J concern, unless future
 authoritative roadmap work changes that boundary.
 
+**Owner scope decision (2026-09-29, ADR 0061).** It supersedes, for Phase
+Zero closeout only, the historical "Phase 0H as a whole is NOT complete"
+above, which stays true for its date.
+- **Status:** Phase 0H is **CLOSED FOR PHASE ZERO**. The delivered
+  foundation scope stays as built.
+- **Deferred post-v1, not required for Phase Zero closure:**
+  - Lesson Planning;
+  - 0H.4D-P3 elective historical eligibility;
+  - StudentMark / marks entry;
+  - result calculation and publication;
+  - report cards;
+  - transcripts;
+  - Student/Guardian-facing surfaces.
+- **Not implied:** this is not implementation completion and not legal
+  clearance. The StudentMark determination is unchanged and not widened.
+- **Reopening:** no deferred item resumes automatically. A post-v1
+  initiative needs a fresh audit, revalidated legal and security
+  decisions, a new checkpoint and explicit owner authorization (ADR 0061
+  §2.5).
+
 ## Phase 0I — LMS
 
 **Status: COMPLETE.** Active scope is Learning Content (0I.2) +
@@ -1124,6 +1175,25 @@ audit), gateway logs and errors carry no bodies, and an external
 provider can be neither registered nor selected while
 `REAL_PROVIDERS_ENABLED` is off (its default). Phase 0M remains
 **BLOCKED** on the provider/legal and product decisions.
+
+**Owner scope decision (2026-09-29, ADR 0061).**
+- **Status:** Phase 0M is **CLOSED FOR PHASE ZERO — REAL PROVIDERS / REAL
+  AGENTS DEFERRED POST-v1**. The "BLOCKED" records above stay true for
+  their dates.
+- **Not complete:** Phase 0M is not complete, and its gate is not cleared.
+- **Safe state unchanged:**
+  - `NullProvider` only;
+  - no provider SDK or credentials;
+  - no production caller;
+  - `REAL_PROVIDERS_ENABLED` off;
+  - no real agent, AI write tool or AI approval workflow.
+
+  The G1–G4 hardening, context token, capability checks, durable AI audit
+  and service authentication all stay.
+- **Reopening gate:** the unresolved section 18 decisions of
+  `docs/security/AI-PROVIDER-LEGAL-COMPLIANCE-GATE.md` (18A, 18B, 18C).
+  No School data may reach a real provider before that gate is passed
+  (ADR 0061 §3.5).
 
 ## Phase 0N — Multi-School Management
 
@@ -1833,6 +1903,22 @@ Next: the legal/processor review of SendGrid. Then **0O.13A — SendGrid
 Transactional Email Adapter** (E18), which is not started. In parallel,
 outside the repository: E03, the E16 plan, and the E19 DKIM clock once the
 owner authorizes the account.
+
+**E16 fresh-scan audit (2026-09-29, read-only).**
+- **Scan:** both images still PASS with 0 blocking findings. The 12
+  excepted advisories are unchanged.
+- **No fix:** Debian trixie and trixie-security have none (`no-dsa` /
+  postponed / unfixed), and no newer base digest exists. So no refresh can
+  remove them.
+- **Whole-file expiry.** An expired record invalidates the whole exception
+  file, so all 97 records stop working on 2026-10-10 (the last passing day
+  is 2026-10-09). A fresh owner/security decision is required first.
+- **E16:** DECISION_REQUIRED.
+
+**Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
+and Phase 0M are closed for Phase Zero, with their remaining scope deferred
+post-v1. **Phase 0O is the only active Phase Zero closeout area.** See
+"Phase Zero closeout status" at the top of this roadmap.
 
 ## Cross-cutting, ongoing (not a single phase)
 
