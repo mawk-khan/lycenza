@@ -19,7 +19,7 @@ own). Each security tool runs from a digest-pinned container image named in
 | File | Purpose |
 |---|---|
 | `artifact-policy.json` (+ `schema/`) | The one policy manifest: images, required evidence, vulnerability thresholds, scanner-database age, exception limits, signing custody (unconfigured), pinned tool digests, reachable states. `verify-artifact` reads only this. |
-| `vulnerability-exceptions.json` (+ `schema/`) | Time-bounded, exact-match vulnerability exceptions, each linked to a recorded human approval (`approvals`). Since Phase 0O.6F: the 97 records of owner decision `OWNER-0O6E-2026-09-26` (12 Debian 13 advisories; expiring 2026-10-10 / 2026-10-26). |
+| `vulnerability-exceptions.json` (+ `schema/`) | Time-bounded, exact-match vulnerability exceptions, each linked to a recorded human approval (`approvals`). Since 2026-09-29 (E16): the 97 records of owner decision `OWNER-0O-E16-2026-09-29` (a fresh scan; 12 Debian 13 advisories; all expire 2026-10-29), which replaced `OWNER-0O6E-2026-09-26`. |
 | `runtime-security.json` (+ `schema/`) | Phase 0O.6F: the provider-neutral runtime security contract every production container is started with (never privileged, ALL capabilities dropped, none added, no-new-privileges, existing non-root user) and the checks `verify-images.sh` must pass to prove it. |
 | `retained-releases.json` (+ `schema/`) | Releases whose retained SBOMs the scheduled re-scan covers. **Empty** (nothing promoted). |
 | `gitleaks-image.toml`, `../../.gitleaks.toml` | Image-filesystem and source secret-scan configuration: gitleaks' default rules with an **exact-match** allowlist (one path + exact value per entry). |
@@ -200,7 +200,10 @@ repository-built PHP 8.3.35 on curl 8.22.0 / libxml2 2.15.4; Gateway: CPython
 Essential-package advisories, 48 + 49 matches — are covered exactly by owner
 decision `OWNER-0O6E-2026-09-26`
 (`docs/security/release-remediation/0O.6E-owner-security-decision.md`),
-five of them conditional on the runtime security contract. The qualified
+five of them conditional on the runtime security contract. Since
+2026-09-29 the same findings are covered by the new decision
+`OWNER-0O-E16-2026-09-29`, after a fresh scan. All records expire
+2026-10-29. The qualified
 digests and their `verify-artifact` result are recorded in
 `docs/security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md`.
 **PUBLISHED = NONE, PROMOTED = NONE**: no registry, no production signing

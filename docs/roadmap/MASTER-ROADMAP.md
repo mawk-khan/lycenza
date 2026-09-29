@@ -1915,6 +1915,13 @@ owner authorizes the account.
   is 2026-10-09). A fresh owner/security decision is required first.
 - **E16:** DECISION_REQUIRED.
 
+**E16 exception replacement (2026-09-29).** Owner/security approved
+`OWNER-0O-E16-2026-09-29`: a new decision after the fresh scan, with the
+same 12 advisories and 97 records, all expiring **2026-10-29** (last passing
+day 2026-10-28). It replaces the `OWNER-0O6E-2026-09-26` records. E16 stays
+DECISION_REQUIRED for the final E02/E15 dates. The O16 qualification of the
+merged commit is in `PHASE-0O-READINESS.md` §47 and after.
+
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred
 post-v1. **Phase 0O is the only active Phase Zero closeout area.** See

@@ -146,7 +146,8 @@ worker and scheduler roles and of the Gateway:
 - NoNewPrivs 1.
 
 **Why it is required.** Five approved vulnerability exceptions are
-**conditional** on this contract (owner decision `OWNER-0O6E-2026-09-26`):
+**conditional** on this contract (owner decision `OWNER-0O-E16-2026-09-29`,
+which replaced `OWNER-0O6E-2026-09-26` on 2026-09-29):
 the util-linux mount advisories and the two acl advisories. `verify-artifact`
 applies them only with the signed evidence that these checks passed for the
 exact artifact. Deploying without the contract breaks the condition of that

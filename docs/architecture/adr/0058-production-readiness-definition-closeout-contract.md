@@ -581,7 +581,7 @@ with secrets.
 | E13 | Authorized OCI registry + permissions | ADR 0052 §5 | Deployment (provider) | Mandatory | PROVIDER_REQUIRED | Registry selected and authorized; permissions applied | Operator record | Owner + Operator | Yes |
 | E14 | Production signing identity/key custody | ADR 0052 §3, §5 | Governance | Mandatory | GOVERNANCE_REQUIRED | Custody configured; `artifact-policy.json` signing identity set by a reviewed change | `artifact-policy.json` | Owner + Security | Yes |
 | E15 | Signed, stored, verified, explicitly promoted digest; first promotion evidence retained; promoted-only deployment; rollback retention | ADR 0052 §3.14, §3.17, §3.19 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Same VERIFIED digest in registry; promotion event; `retained-releases.json` entry | `retained-releases.json`; `RELEASE-QUALIFICATION.md` | Operator | Yes |
-| E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision (expiries 2026-10-10 / 2026-10-26) | `vulnerability-exceptions.json` | Owner + Security | Yes |
+| E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` (superseded 2026-09-29 by `OWNER-0O-E16-2026-09-29`) | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision. **Current (2026-09-29):** `OWNER-0O-E16-2026-09-29`, fresh scan, 97 records valid **through 2026-10-28** (expire 2026-10-29). A fix, or a further fresh decision, is still needed for the E02/E15 dates | `vulnerability-exceptions.json`; `0O-E16-2026-09-29-owner-security-decision.md` | Owner + Security | Yes |
 | E17 | Email provider selected + legal/processor review | ADR 0055 §23; §4.11 | Provider / Legal | Mandatory | LEGAL_REVIEW_REQUIRED | Selection decision (made: Twilio SendGrid, ADR 0060); processor review recorded | ADR 0060 (§20 legal amendment, future) | Owner + Legal | Yes |
 | E18 | Email provider code tail (event auth/normalization; HTTPS sending only if needed) | §4.11 | Provider tail (repository) | Mandatory | LEGAL_REVIEW_REQUIRED | Adapter per ADR 0060 §22, focused tests, sandbox gates (§21), full regression, O16 requalification | Future Phase 0O.13A | Engineering | Yes |
 | E19 | Sending domain, SPF, aligned DKIM, DMARC ≥ quarantine after ≥ 14 d aligned | ADR 0055 §17 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | DNS evidence; aggregate-report summary; `MAIL_SENDING_VERIFIED` attestation | `EMAIL-DELIVERABILITY.md` checklist | Operator | Yes |
@@ -815,3 +815,22 @@ blocks O1, and closing 0O never reopens either.
 **E16.** The fresh scan of 2026-09-29 (`PHASE-0O-READINESS.md` §46) found no
 available fix for the 12 excepted advisories. Every one of the 97 records
 needs a fresh owner/security decision before 2026-10-10.
+
+## Note — E16 exception replacement (2026-09-29)
+
+**Decision.** Owner/security approved `OWNER-0O-E16-2026-09-29`. It is a
+**new** decision after the 2026-09-29 fresh scan: the same 12 advisories and
+97 records, the same classifications and runtime-hardening conditions, and
+one common expiry **2026-10-29** (last passing day 2026-10-28).
+- **Records.** It replaces the `OWNER-0O6E-2026-09-26` records, whose
+  approval is removed from the active file. It is not an extension of them.
+- **Scan change.** A newer scanner database added only one Low (CVE-2026-97399,
+  glibc, no fix). Owner/security confirmed it is within scope.
+
+**E16 register status.** It stays **DECISION_REQUIRED** in this register's
+closed vocabulary. The current decision is valid now (row annotation), but
+E16 needs validity **on the final E02/E15 dates**, and those will fall after
+2026-10-28. It is not permanently complete.
+
+**Qualification.** The O16 qualification of the resulting `main` commit is
+recorded in `PHASE-0O-READINESS.md` (§47 and the follow-up).

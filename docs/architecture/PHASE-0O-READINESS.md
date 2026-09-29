@@ -2286,3 +2286,51 @@ The gate's own status (BLOCKED) is unchanged.
 
 **Regression:** checkpoint `e52c4c4`. This docs-only unit is #2 since it
 (counter **2/5** once published).
+
+## 47. Phase 0O / E16 — Vulnerability exception replacement from fresh scan (2026-09-29)
+
+Owner/security approved `OWNER-0O-E16-2026-09-29`
+(`docs/security/release-remediation/0O-E16-2026-09-29-owner-security-decision.md`).
+It is a **new** decision after the §46 fresh scan, not a renewal of
+`OWNER-0O6E-2026-09-26`.
+
+**What changed.** Only release security policy data, the decision record and
+tests. No application code, Dockerfile, lockfile or policy threshold
+changed.
+- **`vulnerability-exceptions.json`:**
+  - one active approval, `OWNER-0O-E16-2026-09-29` (reviewed digests: the
+    qualified `e52c4c4` manifests);
+  - the superseded approval is removed, so no new record can cite it;
+  - 97 replacement records, `created` 2026-09-29, **`expires` 2026-10-29**
+    (last passing day 2026-10-28, one common date). Every record matches
+    the fresh scan exactly (image, advisory, package, version, severity).
+- **Classifications (unchanged):** 24 `accepted_risk`, 71 `not_affected`
+  and 2 `false_positive`; 48 application and 49 Gateway.
+- **Conditions:** runtime hardening on CVE-2026-76642, -78409, -78410,
+  -54369 and -54370.
+- **Release tooling tests:** 85, all passing (79 before plus 6 new
+  focused tests on the real decision). They cover:
+  - the exact residual set passes with no unused record;
+  - no superseded record or approval can be used;
+  - a fix, version change, severity change, unapproved advisory, or new
+    High/Critical blocks;
+  - classifications cannot be broadened, and no record goes past
+    2026-10-29;
+  - the conditional records are withdrawn without runtime-hardening proof;
+  - the file is valid on 2026-10-28 and invalid from 2026-10-29.
+- **Test fix.** The `verify-artifact` mechanics tests now use a neutral,
+  empty exception fixture. Before, they read the live, date-bounded file
+  under a frozen clock, so every decision replacement would have broken
+  them.
+
+**Recheck before activation.** A newer Grype database (built 2026-09-29
+06:32Z) left the governed High/Critical set **identical**. It added only a
+new **Low**, CVE-2026-97399 (glibc, no fix), which owner/security confirmed
+is within scope. Low findings never block.
+
+**E16 register status:** DECISION_REQUIRED (the register's closed
+vocabulary). The decision is **current through 2026-10-28**. Validity on
+the final E02/E15 dates still needs a fix or a further fresh decision.
+
+**Qualification:** the O16 qualification of the `main` commit carrying this
+change follows in the next section.

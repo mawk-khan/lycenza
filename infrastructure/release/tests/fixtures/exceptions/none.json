@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schema/vulnerability-exceptions.schema.json",
+  "schema_version": 1,
+  "approvals": {},
+  "exceptions": []
+}

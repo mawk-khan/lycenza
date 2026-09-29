@@ -37,6 +37,13 @@ class VerifyArtifactTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        # These tests prove verification mechanics, so they run against a neutral, empty exception file.
+        # The LIVE file holds a date-bounded owner decision that is replaced at least every 30 days;
+        # its exact content and window are tested in test_policy_and_exceptions (Phase 0O / E16).
+        import lycenza_release.exceptions as exc_module
+        patcher = mock.patch.object(exc_module, "EXCEPTIONS_FILE", Path(__file__).with_name("fixtures") / "exceptions" / "none.json")
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self) -> None:
         self.tmp.cleanup()

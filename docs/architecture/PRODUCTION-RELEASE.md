@@ -313,8 +313,8 @@ any production publication or promotion:
   that a commit is on `main`.
 - **A fresh qualification must run after protection is active.** The
   `c4b1b6c` and `e52c4c4` (latest, Phase 0O.12B) artifacts are not the
-  release to promote. Their vulnerability
-  exceptions expire 2026-10-10 / 2026-10-26, with no automatic renewal.
+  release to promote. Their vulnerability exceptions (since 2026-09-29,
+  `OWNER-0O-E16-2026-09-29`) expire 2026-10-29, with no automatic renewal.
 
 Closing Phase 0O never authorizes go-live: that is a separate rule-16
 decision.

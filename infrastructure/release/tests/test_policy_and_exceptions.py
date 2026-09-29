@@ -4,19 +4,31 @@ from __future__ import annotations
 
 import copy
 import json
+from collections import Counter
+from datetime import date
 import tempfile
 import unittest
 from pathlib import Path
 
+from types import SimpleNamespace
+from unittest import mock
+
+from lycenza_release import verify
+from lycenza_release.evaluate import evaluate
 from lycenza_release.exceptions import (
     EXCEPTIONS_FILE,
     load_exceptions,
     validate_exceptions,
 )
+from lycenza_release.findings import Finding
 from lycenza_release.policy import POLICY_FILE, load_policy, validate_policy
 from lycenza_release.schema import SchemaError, validate
 from lycenza_release.util import ReleaseError
 from support import FIXTURES, TODAY
+
+DECISION = "OWNER-0O-E16-2026-09-29"
+SUPERSEDED = "OWNER-0O6E-2026-09-26"
+CONDITIONAL = {"CVE-2026-76642", "CVE-2026-78409", "CVE-2026-78410", "CVE-2026-54369", "CVE-2026-54370"}
 
 
 class SchemaValidatorTest(unittest.TestCase):
@@ -99,7 +111,7 @@ class ExceptionsTest(unittest.TestCase):
         return validate_exceptions(json.loads((FIXTURES / "exceptions" / f"{name}.json").read_text()), self.policy, TODAY)[1]
 
     def test_the_repository_exception_file_is_exactly_the_owner_decision(self) -> None:
-        """Phase 0O.6F: OWNER-0O6E-2026-09-26, activated exactly -- 12 advisories, exact per-package statuses, no broadening."""
+        """Phase 0O / E16: OWNER-0O-E16-2026-09-29 (fresh scan), activated exactly -- 12 advisories, exact per-package statuses, no broadening."""
         util_linux = {"bsdutils", "libblkid1", "liblastlog2-2", "libmount1", "libsmartcols1", "libuuid1", "login", "mount", "util-linux"}
 
         def statuses(accepted: set[str], others: set[str], other: str = "not_affected") -> dict[str, dict[str, str]]:
@@ -108,10 +120,10 @@ class ExceptionsTest(unittest.TestCase):
 
         ncurses = {"app": {"libtinfo6", "ncurses-base"}, "ai-gateway": {"libtinfo6", "ncurses-base", "libncursesw6"}}
         decision = {  # advisory: (days, conditional, {image: {package: exact status}})
-            "CVE-2026-76642": (14, True, statuses({"mount", "libmount1"}, util_linux - {"mount", "libmount1"})),
+            "CVE-2026-76642": (30, True, statuses({"mount", "libmount1"}, util_linux - {"mount", "libmount1"})),
             "CVE-2026-78408": (30, False, statuses({"util-linux"}, util_linux - {"util-linux"})),
-            "CVE-2026-78409": (14, True, statuses({"mount", "libmount1"}, util_linux - {"mount", "libmount1"})),
-            "CVE-2026-78410": (14, True, statuses({"mount", "libmount1"}, util_linux - {"mount", "libmount1"})),
+            "CVE-2026-78409": (30, True, statuses({"mount", "libmount1"}, util_linux - {"mount", "libmount1"})),
+            "CVE-2026-78410": (30, True, statuses({"mount", "libmount1"}, util_linux - {"mount", "libmount1"})),
             "CVE-2026-19499": (30, False, statuses({"libc6"}, {"libc-bin"})),
             "CVE-2026-5435": (30, False, statuses({"libc6"}, {"libc-bin"})),
             "CVE-2026-54369": (30, True, statuses({"libacl1"}, set())),
@@ -122,14 +134,15 @@ class ExceptionsTest(unittest.TestCase):
             "CVE-2026-85091": (30, False, statuses(set(), {"zlib1g"}, "false_positive")),
         }
         document = json.loads(EXCEPTIONS_FILE.read_text())
-        valid = load_exceptions(self.policy, TODAY)
+        valid = load_exceptions(self.policy, date(2026, 9, 29))  # the decision date (TODAY is an earlier fixture date)
         self.assertEqual(len(valid), len(document["exceptions"]))
-        self.assertEqual(list(document["approvals"]), ["OWNER-0O6E-2026-09-26"])
-        approval = document["approvals"]["OWNER-0O6E-2026-09-26"]
-        self.assertEqual(approval["record"], "docs/security/release-remediation/0O.6E-owner-security-decision.md")
+        self.assertEqual(list(document["approvals"]), [DECISION], "only the current decision is active")
+        approval = document["approvals"][DECISION]
+        self.assertEqual(approval["record"], "docs/security/release-remediation/0O-E16-2026-09-29-owner-security-decision.md")
+        self.assertEqual(approval["decided"], "2026-09-29")
         self.assertEqual(approval["reviewed_digests"], {
-            "app": "sha256:11a5a7612b32ffb47d036c30fcdd0f23bf5e7e97b95f516f718c9dee342d75de",
-            "ai-gateway": "sha256:d110ed022f3eb066e853821b8e2b254a642469cc0600bc782bf9e72ce1d006ac"})
+            "app": "sha256:d03a3e4dd3400f89ea4ed98f94cfe27ecd2b937000dae001e47adfcd80159729",
+            "ai-gateway": "sha256:db5ae74d5a227fd1432d288cab525e3b8a427995207242672e5386de3524e502"})
         self.assertEqual(set(approval["advisories"]), set(decision), "no other advisory is approved")
 
         seen = set()
@@ -137,19 +150,20 @@ class ExceptionsTest(unittest.TestCase):
             days, conditional, packages = decision[e.id]
             with self.subTest(e.id, image=e.image, package=e.package):
                 self.assertEqual(e.status, packages[e.image][e.package])
-                self.assertEqual((e.severity, e.approved_by), ("high", "OWNER-0O6E-2026-09-26"))
-                self.assertEqual((e.created.isoformat(), (e.expires - e.created).days), ("2026-09-26", days))
+                self.assertEqual((e.severity, e.approved_by), ("high", DECISION))
+                self.assertEqual((e.created.isoformat(), e.expires.isoformat(), (e.expires - e.created).days), ("2026-09-29", "2026-10-29", days))
                 self.assertEqual(e.conditions, ("runtime-hardening",) if conditional else ())
             seen.add((e.id, e.image, e.package))
         expected_records = {(a, image, p) for a, (_, _, packages) in decision.items() for image in packages for p in packages[image]}
         self.assertEqual(seen, expected_records)
         self.assertEqual(sum(1 for e in valid if e.image == "app"), 48)
         self.assertEqual(sum(1 for e in valid if e.image == "ai-gateway"), 49)
+        self.assertEqual(Counter(e.status for e in valid), {"accepted_risk": 24, "not_affected": 71, "false_positive": 2})
 
     def test_the_activated_records_expire_and_then_fail_every_verification(self) -> None:
-        from datetime import date
-        self.assertEqual(len(load_exceptions(self.policy, date(2026, 10, 9))), 97)
-        for day in (date(2026, 10, 10), date(2026, 10, 26)):
+        """One common expiry: valid through 2026-10-28, and the WHOLE file fails from 2026-10-29."""
+        self.assertEqual(len(load_exceptions(self.policy, date(2026, 10, 28))), 97)
+        for day in (date(2026, 10, 29), date(2026, 11, 1)):
             with self.subTest(day), self.assertRaises(ReleaseError) as caught:
                 load_exceptions(self.policy, day)
             self.assertEqual(caught.exception.code, "exceptions_invalid")
@@ -270,3 +284,74 @@ class ExceptionsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CurrentDecisionEngineTest(unittest.TestCase):
+    """Phase 0O / E16: the engine applied to the REAL OWNER-0O-E16-2026-09-29 records (not fixtures)."""
+
+    def setUp(self) -> None:
+        self.policy = load_policy()
+        self.document = json.loads(EXCEPTIONS_FILE.read_text())
+        self.valid = load_exceptions(self.policy, date(2026, 10, 28))
+
+    def findings(self, **change: str) -> list[Finding]:
+        return [Finding("grype", e.image, e.id, e.package, e.version, "high", "not-fixed") if not change
+                else Finding("grype", e.image, e.id, e.package, e.version, change.get("severity", "high"), change.get("fix_state", "not-fixed"))
+                for e in self.valid]
+
+    def test_the_reviewed_residual_set_passes_exactly_with_no_unused_record(self) -> None:
+        result = evaluate(self.findings(), self.valid)
+        self.assertEqual((result["verdict"], len(result["blocking"]), len(result["excepted"]), result["unused_exceptions"]), ("PASS", 0, 97, []))
+        self.assertEqual(Counter(r["image"] for r in result["excepted"]), {"app": 48, "ai-gateway": 49})
+
+    def test_no_superseded_record_remains_and_the_superseded_approval_cannot_be_used(self) -> None:
+        self.assertNotIn(SUPERSEDED, json.dumps(self.document))
+        document = copy.deepcopy(self.document)
+        document["exceptions"][0]["approved_by"] = SUPERSEDED
+        errors = validate_exceptions(document, self.policy, date(2026, 10, 1))[1]
+        self.assertIn("$.exceptions[0]: approval reference not recorded in approvals", errors)
+
+    def test_a_fix_a_version_change_or_a_severity_change_ends_coverage(self) -> None:
+        fixed = evaluate(self.findings(fix_state="fixed"), self.valid)
+        self.assertEqual({r["reason"] for r in fixed["blocking"]}, {"high_fix_available"})
+        self.assertEqual(len(fixed["blocking"]), 97)
+        critical = evaluate(self.findings(severity="critical"), self.valid)
+        self.assertEqual({r["reason"] for r in critical["blocking"]}, {"critical"})
+        e = self.valid[0]
+        moved = evaluate([Finding("grype", e.image, e.id, e.package, e.version + "+deb13u9", "high", "not-fixed")], self.valid)
+        self.assertEqual([r["reason"] for r in moved["blocking"]], ["high_requires_exception"])
+
+    def test_an_unapproved_advisory_or_a_new_high_or_critical_blocks(self) -> None:
+        e = self.valid[0]
+        extra = [Finding("grype", e.image, "CVE-2026-99999", e.package, e.version, "high", "not-fixed"),
+                 Finding("grype", "app", "CVE-2026-99998", "libnew1", "1.0-1", "critical", "not-fixed")]
+        result = evaluate(self.findings() + extra, self.valid)
+        self.assertEqual(sorted(r["id"] for r in result["blocking"]), ["CVE-2026-99998", "CVE-2026-99999"])
+        document = copy.deepcopy(self.document)
+        document["exceptions"][0]["id"] = "CVE-2026-99999"
+        self.assertTrue(any("is not approved by" in err for err in validate_exceptions(document, self.policy, date(2026, 10, 1))[1]))
+
+    def test_the_reviewed_classifications_cannot_be_broadened(self) -> None:
+        document = copy.deepcopy(self.document)
+        index = next(i for i, r in enumerate(document["exceptions"]) if r["status"] == "not_affected")
+        document["exceptions"][index]["status"] = "accepted_risk"
+        self.assertTrue(any("differs from the approved" in err for err in validate_exceptions(document, self.policy, date(2026, 10, 1))[1]))
+        document = copy.deepcopy(self.document)
+        document["exceptions"][0]["expires"] = "2026-10-30"
+        self.assertTrue(validate_exceptions(document, self.policy, date(2026, 10, 1))[1], "no record may extend past 2026-10-29")
+
+    def test_runtime_hardening_records_are_exactly_the_conditional_advisories_and_are_withdrawn_without_proof(self) -> None:
+        self.assertEqual({e.id for e in self.valid if e.conditions}, CONDITIONAL)
+        self.assertTrue(all(e.conditions == ("runtime-hardening",) for e in self.valid if e.id in CONDITIONAL))
+
+        def refuse(_ctx: object) -> None:
+            raise ReleaseError("runtime_hardening_evidence_missing")
+
+        for image in ("app", "ai-gateway"):
+            ctx = SimpleNamespace(image=image, exceptions=list(self.valid))
+            with self.subTest(image), mock.patch.dict(verify.CONDITION_EVIDENCE, {"runtime-hardening": refuse}), self.assertRaises(ReleaseError):
+                verify._conditions(ctx)
+            remaining = [e for e in ctx.exceptions if e.image == image]
+            self.assertFalse(any(e.conditions for e in remaining), "the conditional records are withdrawn")
+            result = evaluate([f for f in self.findings() if f.image == image], ctx.exceptions)
+            self.assertEqual({r["id"] for r in result["blocking"]}, CONDITIONAL)

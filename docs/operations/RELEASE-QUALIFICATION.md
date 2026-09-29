@@ -96,9 +96,17 @@ Since Phase 0O.6F:
   where the advisory does not apply to the version at all.
 - A new advisory, a new package version, a raised severity, or a fix
   becoming available is **not** covered. It blocks and goes to a separate
-  review; it is never folded into an existing approval. The current
-  approval is `OWNER-0O6E-2026-09-26`
-  (`docs/security/release-remediation/0O.6E-owner-security-decision.md`).
+  review; it is never folded into an existing approval.
+- **Current approval (since 2026-09-29):** `OWNER-0O-E16-2026-09-29`
+  (`docs/security/release-remediation/0O-E16-2026-09-29-owner-security-decision.md`).
+  - It is a new decision after a fresh scan, with the same 12 advisories
+    and 97 records.
+  - All records expire **2026-10-29**, so the last passing day is
+    2026-10-28.
+  - The superseded `OWNER-0O6E-2026-09-26` stays history and is no longer
+    in `approvals`.
+- **Whole-file expiry.** One expired record invalidates the whole file,
+  so a replacement decision must land **before** the common expiry.
 
 ## Rollback
 

@@ -67,7 +67,7 @@ review.
 
    An ABI change (a new soname) needs a new review, like Phase 0O.6C's Step 6 stop.
 6. **Run the full tests:** the complete regression (`SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --reset-db`, then `safe-test`), the quality gates, and the release-tooling tests.
-7. **SBOM and scan.** Check that the SBOM lists `php-cli`/`php-fpm`, `curl` and `libxml2` at the new versions, and that Grype, with a fresh database, reports no CRITICAL and no HIGH-with-fix for them. Approved exceptions (`OWNER-0O6E-2026-09-26`) cover only their exact Debian packages and versions: any new residual finding blocks and needs its own decision. The rebuilt image must still pass the runtime security contract checks (`runtime-security.json`) for the conditional ones to apply.
+7. **SBOM and scan.** Check that the SBOM lists `php-cli`/`php-fpm`, `curl` and `libxml2` at the new versions, and that Grype, with a fresh database, reports no CRITICAL and no HIGH-with-fix for them. Approved exceptions (currently `OWNER-0O-E16-2026-09-29`) cover only their exact Debian packages and versions: any new residual finding blocks and needs its own decision. The rebuilt image must still pass the runtime security contract checks (`runtime-security.json`) for the conditional ones to apply.
 8. **Qualify the release** (`infrastructure/release/qualify all …`) on the published commit. The provenance records the three source archives (URL + SHA-256) and every base-image digest.
 
 A PHP *minor* upgrade (8.4) is a separate decision, not a routine rebuild.
