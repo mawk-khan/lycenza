@@ -45,6 +45,10 @@ use LogicException;
  * ordinary case. The database's `payment_allocations` triggers remain
  * the authoritative over-allocation/cancellation/freeze guarantee for
  * every caller.
+ *
+ * FEE.4 (ADR 0062 §17.3): the Payment's receipt is issued here, in the same
+ * transaction, through the trusted `ReceiptIssuer`; the capacity pre-check
+ * uses the charge amount net of live fee adjustments (FEE.3, §15).
  */
 class SettledPaymentRecorder
 {
@@ -54,6 +58,7 @@ class SettledPaymentRecorder
         private readonly LedgerService $ledger,
         private readonly ChargeService $charges,
         private readonly AuditRecorder $audit,
+        private readonly ReceiptIssuer $receipts,
     ) {}
 
     /**
@@ -178,6 +183,12 @@ class SettledPaymentRecorder
         $this->audit->school($school, $auditAction, actor: $actor, subject: $payment, metadata: $auditMetadata);
 
         event(new PaymentSettled($school->id, $payment->id, $posted->journalEntryId, $payment->currency, count($data->allocations)));
+
+        // FEE.4 (ADR 0062 §17.3): the receipt is issued in this same
+        // transaction for every ingress; if it fails, the settlement rolls
+        // back with it. A replay never reaches here (each ingress resolves
+        // its own claim first), so no second number is consumed.
+        $this->receipts->issue($school, $payment, ReceiptIssuer::ISSUANCE_SETTLEMENT, $actor);
 
         return $payment;
     }

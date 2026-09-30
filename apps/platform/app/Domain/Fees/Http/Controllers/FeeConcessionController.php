@@ -23,7 +23,8 @@ use Illuminate\Validation\ValidationException;
  * finance.fee_concessions.view; request/withdraw .request;
  * approve/reject/revoke and adjustment cancellation .approve -- each on the
  * route AND in the Application service. The concession account setting
- * needs finance.fee_structures.view/.manage. There is no DELETE and no
+ * and (FEE.4) the receipt numbering need finance.fee_structures.view/.manage.
+ * There is no DELETE and no
  * free-text note. A request carries a client-generated `idempotency_key`
  * (UUID): the same requester re-sending identical content gets the
  * original back (200), anything else is a 409.
@@ -124,7 +125,26 @@ class FeeConcessionController extends Controller
 
     public function settings(Request $request, School $school, FeeSettingsService $settings): JsonResponse
     {
-        return response()->json(['data' => ['concessionLedgerAccountId' => $settings->concessionAccountId($school, $request->user())]]);
+        $settings->receiptNumberingFor($school, $request->user());
+
+        return response()->json(['data' => $settings->snapshot($school)]);
+    }
+
+    /** FEE.4 (ADR 0062 §17.2): the receipt prefix and financial-year start month. */
+    public function updateReceiptNumbering(Request $request, School $school, FeeSettingsService $settings): JsonResponse
+    {
+        $validated = $request->validate([
+            'receipt_prefix' => ['required', 'string', 'max:16'],
+            'financial_year_start_month' => ['required', 'integer', 'min:1', 'max:12'],
+        ]);
+
+        try {
+            $settings->setReceiptNumbering($school, $validated['receipt_prefix'], (int) $validated['financial_year_start_month'], $request->user());
+        } catch (InvalidFeeSettingsException $e) {
+            throw ValidationException::withMessages([$e->field() => [$e->getMessage()]]);
+        }
+
+        return response()->json(['data' => $settings->snapshot($school)]);
     }
 
     public function updateSettings(Request $request, School $school, FeeSettingsService $settings): JsonResponse
@@ -137,7 +157,7 @@ class FeeConcessionController extends Controller
             throw ValidationException::withMessages([$e->field() => [$e->getMessage()]]);
         }
 
-        return response()->json(['data' => ['concessionLedgerAccountId' => $row->concession_ledger_account_id]]);
+        return response()->json(['data' => [...$settings->snapshot($school), 'concessionLedgerAccountId' => $row->concession_ledger_account_id]]);
     }
 
     /** @param array<string, mixed> $v */

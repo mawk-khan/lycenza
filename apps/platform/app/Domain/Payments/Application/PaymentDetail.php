@@ -15,6 +15,9 @@ use Illuminate\Support\Carbon;
  * `manualReference`, `recordedByUserId`, `recordedAt`); provider fields
  * are null for a manual Payment. The idempotency key is never exposed.
  *
+ * FEE.4: `receiptId`/`receiptNumber` (null only for a Payment settled
+ * before FEE.4 and not yet backfilled).
+ *
  * @param  list<array{chargeId: string, amount: string}>  $allocations
  */
 final class PaymentDetail
@@ -35,6 +38,8 @@ final class PaymentDetail
         public readonly Carbon $settledAt,
         public readonly Carbon $recordedAt,
         public readonly array $allocations,
+        public readonly ?string $receiptId = null,
+        public readonly ?string $receiptNumber = null,
     ) {}
 
     public static function fromModel(Payment $payment): self
@@ -58,6 +63,8 @@ final class PaymentDetail
                 'chargeId' => $allocation->charge_id,
                 'amount' => $allocation->amount,
             ])->all(),
+            receiptId: $payment->receipt?->id,
+            receiptNumber: $payment->receipt?->receipt_number,
         );
     }
 }

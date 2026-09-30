@@ -38,6 +38,7 @@ interface Props {
     canRecordPayment: boolean;
     adjustments: Adjustment[] | null;
     canRequestConcession: boolean;
+    canViewStatement: boolean;
 }
 
 const props = defineProps<Props>();
@@ -79,6 +80,12 @@ function cancel(): void {
                     <span v-if="charge.studentNumber">({{ charge.studentNumber }})</span>
                     · {{ charge.academicYearName ?? charge.academicYearId }}
                 </p>
+                <a
+                    v-if="canViewStatement"
+                    class="mt-1 inline-block text-sm underline"
+                    :href="`/app/finance/fee-statements/${charge.studentId}`"
+                    >Student fee statement</a
+                >
             </div>
             <span
                 v-if="charge.cancelledAt"

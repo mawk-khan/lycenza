@@ -7,6 +7,7 @@ use App\Support\Tenancy\BelongsToSchool;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -40,6 +41,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property Collection<int, PaymentAllocation> $allocations
+ * @property PaymentReceipt|null $receipt
  */
 class Payment extends Model
 {
@@ -65,5 +67,15 @@ class Payment extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(PaymentAllocation::class);
+    }
+
+    /**
+     * FEE.4 (ADR 0062 §17): the one receipt of this Payment, if issued.
+     *
+     * @return HasOne<PaymentReceipt, $this>
+     */
+    public function receipt(): HasOne
+    {
+        return $this->hasOne(PaymentReceipt::class);
     }
 }

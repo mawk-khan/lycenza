@@ -65,6 +65,7 @@ use App\Domain\Library\Http\Controllers\LibraryTitleController;
 use App\Domain\LMS\Http\Controllers\AssignmentController;
 use App\Domain\LMS\Http\Controllers\LearningContentController;
 use App\Domain\Payments\Http\Controllers\PaymentController;
+use App\Domain\Payments\Http\Controllers\PaymentReceiptController;
 use App\Domain\Payroll\Http\Controllers\CompensationAssignmentController;
 use App\Domain\Payroll\Http\Controllers\PayrollAccountingConfigurationController;
 use App\Domain\Payroll\Http\Controllers\PayrollPeriodController;
@@ -1171,6 +1172,18 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/payments/{payment}', [PaymentController::class, 'show'])
                 ->middleware('capability:finance.payments.view')
                 ->name('schools.payments.show');
+            // --- FEE.4 (ADR 0062 §17, §18): read-only receipt and Student
+            // fee statement. The receipt needs finance.payments.view; the
+            // statement needs finance.charges.view AND finance.payments.view
+            // (both middlewares, and again in the read services). No
+            // receipt create/edit/delete/renumber/void/tax route exists; the
+            // I2 backfill is an operator command.
+            Route::get('/payments/{payment}/receipt', [PaymentReceiptController::class, 'receipt'])
+                ->middleware('capability:finance.payments.view')
+                ->name('schools.payments.receipt');
+            Route::get('/students/{student}/fee-statement', [PaymentReceiptController::class, 'statement'])
+                ->middleware(['capability:finance.charges.view', 'capability:finance.payments.view'])
+                ->name('schools.students.fee-statement');
 
             // --- FEE.1 (ADR 0062 §5-§8): ledger-account administration (K1),
             // fee heads, fee structures (lines, instalments, lifecycle) and
@@ -1301,6 +1314,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::put('/fee-settings/concession-account', [FeeConcessionController::class, 'updateSettings'])
                 ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
                 ->name('schools.fee-settings.concession-account');
+            Route::put('/fee-settings/receipt-numbering', [FeeConcessionController::class, 'updateReceiptNumbering'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-settings.receipt-numbering');
             Route::get('/fee-concessions', [FeeConcessionController::class, 'index'])
                 ->middleware('capability:finance.fee_concessions.view')
                 ->name('schools.fee-concessions.index');

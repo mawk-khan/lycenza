@@ -4801,3 +4801,94 @@ never changed.
   - thresholds, multi-stage approval, configurable categories, notes;
   - per-head concession accounts, GST, portal, OPF.
 
+## FEE.4 as-built — Receipts & Staff Fee Statements (2026-09-30, ADR 0062, owner decisions I, I2)
+
+A receipt is Payments-owned **evidence** that one Payment settled. It has
+no amount of its own and no ledger posting. The statement is computed on
+read, with no stored balance.
+
+**Receipt form: a payment acknowledgement only** — J: LEGAL REVIEW
+REQUIRED — DEVELOPMENT AUTHORISED, PROD LEGAL SIGN-OFF REQUIRED.
+
+- **Tables** (migrations `2026_11_01_090000`–`090100`). Both are RLS-forced
+  with composite same-School foreign keys.
+  - **`payment_receipt_counters`.** One row per School × series:
+    `series_key`, the prefix snapshot, and `next_value` (the next number to
+    allocate).
+    - `payments_guard_receipt_counter`: starts at 1; moves only by +1 and
+      only once the receipt for the old value exists; identity and prefix
+      are immutable.
+    - Never deleted.
+  - **`payment_receipts`.** `payment_id` (unique), `receipt_number`,
+    `series_key`, `sequence_value`, `issued_at`, `issued_by_user_id`
+    (null for a system ingress or the backfill).
+    - Unique: number per School; `(school, series, sequence)`.
+    - `payments_validate_payment_receipt`: the series must be the FY of
+      the Payment's `settled_at` in the School's timezone, the sequence the
+      counter's next value, and the number the exact format.
+    - Immutable (runtime UPDATE/DELETE revoked plus the trigger).
+    - There is no void, status, tax or note column.
+  - **`fee_settings`** (FEE.1, Fees-owned) gains:
+    - a prefix format CHECK;
+    - the Payments-owned `fee_settings_receipt_numbering_guard_trigger`:
+      the prefix is locked while the current series has receipts, and the
+      start month once any receipt exists.
+- **Numbering (I, corrected 2026-09-30).** `<PREFIX>/<FY>/<sequence>`, for
+  example `RCPT/2026-27/000001`.
+  - The prefix (`fee_settings.receipt_prefix`, default `RCPT`) is
+    uppercase letters, digits and hyphens, at most 16.
+  - The FY is `<starting year>-<next year's last two digits>` for every
+    start month (`fee_settings.financial_year_start_month`, default 4). It
+    comes from the Payment's `settled_at` in the School's timezone, never
+    an AcademicYear.
+  - The sequence prints with at least six digits and never wraps.
+  - Numbers follow issuance order within a series.
+- **Services.**
+  - `ReceiptIssuer` (trusted, Payments). Insert-or-ignore the series
+    counter, lock it `FOR UPDATE`, re-check the Payment's receipt, insert
+    at `next_value`, advance the counter, then audit and emit. It runs
+    inside `SettledPaymentRecorder::record()`, so every ingress issues a
+    receipt in the settlement transaction.
+  - `ReceiptBackfillService` + `finance:receipts-backfill {school}` (I2).
+    - One named School (id or slug); refused unless the School is active,
+      with a per-receipt lifecycle re-check.
+    - Candidates in `(settled_at, id)` order: the historical FY and the
+      live counter decide the number; the real backfill time is
+      `issued_at`.
+    - Skips receipted Payments, so it is idempotent.
+    - Audited `payment_receipt.backfilled`.
+  - `PaymentReceiptReadService` (`finance.payments.view`, audited
+    `payment_receipt.viewed`).
+  - `StudentFeeStatementReadService` (`finance.charges.view` **and**
+    `finance.payments.view`, audited `fee_statement.viewed`).
+    - Per charge: amount − allocations − live adjustments, and 0 when
+      cancelled; totals are the sums.
+    - Fee head and period come from the fee assessment, and adjustments
+      include cancelled history.
+    - Fees facts come through `ChargeService::statementLinesForStudent()` /
+      `statementLinesForCharges()`.
+  - `FeeSettingsService::receiptNumbering()`, `setReceiptNumbering()`
+    (`finance.fee_structures.manage`, audited
+    `fee_settings.receipt_numbering_changed`) and `snapshot()`.
+- **Outbox.** `payment_receipt.issued.v1` once per receipt: ids, the series,
+  and `issuance: settlement|backfill`. No number, amount, Student or
+  content. Not webhook-registered, and a replay emits nothing.
+- **Surfaces.**
+  - **API (read-only):**
+    - `GET /payments/{payment}/receipt`;
+    - `GET /students/{student}/fee-statement`;
+    - `PUT /fee-settings/receipt-numbering`;
+    - `GET /fee-settings` (now includes the numbering);
+    - `PaymentDetail.receiptId`/`receiptNumber`.
+  - **Web:**
+    - `/app/finance/payments/{payment}/receipt` (printable "Payment
+      receipt");
+    - `/app/finance/fee-statements` (Student search) and
+      `/app/finance/fee-statements/{student}` (AcademicYear filter);
+    - receipt numbering on Fee setup; links from the Payment, charge and
+      Finance hub pages.
+- **Not in FEE.4:**
+  - tax/GST, tax invoices, HSN/SAC or any tax classification;
+  - receipt void or correction, refunds, credits;
+  - statement export/PDF/email, Guardian/Student views, portal;
+  - late fees.

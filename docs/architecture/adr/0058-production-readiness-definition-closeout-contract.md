@@ -595,6 +595,9 @@ with secrets.
 | E27 | Custom domains in production | ADR 0054 §14; §4.10 | Conditional | Conditional | CONDITIONAL_DISABLED | If enabled: all ADR 0054 §14 evidence there before enablement | `CUSTOM-DOMAINS.md` | Owner + Operator | No (Yes if enabled) |
 | E28 | Deferred integrations (gateway, SMS/WhatsApp/push, government/board, accounting, partner scopes, SSO) | ADR 0057 | Conditional | Conditional | CONDITIONAL_DISABLED | Stay fail-closed; any enablement needs its own ADR | ADR 0057 §9 | Owner | No |
 | E29 | Evidence hygiene (no secrets, credentials, hostnames, School data) | §5 item 13; rule 12 | Governance | Mandatory | GOVERNANCE_REQUIRED | Reviewed at each evidence record | Every record above | Operator + Owner | Yes |
+| E30 | Fee receipt statutory form / GST (ADR 0062 decision J): whether a prescribed receipt or tax invoice, GSTIN, HSN/SAC, taxable value or tax lines are required, and how any fee is treated | ADR 0062 §17.5; FEE.4 note | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — FEE.4 ships a payment acknowledgement only) | Qualified answer recorded; the receipt form changed only if the answer requires it | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
+| E31 | Fee regulation: limits on late fees and in-year fee changes (FEE.5 also needs owner decision H) | ADR 0062 §16, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised when FEE.5 starts; H still required) | Qualified answer recorded before late fees are enabled in production | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
+| E32 | RTE / statutory free-seat obligations for fee assessment and concessions | ADR 0062 §14.2, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised; no RTE label or rule exists) | Qualified answer recorded; any required fee treatment decided by the owner | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
 
 A row moves to `EVIDENCE_COMPLETE` only by a dated, reviewed repository
 change that names its evidence location. The move is appended to
@@ -845,3 +848,24 @@ recorded in `PHASE-0O-READINESS.md` (§47 and the follow-up).
 
 E16 stays DECISION_REQUIRED for the E02/E15 dates. The current decision is
 valid through 2026-10-28.
+
+## Note — product legal gates carried to production readiness (FEE.4, 2026-09-30)
+
+- **The rule.** The owner authorised product development to continue
+  through unresolved legal-review items and to resolve them in the final
+  application production-readiness review. **This is not a legal
+  determination.** Each such item keeps its substantive question open and
+  claims no compliance. Only the conservative behaviour its ADR already
+  approves is built.
+- **Status.** Each item is marked **LEGAL_REVIEW_REQUIRED (development
+  authorised)** — the ADR 0062 wording is "DEVELOPMENT AUTHORISED — PROD
+  LEGAL SIGN-OFF REQUIRED". Each stays a mandatory production blocker in
+  §6.
+- **New register rows:**
+  - **E30** — ADR 0062 J, fee receipt statutory form / GST. FEE.4 built a
+    payment acknowledgement only: never a tax invoice, no tax fields.
+  - **E31** — fee regulation of late fees and in-year changes. FEE.5 also
+    still needs the owner's product decision H, which this rule does not
+    supply.
+  - **E32** — RTE / statutory free seats.
+- **Retention.** Stays **E21**: no FEE table has a purge.

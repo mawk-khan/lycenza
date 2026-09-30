@@ -48,6 +48,23 @@ class FeeSetupArchitectureGuardTest extends TestCase
         'app/Domain/Fees/Application/RequestFeeConcessionData.php',
         'app/Domain/Fees/Http/Controllers/FeeConcessionController.php',
         'app/Http/Controllers/App/Finance/FeeConcessionController.php',
+        // FEE.4 (Fees side)
+        'app/Domain/Fees/Application/ChargeStatementLine.php',
+        'app/Domain/Fees/Application/ReceiptNumberingSettings.php',
+    ];
+
+    /** FEE.4 Payments-owned receipt/statement code: no float, no Fees model or table. */
+    private const FEE_4_PAYMENTS_FILES = [
+        'app/Domain/Payments/Application/ReceiptIssuer.php',
+        'app/Domain/Payments/Application/ReceiptBackfillService.php',
+        'app/Domain/Payments/Application/PaymentReceiptReadService.php',
+        'app/Domain/Payments/Application/StudentFeeStatementReadService.php',
+        'app/Domain/Payments/Application/ReceiptDocument.php',
+        'app/Domain/Payments/Application/StudentFeeStatement.php',
+        'app/Domain/Payments/Domain/ReceiptNumbering.php',
+        'app/Domain/Payments/Http/Controllers/PaymentReceiptController.php',
+        'app/Console/Commands/BackfillPaymentReceipts.php',
+        'app/Http/Controllers/App/Finance/FeeStatementController.php',
     ];
 
     private const MIGRATIONS = [
@@ -55,6 +72,15 @@ class FeeSetupArchitectureGuardTest extends TestCase
         'database/migrations/2026_10_29_090200_create_fee_structures_tables.php',
         'database/migrations/2026_10_29_090300_create_fee_optional_selections_table.php',
     ];
+
+    /** The source without comments and docblocks. */
+    private function codeOnly(string $source): string
+    {
+        return implode('', array_map(
+            fn ($token) => is_array($token) ? (in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true) ? '' : $token[1]) : $token,
+            token_get_all($source),
+        ));
+    }
 
     private function source(string $path): string
     {
@@ -74,7 +100,8 @@ class FeeSetupArchitectureGuardTest extends TestCase
         foreach (['resources/js/Pages/App/Finance/FeeSetup/Index.vue', 'resources/js/Pages/App/Finance/FeeSetup/Structure.vue',
             'resources/js/Pages/App/Finance/FeeSetup/Runs.vue', 'resources/js/Pages/App/Finance/FeeSetup/Run.vue',
             'resources/js/Pages/App/Finance/Concessions/Index.vue', 'resources/js/Pages/App/Finance/Concessions/Create.vue',
-            'resources/js/Pages/App/Finance/Concessions/Show.vue'] as $page) {
+            'resources/js/Pages/App/Finance/Concessions/Show.vue', 'resources/js/Pages/App/Finance/Payments/Receipt.vue',
+            'resources/js/Pages/App/Finance/Statements/Index.vue', 'resources/js/Pages/App/Finance/Statements/Show.vue'] as $page) {
             $code = $this->source($page);
             foreach (['parseFloat', 'Number(', 'toFixed('] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$page} must not use {$forbidden} for money.");
@@ -101,7 +128,7 @@ class FeeSetupArchitectureGuardTest extends TestCase
         $registry = app(WebhookEventRegistry::class);
 
         foreach (['fee_structure.activated.v1', 'fee_assessment_run.completed.v1', 'fee_concession.approved.v1', 'fee_concession.rejected.v1',
-            'fee_adjustment.posted.v1', 'fee_adjustment.cancelled.v1'] as $type) {
+            'fee_adjustment.posted.v1', 'fee_adjustment.cancelled.v1', 'payment_receipt.issued.v1'] as $type) {
             $this->assertFalse($registry->exists($type), $type);
             $this->assertFalse($registry->isSubscribable($type), $type);
         }
@@ -160,5 +187,25 @@ class FeeSetupArchitectureGuardTest extends TestCase
         preg_match('/(DECLARE\s+v_charge_amount numeric;\s+v_cancelled_at timestamp;\s+v_allocated_total numeric;\s+BEGIN.*?END;)/s', $original, $m);
         $this->assertNotEmpty($m, 'The 0G.5 function body was found.');
         $this->assertStringContainsString($m[1], $capacity, 'down() restores the 0G.5 allocation function body verbatim.');
+    }
+
+    #[Test]
+    public function fee_4_payments_code_uses_no_float_no_fees_model_and_no_tax_logic(): void
+    {
+        foreach (self::FEE_4_PAYMENTS_FILES as $file) {
+            $code = $this->source($file);
+            foreach (['(float)', 'floatval(', ': float', 'float $', 'round(', 'number_format('] as $forbidden) {
+                $this->assertStringNotContainsString($forbidden, $code, "{$file} must not use {$forbidden} for money.");
+            }
+            $this->assertStringNotContainsString('App\\Domain\\Fees\\Infrastructure', $code, "{$file}: Payments reads Fees only through its Application layer.");
+            $this->assertDoesNotMatchRegularExpression('/gstin|hsn|sac_code|taxable|tax_rate|tax invoice/i', $this->codeOnly($code), "{$file}: no tax logic or tax-invoice wording outside comments (J).");
+        }
+
+        $receipts = $this->source('database/migrations/2026_11_01_090100_create_payment_receipts_table.php');
+        $this->assertStringContainsString("TenantRls::enable('payment_receipts')", $receipts);
+        $this->assertStringContainsString("TenantRls::makeAppendOnly('payment_receipts')", $receipts);
+        $counters = $this->source('database/migrations/2026_11_01_090000_create_payment_receipt_counters_table.php');
+        $this->assertStringContainsString("TenantRls::enable('payment_receipt_counters')", $counters);
+        $this->assertStringNotContainsString('CREATE SEQUENCE', $receipts.$counters, 'Never a PostgreSQL sequence (gaps on rollback).');
     }
 }

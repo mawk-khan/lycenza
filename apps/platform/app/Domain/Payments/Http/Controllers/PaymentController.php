@@ -105,6 +105,8 @@ class PaymentController extends Controller
             'settledAt' => $payment->settledAt->toIso8601String(),
             'recordedAt' => $payment->recordedAt->toIso8601String(),
             'allocations' => $payment->allocations,
+            'receiptId' => $payment->receiptId,
+            'receiptNumber' => $payment->receiptNumber,
         ];
     }
 }

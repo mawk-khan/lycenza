@@ -14,6 +14,9 @@ use App\Domain\Fees\Events\ChargeAssessed;
 use App\Domain\Fees\Events\ChargeCancelled;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Fees\Infrastructure\FeeAdjustment;
+use App\Domain\Fees\Infrastructure\FeeAssessment;
+use App\Domain\Fees\Infrastructure\FeeHead;
+use App\Domain\Fees\Infrastructure\FeeStructureInstallment;
 use App\Domain\Finance\Application\Exceptions\JournalEntryAlreadyReversedException;
 use App\Domain\Finance\Application\JournalLineData;
 use App\Domain\Finance\Application\LedgerService;
@@ -24,6 +27,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -320,6 +324,92 @@ class ChargeService
             ->get()
             ->mapWithKeys(fn ($row) => [(string) $row->getAttribute('charge_id') => Money::of((string) $row->getAttribute('total'), (string) $row->getAttribute('currency'))])
             ->all());
+    }
+
+    /**
+     * FEE.4 (ADR 0062 §18): one Student's charges (optionally one
+     * AcademicYear), oldest first, as statement lines. Trusted and
+     * read-only -- `App\Domain\Payments`' statement service authorizes
+     * (`finance.charges.view` AND `finance.payments.view`) and composes
+     * allocations, Payments and receipts itself. Another School's Student
+     * simply has no lines.
+     *
+     * @return list<ChargeStatementLine>
+     */
+    public function statementLinesForStudent(School $school, string $studentId, ?string $academicYearId = null): array
+    {
+        return $this->statementLines($school, fn ($q) => $q
+            ->where('student_id', $studentId)
+            ->when($academicYearId !== null, fn ($w) => $w->where('academic_year_id', $academicYearId)));
+    }
+
+    /**
+     * FEE.4: the same lines for named charges (a receipt's allocations).
+     *
+     * @param  list<string>  $chargeIds
+     * @return list<ChargeStatementLine>
+     */
+    public function statementLinesForCharges(School $school, array $chargeIds): array
+    {
+        return $chargeIds === [] ? [] : $this->statementLines($school, fn ($q) => $q->whereIn('id', $chargeIds));
+    }
+
+    /**
+     * @param  callable(Builder<Charge>): mixed  $scope
+     * @return list<ChargeStatementLine>
+     */
+    private function statementLines(School $school, callable $scope): array
+    {
+        return $this->context->withSchool($school, function () use ($school, $scope) {
+            $query = Charge::query()->where('school_id', $school->id);
+            $scope($query);
+            $charges = $query->orderBy('created_at')->orderBy('id')->limit(1000)->get();
+            if ($charges->isEmpty()) {
+                return [];
+            }
+
+            $ids = $charges->pluck('id')->all();
+            $assessments = FeeAssessment::query()->whereIn('charge_id', $ids)->get()->keyBy('charge_id');
+            $heads = FeeHead::query()->whereIn('id', $assessments->pluck('fee_head_id')->unique()->all())->pluck('name', 'id');
+            $periods = FeeStructureInstallment::query()->whereIn('id', $assessments->pluck('fee_structure_installment_id')->unique()->all())->pluck('label', 'id');
+            $adjustments = FeeAdjustment::query()->whereIn('charge_id', $ids)->orderBy('created_at')->orderBy('id')->get()->groupBy('charge_id');
+
+            return $charges->map(function (Charge $charge) use ($assessments, $heads, $periods, $adjustments) {
+                $assessment = $assessments->get($charge->id);
+                $rows = $adjustments->get($charge->id, collect());
+                $live = Money::of('0.00', $charge->currency);
+                foreach ($rows as $row) {
+                    if ($row->isLive()) {
+                        $live = $live->add(Money::of($row->amount, $row->currency));
+                    }
+                }
+
+                return new ChargeStatementLine(
+                    chargeId: $charge->id,
+                    studentId: $charge->student_id,
+                    academicYearId: $charge->academic_year_id,
+                    description: $charge->description,
+                    amount: $charge->amount,
+                    currency: $charge->currency,
+                    dueDate: $charge->due_date?->toDateString(),
+                    assessedAt: $charge->created_at,
+                    cancelledAt: $charge->cancelled_at,
+                    feeHeadId: $assessment?->fee_head_id,
+                    feeHeadName: $assessment ? ($heads[$assessment->fee_head_id] ?? null) : null,
+                    billingPeriodKey: $assessment?->billing_period_key,
+                    billingPeriodLabel: $assessment ? ($periods[$assessment->fee_structure_installment_id] ?? null) : null,
+                    adjustments: $rows->map(fn (FeeAdjustment $a) => [
+                        'id' => $a->id,
+                        'feeConcessionId' => $a->fee_concession_id,
+                        'category' => $a->category,
+                        'amount' => $a->amount,
+                        'postedAt' => $a->created_at->toIso8601String(),
+                        'cancelledAt' => $a->cancelled_at?->toIso8601String(),
+                    ])->values()->all(),
+                    liveAdjustedTotal: $live->amount(),
+                );
+            })->values()->all();
+        });
     }
 
     /**

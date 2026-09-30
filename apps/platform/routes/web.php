@@ -41,6 +41,7 @@ use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController
 use App\Http\Controllers\App\Finance\FeeAssessmentRunController as FinanceFeeAssessmentRunController;
 use App\Http\Controllers\App\Finance\FeeConcessionController as FinanceFeeConcessionController;
 use App\Http\Controllers\App\Finance\FeeSetupController as FinanceFeeSetupController;
+use App\Http\Controllers\App\Finance\FeeStatementController as FinanceFeeStatementController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
@@ -1005,6 +1006,7 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         // wildcard, the same convention as 'charges/create' below.
         Route::get('/fee-setup', [FinanceFeeSetupController::class, 'index'])->name('fee-setup.index');
         Route::post('/fee-setup/fee-heads', [FinanceFeeSetupController::class, 'storeFeeHead'])->name('fee-setup.fee-heads.store');
+        Route::post('/fee-setup/receipt-numbering', [FinanceFeeSetupController::class, 'updateReceiptNumbering'])->name('fee-setup.receipt-numbering');
         Route::post('/fee-setup/fee-heads/{feeHead}', [FinanceFeeSetupController::class, 'updateFeeHead'])->name('fee-setup.fee-heads.update');
         Route::post('/fee-setup/structures', [FinanceFeeSetupController::class, 'storeStructure'])->name('fee-setup.structures.store');
         Route::get('/fee-setup/students/search', [FinanceFeeSetupController::class, 'searchStudents'])->name('fee-setup.students.search');
@@ -1087,6 +1089,13 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
 
         Route::get('/payments', [FinancePaymentController::class, 'index'])->name('payments.index');
         Route::get('/payments/{payment}', [FinancePaymentController::class, 'show'])->name('payments.show');
+        // FEE.4 (ADR 0062 §17, §18): the printable payment acknowledgement
+        // (finance.payments.view) and the staff Student fee statement
+        // (finance.charges.view AND finance.payments.view).
+        Route::get('/payments/{payment}/receipt', [FinancePaymentController::class, 'receipt'])->name('payments.receipt');
+        Route::get('/fee-statements', [FinanceFeeStatementController::class, 'index'])->name('fee-statements.index');
+        Route::get('/fee-statements/students/search', [FinanceFeeStatementController::class, 'searchStudents'])->name('fee-statements.students.search');
+        Route::get('/fee-statements/{student}', [FinanceFeeStatementController::class, 'show'])->name('fee-statements.show');
     });
 
     // Phase 8A closure correction (item 2) -- the HR administrative UI

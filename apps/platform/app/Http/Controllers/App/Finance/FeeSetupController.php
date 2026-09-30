@@ -10,8 +10,11 @@ use App\Domain\Fees\Application\Exceptions\FeeOptionalSelectionNotFoundException
 use App\Domain\Fees\Application\Exceptions\FeesException;
 use App\Domain\Fees\Application\Exceptions\FeeStructureLineNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeeStructureNotFoundException;
+use App\Domain\Fees\Application\Exceptions\InvalidFeeSettingsException;
+use App\Domain\Fees\Application\Exceptions\ReceiptNumberingLockedException;
 use App\Domain\Fees\Application\FeeHeadService;
 use App\Domain\Fees\Application\FeeOptionalSelectionService;
+use App\Domain\Fees\Application\FeeSettingsService;
 use App\Domain\Fees\Application\FeeStructureReadService;
 use App\Domain\Fees\Application\FeeStructureService;
 use App\Domain\Fees\Http\FeeSetupPresenter;
@@ -33,6 +36,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -50,7 +54,7 @@ class FeeSetupController extends Controller
 {
     use AuthorizesCapability, NormalizesCodeInput, TranslatesFeeSetupErrors;
 
-    public function index(TenantContext $context, FeeStructureReadService $reads, LedgerService $ledger, CapabilityResolver $capabilities): Response
+    public function index(TenantContext $context, FeeStructureReadService $reads, LedgerService $ledger, CapabilityResolver $capabilities, FeeSettingsService $settings): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.fee_structures.view', $school);
@@ -82,7 +86,38 @@ class FeeSetupController extends Controller
             'campuses' => $campuses->where('status', 'active')
                 ->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),
             'canManage' => $canManage,
+            // FEE.4 (ADR 0062 §17.2, owner decision I): receipt numbering.
+            'receiptNumbering' => (function () use ($settings, $school, $actor) {
+                $n = $settings->receiptNumberingFor($school, $actor);
+
+                return ['prefix' => $n->prefix, 'financialYearStartMonth' => $n->financialYearStartMonth];
+            })(),
         ]);
+    }
+
+    /**
+     * FEE.4 (ADR 0062 §17.2): the receipt prefix and financial-year start
+     * month, under finance.fee_structures.manage. Locked once the current
+     * series (prefix) or any series (start month) has receipts.
+     */
+    public function updateReceiptNumbering(Request $request, TenantContext $context, FeeSettingsService $settings): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('finance.fee_structures.manage', $school);
+        $validated = $request->validate([
+            'receipt_prefix' => ['required', 'string', 'max:16'],
+            'financial_year_start_month' => ['required', 'integer', 'min:1', 'max:12'],
+        ]);
+
+        try {
+            $settings->setReceiptNumbering($school, $validated['receipt_prefix'], (int) $validated['financial_year_start_month'], $context->actor());
+        } catch (InvalidFeeSettingsException $e) {
+            throw ValidationException::withMessages([$e->field() => [$e->getMessage()]]);
+        } catch (ReceiptNumberingLockedException $e) {
+            return back()->withErrors(['action' => $e->getMessage()]);
+        }
+
+        return back();
     }
 
     // --- fee heads ------------------------------------------------------------

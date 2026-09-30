@@ -593,3 +593,29 @@ the Payments-owned migration
   - `ChargeAllocationExceedsChargeAmountException` is still the typed
     refusal.
 - **Rollback.** `down()` restores the 0G.5 function body verbatim.
+
+## Amendment — receipts issued with every settlement (FEE.4, 2026-09-30)
+
+ADR 0062 §17 (owner decisions I, I2) is implemented in the Payments-owned
+migrations `2026_11_01_090000`/`090100`.
+
+- **Issued with the settlement.** `SettledPaymentRecorder::record()` issues
+  the Payment's receipt through the trusted `ReceiptIssuer`, in the same
+  transaction, for every ingress (manual, and the provider foundation).
+  - A receipt failure rolls the settlement back.
+  - A replay resolves its own claim first and never reaches the recorder,
+    so it consumes no number.
+- **What a receipt is.** Evidence only: one per Payment, immutable, no
+  amount of its own, no ledger posting.
+- **Numbering.** Gap-free per School × financial year: a counter row
+  locked in the settlement transaction, database-checked.
+- **Payments settled before FEE.4** are receipted only by the explicit,
+  idempotent `finance:receipts-backfill {school}`.
+- **Unchanged:**
+  - Payments stay immutable; no Payment row is edited;
+  - no refund, void, reversal or tax logic;
+  - `PaymentSettled` (`payment.settled.v1`) is unchanged, and
+    `payment_receipt.issued.v1` is a separate internal event.
+- **Reads.** `PaymentDetail` gains `receiptId`/`receiptNumber`.
+  `PaymentReceiptReadService` and `StudentFeeStatementReadService` (Payments)
+  read Fees facts only through `ChargeService` — still Payments → Fees.

@@ -230,6 +230,8 @@ class ChargeController extends Controller
                     ->map(fn (FeeAdjustment $a) => FeeSetupPresenter::adjustment($a))->values()->all()
                 : null,
             'canRequestConcession' => $capabilities->canInSchool($context->actor(), FeeConcessionService::REQUEST, $school),
+            // FEE.4: a link to the Student's fee statement (charges + payments view).
+            'canViewStatement' => $capabilities->canInSchool($context->actor(), 'finance.payments.view', $school),
         ]);
     }
 

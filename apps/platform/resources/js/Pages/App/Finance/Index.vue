@@ -10,6 +10,7 @@ interface Props {
         viewFeeSetup: boolean;
         viewFeeRuns: boolean;
         viewConcessions: boolean;
+        viewStatements: boolean;
     };
 }
 
@@ -61,6 +62,14 @@ defineProps<Props>();
                 <p class="mt-1 text-sm text-slate-500">
                     Concessions, scholarships and waivers: requests, the approval queue and posted
                     adjustments.
+                </p>
+            </li>
+            <li v-if="can.viewStatements" class="px-4 py-3">
+                <a class="text-sm font-medium underline" href="/app/finance/fee-statements"
+                    >Student fee statements</a
+                >
+                <p class="mt-1 text-sm text-slate-500">
+                    One Student's charges, concessions, payments, receipts and outstanding balance.
                 </p>
             </li>
             <li v-if="can.viewCharges" class="px-4 py-3">

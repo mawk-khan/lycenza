@@ -151,12 +151,22 @@ the ADR 0062 implementation note.
   audited, idempotent `finance:receipts-backfill {school}` command, in
   `(settled_at, id)` order.
 
-**Next: FEE.4 — Receipts & staff fee statements.** Its product decisions
-are resolved. It remains subject to the **[LEGAL REVIEW REQUIRED]**
-statutory receipt/GST gate (J): until that is answered, FEE.4 may render
-only a payment acknowledgement, never a tax invoice. FEE.4 implementation
-has **not started**. FEE.5 (late fees) stays behind H and the
-fee-regulation legal answer.
+**FEE.4 — COMPLETE (2026-09-30).** Built:
+- gap-free receipts per School × financial year, issued with every
+  settlement;
+- the explicit, idempotent `finance:receipts-backfill {school}`;
+- a printable payment acknowledgement;
+- the staff Student fee statement, computed on read.
+
+The receipt form is provisional: **J — LEGAL REVIEW REQUIRED, DEVELOPMENT
+AUTHORISED, PROD LEGAL SIGN-OFF REQUIRED** (ADR 0058 register E30). It is
+never labelled a tax invoice and has no tax fields. The as-built record is
+in `docs/modules/FINANCE.md` "FEE.4 as-built" and the ADR 0062
+implementation note.
+
+**Next: FEE.5 — Late fees.** It is **blocked on owner decision H**. Its
+fee-regulation legal review is carried to production readiness (E31). The
+owner's development-vs-production rule for legal gates does not supply H.
 
 ## Phase 0A — Architectural Foundation (complete)
 

@@ -40,9 +40,33 @@ interface Props {
     gradeLevels: Array<{ id: string; name: string }>;
     campuses: Array<{ id: string; name: string }>;
     canManage: boolean;
+    receiptNumbering: { prefix: string; financialYearStartMonth: number };
 }
 
 const props = defineProps<Props>();
+
+const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+];
+const receiptForm = useForm({
+    receipt_prefix: props.receiptNumbering.prefix,
+    financial_year_start_month: props.receiptNumbering.financialYearStartMonth,
+});
+
+function saveReceiptNumbering(): void {
+    receiptForm.post('/app/finance/fee-setup/receipt-numbering', { preserveScroll: true });
+}
 const page = usePage();
 const actionError = computed(() => (page.props.errors as Record<string, string>).action);
 
@@ -145,6 +169,55 @@ const noAccounts = computed(
         <p v-if="actionError" role="alert" class="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
             {{ actionError }}
         </p>
+
+        <!-- Receipt numbering (FEE.4) -->
+        <section class="mt-8 rounded border border-slate-200 p-4">
+            <h2 class="text-sm font-medium">Receipt numbering</h2>
+            <p class="mt-1 text-sm text-slate-500">
+                Payment receipts are numbered per financial year, for example
+                {{ receiptForm.receipt_prefix || receiptNumbering.prefix }}/2026-27/000001. The
+                prefix cannot change while this year's series has receipts, and the start month
+                cannot change once any receipt exists.
+            </p>
+            <p v-if="!canManage" class="mt-2 text-sm">
+                Prefix {{ receiptNumbering.prefix }} · financial year starts in
+                {{ months[receiptNumbering.financialYearStartMonth - 1] }}
+            </p>
+            <form
+                v-else
+                class="mt-2 flex flex-wrap items-end gap-3"
+                @submit.prevent="saveReceiptNumbering"
+            >
+                <label class="text-sm">
+                    <span class="block text-xs text-slate-500">Prefix</span>
+                    <input
+                        v-model="receiptForm.receipt_prefix"
+                        maxlength="16"
+                        class="mt-1 w-32 rounded border border-slate-300 px-2 py-1 font-mono uppercase"
+                        required
+                    />
+                </label>
+                <label class="text-sm">
+                    <span class="block text-xs text-slate-500">Financial year starts in</span>
+                    <select
+                        v-model.number="receiptForm.financial_year_start_month"
+                        class="mt-1 rounded border border-slate-300 px-2 py-1"
+                    >
+                        <option v-for="(m, i) in months" :key="m" :value="i + 1">{{ m }}</option>
+                    </select>
+                </label>
+                <button
+                    type="submit"
+                    class="rounded border border-slate-300 px-3 py-1 text-sm disabled:opacity-50"
+                    :disabled="receiptForm.processing"
+                >
+                    Save
+                </button>
+                <span v-if="receiptForm.errors.receipt_prefix" class="text-xs text-red-600">{{
+                    receiptForm.errors.receipt_prefix
+                }}</span>
+            </form>
+        </section>
 
         <!-- Fee heads -->
         <section class="mt-8">

@@ -2042,6 +2042,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/payments/{paymentId}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Payment's receipt: number, series, issue time and the Payment's own facts (amount, method, allocations by fee head and billing period). No tax field. Audited (payment_receipt.viewed). Requires finance.payments.view. */
+        get: operations["getPaymentReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/students/{studentId}/fee-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One Student's fee statement, computed on read: per charge the amount, cancellation, fee head and billing period, concession adjustments, payments with receipt numbers and the outstanding (amount - allocations - live adjustments); totals. Audited (fee_statement.viewed). Requires finance.charges.view AND finance.payments.view. */
+        get: operations["getStudentFeeStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/ledger-accounts/{ledgerAccountId}": {
         parameters: {
             query?: never;
@@ -2467,6 +2501,23 @@ export interface paths {
         get?: never;
         /** Sets the School's concession posting account: an active INR expense account of this School. Posted adjustments keep their own debit account. Requires finance.fee_structures.manage. */
         put: operations["setFeeConcessionAccount"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-settings/receipt-numbering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** FEE.4: sets the receipt prefix (letters, digits, hyphens; at most 16; uppercased) and the financial-year start month (1-12). The prefix cannot change while the School's current series has receipts; the start month cannot change once any receipt exists. Requires finance.fee_structures.manage. */
+        put: operations["setFeeReceiptNumbering"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4752,6 +4803,117 @@ export interface components {
         FeeSettings: {
             /** Format: uuid */
             concessionLedgerAccountId: string | null;
+            /** @example RCPT */
+            receiptPrefix: string;
+            /** @example 4 */
+            financialYearStartMonth: number;
+        };
+        FeeReceiptNumberingInput: {
+            receipt_prefix: string;
+            financial_year_start_month: number;
+        };
+        /** @description A payment acknowledgement ("Payment receipt"), never a tax invoice. It carries no tax, GSTIN, HSN/SAC or taxable-value field and no Student name. */
+        PaymentReceipt: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            title: "Payment receipt";
+            /** @example RCPT/2026-27/000001 */
+            receiptNumber: string;
+            /** @description The School financial year of the Payment's settlement. */
+            seriesKey: string;
+            sequenceValue: number;
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: uuid */
+            paymentId: string;
+            /** @enum {string} */
+            source: "provider" | "manual";
+            /** @enum {string|null} */
+            method: "cash" | "bank_transfer" | "cheque" | null;
+            manualReference: string | null;
+            amount: string;
+            /** @enum {string} */
+            currency: "INR";
+            /** Format: date-time */
+            settledAt: string;
+            studentIds: string[];
+            lines: components["schemas"]["PaymentReceiptLine"][];
+        };
+        PaymentReceiptLine: {
+            /** Format: uuid */
+            chargeId: string;
+            amount: string;
+            description: string | null;
+            feeHeadName: string | null;
+            billingPeriodKey: string | null;
+            billingPeriodLabel: string | null;
+            /** Format: uuid */
+            academicYearId: string | null;
+        };
+        StudentFeeStatement: {
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            academicYearId: string | null;
+            /** @enum {string} */
+            currency: "INR";
+            lines: components["schemas"]["StudentFeeStatementLine"][];
+            totals: {
+                charged: string;
+                adjusted: string;
+                paid: string;
+                outstanding: string;
+            };
+        };
+        StudentFeeStatementLine: {
+            /** Format: uuid */
+            chargeId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            description: string;
+            /** Format: uuid */
+            feeHeadId: string | null;
+            feeHeadName: string | null;
+            billingPeriodKey: string | null;
+            billingPeriodLabel: string | null;
+            /** Format: date */
+            dueDate: string | null;
+            /** Format: date-time */
+            assessedAt: string;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            amount: string;
+            /** @description Live (uncancelled) concession adjustments. */
+            adjustedTotal: string;
+            paidTotal: string;
+            /** @description amount - paidTotal - adjustedTotal; 0.00 for a cancelled charge. */
+            outstanding: string;
+            /** @enum {string} */
+            currency: "INR";
+            adjustments: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                feeConcessionId: string;
+                /** @enum {string} */
+                category: "concession" | "scholarship" | "waiver";
+                amount: string;
+                /** Format: date-time */
+                postedAt: string;
+                /** Format: date-time */
+                cancelledAt: string | null;
+            }[];
+            payments: {
+                /** Format: uuid */
+                paymentId: string;
+                amount: string;
+                /** Format: date-time */
+                settledAt: string | null;
+                method: string | null;
+                source: string | null;
+                receiptNumber: string | null;
+            }[];
         };
         FeeConcessionAccountInput: {
             /** Format: uuid */
@@ -5066,6 +5228,13 @@ export interface components {
             /** Format: date-time */
             recordedAt: string;
             allocations: components["schemas"]["PaymentAllocationEntry"][];
+            /**
+             * Format: uuid
+             * @description FEE.4: null only for a Payment settled before receipts existed and not yet backfilled.
+             */
+            receiptId: string | null;
+            /** @example RCPT/2026-27/000001 */
+            receiptNumber: string | null;
         };
         /** @description Never includes the signing secret (see the create/rotate-secret responses for the one-time exception). */
         WebhookEndpoint: {
@@ -14028,6 +14197,111 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    getPaymentReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Phase 0G.6. Nonexistent or cross-School ids both resolve to PAYMENT_NOT_FOUND -- no existence oracle. */
+                paymentId: components["parameters"]["PaymentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PaymentReceipt"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.payments.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description PAYMENT_RECEIPT_NOT_FOUND -- no Payment here, or a Payment settled before receipts existed and not yet backfilled (identical response). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getStudentFeeStatement: {
+        parameters: {
+            query?: {
+                academic_year_id?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK (a Student of another School, or none, has no lines). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StudentFeeStatement"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view or finance.payments.view in this School (both are required). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a Student id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     updateLedgerAccountStatus: {
         parameters: {
             query?: never;
@@ -15947,6 +16221,69 @@ export interface operations {
                 };
             };
             /** @description Validation error (not an active expense account of this School). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    setFeeReceiptNumbering: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeReceiptNumberingInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeSettings"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description RECEIPT_NUMBERING_LOCKED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (prefix format, month range). */
             422: {
                 headers: {
                     [name: string]: unknown;

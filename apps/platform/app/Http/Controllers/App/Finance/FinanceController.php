@@ -36,6 +36,9 @@ class FinanceController extends Controller
                     && $capabilities->canInSchool($user, 'finance.fee_assessments.run', $school),
                 // FEE.3: concessions, scholarships and waivers.
                 'viewConcessions' => $capabilities->canInSchool($user, 'finance.fee_concessions.view', $school),
+                // FEE.4: Student fee statements need both charge and payment view.
+                'viewStatements' => $capabilities->canInSchool($user, 'finance.charges.view', $school)
+                    && $capabilities->canInSchool($user, 'finance.payments.view', $school),
             ],
         ]);
     }

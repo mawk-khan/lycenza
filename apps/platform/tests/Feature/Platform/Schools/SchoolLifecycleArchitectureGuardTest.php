@@ -51,6 +51,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'SendFakeEmailEvent.php',                // local/testing only; one named School
         'ProvisionSchoolAdminAccount.php',       // one named School, which must be `provisioning` (ADR 0059 section 5)
         'PruneStaffAccountCredentials.php',      // technical credential cleanup (ADR 0059 section 21)
+        'BackfillPaymentReceipts.php',           // one named School; refused unless active, and each receipt re-checks the lifecycle (ADR 0062 I2)
     ];
 
     #[Test]

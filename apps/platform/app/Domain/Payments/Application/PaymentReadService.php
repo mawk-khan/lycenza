@@ -79,7 +79,7 @@ class PaymentReadService
         $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
 
         return $this->context->withSchool($school, function () use ($school, $paymentId, $actor) {
-            $payment = Payment::query()->where('school_id', $school->id)->with('allocations')->find($paymentId);
+            $payment = Payment::query()->where('school_id', $school->id)->with(['allocations', 'receipt'])->find($paymentId);
 
             if ($payment === null) {
                 throw new PaymentNotFoundException($paymentId);

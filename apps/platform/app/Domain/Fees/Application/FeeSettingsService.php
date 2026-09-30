@@ -3,6 +3,7 @@
 namespace App\Domain\Fees\Application;
 
 use App\Domain\Fees\Application\Exceptions\InvalidFeeSettingsException;
+use App\Domain\Fees\Application\Exceptions\ReceiptNumberingLockedException;
 use App\Domain\Fees\Infrastructure\FeeSetting;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerService;
@@ -11,12 +12,15 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * FEE.3 (ADR 0062 §14.5, owner decision F2): the School-level Fees settings
- * singleton's concession account -- one active INR `expense` account
+ * FEE.3/FEE.4 (ADR 0062 §14.5, §17.2; owner decisions F2, I): the
+ * School-level Fees settings singleton -- the concession account and the
+ * receipt numbering (prefix, financial-year start month). FEE.3 text: the
+ * concession account -- one active INR `expense` account
  * ("Fee concessions and scholarships"), never inferred from a fee head.
  *
  * Setting it needs `finance.fee_structures.manage` (Fee setup authority);
@@ -79,6 +83,98 @@ class FeeSettingsService
 
             return $settings->refresh();
         }));
+    }
+
+    /**
+     * FEE.4 (ADR 0062 §17.2): the School's effective receipt numbering.
+     * Trusted (no capability check) -- `App\Domain\Payments`'
+     * `ReceiptIssuer` reads it through this Application method, never the
+     * `fee_settings` table (Payments -> Fees, the permitted direction).
+     */
+    public function receiptNumbering(School $school): ReceiptNumberingSettings
+    {
+        $row = $this->context->withSchool($school, fn () => FeeSetting::query()->where('school_id', $school->id)->first());
+
+        return new ReceiptNumberingSettings(
+            prefix: $row->receipt_prefix ?? ReceiptNumberingSettings::DEFAULT_PREFIX,
+            financialYearStartMonth: $row->financial_year_start_month ?? ReceiptNumberingSettings::DEFAULT_START_MONTH,
+        );
+    }
+
+    public function receiptNumberingFor(School $school, User $actor): ReceiptNumberingSettings
+    {
+        $this->authorizeCapabilityFor($actor, 'finance.fee_structures.view', $school);
+
+        return $this->receiptNumbering($school);
+    }
+
+    /**
+     * Sets the receipt prefix (uppercased; letters, digits and hyphens, at
+     * most 16) and the financial-year start month (1-12). The database
+     * refuses changing the prefix while the School's current series has
+     * receipts, and the start month once any receipt exists
+     * (`fee_settings_receipt_numbering_guard_trigger`, Payments-owned);
+     * that refusal becomes `ReceiptNumberingLockedException`.
+     */
+    public function setReceiptNumbering(School $school, string $prefix, int $startMonth, User $actor): ReceiptNumberingSettings
+    {
+        $this->authorizeCapabilityFor($actor, 'finance.fee_structures.manage', $school);
+
+        $prefix = strtoupper(trim($prefix));
+        if (preg_match(ReceiptNumberingSettings::PREFIX_PATTERN, $prefix) !== 1) {
+            throw new InvalidFeeSettingsException('receipt_prefix', 'Use 1-16 letters, digits or hyphens, starting with a letter or digit.');
+        }
+        if ($startMonth < 1 || $startMonth > 12) {
+            throw new InvalidFeeSettingsException('financial_year_start_month', 'Choose a month from January to December.');
+        }
+
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $prefix, $startMonth, $actor) {
+            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ["fees.settings:{$school->id}"]);
+
+            $settings = FeeSetting::query()->where('school_id', $school->id)->lockForUpdate()->first()
+                ?? new FeeSetting(['school_id' => $school->id, 'currency' => 'INR']);
+            $before = ['prefix' => $settings->receipt_prefix ?? ReceiptNumberingSettings::DEFAULT_PREFIX, 'month' => $settings->financial_year_start_month ?? ReceiptNumberingSettings::DEFAULT_START_MONTH];
+
+            if ($before['prefix'] !== $prefix || $before['month'] !== $startMonth || ! $settings->exists) {
+                try {
+                    $settings->forceFill(['receipt_prefix' => $prefix, 'financial_year_start_month' => $startMonth])->save();
+                } catch (QueryException $e) {
+                    $message = $e->getMessage();
+                    if (str_contains($message, 'the receipt prefix cannot change')) {
+                        throw new ReceiptNumberingLockedException('The receipt prefix cannot change while this financial year\'s receipt series has receipts.');
+                    }
+                    if (str_contains($message, 'start month cannot change')) {
+                        throw new ReceiptNumberingLockedException('The financial-year start month cannot change once receipts have been issued.');
+                    }
+
+                    throw $e;
+                }
+
+                $this->audit->school($school, 'fee_settings.receipt_numbering_changed', actor: $actor, subject: $settings, metadata: [
+                    'before' => $before,
+                    'after' => ['prefix' => $prefix, 'month' => $startMonth],
+                ]);
+            }
+
+            return new ReceiptNumberingSettings($prefix, $startMonth);
+        }));
+    }
+
+    /**
+     * Trusted (no capability check): the stored settings, for a write
+     * response the caller already authorized.
+     *
+     * @return array{concessionLedgerAccountId: string|null, receiptPrefix: string, financialYearStartMonth: int}
+     */
+    public function snapshot(School $school): array
+    {
+        $numbering = $this->receiptNumbering($school);
+
+        return [
+            'concessionLedgerAccountId' => $this->configuredAccountId($school),
+            'receiptPrefix' => $numbering->prefix,
+            'financialYearStartMonth' => $numbering->financialYearStartMonth,
+        ];
     }
 
     /** Trusted (no capability check): the configured account id if it is still valid for posting, else null. */

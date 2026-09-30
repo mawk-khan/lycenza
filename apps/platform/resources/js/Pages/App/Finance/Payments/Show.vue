@@ -23,6 +23,7 @@ interface PaymentDetail {
     journalEntryId: string;
     settledAt: string;
     allocations: PaymentAllocation[];
+    receiptNumber: string | null;
 }
 
 interface Props {
@@ -113,6 +114,19 @@ defineProps<Props>();
                         :href="`/app/finance/journal-entries/${payment.journalEntryId}`"
                         >View journal entry</a
                     >
+                </dd>
+            </div>
+            <div>
+                <dt class="text-slate-500">Receipt</dt>
+                <dd v-if="payment.receiptNumber">
+                    <a
+                        class="font-mono underline"
+                        :href="`/app/finance/payments/${payment.id}/receipt`"
+                        >{{ payment.receiptNumber }}</a
+                    >
+                </dd>
+                <dd v-else class="text-slate-500">
+                    Not issued yet (recorded before receipts existed)
                 </dd>
             </div>
         </dl>

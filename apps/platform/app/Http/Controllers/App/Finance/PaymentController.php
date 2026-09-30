@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers\App\Finance;
 
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Payments\Application\Exceptions\PaymentNotFoundException;
+use App\Domain\Payments\Application\Exceptions\PaymentReceiptNotFoundException;
 use App\Domain\Payments\Application\ManualPaymentRecordingService;
 use App\Domain\Payments\Application\PaymentDetail;
 use App\Domain\Payments\Application\PaymentQuery;
 use App\Domain\Payments\Application\PaymentReadService;
+use App\Domain\Payments\Application\PaymentReceiptReadService;
 use App\Domain\Payments\Application\PaymentSummary;
+use App\Domain\Payments\Application\ReceiptDocument;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
+use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\User;
@@ -135,7 +140,53 @@ class PaymentController extends Controller
             'journalEntryId' => $payment->journalEntryId,
             'settledAt' => $payment->settledAt->toIso8601String(),
             'allocations' => $payment->allocations,
+            'receiptNumber' => $payment->receiptNumber,
         ];
+    }
+
+    /**
+     * FEE.4 (ADR 0062 §17): the printable payment acknowledgement, titled
+     * "Payment receipt" -- never a tax invoice, with no tax field (J:
+     * DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED). Printing is
+     * the browser's; nothing is stored or generated.
+     */
+    public function receipt(TenantContext $context, PaymentReceiptReadService $receipts, string $payment): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('finance.payments.view', $school);
+
+        try {
+            $document = $receipts->forPayment($school, $payment, $context->actor());
+        } catch (PaymentReceiptNotFoundException) {
+            throw new NotFoundHttpException;
+        }
+
+        $students = Student::query()->whereIn('id', $document->studentIds)->get();
+        $years = AcademicYear::query()->whereIn('id', collect($document->lines)->pluck('academicYearId')->filter()->unique()->all())->pluck('name', 'id');
+
+        return Inertia::render('App/Finance/Payments/Receipt', [
+            'receipt' => [
+                'title' => ReceiptDocument::TITLE,
+                'schoolName' => $school->name,
+                'receiptNumber' => $document->receiptNumber,
+                'seriesKey' => $document->seriesKey,
+                'issuedOn' => $document->issuedAt->copy()->setTimezone($school->timezone)->toDateString(),
+                'paymentId' => $document->paymentId,
+                'receivedOn' => $document->settledAt->copy()->setTimezone($school->timezone)->toDateString(),
+                'methodLabel' => $this->methodLabel($document->method) ?? ($document->source === 'provider' ? 'Online' : null),
+                'reference' => $document->manualReference,
+                'amount' => $document->amount,
+                'currency' => $document->currency,
+                'students' => $students->map(fn (Student $s) => [
+                    'name' => collect([$s->first_name, $s->middle_name, $s->last_name])->filter()->implode(' '),
+                    'studentNumber' => $s->student_number,
+                ])->values()->all(),
+                'lines' => collect($document->lines)->map(fn (array $l) => [
+                    ...$l,
+                    'academicYearName' => $l['academicYearId'] ? ($years[$l['academicYearId']] ?? null) : null,
+                ])->all(),
+            ],
+        ]);
     }
 
     private function methodLabel(?string $method): ?string

@@ -228,7 +228,7 @@ Status values:
 | H | Late-fee policy | OWNER DECISION REQUIRED | Fixed or percentage-of-outstanding, grace days, optional cap, one late fee per overdue charge per rule; no tiers or recurrence in v1 (§16) | FEE.5 |
 | I | Receipt numbering | **DECIDED — owner confirmed 2026-09-30** | School + financial year, FY start month configurable (default April), format `<PREFIX>/<FY>/<000001>` (§17.2) | FEE.4 |
 | I2 | Existing payments | **DECIDED — owner confirmed 2026-09-30** | Explicit, audited, idempotent one-time backfill in `(settled_at, id)` order (§17.4) | FEE.4 |
-| J | Receipt statutory/GST form | **LEGAL REVIEW REQUIRED** | FEE.4 ships a payment acknowledgement only, with no tax fields (§17.5) | FEE.4 |
+| J | Receipt statutory/GST form | **LEGAL REVIEW REQUIRED — DEVELOPMENT AUTHORISED, PROD LEGAL SIGN-OFF REQUIRED (owner, 2026-09-30)** | FEE.4 ships a payment acknowledgement only, with no tax fields (§17.5) | FEE.4 |
 | K | Ledger-account provisioning (finding F1) | **DECIDED — owner confirmed K1, 2026-09-29** | FEE.1 includes minimal Finance-owned account administration (§6) | FEE.1 |
 | L | Role grants | **DECIDED — owner confirmed 2026-09-29** | `school_admin` gets all; `principal` gets none by default; demo finance officer gets all except approve (§19) | FEE.1 |
 | M | Concession categories and notes | **DECIDED — owner confirmed 2026-09-29** | Closed catalogue `concession`, `scholarship`, `waiver`; no free-text note (§14.2) | FEE.3 |
@@ -847,8 +847,10 @@ Student.
   School-level `financial_year_start_month` setting (default 4 = April).
   The alternative is a single continuous School-wide series.
 - **Format.** `<PREFIX>/<FY>/<6-digit zero-padded sequence>`, prefix default
-  `RCPT`. Prefix and padding go in `fee_settings`; they may not change once
-  a receipt exists in the series.
+  `RCPT`. The prefix goes in `fee_settings` and may not change once a
+  receipt exists in the current series. The padding is fixed at a minimum
+  of six digits and is not a setting (corrected 2026-09-30, see "FEE.4
+  pre-implementation corrections" below).
 - **Voids.** Payments are immutable and have no void in v1, so receipts have
   no void or cancel either. If a future correction contract (rule 91) adds
   one, it must issue a new, linked document and never renumber.
@@ -1530,10 +1532,9 @@ decision.**
     are separate concepts.
   - **Label.** The FY's starting year, a hyphen, and the last two digits of
     the next year: April 2026 – March 2027 is `2026-27`. It is also the
-    receipt's `series_key`.
-    - *Engineering clarification, not an owner decision:* with a January
-      start the FY is a single calendar year and is labelled `2026`. The
-      owner may override this.
+    receipt's `series_key`. The same rule applies to **every** start month,
+    January included (corrected 2026-09-30, see "FEE.4 pre-implementation
+    corrections"; the earlier single-year January label is withdrawn).
 - **Format.** `<PREFIX>/<FY>/<sequence>`, for example
   `RCPT/2026-27/000001`.
   - The prefix is School-configurable (`fee_settings.receipt_prefix`,
@@ -1541,9 +1542,8 @@ decision.**
     series.
   - The sequence is numeric and zero-padded to **six digits**. A value past
     999999 prints in full; it never wraps.
-  - The padding is **fixed**, not a setting. This narrows §17.2's "prefix
-    and padding go in `fee_settings`" to the prefix only, consistent with
-    "no arbitrary templates".
+  - The padding is **fixed**, not a setting, consistent with "no arbitrary
+    templates" (§17.2 now says the same).
   - Each School × FY series starts at 1 and increases monotonically.
 - **Gap-free allocation.** The §17.2 counter model is frozen:
   - `payment_receipt_counters (school_id, series_key, next_value)`,
@@ -1586,9 +1586,9 @@ decision.**
   - Its FY is derived from its **historical `settled_at`**.
   - Receipts already issued are never renumbered and counters are never
     reset around them.
-  - *Consequence:* numbers follow issuance order. If live FEE.4 issuance
-    has already numbered receipts in an FY, backfilled receipts for earlier
-    settlements in that FY follow them.
+  - *Intended behaviour, not an anomaly:* numbers follow issuance order.
+    If live FEE.4 issuance has already numbered receipts in an FY,
+    backfilled receipts for earlier settlements in that FY follow them.
 - **Provenance.**
   - `issued_at` is the **real** time of the backfill operation. It is never
     backdated to the settlement time.
@@ -1626,3 +1626,104 @@ decision.**
 **FEE.4 product decisions are resolved. FEE.4 remains subject to the J
 legal gate and has not started.**
 
+## FEE.4 pre-implementation corrections and legal-gate operating rule (owner, 2026-09-30)
+
+The owner made three contract corrections before FEE.4 implementation, and
+set how unresolved legal gates are carried. The corrected sentences above
+are marked with this date. Nothing else in the dated sections changes.
+
+### Corrections
+
+- **Financial-year label, every start month.** One algorithm for all
+  configured start months: `<starting year>-<last two digits of the next
+  year>`.
+  - April 2026 → `2026-27`; July 2026 → `2026-27`; January 2026 →
+    `2026-27`.
+  - The label is a stable **series identifier**. It does not assert that
+    the configured financial period extends into the next calendar year.
+  - The earlier single-year January label (`2026`) is withdrawn.
+- **Padding.** The sequence prints with a minimum of six digits (`000001`).
+  - It is fixed in v1 and is not a School setting.
+  - Only `fee_settings.receipt_prefix` is configurable.
+  - Values above 999999 print in full and never wrap.
+  - §17.2 is corrected to say the same, so the ADR no longer contradicts
+    itself.
+- **Numbering chronology.**
+  - Receipt numbers represent **issuance order** inside a School × FY
+    series; the Payment's `settled_at` represents settlement chronology.
+  - The backfill processes its candidates in `(settled_at, id)` order, but
+    never renumbers receipts already issued.
+  - An older Payment backfilled later may therefore carry a higher number.
+    This is intentional.
+
+### Legal-gate operating rule
+
+- **The rule.** The owner authorised development to continue through
+  unresolved legal-review items, to be resolved in the final application
+  production-readiness review. **This is not a legal determination.**
+- **For every such item:**
+  - the legal question stays open, and no compliance is claimed;
+  - only the conservative behaviour already approved here is built;
+  - the item is marked **DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF
+    REQUIRED**;
+  - it is carried in the production-readiness evidence register (ADR 0058
+    §6).
+- **J under this rule.** FEE.4 renders only a payment acknowledgement,
+  titled "Payment receipt":
+  - never "Tax invoice";
+  - no GSTIN, HSN/SAC, taxable value, tax rate or tax lines;
+  - no GST calculation;
+  - no statement that any fee is taxable or exempt.
+
+  Production must not treat this as legally cleared until J has a
+  qualified answer.
+- **Other legal gates.** They get the same distinction when their
+  checkpoints are reached: fee regulation (late fees, in-year changes),
+  RTE statutory free seats, and retention (E21).
+- **H is unaffected.** The rule does not supply the missing product
+  decision H: FEE.5 still waits for the owner.
+
+## Implementation note — FEE.4 as built (2026-09-30)
+
+FEE.4 implements §17 and §18 under owner decisions I and I2 and the
+corrections above. J stays **LEGAL REVIEW REQUIRED — DEVELOPMENT
+AUTHORISED, PROD LEGAL SIGN-OFF REQUIRED**. The full record is in
+`docs/modules/FINANCE.md` ("FEE.4 as-built"). Refinements to the text
+above:
+
+- **Counter prefix snapshot.** `payment_receipt_counters` stores the
+  prefix the series started with, so every receipt of one series has one
+  format.
+  - The §17.2 lock ("may not change once a receipt exists in the current
+    series") is database-enforced by the Payments-owned
+    `fee_settings_receipt_numbering_guard_trigger`.
+  - A past series keeps its own prefix if the setting later changes.
+- **Start month lock.** The financial-year start month is locked once any
+  receipt exists. Changing it would redefine existing series; §17.2 was
+  silent on this, so this is the conservative reading.
+- **Gap-free by construction, in the database:**
+  - a receipt insert must take exactly the counter's `next_value`, in the
+    exact `payments_receipt_number()` format, in the FY of its Payment
+    (`payments_fy_series_key()`);
+  - a counter only moves by +1, and only once the receipt for the old value
+    exists; a series starts at 1;
+  - receipts can never be updated or deleted (runtime privileges plus a
+    trigger).
+- **One event type for both issuance modes.** `payment_receipt.issued.v1`
+  is emitted for live issuance and for the backfill, with
+  `issuance: settlement|backfill`. The audit events stay distinct:
+  `payment_receipt.issued` and `payment_receipt.backfilled`.
+- **Suspended School (rule 86) — backfill.** It is refused unless the
+  School is active, and each receipt re-checks the lifecycle inside its own
+  transaction (`SchoolOperationalGuard`). The operator re-runs it after the
+  School resumes; nothing is replayed automatically.
+- **Read audits.** `payment_receipt.viewed` (receipt) and
+  `fee_statement.viewed` (statement), once per successful read, ids only.
+- **Receipt form.** The page is titled "Payment receipt" and states it is
+  an acknowledgement, not a tax invoice. It shows no GSTIN, HSN/SAC,
+  taxable value, tax rate or tax lines. Printing uses the browser; no PDF
+  is stored.
+- **Not built:**
+  - H (late fees), tax/GST, tax invoices;
+  - receipt void or correction, refunds, credits;
+  - statement export/PDF/email, Guardian/Student views, portal.

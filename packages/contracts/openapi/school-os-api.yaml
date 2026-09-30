@@ -4137,6 +4137,68 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # FEE.4 (ADR 0062 §17, §18): read-only receipt (a payment
+  # acknowledgement titled "Payment receipt", never a tax invoice; ADR 0062
+  # J: DEVELOPMENT AUTHORISED -- PROD LEGAL SIGN-OFF REQUIRED) and the staff
+  # Student fee statement. No receipt create/edit/delete/renumber/void/tax
+  # operation exists; the I2 backfill is an operator command.
+  /schools/{schoolId}/payments/{paymentId}/receipt:
+    get:
+      operationId: getPaymentReceipt
+      summary: >
+        The Payment's receipt: number, series, issue time and the Payment's own facts (amount, method, allocations by fee head and billing period). No tax field. Audited (payment_receipt.viewed). Requires finance.payments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/PaymentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PaymentReceipt" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.payments.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: PAYMENT_RECEIPT_NOT_FOUND -- no Payment here, or a Payment settled before receipts existed and not yet backfilled (identical response).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/students/{studentId}/fee-statement:
+    get:
+      operationId: getStudentFeeStatement
+      summary: >
+        One Student's fee statement, computed on read: per charge the amount, cancellation, fee head and billing period, concession adjustments, payments with receipt numbers and the outstanding (amount - allocations - live adjustments); totals. Audited (fee_statement.viewed). Requires finance.charges.view AND finance.payments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: studentId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK (a Student of another School, or none, has no lines).
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StudentFeeStatement" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view or finance.payments.view in this School (both are required).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not a Student id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   # FEE.1 (ADR 0062): ledger-account administration (K1), fee heads, fee
   # structures (lines, instalment schedule, lifecycle actions) and
   # optional-fee selections. Money is always a decimal string plus its
@@ -5232,6 +5294,43 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: Validation error (not an active expense account of this School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-settings/receipt-numbering:
+    put:
+      operationId: setFeeReceiptNumbering
+      summary: >
+        FEE.4: sets the receipt prefix (letters, digits, hyphens; at most 16; uppercased) and the financial-year start month (1-12). The prefix cannot change while the School's current series has receipts; the start month cannot change once any receipt exists. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeReceiptNumberingInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeSettings" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: RECEIPT_NUMBERING_LOCKED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (prefix format, month range).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -10768,9 +10867,107 @@ components:
         reason: { type: string, maxLength: 255, nullable: true }
     FeeSettings:
       type: object
-      required: [concessionLedgerAccountId]
+      required: [concessionLedgerAccountId, receiptPrefix, financialYearStartMonth]
       properties:
         concessionLedgerAccountId: { type: string, format: uuid, nullable: true }
+        receiptPrefix: { type: string, pattern: "^[A-Z0-9][A-Z0-9-]{0,15}$", example: RCPT }
+        financialYearStartMonth: { type: integer, minimum: 1, maximum: 12, example: 4 }
+    FeeReceiptNumberingInput:
+      type: object
+      required: [receipt_prefix, financial_year_start_month]
+      properties:
+        receipt_prefix: { type: string, maxLength: 16 }
+        financial_year_start_month: { type: integer, minimum: 1, maximum: 12 }
+    PaymentReceipt:
+      type: object
+      description: A payment acknowledgement ("Payment receipt"), never a tax invoice. It carries no tax, GSTIN, HSN/SAC or taxable-value field and no Student name.
+      required: [id, title, receiptNumber, seriesKey, sequenceValue, issuedAt, paymentId, source, method, manualReference, amount, currency, settledAt, studentIds, lines]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, enum: [Payment receipt] }
+        receiptNumber: { type: string, example: RCPT/2026-27/000001 }
+        seriesKey: { type: string, pattern: "^[0-9]{4}-[0-9]{2}$", description: "The School financial year of the Payment's settlement." }
+        sequenceValue: { type: integer, minimum: 1 }
+        issuedAt: { type: string, format: date-time }
+        paymentId: { type: string, format: uuid }
+        source: { type: string, enum: [provider, manual] }
+        method: { type: string, nullable: true, enum: [cash, bank_transfer, cheque] }
+        manualReference: { type: string, nullable: true }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        currency: { type: string, enum: [INR] }
+        settledAt: { type: string, format: date-time }
+        studentIds: { type: array, items: { type: string, format: uuid } }
+        lines: { type: array, items: { $ref: "#/components/schemas/PaymentReceiptLine" } }
+    PaymentReceiptLine:
+      type: object
+      required: [chargeId, amount, description, feeHeadName, billingPeriodKey, billingPeriodLabel, academicYearId]
+      properties:
+        chargeId: { type: string, format: uuid }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        description: { type: string, nullable: true }
+        feeHeadName: { type: string, nullable: true }
+        billingPeriodKey: { type: string, nullable: true }
+        billingPeriodLabel: { type: string, nullable: true }
+        academicYearId: { type: string, format: uuid, nullable: true }
+    StudentFeeStatement:
+      type: object
+      required: [studentId, academicYearId, currency, lines, totals]
+      properties:
+        studentId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid, nullable: true }
+        currency: { type: string, enum: [INR] }
+        lines: { type: array, items: { $ref: "#/components/schemas/StudentFeeStatementLine" } }
+        totals:
+          type: object
+          required: [charged, adjusted, paid, outstanding]
+          properties:
+            charged: { type: string }
+            adjusted: { type: string }
+            paid: { type: string }
+            outstanding: { type: string }
+    StudentFeeStatementLine:
+      type: object
+      required: [chargeId, academicYearId, description, feeHeadId, feeHeadName, billingPeriodKey, billingPeriodLabel, dueDate, assessedAt, cancelledAt, amount, adjustedTotal, paidTotal, outstanding, currency, adjustments, payments]
+      properties:
+        chargeId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        description: { type: string }
+        feeHeadId: { type: string, format: uuid, nullable: true }
+        feeHeadName: { type: string, nullable: true }
+        billingPeriodKey: { type: string, nullable: true }
+        billingPeriodLabel: { type: string, nullable: true }
+        dueDate: { type: string, format: date, nullable: true }
+        assessedAt: { type: string, format: date-time }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        adjustedTotal: { type: string, description: Live (uncancelled) concession adjustments. }
+        paidTotal: { type: string }
+        outstanding: { type: string, description: "amount - paidTotal - adjustedTotal; 0.00 for a cancelled charge." }
+        currency: { type: string, enum: [INR] }
+        adjustments:
+          type: array
+          items:
+            type: object
+            required: [id, feeConcessionId, category, amount, postedAt, cancelledAt]
+            properties:
+              id: { type: string, format: uuid }
+              feeConcessionId: { type: string, format: uuid }
+              category: { type: string, enum: [concession, scholarship, waiver] }
+              amount: { type: string }
+              postedAt: { type: string, format: date-time }
+              cancelledAt: { type: string, format: date-time, nullable: true }
+        payments:
+          type: array
+          items:
+            type: object
+            required: [paymentId, amount, settledAt, method, source, receiptNumber]
+            properties:
+              paymentId: { type: string, format: uuid }
+              amount: { type: string }
+              settledAt: { type: string, format: date-time, nullable: true }
+              method: { type: string, nullable: true }
+              source: { type: string, nullable: true }
+              receiptNumber: { type: string, nullable: true }
     FeeConcessionAccountInput:
       type: object
       required: [concession_ledger_account_id]
@@ -11001,7 +11198,7 @@ components:
 
     PaymentDetail:
       type: object
-      required: [id, source, provider, providerPaymentReference, method, manualReference, recordedByUserId, amount, currency, settlementLedgerAccountId, journalEntryId, settledAt, recordedAt, allocations]
+      required: [id, source, provider, providerPaymentReference, method, manualReference, recordedByUserId, amount, currency, settlementLedgerAccountId, journalEntryId, settledAt, recordedAt, allocations, receiptId, receiptNumber]
       description: >
         Never includes creation_txid, a raw provider payload, any
         provider secret/signature material, or a manual Payment's
@@ -11026,6 +11223,8 @@ components:
         settledAt: { type: string, format: date-time }
         recordedAt: { type: string, format: date-time }
         allocations: { type: array, items: { $ref: "#/components/schemas/PaymentAllocationEntry" } }
+        receiptId: { type: string, format: uuid, nullable: true, description: "FEE.4: null only for a Payment settled before receipts existed and not yet backfilled." }
+        receiptNumber: { type: string, nullable: true, example: RCPT/2026-27/000001 }
 
     WebhookEndpoint:
       type: object

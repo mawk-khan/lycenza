@@ -25,7 +25,7 @@ class FeeConcessionOpenApiCoverageTest extends TestCase
 
         $this->assertSame([], array_values(array_diff($live, $documented)), 'Live but undocumented: '.implode(', ', array_diff($live, $documented)));
         $this->assertSame([], array_values(array_diff($documented, $live)), 'Documented but not live: '.implode(', ', array_diff($documented, $live)));
-        $this->assertCount(11, $live, 'FEE.3 pin: 11 operations. Update deliberately.');
+        $this->assertCount(12, $live, 'FEE.3 pin: 11 operations, + FEE.4 receipt numbering. Update deliberately.');
         $this->assertSame([], array_values(array_filter($documented, fn ($o) => str_starts_with($o, 'DELETE '))), 'No DELETE.');
     }
 
