@@ -143,10 +143,20 @@ No proration (D1). The as-built record is in `docs/modules/FINANCE.md`
 The as-built record is in `docs/modules/FINANCE.md` "FEE.3 as-built" and
 the ADR 0062 implementation note.
 
-**Next: FEE.4 — Receipts & staff fee statements.** It is blocked on owner
-decisions I (receipt numbering) and I2 (existing payments), and the
-receipt/GST form is **[LEGAL REVIEW REQUIRED]**. FEE.5 (late fees) stays
-behind H and the fee-regulation legal answer.
+**ADR 0062 decisions I and I2 confirmed (owner, 2026-09-30):**
+- **I:** one receipt series per School × financial year; the FY start
+  month is configurable (default April); format `<PREFIX>/<FY>/<000001>`;
+  gap-free transactional counter; numbers immutable.
+- **I2:** existing Payments get receipts only through the explicit,
+  audited, idempotent `finance:receipts-backfill {school}` command, in
+  `(settled_at, id)` order.
+
+**Next: FEE.4 — Receipts & staff fee statements.** Its product decisions
+are resolved. It remains subject to the **[LEGAL REVIEW REQUIRED]**
+statutory receipt/GST gate (J): until that is answered, FEE.4 may render
+only a payment acknowledgement, never a tax invoice. FEE.4 implementation
+has **not started**. FEE.5 (late fees) stays behind H and the
+fee-regulation legal answer.
 
 ## Phase 0A — Architectural Foundation (complete)
 
