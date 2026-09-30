@@ -33,9 +33,16 @@ interface Props {
     sessions: { data: SessionRow[]; links: PageLink[]; total: number };
     filters: { attendanceDate: string };
     canManage: boolean;
+    // TCH.4: the same page serves "My Attendance" (the owned teacher
+    // surface) under its own URL; the server decides what it contains.
+    baseUrl?: string;
+    heading?: string;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    baseUrl: '/app/attendance',
+    heading: 'Attendance registers',
+});
 
 const attendanceDate = ref(props.filters.attendanceDate);
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -44,7 +51,7 @@ watch(attendanceDate, () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
         router.get(
-            '/app/attendance',
+            props.baseUrl,
             { attendance_date: attendanceDate.value || undefined },
             { preserveState: true, preserveScroll: true, replace: true },
         );
@@ -58,7 +65,7 @@ watch(attendanceDate, () => {
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
-                <h1 class="text-xl font-semibold">Attendance registers</h1>
+                <h1 class="text-xl font-semibold">{{ heading }}</h1>
                 <p class="mt-1 text-sm text-slate-500">
                     Submitted class registers. A register is taken once, complete, and thereafter
                     only individual statuses are corrected.
@@ -66,7 +73,7 @@ watch(attendanceDate, () => {
             </div>
             <a
                 v-if="canManage"
-                href="/app/attendance/take"
+                :href="`${baseUrl}/take`"
                 class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
             >
                 Take a register
@@ -91,7 +98,7 @@ watch(attendanceDate, () => {
         >
             <template v-if="canManage" #action>
                 <a
-                    href="/app/attendance/take"
+                    :href="`${baseUrl}/take`"
                     class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
                 >
                     Take a register
@@ -125,7 +132,7 @@ watch(attendanceDate, () => {
                     <td class="py-2">{{ row.teacherName }}</td>
                     <td class="py-2">{{ row.recordCount }}</td>
                     <td class="py-2 text-right">
-                        <a class="underline" :href="`/app/attendance/${row.id}`">View</a>
+                        <a class="underline" :href="`${baseUrl}/${row.id}`">View</a>
                     </td>
                 </tr>
             </tbody>

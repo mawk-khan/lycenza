@@ -662,15 +662,16 @@ final class DemoDataBuilder
 
     private function buildIdentityLinkedAccounts(): void
     {
-        // Teacher (TCH.3): the production system `teacher` role, linked to
-        // an HR Employee record. The role carries only
-        // curriculum.delivery.teacher; what it reaches is decided by the
+        // Teacher (TCH.3/TCH.4): the production system `teacher` role, linked
+        // to an HR Employee record. The role carries only
+        // curriculum.delivery.teacher and attendance.teacher; what it
+        // reaches is decided by the
         // Employee's TeachingAssignment (G8-A Mathematics, created in
         // DemoModuleData::teachingAssignments()).
         $teacher = $this->user('Kavya Reddy (Teacher)', 'teacher@example.test');
         $this->assignSchoolRole($this->member($teacher, $this->school), 'teacher');
         $this->inSchool(fn () => $this->employees['MATH']->forceFill(['user_id' => $teacher->id])->save());
-        $this->account('Teacher', $teacher, $this->school->name, 'Teacher role, linked to Employee EMP-000003; My Curriculum Delivery for G8-A Mathematics only');
+        $this->account('Teacher', $teacher, $this->school->name, 'Teacher role, linked to Employee EMP-000003; My Curriculum Delivery and My Attendance for G8-A Mathematics only');
 
         // Student: School member linked to a Student record (Phase 5B).
         $studentRecord = $this->studentsBySection['G8-A'][0];

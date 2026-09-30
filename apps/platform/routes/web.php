@@ -21,6 +21,7 @@ use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\Analytics\CurriculumCoverageController;
 use App\Http\Controllers\App\ApplicantController;
 use App\Http\Controllers\App\Attendance\AttendanceController;
+use App\Http\Controllers\App\Attendance\MyAttendanceController;
 use App\Http\Controllers\App\Automation\AutomationController;
 use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
 use App\Http\Controllers\App\Canteen\CanteenItemController;
@@ -1467,6 +1468,19 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/', [AttendanceController::class, 'store'])->name('store');
         Route::get('/{attendanceSession}', [AttendanceController::class, 'show'])->name('show');
         Route::post('/records/{attendanceRecord}/correct', [AttendanceController::class, 'correct'])->name('correct');
+    });
+
+    // TCH.4 (ADR 0063 section 11, Tier 2) -- "My Attendance", the owned
+    // teacher pages: only the calling teacher's own registers, classes and
+    // rosters. Authorization lives in the controller (TeacherAttendanceAccess)
+    // and, for writes, again inside the Attendance services' transactions.
+    // PRODUCTION ENABLEMENT is blocked by the open TCH-L1 determination.
+    Route::prefix('app/my-attendance')->name('app.my-attendance.')->group(function (): void {
+        Route::get('/', [MyAttendanceController::class, 'index'])->name('index');
+        Route::get('/take', [MyAttendanceController::class, 'take'])->name('take');
+        Route::post('/', [MyAttendanceController::class, 'store'])->name('store');
+        Route::get('/{attendanceSession}', [MyAttendanceController::class, 'show'])->name('show');
+        Route::post('/records/{attendanceRecord}/correct', [MyAttendanceController::class, 'correct'])->name('correct');
     });
 
     Route::prefix('app/timetable-schedule')->name('app.timetable-schedule.')->group(function (): void {

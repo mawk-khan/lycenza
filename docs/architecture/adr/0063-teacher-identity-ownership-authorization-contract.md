@@ -1,10 +1,12 @@
 # ADR 0063: Teacher Identity and Ownership-Based Authorization Contract
 
 - Status: Accepted as a contract (TCH.0, documentation only, closed).
-  **TCH.1 and TCH.2 are implemented and closed** (§29, §30). **TCH.3 is
-  implemented** (the production Teacher role and owned Curriculum Delivery
-  access, §31). TCH.4 onward are **not** implemented: Attendance and LMS
-  remain admin-only.
+  **TCH.1, TCH.2 and TCH.3 are implemented and closed** (§29–§31).
+  **TCH.4 is implemented** (owned teacher Attendance access, §32).
+  **Teacher Attendance functionality is implemented but production
+  enablement remains blocked by TCH-L1 until the required legal/compliance
+  determination is recorded** (§26). TCH.5 onward are **not** implemented:
+  LMS remains admin-only.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -648,6 +650,11 @@ roles, HRX, RES, POR, Lesson Planning or LMS Submission.
 No other item here is legal: roles, ownership shape, MFA and denial
 semantics are product and architecture choices.
 
+**TCH-L1 status: OPEN** (TCH.4, §32). Development blocker: **no**.
+Production blocker: **yes**, for the teacher Attendance surface
+(`attendance.teacher`). No determination has been recorded, and none is
+implied by the TCH.4 implementation or its tests.
+
 ## 27. Findings recorded for other programmes (not TCH scope)
 
 - **Production least privilege.** Only two School roles exist, so every
@@ -975,3 +982,140 @@ on every date the operation involves.
 **Demo.** Inside the demo builder's environment guard, the demo teacher
 (Kavya Reddy) holds the production `teacher` role and one assignment:
 G8-A Mathematics for the current year. There is no `demo.teacher` role.
+
+## 32. TCH.4 implementation (as built)
+
+TCH.4 builds §16.2: Attendance as the second owned adopter, on Sensitive
+Student data. D-01 to D-17 are unchanged. **Teacher Attendance
+functionality is implemented but production enablement remains blocked by
+TCH-L1 until the required legal/compliance determination is recorded.**
+TCH-L1 stays **OPEN** (§26): not a development blocker, a production
+blocker. This section draws no statutory conclusion.
+
+**Capability and role (§12, §13).**
+- New owned-scope (Tier 2) capability `attendance.teacher`.
+- The production `teacher` role now carries exactly
+  `curriculum.delivery.teacher` and `attendance.teacher` — nothing else, and
+  in particular no `attendance.view`/`.manage` and no `students.view`.
+- `school_admin` also holds `attendance.teacher`, only so the no-escalation
+  rule lets it grant the Teacher role (§31). It adds no School-wide reach:
+  School Admin already holds `attendance.manage`. `principal` does not hold
+  it.
+- `attendance.view`/`.manage` keep their School-wide (Tier 1) meaning,
+  grants and routes unchanged. Administrators need no Employee record,
+  ActingEmployee or TeachingAssignment.
+- No code checks the role key (architecture guard).
+
+**The executable chain.** Authenticated User → trusted School route context
+with an active membership → `attendance.teacher` → `ActingEmployeeResolver`
+(today, School-local; `hold()` inside the write transaction) →
+`TeachingOwnership` for the exact Section + SubjectOffering on the
+register's `attendance_date`.
+
+- **Actor date:** today.
+- **Ownership date:** the one `attendance_date`, for submission and for
+  correction alike. A class's current teacher therefore cannot correct an
+  earlier teacher's register, and a register taken under cover stays with
+  the cover teacher's dates.
+- **Read visibility:** a register is the teacher's when they own its Section
+  + SubjectOffering on its `attendance_date`. Lists are filtered in the
+  query (`TeacherAttendanceScope::constrain()`), never in the browser.
+- **Class selection:** a register names its class through a
+  `TimetableEntry`. The entry names the class; the TeachingAssignment
+  authorizes it. The scheduled classes and roster preview list only entries
+  whose Section + SubjectOffering the teacher owns on the date.
+
+**Timetable and provenance (§8).** `timetable_entries.teacher_id` and
+`attendance_sessions.teacher_id` authorize nothing. The session still
+snapshots the entry's scheduled teacher as provenance. So a temporary cover
+teacher (assignment, no timetable slot) can take the register, and the
+session still names the timetabled teacher. A timetabled teacher without an
+assignment gets 404. Co-teachers (two assignments for one class) both
+qualify. No Attendance code filters or authorizes on a teacher column
+(architecture guard).
+
+**Attendance integration.**
+- **Reads:** `TeacherAttendanceAccess::scope()` (capability + fresh
+  ActingEmployee + `TeachingOwnership::periods()`).
+- **Writes:** the same `AttendanceSubmissionService` and
+  `AttendanceCorrectionService` receive an optional `AttendanceWriteGuard`.
+  There is no forked submission or correction logic. The Tier 2
+  `TeacherAttendanceGuard` runs inside their transaction, before any
+  Attendance lock:
+  1. the capability;
+  2. `ActingEmployeeResolver::hold()`;
+  3. visibility: the class for submission, the register on its date for
+     correction — unowned is a non-disclosing 404;
+  4. `TeachingOwnership::hold()` on the date — outside it is
+     `ATTENDANCE_OUTSIDE_TEACHING_ASSIGNMENT` (422).
+- **Lock order:** School → membership → User → Employee → EmploymentRecord
+  → TeachingAssignment → TimetableEntry → AcademicYear → Section →
+  StudentEnrollments, matching §20 and the existing Attendance order. If
+  the entry was repointed at another class between the unlocked read and
+  its lock, the guard runs again for the class it names now.
+- **Unchanged:** the schema, the Attendance audit events and actor
+  attribution, the duplicate-register unique indexes, the roster rules and
+  the Sensitive classification.
+
+**Idempotency (CLAUDE.md rules 29, 32).** The teacher submit is
+deliberately **not** `idempotent`. A stored-response replay is served by the
+middleware before the handler re-verifies the ActingEmployee and the
+TeachingAssignment. Duplicate registers are already refused by the
+database: `ATTENDANCE_SESSION_ALREADY_SUBMITTED` /
+`ATTENDANCE_SECTION_SLOT_ALREADY_SUBMITTED` (409). The Tier 1 submit keeps
+its idempotency.
+
+**Denial semantics (§18).**
+- **403:** no `attendance.teacher`, or not an eligible Employee today
+  (`HR_ACTING_EMPLOYEE_UNAVAILABLE`).
+- **404:** an unowned class or register, another School's id, an unknown id
+  and a malformed id — all the same response.
+- **422 / 409:** an owned class outside its assignment dates, and the
+  existing Attendance rules.
+
+**Surfaces (§23).**
+- **API**, under `/api/v1/schools/{school}/my/`, every route with
+  `capability:attendance.teacher` and `private-no-store`:
+  - `attendance-sessions` — GET list, POST submit;
+  - `attendance-sessions/scheduled-classes`;
+  - `attendance-sessions/roster-preview`;
+  - `attendance-sessions/{id}`;
+  - `attendance-records/{id}/correct` — POST.
+
+  They are in the OpenAPI contract, with regenerated shared types. The Tier
+  1 routes are unchanged.
+- **Page** `/app/my-attendance` ("My Attendance"): the existing Attendance
+  Index, Take and Show pages with a base URL, linked from the dashboard by
+  the capability. A capability holder who is not an eligible Employee sees
+  an empty list, and every other page is refused.
+- **Not given to teachers:** the Student directory (`students.view`), the
+  administrative Attendance pages, Timetable administration and
+  TeachingAssignment administration.
+
+**MFA and processing authorization (§17).** None is added. The Tier 1
+Attendance surface has neither, and TCH lowers nothing.
+
+**Tests.**
+- Authorization matrix, `TeacherAttendanceAccessTest`:
+  - the positive path, with provenance;
+  - capability, identity or ownership missing; a role alone; a non-`teacher`
+    role;
+  - wrong Section or Offering; inclusive date bounds; a future assignment;
+  - hand-over; temporary cover; timetable teacher without an assignment;
+    co-teaching;
+  - list filtering; non-disclosure;
+  - role revoke, assignment end and off-boarding;
+  - Tier 1 unchanged; no Tier 1, Student or TeachingAssignment access.
+- `MyAttendanceUiTest`, `TeacherRoleRegistryTest`,
+  `TeacherAttendanceArchitectureGuardTest` and
+  `TeachingAssignmentArchitectureGuardTest`. Attendance may use only
+  `TeachingOwnership`/`OwnedTeachingPeriod`.
+- Two-process races (`TeacherAttendanceConcurrencyTest`): a teacher
+  submission or correction vs an assignment end, a membership suspension,
+  an unlink, an archive and an employment end, in both orders.
+- The existing Attendance concurrency tests pass unchanged.
+
+**Demo.** Inside the demo builder's environment guard, the demo teacher
+(Kavya Reddy, production `teacher` role, G8-A Mathematics) now also has one
+administratively submitted G8-A Mathematics register to review and correct
+under My Attendance.

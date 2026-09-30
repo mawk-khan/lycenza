@@ -71,14 +71,15 @@ contract checkpoint.
 | Order | Programme | Status |
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
-| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0–TCH.2 closed (ADR 0063, 2026-09-30); **TCH.3 production Teacher role + owned Curriculum Delivery implemented**. Curriculum Delivery is the only teacher-owned surface; the Teacher role alone grants nothing (capability AND ActingEmployee AND TeachingAssignment). Attendance, LMS and Timetable stay admin-only until TCH.4 onward |
+| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0–TCH.3 closed (ADR 0063, 2026-09-30); **TCH.4 owned teacher Attendance implemented — production enablement BLOCKED by open legal/compliance determination TCH-L1**. Curriculum Delivery and Attendance are the teacher-owned surfaces; the Teacher role alone grants nothing (capability AND ActingEmployee AND TeachingAssignment). LMS and Timetable stay admin-only; TCH.5 (LMS) is next, subject to the deferred LMS ownership decision |
 | 3 | HRX — Leave & staff attendance | Not started |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
 
-**TCH checkpoints (ADR 0063 §25)** -- TCH.0–TCH.2 closed, TCH.3
-implemented; Curriculum Delivery is the only teacher-owned surface:
+**TCH checkpoints (ADR 0063 §25)** -- TCH.0–TCH.3 closed, TCH.4
+implemented (production enablement blocked by open TCH-L1); Curriculum
+Delivery and Attendance are the teacher-owned surfaces:
 - **TCH.0 — Teacher Identity & Ownership-Based Authorization Contract**
   (ADR 0063, docs only). Closed.
 - **TCH.1 — Verified ActingEmployee identity boundary** (HR). Closed
@@ -103,8 +104,9 @@ implemented; Curriculum Delivery is the only teacher-owned surface:
 
   Dormant at TCH.2; TCH.3 adopts it for Curriculum Delivery.
 - **TCH.3 — Production Teacher role + Curriculum Delivery adoption.**
-  Implemented (ADR 0063 §31):
-  - the system `teacher` role carries only `curriculum.delivery.teacher`;
+  Closed (ADR 0063 §31):
+  - the system `teacher` role carried only `curriculum.delivery.teacher`
+    (TCH.4 adds `attendance.teacher`);
   - an owned `/my/` API and "My Curriculum Delivery" page require that
     capability AND a verified ActingEmployee AND a TeachingAssignment for
     the exact class on the delivery's dates;
@@ -112,10 +114,23 @@ implemented; Curriculum Delivery is the only teacher-owned surface:
     ownership in its transaction;
   - Tier 1 is unchanged;
   - there is no `teacher_id` on deliveries.
-- **TCH.4 — Attendance teacher adoption.** Next; not implemented.
-  Production carries legal determination TCH-L1.
-- **TCH.5 — LMS teaching adoption**, only after the LMS ownership decision;
-  the owner may remove it. Planned.
+- **TCH.4 — Attendance teacher adoption.** Implemented (ADR 0063 §32):
+  - the `teacher` role carries exactly `curriculum.delivery.teacher` and
+    `attendance.teacher`;
+  - an owned `/my/` API and "My Attendance" page require that capability
+    AND a verified ActingEmployee AND a TeachingAssignment for the exact
+    class on the register's `attendance_date`;
+  - writes use the same Attendance submission/correction services, holding
+    identity and ownership in their transaction;
+  - timetable and session `teacher_id` stay provenance only;
+  - Tier 1 (`attendance.view`/`.manage`) is unchanged.
+
+  **Teacher Attendance functionality is implemented but production
+  enablement remains blocked by TCH-L1 until the required legal/compliance
+  determination is recorded.** TCH-L1 is OPEN: not a development blocker, a
+  production blocker.
+- **TCH.5 — LMS teaching adoption.** Next, only after the LMS ownership
+  decision deferred in ADR 0063; the owner may remove it. Not implemented.
 - **TCH.6 — TCH closure audit.** Planned.
 
 TCH reopens only the ADR 0061 §2.3 item "teacher identity and

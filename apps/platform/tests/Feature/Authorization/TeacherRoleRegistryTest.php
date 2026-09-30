@@ -34,13 +34,14 @@ class TeacherRoleRegistryTest extends TestCase
     }
 
     #[Test]
-    public function teacher_is_a_system_school_role_carrying_exactly_one_owned_scope_capability(): void
+    public function teacher_is_a_system_school_role_carrying_exactly_the_owned_scope_capabilities(): void
     {
         $role = Role::query()->where('key', 'teacher')->firstOrFail();
 
         $this->assertTrue($role->is_system);
         $this->assertSame('school', $role->scope);
-        $this->assertSame(['curriculum.delivery.teacher'], $this->capabilities('teacher'));
+        // TCH.3 + TCH.4: exactly the two owned-scope capabilities.
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher'], $this->capabilities('teacher'));
         $this->assertSame(1, Role::query()->where('key', 'like', '%teacher%')->count(), 'One Teacher role, no second teacher-like role.');
     }
 
@@ -49,29 +50,31 @@ class TeacherRoleRegistryTest extends TestCase
     {
         $teacher = $this->capabilities('teacher');
 
-        foreach (['curriculum.delivery.view', 'curriculum.delivery.manage', 'teaching.assignments.view', 'teaching.assignments.manage', 'syllabus.view', 'syllabus.manage'] as $key) {
+        foreach (['curriculum.delivery.view', 'curriculum.delivery.manage', 'attendance.view', 'attendance.manage', 'teaching.assignments.view', 'teaching.assignments.manage', 'syllabus.view', 'syllabus.manage'] as $key) {
             $this->assertNotContains($key, $teacher);
         }
 
-        foreach (['attendance.', 'lms.', 'hr.', 'finance.', 'payroll.', 'school.', 'students.', 'timetable.', 'academics.'] as $prefix) {
+        foreach (['lms.', 'hr.', 'finance.', 'payroll.', 'school.', 'students.', 'timetable.', 'academics.'] as $prefix) {
             $this->assertSame([], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, $prefix))), "No {$prefix}* capability.");
         }
+        $this->assertSame(['attendance.teacher'], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, 'attendance.'))), 'Only the owned-scope Attendance capability.');
     }
 
     #[Test]
-    public function the_capability_is_school_scoped_and_only_three_roles_carry_it(): void
+    public function the_owned_capabilities_are_carried_only_by_teacher_and_by_school_admin_for_grantability(): void
     {
-        $holders = Role::query()->where('is_system', true)
-            ->whereHas('capabilities', fn ($q) => $q->where('key', 'curriculum.delivery.teacher'))
-            ->pluck('key')->sort()->values()->all();
+        foreach (['curriculum.delivery.teacher', 'attendance.teacher'] as $key) {
+            $holders = Role::query()->where('is_system', true)
+                ->whereHas('capabilities', fn ($q) => $q->where('key', $key))
+                ->pluck('key')->sort()->values()->all();
 
-        // school_admin holds it only so it can GRANT the Teacher role
-        // (StaffRoleCatalog's no-escalation rule); principal does not.
-        $this->assertSame(['school_admin', 'teacher'], $holders);
-        $this->assertSame([], array_values(array_filter(
-            Capability::query()->where('key', 'like', '%.teacher')->pluck('key')->all(),
-            fn ($k) => $k !== 'curriculum.delivery.teacher',
-        )), 'No other *.teacher capability (Attendance and LMS are not adopted).');
+            // school_admin holds them only so it can GRANT the Teacher role
+            // (StaffRoleCatalog's no-escalation rule); principal does not.
+            $this->assertSame(['school_admin', 'teacher'], $holders, $key);
+            $this->assertSame('school', Capability::query()->where('key', $key)->value('namespace'));
+        }
+
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher'], Capability::query()->where('key', 'like', '%.teacher')->orderBy('key')->pluck('key')->all(), 'No LMS or Timetable *.teacher capability (not adopted).');
     }
 
     /** @return array{0: User, 1: School} */

@@ -14,6 +14,13 @@ authoritative).
 Staff/Employee attendance is a Phase 0J/HR concern and appears nowhere
 in this module. Section 16 lists everything else deliberately excluded.
 
+**Amended by TCH.4 (ADR 0063 §32).** An owned teacher (Tier 2) path now
+exists alongside the administrative one — see section 18. The "admin-only"
+and "no teacher self-service" statements below describe Phase 0H.2 and are
+superseded for that path only. **Teacher Attendance functionality is
+implemented but production enablement remains blocked by TCH-L1 until the
+required legal/compliance determination is recorded.**
+
 ## 2. The two entities
 
 | Entity | What it is | Mutability |
@@ -527,9 +534,10 @@ submission always re-derives under locks.
 **Capabilities.** `attendance.view` / `attendance.manage`, granted to
 `school_admin` and `principal`. Deliberately no `attendance.correct`
 (correction is already CAS-protected and audited; splitting it would
-imply an approver workflow this checkpoint does not build) and no
-`attendance.teacher` — v1 is admin-only, with no teacher-ownership rule.
-Never a role-name check.
+imply an approver workflow this checkpoint does not build). Phase 0H.2 had
+no `attendance.teacher` and was admin-only; TCH.4 adds it as a separate
+owned path (section 18) and leaves these two capabilities unchanged. Never a
+role-name check.
 
 **UI** (`/app/attendance`). Minimal administrative workflow: pick a
 date → pick a scheduled class → load the roster → mark every Student →
@@ -557,7 +565,8 @@ raw-SQL layer including the missing-context fail-closed case.
 ## 16. Deliberately NOT in this checkpoint
 
 Employee/staff attendance (Phase 0J/HR) · payroll attendance ·
-leave · timesheets · biometric/RFID capture · teacher self-service ·
+leave · timesheets · biometric/RFID capture · teacher self-service
+(since built by TCH.4, section 18) ·
 Student portal · Guardian portal · mobile attendance · medical absence
 reasons · free-text reasons · safeguarding/disciplinary notes ·
 Documents integration · Communications integration · automated absence
@@ -583,3 +592,80 @@ register save · substitution modelling · a replace-register operation.
 | SubjectOffering identity premise | `Tests\Feature\Attendance\SubjectOfferingIdentityGuardTest` |
 | OpenAPI bidirectional coverage + contract minimization | `Tests\Feature\Attendance\AttendanceOpenApiCoverageTest` |
 | Inertia workflow and page authorization | `Tests\Feature\App\AttendanceAdminUiTest` |
+| TCH.4 owned teacher path: authorization matrix, cover, co-teaching, non-disclosure, provenance | `Tests\Feature\Attendance\TeacherAttendanceAccessTest` |
+| TCH.4 teacher write vs assignment end / suspension / unlink / archive / employment end (real OS processes) | `Tests\Feature\Attendance\TeacherAttendanceConcurrencyTest` |
+| TCH.4 dependency direction, no teacher_id authority, route gating, OpenAPI | `Tests\Feature\Attendance\TeacherAttendanceArchitectureGuardTest` |
+| TCH.4 "My Attendance" pages and capability-driven navigation | `Tests\Feature\App\MyAttendanceUiTest` |
+
+## 18. Owned teacher Attendance (TCH.4, ADR 0063 §32)
+
+**Production gate.** Teacher Attendance functionality is implemented but
+production enablement remains blocked by TCH-L1 until the required
+legal/compliance determination is recorded. TCH-L1 (ADR 0063 §26) is
+**OPEN**: not a development blocker, a production blocker. Nothing here
+draws a statutory conclusion.
+
+**Two tiers.**
+
+```text
+Tier 1 (unchanged):  attendance.view / attendance.manage  -- School-wide
+Tier 2 (new):        attendance.teacher
+                     + verified ActingEmployee today (HR)
+                     + TeachingAssignment for the exact Section +
+                       SubjectOffering on the register's attendance_date
+```
+
+The production `teacher` role carries exactly `curriculum.delivery.teacher`
+and `attendance.teacher`. It has no `attendance.view`/`.manage` and no
+`students.view`. The role alone reaches nothing.
+
+**Date semantics.**
+- The actor must be an eligible Employee **today**.
+- Ownership is checked on the register's own `attendance_date`, for
+  submission and for correction alike.
+- A register is visible to a teacher when they own its class on its date.
+  So a class's later teacher does not see or correct an earlier teacher's
+  register, and a temporary cover teacher keeps the registers of their
+  cover dates.
+- Assignment bounds are inclusive.
+
+**Provenance, not authority.** A register still names its class through a
+TimetableEntry and still snapshots the entry's `teacher_id` (section 8).
+Neither that column nor `timetable_entries.teacher_id` authorizes. So:
+- a cover teacher with an assignment but no timetable slot can take the
+  register (the session still names the timetabled teacher);
+- a timetabled teacher without an assignment gets 404;
+- co-teachers both qualify.
+
+**Mechanism.**
+- The same `AttendanceSubmissionService` and `AttendanceCorrectionService`
+  run with an optional `AttendanceWriteGuard`; there is no second
+  submission or correction path.
+- `TeacherAttendanceGuard` runs inside their transaction before any
+  Attendance lock: capability → `ActingEmployeeResolver::hold()` →
+  visibility (404) → `TeachingOwnership::hold()` on the date
+  (`ATTENDANCE_OUTSIDE_TEACHING_ASSIGNMENT`, 422).
+- The lock order is identity → TeachingAssignment → the section 12 order.
+- Reads use `TeacherAttendanceAccess::scope()`, which filters in the query.
+
+**Surfaces.**
+- API `/api/v1/schools/{school}/my/attendance-sessions` (GET, POST),
+  `…/scheduled-classes`, `…/roster-preview`, `…/{id}` and
+  `/my/attendance-records/{id}/correct`, all `capability:attendance.teacher`
+  + `private-no-store`.
+- The owned submit is **not** `idempotent` (CLAUDE.md rule 32): a replay
+  would skip the identity/ownership re-check, and duplicates are refused by
+  the unique indexes (409).
+- Page `/app/my-attendance` ("My Attendance") reuses the Index, Take and
+  Show pages with only the teacher's classes, rosters and registers. It is
+  linked from the dashboard by the capability.
+
+**Denials.**
+- **403:** no capability, or not an eligible Employee
+  (`HR_ACTING_EMPLOYEE_UNAVAILABLE`).
+- **404:** an unowned class or register, another School's id, an unknown id
+  and a malformed id — all the same response.
+
+**Unchanged:** the schema, the Sensitive classification, the audit events
+(the acting User is the actor, as for Tier 1), zero domain events, and every
+section 5–14 rule.

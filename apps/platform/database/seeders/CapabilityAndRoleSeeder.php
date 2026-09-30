@@ -659,11 +659,18 @@ class CapabilityAndRoleSeeder extends Seeder
             // protected by expected-status compare-and-swap and full
             // audit, and splitting it would imply a reviewer/approver
             // workflow this checkpoint does not build (CLAUDE.md rule
-            // 2). There is likewise no `attendance.teacher` -- v1 is
-            // admin-only, with no teacher self-service and no
-            // teacher-ownership rule.
+            // 2). v1 was admin-only; TCH.4 adds the owned-scope
+            // `attendance.teacher` below (ADR 0063).
             ['key' => 'attendance.view', 'label' => 'View Student attendance registers', 'namespace' => 'school'],
             ['key' => 'attendance.manage', 'label' => 'Submit and correct Student attendance registers', 'namespace' => 'school'],
+            // TCH.4 (ADR 0063 sections 11-13, 16.2): the second OWNED-SCOPE
+            // (Tier 2) capability. Alone it reaches nothing: a register is
+            // reached only as a verified ActingEmployee (TCH.1) owning the
+            // Section + SubjectOffering through a TeachingAssignment (TCH.2)
+            // on the attendance date. `.teacher` is part of the key, never a
+            // role check. Production enablement of this surface is gated by
+            // the TCH-L1 legal/compliance determination (ADR 0063 section 26).
+            ['key' => 'attendance.teacher', 'label' => 'Take and correct attendance registers for the classes one teaches', 'namespace' => 'school'],
 
             // Phase 0H.3A (Syllabus Foundation -- the first concrete
             // Academics fact). Deliberately rooted at `syllabus.*`, NOT
@@ -1149,6 +1156,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // ActingEmployee and a TeachingAssignment, and School
                     // Admin already holds curriculum.delivery.manage.
                     'curriculum.delivery.teacher',
+                    // TCH.4: same no-escalation reason; School Admin already
+                    // holds the School-wide attendance.manage.
+                    'attendance.teacher',
                 ],
             ],
             'principal' => [
@@ -1332,6 +1342,9 @@ class CapabilityAndRoleSeeder extends Seeder
                 'scope' => 'school',
                 'capabilities' => [
                     'curriculum.delivery.teacher',
+                    // TCH.4: owned Attendance (production enablement gated
+                    // by TCH-L1, ADR 0063 section 26).
+                    'attendance.teacher',
                 ],
             ],
         ];

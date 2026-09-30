@@ -33,19 +33,22 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
     #[Test]
     public function only_adopted_surfaces_consume_ownership_and_only_through_teaching_ownership(): void
     {
-        // Adopted one surface at a time (ADR 0063 section 16). TCH.3 adopts
-        // Curriculum Delivery -- through the TeachingOwnership read only,
-        // never the model, the table or the administrative services.
-        foreach (['Timetable', 'Attendance', 'LMS', 'Syllabus', 'Examinations'] as $module) {
+        // Adopted one surface at a time (ADR 0063 section 16): TCH.3
+        // Curriculum Delivery, TCH.4 Attendance -- each through the
+        // TeachingOwnership read only, never the model, the table or the
+        // administrative services.
+        foreach (['Timetable', 'LMS', 'Syllabus', 'Examinations'] as $module) {
             $this->assertSame([], $this->grep('TeachingAssignment', "app/Domain/{$module}"), "{$module} is not an adopted TeachingAssignment consumer.");
         }
 
-        $uses = array_filter(
-            $this->grep('App\\Domain\\TeachingAssignments', 'app/Domain/CurriculumDelivery'),
-            fn (string $line) => ! str_contains($line, 'Application\\TeachingOwnership;') && ! str_contains($line, 'Application\\OwnedTeachingPeriod;'),
-        );
-        $this->assertSame([], array_values($uses), 'Curriculum Delivery may use TeachingOwnership/OwnedTeachingPeriod only: '.implode("\n", $uses));
-        $this->assertSame([], $this->grep('teaching_assignments', 'app/Domain/CurriculumDelivery'));
+        foreach (['CurriculumDelivery', 'Attendance'] as $module) {
+            $uses = array_filter(
+                $this->grep('App\\Domain\\TeachingAssignments', "app/Domain/{$module}"),
+                fn (string $line) => ! str_contains($line, 'Application\\TeachingOwnership;') && ! str_contains($line, 'Application\\OwnedTeachingPeriod;'),
+            );
+            $this->assertSame([], array_values($uses), "{$module} may use TeachingOwnership/OwnedTeachingPeriod only: ".implode("\n", $uses));
+            $this->assertSame([], $this->grep('teaching_assignments', "app/Domain/{$module}"));
+        }
 
         $this->assertSame([], $this->grep('TeachingAssignment', 'app/Support/Authorization'), 'CapabilityResolver stays independent of ownership.');
     }

@@ -11,10 +11,12 @@ owned teacher resource access
       AND a TeachingAssignment covering the resource on the day (TCH.2)
 ```
 
-**It grants nothing by itself.** Since TCH.3 (ADR 0063 §31) it is one of
-the three facts owned teacher access to **Curriculum Delivery** requires,
-read through `TeachingOwnership` (§8). Attendance, LMS and Timetable are
-still admin-only.
+**It grants nothing by itself.** It is one of the three facts that owned
+teacher access requires, read through `TeachingOwnership` (§8), for
+**Curriculum Delivery** (TCH.3, ADR 0063 §31) and **Attendance** (TCH.4,
+§32). LMS and Timetable are still admin-only. Production enablement of the
+teacher Attendance surface is blocked by the open legal/compliance
+determination TCH-L1 (ADR 0063 §26).
 
 ADR 0063 (§7–§10, §15, §19–§23, §30) is the decision record. This page
 describes the as-built module.
@@ -25,9 +27,12 @@ describes the as-built module.
   check) and Academic Structure (Section, SubjectOffering, AcademicYear), by
   composite foreign key and through tenant-scoped reads.
 - **Never depended on** by HR or Academic Structure.
-- **One consumer (TCH.3):** Curriculum Delivery, through `TeachingOwnership`
-  only. Timetable, Attendance, LMS, Syllabus and Examinations do not
-  reference it.
+- **Two consumers,** both through `TeachingOwnership`/`OwnedTeachingPeriod`
+  only:
+  - Curriculum Delivery (TCH.3), on the delivery's dates;
+  - Attendance (TCH.4), on the register's `attendance_date`.
+
+  Timetable, LMS, Syllabus and Examinations do not reference it.
 - **Not derived from anything else.** It never uses `TimetableEntry` (a
   weekly schedule, not authority) or `ActingEmployeeResolver` (the actor's
   identity, not the owner's).
@@ -158,5 +163,5 @@ The Employee passed in is always the consumer's verified ActingEmployee.
 Nothing here resolves identity, checks roles or is cached.
 
 Teachers never get `teaching.assignments.view`/`.manage`. They see only
-their own periods, through their consumer's projection (e.g. "My
-Curriculum Delivery").
+their own periods, through their consumer's projection ("My Curriculum
+Delivery", "My Attendance").

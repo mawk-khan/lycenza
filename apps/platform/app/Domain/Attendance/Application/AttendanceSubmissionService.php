@@ -38,13 +38,17 @@ use Symfony\Component\Uid\UuidV7;
  * Section row lock, so a second writer would silently bypass an
  * invariant no database constraint expresses.
  *
- * Deliberately authorization-neutral like every other Application
- * service here -- the controller authorizes `attendance.manage` before
- * reaching this class, and BEFORE the idempotency guard is consulted
- * (CLAUDE.md rule 32).
+ * Authorization-neutral for Tier 1: the controller authorizes
+ * `attendance.manage` before reaching this class, and BEFORE the
+ * idempotency guard is consulted (CLAUDE.md rule 32). TCH.4 (ADR 0063
+ * section 11) adds an optional Tier 2 AttendanceWriteGuard: when a teacher
+ * submits, the guard holds the ActingEmployee and the covering
+ * TeachingAssignment (FOR SHARE) as step 0, before any lock below.
  *
  * GLOBAL LOCK ORDER (never inverted):
  *
+ *   0. (Tier 2 only) School, membership, User, Employee, EmploymentRecord,
+ *      TeachingAssignment -- FOR SHARE, through the guard
  *   1. TimetableEntry   -- SELECT ... FOR UPDATE on (id, school_id)
  *   2. AcademicYear     -- SELECT ... FOR UPDATE
  *   3. Section          -- SELECT ... FOR UPDATE  (shared with SIS)
@@ -120,9 +124,19 @@ class AttendanceSubmissionService
         string $attendanceDate,
         array $records,
         User $actor,
+        ?AttendanceWriteGuard $guard = null,
     ): AttendanceSession {
         $this->assertNotInFuture($attendanceDate);
         $this->assertNoDuplicateEnrollments($records);
+
+        // 0. Tier 2 only: identity and ownership for the class the entry
+        //    names on this date, held before the entry lock (the ADR 0063
+        //    section 20 order). The entry only NAMES the class -- its
+        //    teacher_id authorizes nothing.
+        if ($guard !== null) {
+            $peek = TimetableEntry::query()->where('id', $timetableEntryId)->where('school_id', $school->id)->firstOrFail();
+            $guard->beforeSubmit($school, $peek->section_id, $peek->subject_offering_id, Carbon::parse($attendanceDate)->toDateString());
+        }
 
         // 1. TimetableEntry -- locked first, and every snapshot value is
         //    read off this locked row.
@@ -131,6 +145,13 @@ class AttendanceSubmissionService
             ->where('school_id', $school->id)
             ->lockForUpdate()
             ->firstOrFail();
+
+        // An entry repointed at another class between the unlocked read and
+        // the lock is re-checked against the class it names NOW.
+        if ($guard !== null
+            && ($peek->section_id !== $entry->section_id || $peek->subject_offering_id !== $entry->subject_offering_id)) {
+            $guard->beforeSubmit($school, $entry->section_id, $entry->subject_offering_id, Carbon::parse($attendanceDate)->toDateString());
+        }
 
         if (! $entry->isActive()) {
             throw new TimetableEntryNotSchedulableException;

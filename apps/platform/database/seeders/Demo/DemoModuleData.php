@@ -291,6 +291,35 @@ final class DemoModuleData
             null,
             $d->admin,
         );
+
+        // TCH.4: one past G8-A Mathematics register (taken by the School
+        // Admin, Tier 1), so "My Attendance" shows the teacher an owned
+        // register; every other date is hers to take.
+        foreach (self::ATTENDANCE_DATES as $date) {
+            $day = (int) Carbon::parse($date)->isoWeekday();
+            $entry = collect($this->entries)
+                ->filter(fn ($e, string $key) => str_starts_with($key, "G8-A|{$day}|") && $e->subject_offering_id === $d->offerings['G8-MATH']->id)
+                ->first();
+
+            if ($entry === null) {
+                continue;
+            }
+
+            $d->inSchool(function () use ($entry, $date, $d) {
+                $records = DB::table('student_enrollments')
+                    ->where('section_id', $d->sections['G8-A']->id)
+                    ->where('status', 'active')
+                    ->orderBy('roll_number')
+                    ->pluck('id')
+                    ->map(fn (string $id, int $i) => ['student_enrollment_id' => $id, 'status' => $i === 1 ? 'absent' : 'present'])
+                    ->all();
+
+                $attendance = app(AttendanceSubmissionService::class);
+                $attendance->guarded(fn () => DB::transaction(fn () => $attendance->submit($d->school, $entry->id, $date, $records, $d->admin)));
+            });
+
+            return;
+        }
     }
 
     // --- Examinations (0H.4A/B) + Grade scale (0H.4C) --------------------

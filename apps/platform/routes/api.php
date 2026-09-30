@@ -11,6 +11,7 @@ use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
 use App\Domain\Admissions\Http\Controllers\AdmissionApplicationController;
 use App\Domain\Admissions\Http\Controllers\ApplicantController;
 use App\Domain\Attendance\Http\Controllers\AttendanceSessionController;
+use App\Domain\Attendance\Http\Controllers\TeacherAttendanceController;
 use App\Domain\Canteen\Http\Controllers\CanteenBillingConfigurationController;
 use App\Domain\Canteen\Http\Controllers\CanteenItemController;
 use App\Domain\Canteen\Http\Controllers\CanteenOrderController;
@@ -1904,6 +1905,36 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/attendance-records/{attendanceRecord}/correct', [AttendanceSessionController::class, 'correct'])
                 ->middleware(['capability:attendance.manage', 'throttle:school-api-mutations'])
                 ->name('schools.attendance-records.correct');
+
+            // TCH.4 (ADR 0063 section 11, Tier 2): the OWNED teacher
+            // Attendance surface -- a separate `/my/` family so the
+            // School-wide routes above keep their meaning. The
+            // `attendance.teacher` middleware is only the outer check: the
+            // controller adds a verified ActingEmployee and TeachingAssignment
+            // ownership on the attendance date, and the services hold both
+            // inside each write. Unowned = 404. `private-no-store`: Sensitive
+            // Student attendance. Submit is deliberately not `idempotent`
+            // (see TeacherAttendanceController::store()). Helpers before
+            // `{attendanceSession}`. PRODUCTION ENABLEMENT is blocked by the
+            // open TCH-L1 legal/compliance determination.
+            Route::get('/my/attendance-sessions', [TeacherAttendanceController::class, 'index'])
+                ->middleware(['private-no-store', 'capability:attendance.teacher'])
+                ->name('schools.my.attendance-sessions.index');
+            Route::post('/my/attendance-sessions', [TeacherAttendanceController::class, 'store'])
+                ->middleware(['private-no-store', 'capability:attendance.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.attendance-sessions.store');
+            Route::get('/my/attendance-sessions/scheduled-classes', [TeacherAttendanceController::class, 'scheduledClasses'])
+                ->middleware(['private-no-store', 'capability:attendance.teacher'])
+                ->name('schools.my.attendance-sessions.scheduled-classes');
+            Route::get('/my/attendance-sessions/roster-preview', [TeacherAttendanceController::class, 'rosterPreview'])
+                ->middleware(['private-no-store', 'capability:attendance.teacher'])
+                ->name('schools.my.attendance-sessions.roster-preview');
+            Route::get('/my/attendance-sessions/{attendanceSession}', [TeacherAttendanceController::class, 'show'])
+                ->middleware(['private-no-store', 'capability:attendance.teacher'])
+                ->name('schools.my.attendance-sessions.show');
+            Route::post('/my/attendance-records/{attendanceRecord}/correct', [TeacherAttendanceController::class, 'correct'])
+                ->middleware(['private-no-store', 'capability:attendance.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.attendance-records.correct');
 
             // Phase 0H.3A (Syllabus Foundation -- the first concrete
             // Academics fact). Exactly FOUR operations: list/create

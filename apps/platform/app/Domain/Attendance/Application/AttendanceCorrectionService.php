@@ -37,6 +37,12 @@ use Illuminate\Support\Facades\DB;
  * The only things checked are the record's own identity, tenancy and
  * expected status.
  *
+ * TWO AUTHORIZATION TIERS (TCH.4, ADR 0063 section 11): Tier 1 callers
+ * hold `attendance.manage` and pass no guard; a Tier 2 teacher passes an
+ * AttendanceWriteGuard, run before the record lock. A teacher may correct
+ * only registers whose date their TeachingAssignment covers -- today's
+ * owner of a class cannot rewrite an earlier teacher's register.
+ *
  * Only `status` and `corrected_at` ever change. Nothing here can touch
  * a Session column, a structural context column, or
  * `student_enrollment_id`, and there is no delete.
@@ -54,8 +60,17 @@ class AttendanceCorrectionService
         string $expectedStatus,
         string $newStatus,
         User $actor,
+        ?AttendanceWriteGuard $guard = null,
     ): AttendanceRecord {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $attendanceRecordId, $expectedStatus, $newStatus, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $attendanceRecordId, $expectedStatus, $newStatus, $actor, $guard) {
+            // TCH.4 Tier 2 only: identity and ownership of the register's
+            // class ON its attendance_date, held before the record lock. A
+            // Session is immutable, so the unlocked read cannot go stale.
+            if ($guard !== null) {
+                $session = AttendanceRecord::query()->where('id', $attendanceRecordId)->where('school_id', $school->id)->firstOrFail()->session;
+                $guard->beforeCorrect($school, $session);
+            }
+
             $record = AttendanceRecord::query()
                 ->where('id', $attendanceRecordId)
                 ->where('school_id', $school->id)

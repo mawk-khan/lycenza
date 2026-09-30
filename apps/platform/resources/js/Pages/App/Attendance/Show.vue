@@ -49,9 +49,11 @@ interface Props {
     session: SessionDetail;
     statuses: string[];
     canManage: boolean;
+    // TCH.4: "My Attendance" reuses this page under its own URL.
+    baseUrl?: string;
 }
 
-defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), { baseUrl: '/app/attendance' });
 
 const DAY_NAMES = [
     '',
@@ -75,7 +77,7 @@ function correct(record: RecordRow, newStatus: string): void {
     }
     correcting.value = record.id;
     router.post(
-        `/app/attendance/records/${record.id}/correct`,
+        `${props.baseUrl}/records/${record.id}/correct`,
         { expected_status: record.status, new_status: newStatus },
         { onFinish: () => (correcting.value = null) },
     );
@@ -84,7 +86,7 @@ function correct(record: RecordRow, newStatus: string): void {
 
 <template>
     <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app/attendance">← Registers</a>
+        <a class="text-sm underline" :href="baseUrl">← Registers</a>
 
         <h1 class="mt-2 text-xl font-semibold">
             {{ session.sectionCode }} · {{ session.subjectName }}

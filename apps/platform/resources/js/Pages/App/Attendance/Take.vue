@@ -38,9 +38,11 @@ interface Props {
     roster: RosterRow[];
     rosterError: string | null;
     statuses: string[];
+    // TCH.4: "My Attendance" reuses this page under its own URL.
+    baseUrl?: string;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), { baseUrl: '/app/attendance' });
 
 const attendanceDate = ref(props.attendanceDate);
 const selected = ref(props.selectedTimetableEntryId ?? '');
@@ -58,7 +60,7 @@ watch(
 
 function reload(): void {
     router.get(
-        '/app/attendance/take',
+        `${props.baseUrl}/take`,
         {
             attendance_date: attendanceDate.value,
             timetable_entry_id: selected.value || undefined,
@@ -89,13 +91,13 @@ function submit(): void {
         student_enrollment_id: member.studentEnrollmentId,
         status: marks.value[member.studentEnrollmentId],
     }));
-    form.post('/app/attendance');
+    form.post(props.baseUrl);
 }
 </script>
 
 <template>
     <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app/attendance">← Registers</a>
+        <a class="text-sm underline" :href="baseUrl">← Registers</a>
 
         <h1 class="mt-2 text-xl font-semibold">Take a register</h1>
         <p class="mt-1 text-sm text-slate-500">

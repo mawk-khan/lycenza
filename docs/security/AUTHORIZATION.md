@@ -156,16 +156,20 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   See `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
-## Ownership-based authorization (ADR 0063 — TCH; first adopter: Curriculum Delivery)
+## Ownership-based authorization (ADR 0063 — TCH; adopters: Curriculum Delivery, Attendance)
 
 Roles stay capability bundles. ADR 0063 (TCH.0, 2026-09-30) contracts the
 platform's first ownership-based authorization, for teachers. The
 ActingEmployee identity boundary (TCH.1), the TeachingAssignment ownership
-fact (TCH.2) and the first owned adopter (TCH.3) are built.
+fact (TCH.2) and two owned adopters — Curriculum Delivery (TCH.3) and
+Attendance (TCH.4) — are built.
 
-**Curriculum Delivery is the only owned teaching surface.** Attendance, LMS
+**Curriculum Delivery and Attendance are the owned teaching surfaces.** LMS
 and Timetable remain admin-only, and Timetable stays scheduling evidence,
-never ownership authority. The first implemented example:
+never ownership authority. **Teacher Attendance functionality is implemented
+but production enablement remains blocked by TCH-L1 until the required
+legal/compliance determination is recorded** (ADR 0063 §26). The first
+implemented example:
 
 ```text
 School-wide Curriculum Delivery (Tier 1):
@@ -185,14 +189,37 @@ for reads and `TeacherDeliveryGuard` for writes, the latter run inside
 SHARE before the row lock). An unowned resource is the same 404 as a missing
 one (ADR 0063 §18, §31).
 
-**Teacher role.** The production system role `teacher` carries only
-`curriculum.delivery.teacher`:
+The second, on Sensitive Student data (ADR 0063 §32):
+
+```text
+School-wide Attendance (Tier 1, unchanged):
+    attendance.view / attendance.manage
+
+Owned teacher Attendance (Tier 2):
+    attendance.teacher
+    + verified ActingEmployee today
+    + TeachingAssignment for the exact Section + SubjectOffering
+      on the register's attendance_date
+```
+
+Reads go through `App\Domain\Attendance\Application\TeacherAttendanceAccess`
+(lists filtered in the query) and writes through `TeacherAttendanceGuard`, run
+inside `AttendanceSubmissionService`'s and `AttendanceCorrectionService`'s
+transactions before any Attendance lock. The TimetableEntry only names the
+class; neither `timetable_entries.teacher_id` nor
+`attendance_sessions.teacher_id` authorizes. The roster is exposed only for
+an owned class; a teacher gets no `students.view`. The owned submit is not
+`idempotent`: a replay would bypass the in-handler identity and ownership
+re-check (rule 32), and duplicate registers are refused by the database.
+
+**Teacher role.** The production system role `teacher` carries exactly
+`curriculum.delivery.teacher` and `attendance.teacher`:
 - It is a bundle, never a check: no code tests the role key, and any role
   carrying the capability behaves identically.
 - On its own it reaches nothing.
 - It is granted and revoked through the ordinary staff role path.
-- `school_admin` also holds the capability, only so it can grant the role
-  under the no-escalation rule.
+- `school_admin` also holds both capabilities, only so it can grant the
+  role under the no-escalation rule.
 
 - **Two capability tiers:**
 
@@ -210,9 +237,9 @@ one (ADR 0063 §18, §31).
   - Existing School-wide capabilities (e.g. `attendance.manage`,
     `curriculum.delivery.manage`, `lms.content.manage`) keep their current
     meaning and grants.
-  - Owned-scope capabilities (anticipated names such as
-    `curriculum.delivery.teacher`) require capability **AND** ownership,
-    never either alone.
+  - Owned-scope capabilities (`curriculum.delivery.teacher`,
+    `attendance.teacher`) require capability **AND** ownership, never
+    either alone.
 - **ActingEmployee** (HR): User → active SchoolMembership → linked Employee
   → active Employee record → eligible current EmploymentRecord (dated
   current, status `active` or `notice_period`).
@@ -237,7 +264,7 @@ one (ADR 0063 §18, §31).
     administrative (Tier 1) capabilities, granted to `school_admin` and
     `principal`, checked on the route and in the service. An administrator
     needs no ActingEmployee.
-  - Read for access decisions only through `TeachingOwnership` (TCH.3), by Curriculum Delivery.
+  - Read for access decisions only through `TeachingOwnership`, by Curriculum Delivery (TCH.3) and Attendance (TCH.4).
   - `TimetableEntry.teacher_id` is scheduling evidence and never grants
     access.
 - **No role-name check, ever.**

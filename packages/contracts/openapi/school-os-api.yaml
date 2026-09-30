@@ -9549,6 +9549,243 @@ paths:
   # No Student, Guardian, Employee or teacher identity appears in any
   # schema below, and no grading, marks, assignment or submission field
   # exists anywhere -- those belong to Examinations and LMS.
+  # --- TCH.4 (ADR 0063 section 11, Tier 2): the OWNED teacher Attendance
+  # surface. Every operation requires attendance.teacher AND a verified
+  # ActingEmployee (linked, active, eligible employment today) AND a
+  # TeachingAssignment of that Employee for the exact Section +
+  # SubjectOffering on the register's attendance_date. The TimetableEntry
+  # only names the class; neither its teacher_id nor the session's
+  # teacher_id snapshot authorizes. An unowned register or class, another
+  # School's id and an unknown id are the same 404. Separate from the
+  # School-wide operations above, which are unchanged.
+  # PRODUCTION ENABLEMENT is blocked by the open TCH-L1 legal/compliance
+  # determination (ADR 0063 section 26).
+  /schools/{schoolId}/my/attendance-sessions:
+    get:
+      operationId: listMyAttendanceSessions
+      summary: >
+        The teacher's own registers: those whose Section + SubjectOffering
+        the teacher owns on the register's attendance_date. Filtered in the
+        query; fixed page size of 50.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: attendance_date, in: query, required: false, schema: { type: string, format: date } }
+        - { $ref: "#/components/parameters/Page" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AttendanceSessionSummary" } }
+                  meta: { $ref: "#/components/schemas/TimetablePaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid query parameter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: submitMyAttendanceSession
+      summary: >
+        Submits one complete register for an owned class on a date the
+        teacher's assignment covers, through the same submission rules as the
+        School-wide operation. Deliberately without Idempotency-Key replay: a
+        duplicate register is refused by the database's unique indexes (409),
+        and every request re-verifies identity and ownership.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttendanceRegisterInput" }
+      responses:
+        "201":
+          description: Submitted.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AttendanceSession" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown TimetableEntry, or not one of the teacher's classes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: A register already exists for this class/slot on this date, or a roster conflict.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: ATTENDANCE_OUTSIDE_TEACHING_ASSIGNMENT, or any School-wide submission rule (roster mismatch, weekday, year, future date).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/attendance-sessions/scheduled-classes:
+    get:
+      operationId: listMyScheduledClasses
+      summary: >
+        The teacher's own classes scheduled on a date: active timetable
+        entries whose Section + SubjectOffering the teacher owns on that
+        date. The entry's teacher is shown as the scheduled teacher and
+        plays no part in the filter.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: attendance_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/AttendanceScheduledClass" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Missing or malformed attendance_date.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/attendance-sessions/roster-preview:
+    get:
+      operationId: previewMyAttendanceRoster
+      summary: >
+        Non-authoritative roster preview for an OWNED class on a date the
+        teacher's assignment covers. No Student directory access.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: timetable_entry_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: attendance_date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/AttendanceRosterMember" } }
+                  meta:
+                    type: object
+                    required: [timetableEntryId, sectionId, attendanceDate, authoritative]
+                    properties:
+                      timetableEntryId: { type: string, format: uuid }
+                      sectionId: { type: string, format: uuid }
+                      attendanceDate: { type: string, format: date }
+                      authoritative: { type: boolean }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown TimetableEntry, or not the teacher's class on this date.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Missing or malformed query parameter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/attendance-sessions/{attendanceSessionId}:
+    get:
+      operationId: getMyAttendanceSession
+      summary: One owned register with its records (Student id, roll number and display name only).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: attendanceSessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AttendanceSession" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not the teacher's register (or not found).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/attendance-records/{attendanceRecordId}/correct:
+    post:
+      operationId: correctMyAttendanceRecord
+      summary: >
+        The School-wide expected-status compare-and-swap correction, on a
+        record of a register the teacher owns on its own attendance_date --
+        a class's current teacher cannot rewrite an earlier teacher's
+        register.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: attendanceRecordId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttendanceCorrectionInput" }
+      responses:
+        "200":
+          description: Corrected.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/AttendanceRecord" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not a record of the teacher's register (or not found).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The record's current status is not the supplied expected_status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid body, a no-op correction, or ATTENDANCE_OUTSIDE_TEACHING_ASSIGNMENT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /schools/{schoolId}/subject-offerings/{subjectOfferingId}/syllabus-units:
     get:
       operationId: listSyllabusUnits
