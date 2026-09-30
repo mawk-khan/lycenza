@@ -21,9 +21,17 @@ code change.
 
 ## Actor categories
 
-None of these are implemented yet in Phase 0A (no Identity & Access
-module exists) — this is the design reference for whichever module
-builds it (`docs/architecture/DOMAIN-MAP.md` Layer 0).
+This table is a design reference, not a list of implemented roles.
+(Historical, Phase 0A: none were implemented then.) As built
+(2026-09-30):
+- the system roles are `platform_super_admin`, `platform_auditor`
+  (platform), `group_admin` (Group), and `school_admin` and `principal`
+  (School);
+- every other row here is a design-reference actor, with no production
+  role;
+- the Teacher row is contracted by ADR 0063 (TCH) — see "Ownership-based
+  authorization" below. It is **not** implemented yet: there is no
+  production Teacher role and no teacher ownership.
 
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|
@@ -93,9 +101,16 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   minimal `platform.*`/`school.*` namespace needed to prove the
   architecture (section 17) — future modules reserve their own
   namespace (`students.*`, `fees.*`, ...).
-- **Roles**: `roles` table (central catalog; `scope` is `platform` or
-  `school`). Only system-defined roles exist (`platform_super_admin`,
-  `school_admin`, `principal`) — tenant-custom roles are future work.
+- **Roles**: `roles` table (central, global catalog; `scope` is
+  `platform`, `school` or `group` since Phase 0N.5). Only system-defined
+  roles exist:
+  - `platform_super_admin` and `platform_auditor` (platform);
+  - `group_admin` (Group);
+  - `school_admin` and `principal` (School).
+
+  The DDEV demo adds non-system `demo.*` roles only behind its local-demo
+  guard. Tenant-custom roles are future work; ADR 0063 adds no custom roles,
+  only a planned minimal system Teacher role.
 - **Assignment, kept structurally separate by scope**:
   `platform_role_assignments` (central) for platform roles,
   `membership_role_assignments` (tenant-owned, RLS-protected) for
@@ -123,13 +138,71 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   `App\Support\Authorization\AuthorizesCapability` controller trait
   (`SchoolSettingsController` demonstrates both, one per action, in
   real tested code).
-- **Revocation**: a disabled user or a suspended/revoked membership
-  loses access on the *next* capability check — there is no session- or
-  cache-level grace period, since `CapabilityResolver` re-derives from
-  the database each time its cache entry expires (60s TTL) and the
-  check itself queries current `is_disabled`/membership `status`. See
-  `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
+- **Revocation**:
+  - **A disabled user** loses access on the next capability check: `is_disabled`
+    is checked before the capability cache is read.
+  - **A suspended membership** is refused on every School request
+    immediately, because `RequireSchoolContext`/`ResolveSchoolContext`
+    re-check membership status without the cache.
+  - **The School capability set itself is cached for 60 s**, with membership
+    status read *inside* the cached value (`CapabilityResolver`).
+    `StaffAccessService` calls `forgetCache` on suspension and role changes,
+    but a non-HTTP caller relying on the resolver alone after a path that
+    skips `forgetCache` may see stale capabilities for up to 60 s.
+  - For that reason ADR 0063 requires state-changing teacher operations to
+    re-read membership and ownership under lock inside their transaction.
+
+  See `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
+
+## Ownership-based authorization (ADR 0063 — TCH contract; not implemented)
+
+Roles stay capability bundles. ADR 0063 (TCH.0, 2026-09-30) contracts the
+platform's first ownership-based authorization, for teachers. **None of it
+is built yet**: every teaching module is still admin-only.
+
+- **Two capability tiers:**
+
+  ```text
+  Administrative School-wide resource access:
+      active actor + required School-wide capability
+
+  Owned teacher resource access:
+      active actor
+      + verified ActingEmployee
+      + required owned-scope capability
+      + authoritative TeachingAssignment ownership
+  ```
+
+  - Existing School-wide capabilities (e.g. `attendance.manage`,
+    `curriculum.delivery.manage`, `lms.content.manage`) keep their current
+    meaning and grants.
+  - Owned-scope capabilities (anticipated names such as
+    `curriculum.delivery.teacher`) require capability **AND** ownership,
+    never either alone.
+- **ActingEmployee** (HR): User → active SchoolMembership → linked Employee
+  → active Employee record → eligible current EmploymentRecord (dated
+  current, status `active` or `notice_period`).
+  - Resolved server-side and fails closed.
+  - Never inferred from an email, employee number, name or any request
+    field.
+  - It identifies; it authorizes nothing by itself.
+- **TeachingAssignment** is the ownership fact: a dated Employee × Section ×
+  required SubjectOffering assignment, administered under
+  `teaching.assignments.*`.
+  - `TimetableEntry.teacher_id` is scheduling evidence and never grants
+    access.
+- **No role-name check, ever.**
+  - A Teacher role is a capability bundle, never authorization: a Teacher
+    without qualifying ownership reaches no owned resource.
+  - The `.teacher` suffix in a capability key is a permission name, not a
+    role check.
+- **Out of scope for TCH:**
+  - generic staff roles (accountant, HR, librarian, reception, transport,
+    admissions);
+  - tenant-custom roles;
+  - HRX self-service;
+  - RES, POR and Lesson Planning.
 
 ## Source-record access vs. derived/aggregate-view access are separate concepts (ADR 0040)
 
@@ -625,8 +698,10 @@ already received.
 
 ## What is NOT yet implemented
 
-Tenant-custom roles, a UI for managing role assignments (only the data
-model + a seeded system catalog exist), a real "platform admin enters a
+Tenant-custom roles (role *assignment* exists: Settings → Staff accounts
+grants and revokes School roles from the closed catalog, ADR 0059; role
+*creation* does not), teacher ownership-based authorization (contracted by
+ADR 0063, not built), a real "platform admin enters a
 specific School's context" elevation workflow (the brief in section 12
 deliberately asked for only the *foundation*, proven by denial — see
 `CapabilityResolverTest::platform_capability_grant_does_not_imply_school_capability`

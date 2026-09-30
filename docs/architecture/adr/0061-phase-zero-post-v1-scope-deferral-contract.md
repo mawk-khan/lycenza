@@ -82,6 +82,11 @@ Lesson Planning are **not** complete.
 
 Nothing else is inferred.
 
+*Reopening trace (2026-09-30):* the deferred "teacher identity and
+ownership-based authorization" item was reopened under §2.5 by TCH.0 /
+ADR 0063. The other §2.3 deferred items remain deferred unless separately
+reopened.
+
 ### 2.4 StudentMark legal determination — preserved, not widened
 
 `docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md` (Lead Privacy

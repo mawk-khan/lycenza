@@ -71,11 +71,34 @@ contract checkpoint.
 | Order | Programme | Status |
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
-| 2 | TCH — Teacher identity & ownership-based authorization | Not started (contract first) |
+| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE — TCH.0 contract** (ADR 0063, 2026-09-30). Contract only: teacher authorization is **not** implemented; every teaching module stays admin-only until TCH.3 onward |
 | 3 | HRX — Leave & staff attendance | Not started |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
+
+**TCH checkpoints (ADR 0063 §25)** -- TCH.0 contract accepted; nothing
+implemented yet:
+- **TCH.0 — Teacher Identity & Ownership-Based Authorization Contract**
+  (ADR 0063, docs only). Contract complete; not implementation.
+- **TCH.1 — Verified ActingEmployee identity boundary** (HR): User → active
+  membership → linked active Employee → eligible current employment;
+  hardened, audited link/unlink. Planned.
+- **TCH.2 — Authoritative TeachingAssignment foundation** (dated Employee ×
+  Section × required SubjectOffering; administered under
+  `teaching.assignments.*`). Planned.
+- **TCH.3 — Production Teacher role + Curriculum Delivery adoption.**
+  Planned.
+- **TCH.4 — Attendance teacher adoption.** Planned (production carries legal
+  determination TCH-L1).
+- **TCH.5 — LMS teaching adoption**, only after the LMS ownership decision;
+  the owner may remove it. Planned.
+- **TCH.6 — TCH closure audit.** Planned.
+
+TCH reopens only the ADR 0061 §2.3 item "teacher identity and
+ownership-based authorization". Lesson Planning, StudentMark/RES, POR, HRX,
+generic staff-role expansion, tenant-custom roles and LMS Submission stay
+outside it.
 
 **FEE checkpoints (ADR 0062 §25)** -- all built, development-closed
 2026-09-30:
