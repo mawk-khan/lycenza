@@ -83,6 +83,7 @@ class ManualPaymentController extends Controller
                     'description' => $c->description,
                     'amount' => $c->amount,
                     'allocated' => $c->allocated,
+                    'adjusted' => $c->adjusted,
                     'outstanding' => $c->outstanding,
                     'currency' => $c->currency,
                     'dueDate' => $c->dueDate?->toDateString(),

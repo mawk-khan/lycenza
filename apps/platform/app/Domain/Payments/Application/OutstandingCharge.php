@@ -9,6 +9,9 @@ use Illuminate\Support\Carbon;
  * to, with its recognized allocations so far -- a display projection for
  * the recording form. The authoritative remaining balance is re-derived
  * under the Charge row lock when the payment is recorded.
+ *
+ * FEE.3 (ADR 0062 §15): `adjusted` is the live fee-adjustment total and
+ * `outstanding` = amount - allocated - adjusted.
  */
 final class OutstandingCharge
 {
@@ -20,5 +23,6 @@ final class OutstandingCharge
         public readonly string $outstanding,
         public readonly string $currency,
         public readonly ?Carbon $dueDate,
+        public readonly string $adjusted = '0.00',
     ) {}
 }

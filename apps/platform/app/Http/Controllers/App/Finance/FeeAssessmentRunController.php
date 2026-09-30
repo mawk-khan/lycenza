@@ -12,6 +12,7 @@ use App\Domain\Fees\Application\Exceptions\InvalidFeeAssessmentRunException;
 use App\Domain\Fees\Application\FeeAssessmentRunReadService;
 use App\Domain\Fees\Application\FeeAssessmentRunService;
 use App\Domain\Fees\Application\FeeAssessmentService;
+use App\Domain\Fees\Application\FeeConcessionReadService;
 use App\Domain\Fees\Application\FeeStructureReadService;
 use App\Domain\Fees\Http\FeeSetupPresenter;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRun;
@@ -97,7 +98,7 @@ class FeeAssessmentRunController extends Controller
         return redirect("/app/finance/fee-runs/{$run->id}");
     }
 
-    public function show(Request $request, TenantContext $context, FeeAssessmentRunReadService $reads, CapabilityResolver $capabilities, string $run): Response
+    public function show(Request $request, TenantContext $context, FeeAssessmentRunReadService $reads, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, string $run): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.view', $school);
@@ -119,6 +120,13 @@ class FeeAssessmentRunController extends Controller
         $heads = FeeHead::query()->get()->keyBy('id');
         $structure = FeeStructure::query()->find($model->fee_structure_id);
 
+        // FEE.3 (ADR 0062 §14.4): gross, concession and net per item -- only
+        // for a viewer of concessions (Highly Sensitive), for items that
+        // have not executed yet.
+        $projection = $structure !== null && $capabilities->canInSchool($actor, FeeConcessionReadService::VIEW, $school)
+            ? $concessions->previewStanding($school, $structure->academic_year_id, collect($items->items())->filter(fn (FeeAssessmentRunItem $i) => $i->preview_result === FeeAssessmentRunItem::RESULT_READY && in_array($i->execution_status, [null, FeeAssessmentRunItem::EXEC_PENDING], true)), $actor)
+            : null;
+
         return Inertia::render('App/Finance/FeeSetup/Run', [
             'run' => [
                 ...FeeSetupPresenter::run($model),
@@ -129,6 +137,7 @@ class FeeAssessmentRunController extends Controller
                 'studentName' => ($s = $students->get($i->student_id)) ? collect([$s->first_name, $s->middle_name, $s->last_name])->filter()->implode(' ') : null,
                 'studentNumber' => $students->get($i->student_id)?->student_number,
                 'feeHeadCode' => $heads->get($i->fee_head_id)?->code,
+                'concessionPreview' => $projection[$i->id] ?? null,
             ])->appends($request->only('preview_result')),
             'filters' => ['preview_result' => $validated['preview_result'] ?? ''],
             'canRun' => $capabilities->canInSchool($actor, 'finance.fee_assessments.run', $school),

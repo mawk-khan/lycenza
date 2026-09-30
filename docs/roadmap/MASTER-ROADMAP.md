@@ -132,8 +132,21 @@ No proration (D1). The as-built record is in `docs/modules/FINANCE.md`
 - **M:** closed categories `concession`/`scholarship`/`waiver`, with no
   free-text note.
 
-**Next: FEE.3 — Concessions / Scholarships / Waivers.** It is unblocked and
-not started. H, I, I2 and the §27 legal questions remain open.
+**FEE.3 — COMPLETE (2026-09-30).** Built:
+- concession requests with maker/checker approval (database-enforced
+  separation of duties);
+- posted adjustments to the School's concession expense account;
+- the G1 current-outstanding cap through the Payments-owned capacity guard;
+- standing concessions applied inside assessment;
+- adjustment cancellation and the charge-cancel guard.
+
+The as-built record is in `docs/modules/FINANCE.md` "FEE.3 as-built" and
+the ADR 0062 implementation note.
+
+**Next: FEE.4 — Receipts & staff fee statements.** It is blocked on owner
+decisions I (receipt numbering) and I2 (existing payments), and the
+receipt/GST form is **[LEGAL REVIEW REQUIRED]**. FEE.5 (late fees) stays
+behind H and the fee-regulation legal answer.
 
 ## Phase 0A — Architectural Foundation (complete)
 

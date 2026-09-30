@@ -40,6 +40,14 @@ class FeeSetupArchitectureGuardTest extends TestCase
         'app/Domain/Fees/Http/Controllers/FeeAssessmentRunController.php',
         'app/Http/Controllers/App/Finance/FeeAssessmentRunController.php',
         'app/Jobs/ExecuteFeeAssessmentRunJob.php',
+        // FEE.3
+        'app/Domain/Fees/Application/FeeConcessionService.php',
+        'app/Domain/Fees/Application/FeeAdjustmentService.php',
+        'app/Domain/Fees/Application/FeeConcessionReadService.php',
+        'app/Domain/Fees/Application/FeeSettingsService.php',
+        'app/Domain/Fees/Application/RequestFeeConcessionData.php',
+        'app/Domain/Fees/Http/Controllers/FeeConcessionController.php',
+        'app/Http/Controllers/App/Finance/FeeConcessionController.php',
     ];
 
     private const MIGRATIONS = [
@@ -64,7 +72,9 @@ class FeeSetupArchitectureGuardTest extends TestCase
         }
 
         foreach (['resources/js/Pages/App/Finance/FeeSetup/Index.vue', 'resources/js/Pages/App/Finance/FeeSetup/Structure.vue',
-            'resources/js/Pages/App/Finance/FeeSetup/Runs.vue', 'resources/js/Pages/App/Finance/FeeSetup/Run.vue'] as $page) {
+            'resources/js/Pages/App/Finance/FeeSetup/Runs.vue', 'resources/js/Pages/App/Finance/FeeSetup/Run.vue',
+            'resources/js/Pages/App/Finance/Concessions/Index.vue', 'resources/js/Pages/App/Finance/Concessions/Create.vue',
+            'resources/js/Pages/App/Finance/Concessions/Show.vue'] as $page) {
             $code = $this->source($page);
             foreach (['parseFloat', 'Number(', 'toFixed('] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$page} must not use {$forbidden} for money.");
@@ -90,7 +100,8 @@ class FeeSetupArchitectureGuardTest extends TestCase
     {
         $registry = app(WebhookEventRegistry::class);
 
-        foreach (['fee_structure.activated.v1', 'fee_assessment_run.completed.v1'] as $type) {
+        foreach (['fee_structure.activated.v1', 'fee_assessment_run.completed.v1', 'fee_concession.approved.v1', 'fee_concession.rejected.v1',
+            'fee_adjustment.posted.v1', 'fee_adjustment.cancelled.v1'] as $type) {
             $this->assertFalse($registry->exists($type), $type);
             $this->assertFalse($registry->isSubscribable($type), $type);
         }
@@ -124,5 +135,30 @@ class FeeSetupArchitectureGuardTest extends TestCase
         foreach (['fee_heads', 'fee_settings', 'fee_structures', 'fee_optional_selections'] as $table) {
             $this->assertStringContainsString("TenantRls::revokeDelete('{$table}')", $all, "{$table} must never be hard-deleted.");
         }
+    }
+
+    #[Test]
+    public function fee_3_tables_are_rls_enabled_never_deleted_and_the_capacity_guard_is_payments_owned(): void
+    {
+        $concessions = $this->source('database/migrations/2026_10_31_090000_create_fee_concessions_table.php');
+        $adjustments = $this->source('database/migrations/2026_10_31_090100_create_fee_adjustments_table.php');
+        $capacity = $this->source('database/migrations/2026_10_31_090200_amend_payment_charge_capacity_for_fee_adjustments.php');
+
+        foreach (['fee_concessions' => $concessions, 'fee_adjustments' => $adjustments] as $table => $migration) {
+            $this->assertStringContainsString("TenantRls::enable('{$table}')", $migration);
+            $this->assertStringContainsString("TenantRls::revokeDelete('{$table}')", $migration);
+            $this->assertStringNotContainsString('payment_allocations', $migration, 'Fees-owned migrations never read payment_allocations.');
+        }
+        $this->assertStringNotContainsString("'note'", $concessions, 'No free-text note column (owner decision M).');
+        $this->assertStringContainsString('fee_concessions_sod_check', $concessions);
+
+        // ADR 0062 §15: the Payments-owned amendment reads allocations and
+        // adjustments, and its down() restores the 0G.5 body verbatim.
+        $this->assertStringContainsString('payments_lock_and_validate_charge_adjustment', $capacity);
+        $this->assertSame(2, substr_count($capacity, 'CREATE OR REPLACE FUNCTION payments_lock_and_validate_charge_allocation()'));
+        $original = $this->source('database/migrations/2026_09_09_090200_create_payment_allocations_table.php');
+        preg_match('/(DECLARE\s+v_charge_amount numeric;\s+v_cancelled_at timestamp;\s+v_allocated_total numeric;\s+BEGIN.*?END;)/s', $original, $m);
+        $this->assertNotEmpty($m, 'The 0G.5 function body was found.');
+        $this->assertStringContainsString($m[1], $capacity, 'down() restores the 0G.5 allocation function body verbatim.');
     }
 }

@@ -13,7 +13,9 @@ use Tests\TestCase;
  * FEE.1 (ADR 0062 §19, owner decision L): the three FEE.1 capabilities are
  * School-scoped, granted by default to School Admin only (never Principal
  * or any other default role), and the demo finance officer holds them.
- * No FEE.2+ capability (assessment, concessions) is registered yet.
+ * FEE.2 adds the run capability; FEE.3 the three concession capabilities
+ * (School Admin all, Principal none, the demo finance officer everything
+ * except approval -- maker/checker).
  */
 class FeeSetupCapabilityRegistryTest extends TestCase
 {
@@ -52,7 +54,7 @@ class FeeSetupCapabilityRegistryTest extends TestCase
     }
 
     #[Test]
-    public function fee_2_registers_only_the_run_capability_and_no_fee_3_capability_exists_yet(): void
+    public function fee_2_registers_the_run_capability_for_school_admin_only(): void
     {
         $run = Capability::query()->where('key', 'finance.fee_assessments.run')->firstOrFail();
         $this->assertSame('school', $run->namespace);
@@ -62,10 +64,25 @@ class FeeSetupCapabilityRegistryTest extends TestCase
             ->pluck('key')->values()->all();
         $this->assertSame(['school_admin'], $holders, 'Only School Admin runs fee assessments by default; never Principal.');
         $this->assertContains('finance.fee_assessments.run', DemoAccountCatalog::OPERATIONS_DESK_ROLES['demo.finance_officer']['capabilities']);
+    }
+
+    #[Test]
+    public function fee_3_concession_capabilities_follow_owner_decision_l(): void
+    {
+        $officer = DemoAccountCatalog::OPERATIONS_DESK_ROLES['demo.finance_officer']['capabilities'];
 
         foreach (['finance.fee_concessions.view', 'finance.fee_concessions.request', 'finance.fee_concessions.approve'] as $key) {
-            $this->assertFalse(Capability::query()->where('key', $key)->exists(), "{$key} belongs to FEE.3.");
+            $this->assertSame('school', Capability::query()->where('key', $key)->value('namespace'), $key);
+
+            $holders = Role::query()->where('scope', 'school')->where('is_system', true)->get()
+                ->filter(fn (Role $role) => $role->capabilities->contains('key', $key))
+                ->pluck('key')->values()->all();
+            $this->assertSame(['school_admin'], $holders, "{$key}: School Admin only by default; never Principal.");
         }
+
+        $this->assertContains('finance.fee_concessions.view', $officer);
+        $this->assertContains('finance.fee_concessions.request', $officer);
+        $this->assertNotContains('finance.fee_concessions.approve', $officer, 'The demo officer requests; School Admin approves (maker/checker).');
     }
 
     #[Test]

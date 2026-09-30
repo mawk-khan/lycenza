@@ -4,6 +4,7 @@ namespace App\Domain\Fees\Application;
 
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
+use App\Domain\Fees\Application\Exceptions\ChargeHasActiveAdjustmentsException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeIsFeeAssessedException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
@@ -12,6 +13,7 @@ use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
 use App\Domain\Fees\Events\ChargeAssessed;
 use App\Domain\Fees\Events\ChargeCancelled;
 use App\Domain\Fees\Infrastructure\Charge;
+use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Finance\Application\Exceptions\JournalEntryAlreadyReversedException;
 use App\Domain\Finance\Application\JournalLineData;
 use App\Domain\Finance\Application\LedgerService;
@@ -231,6 +233,11 @@ class ChargeService
                         throw new ChargeHasPaymentAllocationsException($charge->id);
                     }
 
+                    // FEE.3 (ADR 0062 §14.7): cancel live adjustments first.
+                    if (str_contains($e->getMessage(), 'has active fee adjustments; cancel them first')) {
+                        throw new ChargeHasActiveAdjustmentsException($charge->id);
+                    }
+
                     // FEE.2 (ADR 0062 §11.3): a fee-assessed charge is
                     // cancelled only through the assessment void path.
                     if (str_contains($e->getMessage(), 'is fee-assessed; void its fee assessment')) {
@@ -284,8 +291,35 @@ class ChargeService
                 amount: Money::of($charge->amount, $charge->currency),
                 receivableLedgerAccountId: $charge->receivable_ledger_account_id,
                 isCancelled: $charge->isCancelled(),
+                adjustedTotal: $this->liveAdjustmentTotalsFor($school, [$charge->id])[$charge->id] ?? Money::of('0.00', $charge->currency),
             );
         });
+    }
+
+    /**
+     * FEE.3 (ADR 0062 §15): the live (uncancelled) fee-adjustment total per
+     * charge, for Payments' "outstanding" display. Trusted, read-only, no
+     * capability check (the caller authorizes, like
+     * `uncancelledChargesForStudent()`); ids of another School simply
+     * contribute nothing.
+     *
+     * @param  list<string>  $chargeIds
+     * @return array<string, Money> keyed by charge id; charges without adjustments are absent
+     */
+    public function liveAdjustmentTotalsFor(School $school, array $chargeIds): array
+    {
+        if ($chargeIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, fn () => FeeAdjustment::query()
+            ->whereIn('charge_id', $chargeIds)
+            ->whereNull('cancelled_at')
+            ->groupBy('charge_id', 'currency')
+            ->selectRaw('charge_id, currency, sum(amount) as total')
+            ->get()
+            ->mapWithKeys(fn ($row) => [(string) $row->getAttribute('charge_id') => Money::of((string) $row->getAttribute('total'), (string) $row->getAttribute('currency'))])
+            ->all());
     }
 
     /**

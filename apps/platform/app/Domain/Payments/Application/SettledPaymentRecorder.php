@@ -135,10 +135,12 @@ class SettledPaymentRecorder
             $snapshot = $snapshots[$allocation->chargeId];
             $alreadyAllocated = $this->sumExistingAllocations($allocation->chargeId, $data->amount->currency());
             $projected = $alreadyAllocated->add($allocation->amount);
-            $remaining = $snapshot->amount->add($projected->negated());
+            // FEE.3 (ADR 0062 §15): capacity is the amount net of live fee
+            // adjustments; the Payments-owned trigger stays authoritative.
+            $remaining = $snapshot->netAmount()->add($projected->negated());
 
             if ($remaining->isNegative()) {
-                throw new ChargeAllocationExceedsChargeAmountException($allocation->chargeId, $projected->amount(), $snapshot->amount->amount());
+                throw new ChargeAllocationExceedsChargeAmountException($allocation->chargeId, $projected->amount(), $snapshot->netAmount()->amount());
             }
         }
 

@@ -5180,6 +5180,349 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # FEE.3 (ADR 0062 §14, §19; owner decisions F, F2, G1, M): concessions,
+  # scholarships and waivers. Highly Sensitive; every read is audited.
+  # Request/approval are separate duties (the decider is never the
+  # requester, database-enforced). No DELETE, no free-text note.
+  /schools/{schoolId}/fee-settings:
+    get:
+      operationId: getFeeSettings
+      summary: >
+        Reads the School's Fees settings (the concession ledger account, F2). Requires finance.fee_structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeSettings" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/fee-settings/concession-account:
+    put:
+      operationId: setFeeConcessionAccount
+      summary: >
+        Sets the School's concession posting account: an active INR expense account of this School. Posted adjustments keep their own debit account. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeConcessionAccountInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeSettings" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (not an active expense account of this School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-concessions:
+    get:
+      operationId: listFeeConcessions
+      summary: >
+        Lists concession requests, newest first, 25 per page. Audited (fee_concession.list_viewed). Requires finance.fee_concessions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, approved, rejected, withdrawn, revoked] } }
+        - { name: scope, in: query, required: false, schema: { type: string, enum: [targeted, standing] } }
+        - { name: student_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: charge_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data, meta], properties: { data: { type: array, items: { $ref: "#/components/schemas/FeeConcession" } }, meta: { $ref: "#/components/schemas/FeeConcessionPageMeta" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: requestFeeConcession
+      summary: >
+        Requests a concession (always pending; never a posting). Targeted = one charge, fixed amount; standing = Student x year x optional fee head x validity window, applied when assessment creates matching charges. The client-generated idempotency_key replays the same requester's identical request (200) and refuses anything else (409). Requires finance.fee_concessions.request.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeConcessionRequestInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeConcession" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.request in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: CHARGE_NOT_FOUND, STUDENT_NOT_FOUND, ACADEMIC_YEAR_NOT_FOUND or FEE_HEAD_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_CONCESSION_IDEMPOTENCY_CONFLICT or CHARGE_ALREADY_CANCELLED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (closed category, value shape, window inside the year).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-concessions/{concessionId}:
+    get:
+      operationId: getFeeConcession
+      summary: >
+        One concession with its posted adjustments. Audited (fee_concession.viewed). Requires finance.fee_concessions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: concessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeConcessionDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_CONCESSION_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/fee-concessions/{concessionId}/withdraw:
+    post:
+      operationId: withdrawFeeConcession
+      summary: >
+        The requester withdraws their own pending request. Requires finance.fee_concessions.request.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: concessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeConcession" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.request in this School, or FEE_CONCESSION_NOT_REQUESTER.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_CONCESSION_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_CONCESSION_ILLEGAL_TRANSITION.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-concessions/{concessionId}/approve:
+    post:
+      operationId: approveFeeConcession
+      summary: >
+        Approves a pending request; never the requester's own (FEE_CONCESSION_SELF_APPROVAL). A targeted concession posts its adjustment (Dr concession account / Cr receivable) in the same transaction, refused -- never reduced -- beyond the charge's current outstanding (G1). Requires finance.fee_concessions.approve.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: concessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeConcession" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.approve in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_CONCESSION_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_CONCESSION_ILLEGAL_TRANSITION, CHARGE_FULLY_PAID, ADJUSTMENT_EXCEEDS_OUTSTANDING, FEE_CONCESSION_ACCOUNT_INVALID or CHARGE_ALREADY_CANCELLED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-concessions/{concessionId}/reject:
+    post:
+      operationId: rejectFeeConcession
+      summary: >
+        Rejects a pending request; never the requester's own. No financial effect. Requires finance.fee_concessions.approve.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: concessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeConcession" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.approve in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_CONCESSION_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_CONCESSION_ILLEGAL_TRANSITION.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-concessions/{concessionId}/revoke:
+    post:
+      operationId: revokeFeeConcession
+      summary: >
+        Revokes an approved STANDING concession: it stops applying to future charges; posted adjustments stay until cancelled. Requires finance.fee_concessions.approve.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: concessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeConcession" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.approve in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_CONCESSION_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_CONCESSION_ILLEGAL_TRANSITION.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-adjustments:
+    get:
+      operationId: listFeeAdjustments
+      summary: >
+        Posted adjustments, newest first (at most 200), optionally for one charge or concession. Audited (fee_adjustment.list_viewed). Requires finance.fee_concessions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: charge_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: fee_concession_id, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/FeeAdjustment" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/fee-adjustments/{adjustmentId}/cancel:
+    post:
+      operationId: cancelFeeAdjustment
+      summary: >
+        Cancels one posted adjustment through a Finance reversal (the charge amount never changes). Requires finance.fee_concessions.approve.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: adjustmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeAdjustmentCancelInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAdjustment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_concessions.approve in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ADJUSTMENT_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ADJUSTMENT_ALREADY_CANCELLED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   # Phase 9.8: Payroll HTTP transport, mirroring the Finance section's
   # exact style. Every path below is authorized through the 9.7
   # Administration/Read boundary (App\Domain\Payroll\Application\*AdministrationService /
@@ -10398,7 +10741,7 @@ components:
         reason: { type: string, nullable: true, enum: [optional_not_selected, period_before_enrollment, enrollment_cancelled, student_inactive, staff_excluded, no_structure, head_inactive, account_invalid, null] }
         excludedAt: { type: string, format: date-time, nullable: true }
         executionStatus: { type: string, nullable: true, enum: [pending, succeeded, skipped_already_assessed, failed, null] }
-        failureReason: { type: string, nullable: true, enum: [structure_not_active, structure_not_resolved, enrollment_not_qualifying, student_inactive, optional_not_selected, head_inactive, account_invalid, error, null] }
+        failureReason: { type: string, nullable: true, enum: [structure_not_active, structure_not_resolved, enrollment_not_qualifying, student_inactive, optional_not_selected, head_inactive, account_invalid, error, concession_exceeds_outstanding, concession_account_invalid, null] }
         feeAssessmentId: { type: string, format: uuid, nullable: true }
         executedAt: { type: string, format: date-time, nullable: true }
     FeeAssessment:
@@ -10420,6 +10763,96 @@ components:
         fee_structure_id: { type: string, format: uuid }
         billing_period_key: { type: string, maxLength: 32 }
     FeeAssessmentVoidInput:
+      type: object
+      properties:
+        reason: { type: string, maxLength: 255, nullable: true }
+    FeeSettings:
+      type: object
+      required: [concessionLedgerAccountId]
+      properties:
+        concessionLedgerAccountId: { type: string, format: uuid, nullable: true }
+    FeeConcessionAccountInput:
+      type: object
+      required: [concession_ledger_account_id]
+      properties:
+        concession_ledger_account_id: { type: string, format: uuid }
+    FeeConcession:
+      type: object
+      description: A concession request. There is deliberately no note or reason field (owner decision M).
+      required: [id, studentId, academicYearId, category, scope, chargeId, feeHeadId, validFrom, validTo, kind, fixedAmount, percentage, currency, status, requestedByUserId, decidedByUserId, decidedAt, withdrawnAt, revokedByUserId, revokedAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        category: { type: string, enum: [concession, scholarship, waiver] }
+        scope: { type: string, enum: [targeted, standing] }
+        chargeId: { type: string, format: uuid, nullable: true }
+        feeHeadId: { type: string, format: uuid, nullable: true, description: Standing only; null = every fee head. }
+        validFrom: { type: string, format: date, nullable: true }
+        validTo: { type: string, format: date, nullable: true }
+        kind: { type: string, enum: [fixed, percentage] }
+        fixedAmount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", nullable: true }
+        percentage: { type: string, pattern: "^\\d{1,3}(\\.\\d{1,2})?$", nullable: true }
+        currency: { type: string, enum: [INR] }
+        status: { type: string, enum: [pending, approved, rejected, withdrawn, revoked] }
+        requestedByUserId: { type: string, format: uuid }
+        decidedByUserId: { type: string, format: uuid, nullable: true }
+        decidedAt: { type: string, format: date-time, nullable: true }
+        withdrawnAt: { type: string, format: date-time, nullable: true }
+        revokedByUserId: { type: string, format: uuid, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    FeeConcessionDetail:
+      allOf:
+        - { $ref: "#/components/schemas/FeeConcession" }
+        - type: object
+          required: [adjustments]
+          properties:
+            adjustments: { type: array, items: { $ref: "#/components/schemas/FeeAdjustment" } }
+    FeeConcessionPageMeta:
+      type: object
+      required: [currentPage, lastPage, perPage, total]
+      properties:
+        currentPage: { type: integer }
+        lastPage: { type: integer }
+        perPage: { type: integer }
+        total: { type: integer }
+    FeeConcessionRequestInput:
+      type: object
+      required: [idempotency_key, scope, category, kind]
+      properties:
+        idempotency_key: { type: string, format: uuid }
+        scope: { type: string, enum: [targeted, standing] }
+        category: { type: string, enum: [concession, scholarship, waiver] }
+        kind: { type: string, enum: [fixed, percentage], description: Targeted concessions are fixed only. }
+        fixed_amount: { type: string, nullable: true, description: "Exact decimal string, > 0, at most two decimals." }
+        percentage: { type: string, nullable: true, description: "Exact decimal string, 0 < p <= 100, at most two decimals." }
+        charge_id: { type: string, format: uuid, nullable: true, description: Targeted only. }
+        student_id: { type: string, format: uuid, nullable: true, description: Standing only. }
+        academic_year_id: { type: string, format: uuid, nullable: true, description: Standing only. }
+        fee_head_id: { type: string, format: uuid, nullable: true, description: Standing only; omit for every fee head. }
+        valid_from: { type: string, format: date, nullable: true, description: Standing only; inside the academic year. }
+        valid_to: { type: string, format: date, nullable: true, description: Standing only; inside the academic year. }
+    FeeAdjustment:
+      type: object
+      required: [id, chargeId, feeConcessionId, feeAssessmentId, category, amount, currency, debitLedgerAccountId, creditLedgerAccountId, journalEntryId, postedByUserId, postedAt, cancelledAt, cancellationJournalEntryId, cancelledByUserId]
+      properties:
+        id: { type: string, format: uuid }
+        chargeId: { type: string, format: uuid }
+        feeConcessionId: { type: string, format: uuid }
+        feeAssessmentId: { type: string, format: uuid, nullable: true }
+        category: { type: string, enum: [concession, scholarship, waiver] }
+        amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        currency: { type: string, enum: [INR] }
+        debitLedgerAccountId: { type: string, format: uuid, description: The concession expense account at posting time (snapshot). }
+        creditLedgerAccountId: { type: string, format: uuid, description: The charge's receivable account. }
+        journalEntryId: { type: string, format: uuid }
+        postedByUserId: { type: string, format: uuid, nullable: true }
+        postedAt: { type: string, format: date-time }
+        cancelledAt: { type: string, format: date-time, nullable: true }
+        cancellationJournalEntryId: { type: string, format: uuid, nullable: true }
+        cancelledByUserId: { type: string, format: uuid, nullable: true }
+    FeeAdjustmentCancelInput:
       type: object
       properties:
         reason: { type: string, maxLength: 255, nullable: true }

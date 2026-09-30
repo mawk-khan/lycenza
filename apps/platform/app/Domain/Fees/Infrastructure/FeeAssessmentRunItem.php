@@ -93,6 +93,12 @@ class FeeAssessmentRunItem extends Model
 
     public const FAIL_ERROR = 'error';
 
+    /** FEE.3 (G1): matching standing concessions exceed what remains of the charge; refused, never reduced. */
+    public const FAIL_CONCESSION_EXCEEDS_OUTSTANDING = 'concession_exceeds_outstanding';
+
+    /** FEE.3 (F2): a concession applies but the School's concession account is missing or invalid. */
+    public const FAIL_CONCESSION_ACCOUNT_INVALID = 'concession_account_invalid';
+
     protected $table = 'fee_assessment_run_items';
 
     protected $guarded = [];

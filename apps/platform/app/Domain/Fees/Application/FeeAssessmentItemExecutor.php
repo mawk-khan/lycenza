@@ -2,6 +2,9 @@
 
 namespace App\Domain\Fees\Application;
 
+use App\Domain\Fees\Application\Exceptions\AdjustmentExceedsOutstandingException;
+use App\Domain\Fees\Application\Exceptions\ChargeFullyPaidException;
+use App\Domain\Fees\Application\Exceptions\ConcessionAccountNotConfiguredException;
 use App\Domain\Fees\Infrastructure\FeeAssessment;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRun;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRunItem;
@@ -50,6 +53,15 @@ use Throwable;
  * `skipped_already_assessed`. There is no existence pre-check deciding
  * anything (rule 30). The charge amount is the instalment amount exactly
  * (owner decision D1: no proration).
+ *
+ * FEE.3 (ADR 0062 §14.4; owner decisions F2, G1): approved standing
+ * concessions covering the Student, year, head and the instalment's period
+ * start are posted inside the same savepoint, after the assessment row
+ * (`FeeAdjustmentService::applyStanding`). If one would exceed what
+ * remains of the charge, or the School's concession account is invalid,
+ * the savepoint rolls back the charge, the assessment and any adjustment
+ * already posted, and the item fails closed
+ * (`concession_exceeds_outstanding` / `concession_account_invalid`).
  */
 class FeeAssessmentItemExecutor
 {
@@ -57,6 +69,7 @@ class FeeAssessmentItemExecutor
 
     public function __construct(
         private readonly ChargeService $charges,
+        private readonly FeeAdjustmentService $adjustments,
         private readonly LedgerService $ledger,
         private readonly StudentEnrollmentFeeTargetReadService $targets,
         private readonly FeeStructureResolver $resolver,
@@ -205,8 +218,23 @@ class FeeAssessmentItemExecutor
                     'created_by_user_id' => $actor?->id,
                 ])->save();
 
+                // FEE.3 (ADR 0062 §14.4, G1): approved standing concessions
+                // post in this same savepoint; a refusal rolls back the
+                // charge too (no partial application).
+                $this->adjustments->applyStanding(
+                    $school,
+                    $assessment,
+                    CarbonImmutable::parse($installment->period_starts_on)->toDateString(),
+                    Money::of((string) $installment->amount, 'INR'),
+                    $actor,
+                );
+
                 return $assessment;
             });
+        } catch (ChargeFullyPaidException|AdjustmentExceedsOutstandingException) {
+            return $this->fail($item, FeeAssessmentRunItem::FAIL_CONCESSION_EXCEEDS_OUTSTANDING);
+        } catch (ConcessionAccountNotConfiguredException) {
+            return $this->fail($item, FeeAssessmentRunItem::FAIL_CONCESSION_ACCOUNT_INVALID);
         } catch (UniqueConstraintViolationException $e) {
             if (! str_contains($e->getMessage(), 'fee_assessments_one_live_per_period')) {
                 throw $e;

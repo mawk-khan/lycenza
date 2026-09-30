@@ -99,7 +99,7 @@ class CurriculumCoverageReadServiceTest extends TestCase
         // Inactive Section -> excluded.
         $this->createSection($w['year'], $w['campus'], $w['grade'], ['code' => 'Z', 'status' => 'inactive']);
         // Section of another grade -> not paired with this Offering.
-        $this->createSection($w['year'], $w['campus'], $this->createGradeLevel($w['school'], ['code' => 'G9', 'sequence' => 9]), ['code' => 'A']);
+        $this->createSection($w['year'], $w['campus'], $this->createGradeLevel($w['school'], ['code' => 'OTHER', 'sequence' => 900]), ['code' => 'A']);
         // A required Offering with no syllabus: reported with 0 planned.
         $empty = $this->createSubjectOffering($w['year'], $w['campus'], $w['grade'], $this->createSubject($w['school'], ['code' => 'ART']),
             ['is_required' => true, 'status' => 'active']);

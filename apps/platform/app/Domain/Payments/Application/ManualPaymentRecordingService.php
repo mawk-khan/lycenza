@@ -161,18 +161,23 @@ class ManualPaymentRecordingService
             ->selectRaw('charge_id, sum(amount) as total')
             ->pluck('total', 'charge_id'));
 
-        return $charges->map(function (ChargeSummary $charge) use ($allocated) {
+        // FEE.3 (ADR 0062 §15): net of live fee adjustments, through Fees.
+        $adjusted = $this->charges->liveAdjustmentTotalsFor($school, $charges->pluck('chargeId')->all());
+
+        return $charges->map(function (ChargeSummary $charge) use ($allocated, $adjusted) {
             $amount = Money::of($charge->amount, $charge->currency);
             $paid = Money::of((string) ($allocated[$charge->chargeId] ?? '0.00'), $charge->currency);
+            $concession = $adjusted[$charge->chargeId] ?? Money::of('0.00', $charge->currency);
 
             return new OutstandingCharge(
                 chargeId: $charge->chargeId,
                 description: $charge->description,
                 amount: $amount->amount(),
                 allocated: $paid->amount(),
-                outstanding: $amount->add($paid->negated())->amount(),
+                outstanding: $amount->add($paid->negated())->add($concession->negated())->amount(),
                 currency: $charge->currency,
                 dueDate: $charge->dueDate,
+                adjusted: $concession->amount(),
             );
         })->values()->all();
     }

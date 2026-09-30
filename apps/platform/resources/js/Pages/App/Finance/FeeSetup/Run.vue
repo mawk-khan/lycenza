@@ -36,6 +36,7 @@ interface Item {
     feeHeadCode: string | null;
     enrollmentStartsOn: string | null;
     amount: string;
+    concessionPreview: { concession: string; net: string; exceeds: boolean } | null;
     currency: string;
     previewResult: string;
     reason: string | null;
@@ -227,7 +228,23 @@ onBeforeUnmount(() => clearInterval(timer));
                             >
                         </td>
                         <td class="py-2 font-mono text-xs">{{ i.feeHeadCode }}</td>
-                        <td class="py-2 text-right">{{ formatMoney(i.amount, i.currency) }}</td>
+                        <td class="py-2 text-right">
+                            {{ formatMoney(i.amount, i.currency) }}
+                            <span
+                                v-if="i.concessionPreview"
+                                class="block text-xs"
+                                :class="
+                                    i.concessionPreview.exceeds ? 'text-red-700' : 'text-slate-500'
+                                "
+                                >−{{ formatMoney(i.concessionPreview.concession, i.currency) }}
+                                concession ·
+                                {{
+                                    i.concessionPreview.exceeds
+                                        ? 'exceeds the charge; this item will fail'
+                                        : `net ${formatMoney(i.concessionPreview.net, i.currency)}`
+                                }}</span
+                            >
+                        </td>
                         <td class="py-2">
                             <span class="capitalize">{{
                                 i.previewResult.replaceAll('_', ' ')

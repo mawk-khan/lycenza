@@ -4702,3 +4702,102 @@ is cancelled only through the assessment void path.
     cancel, void).
 - **Not in FEE.2:** concessions, receipts, statements, late fees, refunds,
   proration, scheduled runs, portal, OPF linkage.
+
+## FEE.3 as-built — Concessions, Scholarships and Waivers (2026-09-30, ADR 0062, owner decisions F, F2, G1, M)
+
+A concession is a **request** (`fee_concessions`); its financial effect is
+a separate posted **adjustment** (`fee_adjustments`). A charge's amount is
+never changed.
+
+- **Tables** (migrations `2026_10_31_090000`–`090300`). Both are RLS-forced,
+  never deleted (`revokeDelete`), with composite same-School foreign keys.
+  - **`fee_concessions`.**
+    - Scope: `targeted` (one uncancelled charge, fixed amount only) or
+      `standing` (Student x AcademicYear x fee head, NULL = every head, x an
+      inclusive window inside the year).
+    - Value: `fixed` (`NUMERIC(14,2) > 0`) or `percentage` (`0 < p ≤ 100`).
+    - Category: CHECK `concession | scholarship | waiver` (M). There is no
+      note column.
+    - Lifecycle `pending -> approved | rejected | withdrawn`,
+      `approved -> revoked` (standing only), with request content immutable
+      (`fees_validate_fee_concession`).
+    - `fee_concessions_sod_check`: the decider is never the requester (F).
+    - `fee_concessions_idempotency_unique` `(school_id, idempotency_key)`.
+  - **`fee_adjustments`.** One posted effect: charge, concession, optional
+    fee assessment (standing), category snapshot, amount, debit account
+    (the concession `expense` account at posting, F2) and credit account
+    (the charge's receivable), journal entry, and the one-time
+    cancellation triple.
+    - At insert, `fees_validate_fee_adjustment` requires: an approved
+      concession of the same Student, year and category; a targeted
+      concession names this charge; a standing one covers a live assessment
+      of it (head, period start in the window); an active `expense` debit
+      account; credit = the charge's receivable.
+    - One live adjustment per (concession, charge).
+    - Immutable except a cancellation that must reference the reversal of
+      its own entry.
+    - `charges_fee_adjustment_guard_trigger`: a charge with a live
+      adjustment cannot be cancelled (§14.7). This also blocks an assessment
+      void until its adjustments are cancelled.
+  - **Payments-owned capacity guard (§15).** Allocations + live
+    adjustments ≤ charge amount, enforced at either insert under the charge
+    row lock; the old function body is restored verbatim on rollback.
+- **Services.**
+  - `FeeConcessionService` (administrative facade): `request`/`withdraw`
+    (`finance.fee_concessions.request`); `approve`/`reject`/`revoke`/
+    `cancelAdjustment` (`.approve`).
+    - Self-decision → `SelfApprovalNotAllowedException`.
+    - Decisions lock the row and re-check status; every mutation re-checks
+      the School is operational.
+    - Approving a targeted concession posts its adjustment in the same
+      transaction; a refusal rolls the approval back (the request stays
+      pending).
+  - `FeeAdjustmentService` (trusted core): `post` validates the concession
+    account (F2), locks the charge, posts Dr expense / Cr receivable through
+    `LedgerService::post`, and inserts the row in one savepoint.
+    - Capacity refusals become `ChargeFullyPaidException` /
+      `AdjustmentExceedsOutstandingException` (G1: refused, never reduced).
+    - `cancel` reverses through `LedgerService::reverseById`.
+    - `applyStanding` runs inside the FEE.2 item savepoint.
+  - `FeeConcessionReadService` (`.view`, read-audited) and
+    `FeeSettingsService` (concession account; `finance.fee_structures.*`).
+- **Amounts (N).** A percentage is `Money::multiplyByRate(p/100)` of the
+  charge amount, at scale 2, half away from zero.
+- **Standing application.** When an item creates a charge, every approved
+  standing concession covering the Student, year, head and instalment
+  `period_starts_on` posts in the same savepoint, in decision order. An
+  over-limit concession or an invalid account fails the item
+  (`concession_exceeds_outstanding` / `concession_account_invalid`) with no
+  partial application. Revocation stops future application only.
+- **Payments.** `ChargeAllocationSnapshot::adjustedTotal`/`netAmount()`.
+  The manual-payment form shows the net outstanding and the concession.
+  Fees never reads `payment_allocations`.
+- **Capabilities (L).** `finance.fee_concessions.view|request|approve`.
+  - `school_admin` holds all three; `principal` holds none.
+  - The demo finance officer holds view and request only (maker/checker in
+    DDEV).
+- **Audit.**
+  - `fee_concession.requested`, `.approved`, `.rejected`, `.withdrawn`,
+    `.revoked`, `.list_viewed`, `.viewed`;
+  - `fee_adjustment.posted`, `.cancelled`, `.list_viewed`;
+  - `fee_settings.concession_account_changed`.
+
+  Metadata carries ids and closed codes only, never amounts or names.
+- **Outbox.** `fee_concession.approved.v1`, `fee_concession.rejected.v1`,
+  `fee_adjustment.posted.v1`, `fee_adjustment.cancelled.v1` (ids, closed
+  codes, currency). None is webhook-registered.
+- **Surfaces.**
+  - 11 `/api/v1` operations (`FeeConcessionOpenApiCoverageTest`); there is
+    no DELETE.
+  - Web: `/app/finance/concessions` (approval queue, filters, concession
+    account), `/create` (server-issued request key), `/{id}` (decide,
+    withdraw, revoke, cancel adjustments).
+  - The charge page shows adjustments (with `.view`) and a request link.
+  - The assessment-run page shows gross, concession and net per item (with
+    `.view`).
+- **Not in FEE.3:**
+  - late fees (H), receipts (I/I2), statements;
+  - refunds, credits, overpayments;
+  - thresholds, multi-stage approval, configurable categories, notes;
+  - per-head concession accounts, GST, portal, OPF.
+

@@ -1434,3 +1434,73 @@ history and are **not** adopted.
   - retention (E21).
 
 **FEE.3 — Concessions / Scholarships / Waivers is unblocked.**
+
+## Implementation note — FEE.3 as built (2026-09-30)
+
+FEE.3 implements §14 and §15 under owner decisions F, F2, G1 and M. The
+full as-built record is in `docs/modules/FINANCE.md` ("FEE.3 as-built").
+Refinements that amend or make precise the text above:
+
+- **G1 fixes the reading of "capped" (§14.1, §14.3, §14.6).** An
+  adjustment is posted whole or refused. §14.3's "each capped at what
+  remains" is therefore a refusal, never a reduction: several standing
+  concessions apply in decision order (`decided_at`, then id), and if one
+  does not fit, the whole assessment item fails closed.
+- **Two new closed item failure reasons** (FEE.2 catalogue, migration
+  `2026_10_31_090300`):
+  - `concession_exceeds_outstanding`;
+  - `concession_account_invalid` (F2, fail closed).
+
+  Either one rolls the item's savepoint back: no charge, no assessment, no
+  adjustment, no journal entry. Items with no applicable concession never
+  need the concession account.
+- **The §15 seam, as built** (Payments-owned migration `2026_10_31_090200`):
+  - `payments_lock_and_validate_charge_allocation()` now adds live
+    adjustments to the total, so allocations + live adjustments ≤ amount.
+  - `payments_lock_and_validate_charge_adjustment()`
+    (`fee_adjustments_capacity_trigger`) locks the charge row FOR UPDATE
+    and raises "is fully settled" or "would exceed its outstanding amount".
+    Fees maps these to `ChargeFullyPaidException` and
+    `AdjustmentExceedsOutstandingException`.
+  - PostgreSQL fires same-event BEFORE triggers by name, so the capacity
+    trigger runs before Fees' `fee_adjustments_guard_trigger` and Fees'
+    validation runs under the charge lock.
+  - `down()` restores the 0G.5 function body verbatim (guarded by
+    `FeeSetupArchitectureGuardTest`).
+  - `ChargeAllocationSnapshot` gains `adjustedTotal`/`netAmount()`.
+    `SettledPaymentRecorder` pre-checks the net amount, and the manual
+    payment form's outstanding is net (`OutstandingCharge::$adjusted`).
+    Totals come from `ChargeService::liveAdjustmentTotalsFor`, so Fees still
+    never reads `payment_allocations`.
+- **The concession account setting** (§14.5) had no writer in FEE.1.
+  FEE.3 adds `FeeSettingsService::setConcessionAccount` under
+  `finance.fee_structures.manage` (Fee setup authority), audited as
+  `fee_settings.concession_account_changed`.
+- **Self-decision.** The SoD CHECK covers every decision. A requester can
+  neither approve **nor reject** their own request; they withdraw it
+  instead.
+- **Adjustment cancellation** is under `finance.fee_concessions.approve`
+  and takes an optional reason. That reason goes only to the Finance
+  reversal, like a charge cancellation reason; it is not a concession note.
+- **Read audit.** Concession reads are audited once per call:
+  `fee_concession.list_viewed`, `fee_concession.viewed` and
+  `fee_adjustment.list_viewed`. The run page's concession preview is also
+  audited as `fee_concession.list_viewed`.
+- **Preview (§14.4).** The run page shows gross, concession and net per
+  ready, not-yet-executed item, only to holders of
+  `finance.fee_concessions.view`. It also flags items that would fail
+  closed. This is a projection only; execution re-reads everything under
+  its locks.
+- **Race proofs.** §12 proof 6 and the FEE.3 races are covered by
+  `FeeConcessionConcurrencyTest` (real processes, forced and verified
+  overlap):
+  - payment vs. concession, both orders;
+  - two approvals of one concession;
+  - two concessions on the final capacity;
+  - revocation vs. standing application, both orders;
+  - double adjustment cancellation;
+  - charge cancellation vs. approval, both orders.
+- **Not built:** H (late fees), I/I2 (receipts), statements, refunds,
+  credits, overpayments, thresholds or multi-stage approval, configurable
+  categories and notes.
+

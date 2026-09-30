@@ -14,6 +14,7 @@ interface OpenCharge {
     description: string;
     amount: string;
     allocated: string;
+    adjusted: string;
     outstanding: string;
     currency: string;
     dueDate: string | null;
@@ -231,12 +232,19 @@ function record(): void {
                             </td>
                             <td class="py-3 text-right font-mono">
                                 {{ formatMoney(charge.outstanding, charge.currency) }}
+                                <span
+                                    v-if="charge.adjusted !== '0.00'"
+                                    class="block text-xs text-slate-500"
+                                    >after
+                                    {{ formatMoney(charge.adjusted, charge.currency) }}
+                                    concession</span
+                                >
                             </td>
                             <td class="py-3 pl-4">
                                 <span
                                     v-if="charge.outstanding === '0.00'"
                                     class="text-xs text-slate-500"
-                                    >Paid in full</span
+                                    >Settled</span
                                 >
                                 <div v-else class="flex items-center gap-2">
                                     <input

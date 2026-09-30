@@ -23,6 +23,7 @@ use App\Domain\Examinations\Http\Controllers\ExaminationPaperController;
 use App\Domain\Examinations\Http\Controllers\GradeScaleController;
 use App\Domain\Fees\Http\Controllers\ChargeController;
 use App\Domain\Fees\Http\Controllers\FeeAssessmentRunController;
+use App\Domain\Fees\Http\Controllers\FeeConcessionController;
 use App\Domain\Fees\Http\Controllers\FeeHeadController;
 use App\Domain\Fees\Http\Controllers\FeeOptionalSelectionController;
 use App\Domain\Fees\Http\Controllers\FeeStructureController;
@@ -1283,6 +1284,50 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/fee-assessments/{assessment}/void', [FeeAssessmentRunController::class, 'void'])
                 ->middleware(['capability:finance.charges.manage', 'throttle:school-api-mutations'])
                 ->name('schools.fee-assessments.void');
+
+            // --- FEE.3 (ADR 0062 §14, §19): concessions and adjustments.
+            // Reads under finance.fee_concessions.view; request/withdraw
+            // under .request; approve/reject/revoke and adjustment
+            // cancellation under .approve (the decider is never the
+            // requester). No DELETE. Requests are idempotent by their own
+            // body idempotency_key (fee_concessions_idempotency_unique);
+            // decisions are conditional transitions on a locked row, so no
+            // generic Idempotency-Key middleware is layered on (rule 29
+            // reviewed). The concession account setting is Fee setup
+            // (finance.fee_structures.view/.manage).
+            Route::get('/fee-settings', [FeeConcessionController::class, 'settings'])
+                ->middleware('capability:finance.fee_structures.view')
+                ->name('schools.fee-settings.show');
+            Route::put('/fee-settings/concession-account', [FeeConcessionController::class, 'updateSettings'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])
+                ->name('schools.fee-settings.concession-account');
+            Route::get('/fee-concessions', [FeeConcessionController::class, 'index'])
+                ->middleware('capability:finance.fee_concessions.view')
+                ->name('schools.fee-concessions.index');
+            Route::post('/fee-concessions', [FeeConcessionController::class, 'store'])
+                ->middleware(['capability:finance.fee_concessions.request', 'throttle:school-api-mutations'])
+                ->name('schools.fee-concessions.store');
+            Route::get('/fee-concessions/{concession}', [FeeConcessionController::class, 'show'])
+                ->middleware('capability:finance.fee_concessions.view')
+                ->name('schools.fee-concessions.show');
+            Route::post('/fee-concessions/{concession}/withdraw', [FeeConcessionController::class, 'withdraw'])
+                ->middleware(['capability:finance.fee_concessions.request', 'throttle:school-api-mutations'])
+                ->name('schools.fee-concessions.withdraw');
+            Route::post('/fee-concessions/{concession}/approve', [FeeConcessionController::class, 'approve'])
+                ->middleware(['capability:finance.fee_concessions.approve', 'throttle:school-api-mutations'])
+                ->name('schools.fee-concessions.approve');
+            Route::post('/fee-concessions/{concession}/reject', [FeeConcessionController::class, 'reject'])
+                ->middleware(['capability:finance.fee_concessions.approve', 'throttle:school-api-mutations'])
+                ->name('schools.fee-concessions.reject');
+            Route::post('/fee-concessions/{concession}/revoke', [FeeConcessionController::class, 'revoke'])
+                ->middleware(['capability:finance.fee_concessions.approve', 'throttle:school-api-mutations'])
+                ->name('schools.fee-concessions.revoke');
+            Route::get('/fee-adjustments', [FeeConcessionController::class, 'adjustments'])
+                ->middleware('capability:finance.fee_concessions.view')
+                ->name('schools.fee-adjustments.index');
+            Route::post('/fee-adjustments/{adjustment}/cancel', [FeeConcessionController::class, 'cancelAdjustment'])
+                ->middleware(['capability:finance.fee_concessions.approve', 'throttle:school-api-mutations'])
+                ->name('schools.fee-adjustments.cancel');
 
             // --- Phase 10D: Hostel (Hostel/Room/Bed directory, Student
             // Hostel residency lifecycle). `idempotent` is applied only

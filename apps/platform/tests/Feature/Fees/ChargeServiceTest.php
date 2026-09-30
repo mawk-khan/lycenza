@@ -225,9 +225,10 @@ class ChargeServiceTest extends TestCase
         // path, so it does not weaken this invariant. Phase 0O.11A:
         // uncancelledChargesForStudent() is a read-only lookup for the
         // manual payment form (a list of ChargeSummary), likewise no
-        // write path.
+        // write path. FEE.3: liveAdjustmentTotalsFor() is a read-only
+        // per-charge adjustment total for Payments' outstanding display.
         $this->assertFalse(method_exists(ChargeService::class, 'update'));
-        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'uncancelledChargesForStudent'], array_values(array_filter(
+        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'uncancelledChargesForStudent'], array_values(array_filter(
             array_map(fn ($m) => $m->name, (new \ReflectionClass(ChargeService::class))->getMethods(\ReflectionMethod::IS_PUBLIC)),
             fn ($name) => $name !== '__construct',
         )));

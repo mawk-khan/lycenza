@@ -22,10 +22,22 @@ interface ChargeDetail {
     createdAt: string;
 }
 
+interface Adjustment {
+    id: string;
+    feeConcessionId: string;
+    category: string;
+    amount: string;
+    currency: string;
+    postedAt: string;
+    cancelledAt: string | null;
+}
+
 interface Props {
     charge: ChargeDetail;
     canManage: boolean;
     canRecordPayment: boolean;
+    adjustments: Adjustment[] | null;
+    canRequestConcession: boolean;
 }
 
 const props = defineProps<Props>();
@@ -126,6 +138,46 @@ function cancel(): void {
             </div>
         </dl>
 
+        <section v-if="adjustments !== null" class="mt-8 border-t border-slate-200 pt-6">
+            <h2 class="text-sm font-medium text-slate-900">Concession adjustments</h2>
+            <p v-if="adjustments.length === 0" class="mt-1 text-sm text-slate-500">
+                No concession has been posted against this charge.
+            </p>
+            <ul v-else class="mt-2 divide-y divide-slate-100 text-sm">
+                <li
+                    v-for="a in adjustments"
+                    :key="a.id"
+                    class="flex items-center justify-between gap-4 py-2"
+                >
+                    <a class="underline" :href="`/app/finance/concessions/${a.feeConcessionId}`">{{
+                        a.category
+                    }}</a>
+                    <span
+                        class="font-mono"
+                        :class="{ 'text-slate-400 line-through': a.cancelledAt }"
+                    >
+                        {{ formatMoney(a.amount, a.currency) }}
+                    </span>
+                </li>
+            </ul>
+        </section>
+
+        <section
+            v-if="canRequestConcession && !charge.cancelledAt"
+            class="mt-8 border-t border-slate-200 pt-6"
+        >
+            <h2 class="text-sm font-medium text-slate-900">Concession, scholarship or waiver</h2>
+            <p class="mt-1 text-sm text-slate-500">
+                Request a fixed reduction of this charge. Another person must approve it; the charge
+                amount itself never changes.
+            </p>
+            <a
+                class="mt-3 inline-block rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                :href="`/app/finance/concessions/create?charge_id=${charge.id}`"
+                >Request concession</a
+            >
+        </section>
+
         <section
             v-if="canRecordPayment && !charge.cancelledAt"
             class="mt-8 border-t border-slate-200 pt-6"
@@ -149,7 +201,8 @@ function cancel(): void {
             <p class="mt-1 text-sm text-slate-500">
                 Cancelling records a reversing journal entry against the original recognition entry.
                 The charge itself is kept, marked cancelled -- never deleted or edited. A charge
-                with Payment allocations already applied cannot be cancelled.
+                with Payment allocations already applied, or with a live concession adjustment,
+                cannot be cancelled.
             </p>
             <div class="mt-3">
                 <label class="block text-sm text-slate-600" for="reason">Reason (optional)</label>

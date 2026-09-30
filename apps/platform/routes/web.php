@@ -39,6 +39,7 @@ use App\Http\Controllers\App\Examinations\ExaminationPaperController;
 use App\Http\Controllers\App\Examinations\GradeScaleController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FeeAssessmentRunController as FinanceFeeAssessmentRunController;
+use App\Http\Controllers\App\Finance\FeeConcessionController as FinanceFeeConcessionController;
 use App\Http\Controllers\App\Finance\FeeSetupController as FinanceFeeSetupController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
@@ -1033,6 +1034,24 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/fee-runs/{run}/resume', [FinanceFeeAssessmentRunController::class, 'resume'])->name('fee-runs.resume');
         Route::post('/fee-runs/{run}/cancel', [FinanceFeeAssessmentRunController::class, 'cancel'])->name('fee-runs.cancel');
         Route::post('/fee-assessments/{assessment}/void', [FinanceFeeAssessmentRunController::class, 'void'])->name('fee-assessments.void');
+
+        // FEE.3 (ADR 0062 §14): concessions. View under
+        // finance.fee_concessions.view, request/withdraw under .request,
+        // approve/reject/revoke and adjustment cancellation under .approve
+        // (never the requester's own), the concession account under
+        // finance.fee_structures.manage -- controller + Application service.
+        // 'create' and 'students/search' precede the '{concession}' wildcard.
+        Route::get('/concessions', [FinanceFeeConcessionController::class, 'index'])->name('concessions.index');
+        Route::get('/concessions/create', [FinanceFeeConcessionController::class, 'create'])->name('concessions.create');
+        Route::get('/concessions/students/search', [FinanceFeeConcessionController::class, 'searchStudents'])->name('concessions.students.search');
+        Route::post('/concessions', [FinanceFeeConcessionController::class, 'store'])->name('concessions.store');
+        Route::post('/concessions/settings', [FinanceFeeConcessionController::class, 'updateSettings'])->name('concessions.settings');
+        Route::get('/concessions/{concession}', [FinanceFeeConcessionController::class, 'show'])->name('concessions.show');
+        Route::post('/concessions/{concession}/withdraw', [FinanceFeeConcessionController::class, 'withdraw'])->name('concessions.withdraw');
+        Route::post('/concessions/{concession}/approve', [FinanceFeeConcessionController::class, 'approve'])->name('concessions.approve');
+        Route::post('/concessions/{concession}/reject', [FinanceFeeConcessionController::class, 'reject'])->name('concessions.reject');
+        Route::post('/concessions/{concession}/revoke', [FinanceFeeConcessionController::class, 'revoke'])->name('concessions.revoke');
+        Route::post('/fee-adjustments/{adjustment}/cancel', [FinanceFeeConcessionController::class, 'cancelAdjustment'])->name('fee-adjustments.cancel');
 
         // 'create' registered BEFORE the '/{journalEntry}' wildcard
         // below, matching this file's own established convention

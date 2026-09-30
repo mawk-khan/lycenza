@@ -2,9 +2,11 @@
 
 namespace App\Domain\Fees\Http;
 
+use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Fees\Infrastructure\FeeAssessment;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRun;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRunItem;
+use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Domain\Fees\Infrastructure\FeeHead;
 use App\Domain\Fees\Infrastructure\FeeOptionalSelection;
 use App\Domain\Fees\Infrastructure\FeeStructure;
@@ -172,6 +174,56 @@ final class FeeSetupPresenter
             'chargeId' => $assessment->charge_id,
             'feeAssessmentRunId' => $assessment->fee_assessment_run_id,
             'voidedAt' => $assessment->voided_at?->toIso8601String(),
+        ];
+    }
+
+    /** FEE.3: a concession request. There is no note field (owner decision M). @return array<string, mixed> */
+    public static function concession(FeeConcession $c): array
+    {
+        return [
+            'id' => $c->id,
+            'studentId' => $c->student_id,
+            'academicYearId' => $c->academic_year_id,
+            'category' => $c->category,
+            'scope' => $c->scope,
+            'chargeId' => $c->charge_id,
+            'feeHeadId' => $c->fee_head_id,
+            'validFrom' => $c->valid_from?->toDateString(),
+            'validTo' => $c->valid_to?->toDateString(),
+            'kind' => $c->kind,
+            'fixedAmount' => $c->fixed_amount,
+            'percentage' => $c->percentage,
+            'currency' => $c->currency,
+            'status' => $c->status,
+            'requestedByUserId' => $c->requested_by_user_id,
+            'decidedByUserId' => $c->decided_by_user_id,
+            'decidedAt' => $c->decided_at?->toIso8601String(),
+            'withdrawnAt' => $c->withdrawn_at?->toIso8601String(),
+            'revokedByUserId' => $c->revoked_by_user_id,
+            'revokedAt' => $c->revoked_at?->toIso8601String(),
+            'createdAt' => $c->created_at->toIso8601String(),
+        ];
+    }
+
+    /** FEE.3: one posted adjustment. @return array<string, mixed> */
+    public static function adjustment(FeeAdjustment $a): array
+    {
+        return [
+            'id' => $a->id,
+            'chargeId' => $a->charge_id,
+            'feeConcessionId' => $a->fee_concession_id,
+            'feeAssessmentId' => $a->fee_assessment_id,
+            'category' => $a->category,
+            'amount' => $a->amount,
+            'currency' => $a->currency,
+            'debitLedgerAccountId' => $a->debit_ledger_account_id,
+            'creditLedgerAccountId' => $a->credit_ledger_account_id,
+            'journalEntryId' => $a->journal_entry_id,
+            'postedByUserId' => $a->posted_by_user_id,
+            'postedAt' => $a->created_at->toIso8601String(),
+            'cancelledAt' => $a->cancelled_at?->toIso8601String(),
+            'cancellationJournalEntryId' => $a->cancellation_journal_entry_id,
+            'cancelledByUserId' => $a->cancelled_by_user_id,
         ];
     }
 }

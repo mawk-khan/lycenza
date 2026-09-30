@@ -2440,6 +2440,177 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/fee-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reads the School's Fees settings (the concession ledger account, F2). Requires finance.fee_structures.view. */
+        get: operations["getFeeSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-settings/concession-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets the School's concession posting account: an active INR expense account of this School. Posted adjustments keep their own debit account. Requires finance.fee_structures.manage. */
+        put: operations["setFeeConcessionAccount"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-concessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists concession requests, newest first, 25 per page. Audited (fee_concession.list_viewed). Requires finance.fee_concessions.view. */
+        get: operations["listFeeConcessions"];
+        put?: never;
+        /** Requests a concession (always pending; never a posting). Targeted = one charge, fixed amount; standing = Student x year x optional fee head x validity window, applied when assessment creates matching charges. The client-generated idempotency_key replays the same requester's identical request (200) and refuses anything else (409). Requires finance.fee_concessions.request. */
+        post: operations["requestFeeConcession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-concessions/{concessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One concession with its posted adjustments. Audited (fee_concession.viewed). Requires finance.fee_concessions.view. */
+        get: operations["getFeeConcession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-concessions/{concessionId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The requester withdraws their own pending request. Requires finance.fee_concessions.request. */
+        post: operations["withdrawFeeConcession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-concessions/{concessionId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approves a pending request; never the requester's own (FEE_CONCESSION_SELF_APPROVAL). A targeted concession posts its adjustment (Dr concession account / Cr receivable) in the same transaction, refused -- never reduced -- beyond the charge's current outstanding (G1). Requires finance.fee_concessions.approve. */
+        post: operations["approveFeeConcession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-concessions/{concessionId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rejects a pending request; never the requester's own. No financial effect. Requires finance.fee_concessions.approve. */
+        post: operations["rejectFeeConcession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-concessions/{concessionId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revokes an approved STANDING concession: it stops applying to future charges; posted adjustments stay until cancelled. Requires finance.fee_concessions.approve. */
+        post: operations["revokeFeeConcession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Posted adjustments, newest first (at most 200), optionally for one charge or concession. Audited (fee_adjustment.list_viewed). Requires finance.fee_concessions.view. */
+        get: operations["listFeeAdjustments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/fee-adjustments/{adjustmentId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancels one posted adjustment through a Finance reversal (the charge amount never changes). Requires finance.fee_concessions.approve. */
+        post: operations["cancelFeeAdjustment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/salary-components": {
         parameters: {
             query?: never;
@@ -4547,7 +4718,7 @@ export interface components {
             /** @enum {string|null} */
             executionStatus: "pending" | "succeeded" | "skipped_already_assessed" | "failed" | null;
             /** @enum {string|null} */
-            failureReason: "structure_not_active" | "structure_not_resolved" | "enrollment_not_qualifying" | "student_inactive" | "optional_not_selected" | "head_inactive" | "account_invalid" | "error" | null;
+            failureReason: "structure_not_active" | "structure_not_resolved" | "enrollment_not_qualifying" | "student_inactive" | "optional_not_selected" | "head_inactive" | "account_invalid" | "error" | "concession_exceeds_outstanding" | "concession_account_invalid" | null;
             /** Format: uuid */
             feeAssessmentId: string | null;
             /** Format: date-time */
@@ -4576,6 +4747,156 @@ export interface components {
             billing_period_key: string;
         };
         FeeAssessmentVoidInput: {
+            reason?: string | null;
+        };
+        FeeSettings: {
+            /** Format: uuid */
+            concessionLedgerAccountId: string | null;
+        };
+        FeeConcessionAccountInput: {
+            /** Format: uuid */
+            concession_ledger_account_id: string;
+        };
+        /** @description A concession request. There is deliberately no note or reason field (owner decision M). */
+        FeeConcession: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            /** @enum {string} */
+            category: "concession" | "scholarship" | "waiver";
+            /** @enum {string} */
+            scope: "targeted" | "standing";
+            /** Format: uuid */
+            chargeId: string | null;
+            /**
+             * Format: uuid
+             * @description Standing only; null = every fee head.
+             */
+            feeHeadId: string | null;
+            /** Format: date */
+            validFrom: string | null;
+            /** Format: date */
+            validTo: string | null;
+            /** @enum {string} */
+            kind: "fixed" | "percentage";
+            fixedAmount: string | null;
+            percentage: string | null;
+            /** @enum {string} */
+            currency: "INR";
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected" | "withdrawn" | "revoked";
+            /** Format: uuid */
+            requestedByUserId: string;
+            /** Format: uuid */
+            decidedByUserId: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+            /** Format: date-time */
+            withdrawnAt: string | null;
+            /** Format: uuid */
+            revokedByUserId: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        FeeConcessionDetail: components["schemas"]["FeeConcession"] & {
+            adjustments: components["schemas"]["FeeAdjustment"][];
+        };
+        FeeConcessionPageMeta: {
+            currentPage: number;
+            lastPage: number;
+            perPage: number;
+            total: number;
+        };
+        FeeConcessionRequestInput: {
+            /** Format: uuid */
+            idempotency_key: string;
+            /** @enum {string} */
+            scope: "targeted" | "standing";
+            /** @enum {string} */
+            category: "concession" | "scholarship" | "waiver";
+            /**
+             * @description Targeted concessions are fixed only.
+             * @enum {string}
+             */
+            kind: "fixed" | "percentage";
+            /** @description Exact decimal string, > 0, at most two decimals. */
+            fixed_amount?: string | null;
+            /** @description Exact decimal string, 0 < p <= 100, at most two decimals. */
+            percentage?: string | null;
+            /**
+             * Format: uuid
+             * @description Targeted only.
+             */
+            charge_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Standing only.
+             */
+            student_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Standing only.
+             */
+            academic_year_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Standing only; omit for every fee head.
+             */
+            fee_head_id?: string | null;
+            /**
+             * Format: date
+             * @description Standing only; inside the academic year.
+             */
+            valid_from?: string | null;
+            /**
+             * Format: date
+             * @description Standing only; inside the academic year.
+             */
+            valid_to?: string | null;
+        };
+        FeeAdjustment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            chargeId: string;
+            /** Format: uuid */
+            feeConcessionId: string;
+            /** Format: uuid */
+            feeAssessmentId: string | null;
+            /** @enum {string} */
+            category: "concession" | "scholarship" | "waiver";
+            amount: string;
+            /** @enum {string} */
+            currency: "INR";
+            /**
+             * Format: uuid
+             * @description The concession expense account at posting time (snapshot).
+             */
+            debitLedgerAccountId: string;
+            /**
+             * Format: uuid
+             * @description The charge's receivable account.
+             */
+            creditLedgerAccountId: string;
+            /** Format: uuid */
+            journalEntryId: string;
+            /** Format: uuid */
+            postedByUserId: string | null;
+            /** Format: date-time */
+            postedAt: string;
+            /** Format: date-time */
+            cancelledAt: string | null;
+            /** Format: uuid */
+            cancellationJournalEntryId: string | null;
+            /** Format: uuid */
+            cancelledByUserId: string | null;
+        };
+        FeeAdjustmentCancelInput: {
             reason?: string | null;
         };
         JournalLine: {
@@ -15532,6 +15853,616 @@ export interface operations {
                 };
             };
             /** @description FEE_ASSESSMENT_ALREADY_VOIDED or CHARGE_HAS_PAYMENT_ALLOCATIONS. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getFeeSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeSettings"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    setFeeConcessionAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeConcessionAccountInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeSettings"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (not an active expense account of this School). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listFeeConcessions: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "rejected" | "withdrawn" | "revoked";
+                scope?: "targeted" | "standing";
+                student_id?: string;
+                charge_id?: string;
+                page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeConcession"][];
+                        meta: components["schemas"]["FeeConcessionPageMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    requestFeeConcession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeConcessionRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeConcession"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.request in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CHARGE_NOT_FOUND, STUDENT_NOT_FOUND, ACADEMIC_YEAR_NOT_FOUND or FEE_HEAD_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_IDEMPOTENCY_CONFLICT or CHARGE_ALREADY_CANCELLED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (closed category, value shape, window inside the year). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getFeeConcession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                concessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeConcessionDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    withdrawFeeConcession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                concessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeConcession"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.request in this School, or FEE_CONCESSION_NOT_REQUESTER. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_ILLEGAL_TRANSITION. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    approveFeeConcession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                concessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeConcession"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.approve in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_ILLEGAL_TRANSITION, CHARGE_FULLY_PAID, ADJUSTMENT_EXCEEDS_OUTSTANDING, FEE_CONCESSION_ACCOUNT_INVALID or CHARGE_ALREADY_CANCELLED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    rejectFeeConcession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                concessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeConcession"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.approve in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_ILLEGAL_TRANSITION. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    revokeFeeConcession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                concessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeConcession"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.approve in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_CONCESSION_ILLEGAL_TRANSITION. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listFeeAdjustments: {
+        parameters: {
+            query?: {
+                charge_id?: string;
+                fee_concession_id?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAdjustment"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    cancelFeeAdjustment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                adjustmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeAdjustmentCancelInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAdjustment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_concessions.approve in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ADJUSTMENT_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ADJUSTMENT_ALREADY_CANCELLED. */
             409: {
                 headers: {
                     [name: string]: unknown;

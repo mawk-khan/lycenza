@@ -466,6 +466,13 @@ class CapabilityAndRoleSeeder extends Seeder
             // read under `finance.charges.view`; voiding a fee assessment
             // cancels its charge under `finance.charges.manage`.
             ['key' => 'finance.fee_assessments.run', 'label' => 'Run fee assessments (bill a fee structure period to Students)', 'namespace' => 'school'],
+            // FEE.3 (ADR 0062 §19; owner decisions F, L): concessions,
+            // scholarships and waivers. Reading is Highly Sensitive;
+            // requesting and approving are separate duties, and the approver
+            // is never the requester (database-enforced).
+            ['key' => 'finance.fee_concessions.view', 'label' => 'View fee concessions, scholarships and waivers', 'namespace' => 'school'],
+            ['key' => 'finance.fee_concessions.request', 'label' => 'Request and withdraw fee concessions', 'namespace' => 'school'],
+            ['key' => 'finance.fee_concessions.approve', 'label' => 'Approve, reject and revoke fee concessions (never one\'s own request)', 'namespace' => 'school'],
 
             // Phase 10D (docs/modules/HOSTEL.md "Capabilities") --
             // mirrors Visitor's directory/visits split exactly:
@@ -980,6 +987,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // FEE.2 (ADR 0062 §19): School Admin runs fee assessments;
                     // never Principal.
                     'finance.fee_assessments.run',
+                    // FEE.3 (ADR 0062 §19, owner decision L): School Admin
+                    // holds every concession capability; the database still
+                    // refuses self-approval. Never Principal.
+                    'finance.fee_concessions.view', 'finance.fee_concessions.request', 'finance.fee_concessions.approve',
                     // Phase 10D: same day-to-day operational parity
                     // reasoning as Visitor/Transport/Library above --
                     // managing Hostel structure and Student residency

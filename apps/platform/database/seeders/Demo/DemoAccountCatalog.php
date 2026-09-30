@@ -40,6 +40,9 @@ final class DemoAccountCatalog
                 // 0062 §19 maker/checker separation).
                 'finance.accounts.manage', 'finance.fee_structures.view', 'finance.fee_structures.manage',
                 'finance.fee_assessments.run',
+                // FEE.3: view and request concessions; approval stays with
+                // School Admin so the demo shows maker/checker.
+                'finance.fee_concessions.view', 'finance.fee_concessions.request',
             ],
         ],
         'demo.librarian' => [
@@ -134,7 +137,7 @@ final class DemoAccountCatalog
         ];
 
         $operationsHints = [
-            'demo.finance_officer' => 'Ledger accounts, journal entries, fee charges, payments and offline payment recording (Dashboard > Finance).',
+            'demo.finance_officer' => 'Ledger accounts, journal entries, fee setup and runs, fee charges, payments, offline payment recording, and concession requests (School Admin approves) (Dashboard > Finance).',
             'demo.librarian' => 'Catalogue and circulation at /app/library/titles and /app/library/circulation (no menu link).',
             'demo.transport_coordinator' => 'Routes, vehicles, operations and assignments at /app/transport/routes (no menu link).',
             'demo.reception' => 'Visitor directory and check-in/out at /app/visitor/directory and /app/visitor/visits (no menu link).',

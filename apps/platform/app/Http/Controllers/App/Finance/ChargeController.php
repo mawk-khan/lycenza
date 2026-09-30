@@ -10,11 +10,13 @@ use App\Domain\Fees\Application\ChargeQuery;
 use App\Domain\Fees\Application\ChargeReadService;
 use App\Domain\Fees\Application\ChargeSummary;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
-use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
-use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeesException;
 use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
+use App\Domain\Fees\Application\FeeConcessionReadService;
+use App\Domain\Fees\Application\FeeConcessionService;
+use App\Domain\Fees\Http\FeeSetupPresenter;
+use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Finance\Application\Exceptions\FinanceException;
 use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Application\LedgerAccountSummary;
@@ -195,7 +197,7 @@ class ChargeController extends Controller
         return redirect("/app/finance/charges/{$result->chargeId}");
     }
 
-    public function show(TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities, string $charge): Response
+    public function show(TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, string $charge): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.view', $school);
@@ -220,6 +222,14 @@ class ChargeController extends Controller
             // Phase 0O.11A: a link to record an offline payment for this
             // Charge's Student; the recording route re-checks everything.
             'canRecordPayment' => $capabilities->canInSchool($context->actor(), 'finance.payments.record', $school),
+            // FEE.3: the charge's posted concession adjustments (Highly
+            // Sensitive -- only with finance.fee_concessions.view, audited
+            // by the read service) and a link to request a concession.
+            'adjustments' => $capabilities->canInSchool($context->actor(), FeeConcessionReadService::VIEW, $school)
+                ? $concessions->listAdjustments($school, ['charge_id' => $detail->chargeId], $context->actor())
+                    ->map(fn (FeeAdjustment $a) => FeeSetupPresenter::adjustment($a))->values()->all()
+                : null,
+            'canRequestConcession' => $capabilities->canInSchool($context->actor(), FeeConcessionService::REQUEST, $school),
         ]);
     }
 
@@ -236,7 +246,9 @@ class ChargeController extends Controller
             $service->cancel($school, $charge, $context->actor(), $validated['reason'] ?? null);
         } catch (ChargeNotFoundException) {
             throw new NotFoundHttpException;
-        } catch (ChargeAlreadyCancelledException|ChargeHasPaymentAllocationsException $e) {
+        } catch (FeesException $e) {
+            // Already cancelled, payments allocated, fee-assessed (void the
+            // assessment) or live concession adjustments (cancel them first).
             return redirect("/app/finance/charges/{$charge}")->withErrors(['cancellation' => $e->getMessage()]);
         }
 

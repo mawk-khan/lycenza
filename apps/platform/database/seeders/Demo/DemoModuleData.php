@@ -26,6 +26,7 @@ use App\Domain\Examinations\Application\ExaminationService;
 use App\Domain\Examinations\Application\GradeScaleService;
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeService;
+use App\Domain\Fees\Application\FeeSettingsService;
 use App\Domain\Finance\Application\JournalLineData;
 use App\Domain\Finance\Application\LedgerService;
 use App\Domain\Finance\Application\PostJournalEntryData;
@@ -403,6 +404,8 @@ final class DemoModuleData
             'CANTEEN_INC' => ['4200', 'Canteen Income', 'income'],
             'SALARY_EXP' => ['5000', 'Salary Expense', 'expense'],
             'STATIONERY' => ['5100', 'Stationery Expense', 'expense'],
+            // FEE.3 (ADR 0062 §14.5, F2): the School's concession account.
+            'CONCESSION_EXP' => ['5200', 'Fee Concessions and Scholarships', 'expense'],
         ] as $key => [$code, $name, $type]) {
             $this->ledger[$key] = $d->inSchool(fn () => LedgerAccount::query()->create([
                 'school_id' => $d->school->id,
@@ -414,6 +417,8 @@ final class DemoModuleData
                 'status' => 'active',
             ]));
         }
+
+        app(FeeSettingsService::class)->setConcessionAccount($d->school, $this->ledger['CONCESSION_EXP']->id, $d->admin);
 
         $ledger = app(LedgerService::class);
         $ledger->post($d->school, new PostJournalEntryData(

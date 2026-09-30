@@ -564,3 +564,32 @@ mirrored by the database CHECK.
 
 Real two-process PostgreSQL tests prove each case
 (`Tests\Feature\Payments\ManualPaymentConcurrencyTest`).
+
+## Amendment — charge capacity includes fee adjustments (FEE.3, 2026-09-30)
+
+ADR 0062 §15 (owner decision G1) amends Invariant B. It is implemented in
+the Payments-owned migration
+`2026_10_31_090200_amend_payment_charge_capacity_for_fee_adjustments`.
+
+- **The rule.** `SUM(payment_allocations) + SUM(uncancelled fee_adjustments)
+  ≤ charges.amount`.
+- **Where it is enforced.** At the insert of either row, under the same
+  charge row lock (FOR UPDATE):
+  - `payments_lock_and_validate_charge_allocation()` now counts live
+    adjustments;
+  - the new `payments_lock_and_validate_charge_adjustment()`
+    (`fee_adjustments_capacity_trigger`) guards the adjustment side.
+
+  A payment and a concession can never consume the same outstanding
+  capacity. Real-process proofs are in `FeeConcessionConcurrencyTest`.
+- **Application layer.** `SettledPaymentRecorder`'s pre-check uses
+  `ChargeAllocationSnapshot::netAmount()`. The manual-payment form shows the
+  outstanding net of concessions. Both read Fees' own totals
+  (`ChargeService::lockChargeForAllocation`/`liveAdjustmentTotalsFor`), so
+  the dependency stays Payments → Fees.
+- **Unchanged:**
+  - no refund, credit, reallocation or payment reversal;
+  - allocations are still immutable;
+  - `ChargeAllocationExceedsChargeAmountException` is still the typed
+    refusal.
+- **Rollback.** `down()` restores the 0G.5 function body verbatim.
