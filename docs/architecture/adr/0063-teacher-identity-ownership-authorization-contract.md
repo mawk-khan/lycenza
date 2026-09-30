@@ -5,10 +5,10 @@
   **TCH.4 is implemented** (owned teacher Attendance access, §32).
   **Teacher Attendance functionality is implemented but production
   enablement remains blocked by TCH-L1 until the required legal/compliance
-  determination is recorded** (§26). TCH.5 onward are **not** implemented:
-  LMS remains admin-only. **TCH.5A (the LMS ownership decision gate) is
-  ACTIVE — OWNER DECISION REQUIRED** (§33): the audit is recorded, D-14 is
-  not yet resolved, and no LMS teacher implementation is authorized.
+  determination is recorded** (§26). **TCH.5A — the LMS teacher ownership
+  contract — is published and closed** (audit §33, owner resolution §34;
+  D-14 resolved, docs only). TCH.5B onward are **not** implemented: LMS
+  remains admin-only, and no LMS teacher capability or access exists.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -199,7 +199,7 @@ re-checked on every protected operation (§15).
 | D-11 | Assignment administration | **APPROVED** — dedicated capabilities (§15) |
 | D-12 | MFA | **CLARIFIED** — no new universal MFA; RES stays outside TCH (§17) |
 | D-13 | Denial semantics | **APPROVED** — non-disclosing (§18) |
-| D-14 | LMS ownership semantics | **DEFERRED** to the LMS adoption checkpoint (§16). *TCH.5A (2026-09-30): audit and decision register recorded in §33; still unresolved pending owner decision LMS-T3.* |
+| D-14 | LMS ownership semantics | **DEFERRED** to the LMS adoption checkpoint (§16). **RESOLVED BY TCH.5A (2026-09-30, §34):** teacher-authored Learning Content and Assignments use an immutable owner Employee, an immutable one-or-more Section audience, current TeachingAssignment eligibility, owner-only writes and audience-based published reads. Legacy/admin rows remain Offering-wide with no Employee owner. Offering-only teacher write authority is rejected. |
 | D-15 | Substitutes | **APPROVED** — temporary cover is a short dated assignment (§9) |
 | D-16 | Timetable ↔ assignment consistency | **APPROVED** — no hard coupling in v1 (§8) |
 | D-17 | Co-teaching | **APPROVED** — allowed (§9) |
@@ -466,7 +466,7 @@ A later checkpoint (TCH.3) adds one minimum production system School role,
    - `timetable_entries.teacher_id` and `attendance_sessions.teacher_id`
      stay schedule and provenance facts.
 3. **LMS content and assignments (TCH.5)**, only after its own ownership
-   decision (D-14, **DEFERRED**). LMS rows carry an offering but no Section
+   decision (D-14, **DEFERRED**; resolved by TCH.5A, §34). LMS rows carry an offering but no Section
    or author, so co-teacher editing needs its own rule (ADR 0039 decision
    6). The owner may remove TCH.5 from the programme.
 4. **RES** only when separately reopened; it is not part of TCH.
@@ -636,7 +636,7 @@ TCH.1 and TCH.2 must close these races:
 | **TCH.2** | Authoritative TeachingAssignment foundation: table, service, administration capability, API/UI, no consumer |
 | **TCH.3** | Production Teacher role + Curriculum Delivery adoption |
 | **TCH.4** | Attendance teacher adoption |
-| **TCH.5** | LMS teaching adoption, only after the LMS ownership decision (D-14); removable by the owner |
+| **TCH.5** | LMS teaching adoption, only after the LMS ownership decision (D-14); removable by the owner. Split by TCH.5A (§34.13): **TCH.5A** ownership contract (docs, closed) → **TCH.5B** ownership & audience persistence foundation → **TCH.5C** Learning Content adoption → **TCH.5D** Assignment adoption |
 | **TCH.6** | TCH closure audit |
 
 No TCH checkpoint includes generic staff-role expansion, tenant-custom
@@ -1124,10 +1124,11 @@ under My Attendance.
 
 ## 33. TCH.5A — LMS teacher ownership audit and decision register
 
-**Status: ACTIVE — OWNER DECISION REQUIRED (2026-09-30, baseline
-`b55ca3e`).** This section is documentation only. It records verified
-findings and a decision register. It does **not** resolve D-14, adds no
-capability, and authorizes no LMS teacher implementation. LMS stays
+**Status: the TCH.5A audit record (2026-09-30, baseline `b55ca3e`),
+published while the owner decision was open. Resolved by §34, which is
+authoritative wherever the two differ** (§34 narrows §33.5's draft reads
+and adds audience immutability). This section is documentation only. It
+adds no capability and authorizes no LMS teacher implementation. LMS stays
 admin-only (Tier 1). Submission stays cancelled (ADR 0039 cancellation
 addendum) and is outside every TCH checkpoint.
 
@@ -1413,3 +1414,234 @@ The future seam:
 
 "Frozen" entries hold under every LMS-T3 option (option 3 simply has no
 teacher publication). Nothing in this section is implemented.
+
+## 34. TCH.5A resolution — LMS teacher ownership contract (owner decision)
+
+**Status: RESOLVED AND CLOSED (2026-09-30, owner decision; docs only).**
+D-14 is resolved. This section is the authoritative LMS teacher ownership
+contract; where §33 differs, this section wins. **Nothing here is
+implemented.** No `lms.*.teacher` capability exists, teachers have no LMS
+access, and LMS stays admin-only (Tier 1) until TCH.5C/TCH.5D. Submission
+stays cancelled and outside every checkpoint.
+
+### 34.1 Audience model (LMS-T3): Section-targeted, audience bridge
+
+Adopted: **model D** (§33.3). Teacher-authored rows target Sections through
+an audience bridge.
+
+Rejected: Offering-only teacher write authority. A SubjectOffering spans
+every Section of its grade (§33.2), so owning one Section of the Offering
+would let a teacher alter material that reaches other Sections and other
+teachers.
+
+A teacher-authored row carries two **distinct** facts:
+- an immutable owner Employee (`owner_employee_id`, conceptually);
+- one or more immutable Section audience rows.
+
+TCH.5B fixes the exact names under repository conventions. It prefers
+concrete, FK-backed bridge tables (one per resource) over a polymorphic
+audience table, unless the repository offers an equally safe structural
+alternative.
+
+### 34.2 Learning Content and Assignment (LMS-T1, LMS-T2)
+
+Both use the same ownership model: owner Employee plus Section audience.
+They are adopted in **separate** checkpoints: Learning Content first
+(TCH.5C), then Assignment (TCH.5D). A shared persistence contract is not a
+reason to combine the implementations.
+
+### 34.3 Legacy and administrative rows (LMS-T7, LMS-T11)
+
+- **Legacy/admin state:** `owner_employee_id = NULL` with **no** Section
+  audience rows. That state keeps today's SubjectOffering-wide meaning.
+- **Every existing row stays in that state.** There is no backfill from a
+  `created_by` User, an audit actor, an email, a `TimetableEntry` or a
+  current TeachingAssignment.
+- **Tier 1 is unchanged.** Administrators keep School-wide
+  `lms.content.view/.manage` and `lms.assignments.view/.manage` over every
+  row, owned or not, with no ActingEmployee, TeachingAssignment or owner
+  Employee.
+- **Admin-created rows remain Offering-wide with no owner** throughout the
+  initial teacher-adoption programme. No Section-targeted admin authoring
+  workflow is introduced without a later product decision.
+
+### 34.4 Teacher creation
+
+A teacher may create a teacher-owned row only when **all** of these hold at
+execution time:
+
+```text
+owned-scope LMS capability (lms.content.teacher | lms.assignments.teacher)
+AND valid ActingEmployee (held FOR SHARE in the write transaction)
+AND the row's owner Employee = that ActingEmployee
+AND at least one Section audience is selected
+AND every selected Section belongs to the row's SubjectOffering context
+AND a TeachingAssignment covers every selected Section × that SubjectOffering
+    on the School-local current date
+```
+
+Several Sections may be targeted only if the teacher owns every one of
+them.
+
+### 34.5 Teacher writes (owner-only)
+
+Edit, publish, archive, close, reopen and any later adopted lifecycle
+action all require, at execution time:
+
+```text
+valid ActingEmployee
+AND the required lms.*.teacher capability
+AND row.owner_employee_id = ActingEmployee.employeeId
+AND a current TeachingAssignment covers every audience Section × the Offering
+```
+
+- The owner field never replaces TeachingAssignment eligibility, and a
+  TeachingAssignment never replaces owner identity.
+- Legacy/admin rows (owner NULL) are never teacher-writable.
+
+### 34.6 Immutability
+
+- **Owner.** `owner_employee_id` is immutable once the row is created.
+  - There is no teacher ownership transfer and no reassignment on handover.
+  - An audit `created_by`/actor User is never reinterpreted as ownership.
+  - If the owner loses the teaching relationship, an administrator does any
+    lifecycle clean-up.
+- **Audience.** The Section audience is immutable after creation. A
+  resource is never widened (Section A to A + B), narrowed or retargeted,
+  before or after publication. A different audience means a new resource.
+  This keeps history and publication meaning deterministic.
+
+### 34.7 Reads (LMS-T8), co-teaching (LMS-T5), handover (LMS-T6)
+
+Reads are intentionally broader than writes. Every teacher read also
+requires an eligible ActingEmployee and the owned-scope capability.
+
+| Row | A teacher may read it when |
+|---|---|
+| Teacher-owned, unpublished | they are the owner **and** currently own **every** audience Section. Historical authorship alone does not keep access once the teaching relationship ends. |
+| Teacher-owned, published | they currently own **at least one** Section in its audience. They need not be the owner. |
+| Legacy/admin (Offering-wide), published | they currently own at least one Section of its SubjectOffering |
+| Anything else | never — the same non-disclosing 404 (§18) |
+
+Tier 1 reads stay School-wide under the existing capabilities.
+
+- **Co-teaching.** Teachers A and B of one Section each own only their own
+  resources. Each may read the other's published resources that target a
+  Section they currently teach. Neither may edit the other's. Co-teaching
+  never implies shared ownership.
+- **Handover** (A owns the Section January–June, B from July):
+  - B reads A's published resources that target B's current Section;
+  - B may not edit, archive or close them;
+  - A loses teacher write access once A no longer owns every audience
+    Section;
+  - A also loses A's own unpublished drafts, because historical authorship
+    does not preserve access;
+  - ownership never moves from A to B;
+  - Tier 1 administrators keep full management authority.
+
+### 34.8 Date anchor (LMS-T9), identities (LMS-T4), Timetable
+
+- **Date anchor.** Teacher LMS authorization uses the **School-local current
+  date** for both ActingEmployee eligibility and TeachingAssignment
+  coverage. Never `created_at`, `due_on`, an audit timestamp or a
+  `TimetableEntry`. LMS rows have no trustworthy teaching-effective date.
+  This differs deliberately from Curriculum Delivery (the delivery's dates)
+  and Attendance (`attendance_date`).
+- **Three distinct facts.** The authenticated User is the audit actor.
+  The owner Employee is the resource owner. The TeachingAssignment is the
+  teaching relationship. None substitutes for another.
+- **Identity and ownership reads.** Identity comes only through TCH.1's
+  `ActingEmployeeResolver` (`hold()` inside every authoritative write
+  transaction); there is no second User→Employee resolver. Ownership comes
+  only through `TeachingOwnership`.
+- **Timetable never participates.**
+
+### 34.9 Structural integrity, Documents seam, migration (TCH.5B obligations)
+
+- **Audience integrity is database-enforced** (CLAUDE.md rules 18, 70).
+  Every audience Section must match the resource's School, AcademicYear,
+  Campus and GradeLevel, and so its SubjectOffering context. Enforcement is
+  by composite foreign keys, with forced RLS on each bridge. Application
+  validation alone is not enough.
+- **The owner Employee** has a composite FK to `employees(id, school_id)`
+  and a database-enforced immutability rule. The audience is immutable too.
+- **Documents (LMS-T10).** `lms.content.teacher`/`lms.assignments.teacher`
+  are **never** added to the capability-only Documents owner check
+  (§33.1). Teacher attachment access goes through the parent resource:
+
+  ```text
+  Document operation → LMS parent-authorization port → ActingEmployee
+    → owned-scope capability → owner/audience rule → TeachingAssignment
+  ```
+
+  TCH.5B defines that port; TCH.5C/TCH.5D wire it. Administrative Documents
+  behaviour is unchanged.
+- **Migration (LMS-T11).** Ownership and audience persistence is added with
+  no backfill, and legacy/admin rows are preserved. `down()` must refuse
+  while any owner or audience data exists, unless an equally safe
+  non-destructive rollback exists. A rollback must never reinterpret a
+  teacher-owned, Section-targeted row as Offering-wide admin material.
+  TCH.5B finalizes and tests the exact strategy.
+- **Guards.** The LMS architecture guards (no-identity columns) and
+  `TeachingAssignmentArchitectureGuardTest` (no LMS reference) are changed
+  deliberately in TCH.5B/TCH.5C, and never widened beyond
+  `TeachingOwnership`/`OwnedTeachingPeriod` and `ActingEmployeeResolver`.
+
+### 34.10 Capabilities (LMS-T12)
+
+- **Two separate future capabilities.** `lms.content.teacher` (TCH.5C) and
+  `lms.assignments.teacher` (TCH.5D), each added by its own adoption
+  checkpoint.
+- **Neither exists today, and TCH.5A adds neither.** When each lands, the
+  `teacher` role gains it and `school_admin` holds it for grantability only
+  (§31).
+- **Teachers never receive `lms.content.view/.manage` or
+  `lms.assignments.view/.manage`** for owned workflows.
+
+### 34.11 Classification and legal
+
+- **Classification.** Authoritative Employee ownership and a Section
+  audience on teacher-authored rows name an identifiable person against a
+  class. Under the existing Timetable/TeachingAssignment reasoning,
+  Learning Content and Assignment therefore move to **Sensitive**, recorded
+  in the same branch as the persistence (TCH.5B). This is a classification
+  consequence, not by itself a legal gate. LMS attachments keep their fixed
+  `internal` Documents tier.
+- **Legal.** No new LMS-specific legal/compliance gate was identified.
+  - TCH-L1 is Attendance-only and is not copied.
+  - E21 (retention) remains the existing production issue for owner and
+    audience history.
+  - LMS Submission remains separately cancelled and out of scope.
+
+### 34.12 Final decision register
+
+| ID | Disposition |
+|---|---|
+| LMS-T1 | **RESOLVED** — Learning Content = Employee owner + Section audience |
+| LMS-T2 | **RESOLVED** — Assignment = Employee owner + Section audience (adopted separately, after Learning Content) |
+| LMS-T3 | **RESOLVED** — Section-targeted teacher rows using an audience bridge (model D); Offering-only teacher write authority rejected |
+| LMS-T4 | **RESOLVED** — User actor, Employee resource owner and TeachingAssignment remain separate facts |
+| LMS-T5 | **RESOLVED** — co-teachers may read applicable published rows; owner-only writes |
+| LMS-T6 | **RESOLVED** — no transfer on handover; successor reads published applicable rows; admin handles clean-up |
+| LMS-T7 | **RESOLVED** — admin/legacy rows have a NULL owner and Offering-wide meaning |
+| LMS-T8 | **RESOLVED** — reads broader than writes (§34.7) |
+| LMS-T9 | **RESOLVED** — School-local current date for teacher LMS authorization |
+| LMS-T10 | **RESOLVED** — Documents delegate to parent LMS authorization for teacher access |
+| LMS-T11 | **RESOLVED** — no fabricated legacy owner/audience backfill |
+| LMS-T12 | **RESOLVED** — separate `lms.content.teacher` and `lms.assignments.teacher` |
+| LMS-T13 | **RESOLVED** — split implementation checkpoints (§34.13) |
+
+No owner decision remains open.
+
+### 34.13 Implementation sequence
+
+| Checkpoint | Scope | State |
+|---|---|---|
+| **TCH.5A** | LMS teacher ownership contract (docs only) | **PUBLISHED / CLOSED** |
+| **TCH.5B** | LMS ownership & audience persistence foundation: owner fields, audience bridges, structural integrity, RLS/immutability, the parent-authorization seam; the Sensitive re-tier. **No** teacher capability or access | **NEXT — NOT IMPLEMENTED** |
+| **TCH.5C** | Learning Content teacher adoption: `lms.content.teacher`, owned reads/writes, teacher API/UI, attachment integration | Planned |
+| **TCH.5D** | Assignment teacher adoption: `lms.assignments.teacher`, owned reads/writes, teacher API/UI, attachment integration | Planned |
+| **TCH.6** | TCH closure audit | Planned |
+
+Each implementation checkpoint is separately authorized. LMS Submission
+stays outside every one.

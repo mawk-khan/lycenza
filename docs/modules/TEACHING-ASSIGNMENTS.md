@@ -14,7 +14,7 @@ owned teacher resource access
 **It grants nothing by itself.** It is one of the three facts that owned
 teacher access requires, read through `TeachingOwnership` (§8), for
 **Curriculum Delivery** (TCH.3, ADR 0063 §31) and **Attendance** (TCH.4,
-§32). LMS and Timetable are still admin-only. Production enablement of the
+§32). LMS and Timetable are still admin-only; LMS is the planned third consumer (TCH.5C/TCH.5D, contract ADR 0063 §34: current coverage of every audience Section on the School-local date, alongside an immutable owner Employee). Production enablement of the
 teacher Attendance surface is blocked by the open legal/compliance
 determination TCH-L1 (ADR 0063 §26).
 

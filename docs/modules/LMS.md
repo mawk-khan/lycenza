@@ -458,18 +458,32 @@ exists anywhere in `learning_content` (architecture-guard-tested).
   legal-review question this ADR/module never received a qualifying
   answer to; nothing in this cancellation should be read as having
   resolved that question.
-- **Teacher ownership**: the ownership model now exists (ADR 0063: TCH.1
-  ActingEmployee, TCH.2 TeachingAssignment). LMS adoption is gated by
-  **TCH.5A, ACTIVE — OWNER DECISION REQUIRED** (ADR 0063 §33).
-  - Findings: LMS rows are Offering-wide with no Section or owner, and one
-    Offering spans every Section of its grade.
-  - "Teaches any Section of the Offering" is rejected as authority.
-  - The blocking choice is the audience of teacher-authored rows (LMS-T3).
-    The recommended answer would amend ADR 0039 §2.
-  - Until then LMS stays capability-only (§7). No `lms.*.teacher`
-    capability exists.
+- **Teacher ownership: contract decided, not implemented** (TCH.5A, ADR
+  0063 §34). This amends ADR 0039 §2 and §6 for teacher-authored rows only:
+  - **Owner and audience.** A teacher-authored Learning Content or
+    Assignment carries an immutable owner Employee and an immutable
+    one-or-more Section audience (an FK-backed bridge pinned to the
+    Offering's year/campus/grade context).
+  - **Creation and writes.** Owner-only, with ActingEmployee held in the
+    transaction. A current TeachingAssignment must cover every audience
+    Section on the School-local date.
+  - **Published reads.** Open to any eligible teacher who currently owns an
+    audience Section. Co-teachers and successors read, never edit, and
+    ownership never transfers.
+  - **Existing and admin-created rows.** They keep a NULL owner, no audience
+    and today's Offering-wide meaning (no backfill). Admins keep Tier 1
+    School-wide authority unchanged.
+  - **Attachments.** Authorized for teachers only through the parent LMS
+    row, never by capability alone.
+  - **Classification.** Learning Content and Assignment re-tier to
+    Sensitive when the persistence lands.
+  - **Sequence.** TCH.5B persistence foundation (next, not implemented) →
+    TCH.5C Learning Content adoption (`lms.content.teacher`) → TCH.5D
+    Assignment adoption (`lms.assignments.teacher`).
 
-  Independent of Submission's cancellation, which TCH does not reopen.
+  Until TCH.5C, LMS stays capability-only (§7), and no `lms.*.teacher`
+  capability exists. Independent of Submission's cancellation, which TCH
+  does not reopen.
 - **SyllabusUnit/CurriculumDelivery references from LMS**: purely
   additive, nullable, not yet needed.
 - **External LMS integration/standards**: unscoped; requires its own
