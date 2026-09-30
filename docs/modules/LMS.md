@@ -132,8 +132,10 @@ SubjectOffering (Academic Structure)
 - **Student** — referenced only via Submission (one row per Student per
   Assignment) and via `SubjectOfferingRosterReadService` for roster
   resolution; never denormalized into Assignment/LearningContent.
-- **Employee (teacher)** — referenced only for authorship/capability
-  purposes (decision 6); no ownership record exists yet (§6).
+- **Employee (teacher)** — **not referenced at all** (correction,
+  TCH.5A audit, ADR 0063 §27/§33): neither table stores an author, owner or
+  any Employee id, and the LMS architecture guards forbid one. Authorization
+  is capability-only (§7).
 
 ## 4. Assignment/Submission versus Examinations boundary
 
@@ -456,12 +458,18 @@ exists anywhere in `learning_content` (architecture-guard-tested).
   legal-review question this ADR/module never received a qualifying
   answer to; nothing in this cancellation should be read as having
   resolved that question.
-- **Teacher ownership**: blocked on the platform's first
-  ownership-based authorization model, whenever a future checkpoint
-  (Lesson Planning, a teacher-scoped LMS view, or a dedicated
-  ownership-model checkpoint) builds it. Independent of Submission's
-  cancellation — Assignment's existing capability-only posture is
-  unaffected.
+- **Teacher ownership**: the ownership model now exists (ADR 0063: TCH.1
+  ActingEmployee, TCH.2 TeachingAssignment). LMS adoption is gated by
+  **TCH.5A, ACTIVE — OWNER DECISION REQUIRED** (ADR 0063 §33).
+  - Findings: LMS rows are Offering-wide with no Section or owner, and one
+    Offering spans every Section of its grade.
+  - "Teaches any Section of the Offering" is rejected as authority.
+  - The blocking choice is the audience of teacher-authored rows (LMS-T3).
+    The recommended answer would amend ADR 0039 §2.
+  - Until then LMS stays capability-only (§7). No `lms.*.teacher`
+    capability exists.
+
+  Independent of Submission's cancellation, which TCH does not reopen.
 - **SyllabusUnit/CurriculumDelivery references from LMS**: purely
   additive, nullable, not yet needed.
 - **External LMS integration/standards**: unscoped; requires its own

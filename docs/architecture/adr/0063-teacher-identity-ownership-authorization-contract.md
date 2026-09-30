@@ -6,7 +6,9 @@
   **Teacher Attendance functionality is implemented but production
   enablement remains blocked by TCH-L1 until the required legal/compliance
   determination is recorded** (§26). TCH.5 onward are **not** implemented:
-  LMS remains admin-only.
+  LMS remains admin-only. **TCH.5A (the LMS ownership decision gate) is
+  ACTIVE — OWNER DECISION REQUIRED** (§33): the audit is recorded, D-14 is
+  not yet resolved, and no LMS teacher implementation is authorized.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -197,7 +199,7 @@ re-checked on every protected operation (§15).
 | D-11 | Assignment administration | **APPROVED** — dedicated capabilities (§15) |
 | D-12 | MFA | **CLARIFIED** — no new universal MFA; RES stays outside TCH (§17) |
 | D-13 | Denial semantics | **APPROVED** — non-disclosing (§18) |
-| D-14 | LMS ownership semantics | **DEFERRED** to the LMS adoption checkpoint (§16) |
+| D-14 | LMS ownership semantics | **DEFERRED** to the LMS adoption checkpoint (§16). *TCH.5A (2026-09-30): audit and decision register recorded in §33; still unresolved pending owner decision LMS-T3.* |
 | D-15 | Substitutes | **APPROVED** — temporary cover is a short dated assignment (§9) |
 | D-16 | Timetable ↔ assignment consistency | **APPROVED** — no hard coupling in v1 (§8) |
 | D-17 | Co-teaching | **APPROVED** — allowed (§9) |
@@ -1119,3 +1121,295 @@ Attendance surface has neither, and TCH lowers nothing.
 (Kavya Reddy, production `teacher` role, G8-A Mathematics) now also has one
 administratively submitted G8-A Mathematics register to review and correct
 under My Attendance.
+
+## 33. TCH.5A — LMS teacher ownership audit and decision register
+
+**Status: ACTIVE — OWNER DECISION REQUIRED (2026-09-30, baseline
+`b55ca3e`).** This section is documentation only. It records verified
+findings and a decision register. It does **not** resolve D-14, adds no
+capability, and authorizes no LMS teacher implementation. LMS stays
+admin-only (Tier 1). Submission stays cancelled (ADR 0039 cancellation
+addendum) and is outside every TCH checkpoint.
+
+### 33.1 As-built LMS resource shape [FACT at `b55ca3e`]
+
+Both LMS resources have the same shape.
+
+| | Learning Content | Assignment |
+|---|---|---|
+| Table | `learning_content` (`database/migrations/2026_10_13_090000_create_learning_content_table.php:63-91`) | `assignments` (`…_090200_create_assignments_table.php:80-108`) |
+| School | `school_id`, `unique(id, school_id)`, `TenantRls::enable` (`:65`, `:73`, `:91`) | same (`:82`, `:90`, `:108`) |
+| Parent | one `subject_offering_id`, composite FK to `subject_offerings(id, school_id)` RESTRICT (`:66`, `:81-83`) | same (`:83`, `:98-100`) |
+| Year / Campus / Grade | only through the Offering, never stored (`:19-23`) | same (`:19-23`) |
+| Section | **none** | **none** |
+| Author / owner | **none** — deliberately (`:35-42`) | **none** — deliberately (`:35-43`) |
+| Dates | `created_at`/`updated_at` only | `due_on` (School-local date, nullable, editable, informational only — `:86`, `:45-61`; ADR 0039 §9) |
+| Lifecycle | `draft → published → archived → published` (`LearningContentService.php:66-70`) | `draft → published → closed → published` (`AssignmentService.php:67-71`) |
+| Delete | none (no route; status retirement) | none |
+| Tier 1 checks | route `capability:lms.content.view/.manage` (`routes/api.php:1997-2013`) and controller (`LearningContentController.php:40-109`) | route `capability:lms.assignments.view/.manage` (`routes/api.php:2047-2064`) and controller (`AssignmentController.php:42-111`) |
+| Grants | `school_admin`, `principal` (`CapabilityAndRoleSeeder.php:1136-1140`, `:1314-1316`); not `teacher` (`:1340`) | same |
+| UI | `/app/learning-content` (`routes/web.php:1406-1412`) | `/app/assignments` (`routes/web.php:1419-1425`) |
+| Audit | `lms.learning_content.created/updated/published/archived`, actor = the User (`LearningContentService.php:106`, `:138`, `:161`, `:171`) | `lms.assignment.created/updated/published/closed`, actor = the User (`AssignmentService.php:109`, `:154`, `:188`, `:213`) |
+| Offering kind | required **and** elective (no `is_required` check, `LearningContentService.php:86`) | same (`AssignmentService.php:87`) |
+
+Guards that pin the "no identity" shape:
+- `LearningContentArchitectureGuardTest.php:60` and
+  `AssignmentArchitectureGuardTest.php:64` forbid `teacher_id`,
+  `employee_id`, `user_id` and `created_by_employee_id` columns.
+- `TeachingAssignmentArchitectureGuardTest` forbids LMS from referencing
+  TeachingAssignment.
+
+**Audience.** LMS has no audience or roster code, and no Student-facing
+surface exists (Submission is cancelled; there are no Student accounts).
+The *contracted* audience is the whole Offering roster: an Assignment is
+work "a SubjectOffering's roster is expected to complete" (ADR 0039 §2). ADR
+0039 names the Section-agnostic `SubjectOfferingRosterReadService` as that
+roster seam, and alternative 1 **rejected** Section scoping.
+
+**Documents** (ADR 0039 §8). Attachments hang off the exclusive owner arc
+(`learning_content_id`, `assignment_id`). Authorization is **capability-only,
+by owner type**:
+- read: `DocumentReadService.php:147-154` — `lms.content.view` /
+  `lms.assignments.view`;
+- write and archive: `DocumentService.php:258`, `:278`, `:284-290` —
+  `.manage`.
+
+The generic `/documents/{document}` show/content/archive routes resolve the
+owner type from the stored row. `documents.uploaded_by_user_id` is uploader
+provenance, not ownership. Documents already depends on LMS
+(`DocumentService.php:13-14`).
+
+**Legacy rows.**
+- No seeder or demo builder creates LMS rows; they exist only in test
+  fixtures.
+- Every LMS row any environment can hold was created through a Tier 1
+  `.manage` grant. No stored fact records which Employee authored it.
+
+### 33.2 SubjectOffering spans Sections [FACT]
+
+- **The Offering has no Section.** `subject_offerings` is unique per
+  `(school_id, academic_year_id, campus_id, grade_level_id, subject_id)`
+  (`2026_08_23_091000_create_subject_offerings_table.php:38-42`), and a
+  Section is one of many per `(school, year, campus, grade)`
+  (`…_090900_create_sections_table.php:36`).
+- **One required Offering therefore serves every Section of its grade,
+  campus and year.** Its implied roster filters year, grade and campus
+  only (`SubjectOfferingRosterReadService.php:75-85`).
+- **An elective Offering's roster crosses Sections too.** It comes from
+  `student_subject_enrollments` (`:99-118`).
+- **TeachingAssignment is per Section and required-only.** It is Employee ×
+  Section × **required** Offering (`TeachingAssignmentService.php:105`).
+
+So Teacher A (Section A × Offering X) and Teacher B (Section B × Offering X)
+share every existing LMS row of Offering X.
+
+### 33.3 Ownership models evaluated
+
+**A — Offering ownership** (any TeachingAssignment for the Offering ⇒
+authority over the Offering's LMS rows). **Rejected: unsafe.** Under §33.2,
+Teacher A could:
+- edit, archive or close Teacher B's and the administrators' rows;
+- publish or reopen an Assignment whose contracted audience includes Section
+  B's students;
+- change shared material for every Section.
+
+This is exactly the failure ADR 0039 §6 named.
+
+**B — Per-row owner Employee.** Solves "who may edit": only the owner, and
+only while they teach the class. It does **not** solve "who is it for". A
+teacher-owned row that stays Offering-wide still reaches every Section
+(§33.2). **Necessary, not sufficient.**
+
+**C — One Section on the row.** A single `section_id` makes the audience
+explicit. The cost: a teacher of three Sections must create three copies
+(and three attachment sets). It also contradicts ADR 0039 §2 and
+alternative 1.
+
+That rejection's premise ("the only roster seam is Section-agnostic") is
+weaker today. Attendance's `StudentEnrollmentRosterReadService` provides an
+as-of-date Section roster. But the Section-agnostic nature of electives
+still holds.
+
+**D — Audience bridge.** Rows `resource → Section` inside the row's
+Offering context, with no rows meaning Offering-wide. This models "one
+Section", "several of my Sections" and "the whole Offering" without copies,
+and keeps audience separate from owner. It has more moving parts than C: a
+bridge table, same-context composite FKs, RLS and an immutability rule.
+
+| Model | Safe alone | Complexity | Migration | Co-teaching | Handover | Legacy rows |
+|---|---|---|---|---|---|---|
+| A | **No** | none | none | unsafe | unsafe | silently teacher-editable |
+| B | edits yes, audience **no** | low | 1 nullable column | owner-only | owner-only | owner NULL |
+| C | yes (with B) | medium | column + ADR 0039 amendment | per Section | per Section | Section NULL = Offering-wide |
+| D | yes (with B) | medium-high | bridge + ADR 0039 amendment | per Section | per Section | no audience rows = Offering-wide |
+
+### 33.4 The owner decision (LMS-T3)
+
+The blocking question is **audience**: whom a teacher-authored LMS row is
+for. Repository evidence cannot settle it. ADR 0039 (Accepted) fixed LMS
+rows as Offering-wide and rejected Section scope. Changing that is an
+architectural deviation that needs an explicit decision (CLAUDE.md
+rule 15), not an inference from TeachingAssignment having a Section.
+
+The options:
+1. **Section-targeted teacher rows (recommended).** A teacher-owned row
+   targets one or more Sections (model D, or C if the owner prefers the
+   simpler schema). The author must own every targeted Section for the row's
+   Offering. Tier 1 rows keep the ADR 0039 Offering-wide meaning. ADR 0039
+   §2 is amended to "Offering-wide by default, Section-targeted when
+   teacher-owned".
+2. **Offering-wide teacher rows for sole teachers only.** A teacher may
+   publish only when they own every active Section of the Offering. This is
+   fragile: adding a Section or a co-teacher changes the answer after
+   publication. Not recommended.
+3. **Teacher drafts, administrator publication.** Teachers author and edit
+   their own drafts (model B only); publication stays Tier 1 and
+   Offering-wide. There is no ADR 0039 amendment, but teachers cannot run
+   their own class, and publication becomes an approval workflow.
+
+Consequence: TCH.5B cannot start until one option is chosen.
+
+### 33.5 Proposed contract (applies once LMS-T3 is decided; option 1 assumed)
+
+The formula, per operation:
+
+```text
+teacher LMS access =
+    authenticated User + trusted School context + active membership
+  + lms.content.teacher | lms.assignments.teacher        (owned-scope, Tier 2)
+  + ActingEmployee (resolve() for reads; hold() FOR SHARE inside every write)
+  + TeachingOwnership::hold() for every audience Section × the row's Offering,
+    on TODAY (School-local)                                  -- teaching relationship
+  + row.owner_employee_id = ActingEmployee.employeeId        -- resource ownership (writes)
+```
+
+- **Three facts, never collapsed** (LMS-T4). The audit actor is the
+  authenticated User, as today. The resource owner is an Employee. The
+  TeachingAssignment proves the teaching relationship. None stands in for
+  another, and `created_by`, audit rows, `uploaded_by_user_id` and
+  `TimetableEntry.teacher_id` are never ownership.
+- **Date anchor: today** (LMS-T9). LMS rows have no teaching-effective date.
+  `created_at` is not one, and `due_on` is nullable, editable and
+  informational. So every teacher write and lifecycle action (create,
+  edit, publish, archive, close, reopen) requires ownership today of every
+  audience Section. This differs deliberately from Curriculum Delivery
+  (the delivery's dates) and Attendance (`attendance_date`).
+- **Reads are broader than writes** (LMS-T8). While an eligible
+  ActingEmployee, a teacher may read:
+  - their own rows, in any status;
+  - **published** rows whose audience includes a Section they own today
+    (co-teachers' and predecessors' rows);
+  - **published** Tier 1 Offering-wide rows of an Offering where they own
+    a Section today.
+
+  Never another teacher's or an administrator's draft. Unowned or unknown
+  rows are the same 404 (§18).
+- **Writes are owner-only.** A co-teacher reads a colleague's published row
+  and never edits or transitions it (LMS-T5).
+- **Ownership is immutable, never transferred** (LMS-T6). On
+  handover (A to 30 June, B from 1 July):
+  - B reads A's published rows for B's Section;
+  - B cannot edit, close or archive them;
+  - A loses write access when A's assignment ends, even if A is still
+    employed;
+  - reuse is a new row owned by B (a copy action, if ever built, is its own
+    decision);
+  - lifecycle clean-up of a departed teacher's rows is Tier 1.
+- **Tier 1 rows** (owner NULL) are School/administrative material (LMS-T7).
+  Teachers read them when published and never write them. There is no
+  transfer and no fabricated owner. Administrators keep full School-wide
+  authority over every row, owned or not, without ActingEmployee or
+  TeachingAssignment (§11).
+- **Electives:** TeachingAssignment is required-only, so elective LMS stays
+  Tier 1 until an elective ownership fact exists.
+- **Timetable never participates.**
+
+### 33.6 Documents seam (LMS-T10)
+
+The capability-only owner-type check (§33.1) must **not** simply accept
+`lms.*.teacher`. That would let a teacher read or archive any LMS
+attachment in the School.
+
+The future seam:
+- Documents asks an LMS-published owned-access port whether this actor may
+  read, or may write, the Document's LMS owner row.
+- The port applies §33.5's read or write rule to the **parent row**. That
+  includes `hold()` inside the Documents write transaction.
+- The generic `/documents/{document}` routes accept Tier 2 only through that
+  port.
+- Tests must prove that teaching the same Offering, a co-teacher's draft,
+  and an unowned Section each yield 404, for both list and content
+  downloads.
+
+### 33.7 Persistence and migration outline (TCH.5B)
+
+- **Owner column.** `owner_employee_id` (nullable) on both tables. Composite
+  FK `(owner_employee_id, school_id)` → `employees(id, school_id)`
+  RESTRICT. Immutable after insert (database trigger). NULL means a Tier 1
+  / School row.
+- **Audience.** Per LMS-T3: a bridge per table, or a nullable `section_id`.
+  - The Section must be pinned to the row's Offering context by a composite
+    FK (CLAUDE.md rule 70).
+  - Forced RLS; history kept.
+  - An owned row needs at least one audience Section. That is a service
+    invariant plus a test, because a CHECK cannot span tables.
+- **Backfill: none** (LMS-T11). Every existing row stays owner NULL /
+  Offering-wide. Owners are never derived from audit actors, `created_by`,
+  email, `TimetableEntry` or a current TeachingAssignment. Doing so would
+  fabricate history.
+- **Rollback.** `down()` must refuse while any owned row exists. Silently
+  dropping ownership would widen a teacher row to Offering-wide Tier 1
+  material.
+- **Guard updates.** The LMS architecture guards and
+  `TeachingAssignmentArchitectureGuardTest` are changed deliberately in
+  that checkpoint. LMS may use only `TeachingOwnership`/`OwnedTeachingPeriod`
+  and `ActingEmployeeResolver`.
+- **Classification.** Storing an owner Employee names an identifiable person
+  against the resource and, with an audience, a class. Under this table's
+  Timetable/TeachingAssignment reasoning, Learning Content and Assignment
+  re-tier to **Sensitive** in the same branch. Attachments keep their fixed
+  `internal` Documents tier; they do not name the owner.
+
+### 33.8 Capabilities and role (LMS-T12)
+
+- Two separate owned-scope capabilities: `lms.content.teacher` (author and
+  manage own Learning Content) and `lms.assignments.teacher` (author,
+  publish and close own Assignments). They are distinct acts, and a School
+  may want one without the other.
+- **Neither exists yet.** Each is added by its own adoption checkpoint. The
+  `teacher` role then gains it, and `school_admin` holds it for grantability
+  only (§31).
+- Teachers never receive `lms.content.view/.manage` or
+  `lms.assignments.view/.manage`.
+
+### 33.9 Legal and classification
+
+- **No new legal/compliance item.** Learning Content and Assignment are
+  staff-authored and hold no Student data. TCH-L1 is Attendance-only and is
+  not copied.
+- E21 (retention) covers owner history, as it does TeachingAssignment
+  history.
+- Submission's cancelled status is unchanged.
+- The Sensitive re-tier (§33.7) is a classification change, not a legal
+  gate.
+
+### 33.10 Decision register
+
+| ID | Decision | State |
+|---|---|---|
+| LMS-T1 | Learning Content ownership model | **Proposed:** B (immutable owner Employee) + LMS-T3 audience; A rejected. Depends on LMS-T3 |
+| LMS-T2 | Assignment ownership model | **Proposed:** same as LMS-T1; no evidence requires a stronger model, but Assignment adopts after Learning Content. Depends on LMS-T3 |
+| LMS-T3 | Section/audience scoping of teacher rows | **OWNER DECISION REQUIRED** (§33.4). Recommendation: option 1, model D (C acceptable). Alternatives: option 2 (not recommended), option 3. Consequence: amends ADR 0039 §2 / alternative 1 (options 1, 2) or confines teachers to drafts (option 3). Needed before TCH.5B |
+| LMS-T4 | Author Employee vs teaching-context ownership | **Frozen:** User = audit actor; owner Employee = resource ownership; TeachingAssignment = teaching relationship; never collapsed |
+| LMS-T5 | Co-teacher edits | **Proposed default:** owner-only writes; co-teachers read published rows. Confirm with LMS-T3 |
+| LMS-T6 | Handover | **Proposed default:** no transfer; successor reads, cannot write; predecessor loses writes when the assignment ends; clean-up is Tier 1. Confirm with LMS-T3 |
+| LMS-T7 | Tier 1 / shared rows | **Frozen:** owner NULL = School material; teachers read when published, never write; no fabricated owner; admins unchanged |
+| LMS-T8 | Read vs write | **Frozen:** reads broader (own + published rows for currently owned Sections/Offerings), writes owner-only |
+| LMS-T9 | Date anchor | **Frozen:** today (School-local) for every teacher write and lifecycle action; no LMS row has a teaching-effective date |
+| LMS-T10 | Documents attachments | **Frozen:** attachments follow the parent row's owned read/write rule through an LMS-published port; capability alone never authorizes |
+| LMS-T11 | Legacy rows | **Frozen:** no backfill; existing rows stay owner NULL / Offering-wide |
+| LMS-T12 | Capability split | **Frozen:** `lms.content.teacher` and `lms.assignments.teacher`, separate, added one checkpoint at a time |
+| LMS-T13 | Checkpoints | **Proposed:** TCH.5B persistence foundation → TCH.5C Learning Content adoption → TCH.5D Assignment adoption → TCH.6 closure audit. Starts only after LMS-T3 |
+
+"Frozen" entries hold under every LMS-T3 option (option 3 simply has no
+teacher publication). Nothing in this section is implemented.

@@ -71,7 +71,7 @@ contract checkpoint.
 | Order | Programme | Status |
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
-| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0–TCH.3 closed (ADR 0063, 2026-09-30); **TCH.4 owned teacher Attendance implemented — production enablement BLOCKED by open legal/compliance determination TCH-L1**. Curriculum Delivery and Attendance are the teacher-owned surfaces; the Teacher role alone grants nothing (capability AND ActingEmployee AND TeachingAssignment). LMS and Timetable stay admin-only; TCH.5 (LMS) is next, subject to the deferred LMS ownership decision |
+| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0–TCH.3 closed (ADR 0063, 2026-09-30); **TCH.4 owned teacher Attendance implemented — production enablement BLOCKED by open legal/compliance determination TCH-L1**. Curriculum Delivery and Attendance are the teacher-owned surfaces; the Teacher role alone grants nothing (capability AND ActingEmployee AND TeachingAssignment). LMS and Timetable stay admin-only. **TCH.5A (LMS ownership decision gate) ACTIVE — OWNER DECISION REQUIRED** (ADR 0063 §33: audience of teacher-authored LMS rows, LMS-T3); no LMS teacher implementation authorized |
 | 3 | HRX — Leave & staff attendance | Not started |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
@@ -129,8 +129,19 @@ Delivery and Attendance are the teacher-owned surfaces:
   enablement remains blocked by TCH-L1 until the required legal/compliance
   determination is recorded.** TCH-L1 is OPEN: not a development blocker, a
   production blocker.
-- **TCH.5 — LMS teaching adoption.** Next, only after the LMS ownership
-  decision deferred in ADR 0063; the owner may remove it. Not implemented.
+- **TCH.5 — LMS teaching adoption.** Not implemented; the owner may remove
+  it.
+  - **TCH.5A — LMS ownership decision gate.** ACTIVE — OWNER DECISION
+    REQUIRED (ADR 0063 §33, docs only). The audit found LMS rows are
+    Offering-wide with no Section or owner, and one Offering spans every
+    Section of its grade. So "teaches any Section of the Offering" is
+    rejected as authority (model A).
+  - The blocking choice is LMS-T3: whom a teacher-authored row is for.
+    Recommended: Section-targeted teacher rows with an immutable owner
+    Employee (amends ADR 0039 §2).
+  - Proposed after that decision: TCH.5B ownership/audience persistence →
+    TCH.5C Learning Content adoption → TCH.5D Assignment adoption → TCH.6.
+    None is authorized.
 - **TCH.6 — TCH closure audit.** Planned.
 
 TCH reopens only the ADR 0061 §2.3 item "teacher identity and
