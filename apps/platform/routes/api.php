@@ -17,6 +17,7 @@ use App\Domain\Canteen\Http\Controllers\CanteenOrderController;
 use App\Domain\Canteen\Http\Controllers\CanteenOutletController;
 use App\Domain\Canteen\Http\Controllers\CanteenRecipeController;
 use App\Domain\CurriculumDelivery\Http\Controllers\CurriculumDeliveryController;
+use App\Domain\CurriculumDelivery\Http\Controllers\TeacherCurriculumDeliveryController;
 use App\Domain\Documents\Http\Controllers\DocumentController;
 use App\Domain\Examinations\Http\Controllers\ExaminationController;
 use App\Domain\Examinations\Http\Controllers\ExaminationPaperController;
@@ -2094,6 +2095,34 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/curriculum-deliveries/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])
                 ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
                 ->name('schools.curriculum-deliveries.transition');
+
+            // TCH.3 (ADR 0063 section 11, Tier 2): the OWNED teacher surface
+            // -- a separate `/my/` family so the School-wide routes above
+            // keep their meaning unchanged. `curriculum.delivery.teacher`
+            // here is only the outer check: the controller adds a verified
+            // ActingEmployee and TeachingAssignment ownership (and the
+            // service holds both inside each write). An unowned id is 404.
+            // `private-no-store`: the contexts carry the teacher's own
+            // (Sensitive) assignment periods. No Idempotency-Key, exactly as
+            // the Tier 1 routes above (unique start, CAS transition).
+            Route::get('/my/curriculum-delivery-contexts', [TeacherCurriculumDeliveryController::class, 'contexts'])
+                ->middleware(['private-no-store', 'capability:curriculum.delivery.teacher'])
+                ->name('schools.my.curriculum-delivery-contexts.index');
+            Route::get('/my/curriculum-deliveries', [TeacherCurriculumDeliveryController::class, 'index'])
+                ->middleware(['private-no-store', 'capability:curriculum.delivery.teacher'])
+                ->name('schools.my.curriculum-deliveries.index');
+            Route::post('/my/curriculum-deliveries', [TeacherCurriculumDeliveryController::class, 'store'])
+                ->middleware(['private-no-store', 'capability:curriculum.delivery.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.curriculum-deliveries.store');
+            Route::get('/my/curriculum-deliveries/{curriculumDelivery}', [TeacherCurriculumDeliveryController::class, 'show'])
+                ->middleware(['private-no-store', 'capability:curriculum.delivery.teacher'])
+                ->name('schools.my.curriculum-deliveries.show');
+            Route::patch('/my/curriculum-deliveries/{curriculumDelivery}', [TeacherCurriculumDeliveryController::class, 'update'])
+                ->middleware(['private-no-store', 'capability:curriculum.delivery.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.curriculum-deliveries.update');
+            Route::post('/my/curriculum-deliveries/{curriculumDelivery}/transition', [TeacherCurriculumDeliveryController::class, 'transition'])
+                ->middleware(['private-no-store', 'capability:curriculum.delivery.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.curriculum-deliveries.transition');
 
             // TCH.2 (ADR 0063 section 23): the authoritative
             // TeachingAssignment ownership fact. Exactly four operations --

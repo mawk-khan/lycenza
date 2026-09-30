@@ -11,8 +11,8 @@ use Tests\TestCase;
 /**
  * TCH.2 (ADR 0063 D-11, section 15): the two ADMINISTRATIVE capabilities
  * are seeded through the one capability/role seeder, granted by default to
- * school_admin and principal only -- and TCH.2 creates no Teacher role and
- * no owned-scope `*.teacher` capability (those are TCH.3 onward).
+ * school_admin and principal only. The TCH.3 Teacher role never receives
+ * them (TeacherRoleRegistryTest pins the Teacher bundle).
  */
 class TeachingAssignmentCapabilityRegistryTest extends TestCase
 {
@@ -47,13 +47,15 @@ class TeachingAssignmentCapabilityRegistryTest extends TestCase
     }
 
     #[Test]
-    public function there_is_no_teacher_role_and_no_owned_scope_teacher_capability(): void
+    public function the_administrative_pair_never_reaches_the_teacher_role_and_teaching_holds_nothing_else(): void
     {
-        $this->assertFalse(Role::query()->where('key', 'teacher')->exists(), 'No production Teacher role before TCH.3.');
-        $this->assertSame([], Role::query()->where('is_system', true)->where('key', 'like', '%teacher%')->pluck('key')->all());
+        // TCH.3 adds the production Teacher role; it must never administer
+        // assignments (ADR 0063 section 12, TCH.3 scope).
+        $teacher = Role::query()->where('key', 'teacher')->firstOrFail()->capabilities->pluck('key')->all();
+        foreach (self::KEYS as $key) {
+            $this->assertNotContains($key, $teacher);
+        }
 
-        $teacherCapabilities = Capability::query()->where('key', 'like', '%teacher%')->pluck('key')->all();
-        $this->assertSame([], $teacherCapabilities, 'No *.teacher capability exists yet.');
         $this->assertSame(self::KEYS, Capability::query()->where('key', 'like', 'teaching.%')->orderByDesc('key')->pluck('key')->all(), 'teaching.* holds exactly the two administrative capabilities.');
     }
 }

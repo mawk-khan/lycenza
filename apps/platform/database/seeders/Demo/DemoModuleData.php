@@ -61,6 +61,7 @@ use App\Domain\Payroll\Application\SalaryComponentService;
 use App\Domain\Payroll\Application\SalaryStructureService;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
 use App\Domain\Syllabus\Infrastructure\SyllabusUnit;
+use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
 use App\Domain\Timetable\Application\TimetablePeriodService;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Domain\Timetable\Infrastructure\TimetableEntry;
@@ -102,6 +103,7 @@ final class DemoModuleData
     {
         $this->timetableAndAttendance();
         $this->syllabusAndDelivery();
+        $this->teachingAssignments();
         $this->examinations();
         $this->communications();
         $this->finance();
@@ -266,6 +268,29 @@ final class DemoModuleData
                 }
             }
         }
+    }
+
+    // --- Teaching Assignments (TCH.2/TCH.3) --------------------------------
+
+    /**
+     * The demo teacher (Kavya Reddy, MATH Employee) owns G8-A Mathematics
+     * for the whole current year -- through the real service, so the demo
+     * exercises ADR 0063's ownership check. Her timetable rows in other
+     * classes grant nothing: only this assignment does.
+     */
+    private function teachingAssignments(): void
+    {
+        $d = $this->demo;
+
+        app(TeachingAssignmentService::class)->create(
+            $d->school,
+            $d->employees['MATH']->id,
+            $d->sections['G8-A']->id,
+            $d->offerings['G8-MATH']->id,
+            $d->currentYear->starts_on->toDateString(),
+            null,
+            $d->admin,
+        );
     }
 
     // --- Examinations (0H.4A/B) + Grade scale (0H.4C) --------------------

@@ -1,11 +1,10 @@
 # ADR 0063: Teacher Identity and Ownership-Based Authorization Contract
 
 - Status: Accepted as a contract (TCH.0, documentation only, closed).
-  **TCH.1 is implemented and closed** (the ActingEmployee identity boundary,
-  §29). **TCH.2 is implemented** (the authoritative TeachingAssignment
-  foundation, §30). TCH.3 onward are **not** implemented: no Teacher role
-  and no owned-scope `*.teacher` capability exist, nothing consumes a
-  TeachingAssignment, and every teaching module stays admin-only.
+  **TCH.1 and TCH.2 are implemented and closed** (§29, §30). **TCH.3 is
+  implemented** (the production Teacher role and owned Curriculum Delivery
+  access, §31). TCH.4 onward are **not** implemented: Attendance and LMS
+  remain admin-only.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -869,3 +868,110 @@ no ActingEmployee. There is no role-name check.
 - Audit events `teaching_assignment.created` and `teaching_assignment.ended`
   (ids, dates and the closed reason). No outbox event.
 - Classification: Sensitive (DATA-CLASSIFICATION.md).
+
+## 31. TCH.3 implementation (as built)
+
+TCH.3 builds §12, §13 and §16.1: the production Teacher role, and
+Curriculum Delivery as the first owned adopter. It is the first executable
+instance of the §11 conjunction. D-01 to D-17 are unchanged. Attendance
+(TCH.4, legal determination TCH-L1 for production) and LMS remain
+admin-only. TCH.3 adds no legal gate: Curriculum Delivery stores no Student
+or teacher identity, and E21 stays the general retention item.
+
+**Teacher role (§12, T1).** The system School role `teacher` ("Teacher"),
+seeded by `CapabilityAndRoleSeeder`, carries exactly
+`curriculum.delivery.teacher`:
+- It is granted and revoked through the ordinary staff role path
+  (`StaffAccessService`, `StaffRoleCatalog`); there is no special
+  endpoint.
+- Under the existing no-escalation rule an actor may grant only a role
+  whose every capability they hold. `school_admin` therefore also holds
+  `curriculum.delivery.teacher`. That adds no School-wide reach: used alone
+  it still needs an ActingEmployee and a TeachingAssignment, and School
+  Admin already holds `curriculum.delivery.manage`. `principal` does not
+  hold it and cannot grant roles.
+- A role grant creates no Employee link and no TeachingAssignment. Neither
+  of those creates a role grant.
+- No code checks the role key (architecture guard). Any role carrying the
+  capability works the same (tested with a non-`teacher` role).
+
+**Capabilities (§13).** `curriculum.delivery.teacher` is the owned-scope
+(Tier 2) capability. `curriculum.delivery.view`/`.manage` keep their
+School-wide (Tier 1) meaning and grants unchanged. Administrators need no
+Employee record, ActingEmployee or TeachingAssignment.
+
+**The executable chain.** Authenticated User → trusted School route context
+with an active membership (the School-route middleware) →
+`curriculum.delivery.teacher` → `ActingEmployeeResolver` (today,
+School-local) → `TeachingOwnership` for the exact Section + SubjectOffering
+on every date the operation involves.
+
+- **Actor date:** today.
+- **Ownership dates:** the delivery's own dates:
+  - `started_on` to start;
+  - `completed_on` to complete;
+  - the cleared completion date to reopen;
+  - every written AND replaced date to correct.
+- **Read visibility:** a teacher period overlapping
+  `[started_on, completed_on]` (open while in progress).
+
+**Ownership read (TeachingAssignments).**
+`App\Domain\TeachingAssignments\Application\TeachingOwnership`:
+- `periods()` is fresh. It returns an Employee's ownership periods as
+  `OwnedTeachingPeriod`, ids and dates only.
+- `hold()` runs in the transaction. It reads the one covering assignment
+  of the key `FOR SHARE`; zero or several covering rows fail closed.
+- It is never cached, never derived from `TimetableEntry` and never aware
+  of roles.
+- Curriculum Delivery is the only consumer and uses only these two classes
+  (architecture guard).
+
+**Curriculum Delivery integration.**
+- **Reads:** `TeacherDeliveryAccess::scope()` (capability + fresh
+  ActingEmployee + periods) feeds `TeacherDeliveryReadService`, which
+  filters in the query.
+- **Writes:** the same `CurriculumDeliveryService` receives an optional
+  `DeliveryWriteGuard`. The Tier 2 `TeacherDeliveryGuard` runs inside its
+  transaction before the insert or row lock: capability, then
+  `ActingEmployeeResolver::hold()`, then visibility (404), then
+  `TeachingOwnership::hold()` per date
+  (`CURRICULUM_DELIVERY_OUTSIDE_TEACHING_ASSIGNMENT`, 422).
+- **Lock order:** School → membership → User → Employee → EmploymentRecord
+  → TeachingAssignment → `curriculum_deliveries`, matching §20. If a
+  concurrent correction changed the row's dates between the unlocked
+  guard read and the row lock, the guard runs again.
+- **Unchanged:** `curriculum_deliveries` gains no `teacher_id`, the audit
+  events and actor attribution are the existing ones, and the
+  classification stays Confidential.
+
+**Surfaces (§23).**
+- API `/api/v1/schools/{school}/my/curriculum-delivery-contexts`,
+  `/my/curriculum-deliveries` (GET list for one owned class, POST) and
+  `/my/curriculum-deliveries/{id}` (GET, PATCH, POST `…/transition`), with
+  `private-no-store`. They are in the OpenAPI contract, with regenerated
+  shared types. The Tier 1 routes are unchanged.
+- Page `/app/my-curriculum-delivery` ("My Curriculum Delivery"), linked by
+  the capability. A capability holder who is not an eligible Employee sees
+  an empty state and every write is refused.
+- Teachers get no Attendance, LMS or Timetable surface, and no
+  TeachingAssignment administration.
+
+**Tests.**
+- Authorization matrix, `TeacherCurriculumDeliveryAccessTest`:
+  - capability, identity or ownership missing;
+  - role alone; a non-`teacher` role;
+  - wrong Section or Offering; inclusive date bounds; a future assignment;
+  - historical ownership and hand-over; co-teaching; temporary cover;
+  - timetable independence; non-disclosure;
+  - role revoke, assignment end and five off-boarding cases;
+  - Tier 1 unchanged.
+- `TeacherRoleRegistryTest`, `MyCurriculumDeliveryUiTest` and
+  `TeacherDeliveryArchitectureGuardTest`.
+- Two-process races (`TeacherDeliveryConcurrencyTest`): a teacher write vs
+  an assignment end, a membership suspension, an unlink, an archive and an
+  employment end, in both orders.
+- The existing Curriculum Delivery concurrency test passes unchanged.
+
+**Demo.** Inside the demo builder's environment guard, the demo teacher
+(Kavya Reddy) holds the production `teacher` role and one assignment:
+G8-A Mathematics for the current year. There is no `demo.teacher` role.

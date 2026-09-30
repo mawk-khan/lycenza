@@ -156,13 +156,43 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   See `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
-## Ownership-based authorization (ADR 0063 — TCH contract; identity and ownership facts implemented, no teacher access yet)
+## Ownership-based authorization (ADR 0063 — TCH; first adopter: Curriculum Delivery)
 
 Roles stay capability bundles. ADR 0063 (TCH.0, 2026-09-30) contracts the
 platform's first ownership-based authorization, for teachers. The
-ActingEmployee identity boundary (TCH.1) and the TeachingAssignment
-ownership fact (TCH.2) are built, but there is no owned-scope capability, no
-Teacher role and no consumer, so every teaching module is still admin-only.
+ActingEmployee identity boundary (TCH.1), the TeachingAssignment ownership
+fact (TCH.2) and the first owned adopter (TCH.3) are built.
+
+**Curriculum Delivery is the only owned teaching surface.** Attendance, LMS
+and Timetable remain admin-only, and Timetable stays scheduling evidence,
+never ownership authority. The first implemented example:
+
+```text
+School-wide Curriculum Delivery (Tier 1):
+    curriculum.delivery.view / curriculum.delivery.manage
+
+Owned teacher Curriculum Delivery (Tier 2):
+    curriculum.delivery.teacher
+    + verified ActingEmployee today
+    + TeachingAssignment for the exact Section + SubjectOffering
+      on every date the operation involves
+```
+
+Both are explicit authorization paths; neither bypasses the other. The Tier
+2 path is `App\Domain\CurriculumDelivery\Application\TeacherDeliveryAccess`
+for reads and `TeacherDeliveryGuard` for writes, the latter run inside
+`CurriculumDeliveryService`'s transaction (identity and ownership held FOR
+SHARE before the row lock). An unowned resource is the same 404 as a missing
+one (ADR 0063 §18, §31).
+
+**Teacher role.** The production system role `teacher` carries only
+`curriculum.delivery.teacher`:
+- It is a bundle, never a check: no code tests the role key, and any role
+  carrying the capability behaves identically.
+- On its own it reaches nothing.
+- It is granted and revoked through the ordinary staff role path.
+- `school_admin` also holds the capability, only so it can grant the role
+  under the no-escalation rule.
 
 - **Two capability tiers:**
 
@@ -207,7 +237,7 @@ Teacher role and no consumer, so every teaching module is still admin-only.
     administrative (Tier 1) capabilities, granted to `school_admin` and
     `principal`, checked on the route and in the service. An administrator
     needs no ActingEmployee.
-  - It is dormant: nothing reads it for an access decision yet.
+  - Read for access decisions only through `TeachingOwnership` (TCH.3), by Curriculum Delivery.
   - `TimetableEntry.teacher_id` is scheduling evidence and never grants
     access.
 - **No role-name check, ever.**

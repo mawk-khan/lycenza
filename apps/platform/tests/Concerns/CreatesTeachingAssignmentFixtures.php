@@ -12,6 +12,7 @@ use App\Domain\TeachingAssignments\Infrastructure\TeachingAssignment;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 /**
  * TCH.2 fixtures: one School with an active 2026-27 AcademicYear
@@ -29,7 +30,11 @@ trait CreatesTeachingAssignmentFixtures
     protected function teachingWorld(?School $school = null, string $yearStatus = 'active'): array
     {
         $school ??= $this->createSchool();
-        $year = $this->createAcademicYear($school, ['starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => $yearStatus]);
+        // An explicit unique code: a second world in the SAME School (a draft
+        // year) must never collide with the first on
+        // academic_years_school_id_code_unique through the factory's random pick.
+        $code = 'TA'.strtoupper(Str::random(8));
+        $year = $this->createAcademicYear($school, ['code' => $code, 'name' => "Teaching {$code}", 'starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => $yearStatus]);
         $campus = $this->createCampus($school);
         $grade = $this->createGradeLevel($school);
         $section = $this->createSection($year, $campus, $grade);

@@ -4611,6 +4611,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/my/curriculum-delivery-contexts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The calling teacher's own classes (Section + required Subject Offering) with their own assignment periods. Not TeachingAssignment administration: never another Employee's assignments. */
+        get: operations["listMyCurriculumDeliveryContexts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/curriculum-deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** For ONE owned class, its active syllabus units in teaching order, each with the delivery state visible to the teacher. A delivery is visible when one of the teacher's periods for this class overlaps [started_on, completed_on] (open while in progress). A unit whose delivery lies wholly outside those periods is `unavailable` with no id or dates. */
+        get: operations["listMyCurriculumDeliveries"];
+        put?: never;
+        /** Starts a delivery in an owned class; started_on must be covered by the teacher's assignment. Every Tier 1 rule applies unchanged. */
+        post: operations["startMyCurriculumDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/curriculum-deliveries/{curriculumDeliveryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One delivery visible to the teacher. */
+        get: operations["getMyCurriculumDelivery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Corrects dates of a visible delivery. The teacher must own the class on every date written AND on every date replaced, so a record from another teacher's period cannot be rewritten. */
+        patch: operations["correctMyCurriculumDelivery"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/curriculum-deliveries/{curriculumDeliveryId}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The Tier 1 compare-and-swap transition on a visible delivery. Completing requires owning the class on completed_on; reopening requires owning it on the completion date being cleared. */
+        post: operations["transitionMyCurriculumDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/academic-years/{academicYearId}/examinations": {
         parameters: {
             query?: never;
@@ -8243,6 +8313,53 @@ export interface components {
             new_status: components["schemas"]["CurriculumDeliveryStatus"];
             /** Format: date */
             completed_on?: string;
+        };
+        /** @description TCH.3 -- one of the calling teacher's own classes and their own assignment periods. */
+        MyCurriculumDeliveryContext: {
+            /** Format: uuid */
+            sectionId: string;
+            sectionName: string | null;
+            sectionCode: string | null;
+            gradeLevelName: string | null;
+            /** Format: uuid */
+            subjectOfferingId: string;
+            subjectCode: string | null;
+            subjectName: string | null;
+            /** @description A period covers today (School-local). */
+            current: boolean;
+            periods: {
+                /** Format: date */
+                startsOn: string;
+                /** Format: date */
+                endsOn: string | null;
+            }[];
+        };
+        /** @description TCH.3 -- one active syllabus unit of an owned class with the delivery state visible to the teacher. `unavailable` means a delivery exists wholly outside the teacher's periods; nothing else about it is sent. */
+        MyCurriculumDeliveryUnit: {
+            /** Format: uuid */
+            syllabusUnitId: string;
+            code: string;
+            title: string;
+            sequence: number;
+            /** @enum {string} */
+            state: "not_started" | "in_progress" | "completed" | "unavailable";
+            /** Format: uuid */
+            deliveryId: string | null;
+            /** Format: date */
+            startedOn: string | null;
+            /** Format: date */
+            completedOn: string | null;
+        };
+        /** @description TCH.3 -- the class is named explicitly and must be one of the teacher's own. */
+        MyCurriculumDeliveryCreateInput: {
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            subject_offering_id: string;
+            /** Format: uuid */
+            syllabus_unit_id: string;
+            /** Format: date */
+            started_on: string;
         };
         /**
          * @description The complete, closed Examination lifecycle vocabulary, mirrored by the database's own `examinations_status_check` CHECK constraint. Deliberately NOT a draft/active/closed state machine: a retired or cancelled Examination is marked `inactive` and kept, and an inactive Examination continues to reserve its code, which is why there is no activate/deactivate operation and no delete.
@@ -24976,6 +25093,360 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listMyCurriculumDeliveryContexts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyCurriculumDeliveryContext"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listMyCurriculumDeliveries: {
+        parameters: {
+            query: {
+                section_id: string;
+                subject_offering_id: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyCurriculumDeliveryUnit"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not one of the teacher's classes. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or malformed section_id/subject_offering_id. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    startMyCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyCurriculumDeliveryCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Started. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not one of the teacher's classes. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CURRICULUM_DELIVERY_OUTSIDE_TEACHING_ASSIGNMENT, or any Tier 1 validation or domain failure. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getMyCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not visible to this teacher (or not found). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    correctMyCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurriculumDeliveryUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Corrected. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not visible to this teacher (or not found). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CURRICULUM_DELIVERY_OUTSIDE_TEACHING_ASSIGNMENT, or any Tier 1 validation or domain failure. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transitionMyCurriculumDelivery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                curriculumDeliveryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurriculumDeliveryTransitionInput"];
+            };
+        };
+        responses: {
+            /** @description Transitioned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CurriculumDelivery"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not visible to this teacher (or not found). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The record's current status is not the supplied expected_status. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description CURRICULUM_DELIVERY_OUTSIDE_TEACHING_ASSIGNMENT, or any Tier 1 validation or domain failure. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
         };
     };
     listExaminations: {

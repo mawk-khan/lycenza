@@ -157,9 +157,14 @@ class DemoDataBuilderTest extends TestCase
         $this->assertSame('school', $demoRole->scope);
         $this->assertEqualsCanonicalizing(DemoDataBuilder::DEMO_HR_PAYROLL_CAPABILITIES, $demoRole->capabilities()->pluck('key')->all());
 
-        foreach (['teacher@example.test', 'student@example.test', 'guardian01@example.test'] as $email) {
+        foreach (['student@example.test', 'guardian01@example.test'] as $email) {
             $this->assertSame([], $resolver->schoolCapabilities($this->user($email), $school), $email);
         }
+
+        // TCH.3: the demo teacher holds the production Teacher role -- exactly
+        // one owned-scope capability, reaching only what her
+        // TeachingAssignment (G8-A Mathematics) covers.
+        $this->assertSame(['curriculum.delivery.teacher'], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
 
         // Operations desks: a demo-only, non-system role holding EXACTLY
         // one existing capability family, in the Demo School only.
@@ -220,6 +225,14 @@ class DemoDataBuilderTest extends TestCase
             $this->assertPageStatus($email, $school, '/app', 200);
             $this->assertPageStatus($email, $school, '/app/students', 403);
             $this->assertPageStatus($email, $school, '/app/communications', 403);
+        }
+
+        // TCH.3: the teacher reaches My Curriculum Delivery -- and nothing
+        // School-wide: not the administrative delivery page, not
+        // TeachingAssignment administration, not Attendance.
+        $this->assertPageStatus('teacher@example.test', $school, '/app/my-curriculum-delivery', 200);
+        foreach (['/app/syllabus-delivery', '/app/teaching-assignments', '/app/attendance', '/app/timetable-schedule'] as $page) {
+            $this->assertPageStatus('teacher@example.test', $school, $page, 403);
         }
 
         // Phase 0L.2-1: Curriculum Coverage Analytics -- School Admin and

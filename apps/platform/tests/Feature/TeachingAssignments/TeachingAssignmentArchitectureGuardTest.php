@@ -31,12 +31,21 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function no_teaching_surface_consumes_teaching_assignments_yet(): void
+    public function only_adopted_surfaces_consume_ownership_and_only_through_teaching_ownership(): void
     {
-        // TCH.3 onward adopt it one surface at a time; TCH.2 opens nothing.
-        foreach (['Timetable', 'Attendance', 'LMS', 'CurriculumDelivery', 'Syllabus', 'Examinations'] as $module) {
-            $this->assertSame([], $this->grep('TeachingAssignment', "app/Domain/{$module}"), "{$module} must not consume TeachingAssignment in TCH.2.");
+        // Adopted one surface at a time (ADR 0063 section 16). TCH.3 adopts
+        // Curriculum Delivery -- through the TeachingOwnership read only,
+        // never the model, the table or the administrative services.
+        foreach (['Timetable', 'Attendance', 'LMS', 'Syllabus', 'Examinations'] as $module) {
+            $this->assertSame([], $this->grep('TeachingAssignment', "app/Domain/{$module}"), "{$module} is not an adopted TeachingAssignment consumer.");
         }
+
+        $uses = array_filter(
+            $this->grep('App\\Domain\\TeachingAssignments', 'app/Domain/CurriculumDelivery'),
+            fn (string $line) => ! str_contains($line, 'Application\\TeachingOwnership;') && ! str_contains($line, 'Application\\OwnedTeachingPeriod;'),
+        );
+        $this->assertSame([], array_values($uses), 'Curriculum Delivery may use TeachingOwnership/OwnedTeachingPeriod only: '.implode("\n", $uses));
+        $this->assertSame([], $this->grep('teaching_assignments', 'app/Domain/CurriculumDelivery'));
 
         $this->assertSame([], $this->grep('TeachingAssignment', 'app/Support/Authorization'), 'CapabilityResolver stays independent of ownership.');
     }

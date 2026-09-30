@@ -154,7 +154,9 @@ class CurriculumDeliveryOpenApiCoverageTest extends TestCase
         $currentPath = null;
 
         foreach ($lines as $line) {
-            if (preg_match('#^  (/schools/\{schoolId\}/\S*curriculum-deliveries\S*):$#', $line, $m)) {
+            // The Tier 1 contract only; TCH.3's owned `/my/` operations are
+            // pinned by TeacherDeliveryArchitectureGuardTest.
+            if (preg_match('#^  (/schools/\{schoolId\}/(?!my/)\S*curriculum-deliveries\S*):$#', $line, $m)) {
                 $currentPath = preg_replace('/\{[^}]+\}/', '{param}', $m[1]);
 
                 continue;

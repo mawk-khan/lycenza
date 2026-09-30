@@ -11,11 +11,10 @@ owned teacher resource access
       AND a TeachingAssignment covering the resource on the day (TCH.2)
 ```
 
-At TCH.2 only the ownership fact exists. **It grants nothing by itself**:
-- there is no Teacher role;
-- there is no `*.teacher` capability;
-- no teaching surface consumes it, so Attendance, Curriculum Delivery,
-  LMS and Timetable are still admin-only.
+**It grants nothing by itself.** Since TCH.3 (ADR 0063 §31) it is one of
+the three facts owned teacher access to **Curriculum Delivery** requires,
+read through `TeachingOwnership` (§8). Attendance, LMS and Timetable are
+still admin-only.
 
 ADR 0063 (§7–§10, §15, §19–§23, §30) is the decision record. This page
 describes the as-built module.
@@ -26,8 +25,9 @@ describes the as-built module.
   check) and Academic Structure (Section, SubjectOffering, AcademicYear), by
   composite foreign key and through tenant-scoped reads.
 - **Never depended on** by HR or Academic Structure.
-- **No consumer yet:** Timetable, Attendance, LMS, Curriculum Delivery,
-  Syllabus and Examinations do not reference it.
+- **One consumer (TCH.3):** Curriculum Delivery, through `TeachingOwnership`
+  only. Timetable, Attendance, LMS, Syllabus and Examinations do not
+  reference it.
 - **Not derived from anything else.** It never uses `TimetableEntry` (a
   weekly schedule, not authority) or `ActingEmployeeResolver` (the actor's
   identity, not the owner's).
@@ -137,3 +137,26 @@ decision.
   cover is a short dated assignment (ADR 0063 D-02, D-05, D-15).
 - **The Employee picker lists at most 1,000 active Employees,** ordered by
   name.
+
+## 8. The ownership read (TCH.3)
+
+`App\Domain\TeachingAssignments\Application\TeachingOwnership` is the only
+way a consumer reads ownership:
+- **`periods(School, employeeId)`** is a fresh read. It returns every
+  period of one Employee (past, current and future; ended rows with their
+  final `ends_on`) as `OwnedTeachingPeriod`, ids and dates only.
+- **`hold(School, employeeId, sectionId, subjectOfferingId, date)`** runs
+  inside the caller's transaction. It reads the one assignment of that key
+  covering `date` `FOR SHARE`. Zero, or (corrupt) several, covering rows
+  mean "not owned".
+
+`TeachingAssignmentService::end()` takes the same row `FOR UPDATE`. So an
+end either commits first, and `hold()` then finds no coverage for the dates
+it removed, or waits for the consumer's write.
+
+The Employee passed in is always the consumer's verified ActingEmployee.
+Nothing here resolves identity, checks roles or is cached.
+
+Teachers never get `teaching.assignments.view`/`.manage`. They see only
+their own periods, through their consumer's projection (e.g. "My
+Curriculum Delivery").

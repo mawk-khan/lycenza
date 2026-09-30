@@ -10421,6 +10421,219 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  # --- TCH.3 (ADR 0063 section 11, Tier 2): the OWNED teacher surface.
+  # Every operation requires curriculum.delivery.teacher AND a verified
+  # ActingEmployee (linked, active, eligible employment today) AND a
+  # TeachingAssignment of that Employee for the exact Section +
+  # SubjectOffering on every date the operation involves. It is a separate
+  # surface: the School-wide operations above keep their meaning. An
+  # unowned class or delivery, another School's id and an unknown id are
+  # the same 404. The body never names the School, the Employee or the owner.
+  /schools/{schoolId}/my/curriculum-delivery-contexts:
+    get:
+      operationId: listMyCurriculumDeliveryContexts
+      summary: >
+        The calling teacher's own classes (Section + required Subject
+        Offering) with their own assignment periods. Not TeachingAssignment
+        administration: never another Employee's assignments.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/MyCurriculumDeliveryContext" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/curriculum-deliveries:
+    get:
+      operationId: listMyCurriculumDeliveries
+      summary: >
+        For ONE owned class, its active syllabus units in teaching order,
+        each with the delivery state visible to the teacher. A delivery is
+        visible when one of the teacher's periods for this class overlaps
+        [started_on, completed_on] (open while in progress). A unit whose
+        delivery lies wholly outside those periods is `unavailable` with no
+        id or dates.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: section_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: subject_offering_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/MyCurriculumDeliveryUnit" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not one of the teacher's classes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Missing or malformed section_id/subject_offering_id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: startMyCurriculumDelivery
+      summary: >
+        Starts a delivery in an owned class; started_on must be covered by
+        the teacher's assignment. Every Tier 1 rule applies unchanged.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MyCurriculumDeliveryCreateInput" }
+      responses:
+        "201":
+          description: Started.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CurriculumDelivery" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not one of the teacher's classes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: CURRICULUM_DELIVERY_OUTSIDE_TEACHING_ASSIGNMENT, or any Tier 1 validation or domain failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/curriculum-deliveries/{curriculumDeliveryId}:
+    get:
+      operationId: getMyCurriculumDelivery
+      summary: One delivery visible to the teacher.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: curriculumDeliveryId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CurriculumDelivery" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not visible to this teacher (or not found).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: correctMyCurriculumDelivery
+      summary: >
+        Corrects dates of a visible delivery. The teacher must own the class
+        on every date written AND on every date replaced, so a record from
+        another teacher's period cannot be rewritten.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: curriculumDeliveryId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CurriculumDeliveryUpdateInput" }
+      responses:
+        "200":
+          description: Corrected.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CurriculumDelivery" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not visible to this teacher (or not found).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: CURRICULUM_DELIVERY_OUTSIDE_TEACHING_ASSIGNMENT, or any Tier 1 validation or domain failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/curriculum-deliveries/{curriculumDeliveryId}/transition:
+    post:
+      operationId: transitionMyCurriculumDelivery
+      summary: >
+        The Tier 1 compare-and-swap transition on a visible delivery.
+        Completing requires owning the class on completed_on; reopening
+        requires owning it on the completion date being cleared.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: curriculumDeliveryId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CurriculumDeliveryTransitionInput" }
+      responses:
+        "200":
+          description: Transitioned.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/CurriculumDelivery" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking curriculum.delivery.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not visible to this teacher (or not found).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The record's current status is not the supplied expected_status.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: CURRICULUM_DELIVERY_OUTSIDE_TEACHING_ASSIGNMENT, or any Tier 1 validation or domain failure.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /schools/{schoolId}/academic-years/{academicYearId}/examinations:
     get:
       operationId: listExaminations
@@ -14906,6 +15119,52 @@ components:
         expected_status: { $ref: "#/components/schemas/CurriculumDeliveryStatus" }
         new_status: { $ref: "#/components/schemas/CurriculumDeliveryStatus" }
         completed_on: { type: string, format: date }
+    MyCurriculumDeliveryContext:
+      type: object
+      description: TCH.3 -- one of the calling teacher's own classes and their own assignment periods.
+      required: [sectionId, sectionName, sectionCode, gradeLevelName, subjectOfferingId, subjectCode, subjectName, current, periods]
+      properties:
+        sectionId: { type: string, format: uuid }
+        sectionName: { type: string, nullable: true }
+        sectionCode: { type: string, nullable: true }
+        gradeLevelName: { type: string, nullable: true }
+        subjectOfferingId: { type: string, format: uuid }
+        subjectCode: { type: string, nullable: true }
+        subjectName: { type: string, nullable: true }
+        current: { type: boolean, description: "A period covers today (School-local)." }
+        periods:
+          type: array
+          items:
+            type: object
+            required: [startsOn, endsOn]
+            properties:
+              startsOn: { type: string, format: date }
+              endsOn: { type: string, format: date, nullable: true }
+    MyCurriculumDeliveryUnit:
+      type: object
+      description: >
+        TCH.3 -- one active syllabus unit of an owned class with the delivery
+        state visible to the teacher. `unavailable` means a delivery exists
+        wholly outside the teacher's periods; nothing else about it is sent.
+      required: [syllabusUnitId, code, title, sequence, state, deliveryId, startedOn, completedOn]
+      properties:
+        syllabusUnitId: { type: string, format: uuid }
+        code: { type: string }
+        title: { type: string }
+        sequence: { type: integer }
+        state: { type: string, enum: [not_started, in_progress, completed, unavailable] }
+        deliveryId: { type: string, format: uuid, nullable: true }
+        startedOn: { type: string, format: date, nullable: true }
+        completedOn: { type: string, format: date, nullable: true }
+    MyCurriculumDeliveryCreateInput:
+      type: object
+      description: TCH.3 -- the class is named explicitly and must be one of the teacher's own.
+      required: [section_id, subject_offering_id, syllabus_unit_id, started_on]
+      properties:
+        section_id: { type: string, format: uuid }
+        subject_offering_id: { type: string, format: uuid }
+        syllabus_unit_id: { type: string, format: uuid }
+        started_on: { type: string, format: date }
     ExaminationStatus:
       type: string
       description: >

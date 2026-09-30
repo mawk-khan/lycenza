@@ -28,6 +28,7 @@ use App\Http\Controllers\App\Canteen\CanteenOrderController;
 use App\Http\Controllers\App\Canteen\CanteenOutletController;
 use App\Http\Controllers\App\Compliance\AuditLogController;
 use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
+use App\Http\Controllers\App\CurriculumDelivery\MyCurriculumDeliveryController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\Domains\SchoolDomainController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
@@ -1348,6 +1349,18 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/', [CurriculumDeliveryController::class, 'store'])->name('store');
         Route::patch('/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])->name('update');
         Route::post('/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])->name('transition');
+    });
+
+    // TCH.3 (ADR 0063 section 11, Tier 2) -- "My Curriculum Delivery", the
+    // owned teacher page: only the calling teacher's own classes and the
+    // deliveries their TeachingAssignments cover. Authorization lives in
+    // the controller (TeacherDeliveryAccess) and, for writes, again inside
+    // CurriculumDeliveryService's transaction. No delete route.
+    Route::prefix('app/my-curriculum-delivery')->name('app.my-curriculum-delivery.')->group(function (): void {
+        Route::get('/', [MyCurriculumDeliveryController::class, 'index'])->name('index');
+        Route::post('/', [MyCurriculumDeliveryController::class, 'store'])->name('store');
+        Route::patch('/{curriculumDelivery}', [MyCurriculumDeliveryController::class, 'update'])->name('update');
+        Route::post('/{curriculumDelivery}/transition', [MyCurriculumDeliveryController::class, 'transition'])->name('transition');
     });
 
     // TCH.2 (ADR 0063 section 23) -- the administrative TeachingAssignment

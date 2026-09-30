@@ -65,6 +65,15 @@ use Illuminate\Support\Facades\DB;
  * genuine clerical correction impossible. This is the identical rule
  * Attendance established (docs/modules/ATTENDANCE.md §13/§14).
  *
+ * TWO AUTHORIZATION TIERS (TCH.3, ADR 0063 section 11). Callers authorize
+ * first: Tier 1 holds the School-wide `curriculum.delivery.manage` and passes
+ * no guard; Tier 2 (an owned-scope teacher) passes a DeliveryWriteGuard,
+ * which this service runs INSIDE its transaction before the insert or row
+ * lock -- so the identity and ownership holds (ActingEmployee, then
+ * TeachingAssignment, both FOR SHARE) precede this module's own row lock,
+ * the ADR 0063 section 20 order. Every rule below applies identically to
+ * both tiers; there is no teacher copy of this logic.
+ *
  * NO TenantLock, no advisory lock, no School-wide lock: there is no
  * multi-row invariant here. The only two races are a duplicate create
  * -- settled by `curriculum_deliveries_section_unit_unique` alone --
@@ -103,8 +112,9 @@ class CurriculumDeliveryService
         string $syllabusUnitId,
         string $startedOn,
         User $actor,
+        ?DeliveryWriteGuard $guard = null,
     ): CurriculumDelivery {
-        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $sectionId, $syllabusUnitId, $startedOn, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $sectionId, $syllabusUnitId, $startedOn, $actor, $guard) {
             // Resolved through the tenant-scoped query (SchoolScope +
             // RLS), so another School's id is a clean 404 rather than a
             // silent mismatch later.
@@ -131,7 +141,9 @@ class CurriculumDeliveryService
 
             $started = $this->assertUsableDate($school, $year, 'started_on', $startedOn);
 
-            return DB::transaction(function () use ($school, $section, $unit, $offering, $started, $actor) {
+            return DB::transaction(function () use ($school, $section, $unit, $offering, $started, $actor, $guard) {
+                $guard?->beforeStart($school, $section, $offering, $started->toDateString());
+
                 $delivery = new CurriculumDelivery;
                 // Integrity pins are force-filled from resolved parents
                 // and are absent from $fillable, so no mass assignment
@@ -193,13 +205,17 @@ class CurriculumDeliveryService
         ?string $startedOn,
         ?string $completedOn,
         User $actor,
+        ?DeliveryWriteGuard $guard = null,
     ): CurriculumDelivery {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $deliveryId, $startedOn, $completedOn, $actor) {
-            $delivery = CurriculumDelivery::query()
-                ->where('id', $deliveryId)
-                ->where('school_id', $school->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $deliveryId, $startedOn, $completedOn, $actor, $guard) {
+            $touched = fn (CurriculumDelivery $d): array => array_values(array_filter([
+                $startedOn !== null ? $d->started_on->toDateString() : null,
+                $startedOn,
+                $completedOn !== null ? $d->completed_on?->toDateString() : null,
+                $completedOn,
+            ]));
+
+            $delivery = $this->lockGuarded($school, $deliveryId, $guard, $touched);
 
             $year = AcademicYear::query()->where('school_id', $school->id)->findOrFail($delivery->academic_year_id);
 
@@ -273,13 +289,16 @@ class CurriculumDeliveryService
         string $newStatus,
         ?string $completedOn,
         User $actor,
+        ?DeliveryWriteGuard $guard = null,
     ): CurriculumDelivery {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $deliveryId, $expectedStatus, $newStatus, $completedOn, $actor) {
-            $delivery = CurriculumDelivery::query()
-                ->where('id', $deliveryId)
-                ->where('school_id', $school->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $deliveryId, $expectedStatus, $newStatus, $completedOn, $actor, $guard) {
+            // Completing writes the completion date; reopening erases the
+            // current one -- the dates a Tier 2 teacher must own.
+            $touched = fn (CurriculumDelivery $d): array => array_filter(
+                $newStatus === CurriculumDelivery::STATUS_COMPLETED ? [$completedOn] : [$d->completed_on?->toDateString()],
+            );
+
+            $delivery = $this->lockGuarded($school, $deliveryId, $guard, $touched);
 
             // CAS: evaluated only AFTER the row lock, so the value read
             // here is the committed current one, not a stale read.
@@ -334,6 +353,34 @@ class CurriculumDeliveryService
 
             return $delivery->refresh();
         }));
+    }
+
+    /**
+     * The row, FOR UPDATE. With a Tier 2 guard, the guard runs first on an
+     * unlocked read (so identity and ownership are held before this row's
+     * lock), then again only if the locked row's relevant dates changed in
+     * between -- a concurrent correction can never slip a date past it.
+     *
+     * @param  callable(CurriculumDelivery): list<string>  $touched
+     */
+    private function lockGuarded(School $school, string $deliveryId, ?DeliveryWriteGuard $guard, callable $touched): CurriculumDelivery
+    {
+        $query = fn () => CurriculumDelivery::query()->where('id', $deliveryId)->where('school_id', $school->id);
+
+        if ($guard === null) {
+            return $query()->lockForUpdate()->firstOrFail();
+        }
+
+        $peek = $query()->firstOrFail();
+        $guard->beforeChange($school, $peek, $touched($peek));
+
+        $delivery = $query()->lockForUpdate()->firstOrFail();
+
+        if ($touched($delivery) !== $touched($peek)) {
+            $guard->beforeChange($school, $delivery, $touched($delivery));
+        }
+
+        return $delivery;
     }
 
     private function assertOfferingIsRequired(SubjectOffering $offering): void

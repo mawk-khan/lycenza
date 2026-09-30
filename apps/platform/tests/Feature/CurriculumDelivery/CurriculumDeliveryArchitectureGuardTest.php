@@ -148,20 +148,30 @@ class CurriculumDeliveryArchitectureGuardTest extends TestCase
     public function the_registered_route_surface_is_exactly_the_sanctioned_one(): void
     {
         $routes = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn ($r) => str_contains($r->uri(), 'curriculum-deliveries') || str_contains($r->uri(), 'syllabus-delivery'))
+            ->filter(fn ($r) => str_contains($r->uri(), 'curriculum-deliver') || str_contains($r->uri(), 'syllabus-delivery'))
             ->flatMap(fn ($r) => array_map(fn ($m) => $m.' /'.$r->uri(), array_values(array_diff($r->methods(), ['HEAD']))))
             ->sort()->values()->all();
 
         $this->assertSame([
             'GET /api/v1/schools/{school}/curriculum-deliveries/{curriculumDelivery}',
+            'GET /api/v1/schools/{school}/my/curriculum-deliveries',
+            'GET /api/v1/schools/{school}/my/curriculum-deliveries/{curriculumDelivery}',
+            'GET /api/v1/schools/{school}/my/curriculum-delivery-contexts',
             'GET /api/v1/schools/{school}/subject-offerings/{subjectOffering}/curriculum-deliveries',
+            'GET /app/my-curriculum-delivery',
             'GET /app/syllabus-delivery',
             'PATCH /api/v1/schools/{school}/curriculum-deliveries/{curriculumDelivery}',
+            'PATCH /api/v1/schools/{school}/my/curriculum-deliveries/{curriculumDelivery}',
+            'PATCH /app/my-curriculum-delivery/{curriculumDelivery}',
             'PATCH /app/syllabus-delivery/{curriculumDelivery}',
             'POST /api/v1/schools/{school}/curriculum-deliveries/{curriculumDelivery}/transition',
+            'POST /api/v1/schools/{school}/my/curriculum-deliveries',
+            'POST /api/v1/schools/{school}/my/curriculum-deliveries/{curriculumDelivery}/transition',
             'POST /api/v1/schools/{school}/subject-offerings/{subjectOffering}/curriculum-deliveries',
+            'POST /app/my-curriculum-delivery',
+            'POST /app/my-curriculum-delivery/{curriculumDelivery}/transition',
             'POST /app/syllabus-delivery',
             'POST /app/syllabus-delivery/{curriculumDelivery}/transition',
-        ], $routes, 'Five API operations plus four web routes -- no delete, archive, bulk, reorder, search, report, teacher or Student route.');
+        ], $routes, 'Tier 1: five API operations plus four web routes. Tier 2 (TCH.3): the owned teacher /my/ family -- six API operations plus four web routes. No delete, archive, bulk, reorder, search, report or Student route.');
     }
 }

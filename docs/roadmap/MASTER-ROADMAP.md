@@ -71,14 +71,14 @@ contract checkpoint.
 | Order | Programme | Status |
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
-| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0 contract and TCH.1 ActingEmployee identity boundary closed (ADR 0063, 2026-09-30); **TCH.2 authoritative TeachingAssignment foundation implemented**. Teacher authorization is still **not** implemented: TeachingAssignments exist, but there is no Teacher role, no `*.teacher` capability, and every teaching module stays admin-only until TCH.3 onward |
+| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0–TCH.2 closed (ADR 0063, 2026-09-30); **TCH.3 production Teacher role + owned Curriculum Delivery implemented**. Curriculum Delivery is the only teacher-owned surface; the Teacher role alone grants nothing (capability AND ActingEmployee AND TeachingAssignment). Attendance, LMS and Timetable stay admin-only until TCH.4 onward |
 | 3 | HRX — Leave & staff attendance | Not started |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
 
-**TCH checkpoints (ADR 0063 §25)** -- TCH.0 and TCH.1 closed, TCH.2
-implemented; no teacher access exists yet:
+**TCH checkpoints (ADR 0063 §25)** -- TCH.0–TCH.2 closed, TCH.3
+implemented; Curriculum Delivery is the only teacher-owned surface:
 - **TCH.0 — Teacher Identity & Ownership-Based Authorization Contract**
   (ADR 0063, docs only). Closed.
 - **TCH.1 — Verified ActingEmployee identity boundary** (HR). Closed
@@ -90,7 +90,7 @@ implemented; no teacher access exists yet:
   membership; `user_id` removed from the generic Employee update; the
   Employee and Employment status catalogues database-constrained. Grants no
   access by itself.
-- **TCH.2 — Authoritative TeachingAssignment foundation.** Implemented
+- **TCH.2 — Authoritative TeachingAssignment foundation.** Closed
   (ADR 0063 §30, `docs/modules/TEACHING-ASSIGNMENTS.md`):
   - a dated Employee × Section × required SubjectOffering ownership fact
     with composite same-context foreign keys, forced RLS, no runtime DELETE
@@ -101,11 +101,19 @@ implemented; no teacher access exists yet:
     (school_admin, principal);
   - API, an admin page and audit.
 
-  It is dormant: nothing consumes it, and no teacher gains access.
+  Dormant at TCH.2; TCH.3 adopts it for Curriculum Delivery.
 - **TCH.3 — Production Teacher role + Curriculum Delivery adoption.**
-  Next; not implemented.
-- **TCH.4 — Attendance teacher adoption.** Planned (production carries legal
-  determination TCH-L1).
+  Implemented (ADR 0063 §31):
+  - the system `teacher` role carries only `curriculum.delivery.teacher`;
+  - an owned `/my/` API and "My Curriculum Delivery" page require that
+    capability AND a verified ActingEmployee AND a TeachingAssignment for
+    the exact class on the delivery's dates;
+  - writes use the same `CurriculumDeliveryService`, holding identity and
+    ownership in its transaction;
+  - Tier 1 is unchanged;
+  - there is no `teacher_id` on deliveries.
+- **TCH.4 — Attendance teacher adoption.** Next; not implemented.
+  Production carries legal determination TCH-L1.
 - **TCH.5 — LMS teaching adoption**, only after the LMS ownership decision;
   the owner may remove it. Planned.
 - **TCH.6 — TCH closure audit.** Planned.

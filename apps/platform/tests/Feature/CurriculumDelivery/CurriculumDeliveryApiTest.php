@@ -400,7 +400,9 @@ class CurriculumDeliveryApiTest extends TestCase
             ->assertStatus(405);
 
         $routes = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn ($r) => str_contains($r->uri(), 'curriculum-deliveries') && str_starts_with($r->uri(), 'api/'))
+            // The Tier 1 (School-wide) surface; TCH.3's owned `/my/` family
+            // is pinned by CurriculumDeliveryArchitectureGuardTest.
+            ->filter(fn ($r) => str_contains($r->uri(), 'curriculum-deliveries') && str_starts_with($r->uri(), 'api/') && ! str_contains($r->uri(), '/my/'))
             ->flatMap(fn ($r) => array_map(fn ($m) => $m.' /'.$r->uri(), array_values(array_diff($r->methods(), ['HEAD']))))
             ->values();
 

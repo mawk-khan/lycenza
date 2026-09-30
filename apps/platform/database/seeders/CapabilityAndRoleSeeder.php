@@ -693,11 +693,17 @@ class CapabilityAndRoleSeeder extends Seeder
             // defers) -- the same module.entity shape as
             // `timetable.periods.*`/`timetable.schedule.*`. Still NOT
             // `academics.*`, for the identical reason recorded above.
-            // No `curriculum.delivery.teacher`: v1 is admin-only, with
-            // no teacher self-service and no teacher-ownership rule,
-            // exactly as Attendance and Syllabus already are.
+            // v1 was admin-only; TCH.3 adds the owned-scope
+            // `curriculum.delivery.teacher` below (ADR 0063).
             ['key' => 'curriculum.delivery.view', 'label' => 'View Curriculum Delivery records', 'namespace' => 'school'],
             ['key' => 'curriculum.delivery.manage', 'label' => 'Record and correct Curriculum Delivery', 'namespace' => 'school'],
+            // TCH.3 (ADR 0063 sections 11-13): the first OWNED-SCOPE (Tier 2)
+            // capability. It authorizes nothing on its own: an actor holding
+            // it reaches a Curriculum Delivery only as a verified
+            // ActingEmployee (TCH.1) who owns the Section + SubjectOffering
+            // through a TeachingAssignment (TCH.2) on the dates involved.
+            // `.teacher` is part of the key, never a role check.
+            ['key' => 'curriculum.delivery.teacher', 'label' => 'Record Curriculum Delivery for the classes one teaches', 'namespace' => 'school'],
 
             // Phase 0H.4A (Examination Foundation -- the first
             // Examinations fact). Rooted at `examinations.*`, a NEW
@@ -1136,6 +1142,13 @@ class CapabilityAndRoleSeeder extends Seeder
                     // TCH.2 (ADR 0063 section 15): default administrators of
                     // TeachingAssignments are School Admin and Principal.
                     'teaching.assignments.view', 'teaching.assignments.manage',
+                    // TCH.3: held so School Admin can GRANT the Teacher role --
+                    // StaffRoleCatalog only lets an actor grant a role whose
+                    // every capability they hold (no escalation). It adds no
+                    // School-wide reach: used alone it still needs an
+                    // ActingEmployee and a TeachingAssignment, and School
+                    // Admin already holds curriculum.delivery.manage.
+                    'curriculum.delivery.teacher',
                 ],
             ],
             'principal' => [
@@ -1301,6 +1314,24 @@ class CapabilityAndRoleSeeder extends Seeder
                     // school_admin -- a Principal routinely decides who
                     // teaches which class.
                     'teaching.assignments.view', 'teaching.assignments.manage',
+                ],
+            ],
+            // TCH.3 (ADR 0063 section 12, T1): the one minimum production
+            // Teacher role -- a convenience bundle of owned-scope
+            // capabilities, NEVER an enforcement condition (no code asks
+            // for this role key). It starts with exactly one capability and
+            // grows one adopter at a time (ADR 0063 section 13): no
+            // School-wide `*.view`/`*.manage`, no Student, HR, finance,
+            // settings or role-governance capability, and no
+            // `teaching.assignments.*`. The role alone reaches nothing: the
+            // capability still requires a verified ActingEmployee and an
+            // owning TeachingAssignment. Granted and revoked through the
+            // ordinary staff role path (StaffAccessService).
+            'teacher' => [
+                'name' => 'Teacher',
+                'scope' => 'school',
+                'capabilities' => [
+                    'curriculum.delivery.teacher',
                 ],
             ],
         ];

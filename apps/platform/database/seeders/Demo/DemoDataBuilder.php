@@ -662,13 +662,15 @@ final class DemoDataBuilder
 
     private function buildIdentityLinkedAccounts(): void
     {
-        // Teacher: an ordinary School member with NO role, linked to an
-        // HR Employee record. The application has no teacher role or
-        // teacher portal -- this account shows exactly that.
-        $teacher = $this->user('Kavya Reddy (Teacher, no role)', 'teacher@example.test');
-        $this->member($teacher, $this->school);
+        // Teacher (TCH.3): the production system `teacher` role, linked to
+        // an HR Employee record. The role carries only
+        // curriculum.delivery.teacher; what it reaches is decided by the
+        // Employee's TeachingAssignment (G8-A Mathematics, created in
+        // DemoModuleData::teachingAssignments()).
+        $teacher = $this->user('Kavya Reddy (Teacher)', 'teacher@example.test');
+        $this->assignSchoolRole($this->member($teacher, $this->school), 'teacher');
         $this->inSchool(fn () => $this->employees['MATH']->forceFill(['user_id' => $teacher->id])->save());
-        $this->account('Teacher / staff member (no role)', $teacher, $this->school->name, 'Member with no capabilities; linked to Employee EMP-000003');
+        $this->account('Teacher', $teacher, $this->school->name, 'Teacher role, linked to Employee EMP-000003; My Curriculum Delivery for G8-A Mathematics only');
 
         // Student: School member linked to a Student record (Phase 5B).
         $studentRecord = $this->studentsBySection['G8-A'][0];

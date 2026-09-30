@@ -513,16 +513,17 @@ organisational cohort, not an individual.
 
 **Excluding teacher identity is what deliberately keeps this record
 non-personal.** Recording who taught a unit would elevate the entity to
-**Sensitive** by the Timetable row's exact reasoning (§8), and needs the
-platform's first ownership-based authorization model — which does not
-exist: there is no teacher role, no teacher self-service, and
-`employees.user_id` is nullable.
+**Sensitive** by the Timetable row's exact reasoning (§8). TCH.3 (§18.16)
+lets teachers record delivery **without** adding one: ownership lives in
+`teaching_assignments` and the writer is recorded only as the audit actor,
+so this record stays Confidential.
 
 ### 18.10 Authorization
 
 `curriculum.delivery.view` / `curriculum.delivery.manage`, granted to
-`school_admin` and `principal`. **Admin-only v1** — no teacher
-capability, no teacher ownership, no Student or Guardian access, no
+`school_admin` and `principal` — the School-wide (Tier 1) path, unchanged
+by TCH.3. Since TCH.3 there is also an owned (Tier 2) teacher path under
+`curriculum.delivery.teacher` (§18.16). No Student or Guardian access, no
 role-name checks (rule 24). `capability:` route middleware on the API;
 `AuthorizesCapability` in the Inertia controller. Curriculum Delivery
 never borrows `syllabus.*` or `academics.subjects.*`, even though both
@@ -608,6 +609,68 @@ exact projection rules. It returns no dates, rows or person data and
 adds no write path, route or event to this module. See
 `docs/modules/ANALYTICS.md` §13.
 
+### 18.16 Owned teacher access (TCH.3, ADR 0063 §31)
+
+The first adopter of ADR 0063's ownership rule. A teacher reaches
+Curriculum Delivery through a separate Tier 2 path. The Tier 1 path above is
+unchanged, and there is no second copy of this module's business logic.
+
+**The chain.** Every part is required:
+1. `curriculum.delivery.teacher`, from any role; the production `teacher`
+   role carries exactly this one capability;
+2. a verified ActingEmployee **today** (School-local): linked, active
+   Employee with eligible employment (TCH.1);
+3. a TeachingAssignment of that Employee for the **exact** Section +
+   SubjectOffering covering **every date the operation involves** (TCH.2).
+
+**Ownership dates.** The actor must be eligible today, while ownership is
+judged on the delivery's own dates, never today and never `created_at`:
+- **start:** the teacher must own the class on `started_on`;
+- **complete:** on `completed_on`;
+- **reopen:** on the completion date being cleared;
+- **correct:** on every date written AND every date replaced, so a teacher
+  who now owns the class cannot rewrite a date recorded in someone else's
+  period.
+
+**Reads.** A delivery is visible when one of the teacher's periods for its
+class overlaps `[started_on, completed_on]` (open while in progress). So an
+in-progress unit handed over mid-way is visible to the new teacher, who
+completes it in their own period. Filtering happens in the query
+(`TeacherDeliveryScope`); nothing unowned is serialized. A unit covered
+wholly outside the teacher's periods shows as `unavailable`, with no id or
+dates. An unowned class or delivery answers the same 404 as a missing one.
+
+**Writes.** The `/my/` endpoints and "My Curriculum Delivery" call
+`CurriculumDeliveryService` with a `TeacherDeliveryGuard`. Inside the
+service's transaction, before its own row lock, the guard runs
+`ActingEmployeeResolver::hold()` (School, membership, User, Employee,
+EmploymentRecord FOR SHARE) and then `TeachingOwnership::hold()` (the
+covering TeachingAssignment FOR SHARE) for each date. Composed lock order:
+
+School → membership → User → Employee → EmploymentRecord →
+TeachingAssignment → `curriculum_deliveries` (FOR UPDATE).
+
+A suspension, unlink, archive, employment end or assignment end therefore
+either commits first (and the write is refused) or waits for the write
+(`TeacherDeliveryConcurrencyTest`).
+
+**Unchanged.**
+- The table has no `teacher_id`, `employee_id` or `user_id`, and stays
+  Confidential.
+- The audit events are the same three; their actor is the teacher's User.
+- There is no timetable input.
+- Electives remain excluded.
+
+**Surfaces.**
+- API `/api/v1/schools/{school}/my/curriculum-delivery-contexts` and
+  `/my/curriculum-deliveries` (list, start, show, correct, transition),
+  `private-no-store`.
+- The page `/app/my-curriculum-delivery`, linked from the dashboard by the
+  capability.
+
+The teacher sees the syllabus units of their own classes here without
+School-wide `syllabus.view`.
+
 ## 19. Future
 
 - **Lesson Planning**: still deferred until a real requirement exists;
@@ -617,10 +680,10 @@ adds no write path, route or event to this module. See
   model, which still does not exist. Phase 0H.3B deliberately stores
   nothing at lesson granularity, so Lesson Planning remains fully
   necessary rather than redundant.
-- **Teacher identity on a delivery** is a purely additive future path: a
-  nullable `teacher_id` with `(teacher_id, school_id) → employees(id, school_id)`
-  RESTRICT (the `attendance_sessions_teacher_fk` shape), plus a
-  mandatory re-tier of this module to **Sensitive** in the same branch.
+- **Teacher identity on a delivery** remains unstored: TCH.3 authorizes
+  teachers through `teaching_assignments` instead (§18.16). Storing a
+  `teacher_id` would still be a purely additive path, with a mandatory
+  re-tier of this module to **Sensitive** in the same branch.
 - **Elective delivery** would need a Section-independent cohort concept
   that does not exist yet (§18.2).
 - **Examinations** and **LMS** may later reference `syllabus_unit_id` or

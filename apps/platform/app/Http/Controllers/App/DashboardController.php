@@ -152,6 +152,7 @@ class DashboardController extends Controller
                 'canViewTimetablePeriods' => $school !== null && $capabilities->canInSchool($user, 'timetable.periods.view', $school),
                 'canViewTimetableSchedule' => $school !== null && $capabilities->canInSchool($user, 'timetable.schedule.view', $school),
                 'canViewTeachingAssignments' => $school !== null && $capabilities->canInSchool($user, 'teaching.assignments.view', $school),
+                'canUseMyCurriculumDelivery' => $school !== null && $capabilities->canInSchool($user, 'curriculum.delivery.teacher', $school),
                 // Phase 9.9: Payroll workspace -- any one of its four
                 // top-level view capabilities is enough to show the entry
                 // point, mirroring Finance/HR's identical "any one view
