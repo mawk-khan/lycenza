@@ -2228,6 +2228,188 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # --- TCH.2 (ADR 0063 sections 7-10, 23): the authoritative, dated
+  # TeachingAssignment ownership fact. Administrative only
+  # (teaching.assignments.view/.manage). There is no PATCH and no DELETE: an
+  # assignment's Employee, Section, Subject Offering and start date never
+  # change -- a correction is a new assignment, and an assignment is ended,
+  # never deleted. It grants no teacher access to any resource by itself.
+  /schools/{schoolId}/teaching-assignments:
+    get:
+      operationId: listTeachingAssignments
+      summary: >
+        Lists the School's Teaching Assignments, newest start first.
+        Requires teaching.assignments.view. Directory-tier projection only.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: academic_year_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: employee_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: section_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { name: subject_offering_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PerPage" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TeachingAssignment" } }
+                  meta: { $ref: "#/components/schemas/PaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking teaching.assignments.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid filter or pagination parameter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createTeachingAssignment
+      summary: >
+        Assigns an active Employee (with a planned or current employment
+        covering starts_on) to a Section and a REQUIRED Subject Offering of
+        the same academic context, for an inclusive date range inside an
+        open (draft or active) academic year. The same Employee may not own
+        the same Section and Offering for overlapping dates; co-teaching
+        (another Employee, same class) is allowed. Requires
+        teaching.assignments.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeachingAssignmentCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/TeachingAssignment" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking teaching.assignments.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: The Employee, Section or Subject Offering does not exist in this School (another School's id is indistinguishable).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: TEACHING_ASSIGNMENT_OVERLAP -- this Employee already owns this Section and Offering for overlapping dates.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Invalid body, or TEACHING_ASSIGNMENT_REQUIRED_OFFERING_ONLY,
+            _CONTEXT_MISMATCH, _CONTEXT_INACTIVE, _ACADEMIC_YEAR_NOT_OPEN,
+            _OUTSIDE_ACADEMIC_YEAR, _INVALID_DATES or _EMPLOYEE_NOT_ASSIGNABLE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/teaching-assignments/{teachingAssignmentId}:
+    get:
+      operationId: getTeachingAssignment
+      summary: One Teaching Assignment. Requires teaching.assignments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TeachingAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/TeachingAssignment" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking teaching.assignments.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or another School's assignment id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/teaching-assignments/{teachingAssignmentId}/end:
+    post:
+      operationId: endTeachingAssignment
+      summary: >
+        Ends an assignment once: sets its last effective day (on or after
+        starts_on, never later than an existing ends_on) and a closed
+        reason. An ended assignment is immutable and remains readable.
+        There is no cancellation: the earliest end is the start date.
+        Requires teaching.assignments.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TeachingAssignmentId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeachingAssignmentEndInput" }
+      responses:
+        "200":
+          description: Ended.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/TeachingAssignment" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking teaching.assignments.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or another School's assignment id.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: TEACHING_ASSIGNMENT_ALREADY_ENDED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid body, or TEACHING_ASSIGNMENT_INVALID_DATES (before the start, or later than an existing end date).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/enrollment-rollovers:
     get:
       operationId: listEnrollmentRollovers
@@ -10882,6 +11064,12 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    TeachingAssignmentId:
+      name: teachingAssignmentId
+      in: path
+      required: true
+      description: TeachingAssignment UUID (TCH.2).
+      schema: { type: string, format: uuid }
     EmployeeId:
       name: employeeId
       in: path
@@ -13102,6 +13290,61 @@ components:
     # since 8A.8/8A.9/8A.10/8A.11 (this file is the source of truth for
     # the SHAPE the implementation already has, not a license to
     # rename it to match an unrelated module's casing convention).
+
+    TeachingAssignment:
+      type: object
+      description: >
+        TCH.2 -- one authoritative teaching-ownership period. Directory-tier
+        labels only (no HR profile, contact or account field, no user ids).
+        `state` is derived from the School-local date; the dates are
+        authoritative and inclusive, and `endsOn` null means open-ended.
+      required: [id, employee, section, subjectOffering, academicYearId, startsOn, endsOn, state, endedAt, endReason]
+      properties:
+        id: { type: string, format: uuid }
+        employee:
+          type: object
+          required: [id, employeeNumber, fullName]
+          properties:
+            id: { type: string, format: uuid }
+            employeeNumber: { type: string, nullable: true }
+            fullName: { type: string, nullable: true }
+        section:
+          type: object
+          required: [id, name, code]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string, nullable: true }
+            code: { type: string, nullable: true }
+        subjectOffering:
+          type: object
+          required: [id, subjectName, subjectCode]
+          properties:
+            id: { type: string, format: uuid }
+            subjectName: { type: string, nullable: true }
+            subjectCode: { type: string, nullable: true }
+        academicYearId: { type: string, format: uuid }
+        startsOn: { type: string, format: date }
+        endsOn: { type: string, format: date, nullable: true }
+        state: { type: string, enum: [upcoming, current, past] }
+        endedAt: { type: string, format: date-time, nullable: true }
+        endReason: { type: string, enum: [completed, reassigned, employment_ended], nullable: true }
+
+    TeachingAssignmentCreateInput:
+      type: object
+      required: [employee_id, section_id, subject_offering_id, starts_on]
+      properties:
+        employee_id: { type: string, format: uuid }
+        section_id: { type: string, format: uuid }
+        subject_offering_id: { type: string, format: uuid }
+        starts_on: { type: string, format: date, description: "School-local, inclusive." }
+        ends_on: { type: string, format: date, nullable: true, description: "School-local, inclusive; omit or null for open-ended." }
+
+    TeachingAssignmentEndInput:
+      type: object
+      required: [ends_on, reason]
+      properties:
+        ends_on: { type: string, format: date, description: "The last effective day (inclusive)." }
+        reason: { type: string, enum: [completed, reassigned, employment_ended] }
 
     EmployeeCoreRecord:
       type: object

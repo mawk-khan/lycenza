@@ -809,6 +809,17 @@ class CapabilityAndRoleSeeder extends Seeder
             // and there is no `automation.execute`.
             ['key' => 'automation.view', 'label' => 'View Automation rules, executions and review items', 'namespace' => 'school'],
             ['key' => 'automation.manage', 'label' => 'Enable, disable and own Automation rules', 'namespace' => 'school'],
+
+            // TCH.2 (ADR 0063 D-11, section 15): administering the
+            // authoritative TeachingAssignment ownership fact. These are
+            // ADMINISTRATIVE (Tier 1) capabilities -- they manage the
+            // records, they are not owned-scope teacher capabilities and
+            // grant no access to any teaching resource. Deliberately NOT
+            // `timetable.schedule.manage`: scheduling and durable teaching
+            // authority are separate responsibilities. No `*.teacher`
+            // capability exists yet (TCH.3 onward).
+            ['key' => 'teaching.assignments.view', 'label' => 'View Teaching Assignments', 'namespace' => 'school'],
+            ['key' => 'teaching.assignments.manage', 'label' => 'Create and end Teaching Assignments', 'namespace' => 'school'],
         ];
 
         foreach ($capabilities as $capability) {
@@ -1122,6 +1133,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Phase 0L.6 (owner decision 2026-09-24): School Admin
                     // may view and manage Automation.
                     'automation.view', 'automation.manage',
+                    // TCH.2 (ADR 0063 section 15): default administrators of
+                    // TeachingAssignments are School Admin and Principal.
+                    'teaching.assignments.view', 'teaching.assignments.manage',
                 ],
             ],
             'principal' => [
@@ -1283,6 +1297,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // Phase 0L.6 (owner decision 2026-09-24): Principal may
                     // review Automation but not configure or own a rule.
                     'automation.view',
+                    // TCH.2 (ADR 0063 section 15): same default as
+                    // school_admin -- a Principal routinely decides who
+                    // teaches which class.
+                    'teaching.assignments.view', 'teaching.assignments.manage',
                 ],
             ],
         ];

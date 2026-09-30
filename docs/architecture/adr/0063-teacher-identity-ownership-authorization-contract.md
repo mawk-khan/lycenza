@@ -1,10 +1,11 @@
 # ADR 0063: Teacher Identity and Ownership-Based Authorization Contract
 
 - Status: Accepted as a contract (TCH.0, documentation only, closed).
-  **TCH.1 is implemented** (the ActingEmployee identity boundary, §29).
-  TCH.2 onward are **not** implemented: no TeachingAssignment, Teacher role
-  or owned-scope capability exists, and every teaching module stays
-  admin-only until TCH.3 onward are built and closed.
+  **TCH.1 is implemented and closed** (the ActingEmployee identity boundary,
+  §29). **TCH.2 is implemented** (the authoritative TeachingAssignment
+  foundation, §30). TCH.3 onward are **not** implemented: no Teacher role
+  and no owned-scope `*.teacher` capability exist, nothing consumes a
+  TeachingAssignment, and every teaching module stays admin-only.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -757,3 +758,114 @@ constraints. Rollback and re-apply were verified byte-identical with
 - two Users linked to one Employee.
 
 In none of them does a decision taken after an ineligibility commits succeed.
+
+## 30. TCH.2 implementation (as built)
+
+TCH.2 builds §7–§10, §15, §19 and the TCH.2 rows of §20–§23. The
+TeachingAssignment is **dormant authorization substrate**:
+- no Teacher role, no `*.teacher` capability;
+- no teaching surface reads it (Attendance, Curriculum Delivery, LMS and
+  Timetable are unchanged and admin-only);
+- no teacher gains access to anything.
+
+Decisions D-01 to D-17 are unchanged. Module record:
+`docs/modules/TEACHING-ASSIGNMENTS.md`.
+
+**Module (DOMAIN-MAP "Teaching Assignments").** `App\Domain\TeachingAssignments`
+depends on HR and Academic Structure; neither depends on it. It never
+derives ownership from `TimetableEntry` or `ActingEmployeeResolver`
+(architecture guard). HR gains one neutral read,
+`App\Domain\HR\Application\EmploymentCoverage`: an active Employee with a
+`pre_joining`/`active`/`notice_period` employment covering a date, locked
+`FOR SHARE`. It knows nothing about teaching.
+
+**Table (§19).** Migration `2026_11_04_090000_create_teaching_assignments_table`:
+- **Columns:** `id`, `school_id`, `employee_id`, `academic_year_id`,
+  `campus_id`, `grade_level_id`, `section_id`, `subject_offering_id`,
+  `starts_on`, `ends_on`, `created_by_user_id`, `ended_at`,
+  `ended_by_user_id`, `end_reason`, timestamps.
+- **Foreign keys:**
+  - `teaching_assignments_employee_fk` `(employee_id, school_id)` →
+    `employees(id, school_id)`;
+  - `teaching_assignments_section_fk` `(section_id, school_id,
+    academic_year_id, campus_id, grade_level_id)` → `sections_context_unique`;
+  - `teaching_assignments_subject_offering_fk` over the same four stored
+    context columns → `subject_offerings_context_unique`;
+  - all RESTRICT; the users FKs RESTRICT; `school_id` CASCADE.
+- **CHECKs:** `teaching_assignments_date_range_check` (`ends_on IS NULL OR
+  starts_on <= ends_on`) and `teaching_assignments_end_shape_check` (the three
+  end columns set together, an ended row has `ends_on`, closed reasons
+  `completed`/`reassigned`/`employment_ended`).
+- **History trigger:** `trg_teaching_assignments_history` refuses an
+  already-ended insert, any change to an identity column (School, Employee,
+  context, Section, Offering, `starts_on`, creator, `created_at`), any update
+  other than the single end, an extension of an existing `ends_on`, and any
+  change to an ended row.
+- **Tenancy and indexes:** forced RLS, `TenantRls::revokeDelete`. Indexes
+  `unique(id, school_id)`, the key index `(school_id, employee_id,
+  section_id, subject_offering_id, starts_on)` and the context index
+  `(school_id, section_id, subject_offering_id)`.
+- **Rollback / re-apply:** verified byte-identical with
+  `pg_dump --schema-only`.
+
+**Overlap (§10, as corrected).** There is no partial unique
+`… WHERE ended_at IS NULL` and no exact-duplicate unique index. Every create
+and end of one key serializes on the transaction-scoped advisory lock
+`teaching.assignment:{school}:{employee}:{section}:{offering}`
+(`pg_advisory_xact_lock(hashtextextended(…))`, the FeeSettingsService
+convention). Under that lock the inclusive overlap
+`existing.starts_on <= new.ends_on(∞) AND new.starts_on <= existing.ends_on(∞)`
+is refused (`TEACHING_ASSIGNMENT_OVERLAP`, 409). Consequences:
+- adjacent periods and future-dated replacements are allowed;
+- an open-ended row blocks every later period until it is ended;
+- ended rows count with their final `ends_on`;
+- co-teaching (another Employee) is another key.
+
+**Creation rules (§7, §15).**
+- An active Section and an active **required** SubjectOffering of the same
+  context (`TEACHING_ASSIGNMENT_REQUIRED_OFFERING_ONLY`, `_CONTEXT_MISMATCH`,
+  `_CONTEXT_INACTIVE`).
+- An open (draft or active) AcademicYear containing the dates.
+- An active Employee with a covering planned or current employment on
+  `starts_on` (`_EMPLOYEE_NOT_ASSIGNABLE`, 422). No linked User is required.
+- An other-School or unknown id is a 404.
+
+The "exact rule in TCH.2" left open by §15 is this: planned
+(`pre_joining`) employment counts for planning, and use-time ActingEmployee
+eligibility still governs any future access.
+
+**Lifecycle (§9).**
+- `end()` sets `ends_on` (on or after `starts_on`, never later than an
+  existing end), `ended_at`, `ended_by_user_id` and a closed `end_reason`,
+  once (`TEACHING_ASSIGNMENT_ALREADY_ENDED`, 409, under the row lock).
+- There is no update, no delete and no cancellation.
+- **Remaining limitation:** a future assignment cannot be cancelled; the
+  earliest end is its start date. This is recorded rather than simulated
+  with an inverted range.
+
+**Authorization (§11, §15, D-11).** `teaching.assignments.view`/`.manage`
+are seeded and granted to `school_admin` and `principal` only. They are
+checked by route middleware and again in both services. Administrators need
+no ActingEmployee. There is no role-name check.
+
+**Concurrency (§20).** Two-process races with forced, observed overlap
+(`TeachingAssignmentConcurrencyTest`):
+- two overlapping creates → one created, one overlap;
+- two ends → one ended, one already-ended;
+- an end, then a create that waited → the create sees the shortened period;
+- an employment end vs a create, and an Employee archive vs a create →
+  both orders serialize, and a create after the ineligibility commits is
+  refused.
+
+**API/UI/audit (§22, §23).**
+- `GET/POST /api/v1/schools/{school}/teaching-assignments`,
+  `GET …/{id}` and `POST …/{id}/end`, with `private-no-store` and
+  `idempotent` on writes; no PATCH/DELETE. In the OpenAPI contract as
+  `listTeachingAssignments`, `getTeachingAssignment`,
+  `createTeachingAssignment` and `endTeachingAssignment`, with regenerated
+  shared types.
+- An administrative page `/app/teaching-assignments` with directory-tier
+  pickers.
+- Audit events `teaching_assignment.created` and `teaching_assignment.ended`
+  (ids, dates and the closed reason). No outbox event.
+- Classification: Sensitive (DATA-CLASSIFICATION.md).

@@ -71,17 +71,17 @@ contract checkpoint.
 | Order | Programme | Status |
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
-| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0 contract closed (ADR 0063, 2026-09-30); **TCH.1 ActingEmployee identity boundary implemented**. Teacher authorization is still **not** implemented: no TeachingAssignment, no Teacher role, and every teaching module stays admin-only until TCH.3 onward |
+| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0 contract and TCH.1 ActingEmployee identity boundary closed (ADR 0063, 2026-09-30); **TCH.2 authoritative TeachingAssignment foundation implemented**. Teacher authorization is still **not** implemented: TeachingAssignments exist, but there is no Teacher role, no `*.teacher` capability, and every teaching module stays admin-only until TCH.3 onward |
 | 3 | HRX — Leave & staff attendance | Not started |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
 
-**TCH checkpoints (ADR 0063 §25)** -- TCH.0 closed, TCH.1 implemented; no
-teacher access exists yet:
+**TCH checkpoints (ADR 0063 §25)** -- TCH.0 and TCH.1 closed, TCH.2
+implemented; no teacher access exists yet:
 - **TCH.0 — Teacher Identity & Ownership-Based Authorization Contract**
   (ADR 0063, docs only). Closed.
-- **TCH.1 — Verified ActingEmployee identity boundary** (HR). Implemented
+- **TCH.1 — Verified ActingEmployee identity boundary** (HR). Closed
   (ADR 0063 §29): `ActingEmployeeResolver` (User → active membership →
   linked active Employee → exactly one eligible current employment;
   `resolve()` fresh, `hold()` locked inside a consumer's transaction);
@@ -90,11 +90,20 @@ teacher access exists yet:
   membership; `user_id` removed from the generic Employee update; the
   Employee and Employment status catalogues database-constrained. Grants no
   access by itself.
-- **TCH.2 — Authoritative TeachingAssignment foundation** (dated Employee ×
-  Section × required SubjectOffering; administered under
-  `teaching.assignments.*`). Next; not implemented.
+- **TCH.2 — Authoritative TeachingAssignment foundation.** Implemented
+  (ADR 0063 §30, `docs/modules/TEACHING-ASSIGNMENTS.md`):
+  - a dated Employee × Section × required SubjectOffering ownership fact
+    with composite same-context foreign keys, forced RLS, no runtime DELETE
+    and a history trigger;
+  - overlap refused per Employee/Section/Offering under an advisory lock
+    (no "one open row" index); co-teaching allowed;
+  - create/end only, under `teaching.assignments.view`/`.manage`
+    (school_admin, principal);
+  - API, an admin page and audit.
+
+  It is dormant: nothing consumes it, and no teacher gains access.
 - **TCH.3 — Production Teacher role + Curriculum Delivery adoption.**
-  Planned.
+  Next; not implemented.
 - **TCH.4 — Attendance teacher adoption.** Planned (production carries legal
   determination TCH-L1).
 - **TCH.5 — LMS teaching adoption**, only after the LMS ownership decision;

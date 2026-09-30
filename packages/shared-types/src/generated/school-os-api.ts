@@ -1085,6 +1085,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/teaching-assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists the School's Teaching Assignments, newest start first. Requires teaching.assignments.view. Directory-tier projection only. */
+        get: operations["listTeachingAssignments"];
+        put?: never;
+        /** Assigns an active Employee (with a planned or current employment covering starts_on) to a Section and a REQUIRED Subject Offering of the same academic context, for an inclusive date range inside an open (draft or active) academic year. The same Employee may not own the same Section and Offering for overlapping dates; co-teaching (another Employee, same class) is allowed. Requires teaching.assignments.manage. Idempotency-Key required. */
+        post: operations["createTeachingAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/teaching-assignments/{teachingAssignmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One Teaching Assignment. Requires teaching.assignments.view. */
+        get: operations["getTeachingAssignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/teaching-assignments/{teachingAssignmentId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ends an assignment once: sets its last effective day (on or after starts_on, never later than an existing ends_on) and a closed reason. An ended assignment is immutable and remains readable. There is no cancellation: the earliest end is the start date. Requires teaching.assignments.manage. Idempotency-Key required. */
+        post: operations["endTeachingAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/enrollment-rollovers": {
         parameters: {
             query?: never;
@@ -6728,6 +6780,68 @@ export interface components {
             /** Format: date */
             starts_on: string;
         };
+        /** @description TCH.2 -- one authoritative teaching-ownership period. Directory-tier labels only (no HR profile, contact or account field, no user ids). `state` is derived from the School-local date; the dates are authoritative and inclusive, and `endsOn` null means open-ended. */
+        TeachingAssignment: {
+            /** Format: uuid */
+            id: string;
+            employee: {
+                /** Format: uuid */
+                id: string;
+                employeeNumber: string | null;
+                fullName: string | null;
+            };
+            section: {
+                /** Format: uuid */
+                id: string;
+                name: string | null;
+                code: string | null;
+            };
+            subjectOffering: {
+                /** Format: uuid */
+                id: string;
+                subjectName: string | null;
+                subjectCode: string | null;
+            };
+            /** Format: uuid */
+            academicYearId: string;
+            /** Format: date */
+            startsOn: string;
+            /** Format: date */
+            endsOn: string | null;
+            /** @enum {string} */
+            state: "upcoming" | "current" | "past";
+            /** Format: date-time */
+            endedAt: string | null;
+            /** @enum {string|null} */
+            endReason: "completed" | "reassigned" | "employment_ended" | null;
+        };
+        TeachingAssignmentCreateInput: {
+            /** Format: uuid */
+            employee_id: string;
+            /** Format: uuid */
+            section_id: string;
+            /** Format: uuid */
+            subject_offering_id: string;
+            /**
+             * Format: date
+             * @description School-local, inclusive.
+             */
+            starts_on: string;
+            /**
+             * Format: date
+             * @description School-local, inclusive; omit or null for open-ended.
+             */
+            ends_on?: string | null;
+        };
+        TeachingAssignmentEndInput: {
+            /**
+             * Format: date
+             * @description The last effective day (inclusive).
+             */
+            ends_on: string;
+            /** @enum {string} */
+            reason: "completed" | "reassigned" | "employment_ended";
+        };
         /** @description TCH.1 -- the Employee core record returned by the HR mutation transport (App\Domain\HR\Http\Controllers\EmployeeController::present()). camelCase, exactly as that controller already serializes it. */
         EmployeeCoreRecord: {
             /** Format: uuid */
@@ -8434,6 +8548,8 @@ export interface components {
         RelationshipId: string;
         ContactId: string;
         EnrollmentId: string;
+        /** @description TeachingAssignment UUID (TCH.2). */
+        TeachingAssignmentId: string;
         /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
         EmployeeId: string;
         /** @description When true, includes Employees whose record_status is archived (default excludes them). */
@@ -11608,6 +11724,268 @@ export interface operations {
             };
             /** @description HR_EMPLOYEE_NOT_LINKED. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listTeachingAssignments: {
+        parameters: {
+            query?: {
+                academic_year_id?: string;
+                employee_id?: string;
+                section_id?: string;
+                subject_offering_id?: string;
+                page?: components["parameters"]["Page"];
+                per_page?: components["parameters"]["PerPage"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TeachingAssignment"][];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking teaching.assignments.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid filter or pagination parameter. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createTeachingAssignment: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeachingAssignmentCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TeachingAssignment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking teaching.assignments.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The Employee, Section or Subject Offering does not exist in this School (another School's id is indistinguishable). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TEACHING_ASSIGNMENT_OVERLAP -- this Employee already owns this Section and Offering for overlapping dates. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid body, or TEACHING_ASSIGNMENT_REQUIRED_OFFERING_ONLY, _CONTEXT_MISMATCH, _CONTEXT_INACTIVE, _ACADEMIC_YEAR_NOT_OPEN, _OUTSIDE_ACADEMIC_YEAR, _INVALID_DATES or _EMPLOYEE_NOT_ASSIGNABLE. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getTeachingAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description TeachingAssignment UUID (TCH.2). */
+                teachingAssignmentId: components["parameters"]["TeachingAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TeachingAssignment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking teaching.assignments.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or another School's assignment id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    endTeachingAssignment: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description TeachingAssignment UUID (TCH.2). */
+                teachingAssignmentId: components["parameters"]["TeachingAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeachingAssignmentEndInput"];
+            };
+        };
+        responses: {
+            /** @description Ended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TeachingAssignment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking teaching.assignments.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or another School's assignment id. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description TEACHING_ASSIGNMENT_ALREADY_ENDED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid body, or TEACHING_ASSIGNMENT_INVALID_DATES (before the start, or later than an existing end date). */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

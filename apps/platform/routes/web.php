@@ -111,6 +111,7 @@ use App\Http\Controllers\App\StudentProcessingAuthorizationController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\SubjectOfferingController;
 use App\Http\Controllers\App\Syllabus\SyllabusUnitController;
+use App\Http\Controllers\App\TeachingAssignments\TeachingAssignmentController;
 use App\Http\Controllers\App\Timetable\TimetableEntryController;
 use App\Http\Controllers\App\Timetable\TimetablePeriodController;
 use App\Http\Controllers\App\TransportOperationsController;
@@ -1347,6 +1348,17 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/', [CurriculumDeliveryController::class, 'store'])->name('store');
         Route::patch('/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])->name('update');
         Route::post('/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])->name('transition');
+    });
+
+    // TCH.2 (ADR 0063 section 23) -- the administrative TeachingAssignment
+    // page: list, create, end. Capability checks live in the controller
+    // (AuthorizesCapability) and again in the services. No edit and no
+    // delete route: an assignment's owner, class and start date never
+    // change, and an assignment is ended, never deleted.
+    Route::prefix('app/teaching-assignments')->name('app.teaching-assignments.')->group(function (): void {
+        Route::get('/', [TeachingAssignmentController::class, 'index'])->name('index');
+        Route::post('/', [TeachingAssignmentController::class, 'store'])->name('store');
+        Route::post('/{teachingAssignment}/end', [TeachingAssignmentController::class, 'end'])->name('end');
     });
 
     // Phase 0L.2-1 -- Analytics (ADR 0040). One read-only report; the

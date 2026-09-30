@@ -156,13 +156,13 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   See `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
-## Ownership-based authorization (ADR 0063 — TCH contract; identity boundary only implemented)
+## Ownership-based authorization (ADR 0063 — TCH contract; identity and ownership facts implemented, no teacher access yet)
 
 Roles stay capability bundles. ADR 0063 (TCH.0, 2026-09-30) contracts the
-platform's first ownership-based authorization, for teachers. Only the
-ActingEmployee identity boundary (TCH.1) is built; there is no
-TeachingAssignment, no owned-scope capability and no Teacher role, so every
-teaching module is still admin-only.
+platform's first ownership-based authorization, for teachers. The
+ActingEmployee identity boundary (TCH.1) and the TeachingAssignment
+ownership fact (TCH.2) are built, but there is no owned-scope capability, no
+Teacher role and no consumer, so every teaching module is still admin-only.
 
 - **Two capability tiers:**
 
@@ -203,6 +203,11 @@ teaching module is still admin-only.
 - **TeachingAssignment** is the ownership fact: a dated Employee × Section ×
   required SubjectOffering assignment, administered under
   `teaching.assignments.*`.
+  - **Implemented (TCH.2):** `teaching.assignments.view`/`.manage` are
+    administrative (Tier 1) capabilities, granted to `school_admin` and
+    `principal`, checked on the route and in the service. An administrator
+    needs no ActingEmployee.
+  - It is dormant: nothing reads it for an access decision yet.
   - `TimetableEntry.teacher_id` is scheduling evidence and never grants
     access.
 - **No role-name check, ever.**

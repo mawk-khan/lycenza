@@ -3732,3 +3732,17 @@ changed in HR.
   (`employees.user_id` stays nullable, `unique(school_id, user_id)` and its
   RESTRICT foreign key stay). There is no teacher access, TeachingAssignment
   or Teacher role, and no HRX self-service.
+
+### TCH.2 addition — `EmploymentCoverage`
+
+`App\Domain\HR\Application\EmploymentCoverage::hold()` answers, inside the
+caller's transaction, whether an Employee is an active record with a
+planned or current employment (`pre_joining`, `active` or `notice_period`)
+covering a date. It locks the Employee and that EmploymentRecord `FOR SHARE`,
+so an archive or `EmploymentService::end()` serializes with the caller.
+TeachingAssignments uses it when creating an assignment (ADR 0063 §30).
+
+It is administrative planning, not identity: `ActingEmployeeResolver`
+remains the only way to identify an acting User, with its stricter
+`active`/`notice_period` on-the-day rule. HR depends on no consumer of
+either answer.

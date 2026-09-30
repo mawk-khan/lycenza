@@ -91,6 +91,7 @@ use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
 use App\Domain\Syllabus\Http\Controllers\SyllabusUnitController;
+use App\Domain\TeachingAssignments\Http\Controllers\TeachingAssignmentController;
 use App\Domain\Timetable\Http\Controllers\TimetableEntryController;
 use App\Domain\Timetable\Http\Controllers\TimetablePeriodController;
 use App\Domain\Transport\Http\Controllers\TransportRouteAssignmentController;
@@ -2093,6 +2094,29 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/curriculum-deliveries/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])
                 ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
                 ->name('schools.curriculum-deliveries.transition');
+
+            // TCH.2 (ADR 0063 section 23): the authoritative
+            // TeachingAssignment ownership fact. Exactly four operations --
+            // list, show, create, end; no PATCH and no DELETE (an owner,
+            // class or start date is never repointed). Gated by its own
+            // administrative family `teaching.assignments.*` -- never
+            // `timetable.schedule.*` (scheduling is not teaching authority)
+            // and never an owned-scope `*.teacher` capability. Sensitive
+            // staff data: `private-no-store` outermost (see the HR block's
+            // ordering note). Create/end are `idempotent` (rule 29): a
+            // retry replays the first success instead of a 409.
+            Route::get('/teaching-assignments', [TeachingAssignmentController::class, 'index'])
+                ->middleware(['private-no-store', 'capability:teaching.assignments.view'])
+                ->name('schools.teaching-assignments.index');
+            Route::get('/teaching-assignments/{teachingAssignment}', [TeachingAssignmentController::class, 'show'])
+                ->middleware(['private-no-store', 'capability:teaching.assignments.view'])
+                ->name('schools.teaching-assignments.show');
+            Route::post('/teaching-assignments', [TeachingAssignmentController::class, 'store'])
+                ->middleware(['private-no-store', 'capability:teaching.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.teaching-assignments.store');
+            Route::post('/teaching-assignments/{teachingAssignment}/end', [TeachingAssignmentController::class, 'end'])
+                ->middleware(['private-no-store', 'capability:teaching.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.teaching-assignments.end');
 
             // Phase 0H.4A (Examination Foundation -- the first
             // Examinations fact). Exactly FOUR operations: list/create
