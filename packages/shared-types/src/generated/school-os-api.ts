@@ -2662,6 +2662,213 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/late-fee-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists late-fee rules. Requires finance.fee_structures.view. */
+        get: operations["listLateFeeRules"];
+        put?: never;
+        /** Creates an INACTIVE late-fee rule for one fee structure (optionally one of its heads). Legal: DEVELOPMENT AUTHORISED -- PROD LEGAL SIGN-OFF REQUIRED (ADR 0058 E31). Requires finance.fee_structures.manage. */
+        post: operations["createLateFeeRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One late-fee rule. Requires finance.fee_structures.view. */
+        get: operations["getLateFeeRule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edits an INACTIVE rule (its structure never changes); bumps configurationVersion. Requires finance.fee_structures.manage. */
+        patch: operations["updateLateFeeRule"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-rules/{ruleId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activates a rule (the late-fee head and its accounts must be active). Requires finance.fee_structures.manage. */
+        post: operations["activateLateFeeRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-rules/{ruleId}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivates a rule; open runs of it go stale. Requires finance.fee_structures.manage. */
+        post: operations["deactivateLateFeeRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists late-fee runs (newest first, at most 200). Requires finance.charges.view. */
+        get: operations["listLateFeeRuns"];
+        put?: never;
+        /** Creates a DRAFT run of one active rule at an evaluation date (School calendar; default today; never the future). One open run per rule. Requires finance.fee_assessments.run. */
+        post: operations["createLateFeeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One late-fee run with preview and execution totals. Requires finance.charges.view. */
+        get: operations["getLateFeeRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-runs/{runId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run items (50 per page): source charge, due and final grace dates, outstanding, calculated and final (capped) amounts, result and reason; execution-time outstanding and amount. Requires finance.charges.view. */
+        get: operations["listLateFeeRunItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-runs/{runId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Computes (or recomputes) the items from current facts; creates no late fee. Requires finance.fee_assessments.run. */
+        post: operations["previewLateFeeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-runs/{runId}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claims a previewed run whose rule is unchanged and active, and queues execution; every item is re-checked and recomputed from the execution-time outstanding. Requires finance.fee_assessments.run. */
+        post: operations["executeLateFeeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-runs/{runId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-queues an executing run; only pending items are picked up. Requires finance.fee_assessments.run. */
+        post: operations["resumeLateFeeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-runs/{runId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancels a draft or previewed run. Requires finance.fee_assessments.run. */
+        post: operations["cancelLateFeeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/late-fee-assessments/{assessmentId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Voids a live late fee and cancels its late-fee charge (a Finance reversal) in one transaction; refused when a payment is allocated to it. Frees the key for one deliberate later assessment. No refund. Requires finance.charges.manage. */
+        post: operations["voidLateFeeAssessment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/salary-components": {
         parameters: {
             query?: never;
@@ -4800,6 +5007,152 @@ export interface components {
         FeeAssessmentVoidInput: {
             reason?: string | null;
         };
+        /** @description A late-fee rule (owner decision H). Legal: DEVELOPMENT AUTHORISED -- PROD LEGAL SIGN-OFF REQUIRED. */
+        LateFeeRule: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            feeStructureId: string;
+            /**
+             * Format: uuid
+             * @description Null = every line of the structure.
+             */
+            feeHeadId: string | null;
+            /**
+             * Format: uuid
+             * @description The fee head whose accounts carry the late fee.
+             */
+            lateFeeHeadId: string;
+            graceDays: number;
+            /** @enum {string} */
+            kind: "fixed" | "percentage";
+            fixedAmount: string | null;
+            /** @description Of the source charge's current outstanding; 0 < p <= 100. */
+            percentage: string | null;
+            maxAmount: string | null;
+            /** @enum {string} */
+            currency: "INR";
+            /** @enum {string} */
+            status: "active" | "inactive";
+            configurationVersion: number;
+        };
+        LateFeeRuleInput: components["schemas"]["LateFeeRuleUpdateInput"] & {
+            /** Format: uuid */
+            fee_structure_id: string;
+        };
+        LateFeeRuleUpdateInput: {
+            name: string;
+            /** Format: uuid */
+            fee_head_id?: string | null;
+            /** Format: uuid */
+            late_fee_head_id: string;
+            grace_days: number;
+            /** @enum {string} */
+            kind: "fixed" | "percentage";
+            fixed_amount?: string | null;
+            percentage?: string | null;
+            max_amount?: string | null;
+        };
+        LateFeeRunCreateInput: {
+            /** Format: uuid */
+            late_fee_rule_id: string;
+            /**
+             * Format: date
+             * @description School-calendar date; default today; never in the future.
+             */
+            evaluation_date?: string | null;
+        };
+        LateFeeRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            lateFeeRuleId: string;
+            /** Format: date */
+            evaluationDate: string;
+            /** @enum {string} */
+            status: "draft" | "previewed" | "executing" | "completed" | "completed_with_errors" | "cancelled";
+            /** @enum {string} */
+            currency: "INR";
+            preview: {
+                readyCount: number;
+                readyAmount: string;
+                notEligibleCount: number;
+                alreadyAssessedCount: number;
+                /** Format: date-time */
+                previewedAt: string | null;
+            };
+            execution: {
+                succeededCount: number;
+                skippedCount: number;
+                failedCount: number;
+                assessedAmount: string;
+                /** Format: date-time */
+                startedAt: string | null;
+                /** Format: date-time */
+                completedAt: string | null;
+            };
+            /** Format: date-time */
+            createdAt: string;
+        };
+        LateFeeRunItem: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceChargeId: string;
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            billingPeriodKey: string;
+            /** Format: date */
+            dueDate: string;
+            /**
+             * Format: date
+             * @description due_date + grace_days; nothing is assessed on or before it.
+             */
+            finalGraceDate: string;
+            outstandingAmount: string;
+            calculatedAmount: string;
+            finalAmount: string;
+            capApplied: boolean;
+            /** @enum {string} */
+            currency: "INR";
+            /** @enum {string} */
+            previewResult: "ready" | "not_eligible" | "already_assessed";
+            /** @enum {string|null} */
+            reason: "grace_not_elapsed" | "fully_settled" | "zero_amount" | "already_assessed" | null;
+            /** @enum {string|null} */
+            executionStatus: "pending" | "succeeded" | "skipped_already_assessed" | "failed" | null;
+            /** @enum {string|null} */
+            failureReason: "rule_not_active" | "source_not_eligible" | "grace_not_elapsed" | "fully_settled" | "zero_amount" | "account_invalid" | "error" | null;
+            executedOutstandingAmount: string | null;
+            executedAmount: string | null;
+            executedCapApplied: boolean | null;
+            /** Format: uuid */
+            lateFeeAssessmentId: string | null;
+            /** Format: date-time */
+            executedAt: string | null;
+        };
+        LateFeeAssessment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            sourceChargeId: string;
+            /** Format: uuid */
+            lateFeeRuleId: string;
+            /**
+             * Format: uuid
+             * @description The late-fee charge.
+             */
+            chargeId: string;
+            /** Format: uuid */
+            lateFeeRunId: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+        };
         FeeSettings: {
             /** Format: uuid */
             concessionLedgerAccountId: string | null;
@@ -4904,6 +5257,13 @@ export interface components {
                 /** Format: date-time */
                 cancelledAt: string | null;
             }[];
+            /**
+             * Format: uuid
+             * @description FEE.5: set when this charge is a live late fee.
+             */
+            lateFeeSourceChargeId: string | null;
+            /** @description FEE.5: live late fees raised on this charge. */
+            lateFeeChargeIds: string[];
             payments: {
                 /** Format: uuid */
                 paymentId: string;
@@ -16800,6 +17160,855 @@ export interface operations {
                 };
             };
             /** @description FEE_ADJUSTMENT_ALREADY_CANCELLED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listLateFeeRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRule"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createLateFeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LateFeeRuleInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRule"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (kind, amount/percentage shape, grace days, cap, scope). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getLateFeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRule"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RULE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateLateFeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LateFeeRuleUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRule"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RULE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RULE_NOT_EDITABLE (active). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    activateLateFeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRule"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RULE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Late-fee head or accounts inactive. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deactivateLateFeeRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRule"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_structures.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RULE_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listLateFeeRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRun"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createLateFeeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LateFeeRunCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_OPEN_EXISTS. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation error (inactive rule, future or invalid date). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getLateFeeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listLateFeeRunItems: {
+        parameters: {
+            query?: {
+                preview_result?: "ready" | "not_eligible" | "already_assessed";
+                execution_status?: "pending" | "succeeded" | "skipped_already_assessed" | "failed";
+                page?: number;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRunItem"][];
+                        meta: components["schemas"]["FeeConcessionPageMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    previewLateFeeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The rule is no longer active. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    executeLateFeeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted; execution continues in the queue. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_STALE_PREVIEW or LATE_FEE_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    resumeLateFeeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted; execution continues in the queue. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cancelLateFeeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    voidLateFeeAssessment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                assessmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeeAssessmentVoidInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LateFeeAssessment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.charges.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_ASSESSMENT_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LATE_FEE_ASSESSMENT_ALREADY_VOIDED or CHARGE_HAS_PAYMENT_ALLOCATIONS. */
             409: {
                 headers: {
                     [name: string]: unknown;

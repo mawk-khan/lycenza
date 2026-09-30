@@ -176,10 +176,20 @@ only):**
 The FEE.4 numbering behaviour (start-month lock, a prefix fixed per series)
 is confirmed as the final v1 contract.
 
-**Next: FEE.5 — Late fees.** Its product requirements are unblocked, and it
-is **development-authorised** under the legal-gate operating rule.
-**Production stays blocked** until the fee-regulation legal sign-off (ADR
-0058 E31; RTE in E32). FEE.5 implementation has **not started**.
+**FEE.5 — COMPLETE (2026-09-30, development).** Built:
+- late-fee rules (fixed or percentage of current outstanding, grace days,
+  optional cap);
+- staff-triggered late-fee runs (preview, execute, resume, cancel) with
+  one live late fee per source charge per rule;
+- void through a Finance reversal.
+
+No recurrence, tiers or compounding. **Production stays blocked** on the
+fee-regulation legal sign-off (ADR 0058 E31; RTE E32). The as-built record
+is in `docs/modules/FINANCE.md` "FEE.5 as-built".
+
+**The FEE programme (FEE.0–FEE.5) is complete for development.** Its
+remaining production gates are legal: E30 (receipt/GST form), E31, E32
+and E21 (retention).
 
 ## Phase 0A — Architectural Foundation (complete)
 

@@ -1888,3 +1888,65 @@ matches it, so no code changed.
    later (I2) continues its existing series with that series' prefix. A
    historical FY that has no series yet starts with the prefix in force at
    the backfill.
+
+## Implementation note — FEE.5 as built (2026-09-30)
+
+FEE.5 implements §16 under owner decision H. Legal status: **DEVELOPMENT
+AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED** (ADR 0058 E31, E32 remain
+open). Nothing built here asserts that any late fee, rate, amount or grace
+period is lawful. The full record is in `docs/modules/FINANCE.md`
+("FEE.5 as-built"). Refinements to the text above:
+
+- **A run is one rule at one evaluation date.** It evaluates one ACTIVE
+  rule at a School-calendar `evaluation_date`:
+  - the default is today in the School's timezone, and it is never in the
+    future (checked by the service and the run trigger);
+  - there is one open run per rule (`late_fee_runs_one_open_per_rule`), so
+    two runs can never race the same source and rule;
+  - `late_fee_assessments_one_live_per_rule` backs every other path.
+- **Stale preview.** The preview snapshots the rule's
+  `configuration_version`. Execution is refused when the rule changed or
+  was deactivated since.
+- **Closed catalogues:**
+  - preview: `ready`, `not_eligible` (`grace_not_elapsed`,
+    `fully_settled`, `zero_amount`) and `already_assessed`;
+  - execution failures: `rule_not_active`, `source_not_eligible`,
+    `grace_not_elapsed`, `fully_settled`, `zero_amount`, `account_invalid`,
+    `error`.
+- **Lock order per item:**
+  - run FOR SHARE → School lifecycle FOR SHARE → item FOR UPDATE → rule
+    FOR SHARE (through Fees) → source charge FOR UPDATE (through
+    `ChargeService::lockChargeForAllocation`, the lock payments and
+    concessions take);
+  - the outstanding (Payments-computed: amount − allocations − live
+    adjustments) and the amount are then recomputed at execution;
+  - the item stores the preview and execution figures separately.
+- **Charge-cancel guard.** `charges_late_fee_guard_trigger` (Payments-owned)
+  guards both ends of the link:
+  - a live late-fee charge is cancelled only by voiding it;
+  - a charge that is the source of a live late fee cannot be cancelled,
+    including through the FEE.2 assessment void, until that late fee is
+    voided.
+
+  `ChargeService` maps these to `ChargeIsLateFeeException` and
+  `ChargeHasLiveLateFeeException`.
+- **Authorization.**
+  - Late-fee runs and items are read under `finance.charges.view` (the
+    FEE.2 precedent).
+  - Voiding a late fee needs `finance.charges.manage` (the §11.3
+    precedent).
+  - No new capability.
+- **Audit and events.**
+  - Audit: `late_fee_rule.created`, `.updated`, `.status_changed`;
+    `late_fee_run.created`, `.previewed`, `.execution_started`,
+    `.completed`, `.completed_with_errors`, `.cancelled`, `.paused`;
+    `late_fee.assessed`; `late_fee_assessment.voided`.
+  - Outbox: `late_fee.assessed.v1`, once per late fee. There is no run
+    event.
+- **Statement (FEE.4).** A late fee is an ordinary statement line. Live
+  links are shown both ways (`lateFeeSourceChargeId`,
+  `lateFeeChargeIds`).
+- **Not built:**
+  - recurrence, tiers, interest, compounding and schedulers;
+  - tax, refunds, payment reversal, reminders;
+  - portal.

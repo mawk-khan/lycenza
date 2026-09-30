@@ -3,6 +3,7 @@
 namespace Tests\Feature\Fees;
 
 use App\Jobs\ExecuteFeeAssessmentRunJob;
+use App\Jobs\ExecuteLateFeeRunJob;
 use App\Support\Webhooks\WebhookEventRegistry;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -51,6 +52,11 @@ class FeeSetupArchitectureGuardTest extends TestCase
         // FEE.4 (Fees side)
         'app/Domain/Fees/Application/ChargeStatementLine.php',
         'app/Domain/Fees/Application/ReceiptNumberingSettings.php',
+        // FEE.5 (Fees side)
+        'app/Domain/Fees/Application/LateFeeRuleService.php',
+        'app/Domain/Fees/Application/LateFeeRuleSnapshot.php',
+        'app/Domain/Fees/Application/LateFeeSourceFacts.php',
+        'app/Domain/Fees/Http/Controllers/LateFeeRuleController.php',
     ];
 
     /** FEE.4 Payments-owned receipt/statement code: no float, no Fees model or table. */
@@ -65,6 +71,15 @@ class FeeSetupArchitectureGuardTest extends TestCase
         'app/Domain/Payments/Http/Controllers/PaymentReceiptController.php',
         'app/Console/Commands/BackfillPaymentReceipts.php',
         'app/Http/Controllers/App/Finance/FeeStatementController.php',
+        // FEE.5 (Payments side)
+        'app/Domain/Payments/Application/LateFeeRunService.php',
+        'app/Domain/Payments/Application/LateFeeItemExecutor.php',
+        'app/Domain/Payments/Application/LateFeeAssessmentService.php',
+        'app/Domain/Payments/Application/LateFeeReadService.php',
+        'app/Domain/Payments/Application/ChargeOutstandingReader.php',
+        'app/Domain/Payments/Domain/LateFeeCalculation.php',
+        'app/Domain/Payments/Http/Controllers/LateFeeRunController.php',
+        'app/Jobs/ExecuteLateFeeRunJob.php',
     ];
 
     private const MIGRATIONS = [
@@ -101,7 +116,9 @@ class FeeSetupArchitectureGuardTest extends TestCase
             'resources/js/Pages/App/Finance/FeeSetup/Runs.vue', 'resources/js/Pages/App/Finance/FeeSetup/Run.vue',
             'resources/js/Pages/App/Finance/Concessions/Index.vue', 'resources/js/Pages/App/Finance/Concessions/Create.vue',
             'resources/js/Pages/App/Finance/Concessions/Show.vue', 'resources/js/Pages/App/Finance/Payments/Receipt.vue',
-            'resources/js/Pages/App/Finance/Statements/Index.vue', 'resources/js/Pages/App/Finance/Statements/Show.vue'] as $page) {
+            'resources/js/Pages/App/Finance/Statements/Index.vue', 'resources/js/Pages/App/Finance/Statements/Show.vue',
+            'resources/js/Pages/App/Finance/FeeSetup/LateFees.vue', 'resources/js/Pages/App/Finance/FeeSetup/LateFeeRuns.vue',
+            'resources/js/Pages/App/Finance/FeeSetup/LateFeeRun.vue'] as $page) {
             $code = $this->source($page);
             foreach (['parseFloat', 'Number(', 'toFixed('] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$page} must not use {$forbidden} for money.");
@@ -128,7 +145,7 @@ class FeeSetupArchitectureGuardTest extends TestCase
         $registry = app(WebhookEventRegistry::class);
 
         foreach (['fee_structure.activated.v1', 'fee_assessment_run.completed.v1', 'fee_concession.approved.v1', 'fee_concession.rejected.v1',
-            'fee_adjustment.posted.v1', 'fee_adjustment.cancelled.v1', 'payment_receipt.issued.v1'] as $type) {
+            'fee_adjustment.posted.v1', 'fee_adjustment.cancelled.v1', 'payment_receipt.issued.v1', 'late_fee.assessed.v1'] as $type) {
             $this->assertFalse($registry->exists($type), $type);
             $this->assertFalse($registry->isSubscribable($type), $type);
         }
@@ -207,5 +224,29 @@ class FeeSetupArchitectureGuardTest extends TestCase
         $counters = $this->source('database/migrations/2026_11_01_090000_create_payment_receipt_counters_table.php');
         $this->assertStringContainsString("TenantRls::enable('payment_receipt_counters')", $counters);
         $this->assertStringNotContainsString('CREATE SEQUENCE', $receipts.$counters, 'Never a PostgreSQL sequence (gaps on rollback).');
+    }
+
+    #[Test]
+    public function fee_5_tables_are_rls_enabled_never_deleted_and_the_job_is_bounded_and_unscheduled(): void
+    {
+        $migrations = [
+            'fee_late_fee_rules' => 'database/migrations/2026_11_02_090000_create_fee_late_fee_rules_table.php',
+            'late_fee_runs' => 'database/migrations/2026_11_02_090100_create_late_fee_runs_table.php',
+            'late_fee_assessments' => 'database/migrations/2026_11_02_090200_create_late_fee_assessments_table.php',
+            'late_fee_run_items' => 'database/migrations/2026_11_02_090300_create_late_fee_run_items_table.php',
+        ];
+        foreach ($migrations as $table => $file) {
+            $this->assertStringContainsString("TenantRls::enable('{$table}')", $this->source($file), $table);
+        }
+        foreach (['fee_late_fee_rules', 'late_fee_runs', 'late_fee_assessments'] as $table) {
+            $this->assertStringContainsString("TenantRls::revokeDelete('{$table}')", $this->source($migrations[$table]), $table);
+        }
+        $this->assertStringContainsString('late_fee_assessments_one_live_per_rule', $this->source($migrations['late_fee_assessments']));
+
+        $job = new ExecuteLateFeeRunJob('x');
+        $this->assertSame(1, $job->tries);
+        $this->assertLessThan(90, $job->timeout);
+        $this->assertStringNotContainsString('ExecuteLateFeeRunJob', $this->source('routes/console.php'), 'Staff-triggered only: nothing schedules late fees.');
+        $this->assertDoesNotMatchRegularExpression('/tier|compound|interest|recurr/i', $this->codeOnly($this->source('app/Domain/Payments/Domain/LateFeeCalculation.php')), 'Only fixed and percentage exist (H).');
     }
 }

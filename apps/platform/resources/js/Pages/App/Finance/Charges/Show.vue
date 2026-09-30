@@ -39,6 +39,10 @@ interface Props {
     adjustments: Adjustment[] | null;
     canRequestConcession: boolean;
     canViewStatement: boolean;
+    lateFees: {
+        raised: Array<{ assessmentId: string; chargeId: string; voided: boolean }>;
+        sourceChargeId: string | null;
+    };
 }
 
 const props = defineProps<Props>();
@@ -144,6 +148,27 @@ function cancel(): void {
                 </dd>
             </div>
         </dl>
+
+        <section
+            v-if="lateFees.sourceChargeId || lateFees.raised.length"
+            class="mt-8 border-t border-slate-200 pt-6"
+        >
+            <h2 class="text-sm font-medium text-slate-900">Late fees</h2>
+            <p v-if="lateFees.sourceChargeId" class="mt-1 text-sm">
+                This charge is a late fee on
+                <a class="underline" :href="`/app/finance/charges/${lateFees.sourceChargeId}`"
+                    >its source charge</a
+                >. It is a separate charge; the source charge is unchanged.
+            </p>
+            <ul v-if="lateFees.raised.length" class="mt-1 text-sm">
+                <li v-for="l in lateFees.raised" :key="l.assessmentId">
+                    <a class="underline" :href="`/app/finance/charges/${l.chargeId}`"
+                        >Late-fee charge</a
+                    >
+                    <span v-if="l.voided" class="text-slate-500"> (voided)</span>
+                </li>
+            </ul>
+        </section>
 
         <section v-if="adjustments !== null" class="mt-8 border-t border-slate-200 pt-6">
             <h2 class="text-sm font-medium text-slate-900">Concession adjustments</h2>

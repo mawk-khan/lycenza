@@ -21,6 +21,7 @@ use App\Domain\Finance\Application\Exceptions\FinanceException;
 use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerReadService;
+use App\Domain\Payments\Application\LateFeeReadService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
@@ -197,7 +198,7 @@ class ChargeController extends Controller
         return redirect("/app/finance/charges/{$result->chargeId}");
     }
 
-    public function show(TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, string $charge): Response
+    public function show(TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, LateFeeReadService $lateFees, string $charge): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.view', $school);
@@ -230,6 +231,16 @@ class ChargeController extends Controller
                     ->map(fn (FeeAdjustment $a) => FeeSetupPresenter::adjustment($a))->values()->all()
                 : null,
             'canRequestConcession' => $capabilities->canInSchool($context->actor(), FeeConcessionService::REQUEST, $school),
+            // FEE.5: late fees raised on this charge, or its source if it is one
+            // (a separate linked charge -- never an edit of this one).
+            'lateFees' => (function () use ($lateFees, $school, $detail, $context) {
+                $links = $lateFees->linksForCharge($school, $detail->chargeId, $context->actor());
+
+                return [
+                    'raised' => $links['lateFees']->map(fn ($a) => ['assessmentId' => $a->id, 'chargeId' => $a->charge_id, 'voided' => $a->voided_at !== null])->values()->all(),
+                    'sourceChargeId' => $links['sourceOf']?->source_charge_id,
+                ];
+            })(),
             // FEE.4: a link to the Student's fee statement (charges + payments view).
             'canViewStatement' => $capabilities->canInSchool($context->actor(), 'finance.payments.view', $school),
         ]);

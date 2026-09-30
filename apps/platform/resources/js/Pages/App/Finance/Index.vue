@@ -11,6 +11,8 @@ interface Props {
         viewFeeRuns: boolean;
         viewConcessions: boolean;
         viewStatements: boolean;
+        viewLateFeeRules: boolean;
+        viewLateFeeRuns: boolean;
     };
 }
 
@@ -53,6 +55,24 @@ defineProps<Props>();
                 >
                 <p class="mt-1 text-sm text-slate-500">
                     Preview and bill a fee structure's billing period to its Students.
+                </p>
+            </li>
+            <li v-if="can.viewLateFeeRules || can.viewLateFeeRuns" class="px-4 py-3">
+                <a
+                    v-if="can.viewLateFeeRules"
+                    class="text-sm font-medium underline"
+                    href="/app/finance/late-fees"
+                    >Late-fee rules</a
+                >
+                <a
+                    v-if="can.viewLateFeeRuns"
+                    class="ml-3 text-sm font-medium underline"
+                    href="/app/finance/late-fee-runs"
+                    >Late-fee runs</a
+                >
+                <p class="mt-1 text-sm text-slate-500">
+                    One late fee per overdue charge per rule, after its grace days. No recurring or
+                    compounding charges.
                 </p>
             </li>
             <li v-if="can.viewConcessions" class="px-4 py-3">

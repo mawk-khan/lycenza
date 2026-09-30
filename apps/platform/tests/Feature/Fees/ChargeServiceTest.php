@@ -228,8 +228,9 @@ class ChargeServiceTest extends TestCase
         // write path. FEE.3: liveAdjustmentTotalsFor() is a read-only
         // per-charge adjustment total for Payments' outstanding display.
         // FEE.4: statementLinesFor*() are read-only statement/receipt facts.
+        // FEE.5: lateFeeCandidates()/lateFeeSource() are read-only late-fee facts.
         $this->assertFalse(method_exists(ChargeService::class, 'update'));
-        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForCharges', 'uncancelledChargesForStudent'], array_values(array_filter(
+        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent'], array_values(array_filter(
             array_map(fn ($m) => $m->name, (new \ReflectionClass(ChargeService::class))->getMethods(\ReflectionMethod::IS_PUBLIC)),
             fn ($name) => $name !== '__construct',
         )));

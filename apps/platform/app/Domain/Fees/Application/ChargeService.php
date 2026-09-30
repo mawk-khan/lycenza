@@ -5,8 +5,10 @@ namespace App\Domain\Fees\Application;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasActiveAdjustmentsException;
+use App\Domain\Fees\Application\Exceptions\ChargeHasLiveLateFeeException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeIsFeeAssessedException;
+use App\Domain\Fees\Application\Exceptions\ChargeIsLateFeeException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\InvalidChargeException;
 use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
@@ -237,6 +239,15 @@ class ChargeService
                         throw new ChargeHasPaymentAllocationsException($charge->id);
                     }
 
+                    // FEE.5 (ADR 0062 §16.3): a late fee is cancelled only by
+                    // voiding it; its source waits until the late fee is voided.
+                    if (str_contains($e->getMessage(), 'is a late fee; void its late-fee assessment')) {
+                        throw new ChargeIsLateFeeException($charge->id);
+                    }
+                    if (str_contains($e->getMessage(), 'has a live late fee; void the late fee first')) {
+                        throw new ChargeHasLiveLateFeeException($charge->id);
+                    }
+
                     // FEE.3 (ADR 0062 §14.7): cancel live adjustments first.
                     if (str_contains($e->getMessage(), 'has active fee adjustments; cancel them first')) {
                         throw new ChargeHasActiveAdjustmentsException($charge->id);
@@ -410,6 +421,57 @@ class ChargeService
                 );
             })->values()->all();
         });
+    }
+
+    /**
+     * FEE.5 (ADR 0062 §16.2): the late-fee candidates of one rule scope --
+     * uncancelled charges with a LIVE fee assessment of the structure (and
+     * head, when set), oldest due first. Trusted and read-only;
+     * `App\Domain\Payments`' late-fee run authorizes and computes the
+     * outstanding itself. Late-fee charges have no fee assessment, so they
+     * are never candidates.
+     *
+     * @return list<LateFeeSourceFacts>
+     */
+    public function lateFeeCandidates(School $school, string $feeStructureId, ?string $feeHeadId): array
+    {
+        return $this->context->withSchool($school, fn () => $this->lateFeeSources($school, fn ($q) => $q
+            ->where('fa.fee_structure_id', $feeStructureId)
+            ->when($feeHeadId !== null, fn ($w) => $w->where('fa.fee_head_id', $feeHeadId))));
+    }
+
+    /** FEE.5: the same facts for one charge at execution (null when it is no longer a live, uncancelled structure charge). */
+    public function lateFeeSource(School $school, string $chargeId): ?LateFeeSourceFacts
+    {
+        return $this->context->withSchool($school, fn () => $this->lateFeeSources($school, fn ($q) => $q->where('c.id', $chargeId))[0] ?? null);
+    }
+
+    /**
+     * @param  callable(\Illuminate\Database\Query\Builder): mixed  $scope
+     * @return list<LateFeeSourceFacts>
+     */
+    private function lateFeeSources(School $school, callable $scope): array
+    {
+        $query = DB::table('charges as c')
+            ->join('fee_assessments as fa', fn ($j) => $j->on('fa.charge_id', '=', 'c.id')->whereNull('fa.voided_at'))
+            ->where('c.school_id', $school->id)
+            ->whereNull('c.cancelled_at')
+            ->select('c.id', 'c.student_id', 'c.academic_year_id', 'fa.fee_structure_id', 'fa.fee_head_id', 'fa.billing_period_key', 'c.due_date', 'c.amount', 'c.currency', 'c.description');
+        $scope($query);
+
+        return $query->orderBy('c.due_date')->orderBy('c.id')->get()
+            ->map(fn ($r) => new LateFeeSourceFacts(
+                chargeId: (string) $r->id,
+                studentId: (string) $r->student_id,
+                academicYearId: (string) $r->academic_year_id,
+                feeStructureId: (string) $r->fee_structure_id,
+                feeHeadId: (string) $r->fee_head_id,
+                billingPeriodKey: (string) $r->billing_period_key,
+                dueDate: $r->due_date === null ? null : substr((string) $r->due_date, 0, 10),
+                amount: (string) $r->amount,
+                currency: (string) $r->currency,
+                description: (string) $r->description,
+            ))->values()->all();
     }
 
     /**

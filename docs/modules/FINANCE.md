@@ -4892,3 +4892,91 @@ REQUIRED — DEVELOPMENT AUTHORISED, PROD LEGAL SIGN-OFF REQUIRED.
   - receipt void or correction, refunds, credits;
   - statement export/PDF/email, Guardian/Student views, portal;
   - late fees.
+
+## FEE.5 as-built — Late Fees (2026-09-30, ADR 0062 §16, owner decision H)
+
+**Legal status: DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED.** ADR
+0058 **E31** (fee regulation) and **E32** (RTE) stay open production
+blockers. Nothing here asserts that a late fee, rate, amount or grace
+period is lawful.
+
+- **Tables** (migrations `2026_11_02_090000`–`090300`). All four are
+  RLS-forced with composite same-School foreign keys.
+  - **`fee_late_fee_rules`** (Fees).
+    - Scope: one structure plus an optional head (it must be a line of
+      that structure); `late_fee_head_id` carries the accounts.
+    - Value: `fixed` (> 0) or `percentage` (0 < p ≤ 100); `grace_days`
+      0–3650; optional `max_amount` > 0; INR.
+    - Created inactive; editable only while inactive
+      (`fees_validate_late_fee_rule`); `configuration_version`; never
+      deleted.
+  - **`late_fee_runs`** (Payments).
+    - One rule at one School-calendar `evaluation_date` (≤ today in the
+      School's timezone).
+    - The §9 lifecycle; one open run per rule; terminal runs are
+      immutable; never deleted.
+  - **`late_fee_run_items`** (Payments). One per candidate source charge:
+    - provenance: Student, year, head, period, due date, final grace date;
+    - preview: outstanding, calculated amount, whether the cap applied,
+      final amount;
+    - execution: the execution-time outstanding and amount actually used;
+    - closed reasons; phase immutability.
+  - **`late_fee_assessments`** (Payments).
+    - Links the source charge, rule, late-fee charge and run.
+    - **`late_fee_assessments_one_live_per_rule`** (partial unique,
+      `voided_at IS NULL`).
+    - The insert trigger requires: a live structure source in the rule's
+      scope, not itself a late fee; a late-fee charge of the same Student
+      and year on the late-fee head, due on the evaluation date; an
+      executing run of the rule; an active rule.
+    - A one-time void cancels the late-fee charge (deferred check).
+  - **`charges_late_fee_guard_trigger`** (Payments-owned, on `charges`)
+    guards both ends of a live link.
+- **Rules (H).**
+  - Eligible only when `evaluation_date > due_date + grace_days` (nothing
+    on or before the final grace date).
+  - `fixed` = the amount; `percentage` = `multiplyByRate(p/100)` of the
+    **current outstanding** (N).
+  - Capped to `min(calculated, cap)`; a non-positive result is no late
+    fee.
+  - One live late fee per source charge per rule. No recurrence, tiers,
+    interest or compounding, and a late fee is never a candidate.
+- **Services.**
+  - Fees: `LateFeeRuleService` (reads `finance.fee_structures.view`, writes
+    `.manage`, trusted `snapshot()`). `ChargeService::lateFeeCandidates()`
+    and `lateFeeSource()`.
+  - Payments:
+    - `LateFeeRunService` (`finance.fee_assessments.run`): create,
+      preview, execute, resume, cancel; trusted finalize and recordPaused;
+    - `LateFeeItemExecutor`: per-item transaction, re-checks and
+      recomputes everything; the charge and the link are written in one
+      savepoint;
+    - `ExecuteLateFeeRunJob`: `TenantScoped`, `$tries = 1`,
+      `$timeout = 60`; pauses for a non-operational School;
+    - `LateFeeAssessmentService::void` (`finance.charges.manage`);
+    - `LateFeeReadService` (`finance.charges.view`);
+    - `ChargeOutstandingReader`;
+    - `LateFeeCalculation` (pure).
+- **Posting.** Dr the late-fee head's receivable / Cr its revenue, through
+  `ChargeService::assess`, with description `"Late fee: <source>"`. The
+  source charge never changes.
+- **Void and re-assessment.** A void is a Finance reversal of the late-fee
+  charge, refused if a payment is allocated to it. It frees the key for
+  one deliberate later run; nothing recurs.
+- **Audit and outbox.** See the ADR 0062 FEE.5 note:
+  `late_fee.assessed.v1` is emitted once per late fee and is not
+  webhook-registered.
+- **Surfaces.**
+  - **API:** 15 `/api/v1` operations — rules (6), runs (8), void (1). No
+    DELETE and no direct late-fee creation.
+  - **Web:**
+    - `/app/finance/late-fees` (rules);
+    - `/app/finance/late-fee-runs` and `/app/finance/late-fee-runs/{run}`
+      (preview, per-item outstanding, calculated, capped and final
+      amounts, reasons, execute, resume, cancel, void);
+    - charge-page links both ways and Finance hub links;
+    - late fees shown as ordinary lines, linked, in the FEE.4 statement.
+- **Not in FEE.5:**
+  - recurring or tiered penalties, interest, compounding, schedulers;
+  - tax/GST, refunds, payment reversal, credits;
+  - reminders, portal, gateway.

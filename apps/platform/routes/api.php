@@ -27,6 +27,7 @@ use App\Domain\Fees\Http\Controllers\FeeConcessionController;
 use App\Domain\Fees\Http\Controllers\FeeHeadController;
 use App\Domain\Fees\Http\Controllers\FeeOptionalSelectionController;
 use App\Domain\Fees\Http\Controllers\FeeStructureController;
+use App\Domain\Fees\Http\Controllers\LateFeeRuleController;
 use App\Domain\Finance\Http\Controllers\JournalEntryController;
 use App\Domain\Finance\Http\Controllers\LedgerAccountController;
 use App\Domain\Guardians\Http\Controllers\GuardianContactController;
@@ -64,6 +65,7 @@ use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
 use App\Domain\LMS\Http\Controllers\AssignmentController;
 use App\Domain\LMS\Http\Controllers\LearningContentController;
+use App\Domain\Payments\Http\Controllers\LateFeeRunController;
 use App\Domain\Payments\Http\Controllers\PaymentController;
 use App\Domain\Payments\Http\Controllers\PaymentReceiptController;
 use App\Domain\Payroll\Http\Controllers\CompensationAssignmentController;
@@ -1297,6 +1299,47 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/fee-assessments/{assessment}/void', [FeeAssessmentRunController::class, 'void'])
                 ->middleware(['capability:finance.charges.manage', 'throttle:school-api-mutations'])
                 ->name('schools.fee-assessments.void');
+
+            // --- FEE.5 (ADR 0062 §16; owner decision H): late fees. Rules
+            // under finance.fee_structures.view/.manage; run reads under
+            // finance.charges.view; run mutations under
+            // finance.fee_assessments.run; voiding a late fee under
+            // finance.charges.manage. No DELETE, no direct late-fee
+            // creation. Execution is idempotent by construction (item
+            // claim + late_fee_assessments_one_live_per_rule), so no
+            // generic Idempotency-Key middleware is layered on (rule 29
+            // reviewed). Legal: DEVELOPMENT AUTHORISED -- PROD LEGAL
+            // SIGN-OFF REQUIRED (ADR 0058 E31).
+            Route::get('/late-fee-rules', [LateFeeRuleController::class, 'index'])
+                ->middleware('capability:finance.fee_structures.view')->name('schools.late-fee-rules.index');
+            Route::post('/late-fee-rules', [LateFeeRuleController::class, 'store'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])->name('schools.late-fee-rules.store');
+            Route::get('/late-fee-rules/{rule}', [LateFeeRuleController::class, 'show'])
+                ->middleware('capability:finance.fee_structures.view')->name('schools.late-fee-rules.show');
+            Route::patch('/late-fee-rules/{rule}', [LateFeeRuleController::class, 'update'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])->name('schools.late-fee-rules.update');
+            Route::post('/late-fee-rules/{rule}/activate', [LateFeeRuleController::class, 'activate'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])->name('schools.late-fee-rules.activate');
+            Route::post('/late-fee-rules/{rule}/deactivate', [LateFeeRuleController::class, 'deactivate'])
+                ->middleware(['capability:finance.fee_structures.manage', 'throttle:school-api-mutations'])->name('schools.late-fee-rules.deactivate');
+            Route::get('/late-fee-runs', [LateFeeRunController::class, 'index'])
+                ->middleware('capability:finance.charges.view')->name('schools.late-fee-runs.index');
+            Route::post('/late-fee-runs', [LateFeeRunController::class, 'store'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])->name('schools.late-fee-runs.store');
+            Route::get('/late-fee-runs/{run}', [LateFeeRunController::class, 'show'])
+                ->middleware('capability:finance.charges.view')->name('schools.late-fee-runs.show');
+            Route::get('/late-fee-runs/{run}/items', [LateFeeRunController::class, 'items'])
+                ->middleware('capability:finance.charges.view')->name('schools.late-fee-runs.items');
+            Route::post('/late-fee-runs/{run}/preview', [LateFeeRunController::class, 'preview'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])->name('schools.late-fee-runs.preview');
+            Route::post('/late-fee-runs/{run}/execute', [LateFeeRunController::class, 'execute'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])->name('schools.late-fee-runs.execute');
+            Route::post('/late-fee-runs/{run}/resume', [LateFeeRunController::class, 'resume'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])->name('schools.late-fee-runs.resume');
+            Route::post('/late-fee-runs/{run}/cancel', [LateFeeRunController::class, 'cancel'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])->name('schools.late-fee-runs.cancel');
+            Route::post('/late-fee-assessments/{assessment}/void', [LateFeeRunController::class, 'void'])
+                ->middleware(['capability:finance.charges.manage', 'throttle:school-api-mutations'])->name('schools.late-fee-assessments.void');
 
             // --- FEE.3 (ADR 0062 §14, §19): concessions and adjustments.
             // Reads under finance.fee_concessions.view; request/withdraw

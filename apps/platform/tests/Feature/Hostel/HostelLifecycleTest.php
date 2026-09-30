@@ -231,7 +231,9 @@ class HostelLifecycleTest extends TestCase
         $room = $this->createHostelRoom($hostel);
         $bed = $this->createHostelBed($room);
         $student = $this->createStudent($school, ['status' => 'active']);
-        $assignment = $this->createHostelResidencyAssignment($student, $bed, ['status' => 'ended', 'ends_on' => now()]);
+        // One timestamp for both ends (two now() calls can straddle a second).
+        $at = now();
+        $assignment = $this->createHostelResidencyAssignment($student, $bed, ['status' => 'ended', 'starts_on' => $at, 'ends_on' => $at]);
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user));
 
         $client->patchJson("/api/v1/schools/{$school->id}/hostel-beds/{$bed->id}", ['status' => 'inactive'])->assertOk();

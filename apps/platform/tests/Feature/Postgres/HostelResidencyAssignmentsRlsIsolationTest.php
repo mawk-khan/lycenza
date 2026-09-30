@@ -250,7 +250,9 @@ class HostelResidencyAssignmentsRlsIsolationTest extends TestCase
         $room = $this->createHostelRoom($hostel);
         $bed = $this->createHostelBed($room);
         $student = $this->createStudent($school);
-        $assignment = $this->createHostelResidencyAssignment($student, $bed, ['status' => 'ended', 'ends_on' => now()]);
+        // One timestamp for both ends (two now() calls can straddle a second).
+        $at = now();
+        $assignment = $this->createHostelResidencyAssignment($student, $bed, ['status' => 'ended', 'starts_on' => $at, 'ends_on' => $at]);
 
         $this->setSchool($school->id);
 

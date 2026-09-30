@@ -4,6 +4,7 @@ namespace App\Domain\Payments\Application;
 
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\ChargeStatementLine;
+use App\Domain\Payments\Infrastructure\LateFeeAssessment;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
 use App\Models\School;
@@ -28,6 +29,9 @@ use App\Support\Tenancy\TenantContext;
  *   FEE.3 net model); a cancelled charge contributes nothing.
  * - One `fee_statement.viewed` audit per successful view (ids only), none
  *   on a denial.
+ * - FEE.5: a late fee is an ordinary charge line; live links are shown both
+ *   ways (`lateFeeSourceChargeId` on the late fee, `lateFeeChargeIds` on
+ *   its source).
  * - Staff only: no export, PDF, email or Guardian/Student view.
  */
 class StudentFeeStatementReadService
@@ -58,6 +62,12 @@ class StudentFeeStatementReadService
                 ->with('receipt')
                 ->get()
                 ->keyBy('id');
+
+            // FEE.5: late-fee links in both directions (Payments' own rows).
+            $lateFees = $chargeIds === [] ? collect() : LateFeeAssessment::query()
+                ->where(fn ($q) => $q->whereIn('charge_id', $chargeIds)->orWhereIn('source_charge_id', $chargeIds))
+                ->whereNull('voided_at')
+                ->get();
 
             $currency = 'INR';
             $totals = ['charged' => Money::of('0.00', $currency), 'adjusted' => Money::of('0.00', $currency), 'paid' => Money::of('0.00', $currency), 'outstanding' => Money::of('0.00', $currency)];
@@ -110,6 +120,8 @@ class StudentFeeStatementReadService
                     'currency' => $fact->currency,
                     'adjustments' => $fact->adjustments,
                     'payments' => $rows,
+                    'lateFeeSourceChargeId' => $lateFees->firstWhere('charge_id', $fact->chargeId)?->source_charge_id,
+                    'lateFeeChargeIds' => $lateFees->where('source_charge_id', $fact->chargeId)->pluck('charge_id')->values()->all(),
                 ];
             }
 

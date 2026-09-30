@@ -5622,6 +5622,479 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # FEE.5 (ADR 0062 §16; owner decision H): late fees -- fixed or percentage
+  # of current outstanding, grace days (eligible only when evaluation_date >
+  # due_date + grace_days), optional cap, one live late fee per source charge
+  # per rule; no recurrence, tiers or compounding. No DELETE and no direct
+  # late-fee creation. Legal: DEVELOPMENT AUTHORISED -- PROD LEGAL SIGN-OFF REQUIRED (ADR 0058 E31).
+  /schools/{schoolId}/late-fee-rules:
+    get:
+      operationId: listLateFeeRules
+      summary: >
+        Lists late-fee rules. Requires finance.fee_structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LateFeeRule" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: createLateFeeRule
+      summary: >
+        Creates an INACTIVE late-fee rule for one fee structure (optionally one of its heads). Legal: DEVELOPMENT AUTHORISED -- PROD LEGAL SIGN-OFF REQUIRED (ADR 0058 E31). Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LateFeeRuleInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRule" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (kind, amount/percentage shape, grace days, cap, scope).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-rules/{ruleId}:
+    get:
+      operationId: getLateFeeRule
+      summary: >
+        One late-fee rule. Requires finance.fee_structures.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: ruleId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRule" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RULE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    patch:
+      operationId: updateLateFeeRule
+      summary: >
+        Edits an INACTIVE rule (its structure never changes); bumps configurationVersion. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: ruleId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LateFeeRuleUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRule" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RULE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LATE_FEE_RULE_NOT_EDITABLE (active).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-rules/{ruleId}/activate:
+    post:
+      operationId: activateLateFeeRule
+      summary: >
+        Activates a rule (the late-fee head and its accounts must be active). Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: ruleId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRule" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RULE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Late-fee head or accounts inactive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-rules/{ruleId}/deactivate:
+    post:
+      operationId: deactivateLateFeeRule
+      summary: >
+        Deactivates a rule; open runs of it go stale. Requires finance.fee_structures.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: ruleId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRule" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_structures.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RULE_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-runs:
+    get:
+      operationId: listLateFeeRuns
+      summary: >
+        Lists late-fee runs (newest first, at most 200). Requires finance.charges.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LateFeeRun" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: createLateFeeRun
+      summary: >
+        Creates a DRAFT run of one active rule at an evaluation date (School calendar; default today; never the future). One open run per rule. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LateFeeRunCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LATE_FEE_RUN_OPEN_EXISTS.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation error (inactive rule, future or invalid date).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-runs/{runId}:
+    get:
+      operationId: getLateFeeRun
+      summary: >
+        One late-fee run with preview and execution totals. Requires finance.charges.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RUN_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/late-fee-runs/{runId}/items:
+    get:
+      operationId: listLateFeeRunItems
+      summary: >
+        Run items (50 per page): source charge, due and final grace dates, outstanding, calculated and final (capped) amounts, result and reason; execution-time outstanding and amount. Requires finance.charges.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: preview_result, in: query, required: false, schema: { type: string, enum: [ready, not_eligible, already_assessed] } }
+        - { name: execution_status, in: query, required: false, schema: { type: string, enum: [pending, succeeded, skipped_already_assessed, failed] } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data, meta], properties: { data: { type: array, items: { $ref: "#/components/schemas/LateFeeRunItem" } }, meta: { $ref: "#/components/schemas/FeeConcessionPageMeta" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RUN_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/late-fee-runs/{runId}/preview:
+    post:
+      operationId: previewLateFeeRun
+      summary: >
+        Computes (or recomputes) the items from current facts; creates no late fee. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RUN_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LATE_FEE_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: The rule is no longer active.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-runs/{runId}/execute:
+    post:
+      operationId: executeLateFeeRun
+      summary: >
+        Claims a previewed run whose rule is unchanged and active, and queues execution; every item is re-checked and recomputed from the execution-time outstanding. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "202":
+          description: Accepted; execution continues in the queue.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RUN_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LATE_FEE_RUN_STALE_PREVIEW or LATE_FEE_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-runs/{runId}/resume:
+    post:
+      operationId: resumeLateFeeRun
+      summary: >
+        Re-queues an executing run; only pending items are picked up. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "202":
+          description: Accepted; execution continues in the queue.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RUN_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LATE_FEE_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-runs/{runId}/cancel:
+    post:
+      operationId: cancelLateFeeRun
+      summary: >
+        Cancels a draft or previewed run. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_RUN_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LATE_FEE_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/late-fee-assessments/{assessmentId}/void:
+    post:
+      operationId: voidLateFeeAssessment
+      summary: >
+        Voids a live late fee and cancels its late-fee charge (a Finance reversal) in one transaction; refused when a payment is allocated to it. Frees the key for one deliberate later assessment. No refund. Requires finance.charges.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assessmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeeAssessmentVoidInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LateFeeAssessment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.charges.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LATE_FEE_ASSESSMENT_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LATE_FEE_ASSESSMENT_ALREADY_VOIDED or CHARGE_HAS_PAYMENT_ALLOCATIONS.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   # Phase 9.8: Payroll HTTP transport, mirroring the Finance section's
   # exact style. Every path below is authorized through the 9.7
   # Administration/Read boundary (App\Domain\Payroll\Application\*AdministrationService /
@@ -10865,6 +11338,114 @@ components:
       type: object
       properties:
         reason: { type: string, maxLength: 255, nullable: true }
+    LateFeeRule:
+      type: object
+      description: "A late-fee rule (owner decision H). Legal: DEVELOPMENT AUTHORISED -- PROD LEGAL SIGN-OFF REQUIRED."
+      required: [id, name, feeStructureId, feeHeadId, lateFeeHeadId, graceDays, kind, fixedAmount, percentage, maxAmount, currency, status, configurationVersion]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        feeStructureId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid, nullable: true, description: Null = every line of the structure. }
+        lateFeeHeadId: { type: string, format: uuid, description: The fee head whose accounts carry the late fee. }
+        graceDays: { type: integer, minimum: 0 }
+        kind: { type: string, enum: [fixed, percentage] }
+        fixedAmount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", nullable: true }
+        percentage: { type: string, nullable: true, description: "Of the source charge's current outstanding; 0 < p <= 100." }
+        maxAmount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", nullable: true }
+        currency: { type: string, enum: [INR] }
+        status: { type: string, enum: [active, inactive] }
+        configurationVersion: { type: integer }
+    LateFeeRuleInput:
+      allOf:
+        - { $ref: "#/components/schemas/LateFeeRuleUpdateInput" }
+        - type: object
+          required: [fee_structure_id]
+          properties:
+            fee_structure_id: { type: string, format: uuid }
+    LateFeeRuleUpdateInput:
+      type: object
+      required: [name, late_fee_head_id, grace_days, kind]
+      properties:
+        name: { type: string, maxLength: 120 }
+        fee_head_id: { type: string, format: uuid, nullable: true }
+        late_fee_head_id: { type: string, format: uuid }
+        grace_days: { type: integer, minimum: 0, maximum: 3650 }
+        kind: { type: string, enum: [fixed, percentage] }
+        fixed_amount: { type: string, nullable: true }
+        percentage: { type: string, nullable: true }
+        max_amount: { type: string, nullable: true }
+    LateFeeRunCreateInput:
+      type: object
+      required: [late_fee_rule_id]
+      properties:
+        late_fee_rule_id: { type: string, format: uuid }
+        evaluation_date: { type: string, format: date, nullable: true, description: School-calendar date; default today; never in the future. }
+    LateFeeRun:
+      type: object
+      required: [id, lateFeeRuleId, evaluationDate, status, currency, preview, execution, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        lateFeeRuleId: { type: string, format: uuid }
+        evaluationDate: { type: string, format: date }
+        status: { type: string, enum: [draft, previewed, executing, completed, completed_with_errors, cancelled] }
+        currency: { type: string, enum: [INR] }
+        preview:
+          type: object
+          required: [readyCount, readyAmount, notEligibleCount, alreadyAssessedCount, previewedAt]
+          properties:
+            readyCount: { type: integer }
+            readyAmount: { type: string }
+            notEligibleCount: { type: integer }
+            alreadyAssessedCount: { type: integer }
+            previewedAt: { type: string, format: date-time, nullable: true }
+        execution:
+          type: object
+          required: [succeededCount, skippedCount, failedCount, assessedAmount, startedAt, completedAt]
+          properties:
+            succeededCount: { type: integer }
+            skippedCount: { type: integer }
+            failedCount: { type: integer }
+            assessedAmount: { type: string }
+            startedAt: { type: string, format: date-time, nullable: true }
+            completedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    LateFeeRunItem:
+      type: object
+      required: [id, sourceChargeId, studentId, academicYearId, feeHeadId, billingPeriodKey, dueDate, finalGraceDate, outstandingAmount, calculatedAmount, finalAmount, capApplied, currency, previewResult, reason, executionStatus, failureReason, executedOutstandingAmount, executedAmount, executedCapApplied, lateFeeAssessmentId, executedAt]
+      properties:
+        id: { type: string, format: uuid }
+        sourceChargeId: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        billingPeriodKey: { type: string }
+        dueDate: { type: string, format: date }
+        finalGraceDate: { type: string, format: date, description: due_date + grace_days; nothing is assessed on or before it. }
+        outstandingAmount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        calculatedAmount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        finalAmount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$" }
+        capApplied: { type: boolean }
+        currency: { type: string, enum: [INR] }
+        previewResult: { type: string, enum: [ready, not_eligible, already_assessed] }
+        reason: { type: string, nullable: true, enum: [grace_not_elapsed, fully_settled, zero_amount, already_assessed, null] }
+        executionStatus: { type: string, nullable: true, enum: [pending, succeeded, skipped_already_assessed, failed, null] }
+        failureReason: { type: string, nullable: true, enum: [rule_not_active, source_not_eligible, grace_not_elapsed, fully_settled, zero_amount, account_invalid, error, null] }
+        executedOutstandingAmount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", nullable: true }
+        executedAmount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", nullable: true }
+        executedCapApplied: { type: boolean, nullable: true }
+        lateFeeAssessmentId: { type: string, format: uuid, nullable: true }
+        executedAt: { type: string, format: date-time, nullable: true }
+    LateFeeAssessment:
+      type: object
+      required: [id, sourceChargeId, lateFeeRuleId, chargeId, lateFeeRunId, voidedAt]
+      properties:
+        id: { type: string, format: uuid }
+        sourceChargeId: { type: string, format: uuid }
+        lateFeeRuleId: { type: string, format: uuid }
+        chargeId: { type: string, format: uuid, description: The late-fee charge. }
+        lateFeeRunId: { type: string, format: uuid }
+        voidedAt: { type: string, format: date-time, nullable: true }
     FeeSettings:
       type: object
       required: [concessionLedgerAccountId, receiptPrefix, financialYearStartMonth]
@@ -10927,7 +11508,7 @@ components:
             outstanding: { type: string }
     StudentFeeStatementLine:
       type: object
-      required: [chargeId, academicYearId, description, feeHeadId, feeHeadName, billingPeriodKey, billingPeriodLabel, dueDate, assessedAt, cancelledAt, amount, adjustedTotal, paidTotal, outstanding, currency, adjustments, payments]
+      required: [chargeId, academicYearId, description, feeHeadId, feeHeadName, billingPeriodKey, billingPeriodLabel, dueDate, assessedAt, cancelledAt, amount, adjustedTotal, paidTotal, outstanding, currency, adjustments, payments, lateFeeSourceChargeId, lateFeeChargeIds]
       properties:
         chargeId: { type: string, format: uuid }
         academicYearId: { type: string, format: uuid }
@@ -10956,6 +11537,8 @@ components:
               amount: { type: string }
               postedAt: { type: string, format: date-time }
               cancelledAt: { type: string, format: date-time, nullable: true }
+        lateFeeSourceChargeId: { type: string, format: uuid, nullable: true, description: "FEE.5: set when this charge is a live late fee." }
+        lateFeeChargeIds: { type: array, items: { type: string, format: uuid }, description: "FEE.5: live late fees raised on this charge." }
         payments:
           type: array
           items:

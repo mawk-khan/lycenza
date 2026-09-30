@@ -44,6 +44,7 @@ use App\Http\Controllers\App\Finance\FeeSetupController as FinanceFeeSetupContro
 use App\Http\Controllers\App\Finance\FeeStatementController as FinanceFeeStatementController;
 use App\Http\Controllers\App\Finance\FinanceController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
+use App\Http\Controllers\App\Finance\LateFeeController as FinanceLateFeeController;
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
 use App\Http\Controllers\App\Finance\ManualPaymentController as FinanceManualPaymentController;
 use App\Http\Controllers\App\Finance\PaymentController as FinancePaymentController;
@@ -1036,6 +1037,23 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/fee-runs/{run}/resume', [FinanceFeeAssessmentRunController::class, 'resume'])->name('fee-runs.resume');
         Route::post('/fee-runs/{run}/cancel', [FinanceFeeAssessmentRunController::class, 'cancel'])->name('fee-runs.cancel');
         Route::post('/fee-assessments/{assessment}/void', [FinanceFeeAssessmentRunController::class, 'void'])->name('fee-assessments.void');
+
+        // FEE.5 (ADR 0062 §16; owner decision H): late fees. Rules under
+        // finance.fee_structures.view/.manage; runs under finance.charges.view
+        // (read) and finance.fee_assessments.run (act); voiding a late fee
+        // under finance.charges.manage (controller + Application service).
+        Route::get('/late-fees', [FinanceLateFeeController::class, 'rules'])->name('late-fees.rules');
+        Route::post('/late-fees', [FinanceLateFeeController::class, 'storeRule'])->name('late-fees.rules.store');
+        Route::post('/late-fees/{rule}', [FinanceLateFeeController::class, 'updateRule'])->name('late-fees.rules.update');
+        Route::post('/late-fees/{rule}/status', [FinanceLateFeeController::class, 'ruleStatus'])->name('late-fees.rules.status');
+        Route::get('/late-fee-runs', [FinanceLateFeeController::class, 'runs'])->name('late-fee-runs.index');
+        Route::post('/late-fee-runs', [FinanceLateFeeController::class, 'storeRun'])->name('late-fee-runs.store');
+        Route::get('/late-fee-runs/{run}', [FinanceLateFeeController::class, 'showRun'])->name('late-fee-runs.show');
+        Route::post('/late-fee-runs/{run}/preview', [FinanceLateFeeController::class, 'preview'])->name('late-fee-runs.preview');
+        Route::post('/late-fee-runs/{run}/execute', [FinanceLateFeeController::class, 'execute'])->name('late-fee-runs.execute');
+        Route::post('/late-fee-runs/{run}/resume', [FinanceLateFeeController::class, 'resume'])->name('late-fee-runs.resume');
+        Route::post('/late-fee-runs/{run}/cancel', [FinanceLateFeeController::class, 'cancel'])->name('late-fee-runs.cancel');
+        Route::post('/late-fee-assessments/{assessment}/void', [FinanceLateFeeController::class, 'void'])->name('late-fee-assessments.void');
 
         // FEE.3 (ADR 0062 §14): concessions. View under
         // finance.fee_concessions.view, request/withdraw under .request,

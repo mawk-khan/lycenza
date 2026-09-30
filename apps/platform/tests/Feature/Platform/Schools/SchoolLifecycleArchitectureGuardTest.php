@@ -37,6 +37,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'SubmitEmailMessageJob.php' => 'app/Support/Email/EmailSubmissionService.php',
         // FEE.2: a non-operational School PAUSES an assessment run; no item changes (ADR 0062 section 13).
         'ExecuteFeeAssessmentRunJob.php' => 'app/Domain/Fees/Application/FeeAssessmentItemExecutor.php',
+        'ExecuteLateFeeRunJob.php' => 'app/Domain/Payments/Application/LateFeeItemExecutor.php',
     ];
 
     /** Commands that walk every School and why they may include non-active ones. */

@@ -619,3 +619,29 @@ migrations `2026_11_01_090000`/`090100`.
 - **Reads.** `PaymentDetail` gains `receiptId`/`receiptNumber`.
   `PaymentReceiptReadService` and `StudentFeeStatementReadService` (Payments)
   read Fees facts only through `ChargeService` — still Payments → Fees.
+
+## Amendment — late-fee runs are Payments-owned (FEE.5, 2026-09-30)
+
+ADR 0062 §16 (owner decision H) is implemented in migrations
+`2026_11_02_090100`–`090300`.
+
+- **What Payments owns.** `late_fee_runs`, `late_fee_run_items` and
+  `late_fee_assessments`. Eligibility depends on allocations, which
+  Payments owns.
+- **How the outstanding is computed.** It is `amount − allocations − live
+  adjustments`. `ChargeOutstandingReader` computes it under the source
+  charge's row lock (Fees' `lockChargeForAllocation`), so a payment,
+  concession or late fee racing on one charge serializes.
+- **How the late fee is posted.** A new charge, through the trusted
+  `ChargeService::assess` on the rule's late-fee head accounts. The source
+  charge, payments and allocations are never changed.
+- **The charge guard.** `charges_late_fee_guard_trigger` sits on Fees'
+  `charges` — the same cross-boundary structural pattern as
+  `charges_payment_allocation_guard_trigger`.
+- **Still Payments → Fees.**
+  - Rule and charge facts come only through Fees' Application layer
+    (`LateFeeRuleService::snapshot`, `ChargeService::lateFeeCandidates`,
+    `lateFeeSource`).
+  - Fees never reads `payment_allocations` or any late-fee table.
+- **Legal.** DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED (ADR
+  0058 E31).
