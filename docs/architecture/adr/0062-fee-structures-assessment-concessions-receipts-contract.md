@@ -225,7 +225,7 @@ Status values:
 | F | Concession approval | **DECIDED — owner confirmed 2026-09-29** | Maker/checker mandatory for every concession, database-enforced; no amount thresholds in v1 (§14.4) | FEE.3 |
 | F2 | Concession posting account | **DECIDED — owner confirmed 2026-09-29** | One School-level `expense` account "Fee concessions and scholarships" (§14.5) | FEE.3 |
 | G | Concession after payment | **DECIDED — owner confirmed G1, 2026-09-29** | Capped at the charge's current outstanding; never creates credit or refund (§14.6) | FEE.3 |
-| H | Late-fee policy | OWNER DECISION REQUIRED | Fixed or percentage-of-outstanding, grace days, optional cap, one late fee per overdue charge per rule; no tiers or recurrence in v1 (§16) | FEE.5 |
+| H | Late-fee policy | **DECIDED — owner confirmed 2026-09-30** (product decision only; legal: DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED, ADR 0058 E31) | Fixed or percentage-of-outstanding, grace days, optional cap, one late fee per overdue charge per rule; no tiers or recurrence in v1 (§16) | FEE.5 |
 | I | Receipt numbering | **DECIDED — owner confirmed 2026-09-30** | School + financial year, FY start month configurable (default April), format `<PREFIX>/<FY>/<000001>` (§17.2) | FEE.4 |
 | I2 | Existing payments | **DECIDED — owner confirmed 2026-09-30** | Explicit, audited, idempotent one-time backfill in `(settled_at, id)` order (§17.4) | FEE.4 |
 | J | Receipt statutory/GST form | **LEGAL REVIEW REQUIRED — DEVELOPMENT AUTHORISED, PROD LEGAL SIGN-OFF REQUIRED (owner, 2026-09-30)** | FEE.4 ships a payment acknowledgement only, with no tax fields (§17.5) | FEE.4 |
@@ -764,7 +764,7 @@ SUM(allocations) + SUM(uncancelled fee_adjustments) ≤ charges.amount
 - **Rollback.** `down()` restores the previous function body verbatim.
 - **Proof.** Concurrency proof 6 in §12.
 
-## 16. Late fees (H — OWNER DECISION REQUIRED)
+## 16. Late fees (H — DECIDED, owner confirmed 2026-09-30; legal sign-off required for production)
 
 ### 16.1 Rules (configuration, Fees-owned)
 
@@ -1727,3 +1727,164 @@ above:
   - H (late fees), tax/GST, tax invoices;
   - receipt void or correction, refunds, credits;
   - statement export/PDF/email, Guardian/Student views, portal.
+
+## Owner decision H for FEE.5 (2026-09-30)
+
+The owner confirmed the §16 recommended v1 model. The earlier notes listing
+H as pending were true when written and stay unchanged. The §16.1 options
+(tiered and recurring per-month late fees) are kept as history and are
+**not** adopted. **FEE.5 is not implemented by this decision.**
+
+**H is a product decision only.** The owner is not declaring any late-fee
+policy legally permitted. See "Legal status" below.
+
+### Calculation
+
+- **Two rule kinds, no others:**
+  - **fixed** — a positive `NUMERIC(14,2)` INR amount;
+  - **percentage** — `0 < p ≤ 100` (two decimals) of the source charge's
+    **current outstanding** at execution.
+- **Excluded in v1:** tiers, recurring or per-period penalties, escalating
+  percentages, per-day rates, interest (simple or compound), compounding,
+  and arbitrary formulas.
+- **Fixed:** the late fee is the configured amount, subject only to the
+  cap.
+- **Percentage:**
+  - `Money::multiplyByRate(p/100)` of the current outstanding — decision N:
+    scale 2, half away from zero, never a float;
+  - never computed on the original charge amount when the outstanding is
+    lower.
+- **Optional cap (`max_amount`).**
+  - Positive `NUMERIC(14,2)` when set.
+  - No cap: the calculated amount stands.
+  - With a cap: the late fee is the lesser of the calculated amount and the
+    cap.
+  - Applying the cap is the intended rule. It is **not** decision G1's
+    "refuse rather than reduce", which governs concessions only.
+- **Never zero or negative.** If the final amount is not strictly positive
+  (for example a percentage that rounds to 0.00), no late fee is assessed.
+  The run item records a closed non-assessment reason.
+
+### Current outstanding (the base and the eligibility test)
+
+- `charge amount − valid payment allocations − live posted adjustments`:
+  the FEE.3/§15 model.
+- It is **computed by Payments under the source charge's row lock** at
+  execution (§16.2). Fees never reads `payment_allocations`, and Payments
+  reads Fees facts only through Fees' Application layer.
+
+### Grace boundary (frozen)
+
+- **The rule.** A source charge is eligible only when
+  `evaluation_date > due_date + grace_days` — the same condition as §16.2's
+  `due_date + grace_days < evaluation_date`.
+- **Dates are School-calendar dates:**
+  - `due_date` is the charge's date;
+  - `evaluation_date` is the run's date in the School's timezone.
+- **The final grace date** is `due_date + grace_days`. No late fee is
+  assessed on or before it.
+  - Example: due 2026-06-10 with 5 grace days → final grace date
+    2026-06-15 → first eligible evaluation date 2026-06-16.
+  - Example: 0 grace days → the first eligible date is the day after the
+    due date.
+- **Grace days** are an integer `≥ 0`.
+
+### Eligibility at execution (all required, re-checked under locks)
+
+- the rule is active and in scope;
+- the source charge is a live structure-generated charge (a live
+  `fee_assessments` row) and is not cancelled;
+- it has a due date, and the grace period has expired (boundary above);
+- its current outstanding is `> 0`, so a charge fully covered by payments
+  and live adjustments gets no late fee;
+- no live late fee exists for the same source charge and rule;
+- every reference is same-School.
+
+### Scope (unchanged from §16.1)
+
+- **What a rule covers.** A Fees-owned rule is scoped by `fee_structure_id`
+  plus an optional `fee_head_id` (NULL = every line of that structure).
+  `late_fee_head_id` names the fee head whose accounts carry the late fee.
+- **Not added:** no Section, Student, payment-method, concession-category,
+  demographic or arbitrary-query dimension.
+- **Status.** Rules are `active|inactive`, editable only while inactive,
+  and never deleted.
+
+### One late fee per source charge per rule (non-recurrence)
+
+- **The key.** `UNIQUE (school_id, source_charge_id, late_fee_rule_id)
+  WHERE voided_at IS NULL` on `late_fee_assessments` (§16.3).
+  - Re-running a run, or running again later, never creates a second live
+    late fee for the same source charge and rule.
+  - There is no recurrence in v1.
+- **Two rules on one charge.** Each is keyed separately (§16.1, as frozen).
+- **No compounding.** A late fee is itself a charge without a fee
+  assessment, so it is never a late-fee candidate.
+- **Voiding (§16.3 → §11.3).**
+  - The late-fee assessment is voided and its late-fee charge is cancelled
+    through `ChargeService::cancel` (a Finance reversal) in one
+    transaction. This is refused when a payment is allocated to that
+    charge.
+  - The original rows are kept and audited, and the reversal happens once.
+  - Voiding frees the key, so one deliberate later run may assess that
+    source charge and rule again. That is the only re-assessment path.
+  - No refund or payment reversal exists.
+
+### Posting (unchanged from §16.2)
+
+- **The late-fee charge.** A **new charge**, through the trusted
+  `ChargeService::assess()`:
+  - Dr the late-fee head's receivable account / Cr its revenue account;
+  - `due_date` = evaluation date;
+  - description `"Late fee: <source label>"`;
+  - linked to its source charge by the `late_fee_assessments` row.
+- **Never.** The source charge is never edited or appended to. There is no
+  invoice and no mutable "late balance" field.
+
+### Execution and authorization (unchanged)
+
+- **Runs.** Dedicated `fee_late_fee_rules` (Fees) and `late_fee_runs`,
+  `late_fee_run_items`, `late_fee_assessments` (Payments), staff-triggered,
+  with the §9/§13 lifecycle and job shape.
+  - No scheduler and no automatic recurrence.
+  - Payments owns execution because eligibility depends on allocations.
+- **Capabilities.** Rules need `finance.fee_structures.manage`; runs need
+  `finance.fee_assessments.run`. No new capability, no role-name branching,
+  and default grants are unchanged.
+
+### Legal status
+
+- **The rule.** Under the owner's 2026-09-30 legal-gate operating rule
+  (above), FEE.5 is **DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF
+  REQUIRED**. That rule is the owner's written acceptance, for development
+  only, that §16.3 asks for.
+- **Questions that stay open** (ADR 0058 **E31**, with RTE in **E32**):
+  - whether late fees are permitted at all;
+  - the maximum amount or rate;
+  - mandatory grace periods;
+  - restrictions on fee changes during an AcademicYear;
+  - rules for regulated, private or aided Schools;
+  - statutory free-seat / RTE interactions.
+- **Production** must not enable late fees until E31 has a qualified
+  answer.
+
+## FEE.4 numbering behaviour confirmed as final v1 contract (owner, 2026-09-30)
+
+The owner confirmed the FEE.4 as-built numbering behaviour (see the FEE.4
+implementation note) as the final v1 contract. The implementation already
+matches it, so no code changed.
+
+1. **The start month is locked.** `fee_settings.financial_year_start_month`
+   is locked once the School's first receipt exists
+   (`fee_settings_receipt_numbering_guard_trigger`).
+2. **Each series keeps its prefix.** A receipt series keeps, permanently,
+   the prefix it started with: the counter row's `prefix` snapshot is
+   immutable.
+3. **A prefix change affects only new series.** It applies only to series
+   created after the change: the current FY's series if it has no receipt
+   yet, and every future FY. It is refused while the current series has
+   receipts.
+4. **Backfills keep the historical prefix.** A historical FY backfilled
+   later (I2) continues its existing series with that series' prefix. A
+   historical FY that has no series yet starts with the prefix in force at
+   the backfill.

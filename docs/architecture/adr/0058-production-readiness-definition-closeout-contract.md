@@ -596,7 +596,7 @@ with secrets.
 | E28 | Deferred integrations (gateway, SMS/WhatsApp/push, government/board, accounting, partner scopes, SSO) | ADR 0057 | Conditional | Conditional | CONDITIONAL_DISABLED | Stay fail-closed; any enablement needs its own ADR | ADR 0057 §9 | Owner | No |
 | E29 | Evidence hygiene (no secrets, credentials, hostnames, School data) | §5 item 13; rule 12 | Governance | Mandatory | GOVERNANCE_REQUIRED | Reviewed at each evidence record | Every record above | Operator + Owner | Yes |
 | E30 | Fee receipt statutory form / GST (ADR 0062 decision J): whether a prescribed receipt or tax invoice, GSTIN, HSN/SAC, taxable value or tax lines are required, and how any fee is treated | ADR 0062 §17.5; FEE.4 note | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — FEE.4 ships a payment acknowledgement only) | Qualified answer recorded; the receipt form changed only if the answer requires it | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
-| E31 | Fee regulation: limits on late fees and in-year fee changes (FEE.5 also needs owner decision H) | ADR 0062 §16, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised when FEE.5 starts; H still required) | Qualified answer recorded before late fees are enabled in production | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
+| E31 | Fee regulation: limits on late fees and in-year fee changes (owner product decision H recorded 2026-09-30; the legal question stays open) | ADR 0062 §16, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised for FEE.5; H decided 2026-09-30) | Qualified answer recorded before late fees are enabled in production | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
 | E32 | RTE / statutory free-seat obligations for fee assessment and concessions | ADR 0062 §14.2, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised; no RTE label or rule exists) | Qualified answer recorded; any required fee treatment decided by the owner | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
 
 A row moves to `EVIDENCE_COMPLETE` only by a dated, reviewed repository
@@ -864,8 +864,8 @@ valid through 2026-10-28.
 - **New register rows:**
   - **E30** — ADR 0062 J, fee receipt statutory form / GST. FEE.4 built a
     payment acknowledgement only: never a tax invoice, no tax fields.
-  - **E31** — fee regulation of late fees and in-year changes. FEE.5 also
-    still needs the owner's product decision H, which this rule does not
-    supply.
+  - **E31** — fee regulation of late fees and in-year changes. The
+    owner's product decision H was recorded later the same day (ADR 0062);
+    the legal question stays open and E31 stays a production blocker.
   - **E32** — RTE / statutory free seats.
 - **Retention.** Stays **E21**: no FEE table has a purge.

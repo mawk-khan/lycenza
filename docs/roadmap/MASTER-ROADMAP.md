@@ -164,9 +164,22 @@ never labelled a tax invoice and has no tax fields. The as-built record is
 in `docs/modules/FINANCE.md` "FEE.4 as-built" and the ADR 0062
 implementation note.
 
-**Next: FEE.5 — Late fees.** It is **blocked on owner decision H**. Its
-fee-regulation legal review is carried to production readiness (E31). The
-owner's development-vs-production rule for legal gates does not supply H.
+**ADR 0062 decision H confirmed (owner, 2026-09-30; product decision
+only):**
+- fixed or percentage-of-current-outstanding late fees;
+- `grace_days`, eligible only when `evaluation_date > due_date +
+  grace_days`;
+- an optional cap (the lesser of calculated and cap);
+- one live late fee per source charge per rule;
+- no tiers, recurrence or compounding.
+
+The FEE.4 numbering behaviour (start-month lock, a prefix fixed per series)
+is confirmed as the final v1 contract.
+
+**Next: FEE.5 — Late fees.** Its product requirements are unblocked, and it
+is **development-authorised** under the legal-gate operating rule.
+**Production stays blocked** until the fee-regulation legal sign-off (ADR
+0058 E31; RTE in E32). FEE.5 implementation has **not started**.
 
 ## Phase 0A — Architectural Foundation (complete)
 
