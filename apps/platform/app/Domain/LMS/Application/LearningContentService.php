@@ -78,6 +78,10 @@ class LearningContentService
     ) {}
 
     /**
+     * Administrative (Tier 1) creation, or -- given a SectionAudience -- a
+     * teacher-owned row written by trusted internal code. Every route calls
+     * it without one, so administrative rows stay Offering-wide.
+     *
      * @param  array{title: string, description?: string|null, sequence?: int}  $attributes
      */
     public function create(School $school, string $subjectOfferingId, array $attributes, User $actor, ?SectionAudience $audience = null): LearningContent
@@ -88,45 +92,70 @@ class LearningContentService
             // rather than an empty/misleading later failure.
             $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($subjectOfferingId);
 
-            return $this->audiences->refusingForeignOwner('learning_content', fn () => DB::transaction(function () use ($school, $offering, $attributes, $actor, $audience) {
-                $content = new LearningContent;
-                $content->forceFill([
-                    'school_id' => $school->id,
-                    'subject_offering_id' => $offering->id,
-                    'title' => $attributes['title'],
-                    'description' => $attributes['description'] ?? null,
-                    'sequence' => $attributes['sequence'] ?? 0,
-                    'status' => LearningContent::STATUS_DRAFT,
-                    // TCH.5B: an owner only for a teacher-owned row, whose
-                    // Section audience is written in this same transaction.
-                    // Administrative callers pass no SectionAudience, so
-                    // their rows stay Offering-wide (owner NULL, no audience).
-                    'owner_employee_id' => $audience?->ownerEmployeeId,
-                ]);
-                $content->save();
-
-                if ($audience !== null) {
-                    $this->audiences->attach($content, $offering, $audience);
-                }
-
-                // Bounded metadata: ids and sequence only. `title`/
-                // `description` are School-authored content and are
-                // deliberately never copied into audit metadata --
-                // an audit row must not become a second copy of
-                // instructional content (docs/modules/ACADEMICS.md §14's
-                // rule applied here).
-                $this->audit->school($school, 'lms.learning_content.created', actor: $actor, subject: $content, metadata: [
-                    'learningContentId' => $content->id,
-                    'subjectOfferingId' => $content->subject_offering_id,
-                    'sequence' => $content->sequence,
-                ] + ($audience === null ? [] : [
-                    'ownerEmployeeId' => $audience->ownerEmployeeId,
-                    'audienceSectionIds' => $audience->sectionIds,
-                ]));
-
-                return $content;
-            }));
+            return $this->audiences->refusingForeignOwner('learning_content', fn () => DB::transaction(
+                fn () => $this->insert($school, $offering, $attributes, $actor, $audience),
+            ));
         });
+    }
+
+    /**
+     * TCH.5C (ADR 0063 section 36) -- a teacher-owned row. The guard runs in
+     * this transaction: it holds the ActingEmployee and the TeachingAssignment
+     * of every requested Section, and returns the ownership -- the owner is
+     * always the ActingEmployee, never client input. The same insert() as
+     * administrative creation writes the row and its audience atomically.
+     *
+     * @param  array{title: string, description?: string|null, sequence?: int}  $attributes
+     * @param  list<string>  $sectionIds
+     */
+    public function createOwned(School $school, string $subjectOfferingId, array $attributes, array $sectionIds, User $actor, LearningContentWriteGuard $guard): LearningContent
+    {
+        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $attributes, $sectionIds, $actor, $guard) {
+            $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($subjectOfferingId);
+
+            return $this->audiences->refusingForeignOwner('learning_content', fn () => DB::transaction(
+                fn () => $this->insert($school, $offering, $attributes, $actor, $guard->beforeCreate($school, $offering, $sectionIds)),
+            ));
+        });
+    }
+
+    /** @param  array{title: string, description?: string|null, sequence?: int}  $attributes */
+    private function insert(School $school, SubjectOffering $offering, array $attributes, User $actor, ?SectionAudience $audience): LearningContent
+    {
+        $content = new LearningContent;
+        $content->forceFill([
+            'school_id' => $school->id,
+            'subject_offering_id' => $offering->id,
+            'title' => $attributes['title'],
+            'description' => $attributes['description'] ?? null,
+            'sequence' => $attributes['sequence'] ?? 0,
+            'status' => LearningContent::STATUS_DRAFT,
+            // TCH.5B: an owner only for a teacher-owned row, whose Section
+            // audience is written in this same transaction. Without a
+            // SectionAudience the row is Offering-wide (owner NULL, no audience).
+            'owner_employee_id' => $audience?->ownerEmployeeId,
+        ]);
+        $content->save();
+
+        if ($audience !== null) {
+            $this->audiences->attach($content, $offering, $audience);
+        }
+
+        // Bounded metadata: ids and sequence only. `title`/`description` are
+        // School-authored content and are deliberately never copied into
+        // audit metadata -- an audit row must not become a second copy of
+        // instructional content (docs/modules/ACADEMICS.md §14's rule
+        // applied here). The actor is always the authenticated User.
+        $this->audit->school($school, 'lms.learning_content.created', actor: $actor, subject: $content, metadata: [
+            'learningContentId' => $content->id,
+            'subjectOfferingId' => $content->subject_offering_id,
+            'sequence' => $content->sequence,
+        ] + ($audience === null ? [] : [
+            'ownerEmployeeId' => $audience->ownerEmployeeId,
+            'audienceSectionIds' => $audience->sectionIds,
+        ]));
+
+        return $content;
     }
 
     /**
@@ -136,9 +165,12 @@ class LearningContentService
      *
      * @param  array{title?: string, description?: string|null, sequence?: int}  $attributes
      */
-    public function update(School $school, LearningContent $content, array $attributes, User $actor): LearningContent
+    public function update(School $school, LearningContent $content, array $attributes, User $actor, ?LearningContentWriteGuard $guard = null): LearningContent
     {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $content, $attributes, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $content, $attributes, $actor, $guard) {
+            // TCH.5C Tier 2 only: identity and ownership held before the row lock.
+            $guard?->beforeWrite($school, $content);
+
             $locked = LearningContent::query()->whereKey($content->id)->lockForUpdate()->firstOrFail();
 
             $changedFields = array_keys($attributes);
@@ -171,9 +203,9 @@ class LearningContentService
      * keeping the API surface to exactly two lifecycle verbs
      * (publish/archive) rather than three.
      */
-    public function publish(School $school, LearningContent $content, User $actor): LearningContent
+    public function publish(School $school, LearningContent $content, User $actor, ?LearningContentWriteGuard $guard = null): LearningContent
     {
-        return $this->transition($school, $content, LearningContent::STATUS_PUBLISHED, 'lms.learning_content.published', $actor);
+        return $this->transition($school, $content, LearningContent::STATUS_PUBLISHED, 'lms.learning_content.published', $actor, $guard);
     }
 
     /**
@@ -181,14 +213,16 @@ class LearningContentService
      * never deleted (rule 73, ADR 0039 decision 9): archived content
      * remains readable/correctable, and can be published again later.
      */
-    public function archive(School $school, LearningContent $content, User $actor): LearningContent
+    public function archive(School $school, LearningContent $content, User $actor, ?LearningContentWriteGuard $guard = null): LearningContent
     {
-        return $this->transition($school, $content, LearningContent::STATUS_ARCHIVED, 'lms.learning_content.archived', $actor);
+        return $this->transition($school, $content, LearningContent::STATUS_ARCHIVED, 'lms.learning_content.archived', $actor, $guard);
     }
 
-    private function transition(School $school, LearningContent $content, string $newStatus, string $auditEvent, User $actor): LearningContent
+    private function transition(School $school, LearningContent $content, string $newStatus, string $auditEvent, User $actor, ?LearningContentWriteGuard $guard): LearningContent
     {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $content, $newStatus, $auditEvent, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $content, $newStatus, $auditEvent, $actor, $guard) {
+            $guard?->beforeWrite($school, $content);
+
             $locked = LearningContent::query()->whereKey($content->id)->lockForUpdate()->firstOrFail();
 
             $this->assertLegalTransition($locked->status, $newStatus);

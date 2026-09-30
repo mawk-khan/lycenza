@@ -4556,6 +4556,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/my/learning-content-contexts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Subject Offerings the teacher teaches today, each with only the Sections they teach (the audience picker). */
+        get: operations["listMyLearningContentContexts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/learning-content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every Learning Content row the teacher may read, filtered on the server; optionally one Subject Offering. Fixed page size of 50. */
+        get: operations["listMyLearningContent"];
+        put?: never;
+        /** Creates a teacher-owned draft for one or more Sections the teacher teaches today in that Subject Offering. The owner is the teacher's own Employee record, set by the server. */
+        post: operations["createMyLearningContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/learning-content/{learningContentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One row the teacher may read. */
+        get: operations["getMyLearningContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edits title, description and/or sequence of the teacher's own row (never the audience or owner). */
+        patch: operations["updateMyLearningContent"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/learning-content/{learningContentId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publishes (or re-publishes) the teacher's own row, through the same lifecycle as the School-wide operation. */
+        post: operations["publishMyLearningContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/learning-content/{learningContentId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archives the teacher's own published row, through the same lifecycle as the School-wide operation. */
+        post: operations["archiveMyLearningContent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/subject-offerings/{subjectOfferingId}/assignments": {
         parameters: {
             query?: never;
@@ -8304,6 +8391,51 @@ export interface components {
             title?: string;
             description?: string | null;
             sequence?: number;
+        };
+        /** @description TCH.5C: a Learning Content row as the calling teacher sees it. The owner Employee is never exposed: `mine` says whether the teacher created it, `offeringWide` whether it is School material for the whole Subject Offering (no owner, no audience), and `canEdit` whether the teacher may change it today (their own row, every audience Section still taught). */
+        MyLearningContent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            subjectOfferingId: string;
+            title: string;
+            description?: string | null;
+            sequence: number;
+            status: components["schemas"]["LearningContentStatus"];
+            offeringWide: boolean;
+            mine: boolean;
+            canEdit: boolean;
+            /** @description The Sections a teacher-owned row is for (empty for an Offering-wide row). Fixed at creation. */
+            audience: {
+                /** Format: uuid */
+                sectionId: string;
+                sectionCode: string | null;
+            }[];
+        };
+        /** @description TCH.5C -- one Subject Offering the teacher teaches today, with only the Sections they teach. */
+        MyLearningContentContext: {
+            /** Format: uuid */
+            subjectOfferingId: string;
+            subjectCode?: string | null;
+            subjectName?: string | null;
+            gradeLevelName?: string | null;
+            campusName?: string | null;
+            academicYearName?: string | null;
+            sections: {
+                /** Format: uuid */
+                id: string;
+                code: string | null;
+                name: string | null;
+            }[];
+        };
+        /** @description TCH.5C. No owner field exists: the owner is always the teacher's own Employee record. Every audience Section must be one the teacher teaches for this Subject Offering today; the audience cannot be changed afterwards. */
+        MyLearningContentCreateInput: {
+            /** Format: uuid */
+            subject_offering_id: string;
+            title: string;
+            description?: string | null;
+            sequence?: number;
+            audience_section_ids: string[];
         };
         /**
          * @description The complete, closed Assignment state vocabulary, mirrored by the database's own `assignments_status_check` CHECK constraint. Exactly three legal transitions: draft->published, published->closed, closed->published -- never set directly via the update operation, only through the dedicated publish/close operations.
@@ -24805,6 +24937,399 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listMyLearningContentContexts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLearningContentContext"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking lms.content.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listMyLearningContent: {
+        parameters: {
+            query?: {
+                subject_offering_id?: string;
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLearningContent"][];
+                        meta: components["schemas"]["TimetablePaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking lms.content.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid query parameter. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createMyLearningContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyLearningContentCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLearningContent"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking lms.content.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A Subject Offering the teacher teaches no Section of (or not found). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LMS_AUDIENCE_SECTION_NOT_TAUGHT (a Section the teacher does not teach for this Offering today, including one of several), or validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getMyLearningContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                learningContentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLearningContent"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking lms.content.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a row this teacher may read (or not found, or another School's). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    updateMyLearningContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                learningContentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LearningContentUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLearningContent"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description As above, or LEARNING_CONTENT_NOT_OWNED -- the teacher may read this row but did not create it (teacher writes are owner-only). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a row this teacher may read (or not found, or another School's). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), LEARNING_CONTENT_ILLEGAL_TRANSITION, or validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    publishMyLearningContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                learningContentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLearningContent"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description As above, or LEARNING_CONTENT_NOT_OWNED -- the teacher may read this row but did not create it (teacher writes are owner-only). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a row this teacher may read (or not found, or another School's). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), LEARNING_CONTENT_ILLEGAL_TRANSITION, or validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    archiveMyLearningContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                learningContentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLearningContent"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description As above, or LEARNING_CONTENT_NOT_OWNED -- the teacher may read this row but did not create it (teacher writes are owner-only). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a row this teacher may read (or not found, or another School's). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), LEARNING_CONTENT_ILLEGAL_TRANSITION, or validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
         };
     };
     listAssignments: {

@@ -779,14 +779,18 @@ class CapabilityAndRoleSeeder extends Seeder
             // Academic Structure's own `academics.subjects.*`, even
             // though the parent SubjectOffering belongs to that module
             // -- the Canteen capability-boundary lesson, carried
-            // forward from every prior academic module. No
-            // `lms.content.teacher`: ADR 0039 decision 6 chose
-            // capability-only v1 because no teacher-to-Offering
-            // ownership record exists anywhere in this codebase yet --
-            // the identical gap Syllabus/Curriculum Delivery/
-            // Examinations already defer to.
+            // forward from every prior academic module. ADR 0039
+            // decision 6 made v1 capability-only; TCH.5C (ADR 0063
+            // sections 34, 36) adds the owned-scope
+            // `lms.content.teacher` below.
             ['key' => 'lms.content.view', 'label' => 'View Learning Content', 'namespace' => 'school'],
             ['key' => 'lms.content.manage', 'label' => 'Manage Learning Content', 'namespace' => 'school'],
+            // TCH.5C: owned (Tier 2) Learning Content. Never sufficient
+            // alone -- it also needs a verified ActingEmployee, the
+            // resource's owner/audience rule and current TeachingAssignment
+            // coverage (ADR 0063 section 34). `lms.content.view/.manage`
+            // keep their School-wide meaning.
+            ['key' => 'lms.content.teacher', 'label' => 'Author and manage Learning Content for the classes one teaches', 'namespace' => 'school'],
 
             // Phase 0I.3 (Assignments -- the second concrete LMS fact,
             // ADR 0039). The `lms.assignments.*` leaf the 0I.2 comment
@@ -1159,6 +1163,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // TCH.4: same no-escalation reason; School Admin already
                     // holds the School-wide attendance.manage.
                     'attendance.teacher',
+                    // TCH.5C: same no-escalation reason; School Admin already
+                    // holds the School-wide lms.content.manage (Tier 1 wins).
+                    'lms.content.teacher',
                 ],
             ],
             'principal' => [
@@ -1345,6 +1352,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     // TCH.4: owned Attendance (production enablement gated
                     // by TCH-L1, ADR 0063 section 26).
                     'attendance.teacher',
+                    // TCH.5C: owned Learning Content (ADR 0063 section 36).
+                    'lms.content.teacher',
                 ],
             ],
         ];

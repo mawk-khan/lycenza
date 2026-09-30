@@ -83,6 +83,7 @@ use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
 use App\Http\Controllers\App\LMS\AssignmentController as LmsAssignmentController;
 use App\Http\Controllers\App\LMS\LearningContentController as LmsLearningContentController;
+use App\Http\Controllers\App\LMS\MyLearningContentController;
 use App\Http\Controllers\App\Payroll\CompensationController as PayrollCompensationController;
 use App\Http\Controllers\App\Payroll\PayrollAccountingConfigurationController;
 use App\Http\Controllers\App\Payroll\PayrollController;
@@ -1394,6 +1395,18 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     Route::post('/app/automation/rules/{ruleType}/enable', [AutomationController::class, 'enable'])->name('app.automation.rules.enable');
     Route::post('/app/automation/rules/{ruleType}/disable', [AutomationController::class, 'disable'])->name('app.automation.rules.disable');
     Route::post('/app/automation/rules/{ruleType}/take-ownership', [AutomationController::class, 'takeOwnership'])->name('app.automation.rules.take-ownership');
+
+    // TCH.5C (ADR 0063 section 36) -- "My Learning Content": the owned
+    // teacher surface. Authorization (lms.content.teacher + ActingEmployee +
+    // owner/audience + today's TeachingAssignments) lives in
+    // TeacherLearningContentAccess and the service's write guard.
+    Route::prefix('app/my-learning-content')->name('app.my-learning-content.')->group(function (): void {
+        Route::get('/', [MyLearningContentController::class, 'index'])->name('index');
+        Route::post('/', [MyLearningContentController::class, 'store'])->name('store');
+        Route::patch('/{learningContent}', [MyLearningContentController::class, 'update'])->name('update');
+        Route::post('/{learningContent}/publish', [MyLearningContentController::class, 'publish'])->name('publish');
+        Route::post('/{learningContent}/archive', [MyLearningContentController::class, 'archive'])->name('archive');
+    });
 
     // Phase 0I.2 -- the administrative Learning Content surface (ADR
     // 0039). Capability checks live in the controller (the

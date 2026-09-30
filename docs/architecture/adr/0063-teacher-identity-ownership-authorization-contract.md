@@ -9,8 +9,11 @@
   contract — is published and closed** (audit §33, owner resolution §34;
   D-14 resolved, docs only). **TCH.5B — the LMS ownership and audience
   persistence foundation — is implemented** (§35): dormant persistence and
-  the Documents parent-authorization seam. **No LMS teacher capability or
-  teacher access exists yet**; LMS remains admin-only until TCH.5C/TCH.5D.
+  the Documents parent-authorization seam. **TCH.5C — Learning Content
+  teacher adoption — is implemented** (§36): `lms.content.teacher`, owned
+  reads/writes, `/my/` API, "My Learning Content" and attachments.
+  **Assignment teacher access remains unimplemented** (TCH.5D, next);
+  Submission remains cancelled.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -1788,3 +1791,154 @@ no new LMS legal item; E21 is unchanged.
   tables 166 → 168).
 
 **Next:** TCH.5C — Learning Content teacher adoption (not implemented).
+
+## 36. TCH.5C implementation (as built)
+
+TCH.5C (2026-09-30) builds §34 for **Learning Content only**. **Learning
+Content teacher adoption is implemented. Assignment teacher access remains
+unimplemented** (TCH.5D). **Submission remains cancelled.** Learning
+Content stays Sensitive (§35). There is no new legal gate, and TCH-L1
+remains Attendance-only.
+
+**Capability and role.**
+- New owned-scope capability `lms.content.teacher`.
+- The `teacher` role now carries exactly `curriculum.delivery.teacher`,
+  `attendance.teacher` and `lms.content.teacher`.
+- `school_admin` also holds it, only for no-escalation grantability (§31).
+  It already holds `lms.content.manage`, and Tier 1 wins wherever both
+  apply. `principal` does not hold it.
+- There is no `lms.assignments.teacher`. Teachers get no
+  `lms.content.view/.manage`, no `lms.assignments.*`, no
+  `teaching.assignments.*` and no `students.view`.
+- No code reads the role key. A test proves a non-`teacher` role carrying
+  the capability works the same.
+
+**The executable formula** (`App\Domain\LMS\Application\TeacherLearningContentAccess`,
+`TeacherLearningContentScope`, `TeacherLearningContentGuard`).
+
+Common to every rule: `lms.content.teacher`, an ActingEmployee, and
+TeachingAssignment coverage on the **School-local current date**
+(`ActingEmployee::asOf`). Never `created_at`, a publication or audit
+date, `due_on` or the Timetable.
+
+| Operation | Rule |
+|---|---|
+| **create** | the owner is the ActingEmployee (server-derived; any owner field in the request is ignored) AND ≥ 1 audience Section AND a current TeachingAssignment for **every** audience Section × the row's Offering. An Offering with no taught Section is 404; an untaught or foreign Section, including one of several, is 422 `LMS_AUDIENCE_SECTION_NOT_TAUGHT`. |
+| **write** (edit, publish, archive, re-publish) | the row is visible (else 404) AND `owner_employee_id` = ActingEmployee (else 403 `LEARNING_CONTENT_NOT_OWNED`) AND a current TeachingAssignment for **every** audience Section (else 422 `LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT`) |
+| **read: own row, any status** | owner AND teaches **every** audience Section |
+| **read: published teacher-owned row** | teaches **any** audience Section; the reader need not be the owner |
+| **read: published Offering-wide row** (owner NULL) | teaches any Section of its Offering |
+| **anything else** | 404: another teacher's draft or archived row, an unpublished Offering-wide row, an untaught class, another School, unknown or malformed ids |
+
+The owner field and a TeachingAssignment never substitute for each other.
+- **Co-teachers** read each other's published rows and never write them.
+- **Hand-over:** the successor reads the predecessor's published rows for
+  their Section and cannot edit, archive or re-publish them. The
+  predecessor loses write access, and their own unpublished rows, when
+  their assignment ends. Ownership never moves.
+- **Multi-Section rows:** writable only while every audience Section is
+  taught. Losing one keeps a published row readable (any Section), but
+  never writable. The audience is never shrunk.
+- **Ending a TeachingAssignment** changes no owner, audience or history.
+- **Revoking the role** removes access through the normal cache
+  invalidation, and deletes nothing.
+
+**Service reuse and lock order.**
+- The same `LearningContentService` runs everything. There is no teacher
+  copy of the lifecycle.
+  - `createOwned()` calls the guard inside its transaction, then the same
+    private `insert()` as administrative creation. The row, owner and
+    audience are written atomically (TCH.5B's deferred check).
+  - `update()`/`publish()`/`archive()` take an optional
+    `LearningContentWriteGuard`, run before the row lock.
+- **Lock order:** School → membership → User → Employee → EmploymentRecord
+  (`ActingEmployeeResolver::hold`) → the TeachingAssignment of each
+  audience Section in **ascending Section id** (`TeachingOwnership::hold`,
+  FOR SHARE) → the `learning_content` row → the Document row.
+- The client's Section order never decides lock order.
+  `TeacherLearningContentConcurrencyTest` proves it:
+  - a creation naming the Sections in descending order waits on the lower
+    Section's assignment;
+  - meanwhile the higher Section's assignment can be ended without
+    blocking.
+- **Reads** use fresh, non-locking `resolve()`/`periods()`. Lists are
+  filtered in SQL (`TeacherLearningContentScope::constrain()`).
+- **Commit context.** An owned row's deferred audience check runs at
+  COMMIT under RLS (§35), so the creating transaction commits inside the
+  School context. Every request does: the School-route middleware holds
+  context for the request, and `TenantContext::withSchool()` restores it.
+
+**Documents.** `LmsParentResourceAuthorization` now carries the Learning
+Content teacher branch. It applies only when the actor lacks the Tier 1
+capability and holds `lms.content.teacher`.
+- **Read** (list, metadata, content): the parent row's read rule. Otherwise
+  404, the same as an unknown row.
+- **Write** (upload, archive), in two steps:
+  - `authorizeWrite()`: a fresh check before any bytes are stored;
+  - `holdWrite()`: the authoritative check, called by `DocumentService`
+    inside its write transaction. It runs the write guard; a refusal rolls
+    back and the existing compensation removes the stored object.
+- Reading a row never allows writing its attachments.
+- **The Assignment branch is unchanged, Tier 1 only.** A teacher gets 403.
+- Documents names no LMS capability, owner, audience or TeachingAssignment
+  (architecture guard).
+
+**Surfaces.**
+- **API** under `/api/v1/schools/{school}/my/`, all with
+  `capability:lms.content.teacher` + `private-no-store`, with no
+  Idempotency-Key (as Tier 1):
+  - `learning-content-contexts` (GET) — the taught Offerings, each with
+    only the taught Sections, a self projection;
+  - `learning-content` (GET list, POST create);
+  - `learning-content/{id}` (GET, PATCH);
+  - `…/{id}/publish`, `…/{id}/archive` (POST).
+
+  They are in OpenAPI (`MyLearningContent`, `MyLearningContentContext`,
+  `MyLearningContentCreateInput`), with regenerated shared types. The owner
+  Employee is never serialized: responses carry `mine`, `offeringWide`,
+  `canEdit` and the audience Sections.
+- **Page** `/app/my-learning-content` ("My Learning Content").
+  - It is linked from the dashboard by `lms.content.teacher`.
+  - It lists the readable rows and creates Section-targeted rows (the
+    picker shows only taught Sections).
+  - It edits, publishes and archives the teacher's own rows; everything
+    else is read-only.
+  - A capability holder who is not an eligible Employee sees an empty page,
+    and every write is refused.
+  - There is no attachment UI (the Documents API, as for administrators),
+    no Assignment page and no Submission.
+
+**Audit and events.** The existing `lms.learning_content.*` events. The
+actor is the User; the created event carries `ownerEmployeeId` and
+`audienceSectionIds` (TCH.5B). No new event or outbox entry.
+
+**Demo.** Kavya Reddy (production `teacher` role, G8-A Mathematics) holds
+the three capabilities. The demo adds a published Offering-wide G8
+Mathematics reading (School Admin) and her own G8-A draft, created by her
+through the owned path. There is no Assignment teacher data.
+
+**Tests.**
+- `TeacherLearningContentAccessTest` (API matrix):
+  - create with a server-derived owner; multi-Section every-Section;
+    untaught or foreign audiences;
+  - the lifecycle; owner-without-assignment and assignment-without-owner;
+    partial multi-Section; hand-over;
+  - Offering-wide read-only and draft denial; server-side list filtering;
+  - contexts and Timetable independence; non-disclosure; the capability
+    and a non-`teacher` role;
+  - five ActingEmployee failures; role revocation; Tier 1 unchanged.
+- `TeacherLearningContentDocumentsTest`: owner, co-reader, not-visible,
+  lost teaching and Assignment branch.
+- `MyLearningContentUiTest`.
+- `TeacherLearningContentConcurrencyTest` (real processes):
+  - an edit vs an assignment end, and one of two ends;
+  - an attachment vs an assignment end;
+  - a creation vs a suspension, unlink, archive and employment end, in both
+    orders;
+  - the lock-order proof.
+- Updated: `TeacherRoleRegistryTest`, `LmsOwnershipArchitectureGuardTest`,
+  `LearningContentArchitectureGuardTest` (route surface),
+  `TeachingAssignmentArchitectureGuardTest` (LMS is the third adopter),
+  `MyAttendanceUiTest` (nav) and `DemoDataBuilderTest`.
+
+**Next:** TCH.5D — Assignment teacher adoption (not implemented).

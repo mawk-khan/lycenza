@@ -164,10 +164,9 @@ ActingEmployee identity boundary (TCH.1), the TeachingAssignment ownership
 fact (TCH.2) and two owned adopters — Curriculum Delivery (TCH.3) and
 Attendance (TCH.4) — are built.
 
-**Curriculum Delivery and Attendance are the owned teaching surfaces.** LMS
-and Timetable remain admin-only (LMS ownership *persistence* exists since
-TCH.5B, ADR 0063 §35, but teacher LMS authorization remains unimplemented
-until TCH.5C/TCH.5D), and Timetable stays scheduling evidence,
+**Curriculum Delivery, Attendance and LMS Learning Content are the owned
+teaching surfaces.** LMS Assignments and Timetable remain admin-only
+(Assignment teacher authorization is TCH.5D, not implemented), and Timetable stays scheduling evidence,
 never ownership authority. **Teacher Attendance functionality is implemented
 but production enablement remains blocked by TCH-L1 until the required
 legal/compliance determination is recorded** (ADR 0063 §26). The first
@@ -214,14 +213,39 @@ an owned class; a teacher gets no `students.view`. The owned submit is not
 `idempotent`: a replay would bypass the in-handler identity and ownership
 re-check (rule 32), and duplicate registers are refused by the database.
 
+The third, Learning Content (ADR 0063 §36), differs because its rows are
+Section-targeted and owned:
+
+```text
+School-wide Learning Content (Tier 1, unchanged):
+    lms.content.view / lms.content.manage
+
+Owned teacher Learning Content (Tier 2):
+    lms.content.teacher
+    + verified ActingEmployee today
+    + write: owner Employee = ActingEmployee
+             AND TeachingAssignment for EVERY audience Section today
+    + read:  own row while teaching every audience Section,
+             or a published row with ANY taught audience Section,
+             or a published Offering-wide row of a taught Offering
+```
+
+`TeacherLearningContentAccess`/`TeacherLearningContentGuard` implement it;
+the guard runs inside `LearningContentService`'s transaction, taking the
+audience assignments in ascending Section id. Documents reaches the same
+rule for Learning Content attachments through
+`LmsParentResourceAuthorization` (fresh check before storage, locked check
+inside the Documents transaction).
+
 **Teacher role.** The production system role `teacher` carries exactly
-`curriculum.delivery.teacher` and `attendance.teacher`:
+`curriculum.delivery.teacher`, `attendance.teacher` and
+`lms.content.teacher`:
 - It is a bundle, never a check: no code tests the role key, and any role
   carrying the capability behaves identically.
 - On its own it reaches nothing.
 - It is granted and revoked through the ordinary staff role path.
-- `school_admin` also holds both capabilities, only so it can grant the
-  role under the no-escalation rule.
+- `school_admin` also holds all three capabilities, only so it can grant
+  the role under the no-escalation rule.
 
 - **Two capability tiers:**
 
@@ -240,8 +264,8 @@ re-check (rule 32), and duplicate registers are refused by the database.
     `curriculum.delivery.manage`, `lms.content.manage`) keep their current
     meaning and grants.
   - Owned-scope capabilities (`curriculum.delivery.teacher`,
-    `attendance.teacher`) require capability **AND** ownership, never
-    either alone.
+    `attendance.teacher`, `lms.content.teacher`) require capability **AND**
+    ownership, never either alone.
 - **ActingEmployee** (HR): User → active SchoolMembership → linked Employee
   → active Employee record → eligible current EmploymentRecord (dated
   current, status `active` or `notice_period`).
@@ -266,7 +290,7 @@ re-check (rule 32), and duplicate registers are refused by the database.
     administrative (Tier 1) capabilities, granted to `school_admin` and
     `principal`, checked on the route and in the service. An administrator
     needs no ActingEmployee.
-  - Read for access decisions only through `TeachingOwnership`, by Curriculum Delivery (TCH.3) and Attendance (TCH.4).
+  - Read for access decisions only through `TeachingOwnership`, by Curriculum Delivery (TCH.3), Attendance (TCH.4) and LMS Learning Content (TCH.5C).
   - `TimetableEntry.teacher_id` is scheduling evidence and never grants
     access.
 - **No role-name check, ever.**

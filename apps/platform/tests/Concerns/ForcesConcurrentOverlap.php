@@ -21,9 +21,10 @@ trait ForcesConcurrentOverlap
     /**
      * @param  array<int, string>  $holderCommand
      * @param  array<int, string>  $contenderCommand
+     * @param  (callable(): void)|null  $whileContenderBlocked  runs after the contender is observed blocked and before the holder is released
      * @return array{0: string, 1: string} [holder output, contender output]
      */
-    protected function raceWithHeldHolder(array $holderCommand, array $contenderCommand): array
+    protected function raceWithHeldHolder(array $holderCommand, array $contenderCommand, ?callable $whileContenderBlocked = null): array
     {
         $dir = sys_get_temp_dir().'/race_'.bin2hex(random_bytes(8));
         mkdir($dir);
@@ -70,6 +71,10 @@ trait ForcesConcurrentOverlap
                 "The contender was never observed blocked on the holder's uncommitted write -- overlap not proven.\n".
                 'Contender output: '.$contender->getOutput()."\nError: ".$contender->getErrorOutput(),
             );
+
+            if ($whileContenderBlocked !== null) {
+                $whileContenderBlocked();
+            }
         } finally {
             touch($dir.'/release');
             $holder->wait();

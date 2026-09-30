@@ -43,6 +43,8 @@ use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryTitle;
+use App\Domain\LMS\Application\LearningContentService;
+use App\Domain\LMS\Application\TeacherLearningContentAccess;
 use App\Domain\Payments\Application\ChargeAllocationInput;
 use App\Domain\Payments\Application\ManualPaymentRecordingService;
 use App\Domain\Payments\Application\NormalizedProviderEvent;
@@ -318,8 +320,20 @@ final class DemoModuleData
                 $attendance->guarded(fn () => DB::transaction(fn () => $attendance->submit($d->school, $entry->id, $date, $records, $d->admin)));
             });
 
-            return;
+            break;
         }
+
+        // TCH.5C: one published Offering-wide G8 Mathematics reading (School
+        // Admin, Tier 1) she may read but not edit, and one draft of her own
+        // for G8-A, written by HER through the owned path (her ActingEmployee
+        // and G8-A assignment are held; she is the owner and the audit actor).
+        $content = app(LearningContentService::class);
+        $shared = $content->create($d->school, $d->offerings['G8-MATH']->id, ['title' => 'Grade 8 Mathematics: formula sheet', 'sequence' => 1], $d->admin);
+        $content->publish($d->school, $shared, $d->admin);
+
+        $teacher = User::query()->findOrFail($d->employees['MATH']->user_id);
+        $content->createOwned($d->school, $d->offerings['G8-MATH']->id, ['title' => 'G8-A: linear equations practice notes', 'sequence' => 2],
+            [$d->sections['G8-A']->id], $teacher, app(TeacherLearningContentAccess::class)->guard($teacher));
     }
 
     // --- Examinations (0H.4A/B) + Grade scale (0H.4C) --------------------

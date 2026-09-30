@@ -10200,6 +10200,239 @@ paths:
   # Assignment is Confidential (docs/security/DATA-CLASSIFICATION.md):
   # staff-authored operational data containing NO personal data and NO
   # mark/score/grade field of any kind.
+  # --- TCH.5C (ADR 0063 sections 34, 36): the OWNED teacher Learning
+  # Content surface. Every operation requires lms.content.teacher AND a
+  # verified ActingEmployee (today, School-local) AND the row's owner/audience
+  # rule AND today's TeachingAssignment coverage:
+  # - create: the owner is always the ActingEmployee (never input); every
+  #   audience Section must be one the teacher teaches for the Offering;
+  # - writes: owner-only, while the owner teaches EVERY audience Section;
+  # - reads: own rows while teaching every audience Section; published
+  #   teacher rows for ANY taught audience Section; published Offering-wide
+  #   rows of a taught Offering.
+  # Unreadable, unknown and other-School ids are the same 404. The audience
+  # is immutable. Attachments use the Documents operations above, which
+  # apply the same parent rule. The School-wide operations above are
+  # unchanged. Assignments have no teacher surface.
+  /schools/{schoolId}/my/learning-content-contexts:
+    get:
+      operationId: listMyLearningContentContexts
+      summary: >
+        The Subject Offerings the teacher teaches today, each with only the
+        Sections they teach (the audience picker).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/MyLearningContentContext" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking lms.content.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/learning-content:
+    get:
+      operationId: listMyLearningContent
+      summary: >
+        Every Learning Content row the teacher may read, filtered on the
+        server; optionally one Subject Offering. Fixed page size of 50.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subject_offering_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/Page" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/MyLearningContent" } }
+                  meta: { $ref: "#/components/schemas/TimetablePaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking lms.content.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid query parameter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createMyLearningContent
+      summary: >
+        Creates a teacher-owned draft for one or more Sections the teacher
+        teaches today in that Subject Offering. The owner is the teacher's
+        own Employee record, set by the server.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MyLearningContentCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyLearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking lms.content.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: A Subject Offering the teacher teaches no Section of (or not found).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: LMS_AUDIENCE_SECTION_NOT_TAUGHT (a Section the teacher does not teach for this Offering today, including one of several), or validation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/learning-content/{learningContentId}:
+    get:
+      operationId: getMyLearningContent
+      summary: One row the teacher may read.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyLearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking lms.content.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not a row this teacher may read (or not found, or another School's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateMyLearningContent
+      summary: >
+        Edits title, description and/or sequence of the teacher's own row (never the audience or owner).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LearningContentUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyLearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: As above, or LEARNING_CONTENT_NOT_OWNED -- the teacher may read this row but did not create it (teacher writes are owner-only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not a row this teacher may read (or not found, or another School's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), LEARNING_CONTENT_ILLEGAL_TRANSITION, or validation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/learning-content/{learningContentId}/publish:
+    post:
+      operationId: publishMyLearningContent
+      summary: >
+        Publishes (or re-publishes) the teacher's own row, through the same lifecycle as the School-wide operation.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyLearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: As above, or LEARNING_CONTENT_NOT_OWNED -- the teacher may read this row but did not create it (teacher writes are owner-only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not a row this teacher may read (or not found, or another School's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), LEARNING_CONTENT_ILLEGAL_TRANSITION, or validation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/learning-content/{learningContentId}/archive:
+    post:
+      operationId: archiveMyLearningContent
+      summary: >
+        Archives the teacher's own published row, through the same lifecycle as the School-wide operation.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: learningContentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyLearningContent" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: As above, or LEARNING_CONTENT_NOT_OWNED -- the teacher may read this row but did not create it (teacher writes are owner-only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not a row this teacher may read (or not found, or another School's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), LEARNING_CONTENT_ILLEGAL_TRANSITION, or validation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /schools/{schoolId}/subject-offerings/{subjectOfferingId}/assignments:
     get:
       operationId: listAssignments
@@ -15221,6 +15454,74 @@ components:
         title: { type: string, maxLength: 255 }
         description: { type: string, nullable: true, maxLength: 20000 }
         sequence: { type: integer, minimum: 0 }
+    MyLearningContent:
+      type: object
+      description: >
+        TCH.5C: a Learning Content row as the calling teacher sees it. The
+        owner Employee is never exposed: `mine` says whether the teacher
+        created it, `offeringWide` whether it is School material for the
+        whole Subject Offering (no owner, no audience), and `canEdit`
+        whether the teacher may change it today (their own row, every
+        audience Section still taught).
+      required: [id, subjectOfferingId, title, sequence, status, offeringWide, mine, canEdit, audience]
+      properties:
+        id: { type: string, format: uuid }
+        subjectOfferingId: { type: string, format: uuid }
+        title: { type: string, maxLength: 255 }
+        description: { type: string, nullable: true, maxLength: 20000 }
+        sequence: { type: integer, minimum: 0 }
+        status: { $ref: "#/components/schemas/LearningContentStatus" }
+        offeringWide: { type: boolean }
+        mine: { type: boolean }
+        canEdit: { type: boolean }
+        audience:
+          type: array
+          description: The Sections a teacher-owned row is for (empty for an Offering-wide row). Fixed at creation.
+          items:
+            type: object
+            required: [sectionId, sectionCode]
+            properties:
+              sectionId: { type: string, format: uuid }
+              sectionCode: { type: string, nullable: true }
+    MyLearningContentContext:
+      type: object
+      description: TCH.5C -- one Subject Offering the teacher teaches today, with only the Sections they teach.
+      required: [subjectOfferingId, sections]
+      properties:
+        subjectOfferingId: { type: string, format: uuid }
+        subjectCode: { type: string, nullable: true }
+        subjectName: { type: string, nullable: true }
+        gradeLevelName: { type: string, nullable: true }
+        campusName: { type: string, nullable: true }
+        academicYearName: { type: string, nullable: true }
+        sections:
+          type: array
+          items:
+            type: object
+            required: [id, code, name]
+            properties:
+              id: { type: string, format: uuid }
+              code: { type: string, nullable: true }
+              name: { type: string, nullable: true }
+    MyLearningContentCreateInput:
+      type: object
+      description: >
+        TCH.5C. No owner field exists: the owner is always the teacher's
+        own Employee record. Every audience Section must be one the teacher
+        teaches for this Subject Offering today; the audience cannot be
+        changed afterwards.
+      required: [subject_offering_id, title, audience_section_ids]
+      properties:
+        subject_offering_id: { type: string, format: uuid }
+        title: { type: string, maxLength: 255 }
+        description: { type: string, nullable: true, maxLength: 20000 }
+        sequence: { type: integer, minimum: 0 }
+        audience_section_ids:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, format: uuid }
     AssignmentStatus:
       type: string
       description: >

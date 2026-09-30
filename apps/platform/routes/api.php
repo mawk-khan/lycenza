@@ -67,6 +67,7 @@ use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
 use App\Domain\LMS\Http\Controllers\AssignmentController;
 use App\Domain\LMS\Http\Controllers\LearningContentController;
+use App\Domain\LMS\Http\Controllers\TeacherLearningContentController;
 use App\Domain\Payments\Http\Controllers\LateFeeRunController;
 use App\Domain\Payments\Http\Controllers\PaymentController;
 use App\Domain\Payments\Http\Controllers\PaymentReceiptController;
@@ -2029,6 +2030,36 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/learning-content/{learningContent}/documents', [DocumentController::class, 'indexForLearningContent'])
                 ->middleware(['throttle:documents-reads', 'private-no-store'])
                 ->name('schools.learning-content.documents.index');
+
+            // TCH.5C (ADR 0063 sections 34, 36) -- the OWNED teacher
+            // Learning Content surface. `capability:lms.content.teacher` is
+            // only the outer check: TeacherLearningContentAccess adds the
+            // verified ActingEmployee and today's TeachingAssignment coverage,
+            // and the service holds both in every write. `private-no-store`:
+            // Learning Content is Sensitive. No Idempotency-Key, exactly as
+            // the Tier 1 routes above. Attachments reuse the Documents
+            // routes above, which ask LMS through LmsParentResourceAuthorization.
+            Route::get('/my/learning-content-contexts', [TeacherLearningContentController::class, 'contexts'])
+                ->middleware(['private-no-store', 'capability:lms.content.teacher'])
+                ->name('schools.my.learning-content-contexts.index');
+            Route::get('/my/learning-content', [TeacherLearningContentController::class, 'index'])
+                ->middleware(['private-no-store', 'capability:lms.content.teacher'])
+                ->name('schools.my.learning-content.index');
+            Route::post('/my/learning-content', [TeacherLearningContentController::class, 'store'])
+                ->middleware(['private-no-store', 'capability:lms.content.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.learning-content.store');
+            Route::get('/my/learning-content/{learningContent}', [TeacherLearningContentController::class, 'show'])
+                ->middleware(['private-no-store', 'capability:lms.content.teacher'])
+                ->name('schools.my.learning-content.show');
+            Route::patch('/my/learning-content/{learningContent}', [TeacherLearningContentController::class, 'update'])
+                ->middleware(['private-no-store', 'capability:lms.content.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.learning-content.update');
+            Route::post('/my/learning-content/{learningContent}/publish', [TeacherLearningContentController::class, 'publish'])
+                ->middleware(['private-no-store', 'capability:lms.content.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.learning-content.publish');
+            Route::post('/my/learning-content/{learningContent}/archive', [TeacherLearningContentController::class, 'archive'])
+                ->middleware(['private-no-store', 'capability:lms.content.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.learning-content.archive');
 
             // Phase 0I.3 (Assignments -- the second concrete LMS fact,
             // ADR 0039). Exactly SIX operations, structurally identical

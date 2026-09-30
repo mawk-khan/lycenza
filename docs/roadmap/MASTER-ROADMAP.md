@@ -71,7 +71,7 @@ contract checkpoint.
 | Order | Programme | Status |
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
-| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0–TCH.3 closed (ADR 0063, 2026-09-30); **TCH.4 owned teacher Attendance implemented — production enablement BLOCKED by open legal/compliance determination TCH-L1**. Curriculum Delivery and Attendance are the teacher-owned surfaces; the Teacher role alone grants nothing (capability AND ActingEmployee AND TeachingAssignment). LMS and Timetable stay admin-only. **TCH.5A LMS teacher ownership contract PUBLISHED / CLOSED** (ADR 0063 §34, docs only: immutable owner Employee + immutable Section audience bridge, owner-only writes, Offering-only teacher authority rejected); **TCH.5B LMS ownership & audience persistence foundation implemented** (ADR 0063 §35: dormant owner/audience persistence, database-enforced, and the Documents parent-authorization seam); **TCH.5C Learning Content teacher adoption is next — not implemented**; no LMS teacher capability or access exists |
+| 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **ACTIVE** — TCH.0–TCH.3 closed (ADR 0063, 2026-09-30); **TCH.4 owned teacher Attendance implemented — production enablement BLOCKED by open legal/compliance determination TCH-L1**. Curriculum Delivery, Attendance and (since TCH.5C) LMS Learning Content are the teacher-owned surfaces; the Teacher role alone grants nothing (capability AND ActingEmployee AND TeachingAssignment). LMS Assignments and Timetable stay admin-only. **TCH.5A LMS teacher ownership contract PUBLISHED / CLOSED** (ADR 0063 §34, docs only: immutable owner Employee + immutable Section audience bridge, owner-only writes, Offering-only teacher authority rejected); **TCH.5B LMS ownership & audience persistence foundation implemented** (ADR 0063 §35: dormant owner/audience persistence, database-enforced, and the Documents parent-authorization seam); **TCH.5C Learning Content teacher adoption implemented** (ADR 0063 §36: `lms.content.teacher`, owner-only writes over every taught audience Section, published reads, `/my/` API, "My Learning Content", parent-authorized attachments); **TCH.5D Assignment teacher adoption is next — not implemented**; Submission stays cancelled |
 | 3 | HRX — Leave & staff attendance | Not started |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
@@ -145,7 +145,7 @@ Delivery and Attendance are the teacher-owned surfaces:
     - two separate capabilities (`lms.content.teacher`,
       `lms.assignments.teacher`) are planned, and neither exists yet.
   - **TCH.5B — LMS ownership & audience persistence foundation.**
-    Implemented (ADR 0063 §35):
+    Closed (ADR 0063 §35):
     - an immutable `owner_employee_id` on `learning_content`/`assignments`;
     - immutable Section audience bridges, pinned to the Offering context by
       composite FKs;
@@ -156,9 +156,21 @@ Delivery and Attendance are the teacher-owned surfaces:
 
     Dormant: no teacher capability, route or page; no backfill.
   - **TCH.5C — Learning Content teacher adoption** (`lms.content.teacher`).
-    Next; not implemented.
+    Implemented (ADR 0063 §36):
+    - the `teacher` role carries `curriculum.delivery.teacher`,
+      `attendance.teacher` and `lms.content.teacher`;
+    - teachers create Section-targeted rows owned by their ActingEmployee
+      for Sections they teach today;
+    - writes are owner-only while every audience Section is taught, held
+      in the service's transaction in sorted Section order;
+    - teachers read their own rows, published rows for a taught Section, and
+      published Offering-wide rows of a taught Offering;
+    - attachments follow the parent through `LmsParentResourceAuthorization`;
+    - Tier 1 is unchanged.
+
+    Assignment teacher access remains unimplemented.
   - **TCH.5D — Assignment teacher adoption** (`lms.assignments.teacher`).
-    Planned.
+    Next; not implemented.
   - LMS Submission stays cancelled and outside every checkpoint.
 - **TCH.6 — TCH closure audit.** Planned.
 

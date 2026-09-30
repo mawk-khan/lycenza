@@ -164,7 +164,7 @@ class DemoDataBuilderTest extends TestCase
         // TCH.3: the demo teacher holds the production Teacher role -- exactly
         // one owned-scope capability, reaching only what her
         // TeachingAssignment (G8-A Mathematics) covers.
-        $this->assertEqualsCanonicalizing(['curriculum.delivery.teacher', 'attendance.teacher'], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
+        $this->assertEqualsCanonicalizing(['curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher'], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
 
         // Operations desks: a demo-only, non-system role holding EXACTLY
         // one existing capability family, in the Demo School only.
@@ -232,7 +232,8 @@ class DemoDataBuilderTest extends TestCase
         // TeachingAssignment administration, not Attendance.
         $this->assertPageStatus('teacher@example.test', $school, '/app/my-curriculum-delivery', 200);
         $this->assertPageStatus('teacher@example.test', $school, '/app/my-attendance', 200);
-        foreach (['/app/syllabus-delivery', '/app/teaching-assignments', '/app/attendance', '/app/timetable-schedule'] as $page) {
+        $this->assertPageStatus('teacher@example.test', $school, '/app/my-learning-content', 200);
+        foreach (['/app/syllabus-delivery', '/app/teaching-assignments', '/app/attendance', '/app/timetable-schedule', '/app/learning-content', '/app/assignments'] as $page) {
             $this->assertPageStatus('teacher@example.test', $school, $page, 403);
         }
 

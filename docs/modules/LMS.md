@@ -464,8 +464,8 @@ exists anywhere in `learning_content` (architecture-guard-tested).
   legal-review question this ADR/module never received a qualifying
   answer to; nothing in this cancellation should be read as having
   resolved that question.
-- **Teacher ownership: contract decided, not implemented** (TCH.5A, ADR
-  0063 §34). This amends ADR 0039 §2 and §6 for teacher-authored rows only:
+- **Teacher ownership** (TCH.5A contract, ADR 0063 §34; Learning Content
+  implemented by TCH.5C, §36 and §16 below; Assignment not implemented). This amends ADR 0039 §2 and §6 for teacher-authored rows only:
   - **Owner and audience.** A teacher-authored Learning Content or
     Assignment carries an immutable owner Employee and an immutable
     one-or-more Section audience (an FK-backed bridge pinned to the
@@ -483,19 +483,19 @@ exists anywhere in `learning_content` (architecture-guard-tested).
     row, never by capability alone.
   - **Classification.** Learning Content and Assignment re-tier to
     Sensitive when the persistence lands.
-  - **Sequence.** TCH.5B persistence foundation (next, not implemented) →
-    TCH.5C Learning Content adoption (`lms.content.teacher`) → TCH.5D
-    Assignment adoption (`lms.assignments.teacher`).
+  - **Sequence.** TCH.5B persistence foundation (closed) → TCH.5C Learning
+    Content adoption (`lms.content.teacher`, implemented) → TCH.5D
+    Assignment adoption (`lms.assignments.teacher`, next, not implemented).
 
-  Until TCH.5C, LMS stays capability-only (§7), and no `lms.*.teacher`
-  capability exists. Independent of Submission's cancellation, which TCH
-  does not reopen.
+  Assignments stay capability-only (§7): no `lms.assignments.teacher`
+  exists. Independent of Submission's cancellation, which TCH does not
+  reopen.
 - **SyllabusUnit/CurriculumDelivery references from LMS**: purely
   additive, nullable, not yet needed.
 - **External LMS integration/standards**: unscoped; requires its own
   future roadmap/ADR/product decision before any work begins.
 
-## 15. Ownership persistence states (TCH.5B, ADR 0063 §35) — foundation only
+## 15. Ownership persistence states (TCH.5B, ADR 0063 §35)
 
 Every Learning Content and Assignment row is in exactly one state:
 
@@ -514,10 +514,44 @@ Every Learning Content and Assignment row is in exactly one state:
     have forced RLS.
 - **Existing rows.** Every existing row, and every row the administrative
   surfaces create, is Offering-wide. Nothing was backfilled.
-- **Not yet reachable.** A teacher-owned row can be created only through
-  `LearningContentService::create()`/`AssignmentService::create()` with a
-  `SectionAudience`, which no route supplies. **Teacher-owned behaviour is
-  foundation only, not yet reachable through teacher authorization.** No
-  `lms.*.teacher` capability exists until TCH.5C (Learning Content) and
-  TCH.5D (Assignment).
+- **Reachability.** Teacher-owned **Learning Content** is created by
+  teachers since TCH.5C (§16). Teacher-owned **Assignments** are
+  foundation only, not reachable through teacher authorization, until
+  TCH.5D. No transport ever accepts an owner: it is always the
+  ActingEmployee.
 - **Classification.** Both resources are Sensitive since TCH.5B.
+
+## 16. Owned teacher Learning Content (TCH.5C, ADR 0063 §36)
+
+**Learning Content teacher adoption is implemented. Assignment teacher
+access remains unimplemented. Submission remains cancelled.**
+
+| | Tier 1 (unchanged) | Tier 2 (teacher) |
+|---|---|---|
+| Capability | `lms.content.view` / `.manage` | `lms.content.teacher` (Teacher role; `school_admin` for grantability only) |
+| Identity | none needed | ActingEmployee, today |
+| Create | Offering-wide rows | Section-targeted rows owned by the ActingEmployee, for Sections they teach today (all of them) |
+| Write | every row | own rows, while teaching every audience Section |
+| Read | every row | own rows (while teaching every Section); published rows for any taught Section; published Offering-wide rows of a taught Offering |
+
+- **Date.** The School-local current date anchors every teacher decision;
+  never `created_at` or the Timetable.
+- **Hand-over and co-teaching.** Ownership never transfers.
+  - Successors and co-teachers read published rows for their Sections and
+    never write them.
+  - A multi-Section row becomes read-only for its owner once one audience
+    Section is no longer taught.
+  - Administrators keep full Tier 1 control.
+- **API** `/api/v1/schools/{school}/my/learning-content-contexts`,
+  `/my/learning-content` (GET, POST), `/my/learning-content/{id}` (GET,
+  PATCH) and `…/publish`, `…/archive`.
+  - All carry `capability:lms.content.teacher` + `private-no-store`.
+  - Non-disclosing 404s.
+  - The owner id is never serialized.
+- **Page** `/app/my-learning-content`, linked by the capability.
+- **Attachments.** Teachers use the ordinary Documents routes, decided per
+  parent row by `LmsParentResourceAuthorization`.
+  - Reading a row lets them read its files.
+  - Only an owner who teaches every audience Section may upload or archive.
+  - Assignment attachments stay Tier 1.
+- **Classification.** Sensitive, unchanged since TCH.5B. No new legal gate.

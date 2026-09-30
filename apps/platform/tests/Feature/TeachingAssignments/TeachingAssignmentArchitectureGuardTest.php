@@ -34,14 +34,15 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
     public function only_adopted_surfaces_consume_ownership_and_only_through_teaching_ownership(): void
     {
         // Adopted one surface at a time (ADR 0063 section 16): TCH.3
-        // Curriculum Delivery, TCH.4 Attendance -- each through the
+        // Curriculum Delivery, TCH.4 Attendance, TCH.5C LMS (Learning
+        // Content) -- each through the
         // TeachingOwnership read only, never the model, the table or the
         // administrative services.
-        foreach (['Timetable', 'LMS', 'Syllabus', 'Examinations'] as $module) {
+        foreach (['Timetable', 'Syllabus', 'Examinations'] as $module) {
             $this->assertSame([], $this->grep('TeachingAssignment', "app/Domain/{$module}"), "{$module} is not an adopted TeachingAssignment consumer.");
         }
 
-        foreach (['CurriculumDelivery', 'Attendance'] as $module) {
+        foreach (['CurriculumDelivery', 'Attendance', 'LMS'] as $module) {
             $uses = array_filter(
                 $this->grep('App\\Domain\\TeachingAssignments', "app/Domain/{$module}"),
                 fn (string $line) => ! str_contains($line, 'Application\\TeachingOwnership;') && ! str_contains($line, 'Application\\OwnedTeachingPeriod;'),

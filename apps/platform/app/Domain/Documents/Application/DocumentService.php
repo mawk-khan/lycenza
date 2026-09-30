@@ -140,6 +140,12 @@ class DocumentService
 
             try {
                 return DB::transaction(function () use ($school, $data, $actor, $ownerColumn, $mimeType, $disk, $path) {
+                    // TCH.5C: an LMS parent's write authority is held for
+                    // this transaction (the owned teacher path locks its
+                    // identity and TeachingAssignments here). A refusal
+                    // rolls back and the compensation below removes the bytes.
+                    $this->holdLmsParent($school, $data->owner->type, $data->owner->id, $actor);
+
                     $document = Document::query()->create(array_merge([
                         'school_id' => $school->id,
                         'classification_tier' => $data->classificationTier,
@@ -196,6 +202,8 @@ class DocumentService
             $this->authorizeForExistingOwner($school, $document, $actor);
 
             return DB::transaction(function () use ($school, $document, $actor) {
+                $this->holdLmsParent($school, $document->owner_type, (string) ($document->learning_content_id ?? $document->assignment_id), $actor);
+
                 $document->update(['status' => 'archived']);
 
                 $this->audit->school($school, 'document.archived', actor: $actor, subject: $document, metadata: [
@@ -280,6 +288,18 @@ class DocumentService
         $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id);
 
         return ['assignment_id' => $assignment->id];
+    }
+
+    /**
+     * Re-asks LMS, inside the Documents write transaction, whether the actor
+     * may still write this LMS parent (LmsParentResourceAuthorization::holdWrite).
+     * Other owner types need nothing more.
+     */
+    private function holdLmsParent(School $school, string $ownerType, string $ownerId, User $actor): void
+    {
+        if (in_array($ownerType, [LmsParentResourceAuthorization::LEARNING_CONTENT, LmsParentResourceAuthorization::ASSIGNMENT], true)) {
+            $this->lmsParents->holdWrite($actor, $school, $ownerType, $ownerId);
+        }
     }
 
     private function authorizeForExistingOwner(School $school, Document $document, User $actor): void

@@ -186,17 +186,30 @@ class LearningContentArchitectureGuardTest extends TestCase
         $this->assertSame([
             'GET /api/v1/schools/{school}/learning-content/{learningContent}',
             'GET /api/v1/schools/{school}/learning-content/{learningContent}/documents',
+            // TCH.5C: the owned teacher surface (ADR 0063 section 36).
+            'GET /api/v1/schools/{school}/my/learning-content',
+            'GET /api/v1/schools/{school}/my/learning-content-contexts',
+            'GET /api/v1/schools/{school}/my/learning-content/{learningContent}',
             'GET /api/v1/schools/{school}/subject-offerings/{subjectOffering}/learning-content',
             'GET /app/learning-content',
+            'GET /app/my-learning-content',
             'PATCH /api/v1/schools/{school}/learning-content/{learningContent}',
+            'PATCH /api/v1/schools/{school}/my/learning-content/{learningContent}',
             'PATCH /app/learning-content/{learningContent}',
+            'PATCH /app/my-learning-content/{learningContent}',
             'POST /api/v1/schools/{school}/learning-content/{learningContent}/archive',
             'POST /api/v1/schools/{school}/learning-content/{learningContent}/documents',
             'POST /api/v1/schools/{school}/learning-content/{learningContent}/publish',
+            'POST /api/v1/schools/{school}/my/learning-content',
+            'POST /api/v1/schools/{school}/my/learning-content/{learningContent}/archive',
+            'POST /api/v1/schools/{school}/my/learning-content/{learningContent}/publish',
             'POST /api/v1/schools/{school}/subject-offerings/{subjectOffering}/learning-content',
             'POST /app/learning-content',
             'POST /app/learning-content/{learningContent}/archive',
             'POST /app/learning-content/{learningContent}/publish',
-        ], $routes, 'Six API operations (plus two Documents owner-arm routes) and five web routes -- no delete, no Assignment or Submission route.');
+            'POST /app/my-learning-content',
+            'POST /app/my-learning-content/{learningContent}/archive',
+            'POST /app/my-learning-content/{learningContent}/publish',
+        ], $routes, 'Six Tier 1 API operations (plus two Documents owner-arm routes), seven owned /my/ operations (TCH.5C) and ten web routes -- no delete, no Assignment or Submission route.');
     }
 }
