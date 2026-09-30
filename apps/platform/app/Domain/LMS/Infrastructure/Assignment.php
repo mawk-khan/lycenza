@@ -9,6 +9,7 @@ use Database\Factories\AssignmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -97,5 +98,15 @@ class Assignment extends Model
     public function subjectOffering(): BelongsTo
     {
         return $this->belongsTo(SubjectOffering::class, 'subject_offering_id');
+    }
+
+    /**
+     * TCH.5B: the Section audience of a teacher-owned row (none for an
+     * Offering-wide row). `owner_employee_id` is deliberately not
+     * fillable: it is written only at creation and never changes.
+     */
+    public function sectionAudiences(): HasMany
+    {
+        return $this->hasMany(AssignmentSectionAudience::class, 'assignment_id');
     }
 }

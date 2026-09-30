@@ -7,8 +7,10 @@
   enablement remains blocked by TCH-L1 until the required legal/compliance
   determination is recorded** (§26). **TCH.5A — the LMS teacher ownership
   contract — is published and closed** (audit §33, owner resolution §34;
-  D-14 resolved, docs only). TCH.5B onward are **not** implemented: LMS
-  remains admin-only, and no LMS teacher capability or access exists.
+  D-14 resolved, docs only). **TCH.5B — the LMS ownership and audience
+  persistence foundation — is implemented** (§35): dormant persistence and
+  the Documents parent-authorization seam. **No LMS teacher capability or
+  teacher access exists yet**; LMS remains admin-only until TCH.5C/TCH.5D.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -1645,3 +1647,144 @@ No owner decision remains open.
 
 Each implementation checkpoint is separately authorized. LMS Submission
 stays outside every one.
+
+## 35. TCH.5B implementation (as built)
+
+TCH.5B (2026-09-30) builds the persistence and parent-authorization
+foundation §34 froze. **No LMS teacher capability or teacher access exists
+yet.** No `lms.*.teacher` capability, teacher route, page or attachment path
+exists; the Teacher role is unchanged; administrators use LMS exactly as
+before. Submission stays cancelled.
+
+**Persistence.** One migration adds the same shape to both
+`learning_content` and `assignments`
+(`database/migrations/2026_11_05_090000_add_lms_ownership_and_section_audiences.php`).
+
+- **Parent columns:**
+  - `owner_employee_id` (nullable) — composite FK
+    `(owner_employee_id, school_id) → employees(id, school_id)`;
+  - `ownership_txid` (`xid8`, nullable).
+- **New parent key:** `(id, school_id, subject_offering_id)`, for the
+  bridge.
+- **Audience bridges:** `learning_content_section_audiences` and
+  `assignment_section_audiences`.
+  - Columns: `school_id`, the parent id, `subject_offering_id`,
+    `academic_year_id`, `campus_id`, `grade_level_id`, `section_id`,
+    `created_at`.
+  - `unique (parent, section_id)`, forced RLS.
+  - The runtime role holds `SELECT, INSERT` only
+    (`TenantRls::makeAppendOnly`).
+- **Structural context (CLAUDE.md rule 70).** Three composite FKs per
+  bridge pin an audience Section to its parent's Offering context:
+  - parent `(id, school_id, subject_offering_id)`;
+  - `subject_offerings_context_unique` via `(subject_offering_id,
+    school_id, academic_year_id, campus_id, grade_level_id)`;
+  - `sections_context_unique` via `(section_id, school_id,
+    academic_year_id, campus_id, grade_level_id)`.
+
+  A Section of another School, grade, campus or year, or an audience row
+  naming another Offering, is refused by the database.
+- **Delete semantics.** These FKs are NO ACTION (checked at statement end)
+  rather than RESTRICT. A School's cascade removes children and parents
+  together; any lone deletion is still refused.
+- **Models:** `LearningContentSectionAudience`, `AssignmentSectionAudience`
+  (`BelongsToSchool`), plus a `sectionAudiences()` relation on each parent.
+  `owner_employee_id` is not fillable.
+
+**Valid states, database-enforced** (the journal-posting pattern of
+`2026_08_31_090300`):
+
+| State | Owner | Audience rows |
+|---|---|---|
+| Offering-wide (legacy/admin) | NULL | 0 |
+| Teacher-owned | an Employee of the School | ≥ 1, written by the creating transaction |
+
+- **Owner NULL with audience rows is refused.** An insert-guard trigger on
+  each bridge checks this.
+- **An owner with zero audience rows is refused at COMMIT.** A
+  `DEFERRABLE INITIALLY DEFERRED` constraint trigger checks this; a failed
+  commit surfaces as a raw `PDOException`.
+- **The audience is written only in the creating transaction.**
+  `ownership_txid` is set by an unconditional BEFORE INSERT trigger to
+  `pg_current_xact_id()` for an owned row, NULL otherwise, overwriting any
+  caller value. The bridge guard requires it to equal the current
+  transaction. A savepoint does not change it. A later transaction's insert
+  is refused, even one that also updates the parent.
+- **Owner immutability (every role).** Any change to `owner_employee_id` or
+  `ownership_txid` is refused: teacher → other, teacher → NULL,
+  NULL → teacher. Every other field keeps its ordinary LMS rules, and the
+  existing lifecycles are unchanged.
+- **Audience immutability.**
+  - An update trigger binds every role.
+  - The runtime role has no UPDATE or DELETE.
+  - An owned parent cannot change its Offering (the parent FK).
+- **RLS at commit.** The trigger functions are SECURITY INVOKER and read the
+  same School's rows under the caller's tenant context (the journal
+  precedent). An owned row must therefore be checked or committed with its
+  School context set. Without it, the deferred check fails closed.
+
+**Application layer (LMS, internal).**
+- `Ownership\SectionAudience`: the owner Employee plus one or more distinct
+  Sections.
+- `LearningContentService::create()` and `AssignmentService::create()` take
+  an optional `SectionAudience`. With one, they write the owner and, through
+  `Ownership\SectionAudienceWriter`, every audience row in the same
+  transaction.
+  - The writer refuses a Section that is not an active Section of the
+    Offering's context (`LMS_AUDIENCE_SECTION_OUTSIDE_OFFERING`, 422).
+  - A foreign owner is translated from the FK
+    (`LMS_OWNER_EMPLOYEE_INVALID`, 422).
+  - The audit metadata gains `ownerEmployeeId` and `audienceSectionIds`.
+- **No transport passes a `SectionAudience`** (architecture guard).
+  Administrative creation still writes Offering-wide rows.
+- **`Ownership\LmsResourceOwnershipReader`** returns `LmsResourceOwnership`:
+  owner, audience, `isOfferingWide()`/`isEmployeeOwned()`. It is a fresh
+  read, never an authorization decision.
+- **Serialization is unchanged.** The admin API and pages expose no
+  ownership field, and OpenAPI is unchanged.
+
+**Documents seam.** `App\Domain\LMS\Application\LmsParentResourceAuthorization`
+(`authorizeRead`/`authorizeWrite(actor, school, parentType, parentId)`) is
+the LMS-owned decision for LMS-owned Documents.
+- `DocumentService`, `DocumentReadService` and `DocumentListingService` call
+  it at all eight sites that previously named an LMS capability.
+- The direction is the existing Documents → LMS one. LMS never depends on
+  Documents, and Documents names no LMS capability, owner, audience or
+  TeachingAssignment (architecture guard).
+- **Today it applies exactly the Tier 1 rule** (`lms.content.view/.manage`,
+  `lms.assignments.view/.manage`), so attachment behaviour is unchanged.
+- TCH.5C/TCH.5D add the owned branch inside it.
+
+**No backfill.** Every existing row stays owner NULL with no audience. Demo
+data creates no teacher-owned row.
+
+**Rollback.** `down()` probes with CHECK constraints (RLS-proof, because
+constraint validation scans every row). It refuses while any owned row or
+audience row exists ("tch5b rollback: refusing"), changing nothing.
+
+Evidence on the DDEV database (`pg_dump --schema-only`):
+- before migrating vs after rollback: **byte-identical**;
+- after migrating vs after re-applying: **byte-identical**.
+
+`LmsOwnershipMigrationRollbackTest` proves the refusal for both resources,
+and the clean down/up with only Offering-wide data.
+
+**Classification.** Learning Content and Assignment are **Sensitive**
+(`docs/security/DATA-CLASSIFICATION.md`). This is not a legal gate. There is
+no new LMS legal item; E21 is unchanged.
+
+**Tests.**
+- `LmsOwnershipDatabaseInvariantsTest` (raw SQL, runtime role, both
+  resources): states, cardinality, owner and audience immutability,
+  cross-School owner and Section, grade/campus/year/Offering context, RLS.
+- `LmsOwnershipCommitSemanticsTest`: real commits, later-transaction
+  refusals, the admin-role update trigger, the lifecycle of an owned row
+  through the services.
+- `LmsOwnershipPersistenceTest`: services, reader, errors, API
+  serialization.
+- `LmsOwnershipMigrationRollbackTest`.
+- `LmsOwnershipArchitectureGuardTest`.
+- Updated: the LMS column guards, and `ElevationRlsIsolationTest` (forced-RLS
+  tables 166 → 168).
+
+**Next:** TCH.5C — Learning Content teacher adoption (not implemented).

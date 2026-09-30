@@ -4,6 +4,8 @@ namespace App\Domain\LMS\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\LMS\Application\Exceptions\LearningContentIllegalTransitionException;
+use App\Domain\LMS\Application\Ownership\SectionAudience;
+use App\Domain\LMS\Application\Ownership\SectionAudienceWriter;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\School;
 use App\Models\User;
@@ -72,20 +74,21 @@ class LearningContentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SectionAudienceWriter $audiences,
     ) {}
 
     /**
      * @param  array{title: string, description?: string|null, sequence?: int}  $attributes
      */
-    public function create(School $school, string $subjectOfferingId, array $attributes, User $actor): LearningContent
+    public function create(School $school, string $subjectOfferingId, array $attributes, User $actor, ?SectionAudience $audience = null): LearningContent
     {
-        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $attributes, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $attributes, $actor, $audience) {
             // Resolved through the tenant-scoped query (SchoolScope +
             // RLS), so another School's Offering id is a clean 404 here
             // rather than an empty/misleading later failure.
             $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($subjectOfferingId);
 
-            return DB::transaction(function () use ($school, $offering, $attributes, $actor) {
+            return $this->audiences->refusingForeignOwner('learning_content', fn () => DB::transaction(function () use ($school, $offering, $attributes, $actor, $audience) {
                 $content = new LearningContent;
                 $content->forceFill([
                     'school_id' => $school->id,
@@ -94,8 +97,17 @@ class LearningContentService
                     'description' => $attributes['description'] ?? null,
                     'sequence' => $attributes['sequence'] ?? 0,
                     'status' => LearningContent::STATUS_DRAFT,
+                    // TCH.5B: an owner only for a teacher-owned row, whose
+                    // Section audience is written in this same transaction.
+                    // Administrative callers pass no SectionAudience, so
+                    // their rows stay Offering-wide (owner NULL, no audience).
+                    'owner_employee_id' => $audience?->ownerEmployeeId,
                 ]);
                 $content->save();
+
+                if ($audience !== null) {
+                    $this->audiences->attach($content, $offering, $audience);
+                }
 
                 // Bounded metadata: ids and sequence only. `title`/
                 // `description` are School-authored content and are
@@ -107,10 +119,13 @@ class LearningContentService
                     'learningContentId' => $content->id,
                     'subjectOfferingId' => $content->subject_offering_id,
                     'sequence' => $content->sequence,
-                ]);
+                ] + ($audience === null ? [] : [
+                    'ownerEmployeeId' => $audience->ownerEmployeeId,
+                    'audienceSectionIds' => $audience->sectionIds,
+                ]));
 
                 return $content;
-            });
+            }));
         });
     }
 

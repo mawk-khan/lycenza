@@ -6,6 +6,7 @@ use App\Domain\Documents\Application\Exceptions\DocumentOwnerNotFoundException;
 use App\Domain\Documents\Application\Exceptions\DocumentOwnerTypeNotSupportedException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\LMS\Application\LmsParentResourceAuthorization;
 use App\Domain\LMS\Infrastructure\Assignment;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\School;
@@ -63,6 +64,7 @@ class DocumentListingService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly LmsParentResourceAuthorization $lmsParents,
     ) {}
 
     public function list(School $school, DocumentOwner $owner, User $actor, DocumentListingQuery $query): LengthAwarePaginator
@@ -163,7 +165,7 @@ class DocumentListingService
             throw new DocumentOwnerNotFoundException('learning_content', $learningContentId);
         }
 
-        $this->authorizeCapabilityFor($actor, 'lms.content.view', $school);
+        $this->lmsParents->authorizeRead($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, $content->id);
 
         return ['column' => 'learning_content_id', 'id' => $content->id, 'ownerModel' => $content];
     }
@@ -187,7 +189,7 @@ class DocumentListingService
             throw new DocumentOwnerNotFoundException('assignment', $assignmentId);
         }
 
-        $this->authorizeCapabilityFor($actor, 'lms.assignments.view', $school);
+        $this->lmsParents->authorizeRead($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id);
 
         return ['column' => 'assignment_id', 'id' => $assignment->id, 'ownerModel' => $assignment];
     }

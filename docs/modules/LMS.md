@@ -132,10 +132,11 @@ SubjectOffering (Academic Structure)
 - **Student** — referenced only via Submission (one row per Student per
   Assignment) and via `SubjectOfferingRosterReadService` for roster
   resolution; never denormalized into Assignment/LearningContent.
-- **Employee (teacher)** — **not referenced at all** (correction,
-  TCH.5A audit, ADR 0063 §27/§33): neither table stores an author, owner or
-  any Employee id, and the LMS architecture guards forbid one. Authorization
-  is capability-only (§7).
+- **Employee (teacher)** — since TCH.5B, an optional immutable
+  `owner_employee_id` (composite FK to `employees`) on each resource. It is
+  set only on a teacher-owned row and is never an author/audit field: the
+  audit actor is still the User. Authorization is still capability-only
+  (§7); see §15 for the two persistence states.
 
 ## 4. Assignment/Submission versus Examinations boundary
 
@@ -306,6 +307,11 @@ were added additively to `documents`, each with a composite FK to
 `(id, school_id)` on its LMS table; `documents_exactly_one_owner_check`
 widened to include both, preserving exactly-one-owner-always. Both are
 active, `internal`-tier only, gated by `lms.content.*`/`lms.assignments.*`.
+Since TCH.5B, Documents asks LMS for that decision through
+`App\Domain\LMS\Application\LmsParentResourceAuthorization`
+(`authorizeRead`/`authorizeWrite`), which applies exactly those Tier 1
+capabilities today. TCH.5C/TCH.5D add the owned (teacher) branch there;
+Documents names no LMS capability, owner or audience.
 
 **`submission_id` — CANCELLED, not added, must not be added.** It was
 previously named as an approved-but-not-yet-implemented future owner
@@ -488,3 +494,30 @@ exists anywhere in `learning_content` (architecture-guard-tested).
   additive, nullable, not yet needed.
 - **External LMS integration/standards**: unscoped; requires its own
   future roadmap/ADR/product decision before any work begins.
+
+## 15. Ownership persistence states (TCH.5B, ADR 0063 §35) — foundation only
+
+Every Learning Content and Assignment row is in exactly one state:
+
+| State | `owner_employee_id` | Section audience | Meaning |
+|---|---|---|---|
+| **Offering-wide** (legacy/administrative) | NULL | none | the whole SubjectOffering, as since Phase 0I |
+| **Teacher-owned** | an Employee of the School | ≥ 1 Section of the Offering's context | Section-targeted material of one teacher |
+
+- **Database-enforced:**
+  - an owner needs an audience (checked at commit);
+  - an audience needs an owner;
+  - both are written by one transaction and immutable afterwards;
+  - audience Sections are pinned to the Offering's year, campus and grade
+    by composite FKs;
+  - `learning_content_section_audiences`/`assignment_section_audiences`
+    have forced RLS.
+- **Existing rows.** Every existing row, and every row the administrative
+  surfaces create, is Offering-wide. Nothing was backfilled.
+- **Not yet reachable.** A teacher-owned row can be created only through
+  `LearningContentService::create()`/`AssignmentService::create()` with a
+  `SectionAudience`, which no route supplies. **Teacher-owned behaviour is
+  foundation only, not yet reachable through teacher authorization.** No
+  `lms.*.teacher` capability exists until TCH.5C (Learning Content) and
+  TCH.5D (Assignment).
+- **Classification.** Both resources are Sensitive since TCH.5B.

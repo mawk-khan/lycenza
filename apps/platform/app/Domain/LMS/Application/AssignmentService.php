@@ -7,6 +7,8 @@ use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\LMS\Application\Exceptions\AssignmentDueDateOutsideAcademicYearException;
 use App\Domain\LMS\Application\Exceptions\AssignmentDueDateRequiredException;
 use App\Domain\LMS\Application\Exceptions\AssignmentIllegalTransitionException;
+use App\Domain\LMS\Application\Ownership\SectionAudience;
+use App\Domain\LMS\Application\Ownership\SectionAudienceWriter;
 use App\Domain\LMS\Infrastructure\Assignment;
 use App\Models\School;
 use App\Models\User;
@@ -73,14 +75,15 @@ class AssignmentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly SectionAudienceWriter $audiences,
     ) {}
 
     /**
      * @param  array{title: string, instructions?: string|null, due_on?: string|null}  $attributes
      */
-    public function create(School $school, string $subjectOfferingId, array $attributes, User $actor): Assignment
+    public function create(School $school, string $subjectOfferingId, array $attributes, User $actor, ?SectionAudience $audience = null): Assignment
     {
-        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $attributes, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $attributes, $actor, $audience) {
             // Resolved through the tenant-scoped query (SchoolScope +
             // RLS), so another School's Offering id is a clean 404 here
             // rather than an empty/misleading later failure.
@@ -91,7 +94,7 @@ class AssignmentService
                 $dueOn = $this->assertDueDateWithinYear($school, $offering, $attributes['due_on']);
             }
 
-            return DB::transaction(function () use ($school, $offering, $attributes, $dueOn, $actor) {
+            return $this->audiences->refusingForeignOwner('assignments', fn () => DB::transaction(function () use ($school, $offering, $attributes, $dueOn, $actor, $audience) {
                 $assignment = new Assignment;
                 $assignment->forceFill([
                     'school_id' => $school->id,
@@ -100,8 +103,17 @@ class AssignmentService
                     'instructions' => $attributes['instructions'] ?? null,
                     'due_on' => $dueOn,
                     'status' => Assignment::STATUS_DRAFT,
+                    // TCH.5B: an owner only for a teacher-owned row, whose
+                    // Section audience is written in this same transaction.
+                    // Administrative callers pass no SectionAudience, so
+                    // their rows stay Offering-wide (owner NULL, no audience).
+                    'owner_employee_id' => $audience?->ownerEmployeeId,
                 ]);
                 $assignment->save();
+
+                if ($audience !== null) {
+                    $this->audiences->attach($assignment, $offering, $audience);
+                }
 
                 // Bounded metadata: ids and the due date only. `title`/
                 // `instructions` are School-authored content and are
@@ -110,10 +122,13 @@ class AssignmentService
                     'assignmentId' => $assignment->id,
                     'subjectOfferingId' => $assignment->subject_offering_id,
                     'dueOn' => $assignment->due_on?->toDateString(),
-                ]);
+                ] + ($audience === null ? [] : [
+                    'ownerEmployeeId' => $audience->ownerEmployeeId,
+                    'audienceSectionIds' => $audience->sectionIds,
+                ]));
 
                 return $assignment;
-            });
+            }));
         });
     }
 

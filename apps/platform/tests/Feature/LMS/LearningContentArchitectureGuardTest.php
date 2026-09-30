@@ -53,10 +53,15 @@ class LearningContentArchitectureGuardTest extends TestCase
         $this->assertSame([
             'id', 'school_id', 'subject_offering_id', 'title', 'description',
             'sequence', 'status', 'created_at', 'updated_at',
+            // TCH.5B (ADR 0063 section 35): the immutable owner Employee of a
+            // teacher-owned row (NULL = Offering-wide) and its creating
+            // transaction id -- the reviewed exception to the rule below.
+            'owner_employee_id', 'ownership_txid',
         ], $columns, 'The learning_content column set is closed and reviewed; adding one is an architecture decision.');
 
         foreach ([
-            // Person identity -- what keeps this row Confidential.
+            // Person identity beyond the one reviewed owner column (the row is
+            // Sensitive since TCH.5B; no other person may be named on it).
             'teacher_id', 'employee_id', 'user_id', 'created_by_employee_id',
             'student_id', 'student_enrollment_id', 'student_subject_enrollment_id',
             // Forbidden cross-module dependencies.

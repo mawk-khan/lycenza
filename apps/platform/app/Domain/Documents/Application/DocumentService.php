@@ -10,6 +10,7 @@ use App\Domain\Documents\Application\Exceptions\DocumentTypeNotAllowedException;
 use App\Domain\Documents\Application\Exceptions\InvalidDocumentClassificationException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\LMS\Application\LmsParentResourceAuthorization;
 use App\Domain\LMS\Infrastructure\Assignment;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\School;
@@ -102,6 +103,7 @@ class DocumentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly LmsParentResourceAuthorization $lmsParents,
     ) {}
 
     public function create(School $school, CreateDocumentData $data, User $actor): Document
@@ -255,7 +257,7 @@ class DocumentService
             throw new InvalidDocumentClassificationException($classificationTier);
         }
 
-        $this->authorizeCapabilityFor($actor, 'lms.content.manage', $school);
+        $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, $content->id);
 
         return ['learning_content_id' => $content->id];
     }
@@ -275,7 +277,7 @@ class DocumentService
             throw new InvalidDocumentClassificationException($classificationTier);
         }
 
-        $this->authorizeCapabilityFor($actor, 'lms.assignments.manage', $school);
+        $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id);
 
         return ['assignment_id' => $assignment->id];
     }
@@ -284,8 +286,8 @@ class DocumentService
     {
         match ($document->owner_type) {
             'employee' => $this->authorizeCapabilityFor($actor, $this->employeeDocumentCapability($document->classification_tier), $school),
-            'learning_content' => $this->authorizeCapabilityFor($actor, 'lms.content.manage', $school),
-            'assignment' => $this->authorizeCapabilityFor($actor, 'lms.assignments.manage', $school),
+            'learning_content' => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, (string) $document->learning_content_id),
+            'assignment' => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, (string) $document->assignment_id),
             default => throw new DocumentOwnerTypeNotSupportedException($document->owner_type),
         };
     }

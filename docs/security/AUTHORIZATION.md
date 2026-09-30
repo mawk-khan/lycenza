@@ -165,7 +165,9 @@ fact (TCH.2) and two owned adopters — Curriculum Delivery (TCH.3) and
 Attendance (TCH.4) — are built.
 
 **Curriculum Delivery and Attendance are the owned teaching surfaces.** LMS
-and Timetable remain admin-only, and Timetable stays scheduling evidence,
+and Timetable remain admin-only (LMS ownership *persistence* exists since
+TCH.5B, ADR 0063 §35, but teacher LMS authorization remains unimplemented
+until TCH.5C/TCH.5D), and Timetable stays scheduling evidence,
 never ownership authority. **Teacher Attendance functionality is implemented
 but production enablement remains blocked by TCH-L1 until the required
 legal/compliance determination is recorded** (ADR 0063 §26). The first

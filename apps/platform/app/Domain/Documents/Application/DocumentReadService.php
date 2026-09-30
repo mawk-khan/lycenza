@@ -6,6 +6,7 @@ use App\Domain\Documents\Application\Exceptions\DocumentContentUnavailableExcept
 use App\Domain\Documents\Application\Exceptions\DocumentNotFoundException;
 use App\Domain\Documents\Application\Exceptions\DocumentOwnerTypeNotSupportedException;
 use App\Domain\Documents\Infrastructure\Document;
+use App\Domain\LMS\Application\LmsParentResourceAuthorization;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -76,6 +77,7 @@ class DocumentReadService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly LmsParentResourceAuthorization $lmsParents,
     ) {}
 
     public function metadata(School $school, string $documentId, User $actor): DocumentMetadata
@@ -147,8 +149,8 @@ class DocumentReadService
     {
         match ($document->owner_type) {
             'employee' => $this->authorizeCapabilityFor($actor, $this->employeeReadCapability($document->classification_tier), $school),
-            'learning_content' => $this->authorizeCapabilityFor($actor, 'lms.content.view', $school),
-            'assignment' => $this->authorizeCapabilityFor($actor, 'lms.assignments.view', $school),
+            'learning_content' => $this->lmsParents->authorizeRead($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, (string) $document->learning_content_id),
+            'assignment' => $this->lmsParents->authorizeRead($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, (string) $document->assignment_id),
             default => throw new DocumentOwnerTypeNotSupportedException($document->owner_type),
         };
     }
