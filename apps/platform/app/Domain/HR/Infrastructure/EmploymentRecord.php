@@ -45,6 +45,19 @@ class EmploymentRecord extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
+    /**
+     * The closed Employment status catalogue (docs/modules/HR.md state
+     * responsibility matrix), database-enforced by
+     * `employment_records_status_check` since TCH.1 (ADR 0063 section 5).
+     */
+    public const array STATUSES = ['draft', 'pre_joining', 'active', 'notice_period', 'separated', 'terminated', 'retired', 'deceased'];
+
+    /**
+     * ADR 0063 D-08: the only statuses under which an EmploymentRecord can
+     * make its Employee an ActingEmployee. Every other status is ineligible.
+     */
+    public const array AUTHORIZATION_ELIGIBLE_STATUSES = ['active', 'notice_period'];
+
     protected $table = 'employment_records';
 
     protected $fillable = [

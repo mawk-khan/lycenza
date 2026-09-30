@@ -50,6 +50,9 @@ class Employee extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
+    /** The closed `record_status` set, database-enforced by `employees_record_status_check` since TCH.1. */
+    public const array RECORD_STATUSES = ['active', 'archived'];
+
     protected $table = 'employees';
 
     protected $fillable = ['school_id', 'user_id', 'employee_number', 'full_name', 'work_email', 'work_phone', 'record_status'];

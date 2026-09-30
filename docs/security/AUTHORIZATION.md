@@ -31,7 +31,8 @@ This table is a design reference, not a list of implemented roles.
   role;
 - the Teacher row is contracted by ADR 0063 (TCH) — see "Ownership-based
   authorization" below. It is **not** implemented yet: there is no
-  production Teacher role and no teacher ownership.
+  production Teacher role and no teacher ownership. Only its identity
+  prerequisite, ActingEmployee (TCH.1), exists.
 
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|
@@ -155,11 +156,13 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   See `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
-## Ownership-based authorization (ADR 0063 — TCH contract; not implemented)
+## Ownership-based authorization (ADR 0063 — TCH contract; identity boundary only implemented)
 
 Roles stay capability bundles. ADR 0063 (TCH.0, 2026-09-30) contracts the
-platform's first ownership-based authorization, for teachers. **None of it
-is built yet**: every teaching module is still admin-only.
+platform's first ownership-based authorization, for teachers. Only the
+ActingEmployee identity boundary (TCH.1) is built; there is no
+TeachingAssignment, no owned-scope capability and no Teacher role, so every
+teaching module is still admin-only.
 
 - **Two capability tiers:**
 
@@ -187,6 +190,16 @@ is built yet**: every teaching module is still admin-only.
   - Never inferred from an email, employee number, name or any request
     field.
   - It identifies; it authorizes nothing by itself.
+  - **Implemented (TCH.1):** `App\Domain\HR\Application\ActingEmployeeResolver`.
+    `resolve()` is a fresh read. `hold()` holds the membership, User,
+    Employee and EmploymentRecord rows `FOR SHARE` inside the caller's
+    transaction, so a state-changing consumer re-verifies identity at its
+    authoritative write. Nothing is cached, and `CapabilityResolver` does not
+    depend on it.
+  - The Employee↔User link it reads changes only through
+    `EmployeeService::linkUser()`/`unlinkUser()` (`hr.employees.manage`,
+    audited `employee.user_linked`/`employee.user_unlinked`). Linking
+    requires an enabled User with an **active** membership.
 - **TeachingAssignment** is the ownership fact: a dated Employee × Section ×
   required SubjectOffering assignment, administered under
   `teaching.assignments.*`.

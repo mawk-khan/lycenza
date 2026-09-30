@@ -2120,6 +2120,114 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  # --- TCH.1 (ADR 0063 section 6): the explicit Employee<->User link
+  # lifecycle. `user_id` is no longer accepted by the Employee update; a
+  # link changes only through these two operations (unlink, then link --
+  # never a direct re-pointing), each audited
+  # (employee.user_linked / employee.user_unlinked).
+  /schools/{schoolId}/employees/{employeeId}/link-user:
+    post:
+      operationId: linkEmployeeUser
+      summary: >
+        Links an active, currently unlinked Employee to a User who is
+        enabled and holds an ACTIVE membership at this School. Requires
+        hr.employees.manage. Idempotency-Key required. The link identifies
+        the Employee's account; it grants no access by itself.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              additionalProperties: false
+              properties:
+                user_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Linked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/EmployeeCoreRecord" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.employees.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Employee does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            HR_EMPLOYEE_ALREADY_LINKED (unlink first), HR_EMPLOYEE_NOT_ACTIVE
+            (archived Employee) or HR_USER_ALREADY_LINKED (the User is linked
+            to another Employee of this School).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: >
+            Invalid body, or HR_UNRELATED_USER_LINKAGE -- one identical,
+            non-enumerating answer whether the User is unknown, disabled, not
+            a member, invited, suspended, or a member of another School only.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/employees/{employeeId}/unlink-user:
+    post:
+      operationId: unlinkEmployeeUser
+      summary: >
+        Removes an Employee's User link. Deletes nothing else (Employee, HR
+        history, User and membership are untouched); allowed for an
+        archived Employee. Requires hr.employees.manage. Idempotency-Key
+        required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/EmployeeId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: Unlinked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/EmployeeCoreRecord" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.employees.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Employee does not exist, or belongs to a different School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: HR_EMPLOYEE_NOT_LINKED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/enrollment-rollovers:
     get:
       operationId: listEnrollmentRollovers
@@ -12994,6 +13102,22 @@ components:
     # since 8A.8/8A.9/8A.10/8A.11 (this file is the source of truth for
     # the SHAPE the implementation already has, not a license to
     # rename it to match an unrelated module's casing convention).
+
+    EmployeeCoreRecord:
+      type: object
+      description: >
+        TCH.1 -- the Employee core record returned by the HR mutation
+        transport (App\Domain\HR\Http\Controllers\EmployeeController::present()).
+        camelCase, exactly as that controller already serializes it.
+      required: [id, employeeNumber, fullName, workEmail, workPhone, userId, recordStatus]
+      properties:
+        id: { type: string, format: uuid }
+        employeeNumber: { type: string }
+        fullName: { type: string }
+        workEmail: { type: string, nullable: true }
+        workPhone: { type: string, nullable: true }
+        userId: { type: string, format: uuid, nullable: true }
+        recordStatus: { type: string, enum: [active, archived] }
 
     EmployeeDirectoryEntry:
       type: object

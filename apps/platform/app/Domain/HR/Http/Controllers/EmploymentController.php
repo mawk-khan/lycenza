@@ -38,7 +38,7 @@ class EmploymentController extends Controller
             'starts_on' => ['required', 'date'],
             'ends_on' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_on'],
             'probation_ends_on' => ['sometimes', 'nullable', 'date'],
-            'status' => ['sometimes', 'string'],
+            'status' => ['sometimes', 'string', Rule::in(EmploymentRecord::STATUSES)],
         ]);
 
         $employment = $service->create($employeeModel, $validated, $request->user());

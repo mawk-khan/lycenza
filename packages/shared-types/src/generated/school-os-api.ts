@@ -1051,6 +1051,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/employees/{employeeId}/link-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Links an active, currently unlinked Employee to a User who is enabled and holds an ACTIVE membership at this School. Requires hr.employees.manage. Idempotency-Key required. The link identifies the Employee's account; it grants no access by itself. */
+        post: operations["linkEmployeeUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/employees/{employeeId}/unlink-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Removes an Employee's User link. Deletes nothing else (Employee, HR history, User and membership are untouched); allowed for an archived Employee. Requires hr.employees.manage. Idempotency-Key required. */
+        post: operations["unlinkEmployeeUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/enrollment-rollovers": {
         parameters: {
             query?: never;
@@ -6694,6 +6728,19 @@ export interface components {
             /** Format: date */
             starts_on: string;
         };
+        /** @description TCH.1 -- the Employee core record returned by the HR mutation transport (App\Domain\HR\Http\Controllers\EmployeeController::present()). camelCase, exactly as that controller already serializes it. */
+        EmployeeCoreRecord: {
+            /** Format: uuid */
+            id: string;
+            employeeNumber: string;
+            fullName: string;
+            workEmail: string | null;
+            workPhone: string | null;
+            /** Format: uuid */
+            userId: string | null;
+            /** @enum {string} */
+            recordStatus: "active" | "archived";
+        };
         /** @description Directory-tier only (docs/modules/HR.md "Employee Directory (8A.8)") -- no personal/Restricted/Highly Sensitive field exists on this schema. */
         EmployeeDirectoryEntry: {
             /** Format: uuid */
@@ -11417,6 +11464,150 @@ export interface operations {
             };
             /** @description Employee does not exist, or belongs to a different School. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    linkEmployeeUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    user_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Linked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployeeCoreRecord"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.employees.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Employee does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description HR_EMPLOYEE_ALREADY_LINKED (unlink first), HR_EMPLOYEE_NOT_ACTIVE (archived Employee) or HR_USER_ALREADY_LINKED (the User is linked to another Employee of this School). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid body, or HR_UNRELATED_USER_LINKAGE -- one identical, non-enumerating answer whether the User is unknown, disabled, not a member, invited, suspended, or a member of another School only. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    unlinkEmployeeUser: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                /** @description Employee UUID (not User id, not EmploymentRecord id, not the display employee_number) -- Phase 8A.14 section 57. */
+                employeeId: components["parameters"]["EmployeeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlinked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EmployeeCoreRecord"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.employees.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Employee does not exist, or belongs to a different School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description HR_EMPLOYEE_NOT_LINKED. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

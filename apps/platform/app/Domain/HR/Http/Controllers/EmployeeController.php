@@ -52,9 +52,11 @@ class EmployeeController extends Controller
 
         $model = Employee::query()->findOrFail($employee);
 
+        // TCH.1 (ADR 0063 section 6): the User link is not an ordinary
+        // field -- it changes only through linkUser()/unlinkUser() below.
         $validated = $request->validate([
             'full_name' => ['sometimes', 'string', 'max:255'],
-            'user_id' => ['sometimes', 'nullable', 'uuid'],
+            'user_id' => ['prohibited'],
             'work_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'work_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
         ]);
@@ -62,6 +64,36 @@ class EmployeeController extends Controller
         $updated = $service->update($model, $validated, $request->user());
 
         return response()->json(['data' => $this->present($updated)]);
+    }
+
+    /**
+     * TCH.1 (ADR 0063 section 6, D-09): the explicit, audited link. The
+     * body names the User to link; the Employee is the tenant-scoped route
+     * resource. Neither is ever taken as proof of who the actor is.
+     */
+    public function linkUser(Request $request, School $school, string $employee, EmployeeService $service): JsonResponse
+    {
+        abort_if(! Str::isUuid($employee), 404);
+
+        $model = Employee::query()->findOrFail($employee);
+
+        $validated = $request->validate([
+            'user_id' => ['required', 'uuid'],
+        ]);
+
+        $linked = $service->linkUser($model, $validated['user_id'], $request->user());
+
+        return response()->json(['data' => $this->present($linked)]);
+    }
+
+    public function unlinkUser(Request $request, School $school, string $employee, EmployeeService $service): JsonResponse
+    {
+        abort_if(! Str::isUuid($employee), 404);
+
+        $model = Employee::query()->findOrFail($employee);
+        $unlinked = $service->unlinkUser($model, $request->user());
+
+        return response()->json(['data' => $this->present($unlinked)]);
     }
 
     public function archive(Request $request, School $school, string $employee, EmployeeService $service): JsonResponse

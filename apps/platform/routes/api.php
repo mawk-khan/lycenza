@@ -585,6 +585,14 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/employees/{employee}/restore', [EmployeeController::class, 'restore'])
                 ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.restore');
+            // TCH.1 (ADR 0063 section 6): the explicit Employee<->User
+            // link lifecycle; `user_id` is no longer a PATCH field.
+            Route::post('/employees/{employee}/link-user', [EmployeeController::class, 'linkUser'])
+                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.link-user');
+            Route::post('/employees/{employee}/unlink-user', [EmployeeController::class, 'unlinkUser'])
+                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.employees.unlink-user');
 
             Route::put('/employees/{employee}/personal-detail', [EmployeePersonalDetailController::class, 'update'])
                 ->middleware(['capability:hr.employees.personal.manage', 'throttle:school-api-mutations'])

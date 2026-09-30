@@ -6,6 +6,7 @@ use App\Domain\HR\Application\Exceptions\EmployeeCategoryNotFoundException;
 use App\Domain\HR\Application\Exceptions\EmploymentAlreadyEndedException;
 use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentEffectiveDateException;
+use App\Domain\HR\Application\Exceptions\InvalidEmploymentStatusException;
 use App\Domain\HR\Application\Exceptions\InvalidEmploymentStatusTransitionException;
 use App\Domain\HR\Events\EmploymentEnded;
 use App\Domain\HR\Events\EmploymentStarted;
@@ -71,9 +72,17 @@ class EmploymentService
         $startsOn = $attributes['starts_on'];
         $endsOn = $attributes['ends_on'] ?? null;
         $categoryId = $attributes['employee_category_id'] ?? null;
+        $status = $attributes['status'] ?? 'active';
 
-        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $startsOn, $endsOn, $categoryId, $actor) {
-            return DB::transaction(function () use ($school, $employee, $attributes, $startsOn, $endsOn, $categoryId, $actor) {
+        // TCH.1 (ADR 0063 section 5): `status` is an ActingEmployee input,
+        // so only the closed catalogue is ever written (the database
+        // enforces the same list: employment_records_status_check).
+        if (! in_array($status, EmploymentRecord::STATUSES, true)) {
+            throw new InvalidEmploymentStatusException($status);
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $startsOn, $endsOn, $categoryId, $status, $actor) {
+            return DB::transaction(function () use ($school, $employee, $attributes, $startsOn, $endsOn, $categoryId, $status, $actor) {
                 // Lock the Employee row itself (not just existing EmploymentRecord
                 // rows) so two concurrent create() calls for the SAME employee --
                 // including the very first hire, where no EmploymentRecord rows
@@ -93,7 +102,7 @@ class EmploymentService
                         'starts_on' => $startsOn,
                         'ends_on' => $endsOn,
                         'probation_ends_on' => $attributes['probation_ends_on'] ?? null,
-                        'status' => $attributes['status'] ?? 'active',
+                        'status' => $status,
                     ]);
                 } catch (QueryException $e) {
                     if ($categoryId !== null && $this->violatesEmployeeCategoryForeignKey($e)) {

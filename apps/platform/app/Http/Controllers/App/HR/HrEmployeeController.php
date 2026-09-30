@@ -8,7 +8,6 @@ use App\Domain\HR\Application\EmployeeDirectoryService;
 use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\Exceptions\DuplicateWorkEmailException;
-use App\Domain\HR\Application\Exceptions\UnrelatedUserLinkageException;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeCategory;
@@ -171,10 +170,6 @@ class HrEmployeeController extends Controller
         } catch (DuplicateWorkEmailException) {
             throw ValidationException::withMessages([
                 'work_email' => ['This work email is already in use by another Employee in this School.'],
-            ]);
-        } catch (UnrelatedUserLinkageException) {
-            throw ValidationException::withMessages([
-                'user_id' => ['That User has no active membership at this School.'],
             ]);
         }
 

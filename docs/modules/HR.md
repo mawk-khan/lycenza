@@ -3683,3 +3683,52 @@ feature branch was clean before this edit (Vite's gitignored
 per this checkpoint's own "valid outcome (A)."
 
 **PHASE 8A VERDICT: CLOSED.**
+
+## TCH.1 — Verified ActingEmployee identity boundary (implemented)
+
+ADR 0063 §4–§6 and §29 are the full record. This section lists only what
+changed in HR.
+
+- **ActingEmployee.** `App\Domain\HR\Application\ActingEmployeeResolver`
+  is the one way to answer "who is this User, as an eligible Employee, at
+  this School, on this School-local date".
+  - The chain is: School operational → **active** membership → enabled User
+    → the Employee linked by `employees(school_id, user_id)` →
+    `record_status = 'active'` → exactly one EmploymentRecord with
+    `starts_on <= asOf <= ends_on` (open-ended allowed) and status `active`
+    or `notice_period`.
+  - It fails closed (`ActingEmployeeUnavailableException`, 403) at the first
+    missing link, and fails closed on two eligible records.
+  - `hold()` is the locked variant for a consumer's transaction.
+  - It identifies only; no module other than HR resolves a User's Employee
+    (`ActingEmployeeArchitectureGuardTest`).
+- **User link lifecycle (supersedes the link-time rule described in 8A.1
+  and 8A.12 above).**
+  - The link is written only by `EmployeeService`: `linkUser()`,
+    `unlinkUser()`, or `create()` with a `user_id` (the same primitive).
+  - Linking requires an enabled User with an **active** membership at the
+    Employee's School; an `invited` or `suspended` membership no longer
+    qualifies. It is checked under `FOR SHARE` locks inside the write
+    transaction.
+  - An active, unlinked Employee is required. Relinking is unlink, then link.
+  - `update()` refuses `user_id`.
+  - Audited as `employee.user_linked` / `employee.user_unlinked` (ids only).
+  - The HR principle 2.6 still holds: a later membership suspension does not
+    unwind the stored link. It makes ActingEmployee resolution fail instead.
+- **Status columns are database-constrained.** `employees.record_status`
+  (`active`, `archived`) and `employment_records.status` (the eight-value
+  catalogue) now have CHECK constraints
+  (`2026_11_03_090000_constrain_hr_identity_statuses`, which refuses rather
+  than rewrites legacy data). `EmploymentService::create()` validates
+  `status` (`HR_INVALID_EMPLOYMENT_STATUS`).
+- **API.** `POST .../employees/{employee}/link-user` and `.../unlink-user`
+  (`hr.employees.manage`, `idempotent`). `PATCH .../employees/{employee}`
+  now answers 422 for `user_id`. The employment-record `status` input is
+  limited to the catalogue.
+- **Import.** A row's `user_id` goes through the same link (invited,
+  suspended, disabled or other-School Users fail the row). The same-User
+  race still reports `duplicate_exact`.
+- **Not changed.** There is no Employee schema redesign
+  (`employees.user_id` stays nullable, `unique(school_id, user_id)` and its
+  RESTRICT foreign key stay). There is no teacher access, TeachingAssignment
+  or Teacher role, and no HRX self-service.

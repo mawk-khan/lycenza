@@ -1,8 +1,10 @@
 # ADR 0063: Teacher Identity and Ownership-Based Authorization Contract
 
-- Status: Accepted as a contract (TCH.0, documentation only). **Nothing in
-  this ADR is implemented.** The as-built state stays admin-only for every
-  teaching module until TCH.1 onward are built and closed.
+- Status: Accepted as a contract (TCH.0, documentation only, closed).
+  **TCH.1 is implemented** (the ActingEmployee identity boundary, §29).
+  TCH.2 onward are **not** implemented: no TeachingAssignment, Teacher role
+  or owned-scope capability exists, and every teaching module stays
+  admin-only until TCH.3 onward are built and closed.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -671,3 +673,87 @@ semantics are product and architecture choices.
 - HR's Employee link becomes authority-bearing, which is why TCH.1 hardens
   it first.
 - Existing administrative access is unchanged at every step.
+
+## 29. TCH.1 implementation (as built)
+
+TCH.1 builds §4–§6 and the TCH.1 rows of §20–§22. It adds **no** teacher
+access: no TeachingAssignment, no Teacher role, no `*.teacher` capability,
+and no teaching module changes. Decisions D-01 to D-17 are unchanged.
+
+**Resolver (§4, D-10).** `App\Domain\HR\Application\ActingEmployeeResolver`
+is the one path from `(User, School, asOf)` to an
+`App\Domain\HR\Application\ActingEmployee` (ids only: School, User,
+Employee, EmploymentRecord, `asOf`; never persisted).
+- `resolve()` reads fresh, without locks. `hold()` must run inside the
+  caller's transaction and reads every row of the chain `FOR SHARE`, so it
+  is the primitive a future state-changing consumer calls inside its
+  authoritative transaction.
+- Chain, in lock order: School operational (`SchoolOperationalGuard`) →
+  membership `status = 'active'` → User re-read and not disabled →
+  Employee by `employees(school_id, user_id)` → `record_status = 'active'`
+  → exactly one eligible EmploymentRecord. Each failure is
+  `ActingEmployeeUnavailableException` (403, `HR_ACTING_EMPLOYEE_UNAVAILABLE`,
+  one message) carrying an internal reason: `school_not_operational`,
+  `membership_not_active`, `user_unavailable`, `not_linked`,
+  `employee_not_active`, `no_eligible_employment`, `ambiguous_employment`.
+- `asOf` is a `Y-m-d` School-local date; the default is today in
+  `SchoolTimezone::resolve()`.
+- Nothing is cached. `CapabilityResolver` is unchanged and has no HR
+  dependency (architecture guard).
+
+**Eligibility (§5, D-08).** `starts_on <= asOf AND (ends_on IS NULL OR
+ends_on >= asOf) AND status IN ('active', 'notice_period')`, both ends
+inclusive. Two eligible rows (possible only in corrupt or legacy data) fail
+closed as `ambiguous_employment`. `EmploymentService::create()` now validates
+`status` against the closed catalogue (`HR_INVALID_EMPLOYMENT_STATUS`), and the
+API rejects any other value.
+
+**Status constraints (§5).** Migration
+`2026_11_03_090000_constrain_hr_identity_statuses` adds
+`employees_record_status_check` (`active`, `archived`) and
+`employment_records_status_check` (the eight documented statuses). It never
+rewrites a row. PostgreSQL validates a new CHECK against every row regardless
+of forced RLS, so one out-of-catalogue legacy row makes the migration refuse
+(`<constraint>: refusing ... No row was changed`). `down()` drops only the two
+constraints. Rollback and re-apply were verified byte-identical with
+`pg_dump --schema-only`.
+
+**Link governance (§6, D-09).**
+- `EmployeeService::linkUser()` and `unlinkUser()` are the explicit
+  operations, under `hr.employees.manage`. `create()`'s optional `user_id`
+  goes through the same private link primitive in the creation transaction.
+- `update()` refuses `user_id` (`HR_USER_LINK_NOT_EDITABLE`); the API PATCH
+  marks it `prohibited`. The web forms never carried it.
+- Changing a link is unlink, then link. Linking an already-linked Employee is
+  `HR_EMPLOYEE_ALREADY_LINKED`, and linking an archived Employee is
+  `HR_EMPLOYEE_NOT_ACTIVE`. Unlinking an archived Employee is allowed, and
+  unlinking deletes nothing else.
+- Link validation runs inside the transaction: membership `FOR SHARE` (must
+  be `active`), then User `FOR SHARE` (must be enabled), then Employee
+  `FOR UPDATE`. Every User-side refusal is one non-enumerating
+  `HR_UNRELATED_USER_LINKAGE` answer.
+- `employees_school_id_user_id_unique` remains the only guarantee of one User
+  per Employee per School, surfaced as `HR_USER_ALREADY_LINKED`. A User may
+  still be an Employee at several Schools.
+- Audit (§22): `employee.user_linked` and `employee.user_unlinked`, written in
+  the same transaction, with metadata `employeeId`, `previousUserId` and
+  `newUserId` only. `EmployeeUpdated` (fields `['user_id']`) is still emitted
+  for linkUser/unlinkUser, as the old update path did. No new domain event.
+- API (§23): `POST /api/v1/schools/{school}/employees/{employee}/link-user`
+  (body `user_id`) and `.../unlink-user`, both `idempotent`, in the OpenAPI
+  contract (`linkEmployeeUser`, `unlinkEmployeeUser`, `EmployeeCoreRecord`).
+  No web link surface is added in TCH.1. Selecting a member from the HR screen
+  would need a new member-listing disclosure, which is left to a later
+  checkpoint that needs it.
+- Import: a row's `user_id` goes through the same `create()` link. The
+  same-User race is re-detected as `duplicate_exact`.
+
+**Concurrency (§20).** Two-process tests with forced, observed overlap
+(`ActingEmployeeConcurrencyTest`) prove both serial orders of each race:
+- link vs membership suspension;
+- unlink, employment end, Employee archive and membership suspension, each
+  vs `hold()`;
+- one User linked to two Employees;
+- two Users linked to one Employee.
+
+In none of them does a decision taken after an ineligibility commits succeed.

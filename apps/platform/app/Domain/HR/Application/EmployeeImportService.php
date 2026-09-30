@@ -14,6 +14,7 @@ use App\Domain\HR\Application\Exceptions\EmployeeImportUnknownFieldException;
 use App\Domain\HR\Application\Exceptions\EmployeeImportValidationException;
 use App\Domain\HR\Application\Exceptions\EmploymentOverlapException;
 use App\Domain\HR\Application\Exceptions\UnrelatedUserLinkageException;
+use App\Domain\HR\Application\Exceptions\UserAlreadyLinkedException;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
@@ -173,11 +174,14 @@ class EmployeeImportService
 
                     return EmployeeImportRowResult::created($rowNumber, $employee->id, $employee->employee_number);
                 });
-            } catch (UniqueConstraintViolationException) {
+            } catch (UniqueConstraintViolationException|UserAlreadyLinkedException) {
                 // Race: a concurrent import won between our duplicate
                 // check and this transaction's insert. Re-detect
                 // deterministically rather than leaking the raw SQLSTATE
-                // (checkpoint brief section 66).
+                // (checkpoint brief section 66). Since TCH.1 the User link
+                // goes through EmployeeService's link primitive, which
+                // reports the same-User unique violation as
+                // UserAlreadyLinkedException.
                 $raceResult = $this->duplicates->detect($school, $row);
 
                 return EmployeeImportRowResult::duplicateExact($rowNumber, $raceResult->matchedEmployeeId, $raceResult->matchedEmployeeNumber);
