@@ -24,6 +24,12 @@ use Symfony\Component\Uid\UuidV7;
  * a receipt" path.
  *
  * In the caller's transaction, with the School's TenantContext set:
+ * 0. the numbering (prefix, start month) is read under the School's Fees
+ *    settings lock taken SHARED (`FeeSettingsService::
+ *    receiptNumberingForIssuance()`), held to commit: a numbering change
+ *    (EXCLUSIVE) and this issuance serialize, so a first series can never
+ *    be created from settings a concurrent change is replacing, nor a
+ *    change commit under a first series it cannot yet see;
  * 1. the series is the School financial year of the Payment's
  *    `settled_at` in the School's timezone (`fee_settings` start month,
  *    default April; never an AcademicYear);
@@ -36,6 +42,12 @@ use Symfony\Component\Uid\UuidV7;
  *    consuming a number;
  * 4. the receipt is inserted with `next_value`, then the counter advances
  *    by one.
+ *
+ * Lock order (no cycle): the caller's locks (School FOR SHARE, the
+ * manual-payment key lock, Charges in ascending id order) -> Fees settings
+ * lock SHARED -> series counter row FOR UPDATE. A settings mutation takes
+ * only the settings lock EXCLUSIVE -> `fee_settings` row, never a Charge
+ * or a counter.
  *
  * A rolled-back transaction rolls back the receipt and the increment: no
  * committed gap. The database re-checks the series, sequence and format
@@ -60,7 +72,7 @@ class ReceiptIssuer
             throw new LogicException('ReceiptIssuer::issue() must run inside the caller\'s database transaction.');
         }
 
-        $numbering = $this->settings->receiptNumbering($school);
+        $numbering = $this->settings->receiptNumberingForIssuance($school);
         // Read settled_at exactly as stored (a UTC wall-clock value), the
         // same interpretation the database trigger re-checks.
         $settledAt = CarbonImmutable::parse($payment->settled_at->format('Y-m-d H:i:s'), 'UTC');

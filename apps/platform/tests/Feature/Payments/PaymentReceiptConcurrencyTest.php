@@ -2,9 +2,13 @@
 
 namespace Tests\Feature\Payments;
 
+use App\Domain\Fees\Application\Exceptions\ReceiptNumberingLockedException;
+use App\Domain\Fees\Application\FeeSettingsService;
+use App\Domain\Payments\Domain\ReceiptNumbering;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentReceipt;
 use App\Models\School;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -23,6 +27,13 @@ use Tests\TestCase;
  * 2. A settlement that rolls back after taking the counter consumes no
  *    number: the waiting contender takes 000001 and the next takes 000002.
  * 3. Two concurrent backfills issue each legacy receipt exactly once.
+ * 4. FEE closure remediation: a School's first receipt and a receipt
+ *    numbering change serialize on the `fees.settings:{school}` advisory
+ *    lock (issuer SHARED, settings mutation EXCLUSIVE), for both the prefix
+ *    and the financial-year start month and in both orders. Exactly one
+ *    serial outcome: a settings change that commits first is what the
+ *    waiting issuer uses; a first receipt that commits first freezes the
+ *    setting, and the waiting change is refused.
  */
 class PaymentReceiptConcurrencyTest extends TestCase
 {
@@ -130,5 +141,88 @@ class PaymentReceiptConcurrencyTest extends TestCase
         $this->assertSame('issued:3/skipped:0', $holder);
         $this->assertSame('issued:0/skipped:3', $contender, 'The second run waited on the series lock, then found every receipt issued.');
         $this->assertSame(['RCPT/2026-27/000001', 'RCPT/2026-27/000002', 'RCPT/2026-27/000003'], $this->numbers($w));
+    }
+
+    /** @return list<string> */
+    private function setNumbering(array $w, string $prefix, int $month): array
+    {
+        return ['php', $this->script('race-payment-receipt'), 'set-numbering', $w['school']->id, $w['actor']->id, $prefix, (string) $month];
+    }
+
+    /** @return list<string> */
+    private function recordOn(array $w, string $on): array
+    {
+        return ['php', $this->script('race-payment-receipt'), 'record-on', $w['school']->id, $w['recorder']->id, $w['settlement']->id, $w['charge']->id, '10.00', $on];
+    }
+
+    private function numberingOf(array $w): array
+    {
+        $numbering = app(FeeSettingsService::class)->receiptNumbering($w['school']);
+
+        return [$numbering->prefix, $numbering->financialYearStartMonth];
+    }
+
+    #[Test]
+    public function a_prefix_change_that_commits_first_is_used_by_the_waiting_first_receipt(): void
+    {
+        $w = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->setNumbering($w, 'NEWPX', 4), $this->record($w, $w['charge'], '10.00'));
+
+        $this->assertSame('numbering:NEWPX:4', $holder);
+        $this->assertStringStartsWith('recorded:', $contender, 'The first receipt waited on the settings lock, then issued.');
+        $receipt = $this->receiptOf($w, substr($contender, strlen('recorded:')));
+        $this->assertStringStartsWith('NEWPX/', $receipt->receipt_number, 'The waiting issuer used the settings committed before it.');
+        $this->assertSame(['NEWPX', 4], $this->numberingOf($w));
+    }
+
+    #[Test]
+    public function a_first_receipt_that_commits_first_freezes_the_prefix_and_the_waiting_change_is_refused(): void
+    {
+        $w = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->record($w, $w['charge'], '10.00'), $this->setNumbering($w, 'NEWPX', 4));
+
+        $this->assertStringStartsWith('recorded:', $holder);
+        $this->assertStringStartsWith('rejected:'.ReceiptNumberingLockedException::class, $contender, 'The change waited on the settings lock, then saw the committed series and was refused.');
+        $this->assertStringStartsWith('RCPT/', $this->receiptOf($w, substr($holder, strlen('recorded:')))->receipt_number);
+        $this->assertSame(['RCPT', 4], $this->numberingOf($w), 'The prefix did not change under a series that already has receipts.');
+    }
+
+    #[Test]
+    public function a_start_month_change_that_commits_first_is_used_by_the_waiting_first_receipt(): void
+    {
+        $w = $this->world();
+
+        // 2026-02-15 is financial year 2025-26 with the default April start
+        // and 2026-27 with a January start: the series shows which settings
+        // the issuer used.
+        [$holder, $contender] = $this->raceWithHeldHolder($this->setNumbering($w, 'RCPT', 1), $this->recordOn($w, '2026-02-15'));
+
+        $this->assertSame('numbering:RCPT:1', $holder);
+        $this->assertStringStartsWith('recorded:', $contender);
+        $receipt = $this->receiptOf($w, substr($contender, strlen('recorded:')));
+        $this->assertSame('2026-27', $receipt->series_key, 'The waiting issuer used the January start committed before it.');
+        $this->assertSame('RCPT/2026-27/000001', $receipt->receipt_number);
+        $this->assertSame(['RCPT', 1], $this->numberingOf($w));
+    }
+
+    #[Test]
+    public function a_first_ever_receipt_that_commits_first_freezes_the_start_month_and_the_waiting_change_is_refused(): void
+    {
+        $w = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->recordOn($w, '2026-02-15'), $this->setNumbering($w, 'RCPT', 1));
+
+        $this->assertStringStartsWith('recorded:', $holder);
+        $this->assertStringStartsWith('rejected:'.ReceiptNumberingLockedException::class, $contender, 'The change waited on the settings lock, then saw the committed receipt and was refused.');
+        $receipt = $this->receiptOf($w, substr($holder, strlen('recorded:')));
+        $this->assertSame('RCPT/2025-26/000001', $receipt->receipt_number, 'Issued with the April start in force when it committed.');
+        $this->assertSame(['RCPT', 4], $this->numberingOf($w), 'The start month did not change once a receipt existed.');
+        $this->assertSame($receipt->series_key, ReceiptNumbering::seriesKey(
+            CarbonImmutable::parse($this->inSchool($w['school'], fn () => Payment::query()->findOrFail($receipt->payment_id))->settled_at->format('Y-m-d H:i:s'), 'UTC'),
+            $w['school']->timezone,
+            4,
+        ), 'The stored series still matches the frozen start month.');
     }
 }

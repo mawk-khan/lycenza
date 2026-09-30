@@ -2,10 +2,10 @@
 
 namespace App\Domain\Finance\Http\Controllers;
 
-use App\Domain\Fees\Http\TranslatesFeeSetupErrors;
 use App\Domain\Finance\Application\LedgerAccountAdministrationService;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerReadService;
+use App\Domain\Finance\Http\TranslatesLedgerAccountErrors;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\NormalizesCodeInput;
@@ -24,7 +24,7 @@ use Illuminate\Validation\Rule;
  */
 class LedgerAccountController extends Controller
 {
-    use NormalizesCodeInput, TranslatesFeeSetupErrors;
+    use NormalizesCodeInput, TranslatesLedgerAccountErrors;
 
     public function index(School $school, LedgerReadService $service): JsonResponse
     {
@@ -52,7 +52,7 @@ class LedgerAccountController extends Controller
             'type' => ['required', 'string', Rule::in(LedgerAccountAdministrationService::TYPES)],
         ]);
 
-        $account = $this->translatingFeeSetupErrors(fn () => $service->create($school, $validated, $request->user()));
+        $account = $this->translatingLedgerAccountErrors(fn () => $service->create($school, $validated, $request->user()));
 
         return response()->json(['data' => $this->present($account)], 201);
     }
@@ -64,7 +64,7 @@ class LedgerAccountController extends Controller
             'status' => ['required', 'string', Rule::in(LedgerAccountAdministrationService::STATUSES)],
         ]);
 
-        $account = $this->translatingFeeSetupErrors(
+        $account = $this->translatingLedgerAccountErrors(
             fn () => $service->changeStatus($school, $ledgerAccount, $validated['status'], $request->user()),
         );
 

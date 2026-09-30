@@ -70,23 +70,27 @@ contract checkpoint.
 
 | Order | Programme | Status |
 |---|---|---|
-| 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **ACTIVE** — FEE.0 contract: ADR 0062 |
+| 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
 | 2 | TCH — Teacher identity & ownership-based authorization | Not started (contract first) |
 | 3 | HRX — Leave & staff attendance | Not started |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
 
-**FEE checkpoints (ADR 0062 §25):**
-- **FEE.0 — contract** (docs only).
+**FEE checkpoints (ADR 0062 §25)** -- all built, development-closed
+2026-09-30:
+- **FEE.0 — contract** (docs only). Complete.
 - **FEE.1 — fee heads & fee structures**, including minimal ledger-account
-  administration (decision K).
-- **FEE.2 — assessment runs.**
-- **FEE.3 — concessions / scholarships / waivers.**
-- **FEE.4 — receipts & staff fee statements.**
-- **FEE.5 — late fees**, after the fee-regulation legal answer.
+  administration (decision K). Complete.
+- **FEE.2 — assessment runs.** Complete.
+- **FEE.3 — concessions / scholarships / waivers.** Complete.
+- **FEE.4 — receipts & staff fee statements.** Complete.
+- **FEE.5 — late fees.** Development complete under the legal-gate
+  operating rule (DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED).
+  The fee-regulation legal answer (E31, E32) is still required before
+  production.
 
-FEE.1 starts only after the owner records ADR 0062 decisions A, B, C, E, K
+*Historical (FEE.0):* FEE.1 started only after the owner records ADR 0062 decisions A, B, C, E, K
 and L.
 
 **FEE.1 — COMPLETE (2026-09-29).** Owner decisions A, B, C, E, K1 and L
@@ -190,6 +194,29 @@ is in `docs/modules/FINANCE.md` "FEE.5 as-built".
 **The FEE programme (FEE.0–FEE.5) is complete for development.** Its
 remaining production gates are legal: E30 (receipt/GST form), E31, E32
 and E21 (retention).
+
+**FEE.0–FEE.5 — DEVELOPMENT CLOSED (2026-09-30).** A read-only closure
+audit of the functional baseline `819e150` found only minor items. The
+closure-remediation unit fixed them:
+- Finance no longer depends on Fees for its HTTP error glue (now in
+  `App\Support\Http` and Finance's own `Http`, guarded);
+- a first receipt and a receipt-numbering change now serialize on the
+  School's Fees settings lock (issuer SHARED, change EXCLUSIVE), proven by
+  four real two-process races;
+- the stale documentation was corrected;
+- all 17 FEE migrations were rolled back and re-applied on DDEV, reaching
+  the identical schema at every checkpoint boundary.
+
+The record is in ADR 0062 "Development closure". The formal
+development-closure baseline is the remediation commit, not `819e150`
+(which stays the functional implementation baseline). This is **not**
+production readiness. Still open:
+- legal: E21, E30, E31, E32;
+- governance and release: E03 branch protection (deferred to final
+  production hardening), then E02/E15 requalification of an image that
+  contains FEE, and a fresh E16 decision;
+- per-School onboarding: the concession account, the receipt prefix and
+  the start month (FINANCE.md "FEE onboarding").
 
 ## Phase 0A — Architectural Foundation (complete)
 

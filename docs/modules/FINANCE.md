@@ -23,7 +23,19 @@ it.
 0G.6  HTTP/API Transport                           (thin controllers over 0G.2-0G.5 services)          [implemented]
 0G.7  UI / Finance Workspace                       (Inertia pages: chart of accounts, ledger, receivables)   [implemented]
 0G.8  Hardening & Closure                          (cross-tenant tests, full regression, closure report)   [implemented; published as c4652ca]
+FEE.0 Fee Management contract                      (ADR 0062)                                          [implemented]
+FEE.1 Fee heads & fee structures                   (+ K1 ledger-account administration)                [implemented]
+FEE.2 Assessment runs                              (bulk, idempotent charge assessment)                [implemented]
+FEE.3 Concessions, scholarships & waivers          (maker/checker, adjustments, capacity seam)         [implemented]
+FEE.4 Receipts & staff fee statements              (gap-free School x FY series, statements on read)   [implemented]
+FEE.5 Late fees                                    (fixed / % of outstanding, staff-triggered runs)    [implemented]
+      FEE.0-FEE.5: DEVELOPMENT CLOSED 2026-09-30 -- NOT production-ready (see "FEE.0-FEE.5 development closure")
 ```
+
+The FEE rows are the post-foundation Fee Management programme (ADR 0062).
+Each has an as-built section at the end of this document. The legal and
+governance items that still block production are listed separately under
+"FEE.0–FEE.5 development closure", not in these rows.
 
 This sequence refines, rather than blindly copies, the tentative shape
 from Phase 0G's kickoff discovery — it is derived from what a
@@ -4980,3 +4992,49 @@ period is lawful.
   - recurring or tiered penalties, interest, compounding, schedulers;
   - tax/GST, refunds, payment reversal, credits;
   - reminders, portal, gateway.
+
+## FEE.0–FEE.5 development closure (2026-09-30)
+
+The FEE programme is **DEVELOPMENT CLOSED**. The complete record — the
+closure audit of the functional baseline `819e150`, the remediation, the
+lock order and the migration rollback/re-apply evidence — is in ADR 0062
+"Development closure". In summary, the closure-remediation unit:
+- moved the ledger-account HTTP error glue out of Fees, so Finance no
+  longer depends on Fees;
+- serialized a School's first receipt against a receipt-numbering change
+  on the Fees settings lock (issuer SHARED, change EXCLUSIVE);
+- corrected stale documentation;
+- recorded rollback/re-apply evidence for all 17 FEE migrations.
+
+No product behaviour changed, other than that race now having one serial
+outcome.
+
+### FEE onboarding (operational, per School)
+
+This is a runbook requirement, not a development blocker. Nothing here is
+defaulted silently; each item fails closed or keeps its documented default.
+- **Concession expense account.** Before any concession can post, an
+  administrator with `finance.fee_structures.manage` sets the School's
+  concession account (Finance → Concessions → "Concession account"): one
+  active INR `expense` ledger account. Without it, posting fails closed:
+  - an approval is refused (`FEE_CONCESSION_ACCOUNT_INVALID`, 409);
+  - an assessment item with a standing concession fails
+    (`concession_account_invalid`).
+- **Receipt prefix.** Review it before the School's first receipt (default
+  `RCPT`; 1–16 letters, digits or hyphens). Once the current
+  financial-year series has a receipt, the prefix can change only for a
+  later series.
+- **Financial-year start month.** Review it before the School's first
+  receipt (default April). It cannot change once any receipt exists.
+- **Existing payments.** Payments recorded before FEE.4 have no receipt
+  until an operator runs `finance:receipts-backfill {school}` (I2).
+
+### Still open (production readiness, not development)
+
+- **Legal:** E21 (retention), E30 (receipt/GST statutory form), E31 (fee
+  regulation, late fees, in-year changes), E32 (RTE).
+- **Governance and release:**
+  - E03 protected-main governance, deferred to final production hardening;
+  - E02/E15 qualification of a release image that contains FEE (the last
+    VERIFIED digests predate FEE.1);
+  - a fresh E16 decision.

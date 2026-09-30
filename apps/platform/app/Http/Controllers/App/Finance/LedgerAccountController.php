@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\App\Finance;
 
-use App\Domain\Fees\Http\TranslatesFeeSetupErrors;
 use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Application\LedgerAccountAdministrationService;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerReadService;
+use App\Domain\Finance\Http\TranslatesLedgerAccountErrors;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
@@ -27,7 +27,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 class LedgerAccountController extends Controller
 {
-    use AuthorizesCapability, NormalizesCodeInput, TranslatesFeeSetupErrors;
+    use AuthorizesCapability, NormalizesCodeInput, TranslatesLedgerAccountErrors;
 
     public function index(TenantContext $context, LedgerReadService $service, CapabilityResolver $capabilities): Response
     {
@@ -63,7 +63,7 @@ class LedgerAccountController extends Controller
             'type' => ['required', 'string', Rule::in(LedgerAccountAdministrationService::TYPES)],
         ]);
 
-        $this->translatingFeeSetupErrors(fn () => $service->create($school, $validated, $context->actor()));
+        $this->translatingLedgerAccountErrors(fn () => $service->create($school, $validated, $context->actor()));
 
         return redirect('/app/finance/ledger-accounts');
     }

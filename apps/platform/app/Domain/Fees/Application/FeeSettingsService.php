@@ -15,6 +15,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * FEE.3/FEE.4 (ADR 0062 §14.5, §17.2; owner decisions F2, I): the
@@ -29,6 +30,14 @@ use Illuminate\Support\Facades\DB;
  * `validConcessionAccountId()` is the trusted re-validation every posting
  * runs (F2: exists, same School, INR, active, `expense`; else NULL, and
  * the posting fails closed).
+ *
+ * Serialization: every settings mutation takes the School's
+ * `fees.settings:{school}` transaction advisory lock EXCLUSIVE, then the
+ * `fee_settings` row. Receipt issuance takes the same lock SHARED
+ * (`receiptNumberingForIssuance()`) before it reads the numbering, so a
+ * first receipt and a numbering change never pass each other (FEE closure
+ * remediation): issuers never block each other, and whichever side commits
+ * first is what the other sees.
  */
 class FeeSettingsService
 {
@@ -60,7 +69,7 @@ class FeeSettingsService
         $this->authorizeCapabilityFor($actor, 'finance.fee_structures.manage', $school);
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $ledgerAccountId, $actor) {
-            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ["fees.settings:{$school->id}"]);
+            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [self::lockKey($school)]);
 
             if (! $this->isActiveExpenseAccount($school, $ledgerAccountId)) {
                 throw new InvalidFeeSettingsException('concession_ledger_account_id', 'Choose an active expense account of this School.');
@@ -101,6 +110,32 @@ class FeeSettingsService
         );
     }
 
+    /**
+     * FEE closure remediation: the numbering a receipt is ISSUED with.
+     * Trusted (no capability check); only `ReceiptIssuer` calls it, inside
+     * the caller's transaction. It takes the School's settings lock SHARED
+     * -- held until that transaction ends -- and only then reads, so:
+     *
+     * - a numbering change that committed first is what the issuer uses
+     *   (READ COMMITTED: the read after the lock is a fresh snapshot);
+     * - a numbering change that starts while the issuer is open waits for
+     *   it, and then its database guard sees the committed series and
+     *   refuses a now-frozen prefix or start month.
+     *
+     * Without the lock the guard could not see an uncommitted first series,
+     * so both could commit (the closure-audit race).
+     */
+    public function receiptNumberingForIssuance(School $school): ReceiptNumberingSettings
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('receiptNumberingForIssuance() must run inside the issuing transaction.');
+        }
+
+        DB::select('SELECT pg_advisory_xact_lock_shared(hashtextextended(?, 0))', [self::lockKey($school)]);
+
+        return $this->receiptNumbering($school);
+    }
+
     public function receiptNumberingFor(School $school, User $actor): ReceiptNumberingSettings
     {
         $this->authorizeCapabilityFor($actor, 'finance.fee_structures.view', $school);
@@ -129,7 +164,7 @@ class FeeSettingsService
         }
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $prefix, $startMonth, $actor) {
-            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ["fees.settings:{$school->id}"]);
+            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [self::lockKey($school)]);
 
             $settings = FeeSetting::query()->where('school_id', $school->id)->lockForUpdate()->first()
                 ?? new FeeSetting(['school_id' => $school->id, 'currency' => 'INR']);
@@ -183,6 +218,12 @@ class FeeSettingsService
         $id = $this->configuredAccountId($school);
 
         return $id !== null && $this->isActiveExpenseAccount($school, $id) ? $id : null;
+    }
+
+    /** The School's settings lock key: EXCLUSIVE for every mutation, SHARED for receipt issuance. */
+    private static function lockKey(School $school): string
+    {
+        return "fees.settings:{$school->id}";
     }
 
     private function configuredAccountId(School $school): ?string

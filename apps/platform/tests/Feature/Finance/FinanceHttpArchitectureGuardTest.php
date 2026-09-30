@@ -85,6 +85,38 @@ class FinanceHttpArchitectureGuardTest extends TestCase
     }
 
     #[Test]
+    public function finance_never_depends_on_fees(): void
+    {
+        // FEE closure remediation (DOMAIN-MAP: Finance has no dependency on
+        // Fees): every Finance-owned file -- the module itself and its two
+        // browser controllers -- is free of any Fees reference in code
+        // (comments may still name a Fees class for context). Shared HTTP
+        // glue lives in App\Support\Http or Finance's own Http namespace.
+        $base = base_path();
+        $files = [$base.'/app/Http/Controllers/App/Finance/LedgerAccountController.php', $base.'/app/Http/Controllers/App/Finance/JournalEntryController.php'];
+
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($base.'/app/Domain/Finance', \FilesystemIterator::SKIP_DOTS)) as $file) {
+            if ($file->getExtension() === 'php') {
+                $files[] = $file->getPathname();
+            }
+        }
+
+        $this->assertGreaterThan(20, count($files));
+
+        foreach ($files as $file) {
+            $code = '';
+            foreach (\PhpToken::tokenize((string) file_get_contents($file)) as $token) {
+                if (! $token->is([T_COMMENT, T_DOC_COMMENT])) {
+                    $code .= $token->text;
+                }
+            }
+
+            $this->assertStringNotContainsString('Domain\Fees', $code, "{$file} must not depend on the Fees module.");
+            $this->assertStringNotContainsString('TranslatesFeeSetupErrors', $code, "{$file} must not use the Fees-owned HTTP glue.");
+        }
+    }
+
+    #[Test]
     public function no_finance_http_controller_exposes_internal_transaction_identity_fields(): void
     {
         foreach ($this->controllerFiles() as $file) {

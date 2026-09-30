@@ -609,6 +609,12 @@ migrations `2026_11_01_090000`/`090100`.
   amount of its own, no ledger posting.
 - **Numbering.** Gap-free per School × financial year: a counter row
   locked in the settlement transaction, database-checked.
+  - *FEE closure remediation (2026-09-30):* before creating or locking the
+    series, the issuer takes the School's Fees settings lock SHARED
+    (`FeeSettingsService::receiptNumberingForIssuance()`), so a first
+    receipt and a receipt-numbering change serialize.
+  - Settlement lock order: Charges (ascending) → settings lock SHARED →
+    counter row (ADR 0062 "Development closure").
 - **Payments settled before FEE.4** are receipted only by the explicit,
   idempotent `finance:receipts-backfill {school}`.
 - **Unchanged:**

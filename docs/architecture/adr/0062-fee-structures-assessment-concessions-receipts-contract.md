@@ -1,8 +1,13 @@
 # ADR 0062: Fee Structures, Assessment Runs, Concessions and Receipts Contract
 
-- Status: Accepted as a contract (documentation only; nothing is
-  implemented). Implementation starts at FEE.1 **only after** the owner
-  decisions marked "needed for FEE.1" in §2.1 are recorded.
+- Status: Accepted. **FEE.0–FEE.5 — DEVELOPMENT CLOSED** (2026-09-30; see
+  "Development closure" at the end). This ADR is both the original FEE.0
+  contract (§1–§29, written before any code, kept as written except where a
+  dated note says otherwise) and the as-built decision history (the dated
+  owner-decision and implementation-note sections that follow §29). Where
+  they differ, the later dated section is authoritative. Development
+  closure is not production readiness: the legal and governance items in
+  "Development closure" stay open.
 - Date: 2026-09-29 (FEE.0, the first post-foundation product checkpoint)
 - Programme: **FEE — Fee Management** (`docs/roadmap/MASTER-ROADMAP.md`,
   "Post-foundation product programmes").
@@ -224,7 +229,7 @@ Status values:
 | E | Optional fees | **DECIDED — owner confirmed 2026-09-29** | Explicit per-Student selection before assessment (§8) | FEE.1 (schema), FEE.2 |
 | F | Concession approval | **DECIDED — owner confirmed 2026-09-29** | Maker/checker mandatory for every concession, database-enforced; no amount thresholds in v1 (§14.4) | FEE.3 |
 | F2 | Concession posting account | **DECIDED — owner confirmed 2026-09-29** | One School-level `expense` account "Fee concessions and scholarships" (§14.5) | FEE.3 |
-| G | Concession after payment | **DECIDED — owner confirmed G1, 2026-09-29** | Capped at the charge's current outstanding; never creates credit or refund (§14.6) | FEE.3 |
+| G | Concession after payment | **DECIDED — owner confirmed G1, 2026-09-29** | A concession adjustment may not exceed the charge's current outstanding; an over-limit concession is **refused, never reduced**; never creates credit or refund (§14.6, "Current-outstanding cap") | FEE.3 |
 | H | Late-fee policy | **DECIDED — owner confirmed 2026-09-30** (product decision only; legal: DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED, ADR 0058 E31) | Fixed or percentage-of-outstanding, grace days, optional cap, one late fee per overdue charge per rule; no tiers or recurrence in v1 (§16) | FEE.5 |
 | I | Receipt numbering | **DECIDED — owner confirmed 2026-09-30** | School + financial year, FY start month configurable (default April), format `<PREFIX>/<FY>/<000001>` (§17.2) | FEE.4 |
 | I2 | Existing payments | **DECIDED — owner confirmed 2026-09-30** | Explicit, audited, idempotent one-time backfill in `(settled_at, id)` order (§17.4) | FEE.4 |
@@ -604,6 +609,11 @@ Late fees use their own key (§16.3).
 - **Lock order** is always: run row → structure row (share) → advisory key
   → enrollment (share) → ledger (inside `LedgerService`). Concession grants
   are read-only in this transaction.
+  - *Superseded in part by FEE.3 (2026-09-30):* standing concessions are
+    **applied** inside the item transaction (in a savepoint, after the
+    charge is assessed): the matching standing concessions are read
+    `FOR SHARE` and their adjustments posted there. See "Implementation note — FEE.3 as built". The rest of
+    this lock order is unchanged.
 - **`TenantLock`** (a Redis lock) is **not** used for correctness. It may
   only throttle a second executor.
 - **Required proofs** (real PostgreSQL, separate OS processes, forced overlap
@@ -1033,6 +1043,11 @@ meaning or data.
   (`TenantRls::disable`) and restores any replaced function body verbatim
   (rule 10).
 - Every migration runs on `pgsql_admin` (rule 54).
+- *As built:* the table above is the FEE.0 plan. The actual migration files
+  and their order differ slightly (for example, FEE.2 creates
+  `fee_assessments` before its run items; FEE.3 adds the run-item failure
+  reasons; FEE.4 also adds the `fee_settings` numbering guard). The 17 files
+  and their rollback/re-apply evidence are listed in "Development closure".
 - Indexes are declared explicitly for every FK and for each run's
   `(school_id, status)` and `(run_id, execution_status)`.
 
@@ -1069,11 +1084,13 @@ publish) and records its unit number since the last full regression.
 | **FEE.2 Assessment runs** | §23 FEE.2 | Students `StudentEnrollmentFeeTargetReadService`; `FeeAssessmentRunService` (create, preview, exclude, claim, finalize, resume, cancel); `FeeAssessmentItemExecutor`; `ExecuteFeeAssessmentRunJob`; void path | `finance.fee_assessments.run`; view via `finance.charges.view` | runs API + UI (preview totals, item list, execute, progress, resume) | `fee_assessment_run.*`, `fee_assessment.voided`; per-charge `charge.assessed.v1`; `fee_assessment_run.completed.v1` | idempotency (re-execute, re-run, successor structure, transfer); proofs 1–5 (§12); retry after job kill; suspended-School pause; outbox cardinality; D rules |
 | **FEE.3 Concessions** | §23 FEE.3 | `FeeConcessionService` (request/approve/reject/withdraw/revoke); `FeeAdjustmentService` (post/cancel); standing application inside the item executor; Payments trigger amendment; `ChargeAllocationSnapshot` net | `finance.fee_concessions.view|request|approve` | concessions API + UI (request, approval queue, per-charge adjustments) | `fee_concession.*`, `fee_adjustment.*` | SoD CHECK + typed error; G cap; proof 6; cancellation guard; ADR 0031 amendment tests (allocation refused beyond net); rounding (N) |
 | **FEE.4 Receipts & statements** | §23 FEE.4 | `ReceiptIssuer` inside `SettledPaymentRecorder`; `StudentFeeStatementReadService`; backfill command (I2) | `finance.payments.view`; statement = charges.view + payments.view | receipt view/print (acknowledgement, §17.5); statement page | `payment_receipt.*`, `fee_statement.viewed`; `payment_receipt.issued.v1` | proof 7 (gap-free, unique under concurrency, rollback leaves no gap); FY series boundary; replay returns same receipt; statement arithmetic equals ledger |
-| **FEE.5 Late fees** (after the §27 legal answer) | §23 FEE.5 | `LateFeeRuleService` (Fees); `LateFeeRunService` + job (Payments) | `finance.fee_structures.manage` (rules), `finance.fee_assessments.run` (runs) | rules UI; late-fee run UI | `late_fee_rule.*`, `late_fee_run.*`; `late_fee.assessed.v1` | proof 8; grace boundary; cap; percentage of outstanding; void and re-run |
+| **FEE.5 Late fees** (built under the legal-gate operating rule: DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED; §27 answer still needed for production) | §23 FEE.5 | `LateFeeRuleService` (Fees); `LateFeeRunService` + job (Payments) | `finance.fee_structures.manage` (rules), `finance.fee_assessments.run` (runs) | rules UI; late-fee run UI | `late_fee_rule.*`, `late_fee_run.*`; `late_fee.assessed.v1` | proof 8; grace boundary; cap; percentage of outstanding; void and re-run |
 
-**Next checkpoint: FEE.1**, once A (confirmation), B, C, E, K and L are
-decided. D, F, F2, G, H, I, I2 and M are needed only by their later
-checkpoints.
+*Historical (FEE.0):* FEE.1 was to start once A, B, C, E, K and L were
+decided, with D, F, F2, G, H, I, I2 and M needed only by later checkpoints.
+All five checkpoints are now built (FEE.1–FEE.5, 2026-09-29/30), and the
+programme is development-closed ("Development closure" at the end). No
+FEE.6 exists.
 
 ## 26. Test obligations (every FEE checkpoint)
 
@@ -1950,3 +1967,158 @@ period is lawful. The full record is in `docs/modules/FINANCE.md`
   - recurrence, tiers, interest, compounding and schedulers;
   - tax, refunds, payment reversal, reminders;
   - portal.
+
+## Development closure (2026-09-30)
+
+**FEE.0–FEE.5 — DEVELOPMENT CLOSED.** This is not a production-readiness
+claim; see "Still open" below.
+
+- **Functional implementation baseline:** `819e150` (FEE.5).
+- **Formal development-closure baseline:** the commit that adds this
+  section (the closure-remediation unit).
+
+### Closure audit
+
+A read-only audit of `819e150` classified the programme **B — DEVELOPMENT
+CLOSED, MINOR CLOSURE REMEDIATION REQUIRED**:
+- every decision A–N (§2.1) is implemented as recorded, and J stays legally
+  unresolved;
+- there were no blocker or material findings;
+- the four minor items below were fixed by the remediation unit.
+
+### 1. Finance → Fees transport dependency (removed)
+
+`App\Domain\Finance\Http\Controllers\LedgerAccountController` and the
+browser `App\Http\Controllers\App\Finance\LedgerAccountController` used the
+Fees-owned `App\Domain\Fees\Http\TranslatesFeeSetupErrors`, contrary to
+DOMAIN-MAP ("Finance ... has no dependency on Fees"). Now:
+- the School-scoped case-insensitive code check (rule 74) is the neutral
+  `App\Support\Http\ChecksCaseInsensitiveUniqueCode`;
+- Finance has its own `App\Domain\Finance\Http\TranslatesLedgerAccountErrors`,
+  which maps `InvalidLedgerAccountException` to a 422 on its field, exactly
+  as before;
+- `TranslatesFeeSetupErrors` stays Fees-owned for the fee-setup
+  controllers, using the Support trait;
+- no domain exception moved, and HTTP status and error shape are
+  unchanged;
+- `FinanceHttpArchitectureGuardTest::finance_never_depends_on_fees` fails
+  if any Finance file (the module and its two browser controllers)
+  references `Domain\Fees` in code.
+
+### 2. Receipt-settings / first-series race (fixed)
+
+**Root cause.**
+- `ReceiptIssuer` read the numbering (`fee_settings` prefix and start
+  month) without any lock.
+- A numbering change took the School's `fees.settings:{school}` advisory
+  lock EXCLUSIVE and the `fee_settings` row, but the issuer took neither.
+- The Payments-owned guard `fee_settings_receipt_numbering_guard_trigger`
+  checks for counter rows, but a first series still uncommitted in another
+  transaction is invisible to it.
+
+So a first receipt and a prefix or start-month change could both commit:
+- the series was created from the old settings while the new settings were
+  saved;
+- or a now-frozen prefix or start month changed under a series that
+  already had a receipt.
+
+Before the fix this was reproduced with real processes: both sides
+committed, `numbering:NEWPX:4` and `numbering:RCPT:1` under an
+uncommitted first receipt.
+
+**Fix.**
+- `FeeSettingsService::receiptNumberingForIssuance()` (Fees-owned; the
+  only caller is `ReceiptIssuer`) takes the same advisory lock SHARED,
+  `pg_advisory_xact_lock_shared`, held until the issuing transaction ends.
+  Only then does it read the settings, in a fresh READ COMMITTED snapshot.
+- Every settings mutation (`setReceiptNumbering`, `setConcessionAccount`)
+  keeps taking it EXCLUSIVE.
+- Issuers never block each other.
+
+There is exactly one serial outcome:
+- **the change commits first:** the waiting issuer uses the new settings;
+- **the first receipt commits first:** the waiting change's guard sees the
+  committed series and refuses (`ReceiptNumberingLockedException`).
+
+**Lock order after the fix (no cycle):**
+- **Settlement:** School FOR SHARE (`SchoolOperationalGuard`) → manual-payment
+  key advisory lock (manual ingress) → Charges FOR UPDATE, ascending id
+  (`lockChargeForAllocation`) → Fees settings lock SHARED → series counter
+  row FOR UPDATE → receipt insert.
+- **Backfill (per Payment, its own transaction):** School FOR SHARE → Fees
+  settings lock SHARED → counter row FOR UPDATE.
+- **Settings mutation:** Fees settings lock EXCLUSIVE → `fee_settings` row
+  FOR UPDATE. It never locks a Charge, a counter or a receipt, and the
+  guard trigger only reads.
+
+**Proof.** `Tests\Feature\Payments\PaymentReceiptConcurrencyTest` has four
+new real two-process races with verified overlap: the contender is observed
+blocked on a lock in `pg_stat_activity` before the holder commits.
+- prefix change first → the first receipt is numbered `NEWPX/…`;
+- first receipt first → the prefix change is refused and stays `RCPT`;
+- start-month change first → a 2026-02-15 payment is series `2026-27`
+  (January start);
+- first-ever receipt first → the start-month change is refused, the
+  receipt is `RCPT/2025-26/000001`, and the month stays April.
+
+### 3. Documentation
+
+Corrected:
+- this ADR's header, the G register row (refused, never reduced), §12
+  (FEE.3 standing application), §23 (as-built migration note) and §25
+  (historical plan);
+- MASTER-ROADMAP (programme status, FEE.5 wording);
+- DOMAIN-MAP (Finance/Fees/Payments status, the Fees responsibility
+  without "invoices", the FEE.3–FEE.5 run-on sentence, the documented
+  Fees → Academic Structure/Campuses validation reads);
+- FINANCE.md (checkpoint roadmap, closure and onboarding).
+
+### 4. Migration rollback/re-apply evidence (DDEV, 2026-09-30)
+
+On the local DDEV database only:
+- identity was verified with the `demo-reset` guards: project `lycenza`,
+  database `db` on DDEV's own db container, `APP_ENV=local`;
+- the schema was recreated, the pre-FEE migrations applied, then each
+  checkpoint's migrations applied as its own batch;
+- after each step the `public` schema was captured with `pg_dump
+  --schema-only` (tables, constraints, indexes, triggers, functions, RLS
+  policies and grants);
+- the demo dataset was then restored with `ddev demo-reset`.
+
+| Checkpoint | Migrations | Rollback reproduces the pre-checkpoint schema | Re-apply reproduces the post-checkpoint schema |
+|---|---|---|---|
+| FEE.1 | 4 (`2026_10_29_*`) | identical (191 tables, 62 triggers, 61 functions, 148 policies) | identical (197 / 69 / 67 / 154) |
+| FEE.2 | 3 (`2026_10_30_*`) | identical (197 / 69 / 67 / 154) | identical (200 / 74 / 72 / 157) |
+| FEE.3 | 4 (`2026_10_31_*`) | identical (200 / 74 / 72 / 157) | identical (202 / 78 / 76 / 159) |
+| FEE.4 | 2 (`2026_11_01_*`) | identical (202 / 78 / 76 / 159) | identical (204 / 81 / 81 / 161) |
+| FEE.5 | 4 (`2026_11_02_*`) | identical (204 / 81 / 81 / 161) | identical (208 / 87 / 87 / 165) |
+
+A second cycle — all 17 rolled back at once, then re-applied through the
+default `migrate` path — also reached the identical pre-FEE and final
+schemas: 165 forced-RLS tables, the pinned count, with nothing pending.
+Every comparison is byte-for-byte on the dump, not just a count.
+
+**FEE.3 caveat (unchanged).**
+- `2026_10_31_090300`'s `down()` deliberately fails if any assessment run
+  item already carries a FEE.3 failure reason (`concession_exceeds_outstanding`,
+  `concession_account_invalid`): re-adding the FEE.2 CHECK refuses them.
+- This is the intended fail-closed signal; it is not weakened.
+- The run above had no such rows, so rollback succeeded.
+
+### Still open (production readiness)
+
+- **Legal:** E21, E30 (J), E31 (H), E32.
+- **Governance:** E03 protected-main governance, deferred to final
+  production hardening; no ruleset was created.
+- **Release:** E02/E15 qualification of an image containing FEE (the last
+  VERIFIED digests predate FEE.1), then a fresh E16 decision.
+- **Per-School onboarding:** the concession account, the receipt prefix and
+  the start month (`docs/modules/FINANCE.md` "FEE onboarding").
+
+**Optional hardening, not done (not required for closure):**
+- UX wording (Fee setup, charge-cancel help);
+- one outstanding reader;
+- further races (rule deactivation vs execution, void vs payment, backfill
+  vs live issuance, adjustment cancel vs payment);
+- explicit FEE.3–FEE.5 School-deletion tests;
+- read-auditing of run items.
