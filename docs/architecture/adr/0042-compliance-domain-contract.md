@@ -214,6 +214,11 @@ otherwise have no retention at all. Whether audit evidence must outlive
 a School, or needs a legal hold, belongs to the retention/legal-hold
 gate (§13 items 4–5).
 
+*Cross-reference (E21.1, 2026-10-01):* §13 items 4–6 are mapped to
+decisions E21-D1, E21-D10 and E21-D11 in
+`docs/security/E21-RETENTION-DECISION-REQUEST.md`, the issued ADR 0058 E21
+decision request. Nothing is decided there, and this section is unchanged.
+
 ### 8. Exports and regulatory filings
 
 No Compliance export exists or is authorized by this ADR. A future

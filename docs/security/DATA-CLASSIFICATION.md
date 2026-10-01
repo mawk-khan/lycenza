@@ -120,6 +120,10 @@
   *Cross-reference (2026-09-28):* ADR 0058 §4.12 makes the retention
   decisions for the categories used in v1 a **mandatory Phase 0O closeout
   item** (evidence row E21). This document still records no period.
+  *E21.1 (2026-10-01):* the per-category inventory, the open decisions
+  (E21-D0–D13) and the determination template are in
+  `docs/security/E21-RETENTION-DECISION-REQUEST.md`. A tier never implies
+  a period.
 - **Aggregation/derivation:** a derived value's classification tracks
   its source data (see the "Aggregated / derived / statistical data"
   row above) — building an Analytics/reporting feature does not create

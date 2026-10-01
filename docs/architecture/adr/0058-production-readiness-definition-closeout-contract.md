@@ -903,3 +903,37 @@ determination.**
   - the audit ledgers.
 
   None has a purge. ADR 0063 §39.5 lists the exact questions.
+
+## Note — E21.1 retention decision request issued (2026-10-01)
+
+**E21 stays `LEGAL_REVIEW_REQUIRED`.** E21.1 (docs only) audited every v1
+data category and issued the decision request
+`docs/security/E21-RETENTION-DECISION-REQUEST.md`:
+- §4: the inventory;
+- §6: the open decisions E21-D0 to E21-D13, with neutral options;
+- §9: the determination template. The answer is recorded as
+  `docs/security/E21-RETENTION-DETERMINATION.md`.
+
+No period, purge or legal basis was set.
+
+- **Closure semantics, as this row already states.** E21 closes on:
+  1. a qualified decision recorded per v1 category; and
+  2. the periods implemented where a setting or prune path exists
+     (`MAIL_RETENTION_DAYS`, `WEBHOOKS_DELIVERY_RETENTION_DAYS`).
+
+  Whether a decided period that has **no** mechanism yet must be built
+  before O1 is open decision **E21-D0**.
+- **No immediate retention-safety defect.** The only scheduled deletions are
+  ADR-recorded technical lifetimes. The legally gated prunes delete nothing
+  while unset.
+- **Engineering prerequisite before setting `MAIL_RETENTION_DAYS`.** Three
+  latent `platform:email-prune` defects (request §5.2, L1–L3) must be fixed
+  first:
+  - identity-level messages are skipped;
+  - provider references are orphaned;
+  - a suppression-referenced event blocks the bulk delete.
+
+  This makes E21 a decision **plus** a small code tail, not a decision
+  alone.
+- **Independence.** E21 and E33 (TCH-L1) stay separate rows. E30 is the
+  receipt form, not retention.

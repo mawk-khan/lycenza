@@ -56,7 +56,10 @@ waived or complete.
 - **Legal and security gates still bind** product work:
   - the Phase 0M reopening gate;
   - E17 before any production SendGrid use;
-  - E21 before any retention period;
+  - E21 before any retention period. E21.1 (2026-10-01, docs only) issued
+    the decision request `docs/security/E21-RETENTION-DECISION-REQUEST.md`
+    (decisions E21-D0–D13). E21 is still OPEN, and three latent email-prune
+    defects must be fixed before a mail period is set;
   - no real School data to external providers;
   - no deployment, purchases or production secrets without explicit owner
     authorization.
@@ -2198,6 +2201,12 @@ parallel, and the email provider tail) — not started.
   adapter.
 - **Can start now:** E03 (protect `main`), E16 (the exception clock) and
   E17/E21 (decisions).
+- **E21.1 — Production retention policy audit (2026-10-01, docs only):**
+  published / closed. It inventoried every v1 category and recorded 14 open
+  decisions with neutral options, a determination template and no immediate
+  retention-safety defect. **E21 remains OPEN — owner/legal/compliance
+  decisions required.** It also needs an email-prune code tail (L1–L3)
+  before `MAIL_RETENTION_DAYS` is set.
 
 **0O.13 — Transactional Email Provider Selection & Integration Contract
 (2026-09-29, docs-only, ADR 0060).**
