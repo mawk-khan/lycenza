@@ -13,6 +13,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Observability\StorageMetrics;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -140,7 +141,14 @@ class DocumentReadService
             throw new DocumentNotFoundException($documentId);
         }
 
-        $this->authorizeForDocument($school, $document, $actor);
+        try {
+            $this->authorizeForDocument($school, $document, $actor);
+        } catch (ModelNotFoundException) {
+            // TCH.6 (ADR 0063 section 18): a Document whose LMS parent the
+            // actor may not see answers exactly like an unknown Document --
+            // same status, same body, and never the parent's id.
+            throw new DocumentNotFoundException($documentId);
+        }
 
         return $document;
     }

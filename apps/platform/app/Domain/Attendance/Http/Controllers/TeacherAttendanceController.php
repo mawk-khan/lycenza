@@ -143,7 +143,7 @@ class TeacherAttendanceController extends Controller
         $entry = TimetableEntry::query()->where('id', $validated['timetable_entry_id'])->where('school_id', $school->id)->firstOrFail();
 
         if (! $scope->ownsOn($entry->section_id, $entry->subject_offering_id, $validated['attendance_date'])) {
-            throw (new ModelNotFoundException)->setModel(TimetableEntry::class, [$entry->id]);
+            throw (new ModelNotFoundException)->setModel(TimetableEntry::class);
         }
 
         $members = $roster->membersAsOf(

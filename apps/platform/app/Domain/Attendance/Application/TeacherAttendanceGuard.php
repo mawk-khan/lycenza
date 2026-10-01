@@ -62,7 +62,7 @@ final class TeacherAttendanceGuard implements AttendanceWriteGuard
         // A register the teacher does not own on its own date is invisible
         // (404) -- even in a class they own at other dates.
         if (! $this->scope($school, $acting)->canSee($session)) {
-            throw (new ModelNotFoundException)->setModel(AttendanceSession::class, [$session->id]);
+            throw (new ModelNotFoundException)->setModel(AttendanceSession::class);
         }
 
         $this->holdOwnership($school, $acting, $session->section_id, $session->subject_offering_id, $session->attendance_date->toDateString());

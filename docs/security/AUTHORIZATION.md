@@ -23,16 +23,16 @@ code change.
 
 This table is a design reference, not a list of implemented roles.
 (Historical, Phase 0A: none were implemented then.) As built
-(2026-09-30):
+(2026-10-01, TCH development-closed):
 - the system roles are `platform_super_admin`, `platform_auditor`
-  (platform), `group_admin` (Group), and `school_admin` and `principal`
-  (School);
+  (platform), `group_admin` (Group), and `school_admin`, `principal` and
+  `teacher` (School);
 - every other row here is a design-reference actor, with no production
   role;
-- the Teacher row is contracted by ADR 0063 (TCH) — see "Ownership-based
-  authorization" below. It is **not** implemented yet: there is no
-  production Teacher role and no teacher ownership. Only its identity
-  prerequisite, ActingEmployee (TCH.1), exists.
+- the Teacher row is implemented by ADR 0063 (TCH): the `teacher` role is a
+  bundle of four owned-scope capabilities whose every use also needs a
+  verified ActingEmployee and TeachingAssignment ownership — see
+  "Ownership-based authorization" below.
 
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|
@@ -107,11 +107,11 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   roles exist:
   - `platform_super_admin` and `platform_auditor` (platform);
   - `group_admin` (Group);
-  - `school_admin` and `principal` (School).
+  - `school_admin`, `principal` and `teacher` (School).
 
   The DDEV demo adds non-system `demo.*` roles only behind its local-demo
   guard. Tenant-custom roles are future work; ADR 0063 adds no custom roles,
-  only a planned minimal system Teacher role.
+  only the minimal system `teacher` role (TCH.3).
 - **Assignment, kept structurally separate by scope**:
   `platform_role_assignments` (central) for platform roles,
   `membership_role_assignments` (tenant-owned, RLS-protected) for
@@ -156,13 +156,15 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   See `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
-## Ownership-based authorization (ADR 0063 — TCH; adopters: Curriculum Delivery, Attendance)
+## Ownership-based authorization (ADR 0063 — TCH; adopters: Curriculum Delivery, Attendance, Learning Content, Assignments)
 
 Roles stay capability bundles. ADR 0063 (TCH.0, 2026-09-30) contracts the
-platform's first ownership-based authorization, for teachers. The
+platform's first ownership-based authorization, for teachers. **TCH is
+development-closed (TCH.6, 2026-10-01, ADR 0063 §38).** Built: the
 ActingEmployee identity boundary (TCH.1), the TeachingAssignment ownership
-fact (TCH.2) and two owned adopters — Curriculum Delivery (TCH.3) and
-Attendance (TCH.4) — are built.
+fact (TCH.2) and four owned adopters — Curriculum Delivery (TCH.3),
+Attendance (TCH.4), Learning Content (TCH.5C) and Assignments (TCH.5D), on the
+LMS owner/audience persistence (TCH.5B).
 
 **Curriculum Delivery, Attendance, LMS Learning Content and LMS Assignments
 are the owned teaching surfaces.** Timetable remains admin-only, and Timetable stays scheduling evidence,
@@ -235,8 +237,8 @@ Assignments (ADR 0063 §37) apply the identical rule under
 `due_on` is never an authorization date. The shared `TeacherLmsScope`/
 `TeacherLmsGuard` implement both kinds
 (`TeacherLearningContentAccess`/`TeacherAssignmentAccess` the entry points);
-the guard runs inside `LearningContentService`'s transaction, taking the
-audience assignments in ascending Section id. Documents reaches the same
+the guard runs inside `LearningContentService`'s or `AssignmentService`'s
+transaction, taking the audience assignments in ascending Section id. Documents reaches the same
 rule for Learning Content and Assignment attachments through
 `LmsParentResourceAuthorization` (fresh check before storage, locked check
 inside the Documents transaction).
@@ -250,6 +252,18 @@ and `lms.assignments.teacher`:
 - It is granted and revoked through the ordinary staff role path.
 - `school_admin` also holds all four capabilities, only so it can grant the
   role under the no-escalation rule.
+
+**Not found is one answer (ADR 0063 §18, as fixed by TCH.6).** On every owned
+teacher surface — the `/my/` APIs and the Documents routes of an LMS parent —
+a resource that exists but is not the teacher's (another class, another
+teacher's private row, another School) gets the **same status and the same
+error body** as an unknown id: the id the caller supplied is the only id it
+names. The TCH.6 audit found bodies that differed (and, for a correction or
+an attachment, named a hidden parent id); the fix maps the hidden case onto
+the unknown answer in the service that owns that answer, and the tests compare
+whole bodies, not only status codes. A syntactically malformed id is refused
+first with a 404 that names nothing. Domain refusals (403 `*_NOT_OWNED`, 422
+`*_OUTSIDE_TEACHING_ASSIGNMENT`) come only after visibility is established.
 
 - **Two capability tiers:**
 
@@ -805,8 +819,8 @@ already received.
 
 Tenant-custom roles (role *assignment* exists: Settings → Staff accounts
 grants and revokes School roles from the closed catalog, ADR 0059; role
-*creation* does not), teacher ownership-based authorization (contracted by
-ADR 0063, not built), a real "platform admin enters a
+*creation* does not), ownership-based authorization beyond the four TCH
+teacher surfaces (ADR 0063 §38 lists what stays outside TCH), a real "platform admin enters a
 specific School's context" elevation workflow (the brief in section 12
 deliberately asked for only the *foundation*, proven by denial — see
 `CapabilityResolverTest::platform_capability_grant_does_not_imply_school_capability`

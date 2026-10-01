@@ -7,6 +7,7 @@ use App\Domain\LMS\Application\AssignmentService;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -108,13 +109,33 @@ class TeacherLearningContentDocumentsTest extends TestCase
         $documentId = $this->upload($w, $owner, 'learning-content', $draft->id)->json('data.document_id');
         $adminDocumentId = $this->upload($w, $w['admin'], 'learning-content', $adminDraft->id)->json('data.document_id');
 
+        // TCH.6 (ADR 0063 section 18): not merely the same status -- the
+        // same body as an unknown id (the requested id normalized out),
+        // never naming the hidden parent row.
+        $unknownRow = (string) Str::uuid7();
+        $unknownDoc = (string) Str::uuid7();
+        $body = fn (TestResponse $r, string $id) => str_replace($id, ':id', (string) json_encode(Arr::except($r->assertNotFound()->json('error'), ['requestId'])));
+
         foreach ([$coTeacher, $elsewhere] as $teacher) {
+            $unknown = [
+                'list' => $body($this->as($teacher)->getJson($this->base($w)."/learning-content/{$unknownRow}/documents"), $unknownRow),
+                'show' => $body($this->as($teacher)->getJson($this->base($w)."/documents/{$unknownDoc}"), $unknownDoc),
+                'content' => $body($this->as($teacher)->get($this->base($w)."/documents/{$unknownDoc}/content"), $unknownDoc),
+                'archive' => $body($this->as($teacher)->postJson($this->base($w)."/documents/{$unknownDoc}/archive"), $unknownDoc),
+                'upload' => $body($this->upload($w, $teacher, 'learning-content', $unknownRow), $unknownRow),
+            ];
+
             foreach ([[$draft->id, $documentId], [$adminDraft->id, $adminDocumentId]] as [$rowId, $docId]) {
-                $this->as($teacher)->getJson($this->base($w)."/learning-content/{$rowId}/documents")->assertNotFound();
-                $this->as($teacher)->getJson($this->base($w)."/documents/{$docId}")->assertNotFound();
-                $this->as($teacher)->get($this->base($w)."/documents/{$docId}/content")->assertNotFound();
-                $this->as($teacher)->postJson($this->base($w)."/documents/{$docId}/archive")->assertNotFound();
-                $this->upload($w, $teacher, 'learning-content', $rowId)->assertNotFound();
+                $hidden = [
+                    'list' => $body($this->as($teacher)->getJson($this->base($w)."/learning-content/{$rowId}/documents"), $rowId),
+                    'show' => $body($this->as($teacher)->getJson($this->base($w)."/documents/{$docId}"), $docId),
+                    'content' => $body($this->as($teacher)->get($this->base($w)."/documents/{$docId}/content"), $docId),
+                    'archive' => $body($this->as($teacher)->postJson($this->base($w)."/documents/{$docId}/archive"), $docId),
+                    'upload' => $body($this->upload($w, $teacher, 'learning-content', $rowId), $rowId),
+                ];
+
+                $this->assertSame($unknown, $hidden);
+                $this->assertStringNotContainsString($rowId, implode(' ', [$hidden['show'], $hidden['content'], $hidden['archive']]));
             }
         }
     }

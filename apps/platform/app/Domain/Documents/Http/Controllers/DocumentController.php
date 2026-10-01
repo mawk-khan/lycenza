@@ -9,6 +9,7 @@ use App\Domain\Documents\Application\DocumentMetadata;
 use App\Domain\Documents\Application\DocumentOwner;
 use App\Domain\Documents\Application\DocumentReadService;
 use App\Domain\Documents\Application\DocumentService;
+use App\Domain\Documents\Application\Exceptions\DocumentNotFoundException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -237,7 +238,12 @@ class DocumentController extends Controller
             fn () => Document::query()->where('school_id', $school->id)->find($document),
         );
 
-        abort_if($model === null, 404);
+        // The same DOCUMENT_NOT_FOUND as show/content, so an unknown
+        // Document and one whose LMS parent the actor may not see answer
+        // identically (ADR 0063 section 18).
+        if ($model === null) {
+            throw new DocumentNotFoundException(strtolower($document));
+        }
 
         app(DocumentService::class)->archive($school, $model, $request->user());
 

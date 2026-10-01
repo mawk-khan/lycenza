@@ -253,7 +253,9 @@ so none are possible.
 **Assignable roles:**
 - An invitation names **at least one** role.
 - Roles come from the closed catalog of `roles` with `scope = 'school'`.
-  Today that is `school_admin` and `principal`.
+  At ADR 0059 that was `school_admin` and `principal`; since TCH.3 the
+  catalog also holds the system `teacher` role (ADR 0063 §31), granted
+  through this same path under the no-escalation rule.
 - Role ids are resolved server-side from keys. A client-supplied id is
   never trusted.
 - Never platform or Group roles, root, or a wildcard. The existing

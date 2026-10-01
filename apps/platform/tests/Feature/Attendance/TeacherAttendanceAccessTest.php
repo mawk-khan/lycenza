@@ -11,6 +11,7 @@ use App\Domain\TeachingAssignments\Infrastructure\TeachingAssignment;
 use App\Models\Role;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -295,6 +296,31 @@ class TeacherAttendanceAccessTest extends TestCase
 
         $this->correctFirst($w, $user, $theirs)->assertNotFound();
         $this->as($user)->postJson($this->base($w).'/attendance-records/'.Str::uuid7().'/correct', ['expected_status' => 'present', 'new_status' => 'absent'])->assertNotFound();
+    }
+
+    #[Test]
+    public function an_unowned_class_or_register_answers_with_the_unknown_ids_exact_body(): void
+    {
+        // TCH.6 (ADR 0063 section 18): not merely the same status -- the
+        // same body, and never the id of a register the teacher may not see.
+        $w = $this->teacherAttendanceWorld();
+        [$user, $employee] = $this->teacher($w);
+        $this->own($w, $employee, '2026-06-01');
+        $theirs = $this->adminRegister($w, $w['entryB'], self::MONDAY);
+        $body = fn (TestResponse $r) => Arr::except($r->assertNotFound()->json('error'), ['requestId']);
+        $unknown = (string) Str::uuid7();
+
+        $unowned = $body($this->correctFirst($w, $user, $theirs));
+        $this->assertSame($body($this->as($user)->postJson($this->base($w)."/attendance-records/{$unknown}/correct", ['expected_status' => 'present', 'new_status' => 'absent'])), $unowned);
+        $this->assertStringNotContainsString($theirs->id, (string) json_encode($unowned));
+
+        $this->assertSame(
+            $body($this->as($user)->postJson($this->base($w).'/attendance-sessions', ['timetable_entry_id' => $unknown, 'attendance_date' => self::MONDAY, 'records' => $this->allPresent($w['studentsB'])])),
+            $body($this->submit($w, $user, self::MONDAY, $w['entryB'])),
+        );
+
+        $preview = fn (string $entryId) => $body($this->as($user)->getJson($this->base($w)."/attendance-sessions/roster-preview?timetable_entry_id={$entryId}&attendance_date=".self::MONDAY));
+        $this->assertSame($preview($unknown), $preview($w['entryB']->id));
     }
 
     #[Test]

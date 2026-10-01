@@ -1,19 +1,13 @@
 # ADR 0063: Teacher Identity and Ownership-Based Authorization Contract
 
 - Status: Accepted as a contract (TCH.0, documentation only, closed).
-  **TCH.1, TCH.2 and TCH.3 are implemented and closed** (§29–§31).
-  **TCH.4 is implemented** (owned teacher Attendance access, §32).
-  **Teacher Attendance functionality is implemented but production
-  enablement remains blocked by TCH-L1 until the required legal/compliance
-  determination is recorded** (§26). **TCH.5A — the LMS teacher ownership
-  contract — is published and closed** (audit §33, owner resolution §34;
-  D-14 resolved, docs only). **TCH.5B — the LMS ownership and audience
-  persistence foundation — is implemented** (§35): dormant persistence and
-  the Documents parent-authorization seam. **TCH.5C — Learning Content
-  teacher adoption — is implemented** (§36): `lms.content.teacher`, owned
-  reads/writes, `/my/` API, "My Learning Content" and attachments.
-  **TCH.5D — Assignment teacher adoption — is implemented** (§37). TCH.6
-  (closure audit) is next and not implemented. **LMS Submission remains
+  **TCH is DEVELOPMENT CLOSED (TCH.6 closure audit, 2026-10-01, §38).**
+  TCH.1, TCH.2, TCH.3, TCH.5A, TCH.5B, TCH.5C, TCH.5D and TCH.6 are closed;
+  TCH.4 is development-closed (§29–§37). **Teacher Attendance functionality
+  is implemented but production enablement remains blocked by TCH-L1 until
+  the required legal/compliance determination is recorded** (§26). E21
+  (retention) stays open. TCH.6 found and fixed one closure defect
+  (non-identical not-found bodies, §38.3). **LMS Submission remains
   cancelled and outside TCH.**
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
@@ -1119,8 +1113,13 @@ Attendance surface has neither, and TCH lowers nothing.
   `TeachingAssignmentArchitectureGuardTest`. Attendance may use only
   `TeachingOwnership`/`OwnedTeachingPeriod`.
 - Two-process races (`TeacherAttendanceConcurrencyTest`): a teacher
-  submission or correction vs an assignment end, a membership suspension,
-  an unlink, an archive and an employment end, in both orders.
+  submission vs an assignment end, a membership suspension, an unlink, an
+  archive and an employment end, in both orders; a correction vs an
+  assignment end (end first) and a membership suspension (both orders).
+  *(Corrected by the TCH.6 audit, which found the earlier wording claimed
+  every correction race in both orders. Correction runs the same
+  `holdActor()`/`TeachingOwnership::hold()` primitives as submission, so
+  the protection is the same code path; §38.6.)*
 - The existing Attendance concurrency tests pass unchanged.
 
 **Demo.** Inside the demo builder's environment guard, the demo teacher
@@ -1425,7 +1424,9 @@ teacher publication). Nothing in this section is implemented.
 
 **Status: RESOLVED AND CLOSED (2026-09-30, owner decision; docs only).**
 D-14 is resolved. This section is the authoritative LMS teacher ownership
-contract; where §33 differs, this section wins. **Nothing here is
+contract; where §33 differs, this section wins. *(Since implemented by
+TCH.5B–TCH.5D, §35–§37; the next sentences record the state when this
+section was written.)* **Nothing here is
 implemented.** No `lms.*.teacher` capability exists, teachers have no LMS
 access, and LMS stays admin-only (Tier 1) until TCH.5C/TCH.5D. Submission
 stays cancelled and outside every checkpoint.
@@ -1644,10 +1645,10 @@ No owner decision remains open.
 | Checkpoint | Scope | State |
 |---|---|---|
 | **TCH.5A** | LMS teacher ownership contract (docs only) | **PUBLISHED / CLOSED** |
-| **TCH.5B** | LMS ownership & audience persistence foundation: owner fields, audience bridges, structural integrity, RLS/immutability, the parent-authorization seam; the Sensitive re-tier. **No** teacher capability or access | **NEXT — NOT IMPLEMENTED** |
-| **TCH.5C** | Learning Content teacher adoption: `lms.content.teacher`, owned reads/writes, teacher API/UI, attachment integration | Planned |
-| **TCH.5D** | Assignment teacher adoption: `lms.assignments.teacher`, owned reads/writes, teacher API/UI, attachment integration | Planned |
-| **TCH.6** | TCH closure audit | Planned |
+| **TCH.5B** | LMS ownership & audience persistence foundation: owner fields, audience bridges, structural integrity, RLS/immutability, the parent-authorization seam; the Sensitive re-tier. **No** teacher capability or access | **CLOSED** (§35) |
+| **TCH.5C** | Learning Content teacher adoption: `lms.content.teacher`, owned reads/writes, teacher API/UI, attachment integration | **CLOSED** (§36) |
+| **TCH.5D** | Assignment teacher adoption: `lms.assignments.teacher`, owned reads/writes, teacher API/UI, attachment integration | **CLOSED** (§37) |
+| **TCH.6** | TCH closure audit | **CLOSED** (§38) |
 
 Each implementation checkpoint is separately authorized. LMS Submission
 stays outside every one.
@@ -2081,4 +2082,352 @@ own G8-A draft homework, created by her. There is no Submission data.
   tenant storage directory. The isolated suite runs as root, and leftover
   root-owned directories on the bind mount broke host tooling.
 
-**Next:** TCH.6 — TCH closure audit (not implemented).
+**Next:** TCH.6 — TCH closure audit (§38, closed).
+
+## 38. TCH.6 — closure audit and programme closure (2026-10-01)
+
+**Status: CLOSED. TCH — Teacher Identity & Ownership-Based Authorization —
+is DEVELOPMENT CLOSED.** Baseline `origin/main` `2d5bc9c` (regression
+checkpoint `2d5bc9c`, 7,095 tests). The audit was repository-wide and
+read the code, not the completion reports. It found **one closure defect**,
+fixed here (§38.3), and no authorization bypass. Development closure is
+**not** production clearance (§38.8).
+
+### 38.1 Final scope
+
+TCH built exactly:
+- the ActingEmployee identity boundary (TCH.1);
+- TeachingAssignment ownership (TCH.2);
+- the production `teacher` role (TCH.3, grown one adopter at a time);
+- owned teacher access to Curriculum Delivery (TCH.3), Attendance (TCH.4),
+  Learning Content (TCH.5C) and Assignments (TCH.5D), on the LMS
+  owner/audience persistence (TCH.5B).
+
+Outside TCH, unchanged:
+- **Cancelled:** LMS Submission (ADR 0039 addendum). There is no Submission
+  model, table, route, capability, UI or Documents parent (guarded by
+  `LmsOwnershipArchitectureGuardTest`).
+- **Deferred by design:** class teacher / homeroom (D-02) and elective
+  ownership (D-05). Elective LMS stays Tier 1, because a TeachingAssignment
+  is for a required Offering only.
+- **Other or future programmes:** Lesson Planning; RES (StudentMark,
+  results, report cards, transcripts); POR; HRX (own payslip, leave,
+  manager hierarchy, Employee self-service — ActingEmployee is reusable,
+  but TCH uses none of these); tenant-custom roles; generic non-teaching
+  staff roles. `teacher` is the only production staff role TCH added.
+
+### 38.2 Final contracts as built
+
+**Identity.** One resolver, `ActingEmployeeResolver`: authenticated User →
+School operational → membership `active` → User not disabled → the
+Employee of `employees(school_id, user_id)` → `record_status = 'active'` →
+exactly one EmploymentRecord with `starts_on <= asOf <= ends_on` (open end
+allowed) and status `active` or `notice_period`.
+- `asOf` is the School-local date.
+- Zero or two eligible rows fail closed.
+- `resolve()` is fresh; `hold()` throws outside a transaction and takes
+  School → membership → User → Employee → EmploymentRecord `FOR SHARE`.
+- Nothing is cached. No other code resolves a User's Employee
+  (`ActingEmployeeArchitectureGuardTest`).
+- Link and unlink are explicit, locked and audited. The generic update and
+  the PATCH API refuse `user_id`, and import goes through the same link
+  primitive.
+
+**Ownership.** `teaching_assignments` is Employee × Section × required
+SubjectOffering × year/campus/grade context × an inclusive date range.
+- Future rows are allowed; co-teaching is another key; cover is a short
+  dated row.
+- Rows end and are never deleted (forced RLS, `revokeDelete`).
+- A history trigger freezes the identity columns and permits one shortening
+  end.
+- Composite foreign keys enforce the same-School Employee and the
+  same-context Section and Offering.
+- There is no "one open row" index. Overlap is refused under the
+  transaction-scoped advisory lock
+  `teaching.assignment:{school}:{employee}:{section}:{offering}`.
+- `TeachingOwnership::periods()` is fresh. `hold()` requires exactly one
+  covering row `FOR SHARE`.
+- The module never reads the Timetable, ActingEmployee or a consumer.
+
+**Teacher role.** Exactly `curriculum.delivery.teacher`,
+`attendance.teacher`, `lms.content.teacher` and `lms.assignments.teacher`.
+- No `*.view`/`*.manage` of those modules, no `teaching.assignments.*`, no
+  `students.view`, and nothing from HR, finance, payroll, settings or role
+  governance.
+- `school_admin` also holds the four capabilities, only so the
+  no-escalation rule lets it grant the role. It already holds every Tier 1
+  capability, and Tier 1 wins wherever both apply. `principal` holds none of
+  the four.
+- No code reads a role key. Guards forbid it in `app/` and
+  `resources/js/`, and a non-`teacher` role carrying a capability is tested
+  to behave the same.
+- The demo Teacher (Kavya Reddy) uses the production role. No `demo.teacher`
+  exists.
+
+**New TCH capabilities (exactly six):** `teaching.assignments.view`,
+`teaching.assignments.manage`, `curriculum.delivery.teacher`,
+`attendance.teacher`, `lms.content.teacher` and `lms.assignments.teacher`.
+
+**Authorization matrix.** No role is ranked. AE = verified ActingEmployee;
+TA = TeachingAssignment ownership.
+
+| Surface | School Admin | Principal | Teacher |
+|---|---|---|---|
+| TeachingAssignment admin | `teaching.assignments.view/.manage` (no AE/TA) | same | none |
+| Curriculum Delivery | Tier 1 `curriculum.delivery.view/.manage` (no AE/TA) | same | `curriculum.delivery.teacher` + AE (today) + TA on the delivery's own dates |
+| Attendance | Tier 1 `attendance.view/.manage` (no AE/TA) | same | `attendance.teacher` + AE (today) + TA on `attendance_date`; **production gate TCH-L1** |
+| Learning Content | Tier 1 `lms.content.view/.manage` (no AE/TA) | same | `lms.content.teacher` + AE + owner/audience rule + TA (School-local today) |
+| Assignment | Tier 1 `lms.assignments.view/.manage` (no AE/TA) | same | `lms.assignments.teacher` + AE + owner/audience rule + TA (School-local today) |
+
+**LMS owner/audience rule** (both kinds; §34, §36, §37):
+- **Create, write, own-row read:** owner Employee = AE AND a TA for
+  **every** audience Section.
+- **Published teacher row:** a TA for **any** audience Section.
+- **Published Offering-wide row:** a TA for any Section of the Offering.
+- **Never visible to teachers:** admin drafts, closed Assignments and
+  archived Learning Content.
+- **Lock order:** TAs are held in ascending Section id, never in the
+  client's order.
+- **Database:** the owner and audience are immutable and RLS-forced. The
+  valid states (owner NULL + no audience, or owner + ≥ 1 audience) are
+  enforced, and `down()` refuses while owned data exists.
+- **Attachments:** Documents asks `LmsParentResourceAuthorization`, per
+  parent kind with its own capability (no cross-kind substitution).
+
+### 38.3 Closure defect found and fixed — non-identical not-found answers
+
+**Finding.** D-13/§18 require an unowned resource to answer like an unknown
+one. Every status was already 404, but on several owned paths the **error
+body** differed, because Laravel echoes a `ModelNotFoundException`'s model
+and ids into the API message:
+- **Attendance correct:** an unowned register answered
+  `…[AttendanceSession] <session-id>` against `…[AttendanceRecord].` for an
+  unknown record. It disclosed that the record exists and **leaked the
+  parent register's id**.
+- **Attendance submit and roster preview:** an unowned class answered
+  differently from an unknown TimetableEntry.
+- **Curriculum Delivery update/transition:** an unowned delivery's message
+  carried its id.
+- **Documents** (`/documents/{id}`, `/content`, `/archive`, and the LMS
+  list/upload routes): for a teacher, an LMS parent they may not see
+  answered with the LMS model and **the hidden parent row's id**, against
+  `DOCUMENT_NOT_FOUND` / `DOCUMENT_OWNER_NOT_FOUND` for unknown ids.
+- **Web `/app/my-curriculum-delivery/{id}`:** a malformed id reached the
+  database as a uuid cast (an error, not a 404).
+
+**Risk.** Low: ids are UUIDv7 and nothing was readable or writable. But it
+was an existence oracle and an id leak on Sensitive surfaces, contrary to
+the contract.
+
+**Fix (minimal, no behaviour change for permitted actors):**
+- **Attendance:** the hidden case is mapped onto the unknown-id answer by
+  the service that owns that answer (`AttendanceSubmissionService`,
+  `AttendanceCorrectionService`, the roster preview). The guard no longer
+  names a register id, and it still never names a TimetableEntry.
+- **Curriculum Delivery:** `TeacherDeliveryGuard` throws the same id-less
+  not-found as the service's unknown path.
+- **Documents:** Documents maps an LMS-port not-found onto its own
+  `DOCUMENT_NOT_FOUND`/`DOCUMENT_OWNER_NOT_FOUND`, naming only the id the
+  caller sent. An unknown archive now also answers `DOCUMENT_NOT_FOUND`, the
+  same as show/content (it was an empty 404). LMS still never depends on
+  Documents.
+- **Web Curriculum Delivery:** a malformed id is a 404.
+
+**Tests:** whole-body comparisons (`requestId` excluded, the requested id
+normalized), plus "the hidden id never appears":
+- `TeacherAttendanceAccessTest::an_unowned_class_or_register_answers_with_the_unknown_ids_exact_body`;
+- `TeacherCurriculumDeliveryAccessTest::an_unowned_delivery_or_class_answers_with_the_unknown_ids_exact_body`;
+- `MyCurriculumDeliveryUiTest::a_malformed_unknown_or_unowned_delivery_id_is_not_found_on_the_page`;
+- the strengthened `attachments_of_a_row_the_teacher_may_not_read_are_not_found`
+  in both `Teacher*DocumentsTest` files.
+
+All five failed on the unfixed code and pass on the fix.
+
+**Intentional differences that remain:**
+- A syntactically malformed id is refused before any lookup with an empty
+  404 message. It depends on no School data.
+- After visibility is established: 403 `*_NOT_OWNED`, 422
+  `*_OUTSIDE_TEACHING_ASSIGNMENT` / `LMS_AUDIENCE_SECTION_NOT_TAUGHT`, the
+  existing 409 conventions, and 403 `HR_ACTING_EMPLOYEE_UNAVAILABLE` for an
+  actor who is not an eligible Employee.
+- Request-only checks that run before the guard (a future
+  `attendance_date`, duplicate enrollments, an out-of-year `due_on` on a
+  visible Assignment) answer 422 from the request alone, disclosing nothing.
+
+### 38.4 Audit results by area (all PASS after §38.3)
+
+- **Identity (TCH.1):**
+  - one resolver;
+  - the closed eligibility rule, database-constrained;
+  - `hold()` transaction-only, with lock order unchanged;
+  - no identity cache;
+  - link governance and import closed;
+  - races proven by real two-process tests in both orders
+    (`ActingEmployeeConcurrencyTest`): link vs suspension; unlink, archive,
+    employment end and suspension vs `hold()`.
+- **Ownership (TCH.2):**
+  - schema, FKs, RLS, `revokeDelete`, history trigger, advisory lock and
+    inclusive overlap all as built;
+  - races proven (`TeachingAssignmentConcurrencyTest`): create vs create,
+    end vs end, end vs a waiting create, employment end and archive vs
+    create;
+  - raw-SQL invariants proven (`TeachingAssignmentDatabaseInvariantsTest`):
+    cross-School Employee/Section/Offering, wrong context, RLS, no context,
+    no DELETE, no repointing.
+- **Curriculum Delivery (TCH.3):**
+  - the chain, the date model and SQL list filtering;
+  - writes hold inside the service transaction, with a re-check on a
+    concurrent date change;
+  - no `teacher_id`; Tier 1 unchanged;
+  - races vs end, suspension, unlink, archive and employment end, both
+    orders; `CurriculumDeliveryTransitionConcurrencyTest` unchanged.
+- **Attendance (TCH.4):**
+  - the chain, `attendance_date` ownership and an owned-only roster;
+  - no `students.view`;
+  - `teacher_id` (timetable and session) is never authority: every use in
+    `app/` is a schedule write, a provenance snapshot, a display, or a
+    Tier 1 admin filter;
+  - cover via assignment works, and a timetabled teacher without one is
+    refused;
+  - the teacher submit is deliberately not `idempotent`;
+  - race coverage is as corrected in §32.
+- **LMS (TCH.5B–5D):**
+  - states, owner and audience integrity, RLS and rollback refusal
+    (`LmsOwnership*Test`);
+  - SQL and PHP read rules agree;
+  - every write holds inside the service transaction in ascending Section
+    order (reverse-client-order proofs, real processes);
+  - co-teaching and hand-over tested for both kinds;
+  - `due_on` is never an authorization date;
+  - `closed` is owner-only.
+- **Cross-cutting:**
+  - no role-name authorization;
+  - `CapabilityResolver` is the only capability cache and has no HR,
+    TeachingAssignment or LMS dependency, and role grant/revoke clears it;
+  - ActingEmployee, ownership and owner/audience are never cached;
+  - all 26 `/my/` operations carry the owned capability, `private-no-store`
+    and OpenAPI + shared types, and the `/app/my-*` pages are
+    `no-store, private`;
+  - teacher navigation is capability-driven: the four "My …" links only,
+    with no Students, TeachingAssignment, LMS admin, Timetable or
+    Submission links;
+  - dependency directions match DOMAIN-MAP (HR ← consumers;
+    TeachingAssignments ← consumers; Documents → LMS port; Timetable never
+    authority).
+
+### 38.5 Audit and events
+
+- **TCH audit actions:** `employee.user_linked`, `employee.user_unlinked`,
+  `teaching_assignment.created` and `teaching_assignment.ended`.
+  - Metadata is ids, dates and closed reasons only.
+  - The actor is always the authenticated User, never an Employee.
+- **Reused audit actions:**
+  - the role grant/revoke events;
+  - `curriculum_delivery.*`;
+  - the Attendance submission and correction events;
+  - `lms.learning_content.*` and `lms.assignment.*` (the created events add
+    `ownerEmployeeId`/`audienceSectionIds`);
+  - `document.*`.
+- **No new domain or outbox event.** Link and unlink keep emitting the
+  pre-existing `EmployeeUpdated` (`changedFields: ['user_id']`). Nothing is
+  webhook-registered.
+
+### 38.6 Non-blocking observations (recorded, not defects)
+
+- **Test gaps, behaviour verified by reading:**
+  - no teacher test exercises Curriculum Delivery *reopen* or the
+    concurrent date-change re-check;
+  - no list test covers a draft multi-Section LMS row after one Section
+    ends;
+  - `TeachingOwnership::hold()` failing closed on two covering rows is
+    tested only through consumers (the overlap rule makes that state
+    unreachable);
+  - correction is raced against two of the five revocations (§32
+    corrected).
+- **Lock-order wording.** `TeachingAssignmentService::create()` takes its
+  key advisory lock before its Employee/EmploymentRecord `FOR SHARE` reads.
+  No cycle exists: HR never locks assignments, and consumers take only
+  `FOR SHARE` there. §20's order describes the consumer side.
+- **`EmployeeService::archive()`** relies on its `UPDATE` row lock (which
+  does conflict with `FOR SHARE`) rather than an explicit
+  `lockForUpdate()`. That is race-safe for authorization, but two concurrent
+  archives could audit twice.
+- **Guards that could be widened:**
+  - nothing forbids TeachingAssignments from importing a consumer module in
+    future;
+  - the role-name guard forbids `teacher` comparisons but not
+    `principal`/`school_admin` ones (none exist).
+- **Pre-existing Documents → LMS model lookups** (existence checks, Phase
+  0I.3) remain beside the authorization port.
+- **Test hygiene.** The TCH.5C/5D race tests clean their tenant storage;
+  the other race helpers commit and purge their own rows. The
+  pre-existing (Phase 0H.3B, not TCH) `CurriculumDeliveryTransitionConcurrencyTest`
+  leaves one committed User and one non-system `test.capability_grant.<uuid>`
+  role after its School cleanup. This is classified **harmless, not fixed**:
+  the keys are unique, no test counts non-system roles, and the full
+  isolated suite resets the database.
+
+### 38.7 Decision audit
+
+| Decision | Final state |
+|---|---|
+| T1 Production Teacher role | **IMPLEMENTED** (TCH.3–TCH.5D) |
+| T2 Non-teaching staff roles | **OUTSIDE TCH** |
+| T3 Tenant-custom roles | **OUTSIDE TCH** (existing future decision) |
+| T4 Identity vs ownership boundary | **IMPLEMENTED** (HRX outside TCH) |
+| D-01 TeachingAssignment | **IMPLEMENTED** (TCH.2) |
+| D-02 Class teacher / homeroom | **DEFERRED BY DESIGN** |
+| D-03 Timetable not authority | **IMPLEMENTED** (architecture guards) |
+| D-04 Lifecycle | **IMPLEMENTED** (limitation: a future assignment cannot be cancelled, §30) |
+| D-05 Electives | **DEFERRED BY DESIGN** (elective LMS stays Tier 1) |
+| D-06 Adoption order | **IMPLEMENTED** (Curriculum Delivery → Attendance → LMS) |
+| D-07 Owned-scope capabilities | **IMPLEMENTED** (four `*.teacher`) |
+| D-08 Employment eligibility | **IMPLEMENTED** |
+| D-09 Link governance | **IMPLEMENTED** |
+| D-10 ActingEmployee in HR | **IMPLEMENTED** |
+| D-11 Assignment administration | **IMPLEMENTED** |
+| D-12 MFA | **IMPLEMENTED as clarified** (no new MFA; RES outside TCH) |
+| D-13 Non-disclosure | **IMPLEMENTED** (remediated by TCH.6, §38.3) |
+| D-14 LMS ownership | **IMPLEMENTED** (TCH.5A–TCH.5D) |
+| D-15 Temporary cover | **IMPLEMENTED** (dated assignment) |
+| D-16 Timetable ↔ assignment consistency | **IMPLEMENTED** (no coupling); the optional mismatch report is **DEFERRED** |
+| D-17 Co-teaching | **IMPLEMENTED** |
+| TCH-L1 | **OPEN PRODUCTION GATE** (teacher Attendance) |
+| E21 | **OPEN PRODUCTION GATE** (existing ADR 0058 retention item) |
+
+The §27 findings for other programmes:
+- **Resolved:** `LMS.md` authorship wording (corrected at TCH.5B);
+  `HR.md` `record_status` (annotated at TCH.6); the link-check messages
+  (TCH.1); ADR 0059's catalog line (annotated at TCH.6).
+- **Unchanged:** the production least-privilege finding, for a future staff
+  programme.
+
+### 38.8 Production blockers (development closed ≠ production cleared)
+
+| ID | State | Affects |
+|---|---|---|
+| **TCH-L1** | **OPEN** — no legal/compliance determination is recorded; none is implied by the implementation or its tests | Production enablement of teacher Attendance (`attendance.teacher`). Development blocker: no |
+| **E21** | **OPEN** (ADR 0058) | Retention of link history, TeachingAssignment history and LMS owner/audience history |
+
+- No new legal or security blocker was found. Learning Content and
+  Assignments are Sensitive, a classification rather than a gate.
+- Production release gating (ADR 0052) applies to TCH as to everything
+  else.
+
+### 38.9 Closure evidence
+
+- **Focused closure suites:**
+  - `tests/Feature/{HR, TeachingAssignments, Authorization,
+    CurriculumDelivery, Attendance, LMS, Documents, Tenancy, Postgres,
+    Demo, App, Identity/Staff}`;
+  - these include every TCH concurrency, architecture-guard, raw-RLS and
+    demo test;
+  - **3,225 tests, 0 failures** (31,928 assertions).
+- **Full isolated regression** on the closure code:
+  - command: `SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --reset-db`,
+    then `SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test`;
+  - result: **7,098 tests, 0 failures, 1 skip** (175,960 assertions; 7,095 at `2d5bc9c` plus the three new TCH.6 tests);
+  - the one skip is the deliberate ESI-12 legal gate.
+- **The closure commit is the new regression checkpoint** (counter 0/5).
+
+No further TCH implementation checkpoint remains.

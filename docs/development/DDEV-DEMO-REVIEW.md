@@ -250,9 +250,9 @@ minute.
 | Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (14 `platform.*` capabilities, incl. `platform.schools.elevate`, School Group governance, `platform.audit.view`, `platform.role_grants.manage`) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13), **School Groups (platform)** (step 13a), **Platform audit log** and **Platform roles** (step 13b), **Schools (platform)** (step 13c); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
 | Platform Auditor | `platform.auditor@example.test` | Platform scope, review only | `platform_auditor` (`platform.audit.view` only), granted by the Platform Admin | **Platform audit log** only (needs MFA; step 13b). No School, Group, elevation or governance action |
 | Group Admin | `group.admin@example.test` | Group scope: Lycenza Demo Trust | `group_admin` Group grant (`group.schools.view`, `group.schools.elevate`, `group.reporting.view`), granted by the Platform Admin | **Your School Groups** -> the Trust's two Schools (name, status); enter one through elevated access (needs MFA). No School membership or School permission; cannot change the Group |
-| Teacher / Staff | `teacher@example.test` | Current teacher experience | School member with no role, linked to Employee EMP-000003 | **No teacher portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
-| Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: same as Teacher |
-| Guardian | `guardian01@example.test` | Current parent experience | Member with no role, linked to Guardian Priya Sharma (activated via the real invitation flow) | **No parent/guardian portal exists**: same as Teacher |
+| Teacher | `teacher@example.test` | Owned teacher access (TCH, ADR 0063) | Production `teacher` role (exactly `curriculum.delivery.teacher`, `attendance.teacher`, `lms.content.teacher`, `lms.assignments.teacher`), linked to Employee EMP-000003 (Kavya Reddy), one TeachingAssignment: G8-A Mathematics | **My Curriculum Delivery**, **My Attendance**, **My Learning Content** and **My Assignments** for G8-A Mathematics only; every School-wide module (Students, Timetable, TeachingAssignment admin, LMS admin) is 403. Teacher Attendance is production-blocked by open TCH-L1 |
+| Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: dashboard, School setup index, preferences, account security only; modules 403 |
+| Guardian | `guardian01@example.test` | Current parent experience | Member with no role, linked to Guardian Priya Sharma (activated via the real invitation flow) | **No parent/guardian portal exists**: same as Student |
 | Finance Officer *(demo-only role)* | `finance.officer@example.test` | Finance in isolation | `demo.finance_officer`: only `finance.*` (7) -- ledger, journals, charges, payments, offline payment recording | Everything else 403 |
 | Librarian *(demo-only role)* | `library.operator@example.test` | Library in isolation | `demo.librarian`: only `library.*` (4) | No menu link: use `/app/library/titles`, `/app/library/circulation` |
 | Transport Coordinator *(demo-only role)* | `transport.operator@example.test` | Transport in isolation | `demo.transport_coordinator`: only `transport.*` (6) | No menu link: use `/app/transport/routes` |
@@ -294,7 +294,7 @@ product personas.
 
 Considered and not created: a "canteen student" or any student/guardian
 self-service desk (no student- or guardian-facing capability exists), a
-teacher role (the product has none), an examinations/timetable/attendance
+`demo.teacher` role (the product's own `teacher` role is used instead, TCH.3), an examinations/timetable/attendance
 desk (those capabilities are held by the Principal already, and nothing new
 would become reviewable), and a platform-operations account beyond the
 Platform Admin (there is no platform UI to review).
@@ -306,13 +306,13 @@ Platform Admin (there is no platform UI to review).
 | Platform super admin | Yes (`platform_role_assignments`, provisioned) | Yes | Platform | 14 `platform.*` | The neutral `/app` landing, platform elevation (enter one School for 30 minutes; opens no School page yet), School Group governance, the platform audit log and Platform Auditor grants; MFA-reset is a POST-only endpoint; operations status is API-only |
 | Platform auditor | Yes (`platform_role_assignments`, runtime grant, Phase 0N.7) | Yes | Platform | `platform.audit.view` | The platform audit log (MFA required) |
 | Group admin | Yes (`group_role_assignments`, Phase 0N.5) | Yes | One School Group per grant | 2 `group.*` | Read-only Group view; Group-derived elevation (opens no School page yet) |
-| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 111 of the 155 catalog capabilities | Full admin UI |
-| Principal | Yes (system role `principal`) | Yes | One School | 79 capabilities: academic/student/ops subset | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
+| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 129 of the 155 School-scope capabilities (TCH.6 count; includes the four `*.teacher` capabilities, held only for no-escalation grantability) | Full admin UI |
+| Principal | Yes (system role `principal`) | Yes | One School | 82 capabilities (TCH.6 count): academic/student/ops subset, no `*.teacher` | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
 | Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
-| School member, no role (teacher/staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
+| School member, no role (staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
 | Guardian | Yes (Phase 5D.3 invitation -> membership + account link) | Yes | One School | None | Same as "no role" -- **no guardian portal** |
 | Student | Yes (Phase 5B account link) | Yes | One School | None | Same as "no role" -- **no student portal** |
-| Teacher (as a role) | **No** -- there is no teacher role or teacher portal | -- | -- | -- | -- |
+| Teacher | Yes (system role `teacher`, TCH.3-TCH.5D, ADR 0063) | Yes | One School, and only the classes a TeachingAssignment covers | 4 owned-scope `*.teacher` capabilities | My Curriculum Delivery, My Attendance, My Learning Content, My Assignments -- each needs a verified ActingEmployee and TeachingAssignment ownership; the role alone reaches nothing |
 | Finance / Library / Transport / Reception / Hostel / Canteen / Communications officers | **No** product roles -- each is a real, complete capability family, reviewable through a `demo.*` role | Yes (demo) | One School | One family each | That module only |
 
 ## 12. Recommended review walkthrough
@@ -356,9 +356,11 @@ Platform Admin (there is no platform UI to review).
    Statutory.
 10. **multi.school@example.test**: choose the Annexe -> 3 students only;
     switch School from the dashboard.
-11. **teacher@example.test**, **student@example.test**,
-    **guardian01@example.test**: dashboard with only "School setup";
-    every module page returns 403 -- this is the current product state.
+11. **teacher@example.test**: the four "My ..." links for G8-A Mathematics
+    only; Students, Timetable, Teaching assignments and the LMS admin pages
+    are 403. **student@example.test**, **guardian01@example.test**:
+    dashboard with only "School setup"; every module page returns 403 --
+    this is the current product state.
 12. Open **Mailpit** -> "You're invited to Lycenza Demo School" for
     `guardian02@example.test` -> follow the link -> set a password ->
     you are signed in as a newly activated guardian.
@@ -551,10 +553,11 @@ Platform Admin (there is no platform UI to review).
   (endpoints/deliveries), education boards. The API is not reachable from
   a browser session (no session-authenticated API; no token-issuing UI) --
   a Sanctum token must be minted in `ddev artisan tinker`.
-- **Guardian / student / teacher self-service**: account links, guardian
+- **Guardian / student self-service**: account links, guardian
   invitation/activation and communication audiences are implemented, but
-  there are no guardian, student or teacher portals -- linked users land on
-  an empty dashboard.
+  there are no guardian or student portals -- linked users land on an empty
+  dashboard. Teachers have the four owned "My ..." surfaces (TCH, ADR 0063)
+  and no other self-service (no HRX leave/payslip).
 - **Role and member management**: no UI; roles/assignments are DB-only.
 - **Feature flags**: tables and resolver exist; no flags seeded or used.
 - **Statutory payroll** (Phase 9.6): screens exist; no statutory

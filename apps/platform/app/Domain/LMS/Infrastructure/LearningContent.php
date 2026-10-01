@@ -29,10 +29,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * records for the same single-parent shape.
  *
  * NO AUTHOR COLUMN. No `created_by_employee_id` or `teacher_id` exists
- * here -- ADR 0039 decision 6 is explicit that no teacher-to-Offering
- * ownership record exists in this codebase yet; authorization is
- * capability-only in v1 (`lms.content.view`/`lms.content.manage`),
- * matching SyllabusUnit/CurriculumDelivery/Examination/ExaminationPaper.
+ * here (ADR 0039 decision 6). Tier 1 authorization stays capability-only
+ * (`lms.content.view`/`lms.content.manage`). Since TCH.5B/TCH.5C (ADR 0063
+ * sections 35-36) a teacher-owned row carries the immutable
+ * `owner_employee_id` and a Section audience. That is resource ownership,
+ * never an author or audit field, and teacher access also needs
+ * `lms.content.teacher`, an ActingEmployee and a TeachingAssignment.
  *
  * @property string $id
  * @property string $school_id

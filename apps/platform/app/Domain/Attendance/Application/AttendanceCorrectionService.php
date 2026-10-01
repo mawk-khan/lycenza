@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -68,7 +69,15 @@ class AttendanceCorrectionService
             // Session is immutable, so the unlocked read cannot go stale.
             if ($guard !== null) {
                 $session = AttendanceRecord::query()->where('id', $attendanceRecordId)->where('school_id', $school->id)->firstOrFail()->session;
-                $guard->beforeCorrect($school, $session);
+
+                try {
+                    $guard->beforeCorrect($school, $session);
+                } catch (ModelNotFoundException) {
+                    // A register the teacher may not see answers exactly
+                    // like an unknown record (ADR 0063 section 18) and
+                    // never names the register.
+                    throw (new ModelNotFoundException)->setModel(AttendanceRecord::class);
+                }
             }
 
             $record = AttendanceRecord::query()

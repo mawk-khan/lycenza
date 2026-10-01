@@ -2407,6 +2407,9 @@ paths, unchanged in their own responsibilities.
 
 ### Employee lifecycle vs Employment lifecycle — kept fully distinct
 
+*(Superseded since: `EmployeeService::archive()`/`restore()` now write
+`record_status`, and TCH.1 database-constrained it — recorded by the ADR 0063
+§27 finding, resolved at TCH.6. The 8A.13 record follows.)*
 Confirmed by inspection, not assumed: `Employee.record_status`
 (`active`/`archived`) has **no write path anywhere in this codebase**
 beyond `EmployeeService::create()` setting it to `active` once, at
@@ -3730,8 +3733,13 @@ changed in HR.
   race still reports `duplicate_exact`.
 - **Not changed.** There is no Employee schema redesign
   (`employees.user_id` stays nullable, `unique(school_id, user_id)` and its
-  RESTRICT foreign key stay). There is no teacher access, TeachingAssignment
-  or Teacher role, and no HRX self-service.
+  RESTRICT foreign key stay). TCH.1 itself added no teacher access,
+  TeachingAssignment or Teacher role, and no HRX self-service.
+- **Consumers (TCH.3–TCH.5D, development-closed by TCH.6, ADR 0063 §38).**
+  Curriculum Delivery, Attendance, Learning Content and Assignments call
+  `ActingEmployeeResolver` (`resolve()` for reads, `hold()` inside their
+  write transactions). HR depends on none of them, and HRX (leave, own
+  payslip, manager hierarchy, Employee self-service) remains outside TCH.
 
 ### TCH.2 addition — `EmploymentCoverage`
 

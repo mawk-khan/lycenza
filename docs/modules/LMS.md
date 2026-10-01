@@ -14,6 +14,11 @@ context; the decision record is ADR 0039
 for the *why*, this document for the *what*, mirroring how
 `ACADEMIC-STRUCTURE.md`/`HR.md` relate to their own ADRs.
 
+**Teacher access (ADR 0063, TCH — development-closed 2026-10-01).** Teachers
+use Learning Content (§16) and Assignments (§17) through owned-scope
+capabilities, an immutable owner Employee and an immutable Section audience
+(§15). Tier 1 administration is unchanged, and Submission stays cancelled.
+
 ## 0. Submission — CANCELLED / OUT OF SCOPE (2026-09-05)
 
 **LMS student Submission functionality is cancelled and intentionally
@@ -135,8 +140,9 @@ SubjectOffering (Academic Structure)
 - **Employee (teacher)** — since TCH.5B, an optional immutable
   `owner_employee_id` (composite FK to `employees`) on each resource. It is
   set only on a teacher-owned row and is never an author/audit field: the
-  audit actor is still the User. Authorization is still capability-only
-  (§7); see §15 for the two persistence states.
+  audit actor is still the User. Tier 1 authorization is still
+  capability-only (§7); teacher access is ownership-based (§16, §17); see
+  §15 for the two persistence states.
 
 ## 4. Assignment/Submission versus Examinations boundary
 
@@ -170,8 +176,8 @@ current rows.
 
 | Entity | Tier | Status |
 |---|---|---|
-| Learning Content | Confidential | active, implemented |
-| Assignment (definition/lifecycle) | Confidential | active, implemented |
+| Learning Content | Confidential (Phase 0I); **Sensitive since TCH.5B** | active, implemented |
+| Assignment (definition/lifecycle) | Confidential (Phase 0I); **Sensitive since TCH.5B** | active, implemented |
 | Submission (content, feedback, history) | Sensitive (was) | **CANCELLED / OUT OF SCOPE (2026-09-05) — never legally cleared** |
 
 **Historical record, retained for provenance:** Submission was
@@ -195,8 +201,10 @@ response was ever received.** On 2026-09-05 the product owner cancelled
 the Submission capability entirely, as a product-scope decision
 independent of that unresolved legal question — the gate is retired
 because the feature no longer exists, **not because legal clearance was
-obtained.** Learning Content and Assignment remain Confidential,
-unaffected, and were never gated.
+obtained.** Learning Content and Assignment remained Confidential,
+unaffected, and were never gated. (Since TCH.5B they are Sensitive,
+because a teacher-owned row names an Employee against a class — ADR 0063
+§35; still no legal gate.)
 
 ## 6. Student/Guardian actor model — historical (moot, Submission cancelled)
 
@@ -254,6 +262,14 @@ work needs resolved first.
 
 ## 7. Teacher authorization model — Option A, capability-only v1
 
+> **Superseded for teacher access by ADR 0063 (TCH.5A–TCH.5D).** The
+> ownership record this section says is missing now exists
+> (TeachingAssignment, TCH.2), and teachers reach LMS through
+> `lms.content.teacher`/`lms.assignments.teacher` plus ownership (§15–§17).
+> Option A still governs Tier 1: `.view`/`.manage` remain School-wide and
+> are never granted to the `teacher` role. The text below is the Phase 0I
+> record.
+
 No canonical teacher-to-Section/SubjectOffering ownership record exists
 in this codebase. `TimetableEntry.teacher_id` is a real, mutable
 weekly-scheduling fact, never described anywhere as authoritative for
@@ -284,6 +300,8 @@ LMS-specific.
 | `lms.content.manage` | Author/edit Learning Content | active, seeded |
 | `lms.assignments.view` | View Assignments | active, seeded |
 | `lms.assignments.manage` | Author/edit/publish/close Assignments | active, seeded |
+| `lms.content.teacher` | Owned-scope (Tier 2): own Section-targeted Learning Content, with ActingEmployee + TeachingAssignment (§16) | active, seeded (TCH.5C); `teacher`, and `school_admin` for grantability |
+| `lms.assignments.teacher` | Owned-scope (Tier 2): own Section-targeted Assignments, with ActingEmployee + TeachingAssignment (§17) | active, seeded (TCH.5D); `teacher`, and `school_admin` for grantability |
 | `lms.submissions.view` | Staff view of Submissions | **CANCELLED (2026-09-05) — must never be seeded** |
 | `lms.submissions.manage` | Staff management of Submissions | **CANCELLED (2026-09-05) — must never be seeded** |
 | `lms.submissions.submit` | The Student/Guardian-side act of submitting | **CANCELLED (2026-09-05) — must never be seeded** |
@@ -466,7 +484,8 @@ exists anywhere in `learning_content` (architecture-guard-tested).
   answer to; nothing in this cancellation should be read as having
   resolved that question.
 - **Teacher ownership** (TCH.5A contract, ADR 0063 §34; Learning Content
-  implemented by TCH.5C, §36 and §16 below; Assignment not implemented). This amends ADR 0039 §2 and §6 for teacher-authored rows only:
+  implemented by TCH.5C, §36 and §16 below; Assignment implemented by TCH.5D,
+  §37 and §17 below; TCH development-closed by TCH.6, §38). This amends ADR 0039 §2 and §6 for teacher-authored rows only:
   - **Owner and audience.** A teacher-authored Learning Content or
     Assignment carries an immutable owner Employee and an immutable
     one-or-more Section audience (an FK-backed bridge pinned to the
@@ -550,7 +569,7 @@ Every Learning Content and Assignment row is in exactly one state:
   parent row by `LmsParentResourceAuthorization`.
   - Reading a row lets them read its files.
   - Only an owner who teaches every audience Section may upload or archive.
-  - Assignment attachments stay Tier 1.
+  - Assignment attachments stayed Tier 1 until TCH.5D (§17).
 - **Classification.** Sensitive, unchanged since TCH.5B. No new legal gate.
 
 ## 17. Owned teacher Assignments (TCH.5D, ADR 0063 §37)

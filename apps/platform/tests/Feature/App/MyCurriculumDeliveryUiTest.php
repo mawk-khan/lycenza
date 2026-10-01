@@ -5,6 +5,7 @@ namespace Tests\Feature\App;
 use App\Domain\CurriculumDelivery\Infrastructure\CurriculumDelivery;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTeacherDeliveryFixtures;
@@ -84,6 +85,24 @@ class MyCurriculumDeliveryUiTest extends TestCase
             'section_id' => $w['sectionB']->id, 'subject_offering_id' => $w['offering']->id,
             'syllabus_unit_id' => $w['units'][1]->id, 'started_on' => '2026-06-10',
         ])->assertNotFound();
+    }
+
+    #[Test]
+    public function a_malformed_unknown_or_unowned_delivery_id_is_not_found_on_the_page(): void
+    {
+        // TCH.6: a malformed id is a 404 like any other id the teacher may
+        // not see -- never a database error.
+        $w = $this->teacherWorld();
+        [$user, $employee] = $this->teacher($w);
+        $this->own($w, $employee);
+        $theirs = $this->deliveryRow($w, $w['units'][0], '2026-06-01', section: $w['sectionB']);
+
+        foreach (['not-a-uuid', (string) Str::uuid7(), $theirs->id] as $id) {
+            $this->actor($w, $user)->patch("/app/my-curriculum-delivery/{$id}", ['started_on' => '2026-06-02'])->assertNotFound();
+            $this->actor($w, $user)->post("/app/my-curriculum-delivery/{$id}/transition", [
+                'expected_status' => 'in_progress', 'new_status' => 'completed', 'completed_on' => '2026-06-10',
+            ])->assertNotFound();
+        }
     }
 
     #[Test]

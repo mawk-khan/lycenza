@@ -24,6 +24,7 @@ use App\Domain\Timetable\Infrastructure\TimetablePeriod;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Symfony\Component\Uid\UuidV7;
@@ -135,7 +136,14 @@ class AttendanceSubmissionService
         //    teacher_id authorizes nothing.
         if ($guard !== null) {
             $peek = TimetableEntry::query()->where('id', $timetableEntryId)->where('school_id', $school->id)->firstOrFail();
-            $guard->beforeSubmit($school, $peek->section_id, $peek->subject_offering_id, Carbon::parse($attendanceDate)->toDateString());
+
+            try {
+                $guard->beforeSubmit($school, $peek->section_id, $peek->subject_offering_id, Carbon::parse($attendanceDate)->toDateString());
+            } catch (ModelNotFoundException) {
+                // An unowned class answers exactly like an unknown entry
+                // (ADR 0063 section 18): same status, same body.
+                throw (new ModelNotFoundException)->setModel(TimetableEntry::class);
+            }
         }
 
         // 1. TimetableEntry -- locked first, and every snapshot value is

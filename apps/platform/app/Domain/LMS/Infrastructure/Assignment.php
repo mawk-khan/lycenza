@@ -35,10 +35,12 @@ use Illuminate\Support\Carbon;
  * record.
  *
  * NO AUTHOR COLUMN. No `created_by_employee_id` or `teacher_id` exists
- * here -- ADR 0039 decision 6 is explicit that no teacher-to-Offering
- * ownership record exists in this codebase yet; authorization is
- * capability-only in v1 (`lms.assignments.view`/`lms.assignments.manage`),
- * matching every sibling academic entity.
+ * here (ADR 0039 decision 6). Tier 1 authorization stays capability-only
+ * (`lms.assignments.view`/`lms.assignments.manage`). Since TCH.5B/TCH.5D
+ * (ADR 0063 sections 35, 37) a teacher-owned row carries the immutable
+ * `owner_employee_id` and a Section audience. That is resource ownership,
+ * never an author or audit field, and teacher access also needs
+ * `lms.assignments.teacher`, an ActingEmployee and a TeachingAssignment.
  *
  * @property string $id
  * @property string $school_id

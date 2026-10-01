@@ -15,6 +15,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
@@ -165,7 +166,7 @@ class DocumentListingService
             throw new DocumentOwnerNotFoundException('learning_content', $learningContentId);
         }
 
-        $this->lmsParents->authorizeRead($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, $content->id);
+        $this->authorizeLmsParentRead($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, $content->id, $learningContentId);
 
         return ['column' => 'learning_content_id', 'id' => $content->id, 'ownerModel' => $content];
     }
@@ -189,9 +190,23 @@ class DocumentListingService
             throw new DocumentOwnerNotFoundException('assignment', $assignmentId);
         }
 
-        $this->lmsParents->authorizeRead($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id);
+        $this->authorizeLmsParentRead($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id, $assignmentId);
 
         return ['column' => 'assignment_id', 'id' => $assignment->id, 'ownerModel' => $assignment];
+    }
+
+    /**
+     * TCH.6 (ADR 0063 section 18): an LMS parent the actor may not see is
+     * listed exactly like an unknown one -- the same DOCUMENT_OWNER_NOT_FOUND
+     * answer, naming only the id the caller supplied.
+     */
+    private function authorizeLmsParentRead(User $actor, School $school, string $parentType, string $parentId, string $requestedId): void
+    {
+        try {
+            $this->lmsParents->authorizeRead($actor, $school, $parentType, $parentId);
+        } catch (ModelNotFoundException) {
+            throw new DocumentOwnerNotFoundException($parentType, $requestedId);
+        }
     }
 
     /**

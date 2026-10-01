@@ -25,7 +25,8 @@ use Inertia\Response;
 /**
  * TCH.2 (ADR 0063 section 23) -- the session-authenticated administrative
  * TeachingAssignment page: list an AcademicYear's assignments, create one,
- * end one. No edit, no delete, no teacher portal, no "my classes" page.
+ * end one. No edit and no delete. Teachers never see this list; their own
+ * classes appear only on their owned "My ..." pages (TCH.3-TCH.5D).
  *
  * Capabilities are checked here (AuthorizesCapability) AND again by the
  * services. The pickers are shown only to `teaching.assignments.manage`

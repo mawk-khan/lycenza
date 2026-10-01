@@ -17,7 +17,9 @@ teacher access requires, read through `TeachingOwnership` (§8), for
 §32), **LMS Learning Content** (TCH.5C, §36) and **LMS Assignments**
 (TCH.5D, §37). Timetable is still admin-only. Production enablement of the
 teacher Attendance surface is blocked by the open legal/compliance
-determination TCH-L1 (ADR 0063 §26).
+determination TCH-L1 (ADR 0063 §26). **TCH is development-closed** (TCH.6,
+ADR 0063 §38, 2026-10-01); these four consumers are the whole adopted
+surface.
 
 ADR 0063 (§7–§10, §15, §19–§23, §30) is the decision record. This page
 describes the as-built module.
@@ -126,7 +128,10 @@ capabilities, granted by default to `school_admin` and `principal`:
 - **Web:** `/app/teaching-assignments` for School Admin and Principal. It
   lists a year's assignments, creates and ends them, and is linked from the
   dashboard. Its pickers are manage-only and directory-tier (Employee id,
-  number and name). There is no teacher portal and no "my classes" page.
+  number and name). Teachers get no view of this list: their owned pages
+  ("My Curriculum Delivery", "My Attendance", "My Learning Content", "My
+  Assignments") show only their own classes, never other Employees'
+  assignments.
 - **Audit:** `teaching_assignment.created` and `teaching_assignment.ended`,
   ids, dates and the closed reason only. No domain or outbox event (there is
   no consumer).

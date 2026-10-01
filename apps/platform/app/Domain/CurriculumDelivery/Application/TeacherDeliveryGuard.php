@@ -50,7 +50,7 @@ final class TeacherDeliveryGuard implements DeliveryWriteGuard
         $acting = $this->holdActor($school);
 
         if (! $this->scope($school, $acting)->ownsContext($section->id, $offering->id)) {
-            throw (new ModelNotFoundException)->setModel(Section::class, [$section->id]);
+            throw (new ModelNotFoundException)->setModel(CurriculumDelivery::class);
         }
 
         $this->holdOwnership($school, $acting, $section->id, $offering->id, [$startedOn]);
@@ -61,7 +61,7 @@ final class TeacherDeliveryGuard implements DeliveryWriteGuard
         $acting = $this->holdActor($school);
 
         if (! $this->scope($school, $acting)->canSee($delivery)) {
-            throw (new ModelNotFoundException)->setModel(CurriculumDelivery::class, [$delivery->id]);
+            throw (new ModelNotFoundException)->setModel(CurriculumDelivery::class);
         }
 
         $this->holdOwnership($school, $acting, $delivery->section_id, $delivery->subject_offering_id, $dates);

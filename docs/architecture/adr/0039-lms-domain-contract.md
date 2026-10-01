@@ -1,6 +1,14 @@
 # ADR 0039: LMS Domain Contract (Phase 0I.1)
 
-- Status: Accepted
+- Status: Accepted. **Amended by ADR 0063 (TCH.5A–TCH.5D, 2026-09-30 to
+  2026-10-01; TCH development-closed by TCH.6, ADR 0063 §38)** for
+  teacher-authored rows only: §2's audience becomes "Offering-wide by
+  default, Section-targeted when teacher-owned" (an immutable owner
+  Employee plus an immutable Section audience bridge), and §6's
+  capability-only model now governs Tier 1 administration, while teachers
+  reach LMS through `lms.content.teacher`/`lms.assignments.teacher` AND a
+  verified ActingEmployee AND TeachingAssignment ownership. The Submission
+  cancellation addendum is unchanged.
 - Date: 2026-09-04 (Phase 0I.1)
 
 ## Context
@@ -325,6 +333,11 @@ Phase 0I.2's staff-authored Learning Content/Assignment work needs
 resolved first.
 
 ### 6. Teacher authorization: Option A — capability-only for v1
+
+> **Amended (ADR 0063 §34–§37).** The missing ownership record now exists
+> (TeachingAssignment), and teacher access is the owned-scope rule of ADR
+> 0063 §34. Option A below remains the Tier 1 rule: `.view`/`.manage` are
+> still never granted to the `teacher` role. The text is the Phase 0I record.
 
 No canonical teacher-to-Section/SubjectOffering ownership record exists
 in this codebase today. `TimetableEntry.teacher_id` is a real FK to

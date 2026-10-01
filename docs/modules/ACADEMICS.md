@@ -676,8 +676,9 @@ School-wide `syllabus.view`.
 - **Lesson Planning**: still deferred until a real requirement exists;
   it would need a date, a cohort, an author, and probably a
   `SyllabusUnit` or `CurriculumDelivery` reference — the author question
-  requires designing the platform's first ownership-based authorization
-  model, which still does not exist. Phase 0H.3B deliberately stores
+  requires an ownership-based authorization model. TCH (ADR 0063) has since
+  built the teacher one (ActingEmployee + TeachingAssignment), but Lesson
+  Planning stays outside TCH and needs its own decision. Phase 0H.3B deliberately stores
   nothing at lesson granularity, so Lesson Planning remains fully
   necessary rather than redundant.
 - **Teacher identity on a delivery** remains unstored: TCH.3 authorizes

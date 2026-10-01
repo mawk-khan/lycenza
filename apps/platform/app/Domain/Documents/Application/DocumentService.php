@@ -2,6 +2,7 @@
 
 namespace App\Domain\Documents\Application;
 
+use App\Domain\Documents\Application\Exceptions\DocumentNotFoundException;
 use App\Domain\Documents\Application\Exceptions\DocumentOwnerNotFoundException;
 use App\Domain\Documents\Application\Exceptions\DocumentOwnerTypeNotSupportedException;
 use App\Domain\Documents\Application\Exceptions\DocumentStorageException;
@@ -20,6 +21,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Observability\StorageMetrics;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantStoragePath;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -144,7 +146,7 @@ class DocumentService
                     // this transaction (the owned teacher path locks its
                     // identity and TeachingAssignments here). A refusal
                     // rolls back and the compensation below removes the bytes.
-                    $this->holdLmsParent($school, $data->owner->type, $data->owner->id, $actor);
+                    $this->holdLmsParent($school, $data->owner->type, $data->owner->id, $actor, new DocumentOwnerNotFoundException($data->owner->type, $data->owner->id));
 
                     $document = Document::query()->create(array_merge([
                         'school_id' => $school->id,
@@ -202,7 +204,7 @@ class DocumentService
             $this->authorizeForExistingOwner($school, $document, $actor);
 
             return DB::transaction(function () use ($school, $document, $actor) {
-                $this->holdLmsParent($school, $document->owner_type, (string) ($document->learning_content_id ?? $document->assignment_id), $actor);
+                $this->holdLmsParent($school, $document->owner_type, (string) ($document->learning_content_id ?? $document->assignment_id), $actor, new DocumentNotFoundException($document->id));
 
                 $document->update(['status' => 'archived']);
 
@@ -265,7 +267,7 @@ class DocumentService
             throw new InvalidDocumentClassificationException($classificationTier);
         }
 
-        $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, $content->id);
+        $this->asNotFound(fn () => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, $content->id), new DocumentOwnerNotFoundException('learning_content', $learningContentId));
 
         return ['learning_content_id' => $content->id];
     }
@@ -285,7 +287,7 @@ class DocumentService
             throw new InvalidDocumentClassificationException($classificationTier);
         }
 
-        $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id);
+        $this->asNotFound(fn () => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id), new DocumentOwnerNotFoundException('assignment', $assignmentId));
 
         return ['assignment_id' => $assignment->id];
     }
@@ -295,10 +297,25 @@ class DocumentService
      * may still write this LMS parent (LmsParentResourceAuthorization::holdWrite).
      * Other owner types need nothing more.
      */
-    private function holdLmsParent(School $school, string $ownerType, string $ownerId, User $actor): void
+    private function holdLmsParent(School $school, string $ownerType, string $ownerId, User $actor, Throwable $notFound): void
     {
         if (in_array($ownerType, [LmsParentResourceAuthorization::LEARNING_CONTENT, LmsParentResourceAuthorization::ASSIGNMENT], true)) {
-            $this->lmsParents->holdWrite($actor, $school, $ownerType, $ownerId);
+            $this->asNotFound(fn () => $this->lmsParents->holdWrite($actor, $school, $ownerType, $ownerId), $notFound);
+        }
+    }
+
+    /**
+     * TCH.6 (ADR 0063 section 18): an LMS parent the actor may not see
+     * (LMS answers ModelNotFoundException) is refused exactly like an
+     * unknown owner or Document -- same status, same body, and never an id
+     * the caller did not supply.
+     */
+    private function asNotFound(callable $check, Throwable $notFound): void
+    {
+        try {
+            $check();
+        } catch (ModelNotFoundException) {
+            throw $notFound;
         }
     }
 
@@ -306,8 +323,8 @@ class DocumentService
     {
         match ($document->owner_type) {
             'employee' => $this->authorizeCapabilityFor($actor, $this->employeeDocumentCapability($document->classification_tier), $school),
-            'learning_content' => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, (string) $document->learning_content_id),
-            'assignment' => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, (string) $document->assignment_id),
+            'learning_content' => $this->asNotFound(fn () => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, (string) $document->learning_content_id), new DocumentNotFoundException($document->id)),
+            'assignment' => $this->asNotFound(fn () => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, (string) $document->assignment_id), new DocumentNotFoundException($document->id)),
             default => throw new DocumentOwnerTypeNotSupportedException($document->owner_type),
         };
     }

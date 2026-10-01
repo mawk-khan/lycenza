@@ -14,6 +14,7 @@ use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -97,6 +98,7 @@ class MyCurriculumDeliveryController extends Controller
     public function update(Request $request, TenantContext $context, TeacherDeliveryAccess $access, CurriculumDeliveryService $service, string $curriculumDelivery): RedirectResponse
     {
         $school = $context->requireSchool();
+        abort_unless(Str::isUuid($curriculumDelivery), 404);
 
         $validated = $request->validate([
             'started_on' => ['sometimes', 'date_format:Y-m-d'],
@@ -118,6 +120,7 @@ class MyCurriculumDeliveryController extends Controller
     public function transition(Request $request, TenantContext $context, TeacherDeliveryAccess $access, CurriculumDeliveryService $service, string $curriculumDelivery): RedirectResponse
     {
         $school = $context->requireSchool();
+        abort_unless(Str::isUuid($curriculumDelivery), 404);
 
         $validated = $request->validate([
             'expected_status' => ['required', Rule::in(CurriculumDelivery::STATUSES)],

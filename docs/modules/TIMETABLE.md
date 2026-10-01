@@ -131,6 +131,13 @@ Employee) × optional Room × Period × day-of-week.
   (`record_status = 'active'`) — `TeacherNotAvailableException`.
   Timetable never introduces its own notion of "teacher eligibility"
   beyond HR's own `record_status`.
+  **`teacher_id` is schedule evidence, never authorization (ADR 0063
+  §8, D-03/D-16).** Teacher access to a class comes only from a dated
+  TeachingAssignment (TCH.2) plus a verified ActingEmployee and an
+  owned-scope capability. A timetabled teacher without an assignment is
+  refused, and a cover teacher with one is allowed. Attendance snapshots
+  this column as provenance only. Timetable itself stays admin-only, with
+  no teacher surface.
 - **Room reuse**: `room_id` is nullable (a Period can legitimately have
   no assigned Room — a games period). Its composite FK and its own
   slot-uniqueness index both tolerate NULL correctly.

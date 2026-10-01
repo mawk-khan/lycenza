@@ -9931,10 +9931,11 @@ paths:
   # Capabilities are rooted at `lms.content.*`, NOT `academics.*` -- see
   # docs/modules/LMS.md for the module boundary.
   #
-  # LearningContent is Confidential (docs/security/DATA-CLASSIFICATION.md):
-  # School instructional-resource content containing NO personal data.
-  # No Student, Guardian, Employee or teacher identity appears in any
-  # schema below, and no grading, marks, assignment or submission field
+  # LearningContent was Confidential at Phase 0I and is Sensitive since
+  # TCH.5B (docs/security/DATA-CLASSIFICATION.md): a teacher-owned row
+  # stores an owner Employee and a Section audience. No Student or Guardian
+  # identity appears in any schema below, the owner Employee is never
+  # serialized, and no grading, marks, assignment or submission field
   # exists anywhere.
   /schools/{schoolId}/subject-offerings/{subjectOfferingId}/learning-content:
     get:
@@ -10197,9 +10198,10 @@ paths:
   # Capabilities are rooted at `lms.assignments.*`, NOT `academics.*` --
   # see docs/modules/LMS.md for the module boundary.
   #
-  # Assignment is Confidential (docs/security/DATA-CLASSIFICATION.md):
-  # staff-authored operational data containing NO personal data and NO
-  # mark/score/grade field of any kind.
+  # Assignment was Confidential at Phase 0I and is Sensitive since TCH.5B
+  # (docs/security/DATA-CLASSIFICATION.md): a teacher-owned row stores an
+  # owner Employee and a Section audience (never serialized). It holds NO
+  # Student data and NO mark/score/grade field of any kind.
   # --- TCH.5C (ADR 0063 sections 34, 36): the OWNED teacher Learning
   # Content surface. Every operation requires lms.content.teacher AND a
   # verified ActingEmployee (today, School-local) AND the row's owner/audience
@@ -10213,7 +10215,8 @@ paths:
   # Unreadable, unknown and other-School ids are the same 404. The audience
   # is immutable. Attachments use the Documents operations above, which
   # apply the same parent rule. The School-wide operations above are
-  # unchanged. Assignments have no teacher surface.
+  # unchanged. (Assignments gained their own owned surface in TCH.5D,
+  # below.)
   /schools/{schoolId}/my/learning-content-contexts:
     get:
       operationId: listMyLearningContentContexts

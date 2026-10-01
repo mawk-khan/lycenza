@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -277,6 +278,34 @@ class TeacherCurriculumDeliveryAccessTest extends TestCase
 
         $this->as($user)->getJson($this->base($w)."/curriculum-deliveries?section_id={$w['sectionB']->id}&subject_offering_id={$w['offering']->id}")->assertNotFound();
         $this->assertSame('in_progress', $this->inSchool($w, fn () => $theirs->fresh()->status));
+    }
+
+    #[Test]
+    public function an_unowned_delivery_or_class_answers_with_the_unknown_ids_exact_body(): void
+    {
+        // TCH.6 (ADR 0063 section 18): not merely the same status -- the
+        // same body, and never the id of a delivery the teacher may not see.
+        $w = $this->teacherWorld();
+        [$user, $employee] = $this->teacher($w);
+        $this->own($w, $employee);
+        $theirs = $this->deliveryRow($w, $w['units'][0], '2026-06-01', section: $w['sectionB']);
+        $body = fn (TestResponse $r) => Arr::except($r->assertNotFound()->json('error'), ['requestId']);
+        $unknown = (string) Str::uuid7();
+
+        foreach ([
+            fn (string $id) => $this->complete($w, $user, $id, '2026-06-10'),
+            fn (string $id) => $this->as($user)->patchJson($this->base($w)."/curriculum-deliveries/{$id}", ['started_on' => '2026-06-02']),
+            fn (string $id) => $this->as($user)->getJson($this->base($w)."/curriculum-deliveries/{$id}"),
+        ] as $request) {
+            $unowned = $body($request($theirs->id));
+            $this->assertSame($body($request($unknown)), $unowned);
+            $this->assertStringNotContainsString($theirs->id, (string) json_encode($unowned));
+        }
+
+        $this->assertSame(
+            $body($this->as($user)->postJson($this->base($w).'/curriculum-deliveries', ['section_id' => $unknown, 'subject_offering_id' => $w['offering']->id, 'syllabus_unit_id' => $w['units'][0]->id, 'started_on' => '2026-06-01'])),
+            $body($this->start($w, $user, '2026-06-01', section: $w['sectionB'])),
+        );
     }
 
     #[Test]
