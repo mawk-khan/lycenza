@@ -291,4 +291,40 @@ class SchoolLifecycleConcurrencyTest extends TestCase
         $this->assertSame('suspended', $contender, 'The suspension waited for it, then committed.');
         $this->assertSame('suspended', $school->fresh()->status);
     }
+
+    #[Test]
+    public function a_closure_waits_for_in_flight_operational_work_then_freezes_the_school(): void
+    {
+        // E21.2F (E21-D11): closure serializes on the School row exactly like a suspension.
+        $school = $this->activeSchool();
+        [$root, $code] = $this->root();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('hold-operational', $school->id),
+            $this->script('close', $root->id, $school->id, $code),
+        );
+
+        $this->assertSame('held:active', $holder, 'The claim saw an active School and committed first.');
+        $this->assertSame('closed', $contender, 'The closure waited for it, then committed.');
+        $this->assertTrue($school->fresh()->isClosed());
+    }
+
+    #[Test]
+    public function a_communication_claim_waiting_on_a_closure_defers_and_sends_nothing(): void
+    {
+        [$sender, $school] = $this->createSchoolAdmin('school_admin');
+        $this->track($sender, $school);
+        $message = $this->createMessage($this->createThread($school, $sender), $sender);
+        $delivery = $this->createDelivery($this->createRecipient($message, $sender));
+        [$root, $code] = $this->root();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('close', $root->id, $school->id, $code),
+            $this->script('deliver-communication', $school->id, $delivery->id),
+        );
+
+        $this->assertSame('closed', $holder);
+        $this->assertSame('delivery:queued', $contender, 'after the closure committed, the canonical guard refuses the claim');
+        $this->assertSame(0, app(TenantContext::class)->withSchool($school, fn () => CommunicationDelivery::query()->findOrFail($delivery->id))->attempts);
+    }
 }

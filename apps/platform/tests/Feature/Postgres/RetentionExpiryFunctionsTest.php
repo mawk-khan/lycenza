@@ -39,7 +39,7 @@ class RetentionExpiryFunctionsTest extends TestCase
         foreach (['school_audit_events', 'membership_role_assignments', 'teaching_assignments', 'communication_delivery_policy_decisions'] as $table) {
             app(TenantContext::class)->withSchool($school, fn () => $this->refused(fn () => DB::table($table)->where('school_id', $school->id)->delete(), 'permission denied'));
         }
-        foreach (['platform_audit_events', 'email_suppressions', 'school_elevations', 'group_role_assignments', 'platform_role_assignments'] as $table) {
+        foreach (['platform_audit_events', 'email_suppressions', 'school_elevations', 'group_role_assignments', 'platform_role_assignments', 'erasure_cases'] as $table) {
             $this->refused(fn () => DB::table($table)->whereRaw('false')->delete(), 'permission denied');
         }
     }
@@ -60,6 +60,8 @@ class RetentionExpiryFunctionsTest extends TestCase
         $this->refused(fn () => DB::select('select retention_expire_platform_audit_events(?, 10, false)', [$young]), 'retention_floor');
         $this->refused(fn () => DB::select('select retention_expire_group_role_assignments(?, 10, false)', [$young]), 'retention_floor');
         $this->refused(fn () => DB::select('select retention_expire_platform_role_assignments(?, 10, false)', [$young]), 'retention_floor');
+        // E21.2F: closed erasure cases, 7 years after they closed.
+        $this->refused(fn () => DB::select('select retention_expire_erasure_cases(?, 10, false)', [$young]), 'retention_floor');
         // One year for released suppressions and (E21.2C) delivery policy decisions.
         app(TenantContext::class)->withSchool($school, fn () => $this->refused(
             fn () => DB::select('select retention_expire_communication_delivery_policy_decisions(?, ?, 10, false)', [$school->id, now('UTC')->subYear()->addDay()->format('Y-m-d H:i:s')]),

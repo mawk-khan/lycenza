@@ -85,14 +85,19 @@ final class EmployeeRetentionEligibility
      * @param  (Closure(Builder): mixed)|null  $withRows
      * @param  Closure(string): list<string>  $blockers  retained dependents (read-only)
      * @param  Closure(string): (list<object{storage_disk: string, storage_path: string}>|null)  $purge
+     * @param  string|null  $only  narrows the walk to one Employee (an erasure case)
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
-    public function purgeSeparatedBefore(School $school, string $cutoffDate, int $batch, bool $dryRun, ?Closure $withRows, Closure $blockers, Closure $purge): array
+    public function purgeSeparatedBefore(School $school, string $cutoffDate, int $batch, bool $dryRun, ?Closure $withRows, Closure $blockers, Closure $purge, ?string $only = null): array
     {
         $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
 
-        $this->context->withSchool($school, function () use ($school, $cutoffDate, $batch, $dryRun, $withRows, $blockers, $purge, &$result): void {
+        $this->context->withSchool($school, function () use ($school, $cutoffDate, $batch, $dryRun, $withRows, $blockers, $purge, $only, &$result): void {
             $query = DB::table('employees')->where('school_id', $school->id)->select('id');
+            if ($only !== null) {
+                // E21.2F: one reviewed erasure case's subject only.
+                $query->where('id', $only);
+            }
             if ($withRows !== null) {
                 $withRows($query);
             }
@@ -120,6 +125,52 @@ final class EmployeeRetentionEligibility
         });
 
         return $result;
+    }
+
+    /**
+     * E21.2F (closure readiness, read-only): the latest final separation
+     * among a School's Employees, and how many are still current or
+     * unresolved (no date is known while any is).
+     *
+     * @return array{latest: ?string, pending: int}
+     */
+    public function latestSeparation(School $school, int $batch = 500): array
+    {
+        return $this->context->withSchool($school, function () use ($school, $batch): array {
+            $latest = null;
+            $pending = 0;
+
+            DB::table('employees')->where('school_id', $school->id)->select('id')->orderBy('id')->chunkById($batch, function ($employees) use (&$latest, &$pending): void {
+                $employments = DB::table('employment_records')->whereIn('employee_id', $employees->pluck('id')->all())->get(['employee_id', 'status', 'ends_on'])->groupBy('employee_id');
+
+                foreach ($employees as $employee) {
+                    $separation = self::resolve($this->rows($employments->get($employee->id)?->all() ?? []));
+                    if ($separation->state === EmployeeSeparation::SEPARATED) {
+                        $latest = max($latest ?? $separation->separatedOn, $separation->separatedOn);
+                    } else {
+                        $pending++;
+                    }
+                }
+            });
+
+            return ['latest' => $latest, 'pending' => $pending];
+        });
+    }
+
+    /**
+     * E21.2F (erasure planning, read-only): one Employee's separation,
+     * without a lock. Null means the Employee is not in this School's
+     * context.
+     */
+    public function separationOf(School $school, string $employeeId): ?EmployeeSeparation
+    {
+        return $this->context->withSchool($school, function () use ($employeeId): ?EmployeeSeparation {
+            if (! DB::table('employees')->where('id', $employeeId)->exists()) {
+                return null;
+            }
+
+            return self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on'])->all()));
+        });
     }
 
     /**

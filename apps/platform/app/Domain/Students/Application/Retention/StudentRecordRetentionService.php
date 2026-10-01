@@ -5,6 +5,7 @@ namespace App\Domain\Students\Application\Retention;
 use App\Domain\Documents\Application\Retention\DocumentParentRetention;
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -59,7 +60,7 @@ final class StudentRecordRetentionService
     ) {}
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
-    public function pruneRolloverItems(School $school, string $cutoffDate, int $batch, bool $dryRun): array
+    public function pruneRolloverItems(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
         $items = fn (string $studentId): Builder => DB::table('enrollment_rollover_items')->where('student_id', $studentId);
 
@@ -71,6 +72,7 @@ final class StudentRecordRetentionService
             fn (Builder $students) => $students->whereExists(fn (Builder $q) => $q->selectRaw('1')->from('enrollment_rollover_items as i')->whereColumn('i.student_id', 'students.id')),
             fn (string $studentId): array => array_filter([$this->references->first('enrollment_rollover_items', $school->id, $items($studentId)->pluck('id')->all())]),
             fn (string $studentId): ?array => $items($studentId)->delete() > 0 ? [] : null,
+            $only,
         );
     }
 
@@ -79,7 +81,7 @@ final class StudentRecordRetentionService
      * @param  bool  $afterOperational  counting only: the operational phase of the same run clears OPERATIONAL_TABLES first
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
-    public function pruneCore(School $school, string $cutoffDate, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, bool $afterOperational = false): array
+    public function pruneCore(School $school, string $cutoffDate, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, bool $afterOperational = false, ?string $only = null): array
     {
         $cleared = $dryRun && $afterOperational ? self::OPERATIONAL_TABLES : [];
 
@@ -98,7 +100,19 @@ final class StudentRecordRetentionService
 
                 return $objects;
             },
+            $only,
         );
+    }
+
+    /**
+     * E21.2F (erasure planning, read-only): the retained dependent that keeps
+     * one Student's core record, or null.
+     *
+     * @param  list<string>  $cleared  tables an earlier purge of the same run clears first
+     */
+    public function coreBlockerFor(School $school, string $studentId, ?CarbonInterface $authorityCutoff, array $cleared = []): ?string
+    {
+        return app(TenantContext::class)->withSchool($school, fn (): ?string => $this->coreBlocker($school->id, $studentId, $authorityCutoff, $cleared));
     }
 
     /**

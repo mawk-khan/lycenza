@@ -393,7 +393,7 @@ class SchoolLifecycleTest extends TestCase
         $index = $this->actingAs($root)->get('/app/platform/schools');
         $index->assertOk()->assertInertia(fn (AssertableInertia $p) => $p->component('App/Platform/Schools/Index')->has('schools'));
         $row = collect($index->viewData('page')['props']['schools'])->firstWhere('id', $school->id);
-        $this->assertSame(['id', 'name', 'slug', 'code', 'status'], array_keys($row));
+        $this->assertSame(['id', 'name', 'slug', 'code', 'status', 'closedAt', 'closureReason'], array_keys($row), 'platform lifecycle metadata only (E21.2F adds the closure marker)');
 
         $this->get("/app/platform/schools/{$school->id}/activate")->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p->component('App/Platform/Schools/Action')->where('targetStatus', 'active'));

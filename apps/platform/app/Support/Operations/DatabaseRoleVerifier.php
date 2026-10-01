@@ -25,6 +25,8 @@ class DatabaseRoleVerifier
     public const NON_RLS_SCHOOL_TABLES = [
         'api_client_credentials', 'api_clients', 'domain_event_outbox', 'email_provider_references', 'event_consumer_receipts',
         'school_domains', 'school_elevations', 'school_group_members', 'school_memberships',
+        // E21.2F: platform compliance cases (operator console; scoped by School in code).
+        'erasure_cases',
     ];
 
     /** Tables whose history the runtime role must never delete. */
@@ -34,6 +36,8 @@ class DatabaseRoleVerifier
         'membership_role_assignments',
         // E21.2B: authority history expired only through the retention functions.
         'teaching_assignments', 'group_role_assignments', 'school_elevations',
+        // E21.2F: erasure cases expire only through their retention function.
+        'erasure_cases',
     ];
 
     /**
@@ -49,6 +53,8 @@ class DatabaseRoleVerifier
         'retention_expire_group_role_assignments', 'retention_expire_platform_role_assignments',
         // E21.2C
         'retention_expire_communication_delivery_policy_decisions',
+        // E21.2F
+        'retention_expire_erasure_cases',
     ];
 
     /**

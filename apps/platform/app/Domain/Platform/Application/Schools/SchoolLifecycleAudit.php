@@ -22,5 +22,10 @@ final class SchoolLifecycleAudit
 
     public const RESUMED = 'platform.school.resumed';
 
+    /** E21.2F (E21-D11). */
+    public const CLOSED = 'platform.school.closed';
+
+    public const REOPENED = 'platform.school.reopened';
+
     public const DENIED = 'platform.school.lifecycle_denied';
 }

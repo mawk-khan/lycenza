@@ -499,3 +499,16 @@ real environment:
 - **Metric** `lycenza_retention_rows_total` gains the `operation` values
   `employee_ancillary`, `payroll_employee_record` and `employee_evidence`.
   The units are Employees. No identifiers, pay or personal details.
+
+## E21.2F erasure cases and closure (2026-10-01)
+
+- **Metric** `lycenza_erasure_case_transitions_total{state}` (requested,
+  approved, partially_approved, denied, executing, completed). No subject
+  identifiers.
+- **Overdue cases** (past the 30-day target) are visible through
+  `platform:erasure-case-status`. There is no scheduler and no alert:
+  nothing runs automatically.
+- **School closure** is recorded in platform audit
+  (`platform.school.closed`/`reopened`).
+- **Closed-case expiry** counts under `lycenza_retention_rows_total`
+  (`operation=erasure_case`).

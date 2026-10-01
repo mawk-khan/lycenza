@@ -4,13 +4,23 @@
 // and replaceable only while the School is provisioning; there is no
 // membership administration, archive or delete here.
 interface Props {
-    school: { id: string; name: string; slug: string; code: string | null; status: string };
+    school: {
+        id: string;
+        name: string;
+        slug: string;
+        code: string | null;
+        status: string;
+        closedAt: string | null;
+        closureReason: string | null;
+    };
     bootstrapAdmins: { name: string; email: string }[];
     actions: {
         activate: boolean;
         replaceBootstrapAdmin: boolean;
         suspend: boolean;
         resume: boolean;
+        close: boolean;
+        reopen: boolean;
     };
     notice: string | null;
 }
@@ -23,6 +33,8 @@ const notices: Record<string, string> = {
     suspend: 'School suspended.',
     resume: 'School resumed.',
     'bootstrap-admin': 'Bootstrap School Administrator replaced.',
+    close: 'School closed. Nothing was deleted.',
+    reopen: 'School reopened.',
 };
 </script>
 
@@ -44,6 +56,12 @@ const notices: Record<string, string> = {
             <div>
                 <dt class="text-slate-500">Status</dt>
                 <dd class="font-medium" data-testid="school-status">{{ school.status }}</dd>
+            </div>
+            <div v-if="school.closedAt">
+                <dt class="text-slate-500">Closed</dt>
+                <dd data-testid="school-closure">
+                    {{ school.closedAt }} ({{ school.closureReason }})
+                </dd>
             </div>
             <div>
                 <dt class="text-slate-500">Slug</dt>
@@ -84,8 +102,23 @@ const notices: Record<string, string> = {
             <li v-if="actions.resume">
                 <a class="underline" :href="`/app/platform/schools/${school.id}/resume`">Resume…</a>
             </li>
+            <li v-if="actions.close">
+                <a class="underline" :href="`/app/platform/schools/${school.id}/close`">Close…</a>
+            </li>
+            <li v-if="actions.reopen">
+                <a class="underline" :href="`/app/platform/schools/${school.id}/reopen`">Reopen…</a>
+            </li>
         </ul>
-        <p v-if="!actions.activate && !actions.suspend && !actions.resume" class="mt-4 text-sm">
+        <p
+            v-if="
+                !actions.activate &&
+                !actions.suspend &&
+                !actions.resume &&
+                !actions.close &&
+                !actions.reopen
+            "
+            class="mt-4 text-sm"
+        >
             No lifecycle change is available for this School.
         </p>
         <p v-if="school.status !== 'provisioning'" class="mt-4 text-sm text-slate-600">

@@ -2259,9 +2259,22 @@ parallel, and the email provider tail) — not started.
     exists. Nothing financial is deleted (`FinanceRetentionGuardTest`). The
     design prerequisite is recorded for E21.2G.
 
-  E21.2A–E21.2E are closed. **Next: E21.2F — Erasure & tenant closure (not
-  started).** E21 stays OPEN pending E21.2F–G, the D8 prerequisite and
-  final ratification.
+  E21.2A–E21.2E are closed.
+- **E21.2F — Erasure & tenant closure orchestration (2026-10-01): closed.**
+  - **Reviewed erasure cases** (`erasure_cases`, operator console):
+    execution removes only what D7 and D9 already released. Holds, Finance
+    and retained dependencies win. Guardian and User erasure stay
+    `policy_unresolved`. The 30-day target is visibility only.
+  - **School Close/Reopen** (ADR 0047 amendment): a freeze through
+    `suspended` with a durable closure record. Nothing is deleted.
+  - **Read-only closure readiness** (`platform:school-closure-status`):
+    fails closed on unclassified tables and is never purge-ready.
+  - **Tenant destruction is NOT AUTHORIZED.**
+
+  E21.2A–E21.2F are closed. **Next: E21.2G — Final retention closure audit
+  & blocker consolidation (not started).** The D8 Finance financial-year
+  close stays BLOCKED. E21 stays OPEN pending E21.2G and final
+  ratification.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**
   published / closed. It inventoried every v1 category and recorded 14 open
   decisions with neutral options, a determination template and no immediate

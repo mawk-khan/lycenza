@@ -29,7 +29,17 @@ class FinanceRetentionGuardTest extends TestCase
 
         $ledgerBound = "/'(journal_[a-z_]+|ledger_accounts|charges|fee_[a-z_]+|payments|payment_[a-z_]+|late_fee_[a-z_]+|payroll_run_[a-z_]+|payroll_runs|payroll_adjustments|payroll_lwf_annual_charges|payroll_statutory_[a-z_]+|canteen_orders)'/";
 
-        foreach ($files as $file) {
+        // E21.2F: the closure-readiness catalog names every tenant table, Finance
+        // included, as DATA. It is the one exception, and it may not touch the
+        // database at all.
+        $catalog = app_path('Support/Retention/TenantRetentionCatalog.php');
+        $this->assertContains($catalog, $files);
+        $catalogCode = (string) file_get_contents($catalog);
+        foreach (['DB::', '->delete(', '->update(', '->insert(', 'Schema::'] as $call) {
+            $this->assertStringNotContainsString($call, $catalogCode, "the catalog is a read-only map ({$call})");
+        }
+
+        foreach (array_diff($files, [$catalog]) as $file) {
             $code = (string) preg_replace('#/\*.*?\*/|//[^\n]*#s', '', (string) file_get_contents($file));
             $this->assertDoesNotMatchRegularExpression($ledgerBound, $code, $file);
         }

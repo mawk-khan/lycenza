@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App\Platform;
 
 use App\Domain\Platform\Application\Schools\SchoolBootstrapAdministrationService;
+use App\Domain\Platform\Application\Schools\SchoolClosureReason;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleAuthority;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleDeniedException;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleService;
@@ -33,7 +34,7 @@ use Inertia\Response;
  */
 class PlatformSchoolAdminController extends Controller
 {
-    private const ACTIONS = ['activate', 'suspend', 'resume', 'bootstrap-admin'];
+    private const ACTIONS = ['activate', 'suspend', 'resume', 'bootstrap-admin', 'close', 'reopen'];
 
     public function __construct(
         private readonly SchoolLifecycleService $lifecycle,
@@ -79,7 +80,9 @@ class PlatformSchoolAdminController extends Controller
                 'activate' => $school->isProvisioning(),
                 'replaceBootstrapAdmin' => $school->isProvisioning(),
                 'suspend' => $school->isActive(),
-                'resume' => $school->isSuspended(),
+                'resume' => $school->isSuspended() && ! $school->isClosed(),
+                'close' => ($school->isActive() || $school->isSuspended()) && ! $school->isClosed(),
+                'reopen' => $school->isClosed(),
             ],
             'notice' => $request->session()->get('lifecycleNotice'),
         ]);
@@ -94,11 +97,13 @@ class PlatformSchoolAdminController extends Controller
             'school' => $this->summary($school),
             'action' => $action,
             'targetStatus' => match ($action) {
-                'activate', 'resume' => SchoolStatus::Active->value,
-                'suspend' => SchoolStatus::Suspended->value,
+                'activate', 'resume', 'reopen' => SchoolStatus::Active->value,
+                'suspend', 'close' => SchoolStatus::Suspended->value,
                 default => null,
             },
-            'reasons' => array_map(fn (SchoolSuspensionReason $r) => ['value' => $r->value, 'label' => $r->label()], SchoolSuspensionReason::cases()),
+            'reasons' => $action === 'close'
+                ? array_map(fn (SchoolClosureReason $r) => ['value' => $r->value, 'label' => $r->label()], SchoolClosureReason::cases())
+                : array_map(fn (SchoolSuspensionReason $r) => ['value' => $r->value, 'label' => $r->label()], SchoolSuspensionReason::cases()),
             'bootstrapAdmins' => $this->bootstrapAdmins($school),
             'mfaEnrolled' => $this->authority->hasActiveFactor($request->user()),
         ]);
@@ -116,6 +121,8 @@ class PlatformSchoolAdminController extends Controller
             'activate' => $this->lifecycle->activate($request, $user, $school, $confirmed, $code),
             'suspend' => $this->lifecycle->suspend($request, $user, $school, $request->input('reason_code'), $confirmed, $code),
             'resume' => $this->lifecycle->resume($request, $user, $school, $confirmed, $code),
+            'close' => $this->lifecycle->close($request, $user, $school, $request->input('reason_code'), $confirmed, $code),
+            'reopen' => $this->lifecycle->reopen($request, $user, $school, $confirmed, $code),
             'bootstrap-admin' => $this->bootstrap->replace($request, $user, $school, $request->input('admin'), $confirmed, $code),
         });
 
@@ -155,6 +162,8 @@ class PlatformSchoolAdminController extends Controller
             'slug' => $school->slug,
             'code' => $school->code,
             'status' => $school->status,
+            'closedAt' => $school->closed_at?->toIso8601String(),
+            'closureReason' => $school->closure_reason,
         ];
     }
 

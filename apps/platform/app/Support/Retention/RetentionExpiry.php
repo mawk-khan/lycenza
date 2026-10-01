@@ -46,6 +46,9 @@ final class RetentionExpiry
     /** E21.2C (E21-D3): append-only delivery policy decisions, 1 year after created_at. */
     public const COMMUNICATION_POLICY_DECISION = 'communication_policy_decision';
 
+    /** E21.2F (E21-D10): a closed erasure case, 7 years after it closed. */
+    public const ERASURE_CASE = 'erasure_case';
+
     /** School-scoped categories => their fixed database function. */
     private const SCHOOL_FUNCTIONS = [
         self::SCHOOL_AUDIT => 'retention_expire_school_audit_events',
@@ -61,6 +64,7 @@ final class RetentionExpiry
         self::RELEASED_SUPPRESSION => 'retention_expire_released_email_suppressions',
         self::GROUP_ROLE_GRANT => 'retention_expire_group_role_assignments',
         self::PLATFORM_ROLE_GRANT => 'retention_expire_platform_role_assignments',
+        self::ERASURE_CASE => 'retention_expire_erasure_cases',
     ];
 
     /** Categories whose trigger is a School-local date (the cutoff is a date). */

@@ -58,7 +58,7 @@ final class EmployeeRecordRetentionService
     ) {}
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
-    public function pruneAncillary(School $school, string $cutoffDate, int $batch, bool $dryRun): array
+    public function pruneAncillary(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
         return $this->employees->purgeSeparatedBefore(
             $school,
@@ -88,6 +88,7 @@ final class EmployeeRecordRetentionService
 
                 return $deleted > 0 ? [] : null;
             },
+            $only,
         );
     }
 
@@ -95,7 +96,7 @@ final class EmployeeRecordRetentionService
      * @param  list<string>  $clearedFirst  counting only: tables an earlier purge of the same run clears first
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
-    public function pruneEvidence(School $school, string $cutoffDate, int $batch, bool $dryRun, array $clearedFirst = []): array
+    public function pruneEvidence(School $school, string $cutoffDate, int $batch, bool $dryRun, array $clearedFirst = [], ?string $only = null): array
     {
         $cleared = $dryRun ? $clearedFirst : [];
 
@@ -120,6 +121,7 @@ final class EmployeeRecordRetentionService
 
                 return $objects;
             },
+            $only,
         );
     }
 

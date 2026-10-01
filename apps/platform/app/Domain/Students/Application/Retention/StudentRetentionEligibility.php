@@ -97,13 +97,18 @@ final class StudentRetentionEligibility
      *
      * @param  (Closure(Builder): mixed)|null  $withRows  narrows to Students that still hold the caller's own rows
      * @param  Closure(string, StudentExit): void  $each
+     * @param  string|null  $only  narrows the walk to one Student (an erasure case)
      * @return int the number of walked Students whose exit is unresolved
      */
-    public function exitedBefore(School $school, string $cutoffDate, int $batch, ?Closure $withRows, Closure $each): int
+    public function exitedBefore(School $school, string $cutoffDate, int $batch, ?Closure $withRows, Closure $each, ?string $only = null): int
     {
-        return $this->context->withSchool($school, function () use ($school, $cutoffDate, $batch, $withRows, $each): int {
+        return $this->context->withSchool($school, function () use ($school, $cutoffDate, $batch, $withRows, $each, $only): int {
             $unresolved = 0;
             $query = DB::table('students')->where('school_id', $school->id)->where('status', 'inactive')->select('id', 'status');
+            if ($only !== null) {
+                // E21.2F: one reviewed erasure case's subject only.
+                $query->where('id', $only);
+            }
             if ($withRows !== null) {
                 $withRows($query);
             }
@@ -152,7 +157,7 @@ final class StudentRetentionEligibility
      * @param  Closure(string): (list<object{storage_disk: string, storage_path: string}>|null)  $purge
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
-    public function purgeExitedBefore(School $school, string $cutoffDate, int $batch, bool $dryRun, ?Closure $withRows, Closure $blockers, Closure $purge): array
+    public function purgeExitedBefore(School $school, string $cutoffDate, int $batch, bool $dryRun, ?Closure $withRows, Closure $blockers, Closure $purge, ?string $only = null): array
     {
         $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
 
@@ -164,9 +169,61 @@ final class StudentRetentionEligibility
                 fn (): array => $blockers($studentId),
                 fn (): ?array => $purge($studentId),
             );
-        });
+        }, $only);
 
         return $result;
+    }
+
+    /**
+     * E21.2F (closure readiness, read-only): the latest final exit among a
+     * School's Students, and how many are still current or unresolved (no
+     * date is known while any is).
+     *
+     * @return array{latest: ?string, pending: int}
+     */
+    public function latestExit(School $school, int $batch = 500): array
+    {
+        return $this->context->withSchool($school, function () use ($school, $batch): array {
+            $latest = null;
+            $pending = 0;
+
+            DB::table('students')->where('school_id', $school->id)->select('id', 'status')->orderBy('id')->chunkById($batch, function ($students) use (&$latest, &$pending): void {
+                $ids = $students->pluck('id')->all();
+                $enrollments = DB::table('student_enrollments')->whereIn('student_id', $ids)->get(['student_id', 'status', 'ends_on'])->groupBy('student_id');
+                $activeSubjects = DB::table('student_subject_enrollments')->whereIn('student_id', $ids)->where('status', 'active')->distinct()->pluck('student_id')->flip();
+
+                foreach ($students as $student) {
+                    $exit = self::resolve($student->status, $this->rows($enrollments->get($student->id)?->all() ?? []), $activeSubjects->has($student->id));
+                    if ($exit->state === StudentExit::EXITED) {
+                        $latest = max($latest ?? $exit->exitDate, $exit->exitDate);
+                    } else {
+                        $pending++;
+                    }
+                }
+            });
+
+            return ['latest' => $latest, 'pending' => $pending];
+        });
+    }
+
+    /**
+     * E21.2F (erasure planning, read-only): one Student's exit, without a lock.
+     * Null means the Student is not in this School's context.
+     */
+    public function exitOf(School $school, string $studentId): ?StudentExit
+    {
+        return $this->context->withSchool($school, function () use ($studentId): ?StudentExit {
+            $student = DB::table('students')->where('id', $studentId)->first(['status']);
+            if ($student === null) {
+                return null;
+            }
+
+            return self::resolve(
+                $student->status,
+                $this->rows(DB::table('student_enrollments')->where('student_id', $studentId)->get(['status', 'ends_on'])->all()),
+                DB::table('student_subject_enrollments')->where('student_id', $studentId)->where('status', 'active')->exists(),
+            );
+        });
     }
 
     /**

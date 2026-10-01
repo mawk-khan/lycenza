@@ -37,7 +37,7 @@ final class AttendanceRetentionService
     ) {}
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
-    public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun): array
+    public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
         // The one sanctioned delete path for attendance records
         // (AttendanceArchitectureGuardTest); SchoolScope applies.
@@ -53,6 +53,7 @@ final class AttendanceRetentionService
                 ->join('student_enrollments as e', 'e.id', '=', 'r.student_enrollment_id')->whereColumn('e.student_id', 'students.id')),
             fn (string $studentId): array => array_filter([$this->references->first('attendance_records', $school->id, $records($studentId)->pluck('id')->all())]),
             fn (string $studentId): ?array => $records($studentId)->delete() > 0 ? [] : null,
+            $only,
         );
     }
 }

@@ -28,6 +28,10 @@ return [
     // E21-D1: audit ledgers, calendar years after `occurred_at` (adopted: 7).
     'audit_years' => env('AUDIT_RETENTION_YEARS'),
 
+    // E21.2F (E21-D10): a closed (denied or completed) erasure case, calendar
+    // years after it closed (adopted: 7). No default: unset keeps cases.
+    'erasure_case_years' => env('ERASURE_CASE_RETENTION_YEARS'),
+
     // E21-D6: revoked/ended authority, calendar years after the end (adopted: 7).
     'authority_history_years' => env('AUTHORITY_HISTORY_RETENTION_YEARS'),
 

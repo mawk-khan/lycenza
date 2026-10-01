@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * Central/platform data -- the tenant catalog itself. See ADR 0004,
@@ -46,6 +47,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $postal_code
  * @property string $country_code
  * @property string|null $education_board_id
+ * @property Carbon|null $closed_at
+ * @property string|null $closure_reason
+ * @property string|null $closed_by_user_id
  */
 class School extends Model
 {
@@ -57,6 +61,17 @@ class School extends Model
         'address_line1', 'address_line2', 'city', 'state_region', 'postal_code',
         'country_code', 'education_board_id',
     ];
+
+    /**
+     * E21.2F: `closed_at`/`closure_reason`/`closed_by_user_id` are written only
+     * by SchoolLifecycleService (never fillable, never a School setting).
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return ['closed_at' => 'datetime'];
+    }
 
     /** @return HasMany<Campus, $this> */
     public function campuses(): HasMany
@@ -96,6 +111,12 @@ class School extends Model
     public function isSuspended(): bool
     {
         return $this->status === SchoolStatus::Suspended->value;
+    }
+
+    /** E21.2F (E21-D11): closed for good -- always also `suspended` (database-checked). */
+    public function isClosed(): bool
+    {
+        return $this->closed_at !== null;
     }
 
     public function lifecycleStatus(): ?SchoolStatus

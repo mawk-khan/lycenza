@@ -17,7 +17,9 @@ use Illuminate\Validation\ValidationException;
 /**
  * Phase 0N.9 (ADR 0047 sections 2-3, 5, 8, 10): the only code that creates
  * a School or changes `schools.status` -- CREATE, ACTIVATE, SUSPEND,
- * RESUME. There is no archive and no delete (legal gate, section 12).
+ * RESUME, and (E21.2F, E21-D11) CLOSE and REOPEN. There is no archive and
+ * no delete (legal gate, section 12): closure freezes and records, it never
+ * removes anything.
  *
  * Every operation runs SchoolLifecycleAuthority's checks, then one
  * transaction that locks the School row, re-checks the state under the
@@ -172,13 +174,14 @@ class SchoolLifecycleService
         $operation = SchoolLifecycleOperation::Resume;
         $this->authority->authorize($request, $actor, $operation, $school);
         $this->requireStatus($request, $actor, $operation, $school, SchoolStatus::Suspended);
+        $this->requireNotClosed($request, $actor, $operation, $school);
 
         $this->authority->confirmAndReverify($request, $actor, $operation, $school, $confirmed, $code);
 
         $failure = DB::transaction(function () use ($actor, $school): ?string {
             $locked = School::query()->whereKey($school->id)->lockForUpdate()->first();
 
-            if ($locked === null || ! $locked->isSuspended()) {
+            if ($locked === null || ! $locked->isSuspended() || $locked->isClosed()) {
                 return 'invalid_transition';
             }
 
@@ -192,6 +195,113 @@ class SchoolLifecycleService
         // ADR 0054 section 8.8: a custom domain resolves only while its School
         // is active -- the Host cache must not outlive the change.
         app(DomainDirectory::class)->forgetSchool($school->id);
+    }
+
+    /**
+     * E21.2F (E21-D11) CLOSE: freeze -> retain -> controlled purge, step one.
+     * An `active` or `suspended` School becomes (or stays) `suspended` and
+     * is marked closed with a closed reason code, in one transaction under
+     * the School row lock. Closing an active School ends every elevation
+     * into it, exactly like a suspension.
+     *
+     * It deletes, revokes and removes nothing: memberships, Students,
+     * Employees, Finance, Documents and audit all stay. Category retention
+     * continues through its own scheduled commands, which walk closed
+     * Schools (the School-walker allowlist). Closing an already-closed
+     * School changes nothing (idempotent).
+     */
+    public function close(Request $request, User $actor, School $school, mixed $reasonCode, mixed $confirmed, mixed $code): void
+    {
+        $operation = SchoolLifecycleOperation::Close;
+        $this->authority->authorize($request, $actor, $operation, $school);
+
+        $fresh = $school->fresh();
+        if ($fresh === null || ! in_array($fresh->lifecycleStatus(), [SchoolStatus::Active, SchoolStatus::Suspended], true)) {
+            $this->authority->deny($request, $actor, $operation, $school, 'invalid_transition', 409, 'school', 'That change is not possible from the School\'s current status.');
+        }
+
+        $reason = is_string($reasonCode) ? SchoolClosureReason::tryFrom($reasonCode) : null;
+
+        if ($reason === null) {
+            throw ValidationException::withMessages(['reason_code' => 'Choose one of the listed reasons.']);
+        }
+
+        $this->authority->confirmAndReverify($request, $actor, $operation, $school, $confirmed, $code);
+
+        $failure = DB::transaction(function () use ($actor, $school, $reason): ?string {
+            $locked = School::query()->whereKey($school->id)->lockForUpdate()->first();
+
+            if ($locked === null || ! ($locked->isActive() || $locked->isSuspended())) {
+                return 'invalid_transition';
+            }
+
+            if ($locked->isClosed()) {
+                return null;
+            }
+
+            $from = $locked->lifecycleStatus() ?? SchoolStatus::Suspended;
+            $locked->forceFill([
+                'status' => SchoolStatus::Suspended->value,
+                'closed_at' => now(),
+                'closure_reason' => $reason->value,
+                'closed_by_user_id' => $actor->id,
+            ])->save();
+            $this->transitionAudit(SchoolLifecycleAudit::CLOSED, $actor, $locked, $from, SchoolStatus::Suspended, ['reason_code' => $reason->value]);
+
+            if ($from === SchoolStatus::Active) {
+                $this->elevations->terminateWhere(
+                    fn ($query) => $query->where('school_id', $locked->id),
+                    ElevationEndReason::SchoolSuspended,
+                );
+            }
+
+            return null;
+        });
+
+        $this->failAfterTransaction($request, $actor, $operation, $school, $failure);
+        app(DomainDirectory::class)->forgetSchool($school->id);
+    }
+
+    /**
+     * E21.2F REOPEN: withdraw a closure. A closed School returns to
+     * `active` and its closure marker is cleared in the same write (the
+     * database refuses an active School with a closure). Nothing is
+     * restored or replayed, exactly like a resume, so a mistaken closure
+     * never needs a backup restore.
+     */
+    public function reopen(Request $request, User $actor, School $school, mixed $confirmed, mixed $code): void
+    {
+        $operation = SchoolLifecycleOperation::Reopen;
+        $this->authority->authorize($request, $actor, $operation, $school);
+
+        if ($school->fresh()?->isClosed() !== true) {
+            $this->authority->deny($request, $actor, $operation, $school, 'invalid_transition', 409, 'school', 'That change is not possible from the School\'s current status.');
+        }
+
+        $this->authority->confirmAndReverify($request, $actor, $operation, $school, $confirmed, $code);
+
+        $failure = DB::transaction(function () use ($actor, $school): ?string {
+            $locked = School::query()->whereKey($school->id)->lockForUpdate()->first();
+
+            if ($locked === null || ! $locked->isClosed()) {
+                return 'invalid_transition';
+            }
+
+            $locked->forceFill(['status' => SchoolStatus::Active->value, 'closed_at' => null, 'closure_reason' => null, 'closed_by_user_id' => null])->save();
+            $this->transitionAudit(SchoolLifecycleAudit::REOPENED, $actor, $locked, SchoolStatus::Suspended, SchoolStatus::Active);
+
+            return null;
+        });
+
+        $this->failAfterTransaction($request, $actor, $operation, $school, $failure);
+        app(DomainDirectory::class)->forgetSchool($school->id);
+    }
+
+    private function requireNotClosed(Request $request, User $actor, SchoolLifecycleOperation $operation, School $school): void
+    {
+        if ($school->fresh()?->isClosed() === true) {
+            $this->authority->deny($request, $actor, $operation, $school, 'school_closed', 409, 'school', 'This School is closed. Reopen it to make it operational again.');
+        }
     }
 
     /**

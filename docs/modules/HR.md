@@ -3787,3 +3787,15 @@ the single rule. It locks the Employee row exactly like
   changes a membership (D10, E21.2F).
 - **Active Employees are never eligible**, so retention cannot affect
   ActingEmployee or Teacher authorization.
+
+## Erasure cases (E21.2F, 2026-10-01)
+
+An Employee erasure request is a reviewed case (`platform:erasure-case-*`,
+determination D10). Execution applies only D9 retention that has already
+passed since final separation, through the same locked HR and Payroll
+purges:
+- active, future-employed and rehired Employees are kept;
+- payroll results, teaching history or a linked User keep the Employee.
+
+It is never a path around the 8-year evidence period. It never unlinks a
+User.

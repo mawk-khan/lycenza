@@ -404,3 +404,16 @@ this surface only** and records how §10 was built. As built:
    surface's controls (capability, tenancy, access audit, `no-store`)
    match the other Highly Sensitive reads.
 
+*E21.2F (2026-10-01):* data-subject requests (item 6) now have a reviewed
+case record, `erasure_cases`, with operator console commands.
+- Execution removes only categories whose adopted retention has already
+  passed and that nothing retained needs (Student D7, Employee D9).
+- Guardian, User-identity and earlier minimisation have no adopted basis.
+  They stay `policy_unresolved` for E21.2G.
+- No User is hard-deleted and nothing is unlinked.
+- Access, correction and export requests are still not implemented.
+- The Compliance domain stays read-only as this ADR requires
+  (`ComplianceArchitectureGuardTest`). The case model is
+  `App\Models\ErasureCase`, and the workflow (case service, planner,
+  closed-list subject adapters) is retention orchestration in
+  `App\Support\Retention\Erasure`, beside the other E21 maintenance.

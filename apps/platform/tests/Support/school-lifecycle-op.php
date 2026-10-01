@@ -28,6 +28,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 // Usage:
 //   php school-lifecycle-op.php activate  <actorId> <schoolId> <recoveryCode>
 //   php school-lifecycle-op.php suspend   <actorId> <schoolId> <recoveryCode>
+//   php school-lifecycle-op.php close     <actorId> <schoolId> <recoveryCode>   (E21.2F)
 //   php school-lifecycle-op.php replace   <actorId> <schoolId> <targetEmail> <recoveryCode>
 //   php school-lifecycle-op.php elevate   <actorId> <schoolId> <recoveryCode>
 //   php school-lifecycle-op.php hold-operational  <schoolId>
@@ -65,6 +66,11 @@ try {
                 $lifecycle->suspend($request, User::query()->findOrFail($actorId), School::query()->findOrFail($schoolId), 'security_incident', true, $code);
 
                 return 'suspended';
+            case 'close':
+                [$actorId, $schoolId, $code] = $args;
+                $lifecycle->close($request, User::query()->findOrFail($actorId), School::query()->findOrFail($schoolId), 'ceased_operations', true, $code);
+
+                return 'closed';
             case 'replace':
                 [$actorId, $schoolId, $email, $code] = $args;
                 $app->make(SchoolBootstrapAdministrationService::class)->replace($request, User::query()->findOrFail($actorId), School::query()->findOrFail($schoolId), $email, true, $code);

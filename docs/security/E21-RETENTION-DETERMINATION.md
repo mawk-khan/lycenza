@@ -555,7 +555,48 @@ The checkpoints are listed in §5.
   unless a dependency or hold needs longer. This is a project operational
   target, not a statutory deadline.
 - **No automated User/Student/Employee cascade deletion.**
-- **Class C → E21.2F.**
+- **Class C → E21.2F, IMPLEMENTED as reviewed, retention-aware cases.**
+  - **The case** (`erasure_cases`, a platform compliance record) holds
+    scope, subject type and reference, request channel, review decision
+    with a closed reason, 30-day target, execution state and a
+    per-category outcome summary. It holds **no** copy of the subject's
+    data.
+    - Lifecycle: `requested` → `approved` | `partially_approved` |
+      `denied` → `executing` → `completed`.
+    - Operator console only: `platform:erasure-case-open`, `-decide`,
+      `-execute [--dry-run]`, `-status`. Never a request path, never a
+      schedule.
+  - **Planner, no rule of its own.** `DataSubjectErasurePlanner` picks the
+    subject type's closed-list adapter. Each adapter reuses its domain's
+    canonical eligibility and locked purges:
+    - **Student:** D7, 7 y operational and 25 y core after final exit;
+    - **Employee:** D9 and Payroll, 2 y ancillary and 8 y evidence after
+      final separation;
+    - **Guardian:** policy unresolved, nothing executable;
+    - **User:** platform scope; never hard-deleted. `dependency_blocked`
+      while any membership is active, otherwise policy unresolved.
+  - **Outcomes** come from a closed set: `eligible`, `retained_until`
+    (with the first eligible day), `legal_hold`, `dependency_blocked`
+    (with the blocking table), `policy_unresolved`, `outside_scope`,
+    `completed`, `error`.
+  - **Execution removes only `eligible` categories.** Each is rechecked
+    under the domain lock. An erasure request therefore never shortens an
+    adopted period, never bypasses a hold, never touches Finance (D8 still
+    blocks) and never unlinks a User, Employee or membership.
+  - **Cross-School:** a School-scope case sees only its School; a User case
+    reads no School's records.
+  - **Target:** 30 calendar days after the decision, in the School's local
+    date. Overdue is visibility only (`platform:erasure-case-status`).
+  - **Case evidence:** a closed case expires **7 calendar years** after it
+    closed (`ERASURE_CASE_RETENTION_YEARS`, project-adopted). It runs from
+    `platform:audit-prune` through one narrow retention function. The
+    runtime role has no DELETE.
+  - **Recorded, not guessed (E21.2G):**
+    - minimising the identity of a retained Student or Employee, and a
+      Guardian's personal data, have no adopted basis;
+    - erasing or minimising a User identity (audit actors, authority
+      history, links) has none either;
+    - Admissions applicants are not a subject type (no adopted trigger).
 
 ### E21-D11 — School / tenant closure
 
@@ -566,7 +607,48 @@ The checkpoints are listed in §5.
   expiry wins. Core academic Student records stay under D7.
 - **Constraint:** raw School deletion is never the closure workflow. A
   future tenant close is explicit and audited.
-- **Class C → E21.2F.**
+- **Class C → E21.2F: freeze and readiness IMPLEMENTED; tenant destruction
+  NOT AUTHORIZED.**
+  - **Freeze.** `SchoolLifecycleService::close()` (Close, ADR 0047
+    amendment: `platform.schools.manage`, confirmation, fresh MFA) puts an
+    active or suspended School into the existing `suspended` status, so
+    every School business effect is refused by `SchoolOperationalGuard`. It
+    records the closure durably on the School (`closed_at`, a closed
+    `closure_reason`, `closed_by_user_id`), and the database requires a
+    closed School to stay suspended.
+    - It deletes nothing: memberships, Students, Employees, Finance,
+      Documents and audit all stay.
+    - It is idempotent.
+    - **Reopen** withdraws a mistaken closure (back to active, nothing
+      replayed); a closed School cannot simply be resumed.
+  - **Retention continues.** Every E21 command still walks closed Schools
+    (the School-walker allowlist).
+  - **Readiness.** `platform:school-closure-status` (read-only,
+    `TenantClosureReadiness`) checks every tenant table against the closed
+    `TenantRetentionCatalog` (an unknown table fails closed). Per category
+    it reports one of:
+    - `retained`, with the first possible day for audit, the Student core
+      record and HR evidence;
+    - `technical_blocker` (D8);
+    - `policy_unresolved`;
+    - `tenant_lifetime`;
+    - `empty`.
+
+    Its gates: not closed, legal hold, D8, unresolved policy, unclassified
+    tables, running periods, plus two that always stand: final
+    ratification and no authorized tenant purge. **A School is never
+    reported purge-ready.**
+  - **No School hard-delete exists.** The runtime role has no DELETE on
+    `schools`. RESTRICT relationships are unchanged. No command deletes a
+    School (architecture guard).
+  - **Future destructive tenant purge needs ALL of:**
+    - final E21 category coverage;
+    - D8 Finance resolved (financial-year close);
+    - no legal hold;
+    - no unresolved dependency or policy;
+    - every category period satisfied;
+    - final legal/compliance ratification;
+    - an explicit, audited purge authorization.
 
 ### E21-D12 — Backups and object versions
 
@@ -609,8 +691,8 @@ The checkpoints are listed in §5.
 | **E21.2C** | Communications (D3), Documents and orphans (D5) | **Implemented** (E21.2C commit; full isolated regression) |
 | **E21.2D** | Student / academic (D7) | **Implemented** (E21.2D commit; full isolated regression) |
 | **E21.2E** | Finance (D8), HR and payroll (D9) | **Implemented** for D9 (E21.2E commit; full isolated regression). D8 **audited, expiry blocked**: no financial-year close or carried-forward balances (recorded for E21.2G) |
-| E21.2F | Erasure (D10) and tenant-closure orchestration (D11) | **Next — not started** |
-| E21.2G | Final retention closure audit | Not started |
+| **E21.2F** | Erasure (D10) and tenant-closure orchestration (D11) | **Implemented** (E21.2F commit; full isolated regression). Reviewed retention-aware erasure cases; closure freeze and readiness. Tenant destruction **not authorized** |
+| E21.2G | Final retention closure audit and blocker consolidation | **Next — not started** |
 
 ### 5.1 The privileged retention path (E21.2B)
 
@@ -733,6 +815,28 @@ The checkpoints are listed in §5.
   `payroll_employee_record` and `employee_evidence`. The units are
   Employees, and only counts are recorded.
 
+### 5.5 Erasure cases and School closure (E21.2F)
+
+- **Privilege.**
+  - `erasure_cases` is a platform table: no tenant RLS
+    (`NON_RLS_SCHOOL_TABLES`), no runtime DELETE (`NO_RUNTIME_DELETE`),
+    expired only by `retention_expire_erasure_cases` (7-year floor,
+    `retention_functions_narrow`).
+  - `schools` gains only closure columns and two CHECKs; its DELETE stays
+    revoked.
+  - No generic erasure or tenant-delete function exists.
+- **Migrations** `2026_11_08_090000` (closure columns) and `_090100`
+  (cases): migrate, rollback and re-apply verified on DDEV (rolled back =
+  before; re-applied = migrated).
+- **Concurrency, with two real processes:**
+  - **Closure:** it waits for in-flight operational work, and a claim
+    arriving after it commits is refused.
+  - **Erasure vs re-entry:** a re-enrollment or rehire committed first
+    keeps the subject. An erasure committed first makes a late
+    re-enrollment fail on its FK.
+- **Metric:** `lycenza_erasure_case_transitions_total{state}`. Closure is
+  in platform audit (`platform.school.closed`/`reopened`).
+
 **Deployment-side (operator, ADR 0058 E07/E09/E10):**
 - the log and metric backend retention (D13);
 - backup and bucket noncurrent-version lifecycle (D12);
@@ -763,6 +867,7 @@ is unset. Production must set them once their checkpoint ships.
 | `STUDENT_CORE_RETENTION_YEARS` | 25 (calendar years after final exit; never shorter than operational) | E21.2D |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 (calendar years after final separation) | E21.2E |
 | `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 (calendar years after final separation; never shorter than ancillary) | E21.2E |
+| `ERASURE_CASE_RETENTION_YEARS` | 7 (calendar years after a case closed) | E21.2F |
 | *(D8 Finance)* | 8 years after the financial year closes: **no setting, no expiry yet** (needs a financial-year close) | E21.2E (blocked) |
 
 ## 7. Ratification record (to be completed by the final reviewer)

@@ -502,3 +502,15 @@ purposes (`email_messages_identity_level_check`).
   forced-RLS. Staff access changes run under a transaction-scoped advisory
   lock per School (`staff-access:<school_id>`) inside that School's
   `TenantContext`.
+
+## School closure (E21.2F, 2026-10-01)
+
+A closed School is a `suspended` School with a durable closure record (ADR
+0047 amendment).
+- `SchoolOperationalGuard` refuses every School business effect for it,
+  exactly as for a suspension.
+- Platform maintenance and E21 retention keep running for it.
+- No path deletes a School or its tenant rows: closure readiness is
+  read-only (`platform:school-closure-status`).
+- An erasure case is planned only inside its own School's context; a
+  platform-scope User case reads no School's records.

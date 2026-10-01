@@ -355,6 +355,17 @@ email recovery.
       or with a terminal one missing its end date;
     - `dependency-blocked` counts Employees another retained record still
       needs (payroll results, teaching history, a linked User).
+- **E21.2F (2026-10-01):**
+  - **Erasure cases** are operator console only:
+    - `platform:erasure-case-open`, `-decide`, `-execute [--dry-run]` and
+      `-status`;
+    - always `--dry-run` before executing;
+    - nothing is scheduled.
+  - **Production sets** `ERASURE_CASE_RETENTION_YEARS=7` (project-adopted)
+    for closed-case expiry.
+  - **School closure** is Close/Reopen on the platform School page (MFA).
+    `platform:school-closure-status <school>` is read-only. There is no
+    School purge.
 
 ## 6. Seeding: production-safe versus demo
 

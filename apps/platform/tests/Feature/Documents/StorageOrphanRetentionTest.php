@@ -246,11 +246,14 @@ class StorageOrphanRetentionTest extends TestCase
         // E21.2E: HR's own `employee_documents` go only with their Employee, in HR's
         // evidence purge. The only other retention files naming the table are
         // read-only (the dependency catalog's closed parent list, the orphan
-        // reaper's reference check).
+        // reaper's reference check, the closure-readiness catalog).
         $hr = app_path('Domain/HR/Application/Retention/EmployeeRecordRetentionService.php');
         $naming = array_values(array_filter($files, fn (string $f) => str_contains((string) file_get_contents($f), "'employee_documents'")));
         sort($naming);
-        $this->assertSame([$hr, app_path('Support/Retention/ReferencingRows.php'), app_path('Support/Retention/StorageOrphanReaper.php')], $naming);
+        $this->assertSame([
+            $hr, app_path('Support/Retention/ReferencingRows.php'), app_path('Support/Retention/StorageOrphanReaper.php'),
+            app_path('Support/Retention/TenantRetentionCatalog.php'), // E21.2F: the read-only closure-readiness map
+        ], $naming);
         $this->assertStringContainsString('public function pruneEvidence(', (string) file_get_contents($hr));
 
         foreach (array_diff($files, [$seam]) as $file) {

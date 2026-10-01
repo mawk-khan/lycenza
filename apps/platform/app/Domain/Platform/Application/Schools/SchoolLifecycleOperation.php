@@ -14,4 +14,7 @@ enum SchoolLifecycleOperation: string
     case Activate = 'activate';
     case Suspend = 'suspend';
     case Resume = 'resume';
+    // E21.2F (E21-D11): freeze a School for good, and withdraw a mistaken closure.
+    case Close = 'close';
+    case Reopen = 'reopen';
 }

@@ -230,6 +230,17 @@ is now cleaned up by `platform:storage-orphans-prune`.
   recorded for E21.2G. The financial-year start month also stays mutable
   until the first receipt.
 
+
+*E21.2F (2026-10-01):* D10 and D11 are implemented to the extent proven
+(determination D10, D11 and §5.5).
+- **D10:** reviewed erasure cases. Execution reuses D7 and D9 and never
+  shortens a period. Guardian and User-identity erasure stay
+  `policy_unresolved`.
+- **D11:** School Close/Reopen freeze plus a read-only readiness planner.
+  No tenant purge exists.
+- The row-13 out-of-band User delete is unchanged and is still not an
+  erasure path.
+
 ### 5.3 Documentation contradictions and latent schema conflicts
 
 Recorded, not silently reconciled:

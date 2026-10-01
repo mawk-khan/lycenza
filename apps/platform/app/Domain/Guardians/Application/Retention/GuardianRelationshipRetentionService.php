@@ -36,7 +36,7 @@ final class GuardianRelationshipRetentionService
     ) {}
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
-    public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun): array
+    public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
         $relationships = fn (string $studentId): Builder => DB::table('student_guardian_relationships')->where('student_id', $studentId);
 
@@ -48,6 +48,7 @@ final class GuardianRelationshipRetentionService
             fn (Builder $students) => $students->whereExists(fn (Builder $q) => $q->selectRaw('1')->from('student_guardian_relationships as r')->whereColumn('r.student_id', 'students.id')),
             fn (string $studentId): array => array_filter([$this->references->first('student_guardian_relationships', $school->id, $relationships($studentId)->pluck('id')->all())]),
             fn (string $studentId): ?array => $relationships($studentId)->delete() > 0 ? [] : null,
+            $only,
         );
     }
 }

@@ -6,8 +6,16 @@ import { useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 interface Props {
-    school: { id: string; name: string; slug: string; code: string | null; status: string };
-    action: 'activate' | 'suspend' | 'resume' | 'bootstrap-admin';
+    school: {
+        id: string;
+        name: string;
+        slug: string;
+        code: string | null;
+        status: string;
+        closedAt: string | null;
+        closureReason: string | null;
+    };
+    action: 'activate' | 'suspend' | 'resume' | 'bootstrap-admin' | 'close' | 'reopen';
     targetStatus: string | null;
     reasons: { value: string; label: string }[];
     bootstrapAdmins: { name: string; email: string }[];
@@ -21,6 +29,8 @@ const titles: Record<Props['action'], string> = {
     suspend: 'Suspend School',
     resume: 'Resume School',
     'bootstrap-admin': 'Replace the bootstrap School Administrator',
+    close: 'Close School',
+    reopen: 'Reopen School',
 };
 
 const effects: Record<Props['action'], string> = {
@@ -31,6 +41,8 @@ const effects: Record<Props['action'], string> = {
     resume: 'The School becomes operational again. Held messages and webhooks continue; nothing is replayed or recreated.',
     'bootstrap-admin':
         "The current administrator's membership is suspended (kept as history) and the account you name becomes the School Administrator.",
+    close: 'The School is frozen for good: nobody can use it, and active elevated access into it ends now. Nothing is deleted. Its records stay under their retention periods; no School deletion exists.',
+    reopen: 'The closure is withdrawn and the School becomes operational again. Nothing is replayed or recreated.',
 };
 
 const title = computed(() => titles[props.action]);
@@ -95,7 +107,7 @@ function schoolError(): string | undefined {
         </p>
 
         <form v-else class="mt-6 space-y-4" @submit.prevent="submit">
-            <div v-if="action === 'suspend'">
+            <div v-if="action === 'suspend' || action === 'close'">
                 <label class="block text-sm text-slate-600" for="reason_code">Reason</label>
                 <select
                     id="reason_code"

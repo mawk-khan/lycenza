@@ -1045,3 +1045,26 @@ ratification.
 
 No database privilege was added. Remaining: E21.2F, then E21.2G (including
 the D8 prerequisite) and final ratification.
+
+## Note — E21.2F erasure and tenant closure orchestration (2026-10-01)
+
+**E21 stays `LEGAL_REVIEW_REQUIRED`.**
+
+**D10 is implemented as reviewed, retention-aware erasure cases**, with an
+operator console only:
+- execution removes only what an adopted period has already released;
+- holds, Finance (D8) and every retained dependency win;
+- no User is deleted and nothing is unlinked;
+- the 30-day target is visibility only.
+
+**D11 is implemented as freeze and readiness:**
+- Close/Reopen (ADR 0047 amendment) freeze the School through `suspended`
+  and record the closure; nothing is deleted;
+- `platform:school-closure-status` lists every blocker and fails closed on
+  an unclassified table.
+
+**Tenant destruction stays NOT AUTHORIZED.** No School delete exists. A
+future purge needs D8 resolution, final category coverage, no hold, final
+ratification and an explicit audited authorization.
+
+Next: E21.2G, the final closure audit and blocker consolidation.

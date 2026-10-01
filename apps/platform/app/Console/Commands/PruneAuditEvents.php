@@ -39,6 +39,7 @@ class PruneAuditEvents extends Command
     {
         try {
             $years = RetentionPeriod::years(config('retention.audit_years'));
+            $caseYears = RetentionPeriod::years(config('retention.erasure_case_years'));
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
 
@@ -67,11 +68,18 @@ class PruneAuditEvents extends Command
 
         $platform = $expiry->forPlatform(RetentionExpiry::PLATFORM_AUDIT, $cutoff, $batch, $dryRun);
 
+        // E21.2F (E21-D10): closed erasure cases are compliance evidence too, on
+        // their own adopted period (no default: unset keeps them).
+        $cases = $caseYears === null ? null : $expiry->forPlatform(RetentionExpiry::ERASURE_CASE, RetentionPeriod::yearsBeforeNow($caseYears), $batch, $dryRun);
+
         Log::info($dryRun ? 'retention.audit_prune.dry_run' : 'retention.audit_prune.completed', [
-            'retention_years' => $years, 'school' => $school, 'platform' => $platform,
+            'retention_years' => $years, 'school' => $school, 'platform' => $platform, 'erasure_cases' => $cases,
         ]);
         $verb = $dryRun ? 'Dry run: would delete' : 'Deleted';
         $this->info("{$verb} {$this->n($school, $dryRun)} School and {$this->n($platform, $dryRun)} platform audit event(s); held: {$school['held']} School, {$platform['held']} platform.");
+        if ($cases !== null) {
+            $this->info("{$verb} {$this->n($cases, $dryRun)} closed erasure case(s); held: {$cases['held']}.");
+        }
 
         return self::SUCCESS;
     }

@@ -40,7 +40,7 @@ final class PayrollEmployeeRetentionService
     ) {}
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
-    public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun): array
+    public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
         $employments = fn (string $employeeId): array => DB::table('employment_records')->where('employee_id', $employeeId)->pluck('id')->all();
 
@@ -75,6 +75,7 @@ final class PayrollEmployeeRetentionService
 
                 return $deleted > 0 ? [] : null;
             },
+            $only,
         );
     }
 }

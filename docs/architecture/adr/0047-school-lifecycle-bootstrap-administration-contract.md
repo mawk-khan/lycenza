@@ -759,3 +759,31 @@ not built.
 - the path, its capability and fresh MFA;
 - D13: no ongoing platform membership administration. Staff access after
   activation is the School's own (ADR 0059 flow B and off-boarding).
+
+## Amendment — E21.2F School closure (E21-D11, 2026-10-01)
+
+Two lifecycle operations are added. Both go through
+`SchoolLifecycleService` under `platform.schools.manage`, explicit
+confirmation and a fresh MFA re-verification, exactly like the others.
+There is still **no archive and no delete**.
+
+- **Close** puts an `active` or `suspended` School into (or keeps it in)
+  `suspended`, and records the closure on the School: `closed_at`, a
+  closed `closure_reason` (`ceased_operations`, `contract_ended`,
+  `merged_or_transferred`), `closed_by_user_id`. It audits
+  `platform.school.closed`.
+  - Closing an active School ends its elevations, like a suspension.
+  - Nothing is deleted, revoked or removed.
+  - Closing again changes nothing.
+- **Reopen** clears the closure and returns the School to `active`
+  (`platform.school.reopened`). Nothing is replayed.
+- **Resume** refuses a closed School (`school_closed`). The database
+  enforces it too: `schools_closed_is_frozen_check` requires a closed
+  School to be `suspended`, and `schools_closure_shape_check` keeps the
+  closure columns consistent.
+
+The status path is unchanged: provisioning → active → suspended → active.
+A closed School is a suspended one with a durable closure record. Because
+the closure lives on the School row, it does not depend on the 7-year
+platform audit. Retention maintenance keeps walking closed Schools.
+Destructive tenant purge stays prohibited (E21-D11; determination §5.5).

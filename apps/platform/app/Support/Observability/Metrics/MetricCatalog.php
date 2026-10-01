@@ -85,6 +85,8 @@ final class MetricCatalog
             'lycenza_api_token_operation_errors_total' => self::counter('Human API token issue/revoke operations that failed unexpectedly.', ['operation' => ['issue', 'revoke']]),
             // E21.2B: retention maintenance rows per closed category; failures are the scheduler task metrics.
             'lycenza_retention_rows_total' => self::counter('Retention maintenance rows by category and outcome.', ['operation' => RetentionMetrics::categories(), 'outcome' => RetentionMetrics::OUTCOMES]),
+            // E21.2F: reviewed data-subject erasure case transitions (no subject identifiers).
+            'lycenza_erasure_case_transitions_total' => self::counter('Reviewed erasure case lifecycle transitions.', ['state' => ['requested', 'approved', 'partially_approved', 'denied', 'executing', 'completed']]),
             'lycenza_idempotency_requests_total' => self::counter('Idempotency-Key outcomes (formerly idempotency_{outcome}_total log lines).', ['outcome' => ['new', 'replay', 'conflict', 'in_progress', 'failed']]),
 
             // Health and dependencies

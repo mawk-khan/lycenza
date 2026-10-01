@@ -1399,3 +1399,15 @@ record:
 - **The Guardian, its contacts and its Documents** are kept. They are
   Guardian personal data with no adopted period (D10, E21.2F/G).
 - **Processing authorizations** stay undeletable.
+
+## Erasure cases (E21.2F, 2026-10-01)
+
+A data-subject erasure request about a Student or Guardian is a reviewed
+case (`platform:erasure-case-*`, determination D10). It is never a delete
+action here.
+- **Student:** execution applies only the D7 retention that has already
+  passed since final exit, through the same locked purges.
+- **Guardian:** nothing is executable. Guardian personal data has no
+  adopted basis yet (E21.2G).
+- No relationship, account link or membership is unlinked as a side
+  effect.
