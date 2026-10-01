@@ -112,7 +112,8 @@ class ErasureCaseTest extends TestCase
         $this->assertSame(ErasureCategory::RETAINED_UNTIL, $plan['student_operational']->outcome);
         $this->assertSame('2033-10-01', $plan['student_operational']->notBefore);
         $this->assertSame('2051-10-01', $plan['student_core']->notBefore);
-        $this->assertSame(ErasureCategory::POLICY_UNRESOLVED, $plan['student_identity_minimization']->outcome);
+        $this->assertSame(ErasureCategory::RETAINED_UNTIL, $plan['student_identity_minimization']->outcome);
+        $this->assertSame('2051-10-01', $plan['student_identity_minimization']->notBefore, 'identity goes with the core record (E21.2G)');
         $this->assertTrue($this->inSchool($school, fn () => DB::table('student_guardian_relationships')->where('student_id', $student->id)->exists()));
         $this->assertSame('completed', $case->fresh()->status);
     }
@@ -208,7 +209,8 @@ class ErasureCaseTest extends TestCase
 
         $guardianId = $this->inSchool($schoolB, fn () => DB::table('student_guardian_relationships')->where('student_id', $studentB->id)->value('guardian_id'));
         $guardianPlan = $this->outcomes($this->cases()->execute($this->approved($schoolB, 'guardian', $guardianId)->id, false));
-        $this->assertSame(ErasureCategory::POLICY_UNRESOLVED, $guardianPlan['guardian_personal_data']->outcome);
+        $this->assertSame(ErasureCategory::RETAINED_UNTIL, $guardianPlan['guardian_personal_data']->outcome);
+        $this->assertSame('mechanism_pending', $guardianPlan['guardian_personal_data']->reason);
         $this->assertTrue($this->inSchool($schoolB, fn () => DB::table('guardians')->where('id', $guardianId)->exists()));
 
         $user = $this->createUser();

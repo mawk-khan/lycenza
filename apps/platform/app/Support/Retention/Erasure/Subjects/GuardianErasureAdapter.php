@@ -11,10 +11,11 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * E21.2F (E21-D10): a reviewed erasure case for one Guardian. NOTHING is
- * executable yet. Guardian personal data (the Guardian, contacts and
- * Documents) has no adopted retention or erasure basis (E21.2D finding,
- * E21.2G). It is also still needed to interpret retained Student,
- * Communications, consent and authorization records. A Guardian's
+ * executable yet. E21.2G adopted the period for Guardian personal data (the
+ * Guardian, contacts and Documents): 1 year after the Guardian has had no
+ * relationship and no retained dependent. Its mechanism, a durable
+ * no-relationship marker, ships in E21.3C, so the data is retained until
+ * then (`retained_until`, `mechanism_pending`). A Guardian's
  * relationships are governed by each Student's D7 retention, not by the
  * Guardian's case.
  */
@@ -46,7 +47,7 @@ final class GuardianErasureAdapter implements ErasureSubjectAdapter
         }
 
         return [
-            new ErasureCategory('guardian_personal_data', ErasureCategory::POLICY_UNRESOLVED, 'no_adopted_basis'),
+            new ErasureCategory('guardian_personal_data', ErasureCategory::RETAINED_UNTIL, 'mechanism_pending'),
             new ErasureCategory('guardian_relationships', ErasureCategory::OUTSIDE_SCOPE, 'governed_by_student_retention'),
         ];
     }

@@ -409,6 +409,9 @@ case record, `erasure_cases`, with operator console commands.
 - Execution removes only categories whose adopted retention has already
   passed and that nothing retained needs (Student D7, Employee D9).
 - Guardian, User-identity and earlier minimisation have no adopted basis.
+  *E21.2G:* Guardian data now has a period (G1, mechanism E21.3C). Earlier
+  minimisation is decided as "none, it goes with the record". User-identity
+  erasure stays a legal decision (`E21-CLOSURE-AUDIT.md` §8).
   They stay `policy_unresolved` for E21.2G.
 - No User is hard-deleted and nothing is unlinked.
 - Access, correction and export requests are still not implemented.

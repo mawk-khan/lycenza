@@ -62,11 +62,11 @@ class TenantClosureReadinessTest extends TestCase
         $categories = $this->byCategory($report);
 
         $this->assertFalse($report['purge_ready']);
-        foreach (['school_not_closed', 'd8_financial_year_close', 'policy_unresolved', 'retention_periods_running', 'final_ratification_pending', 'no_tenant_purge_authorized'] as $gate) {
+        foreach (['school_not_closed', 'd8_financial_year_close', 'retention_mechanism_pending', 'retention_periods_running', 'final_ratification_pending', 'no_tenant_purge_authorized'] as $gate) {
             $this->assertContains($gate, $report['gates']);
         }
         $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, $categories['finance_ledger']['outcome']);
-        $this->assertSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $categories['guardians']['outcome']);
+        $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, $categories['guardians']['outcome']);
         $this->assertSame('retained', $categories['student_core']['outcome']);
         $this->assertSame('empty', $categories['hr_evidence']['outcome']);
     }
@@ -131,5 +131,21 @@ class TenantClosureReadinessTest extends TestCase
 
         $this->assertSame($before, DB::table('students')->count());
         $this->assertTrue(DB::table('schools')->where('id', $school->id)->exists());
+    }
+
+    #[Test]
+    public function every_category_has_a_decision_and_every_pending_mechanism_names_its_checkpoint(): void
+    {
+        // E21.2G: no category is left without a project decision. A decided
+        // period without a mechanism names the follow-up checkpoint that ships it.
+        foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
+            $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
+            if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
+                $this->assertMatchesRegularExpression('/E21\.3[B-E]/', $decision, "{$category} must name its follow-up checkpoint");
+            }
+            if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {
+                $this->assertStringContainsString('D8', $decision, "{$category}: the only technical blocker is D8");
+            }
+        }
     }
 }

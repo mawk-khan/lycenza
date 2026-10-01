@@ -26,7 +26,7 @@ class PruneStaffAccountCredentials extends Command
 
     public const INVITATION_AFTER_DAYS = 7;
 
-    protected $signature = 'platform:staff-account-credentials-prune {--batch=5000 : Maximum rows per kind per run}';
+    protected $signature = 'platform:staff-account-credentials-prune {--batch=5000 : Maximum rows per kind per run} {--dry-run : Count what would be deleted without deleting anything}';
 
     protected $description = 'Delete ended bootstrap activation credentials (after 24 h) and ended staff invitations (after 7 days) (ADR 0059).';
 
@@ -34,6 +34,23 @@ class PruneStaffAccountCredentials extends Command
     {
         $batch = max(1, (int) $this->option('batch'));
         $cutoff = now()->subHours(self::ACTIVATION_AFTER_HOURS);
+        $invitationCutoff = now()->subDays(self::INVITATION_AFTER_DAYS);
+
+        // E21.2G: expired one-time credentials and ended invitations are
+        // exempt from retention holds by design (the audit ledgers are the
+        // held record). `--dry-run` counts with the same predicates.
+        if ($this->option('dry-run')) {
+            $credentials = AccountActivationCredential::query()->where(fn ($q) => $q->where('expires_at', '<', $cutoff)
+                ->orWhere('consumed_at', '<', $cutoff)->orWhere('invalidated_at', '<', $cutoff))->count();
+            $invitations = 0;
+            foreach (School::query()->orderBy('id')->get() as $school) {
+                $invitations += $context->withSchool($school, fn (): int => StaffAccountInvitation::query()->where('school_id', $school->id)
+                    ->where(fn ($q) => $q->where('expires_at', '<', $invitationCutoff)->orWhere('accepted_at', '<', $invitationCutoff)->orWhere('revoked_at', '<', $invitationCutoff))->count());
+            }
+            $this->info("Dry run: would delete {$credentials} ended activation credential(s) and {$invitations} ended staff invitation(s).");
+
+            return self::SUCCESS;
+        }
 
         $ids = AccountActivationCredential::query()
             ->where(fn ($q) => $q->where('expires_at', '<', $cutoff)
@@ -43,7 +60,6 @@ class PruneStaffAccountCredentials extends Command
             ->pluck('id');
         $credentials = $ids->isEmpty() ? 0 : AccountActivationCredential::query()->whereIn('id', $ids)->delete();
 
-        $invitationCutoff = now()->subDays(self::INVITATION_AFTER_DAYS);
         $invitations = 0;
 
         foreach (School::query()->orderBy('id')->pluck('id') as $schoolId) {

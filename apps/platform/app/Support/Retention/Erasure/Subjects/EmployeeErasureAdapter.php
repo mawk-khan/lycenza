@@ -26,8 +26,8 @@ use Illuminate\Support\Facades\DB;
  *   block;
  * - the School hold wins.
  *
- * Minimising personal details earlier has no adopted basis
- * (`policy_unresolved`, E21.2G).
+ * Personal details are never minimised earlier: they go with the
+ * employment evidence (E21.2G decision).
  */
 final class EmployeeErasureAdapter implements ErasureSubjectAdapter
 {
@@ -83,7 +83,9 @@ final class EmployeeErasureAdapter implements ErasureSubjectAdapter
                 : new ErasureCategory('employee_evidence', ErasureCategory::ELIGIBLE, 'period_passed');
         });
 
-        return [$ancillary, $evidence, new ErasureCategory('employee_personal_minimization', ErasureCategory::POLICY_UNRESOLVED, 'no_adopted_basis')];
+        // E21.2G: no earlier partial minimisation. Personal details stay with the
+        // employment evidence and go with it (project decision, pending ratification).
+        return [$ancillary, $evidence, new ErasureCategory('employee_personal_minimization', ErasureCategory::RETAINED_UNTIL, 'retained_with_evidence', $evidence->notBefore)];
     }
 
     public function execute(?School $school, string $subjectId): array

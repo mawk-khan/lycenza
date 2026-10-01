@@ -14,7 +14,9 @@ use Illuminate\Support\Facades\DB;
  * a case exists:
  * - audit actor references (D1), authority history (D6), Employee links
  *   and School memberships still need it;
- * - no adopted basis exists to erase or minimise a User identity (E21.2G);
+ * - erasing a User identity means anonymising audit actors and authority
+ *   history. That needs a qualified legal decision (E21.2G: final
+ *   ratification item, `audit_actor_anonymization_undecided`);
  * - while any School membership is active, the identity is
  *   `dependency_blocked`.
  *
@@ -54,7 +56,7 @@ final class UserErasureAdapter implements ErasureSubjectAdapter
         return [
             $activeMemberships
                 ? new ErasureCategory('user_identity', ErasureCategory::DEPENDENCY_BLOCKED, 'active_membership')
-                : new ErasureCategory('user_identity', ErasureCategory::POLICY_UNRESOLVED, 'no_adopted_basis'),
+                : new ErasureCategory('user_identity', ErasureCategory::POLICY_UNRESOLVED, 'audit_actor_anonymization_undecided'),
             $schoolRecords,
         ];
     }

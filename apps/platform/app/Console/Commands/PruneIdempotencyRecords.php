@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\Log;
  */
 class PruneIdempotencyRecords extends Command
 {
-    protected $signature = 'platform:idempotency-prune';
+    protected $signature = 'platform:idempotency-prune {--dry-run : Count what would be deleted without deleting anything}';
 
     protected $description = 'Deletes expired api_idempotency_keys rows, one School and one bounded batch at a time.';
 
@@ -36,6 +36,24 @@ class PruneIdempotencyRecords extends Command
     {
         $batchSize = (int) config('idempotency.prune_batch_size');
         $totalDeleted = 0;
+
+        // E21.2G: a technical replay cache, exempt from retention holds by
+        // design. An expired key is treated as never having existed
+        // (IdempotencyGuard deletes it on reuse); the authoritative records
+        // and the audit are what a hold keeps. `--dry-run` counts with the
+        // same predicate.
+        if ($this->option('dry-run')) {
+            $eligible = 0;
+            School::query()->orderBy('id')->chunk(100, function ($schools) use ($context, &$eligible): void {
+                foreach ($schools as $school) {
+                    $eligible += $context->withSchool($school, fn (): int => ApiIdempotencyKey::query()
+                        ->where('school_id', $school->id)->where('status', '!=', 'processing')->where('expires_at', '<', now())->count());
+                }
+            });
+            $this->info("Dry run: would prune {$eligible} expired idempotency record(s).");
+
+            return self::SUCCESS;
+        }
 
         School::query()->orderBy('id')->chunk(100, function ($schools) use ($context, $batchSize, &$totalDeleted): void {
             foreach ($schools as $school) {

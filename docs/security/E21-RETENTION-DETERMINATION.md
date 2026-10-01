@@ -11,6 +11,18 @@
 > ratification (ADR 0058 E21). The final pre-production review may amend
 > any decision. Any amendment must be implemented before O1 clears.
 
+> **E21.2G closure audit (2026-10-01):** E21 — **OPEN / TECHNICAL BLOCKERS
+> REMAIN**.
+> - D8 Finance is **blocked by architecture**: a financial-year close is
+>   required (E21.3A).
+> - The periods adopted at the audit for every remaining category ship in
+>   E21.3B–E21.3E.
+> - Final ratification is deferred to the pre-production project closeout.
+> - The consolidated reference, with matrices, the D8 brief and the
+>   ratification package, is `docs/security/E21-CLOSURE-AUDIT.md`. Its §8
+>   records the E21.2G project decisions, which supersede the "recorded
+>   gaps" notes below.
+
 - **Decision date:** 2026-10-01.
 - **Decision authority:** the project owner (E21.2 instruction), for
   implementation. Final ratification: the authorized legal/compliance
@@ -199,8 +211,8 @@ The checkpoints are listed in §5.
       with no message have no sent anchor (`never sent`, kept);
     - a `cancelled` delivery records no terminal time (`no terminal time`,
       kept);
-    - consent events and domain preferences are consent evidence, not
-      content. No content purge reaches them (no FK), and they are kept.
+    - *(E21.2G decided: closure audit §8 C1–C7.)* Consent events and
+      domain preferences are consent evidence, not content. No content purge reaches them (no FK), and they are kept.
       No adopted decision names their period, so it is recorded for the
       E21.2G closure audit, never guessed here;
     - the Phase 0 `notifications` table is outside D3. It is noted for
@@ -243,7 +255,8 @@ The checkpoints are listed in §5.
 - **E21.2D:** Student-owned Documents now go with their Student's D7 core
   purge (`DocumentParentRetention`), metadata in the purge transaction and
   bytes after commit; a failed byte delete is left to the orphan run.
-  Guardian and LMS Documents stay kept (no adopted parent period).
+  Guardian and LMS Documents stay kept (E21.2G adopted their parents'
+  periods, G1 and A1; the mechanisms are E21.3C and E21.3D).
 - **Class C (inherited) → E21.2C, IMPLEMENTED as a closed deferral.**
   `App\Domain\Documents\Application\Retention\DocumentRetentionEligibility`
   maps every arm of `documents_exactly_one_owner_check` to the checkpoint
@@ -381,7 +394,8 @@ The checkpoints are listed in §5.
     record, and one run clears them first.
   - **Per-table classification:** pinned against the catalog by
     `StudentRetentionClassificationTest`.
-- **D7 scope findings (recorded, not guessed):**
+- **D7 scope findings (recorded, not guessed). E21.2G decided each of them:
+  closure audit §8, A1–A2, G1, P1, AD1–AD2, O1.**
   - **Curriculum Delivery, Syllabus, Examinations and LMS Learning
     Content/Assignments are not Student-rooted.** They reference Sections
     and Offerings only and are School academic content, so D7 does not
@@ -529,7 +543,8 @@ The checkpoints are listed in §5.
     E21.2F).
   - **Pinned:** the per-table classification is checked against the
     catalog by `EmployeeRetentionClassificationTest`.
-- **D9 findings (recorded, not guessed):**
+- **D9 findings (recorded, not guessed). E21.2G: closure audit §8 E1–E3;
+  payroll results are the D8 blocker.**
   - **Paid staff are kept.** An Employee with payroll results stays until
     D8 can expire ledger evidence.
   - **Staff who taught are kept** while the Section-level teaching records
@@ -572,7 +587,8 @@ The checkpoints are listed in §5.
     - **Student:** D7, 7 y operational and 25 y core after final exit;
     - **Employee:** D9 and Payroll, 2 y ancillary and 8 y evidence after
       final separation;
-    - **Guardian:** policy unresolved, nothing executable;
+    - **Guardian:** nothing executable. E21.2G adopted G1, so the data is
+      reported `retained_until` / `mechanism_pending` until E21.3C;
     - **User:** platform scope; never hard-deleted. `dependency_blocked`
       while any membership is active, otherwise policy unresolved.
   - **Outcomes** come from a closed set: `eligible`, `retained_until`
@@ -591,7 +607,9 @@ The checkpoints are listed in §5.
     closed (`ERASURE_CASE_RETENTION_YEARS`, project-adopted). It runs from
     `platform:audit-prune` through one narrow retention function. The
     runtime role has no DELETE.
-  - **Recorded, not guessed (E21.2G):**
+  - **Recorded, not guessed. E21.2G decided S1, G1 and I5** (closure
+    audit §8): no earlier minimisation; Guardian data per G1; User identity
+    stays a legal decision.
     - minimising the identity of a retained Student or Employee, and a
       Guardian's personal data, have no adopted basis;
     - erasing or minimising a User identity (audit actors, authority
@@ -692,7 +710,12 @@ The checkpoints are listed in §5.
 | **E21.2D** | Student / academic (D7) | **Implemented** (E21.2D commit; full isolated regression) |
 | **E21.2E** | Finance (D8), HR and payroll (D9) | **Implemented** for D9 (E21.2E commit; full isolated regression). D8 **audited, expiry blocked**: no financial-year close or carried-forward balances (recorded for E21.2G) |
 | **E21.2F** | Erasure (D10) and tenant-closure orchestration (D11) | **Implemented** (E21.2F commit; full isolated regression). Reviewed retention-aware erasure cases; closure freeze and readiness. Tenant destruction **not authorized** |
-| E21.2G | Final retention closure audit and blocker consolidation | **Next — not started** |
+| **E21.2G** | Final retention closure audit and blocker consolidation | **Implemented** (closure audit, decisions for every remaining category, technical-TTL dry runs, readiness `mechanism_pending`; `E21-CLOSURE-AUDIT.md`) |
+| E21.3A | Financial Year Close & Retention Foundation (D8) | **Next — not started** (architecture brief: closure audit §6) |
+| E21.3B | Student-linked evidence and modules (consent, preferences, processing authorizations, converted admissions, Library/Transport/Hostel, portal invitations) | Not started |
+| E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | Not started |
+| E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | Not started |
+| E21.3E | Communications and platform residuals (never-sent and empty threads, visitors, automation, driver assignments, API credentials) | Not started |
 
 ### 5.1 The privileged retention path (E21.2B)
 

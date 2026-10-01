@@ -402,8 +402,10 @@ provider encryption at rest, **versioning enabled** and TLS; downloads stay
 application-mediated (no public or signed URLs), keys stay
 `schools/{school_id}/…`. Versioning keeps prior versions after the
 compensating and attachment-removal deletes — it is recovery support, not
-backup and not legal retention; no lifecycle rule may expire objects or
-versions while retention is unresolved. Backups: an independent encrypted
+backup and not legal retention. Lifecycle rules never expire current
+objects (they go only with their Document's parent, E21-D5); noncurrent
+versions expire after at most 35 days (E21-D12; corrected at the E21.2G
+closure audit). Backups: an independent encrypted
 copy (RPO ≤ 24 h, RTO ≤ 8 h), restored quarterly in isolation.
 
 Phase 0O.4A: production refuses to boot unless `DOCUMENTS_DISK` (and

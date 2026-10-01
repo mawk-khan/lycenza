@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
  */
 class PruneAccountRecoveryRequests extends Command
 {
-    protected $signature = 'platform:account-recovery-prune {--batch=5000 : Maximum rows per run}';
+    protected $signature = 'platform:account-recovery-prune {--batch=5000 : Maximum rows per run} {--dry-run : Count what would be deleted without deleting anything}';
 
     protected $description = 'Delete password-recovery credentials 24 hours after they ended (ADR 0056).';
 
@@ -24,12 +24,21 @@ class PruneAccountRecoveryRequests extends Command
     {
         $cutoff = now()->subHours((int) config('account_recovery.prune_after_hours'));
 
-        $ids = AccountRecoveryRequest::query()
+        $ended = fn () => AccountRecoveryRequest::query()
             ->where(fn ($q) => $q->where('expires_at', '<', $cutoff)
                 ->orWhere('consumed_at', '<', $cutoff)
-                ->orWhere('invalidated_at', '<', $cutoff))
-            ->limit(max(1, (int) $this->option('batch')))
-            ->pluck('id');
+                ->orWhere('invalidated_at', '<', $cutoff));
+
+        // E21.2G: expired one-time security secrets are exempt from retention
+        // holds by design (keeping them is the risk; the security audit is
+        // the held record). `--dry-run` counts with the same predicate.
+        if ($this->option('dry-run')) {
+            $this->info("Dry run: would delete {$ended()->count()} ended recovery credential(s).");
+
+            return self::SUCCESS;
+        }
+
+        $ids = $ended()->limit(max(1, (int) $this->option('batch')))->pluck('id');
 
         $deleted = $ids->isEmpty() ? 0 : AccountRecoveryRequest::query()->whereIn('id', $ids)->delete();
 

@@ -366,6 +366,16 @@ email recovery.
   - **School closure** is Close/Reopen on the platform School page (MFA).
     `platform:school-closure-status <school>` is read-only. There is no
     School purge.
+- **E21.2G closure audit (2026-10-01):** the complete production retention
+  configuration is `docs/security/E21-CLOSURE-AUDIT.md` §9:
+  - every retention setting;
+  - holds;
+  - the PITR window and bucket lifecycle (D12);
+  - log and metric backend periods (D13);
+  - **NTP-synchronised clocks** on application and database hosts;
+  - the scheduler and alerts.
+
+  All technical-TTL prunes now support `--dry-run`.
 
 ## 6. Seeding: production-safe versus demo
 

@@ -2271,10 +2271,22 @@ parallel, and the email provider tail) — not started.
     fails closed on unclassified tables and is never purge-ready.
   - **Tenant destruction is NOT AUTHORIZED.**
 
-  E21.2A–E21.2F are closed. **Next: E21.2G — Final retention closure audit
-  & blocker consolidation (not started).** The D8 Finance financial-year
-  close stays BLOCKED. E21 stays OPEN pending E21.2G and final
-  ratification.
+  E21.2A–E21.2F are closed.
+- **E21.2G — Final retention closure audit (2026-10-01): closed.**
+  `docs/security/E21-CLOSURE-AUDIT.md`:
+  - D0–D13 matrix;
+  - settings, command, hold, privilege and concurrency audits;
+  - a project decision for every remaining category (User-identity
+    erasure stays a legal decision);
+  - technical-TTL dry runs;
+  - readiness `mechanism_pending`;
+  - three stale docs corrected.
+
+  **E21 — OPEN / TECHNICAL BLOCKERS REMAIN.**
+  - D8 is BLOCKED: next is **E21.3A — Financial Year Close & Retention
+    Foundation** (not started).
+  - Then the mechanism checkpoints E21.3B–E21.3E.
+  - Final ratification is deferred to the pre-production closeout.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**
   published / closed. It inventoried every v1 category and recorded 14 open
   decisions with neutral options, a determination template and no immediate

@@ -37,7 +37,7 @@ maintenance.
 | `communications:publish-scheduled` | Communications | Every minute | Publishes due scheduled announcements **as `scheduledBy ?? createdBy`** | A |
 | `NotifyActorOfSettingChangeConsumer` → `App\Support\Notifications\NotificationDispatcher` | Platform (Phase 0C demo) | `school.setting.changed.v1` | Writes a `notifications` row via fake/in-app providers, bypassing Communications policy | C (demo only — `SchoolSettingsService`, its only producer, has no production caller) |
 | `platform:idempotency-prune` | Platform | Daily 02:10 | Deletes expired `api_idempotency_keys` | D |
-| `platform:webhook-deliveries-prune` | Integrations | Daily 02:20 | No retention period is set — deletes nothing | D |
+| `platform:webhook-deliveries-prune` | Integrations | Daily 02:20 | Deletes delivered webhook deliveries after `WEBHOOKS_DELIVERY_RETENTION_DAYS` (adopted 30) and failed/abandoned ones after `WEBHOOKS_FAILED_DELIVERY_RETENTION_DAYS` (adopted 90); unset deletes nothing (E21-D4, corrected at the E21.2G closure audit) | D |
 | `App\Listeners\RecordQueueHeartbeat`, `SchedulerHeartbeatRecorder` | Observability | Queue job events; each every-minute command | Health telemetry | D |
 | `App\Jobs\RecordSchoolAuditPingJob` | Tenancy (test primitive) | Tests only | `diagnostics.ping` audit row | — |
 | Guardian invitation, enrollment rollover, Payroll lifecycle, Admissions, Attendance, Timetable, LMS | Their modules | HTTP requests | Synchronous; nothing asynchronous or scheduled | not async |

@@ -241,6 +241,15 @@ is now cleaned up by `platform:storage-orphans-prune`.
 - The row-13 out-of-band User delete is unchanged and is still not an
   erasure path.
 
+
+*E21.2G (2026-10-01):* the closure audit is published
+(`docs/security/E21-CLOSURE-AUDIT.md`).
+- Every inventory row now has a project decision (§8), except User-identity
+  erasure, which needs a legal decision.
+- D8 is blocked until a financial-year close exists (E21.3A).
+- The adopted periods ship in E21.3B–E21.3E.
+- E21 stays OPEN with technical blockers.
+
 ### 5.3 Documentation contradictions and latent schema conflicts
 
 Recorded, not silently reconciled:

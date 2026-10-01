@@ -139,8 +139,11 @@ capabilities, granted by default to `school_admin` and `principal`:
 ## 6. Classification and retention
 
 Sensitive (`docs/security/DATA-CLASSIFICATION.md`, "Teaching Assignments").
-Rows are ended, never deleted. Retention follows the pending ADR 0058 E21
-decision.
+Rows are ended, never deleted by any application path. Retention is
+E21-D6 (implemented in E21.2B): `platform:authority-history-prune` expires
+an assignment 7 calendar years after its last effective day (`ends_on`),
+through a narrow database function. Open and future assignments are never
+eligible (corrected at the E21.2G closure audit).
 
 ## 7. Known limitations
 

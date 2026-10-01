@@ -1068,3 +1068,20 @@ future purge needs D8 resolution, final category coverage, no hold, final
 ratification and an explicit audited authorization.
 
 Next: E21.2G, the final closure audit and blocker consolidation.
+
+## Note — E21.2G final retention closure audit (2026-10-01)
+
+**E21: OPEN / TECHNICAL BLOCKERS REMAIN.**
+- **D8 Finance is blocked by architecture.** Every balance is derived from
+  all postings, and there is no financial-year close or carried-forward
+  balance. The design brief is `docs/security/E21-CLOSURE-AUDIT.md` §6;
+  the next checkpoint is E21.3A.
+- **Every other category now has a project decision** (§8), pending
+  ratification, except User-identity erasure (a legal decision).
+- **Their mechanisms** ship in E21.3B–E21.3E.
+- **Final ratification** is deferred to the pre-production project
+  closeout.
+- **Production configuration** for D12, D13, the retention settings and
+  NTP is listed in §9.
+- **Tenant destruction stays NOT AUTHORIZED.**
+- **E33 and the other gates** in this register are independent.

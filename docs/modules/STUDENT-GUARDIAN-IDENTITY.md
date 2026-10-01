@@ -1397,7 +1397,9 @@ record:
   years after final exit. A relationship a processing authorization
   references stays, and so does its Student.
 - **The Guardian, its contacts and its Documents** are kept. They are
-  Guardian personal data with no adopted period (D10, E21.2F/G).
+  Guardian personal data. E21.2G adopted 1 year after the Guardian has had
+  no relationship and no retained dependent (G1); the mechanism ships in
+  E21.3C, so they are kept until then.
 - **Processing authorizations** stay undeletable.
 
 ## Erasure cases (E21.2F, 2026-10-01)

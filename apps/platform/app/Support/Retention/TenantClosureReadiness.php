@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\DB;
  * with rows reports why it is still kept:
  * - its adopted period is running (with the earliest date when known);
  * - it is a technical blocker (D8);
+ * - its period is adopted but its mechanism is still pending (E21.3B-E);
  * - its policy is unresolved;
  * - it is tenant-lifetime configuration.
  *
@@ -92,6 +93,7 @@ final class TenantClosureReadiness
             $held ? 'legal_hold' : null,
             $has(TenantRetentionCatalog::TECHNICAL_BLOCKER) ? 'd8_financial_year_close' : null,
             $has(TenantRetentionCatalog::POLICY_UNRESOLVED) ? 'policy_unresolved' : null,
+            $has(TenantRetentionCatalog::MECHANISM_PENDING) ? 'retention_mechanism_pending' : null,
             $unclassified !== [] ? 'unclassified_tables' : null,
             $has('retained') ? 'retention_periods_running' : null,
             ...self::PERMANENT_GATES,

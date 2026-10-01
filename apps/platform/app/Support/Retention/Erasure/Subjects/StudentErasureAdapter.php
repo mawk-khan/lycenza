@@ -28,8 +28,8 @@ use Illuminate\Support\Facades\DB;
  * - the School hold wins;
  * - Documents follow the record.
  *
- * Minimising the identity of a retained record earlier has no adopted
- * basis (`policy_unresolved`, E21.2G).
+ * The identity of a retained record is never minimised earlier: it goes
+ * with the core record (E21.2G decision).
  *
  * It lives in Compliance, the orchestrator above Students, Attendance and
  * Guardians, because it composes their purges (a Students-side adapter
@@ -97,7 +97,9 @@ final class StudentErasureAdapter implements ErasureSubjectAdapter
                 : new ErasureCategory('student_core', ErasureCategory::DEPENDENCY_BLOCKED, $blocker);
         });
 
-        return [$operational, $core, new ErasureCategory('student_identity_minimization', ErasureCategory::POLICY_UNRESOLVED, 'no_adopted_basis')];
+        // E21.2G: no earlier partial minimisation. The identity is part of the core
+        // record and goes with it (project decision, pending ratification).
+        return [$operational, $core, new ErasureCategory('student_identity_minimization', ErasureCategory::RETAINED_UNTIL, 'retained_with_core_record', $core->notBefore)];
     }
 
     public function execute(?School $school, string $subjectId): array
