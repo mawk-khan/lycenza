@@ -131,11 +131,17 @@ The checkpoints are listed in §5.
 - **Legal hold:** a held School's messages are kept.
 - **Erasure:** follows the same periods.
 - **Tenant closure:** periods continue.
-- **Settings:** `MAIL_RETENTION_DAYS=180`,
-  `MAIL_SUPPRESSION_RELEASE_RETENTION_DAYS=365`.
-- **Prerequisites:** the E21.1 findings L1–L4 must be fixed first. The
-  setting becomes an approved production value only after that.
-- **Class A → E21.2A.**
+- **Settings:** `MAIL_RETENTION_DAYS=180`.
+- **Prerequisites:** the E21.1 findings L1–L4 must be fixed first. They
+  were fixed and tested in E21.2A, so 180 is now the approved production
+  value (pending ratification).
+- **Released-suppression expiry: class B → E21.2B.** The runtime role has
+  no DELETE on `email_suppressions`, by design: `DatabaseRoleVerifier` and
+  the raw-SQL invariants pin it. So expiring released rows needs the same
+  narrowly privileged expiry path as the audit ledgers (D1). Until then,
+  released suppressions are kept, and so are the provider events they
+  reference.
+- **Class A → E21.2A (implemented).**
 
 ### E21-D3 — Communications
 
@@ -166,8 +172,9 @@ The checkpoints are listed in §5.
   - `WEBHOOKS_DELIVERY_RETENTION_DAYS=30` (delivered);
   - `WEBHOOKS_FAILED_DELIVERY_RETENTION_DAYS=90` (failed/abandoned);
   - `OUTBOX_RETENTION_DAYS=30`.
-- **Class A/B → E21.2A.** The existing single webhook setting is narrowed
-  to delivered rows, and the failed/abandoned period gets its own setting.
+- **Class A/B → E21.2A (implemented).** The existing single webhook
+  setting is narrowed to delivered rows, and the failed/abandoned period
+  gets its own setting. `platform:outbox-prune` is new.
 
 ### E21-D5 — Documents
 
@@ -298,7 +305,7 @@ The checkpoints are listed in §5.
   which is acceptable.
 - **Failed jobs:** setting `FAILED_JOBS_RETENTION_DAYS=30`.
 - **Class:**
-  - failed jobs: **A/B → E21.2A**;
+  - failed jobs: **A/B → E21.2A (implemented**, `platform:failed-jobs-prune`);
   - completed transient payloads: **D**. Completed Redis and database
     queue jobs are removed on completion, and no batching is used.
   - log and metric retention: **D (deployment backend configuration,
@@ -308,8 +315,8 @@ The checkpoints are listed in §5.
 
 | Checkpoint | Scope | State |
 |---|---|---|
-| **E21.2A** | Mail (L1–L4, 180 d, released suppressions), webhooks (30/90 d), outbox (30 d), failed jobs (30 d), the School hold seam | Implementation follows this policy record |
-| E21.2B | Audit (D1) and authority history (D6) | Not started |
+| **E21.2A** | Mail (L1–L4, 180 d), webhooks (30/90 d), outbox (30 d), failed jobs (30 d), the School hold seam | **Implemented** (E21.2A commit; full isolated regression) |
+| E21.2B | Audit (D1), authority history (D6), released-suppression expiry (D2): a narrowly privileged expiry path for protected ledgers | Not started |
 | E21.2C | Communications (D3), Documents and orphans (D5) | Not started |
 | E21.2D | Student / academic (D7) | Not started |
 | E21.2E | Finance (D8), HR and payroll (D9) | Not started |
@@ -329,7 +336,7 @@ is unset. Production must set them once their checkpoint ships.
 | Setting | Adopted value | Checkpoint |
 |---|---|---|
 | `MAIL_RETENTION_DAYS` | 180 | E21.2A |
-| `MAIL_SUPPRESSION_RELEASE_RETENTION_DAYS` | 365 | E21.2A |
+| (released suppressions, 365 days) | setting defined by E21.2B | E21.2B |
 | `WEBHOOKS_DELIVERY_RETENTION_DAYS` | 30 (delivered) | E21.2A |
 | `WEBHOOKS_FAILED_DELIVERY_RETENTION_DAYS` | 90 (failed/abandoned) | E21.2A |
 | `OUTBOX_RETENTION_DAYS` | 30 | E21.2A |

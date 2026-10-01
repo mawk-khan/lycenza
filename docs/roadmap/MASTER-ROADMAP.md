@@ -2206,6 +2206,14 @@ parallel, and the email provider tail) — not started.
   pending final legal/compliance ratification. Engineering is E21.2A
   (operational pruning), then E21.2B–F, then the E21.2G audit. **E21 stays
   OPEN** and O1 stays blocked.
+- **E21.2A — Operational retention implemented (2026-10-01):**
+  - mail L1–L4 fixed and 180 d;
+  - webhooks delivered 30 / failed 90;
+  - new outbox and failed-job prunes, 30 d each;
+  - the School hold seam.
+
+  Released-suppression expiry moved to E21.2B. Next: E21.2B (audit,
+  authority history, released suppressions) — not started.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**
   published / closed. It inventoried every v1 category and recorded 14 open
   decisions with neutral options, a determination template and no immediate

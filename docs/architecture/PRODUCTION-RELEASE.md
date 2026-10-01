@@ -282,6 +282,18 @@ email recovery.
   School roles; reactivation grants newly chosen roles. No platform path
   after activation.
 - **New scheduled task:** `staff-account-credentials-prune` (hourly).
+- **E21.2A retention (2026-10-01):**
+  - **New daily tasks:** `outbox-prune` and `failed-jobs-prune`. Both are
+    covered by OBS-06 with the daily window.
+  - **Production sets** the project-adopted periods from
+    `docs/security/E21-RETENTION-DETERMINATION.md` §6 (pending legal
+    ratification): `MAIL_RETENTION_DAYS=180`,
+    `WEBHOOKS_DELIVERY_RETENTION_DAYS=30`,
+    `WEBHOOKS_FAILED_DELIVERY_RETENTION_DAYS=90`,
+    `OUTBOX_RETENTION_DAYS=30` and `FAILED_JOBS_RETENTION_DAYS=30`.
+  - **Holds.** `RETENTION_HOLD_SCHOOL_IDS` lists any School under a legal
+    hold.
+  - **Before enabling a prune**, run it once with `--dry-run`.
 
 ## 6. Seeding: production-safe versus demo
 

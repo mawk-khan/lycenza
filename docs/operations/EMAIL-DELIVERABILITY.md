@@ -46,7 +46,7 @@ Every business email goes through the durable email layer
 | `MAIL_RETURN_PATH_DOMAIN`, `MAIL_DKIM_SELECTOR` | Where `platform:mail-verify-domain` looks. |
 | `MAIL_PROVIDER_OPEN_TRACKING` / `_CLICK_TRACKING` | Must stay `false`; production refuses tracking. |
 | `MAIL_SCHOOL_PER_MINUTE`, `MAIL_SCHOOL_PER_DAY`, `MAIL_SCHOOL_CRITICAL_PER_MINUTE`, `MAIL_SCHOOL_CRITICAL_PER_DAY`, `MAIL_SCHOOL_MAX_IN_FLIGHT`, `MAIL_GLOBAL_PER_MINUTE`, `MAIL_GLOBAL_CRITICAL_PER_MINUTE`, `MAIL_GLOBAL_MAX_IN_FLIGHT` | Fairness budgets. Over budget defers, never fails. |
-| `MAIL_RETENTION_DAYS` | **[LEGAL REVIEW REQUIRED]** — unset deletes nothing. |
+| `MAIL_RETENTION_DAYS` | E21-D2: production 180 (project-adopted, pending legal ratification) — unset deletes nothing. |
 
 `ProductionConfigurationGuard` refuses to boot on any unsafe value and
 prints codes only.
@@ -75,8 +75,16 @@ prints codes only.
   re-dispatches due or abandoned messages, expires outlived ones (suspended
   Schools included, so content is purged on time) and re-queues unapplied
   events.
-- **`platform:email-prune`** (scheduler, daily) — applies
-  `MAIL_RETENTION_DAYS`; with it unset, nothing is deleted.
+- **`platform:email-prune [--dry-run]`** (scheduler, daily) — applies
+  `MAIL_RETENTION_DAYS` (E21-D2, project-adopted 180, pending legal
+  ratification); with it unset, nothing is deleted. Since E21.2A it:
+  - covers identity-level messages, inside `PlatformEmailScope`;
+  - deletes each message's provider references with it;
+  - keeps a provider event that a suppression still references;
+  - skips held Schools (`RETENTION_HOLD_SCHOOL_IDS`).
+
+  Suppressions are released, never pruned, here. Expiry of released
+  suppressions comes with E21.2B.
 
 ## Deployment evidence checklist (ADR 0055 §17, §18, §23)
 

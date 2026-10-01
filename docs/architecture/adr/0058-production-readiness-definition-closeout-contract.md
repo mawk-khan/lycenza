@@ -959,3 +959,19 @@ three separate things:
 
 E21 moves only by a dated, reviewed change after items 2 and 3 are done.
 E33 (TCH-L1) is unaffected and still blocks production `teacher` grants.
+
+## Note — E21.2A operational retention implemented (2026-10-01)
+
+**E21 stays `LEGAL_REVIEW_REQUIRED`.** E21.2A implemented the settings and
+prune paths that this row requires implementing (project-adopted periods,
+pending ratification):
+- **Mail:** `platform:email-prune`, with E21.1 L1–L3 fixed and L4 tested.
+- **Webhooks:** delivered 30 / failed 90, as separate fail-closed
+  settings.
+- **Outbox:** the new `platform:outbox-prune`, 30 days.
+- **Failed jobs:** the new `platform:failed-jobs-prune`, 30 days.
+- **Holds:** the School hold seam `RETENTION_HOLD_SCHOOL_IDS`.
+
+Production evidence still needs the values set in the real environment
+(E09). Remaining engineering is E21.2B–F (released-suppression expiry moved
+to E21.2B), then E21.2G, then final ratification.

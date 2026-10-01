@@ -264,12 +264,22 @@ attempt rows leave only through `ON DELETE CASCADE`, never individually;
 pending/delivering/retrying deliveries, school audit events and the
 outbox are never touched.
 
-`WEBHOOKS_DELIVERY_RETENTION_DAYS` has **no default**: the business/legal
-retention period for delivery history is still undecided
-([LEGAL REVIEW REQUIRED], `docs/security/DATA-CLASSIFICATION.md`), so
-until an operator sets it the scheduled run deletes nothing. Outbox
-retention stays deferred (ADR 0025). Full record:
+`WEBHOOKS_DELIVERY_RETENTION_DAYS` has **no default**: until an operator
+sets it, the scheduled run deletes nothing. Full record:
 `docs/architecture/PHASE-0C-CLOSEOUT.md`.
+
+**E21.2A (E21-D4, project-adopted, pending legal ratification;
+`docs/security/E21-RETENTION-DETERMINATION.md`):**
+- **Separate periods.** `WEBHOOKS_DELIVERY_RETENTION_DAYS` now governs
+  `delivered` rows only (adopted: 30). `failed`/`abandoned` rows use
+  `WEBHOOKS_FAILED_DELIVERY_RETENTION_DAYS` (adopted: 90). Each is
+  fail-closed, and `--failed-days` overrides the second for a manual run.
+- **Holds.** A School on `RETENTION_HOLD_SCHOOL_IDS` is skipped.
+- **Outbox.** `platform:outbox-prune` (daily) deletes processed outbox rows
+  and their consumer receipts after `OUTBOX_RETENTION_DAYS` (adopted: 30).
+  It never deletes a row whose event still has a delivery that is not
+  `delivered`: a retry or redelivery reads the payload from the outbox, so
+  that row outlives the delivery's own period.
 
 ## Rate limiting
 

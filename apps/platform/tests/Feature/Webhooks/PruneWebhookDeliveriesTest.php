@@ -34,7 +34,9 @@ class PruneWebhookDeliveriesTest extends TestCase
         parent::setUp();
 
         $this->freezeTime();
-        config(['webhooks.delivery_retention_days' => self::RETENTION_DAYS, 'webhooks.prune_batch_size' => 500]);
+        // E21-D4: delivered and failed/abandoned rows have separate periods;
+        // the shared cases below give both the same one.
+        config(['webhooks.delivery_retention_days' => self::RETENTION_DAYS, 'webhooks.failed_delivery_retention_days' => self::RETENTION_DAYS, 'webhooks.prune_batch_size' => 500, 'retention.hold_school_ids' => []]);
     }
 
     private function endpoint(School $school): WebhookEndpoint
@@ -111,7 +113,7 @@ class PruneWebhookDeliveriesTest extends TestCase
     #[Test]
     public function it_deletes_nothing_while_retention_is_unconfigured(): void
     {
-        config(['webhooks.delivery_retention_days' => null]);
+        config(['webhooks.delivery_retention_days' => null, 'webhooks.failed_delivery_retention_days' => null]);
         $old = $this->delivery($this->endpoint($this->createSchool()), 'delivered', $this->days(400));
 
         $this->artisan('platform:webhook-deliveries-prune')
@@ -243,7 +245,7 @@ class PruneWebhookDeliveriesTest extends TestCase
     #[Test]
     public function the_days_option_overrides_configuration_and_is_validated(): void
     {
-        config(['webhooks.delivery_retention_days' => null]);
+        config(['webhooks.delivery_retention_days' => null, 'webhooks.failed_delivery_retention_days' => null]);
         $endpoint = $this->endpoint($this->createSchool());
         $tenDaysOld = $this->delivery($endpoint, 'delivered', $this->days(10));
 
@@ -254,6 +256,67 @@ class PruneWebhookDeliveriesTest extends TestCase
 
         $this->artisan('platform:webhook-deliveries-prune', ['--days' => '7'])->assertSuccessful();
         $this->assertFalse($this->exists($tenDaysOld));
+    }
+
+    #[Test]
+    public function delivered_and_failed_rows_follow_their_own_periods(): void
+    {
+        // E21-D4 adopted values: delivered 30 days, failed/abandoned 90 days.
+        config(['webhooks.delivery_retention_days' => 30, 'webhooks.failed_delivery_retention_days' => 90]);
+        $endpoint = $this->endpoint($this->createSchool());
+
+        $delivered31 = $this->delivery($endpoint, 'delivered', $this->days(31));
+        $failed31 = $this->delivery($endpoint, 'failed', $this->days(31));
+        $abandoned89 = $this->delivery($endpoint, 'abandoned', $this->days(89));
+        $failed90 = $this->delivery($endpoint, 'failed', $this->days(90));
+        $failed91 = $this->delivery($endpoint, 'failed', $this->days(91));
+        $abandoned91 = $this->delivery($endpoint, 'abandoned', $this->days(91));
+
+        $this->artisan('platform:webhook-deliveries-prune')->expectsOutputToContain('Pruned 3 terminal webhook')->assertSuccessful();
+
+        foreach ([$delivered31, $failed91, $abandoned91] as $pruned) {
+            $this->assertFalse($this->exists($pruned), $pruned->status);
+        }
+        foreach ([$failed31, $abandoned89, $failed90] as $kept) {
+            $this->assertTrue($this->exists($kept), $kept->status);
+        }
+    }
+
+    #[Test]
+    public function an_unset_failed_period_never_prunes_failed_rows(): void
+    {
+        config(['webhooks.failed_delivery_retention_days' => null]);
+        $endpoint = $this->endpoint($this->createSchool());
+        $delivered = $this->delivery($endpoint, 'delivered', $this->days(400));
+        $failed = $this->delivery($endpoint, 'failed', $this->days(400));
+        $abandoned = $this->delivery($endpoint, 'abandoned', $this->days(400));
+
+        $this->artisan('platform:webhook-deliveries-prune')->assertSuccessful();
+
+        $this->assertFalse($this->exists($delivered));
+        $this->assertTrue($this->exists($failed));
+        $this->assertTrue($this->exists($abandoned));
+
+        // --failed-days applies to an explicit manual run only.
+        $this->artisan('platform:webhook-deliveries-prune', ['--failed-days' => '0'])->assertFailed();
+        $this->artisan('platform:webhook-deliveries-prune', ['--failed-days' => '365'])->assertSuccessful();
+        $this->assertFalse($this->exists($failed));
+        $this->assertFalse($this->exists($abandoned));
+    }
+
+    #[Test]
+    public function a_held_school_is_never_pruned(): void
+    {
+        $held = $this->createSchool();
+        $other = $this->createSchool();
+        config(['retention.hold_school_ids' => [$held->id]]);
+        $heldOld = $this->delivery($this->endpoint($held), 'delivered', $this->days(400));
+        $otherOld = $this->delivery($this->endpoint($other), 'delivered', $this->days(400));
+
+        $this->artisan('platform:webhook-deliveries-prune')->expectsOutputToContain('1 School(s) held')->assertSuccessful();
+
+        $this->assertTrue($this->exists($heldOld));
+        $this->assertFalse($this->exists($otherOld));
     }
 
     #[Test]

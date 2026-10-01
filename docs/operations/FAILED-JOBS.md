@@ -18,3 +18,10 @@ down.
    durable work (outbox, webhooks, Communications, Automation) is also
    re-driven by the recovery sweeps, so retrying is rarely needed for it.
 4. For OBS-09 check OBS-08 (worker class alive?) and worker capacity.
+
+**Retention (E21-D13, project-adopted, pending legal ratification).** A
+failed job's payload and exception may contain personal data.
+`platform:failed-jobs-prune` (daily) deletes rows `FAILED_JOBS_RETENTION_DAYS`
+(adopted: 30) after `failed_at`. It has no default, so it deletes nothing
+while unset. Handle a failure within that window, and use `--dry-run` to
+preview.

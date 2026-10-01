@@ -184,6 +184,13 @@ inside the E21 implementation checkpoint.
 - **L4** — `platform:email-prune` and `platform:staff-account-credentials-prune`
   have no behavioural test.
 
+*E21.2A (2026-10-01):*
+- L1–L3 are **fixed**. L3 was confirmed by execution: the original command
+  aborted on a suppression-referenced event.
+- `platform:email-prune` now has a behavioural test
+  (`Tests\Feature\Email\EmailRetentionPruneTest`).
+- The staff-credentials prune test remains open (technical TTL, not E21).
+
 ### 5.3 Documentation contradictions and latent schema conflicts
 
 Recorded, not silently reconciled:

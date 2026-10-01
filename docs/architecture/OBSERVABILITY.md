@@ -442,3 +442,12 @@ real environment:
   email, selector, secret, link or password.
 - **Audit, not metrics.** Staff access changes are audited in the School
   ledger. No per-School or per-User metric labels are added.
+
+## E21.2A retention (2026-10-01)
+
+- **Scheduler.** The daily tasks `outbox-prune` and `failed-jobs-prune` join
+  the other prunes under OBS-06's daily-cadence window (`MetricCatalog`,
+  regenerated `lycenza-alerts.rules.yml`).
+- **Logs.** Every prune logs counts only (`retention.*`,
+  `platform.email_prune.*`, `webhooks.deliveries_prune.*`), never a
+  deleted payload.

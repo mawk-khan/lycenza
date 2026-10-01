@@ -218,6 +218,15 @@ checkpoint, not invented here.
   deliberately deferred, because deliveries read the original event
   payload from this table — see `docs/architecture/PHASE-0C-CLOSEOUT.md`
   section 6.
+  *E21.2A (2026-10-01; E21-D4, project-adopted, pending legal
+  ratification):* outbox retention is now decided and implemented by
+  `platform:outbox-prune`:
+  - processed rows (`processed_at`, every consumer receipted) and their
+    `event_consumer_receipts` go after `OUTBOX_RETENTION_DAYS` (adopted:
+    30, no default);
+  - a row is kept while any webhook delivery of its event is not
+    `delivered`, which answers the payload dependency above;
+  - pending, failed and unacknowledged rows are never age-pruned.
 
 ## Future extraction/evolution path
 

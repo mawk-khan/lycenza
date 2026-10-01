@@ -85,22 +85,27 @@ return [
     | Delivery History Retention (Phase 0C closeout)
     |--------------------------------------------------------------------------
     |
-    | How many days a TERMINAL delivery (delivered/failed/abandoned) --
-    | and, through ON DELETE CASCADE, its append-only attempt rows -- is
-    | kept after it last changed state, before
-    | `platform:webhook-deliveries-prune` removes it. Deliberately NO
-    | default: no retention period has been decided for delivery history
-    | (docs/architecture/INTEGRATIONS.md "Retention";
-    | docs/security/DATA-CLASSIFICATION.md marks retention periods
-    | [LEGAL REVIEW REQUIRED]). While this is null the scheduled prune
-    | deletes nothing and logs that retention is unconfigured. Pending/
+    | How many days a TERMINAL delivery -- and, through ON DELETE CASCADE,
+    | its append-only attempt rows -- is kept after it last changed state,
+    | before `platform:webhook-deliveries-prune` removes it. Delivered rows
+    | and failed/abandoned rows have separate periods (E21-D4). Deliberately
+    | NO default (docs/architecture/INTEGRATIONS.md "Retention"): production
+    | sets the project-adopted values recorded in
+    | docs/security/E21-RETENTION-DETERMINATION.md. While a value is null
+    | that status group is not pruned. Pending/
     | delivering/retrying deliveries, school audit events and the
     | domain-event outbox are never touched by this setting.
     |
     */
 
-    // Raw value; validated (positive whole number) by the prune command.
+    // Raw values; validated (positive whole number) by the prune command.
+    // E21-D4 (docs/security/E21-RETENTION-DETERMINATION.md, project-adopted,
+    // pending legal ratification): `delivered` rows (adopted: 30 days) and
+    // `failed`/`abandoned` rows (adopted: 90 days) have separate periods;
+    // each deletes nothing while unset.
     'delivery_retention_days' => env('WEBHOOKS_DELIVERY_RETENTION_DAYS'),
+
+    'failed_delivery_retention_days' => env('WEBHOOKS_FAILED_DELIVERY_RETENTION_DAYS'),
 
     'prune_batch_size' => (int) env('WEBHOOKS_PRUNE_BATCH_SIZE', 500),
 

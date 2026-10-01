@@ -110,6 +110,21 @@ Schedule::command('platform:webhook-deliveries-prune')
     ->withoutOverlapping()
     ->name('webhook-deliveries-prune');
 
+// E21-D4 / E21-D13 (docs/security/E21-RETENTION-DETERMINATION.md,
+// project-adopted, pending legal ratification): processed outbox rows
+// (OUTBOX_RETENTION_DAYS) and failed jobs (FAILED_JOBS_RETENTION_DAYS).
+// Neither has a default; until configured each run deletes nothing and
+// logs `retention.*.unconfigured`.
+Schedule::command('platform:outbox-prune')
+    ->dailyAt('02:40')
+    ->withoutOverlapping()
+    ->name('outbox-prune');
+
+Schedule::command('platform:failed-jobs-prune')
+    ->dailyAt('02:50')
+    ->withoutOverlapping()
+    ->name('failed-jobs-prune');
+
 // Phase 0O.10A (ADR 0056 section 13): ended password-recovery credentials
 // are deleted 24 hours later (technical data; the audit is separate).
 Schedule::command('platform:account-recovery-prune')
