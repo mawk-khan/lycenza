@@ -10683,6 +10683,234 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "404":
           description: No such Assignment in this School.
+  # --- TCH.5D (ADR 0063 sections 34, 37): the OWNED teacher Assignment
+  # surface, the TCH.5C Learning Content rule for staff-authored Assignments:
+  # lms.assignments.teacher AND a verified ActingEmployee (today) AND the
+  # row's owner/audience rule AND today's TeachingAssignment coverage. `due_on`
+  # is informational, never an authorization date. Shared status: `published`
+  # only -- `draft` and `closed` Assignments are their owner's alone.
+  # Unreadable, unknown and other-School ids are the same 404. The audience is
+  # immutable. Attachments use the Documents operations above. No
+  # Submission, Student or grading operation exists (cancelled, ADR 0039).
+  /schools/{schoolId}/my/assignment-contexts:
+    get:
+      operationId: listMyAssignmentContexts
+      summary: >
+        The Subject Offerings the teacher teaches today, each with only the
+        Sections they teach (the audience picker).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/MyLearningContentContext" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking lms.assignments.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/assignments:
+    get:
+      operationId: listMyAssignments
+      summary: >
+        Every Assignment the teacher may read, filtered on the server;
+        optionally one Subject Offering. Fixed page size of 50.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: subject_offering_id, in: query, required: false, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/Page" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/MyAssignment" } }
+                  meta: { $ref: "#/components/schemas/TimetablePaginationMeta" }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking lms.assignments.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid query parameter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createMyAssignment
+      summary: >
+        Creates a teacher-owned draft Assignment for one or more Sections the
+        teacher teaches today in that Subject Offering. The owner is the
+        teacher's own Employee record, set by the server.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MyAssignmentCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyAssignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking lms.assignments.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: A Subject Offering the teacher teaches no Section of (or not found).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: LMS_AUDIENCE_SECTION_NOT_TAUGHT (a Section the teacher does not teach for this Offering today, including one of several), a due date outside the Academic Year, or validation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/assignments/{assignmentId}:
+    get:
+      operationId: getMyAssignment
+      summary: One Assignment the teacher may read.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyAssignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Lacking lms.assignments.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not an Assignment this teacher may read (or not found, or another School's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateMyAssignment
+      summary: >
+        Edits title, instructions and/or due date of the teacher's own Assignment (never the audience or owner).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentUpdateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyAssignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: As above, or ASSIGNMENT_NOT_OWNED -- the teacher may read this Assignment but did not create it (teacher writes are owner-only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not an Assignment this teacher may read (or not found, or another School's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), ASSIGNMENT_ILLEGAL_TRANSITION, a due date outside the Academic Year, or validation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/assignments/{assignmentId}/publish:
+    post:
+      operationId: publishMyAssignment
+      summary: >
+        Publishes (or re-publishes a closed) Assignment of the teacher's own, through the same lifecycle as the School-wide operation; a due date is required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyAssignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: As above, or ASSIGNMENT_NOT_OWNED -- the teacher may read this Assignment but did not create it (teacher writes are owner-only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not an Assignment this teacher may read (or not found, or another School's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), ASSIGNMENT_ILLEGAL_TRANSITION, ASSIGNMENT_DUE_DATE_REQUIRED, or validation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /schools/{schoolId}/my/assignments/{assignmentId}/close:
+    post:
+      operationId: closeMyAssignment
+      summary: >
+        Closes the teacher's own published Assignment, through the same lifecycle as the School-wide operation.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: assignmentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyAssignment" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: As above, or ASSIGNMENT_NOT_OWNED -- the teacher may read this Assignment but did not create it (teacher writes are owner-only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not an Assignment this teacher may read (or not found, or another School's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), ASSIGNMENT_ILLEGAL_TRANSITION, or validation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
   /schools/{schoolId}/subject-offerings/{subjectOfferingId}/curriculum-deliveries:
     get:
       operationId: listCurriculumDeliveries
@@ -15485,7 +15713,7 @@ components:
               sectionCode: { type: string, nullable: true }
     MyLearningContentContext:
       type: object
-      description: TCH.5C -- one Subject Offering the teacher teaches today, with only the Sections they teach.
+      description: TCH.5C/TCH.5D -- one Subject Offering the teacher teaches today, with only the Sections they teach (the audience picker of both owned LMS surfaces).
       required: [subjectOfferingId, sections]
       properties:
         subjectOfferingId: { type: string, format: uuid }
@@ -15581,6 +15809,54 @@ components:
         title: { type: string, maxLength: 255 }
         instructions: { type: string, nullable: true, maxLength: 20000 }
         due_on: { type: string, format: date, nullable: true }
+    MyAssignment:
+      type: object
+      description: >
+        TCH.5D: an Assignment as the calling teacher sees it. The owner
+        Employee is never exposed: `mine` says whether the teacher created
+        it, `offeringWide` whether it is School material for the whole
+        Subject Offering, and `canEdit` whether the teacher may change it
+        today (their own Assignment, every audience Section still taught).
+        Staff-authored only -- no Submission, Student or mark.
+      required: [id, subjectOfferingId, title, status, offeringWide, mine, canEdit, audience]
+      properties:
+        id: { type: string, format: uuid }
+        subjectOfferingId: { type: string, format: uuid }
+        title: { type: string, maxLength: 255 }
+        instructions: { type: string, nullable: true, maxLength: 20000 }
+        dueOn: { type: string, format: date, nullable: true, description: "Informational only; never an authorization date." }
+        status: { $ref: "#/components/schemas/AssignmentStatus" }
+        offeringWide: { type: boolean }
+        mine: { type: boolean }
+        canEdit: { type: boolean }
+        audience:
+          type: array
+          description: The Sections a teacher-owned Assignment is for (empty for an Offering-wide one). Fixed at creation.
+          items:
+            type: object
+            required: [sectionId, sectionCode]
+            properties:
+              sectionId: { type: string, format: uuid }
+              sectionCode: { type: string, nullable: true }
+    MyAssignmentCreateInput:
+      type: object
+      description: >
+        TCH.5D. No owner field exists: the owner is always the teacher's own
+        Employee record. Every audience Section must be one the teacher
+        teaches for this Subject Offering today; the audience cannot be
+        changed afterwards.
+      required: [subject_offering_id, title, audience_section_ids]
+      properties:
+        subject_offering_id: { type: string, format: uuid }
+        title: { type: string, maxLength: 255 }
+        instructions: { type: string, nullable: true, maxLength: 20000 }
+        due_on: { type: string, format: date, nullable: true }
+        audience_section_ids:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, format: uuid }
     CurriculumDeliveryStatus:
       type: string
       description: >

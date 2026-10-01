@@ -164,9 +164,8 @@ ActingEmployee identity boundary (TCH.1), the TeachingAssignment ownership
 fact (TCH.2) and two owned adopters — Curriculum Delivery (TCH.3) and
 Attendance (TCH.4) — are built.
 
-**Curriculum Delivery, Attendance and LMS Learning Content are the owned
-teaching surfaces.** LMS Assignments and Timetable remain admin-only
-(Assignment teacher authorization is TCH.5D, not implemented), and Timetable stays scheduling evidence,
+**Curriculum Delivery, Attendance, LMS Learning Content and LMS Assignments
+are the owned teaching surfaces.** Timetable remains admin-only, and Timetable stays scheduling evidence,
 never ownership authority. **Teacher Attendance functionality is implemented
 but production enablement remains blocked by TCH-L1 until the required
 legal/compliance determination is recorded** (ADR 0063 §26). The first
@@ -230,22 +229,27 @@ Owned teacher Learning Content (Tier 2):
              or a published Offering-wide row of a taught Offering
 ```
 
-`TeacherLearningContentAccess`/`TeacherLearningContentGuard` implement it;
+Assignments (ADR 0063 §37) apply the identical rule under
+`lms.assignments.teacher` (Tier 1 `lms.assignments.view/.manage` unchanged);
+`published` is their only shared status, `draft`/`closed` are owner-only, and
+`due_on` is never an authorization date. The shared `TeacherLmsScope`/
+`TeacherLmsGuard` implement both kinds
+(`TeacherLearningContentAccess`/`TeacherAssignmentAccess` the entry points);
 the guard runs inside `LearningContentService`'s transaction, taking the
 audience assignments in ascending Section id. Documents reaches the same
-rule for Learning Content attachments through
+rule for Learning Content and Assignment attachments through
 `LmsParentResourceAuthorization` (fresh check before storage, locked check
 inside the Documents transaction).
 
 **Teacher role.** The production system role `teacher` carries exactly
-`curriculum.delivery.teacher`, `attendance.teacher` and
-`lms.content.teacher`:
+`curriculum.delivery.teacher`, `attendance.teacher`, `lms.content.teacher`
+and `lms.assignments.teacher`:
 - It is a bundle, never a check: no code tests the role key, and any role
   carrying the capability behaves identically.
 - On its own it reaches nothing.
 - It is granted and revoked through the ordinary staff role path.
-- `school_admin` also holds all three capabilities, only so it can grant
-  the role under the no-escalation rule.
+- `school_admin` also holds all four capabilities, only so it can grant the
+  role under the no-escalation rule.
 
 - **Two capability tiers:**
 
@@ -264,8 +268,8 @@ inside the Documents transaction).
     `curriculum.delivery.manage`, `lms.content.manage`) keep their current
     meaning and grants.
   - Owned-scope capabilities (`curriculum.delivery.teacher`,
-    `attendance.teacher`, `lms.content.teacher`) require capability **AND**
-    ownership, never either alone.
+    `attendance.teacher`, `lms.content.teacher`, `lms.assignments.teacher`)
+    require capability **AND** ownership, never either alone.
 - **ActingEmployee** (HR): User → active SchoolMembership → linked Employee
   → active Employee record → eligible current EmploymentRecord (dated
   current, status `active` or `notice_period`).
@@ -290,7 +294,7 @@ inside the Documents transaction).
     administrative (Tier 1) capabilities, granted to `school_admin` and
     `principal`, checked on the route and in the service. An administrator
     needs no ActingEmployee.
-  - Read for access decisions only through `TeachingOwnership`, by Curriculum Delivery (TCH.3), Attendance (TCH.4) and LMS Learning Content (TCH.5C).
+  - Read for access decisions only through `TeachingOwnership`, by Curriculum Delivery (TCH.3), Attendance (TCH.4), LMS Learning Content (TCH.5C) and LMS Assignments (TCH.5D).
   - `TimetableEntry.teacher_id` is scheduling evidence and never grants
     access.
 - **No role-name check, ever.**

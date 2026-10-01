@@ -68,6 +68,7 @@ interface Props {
         canUseMyCurriculumDelivery: boolean;
         canUseMyAttendance: boolean;
         canUseMyLearningContent: boolean;
+        canUseMyAssignments: boolean;
         canViewPayroll: boolean;
         canViewAnalytics: boolean;
         canViewAuditLog: boolean;
@@ -280,6 +281,9 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canUseMyLearningContent">
                     <a class="underline" href="/app/my-learning-content">My Learning Content</a>
+                </li>
+                <li v-if="nav.canUseMyAssignments">
+                    <a class="underline" href="/app/my-assignments">My Assignments</a>
                 </li>
                 <li v-if="nav.canViewPayroll">
                     <a class="underline" href="/app/payroll">Payroll</a>

@@ -93,7 +93,7 @@ class MyAttendanceUiTest extends TestCase
         $this->actor($w, $user)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('nav.canUseMyAttendance', true)
             ->where('nav.canUseMyCurriculumDelivery', true)
-            ->where('nav', fn ($nav) => collect($nav)->filter(fn ($v) => $v === true)->keys()->sort()->values()->all() === ['canUseMyAttendance', 'canUseMyCurriculumDelivery', 'canUseMyLearningContent']));
+            ->where('nav', fn ($nav) => collect($nav)->filter(fn ($v) => $v === true)->keys()->sort()->values()->all() === ['canUseMyAssignments', 'canUseMyAttendance', 'canUseMyCurriculumDelivery', 'canUseMyLearningContent']));
 
         $this->actor($w, $noRole)->get('/app/my-attendance')->assertForbidden();
         foreach (['/app/attendance', '/app/attendance/take', '/app/students', '/app/teaching-assignments', '/app/timetable-schedule'] as $page) {

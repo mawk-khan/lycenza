@@ -798,11 +798,18 @@ class CapabilityAndRoleSeeder extends Seeder
             // `lms.content.*`: authoring/publishing an Assignment is not
             // the same right as authoring Learning Content, and folding
             // them together would prevent a future School from granting
-            // one without the other. No `lms.assignments.teacher`: v1 is
-            // admin-only, same as `lms.content.*` and every other
-            // academic module.
+            // one without the other. v1 was admin-only; TCH.5D (ADR 0063
+            // sections 34, 37) adds the owned-scope
+            // `lms.assignments.teacher` below.
             ['key' => 'lms.assignments.view', 'label' => 'View Assignments', 'namespace' => 'school'],
             ['key' => 'lms.assignments.manage', 'label' => 'Author, publish and close Assignments', 'namespace' => 'school'],
+            // TCH.5D: owned (Tier 2) Assignments. Never sufficient alone --
+            // it also needs a verified ActingEmployee, the row's owner/
+            // audience rule and current TeachingAssignment coverage (ADR 0063
+            // section 34). `lms.assignments.view/.manage` keep their
+            // School-wide meaning. Staff-authored Assignments only: no
+            // Submission exists (cancelled, ADR 0039).
+            ['key' => 'lms.assignments.teacher', 'label' => 'Author and manage Assignments for the classes one teaches', 'namespace' => 'school'],
 
             // Phase 0L.2-1 (Analytics Foundation, ADR 0040 §5). The
             // spelling ADR 0040 froze, seeded now that the first read
@@ -1166,6 +1173,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     // TCH.5C: same no-escalation reason; School Admin already
                     // holds the School-wide lms.content.manage (Tier 1 wins).
                     'lms.content.teacher',
+                    // TCH.5D: same no-escalation reason; School Admin already
+                    // holds the School-wide lms.assignments.manage (Tier 1 wins).
+                    'lms.assignments.teacher',
                 ],
             ],
             'principal' => [
@@ -1354,6 +1364,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'attendance.teacher',
                     // TCH.5C: owned Learning Content (ADR 0063 section 36).
                     'lms.content.teacher',
+                    // TCH.5D: owned Assignments (ADR 0063 section 37).
+                    'lms.assignments.teacher',
                 ],
             ],
         ];

@@ -664,15 +664,15 @@ final class DemoDataBuilder
     {
         // Teacher (TCH.3/TCH.4/TCH.5C): the production system `teacher` role,
         // linked to an HR Employee record. The role carries only
-        // curriculum.delivery.teacher, attendance.teacher and
-        // lms.content.teacher; what it
+        // curriculum.delivery.teacher, attendance.teacher,
+        // lms.content.teacher and lms.assignments.teacher; what it
         // reaches is decided by the
         // Employee's TeachingAssignment (G8-A Mathematics, created in
         // DemoModuleData::teachingAssignments()).
         $teacher = $this->user('Kavya Reddy (Teacher)', 'teacher@example.test');
         $this->assignSchoolRole($this->member($teacher, $this->school), 'teacher');
         $this->inSchool(fn () => $this->employees['MATH']->forceFill(['user_id' => $teacher->id])->save());
-        $this->account('Teacher', $teacher, $this->school->name, 'Teacher role, linked to Employee EMP-000003; My Curriculum Delivery, My Attendance and My Learning Content for G8-A Mathematics only');
+        $this->account('Teacher', $teacher, $this->school->name, 'Teacher role, linked to Employee EMP-000003; My Curriculum Delivery, My Attendance, My Learning Content and My Assignments for G8-A Mathematics only');
 
         // Student: School member linked to a Student record (Phase 5B).
         $studentRecord = $this->studentsBySection['G8-A'][0];

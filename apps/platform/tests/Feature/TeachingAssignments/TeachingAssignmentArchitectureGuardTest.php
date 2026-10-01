@@ -34,8 +34,8 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
     public function only_adopted_surfaces_consume_ownership_and_only_through_teaching_ownership(): void
     {
         // Adopted one surface at a time (ADR 0063 section 16): TCH.3
-        // Curriculum Delivery, TCH.4 Attendance, TCH.5C LMS (Learning
-        // Content) -- each through the
+        // Curriculum Delivery, TCH.4 Attendance, TCH.5C/TCH.5D LMS (Learning
+        // Content, Assignments) -- each through the
         // TeachingOwnership read only, never the model, the table or the
         // administrative services.
         foreach (['Timetable', 'Syllabus', 'Examinations'] as $module) {

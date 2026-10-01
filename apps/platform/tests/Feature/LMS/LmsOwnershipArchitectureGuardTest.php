@@ -16,9 +16,9 @@ use Tests\TestCase;
  *   column, audience or TeachingAssignment, and LMS never depends on it;
  * - HR, TeachingAssignments, Timetable and capability resolution never
  *   depend on LMS;
- * - since TCH.5C, only Learning Content has a teacher path, built from the
- *   published HR/TeachingAssignments primitives; the owner is never client
- *   input; Assignment teacher adoption (TCH.5D) is absent.
+ * - Learning Content (TCH.5C) and Assignments (TCH.5D) share one teacher
+ *   rule built from the published HR/TeachingAssignments primitives; the
+ *   owner is never client input; Submission (cancelled) has no path.
  */
 class LmsOwnershipArchitectureGuardTest extends TestCase
 {
@@ -67,16 +67,22 @@ class LmsOwnershipArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function the_learning_content_teacher_path_uses_only_the_published_primitives(): void
+    public function the_owned_lms_teacher_paths_use_only_the_published_primitives(): void
     {
-        // TCH.5C: identity through HR's ActingEmployeeResolver, ownership through
-        // TeachingAssignments' TeachingOwnership/OwnedTeachingPeriod -- never their
-        // models, never the Timetable, never a teacher column, never a role key.
-        foreach (['App\\Domain\\TeachingAssignments\\Infrastructure', 'App\\Domain\\HR\\Infrastructure', 'App\\Domain\\Timetable', 'teacher_id', "'teacher'", 'hasRole('] as $forbidden) {
+        // TCH.5C/TCH.5D: identity through HR's ActingEmployeeResolver, ownership
+        // through TeachingAssignments' TeachingOwnership/OwnedTeachingPeriod --
+        // never their models, never the Timetable, never a teacher column,
+        // never a role key.
+        foreach (['App\\Domain\\TeachingAssignments\\Infrastructure', 'App\\Domain\\HR\\Infrastructure', 'App\\Domain\\Timetable', 'teacher_id', "'teacher'", 'hasRole(', 'isTeacher'] as $forbidden) {
             $this->assertSame([], $this->codeMatches($forbidden, 'app/Domain/LMS'), "LMS must not use {$forbidden}.");
         }
-        $this->assertNotSame([], $this->codeMatches('ActingEmployeeResolver', 'app/Domain/LMS/Application/TeacherLearningContentAccess.php'));
-        $this->assertNotSame([], $this->codeMatches('TeachingOwnership', 'app/Domain/LMS/Application/TeacherLearningContentGuard.php'));
+        foreach (['TeacherLearningContentAccess.php', 'TeacherAssignmentAccess.php'] as $access) {
+            $this->assertNotSame([], $this->codeMatches('ActingEmployeeResolver', "app/Domain/LMS/Application/{$access}"));
+        }
+        $this->assertNotSame([], $this->codeMatches('TeachingOwnership', 'app/Domain/LMS/Application/TeacherLmsGuard.php'));
+        foreach (['TeacherLearningContentGuard.php', 'TeacherAssignmentGuard.php'] as $guard) {
+            $this->assertNotSame([], $this->codeMatches('extends TeacherLmsGuard', "app/Domain/LMS/Application/{$guard}"), "{$guard} shares the one write rule.");
+        }
 
         // The owner is always derived from the ActingEmployee: no transport
         // builds a SectionAudience or accepts an owner field.
@@ -87,33 +93,34 @@ class LmsOwnershipArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function assignment_teacher_adoption_is_absent(): void
+    public function submission_stays_excluded_and_every_owned_route_is_gated_and_documented(): void
     {
-        $this->assertSame(0, DB::table('capabilities')->where('key', 'lms.assignments.teacher')->count());
-        $this->assertSame([], $this->codeMatches('lms.assignments.teacher', 'app'), 'No Assignment teacher capability in code (TCH.5D).');
-        $this->assertSame([], $this->codeMatches('WriteGuard', 'app/Domain/LMS/Application/AssignmentService.php'), 'AssignmentService has no teacher path.');
+        $this->assertSame(0, DB::table('capabilities')->where('key', 'like', 'lms.submissions%')->count(), 'No Submission capability (cancelled, ADR 0039).');
         $this->assertSame([], array_values(array_filter(
             array_map(fn ($route) => $route->uri(), iterator_to_array(Route::getRoutes())),
-            fn (string $uri) => preg_match('#/my/assignment|my-assignment|submission#', $uri) === 1,
-        )), 'No teacher Assignment or Submission route exists.');
+            fn (string $uri) => str_contains($uri, 'submission'),
+        )), 'No Submission route exists.');
+        $this->assertSame([], $this->codeMatches("'submission'", 'app/Domain/LMS/Application/LmsParentResourceAuthorization.php'), 'No Submission parent in the Documents port.');
 
-        // Every owned Learning Content route is gated by the owned capability
-        // and documented.
+        $capabilities = ['/my/learning-content' => 'capability:lms.content.teacher', '/my/assignment' => 'capability:lms.assignments.teacher'];
         $live = 0;
         foreach (Route::getRoutes() as $route) {
-            if (str_contains($route->uri(), '/my/learning-content')) {
-                $this->assertContains('capability:lms.content.teacher', $route->gatherMiddleware(), $route->uri());
-                $this->assertContains('private-no-store', $route->gatherMiddleware(), $route->uri());
-                $this->assertNotContains('idempotent', $route->gatherMiddleware(), $route->uri());
-                $live += count(array_diff($route->methods(), ['HEAD']));
+            foreach ($capabilities as $prefix => $capability) {
+                if (str_contains($route->uri(), $prefix)) {
+                    $this->assertContains($capability, $route->gatherMiddleware(), $route->uri());
+                    $this->assertContains('private-no-store', $route->gatherMiddleware(), $route->uri());
+                    $this->assertNotContains('idempotent', $route->gatherMiddleware(), $route->uri());
+                    $live += count(array_diff($route->methods(), ['HEAD']));
+                }
             }
         }
-        $this->assertSame(7, $live, 'Seven owned Learning Content operations.');
+        $this->assertSame(14, $live, 'Seven owned Learning Content and seven owned Assignment operations.');
 
         $yaml = (string) file_get_contents(base_path('../../packages/contracts/openapi/school-os-api.yaml'));
-        foreach (['listMyLearningContentContexts', 'listMyLearningContent', 'createMyLearningContent', 'getMyLearningContent', 'updateMyLearningContent', 'publishMyLearningContent', 'archiveMyLearningContent'] as $operationId) {
+        foreach (['listMyLearningContentContexts', 'listMyLearningContent', 'createMyLearningContent', 'getMyLearningContent', 'updateMyLearningContent', 'publishMyLearningContent', 'archiveMyLearningContent',
+            'listMyAssignmentContexts', 'listMyAssignments', 'createMyAssignment', 'getMyAssignment', 'updateMyAssignment', 'publishMyAssignment', 'closeMyAssignment'] as $operationId) {
             $this->assertStringContainsString("operationId: {$operationId}\n", $yaml);
         }
-        $this->assertStringNotContainsString('operationId: listMyAssignments', $yaml);
+        $this->assertStringNotContainsString('Submission:', $yaml.'');
     }
 }

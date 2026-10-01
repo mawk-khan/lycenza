@@ -43,7 +43,9 @@ use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryTitle;
+use App\Domain\LMS\Application\AssignmentService;
 use App\Domain\LMS\Application\LearningContentService;
+use App\Domain\LMS\Application\TeacherAssignmentAccess;
 use App\Domain\LMS\Application\TeacherLearningContentAccess;
 use App\Domain\Payments\Application\ChargeAllocationInput;
 use App\Domain\Payments\Application\ManualPaymentRecordingService;
@@ -334,6 +336,15 @@ final class DemoModuleData
         $teacher = User::query()->findOrFail($d->employees['MATH']->user_id);
         $content->createOwned($d->school, $d->offerings['G8-MATH']->id, ['title' => 'G8-A: linear equations practice notes', 'sequence' => 2],
             [$d->sections['G8-A']->id], $teacher, app(TeacherLearningContentAccess::class)->guard($teacher));
+
+        // TCH.5D: the same shape for Assignments -- a published Offering-wide
+        // G8 Mathematics worksheet (School Admin) and her own G8-A draft,
+        // created by her. Staff-authored only: no Submission data exists.
+        $assignments = app(AssignmentService::class);
+        $worksheet = $assignments->create($d->school, $d->offerings['G8-MATH']->id, ['title' => 'Grade 8 Mathematics: chapter 4 worksheet', 'due_on' => $d->currentYear->ends_on->toDateString()], $d->admin);
+        $assignments->publish($d->school, $worksheet, $d->admin);
+        $assignments->createOwned($d->school, $d->offerings['G8-MATH']->id, ['title' => 'G8-A: linear equations homework'],
+            [$d->sections['G8-A']->id], $teacher, app(TeacherAssignmentAccess::class)->guard($teacher));
     }
 
     // --- Examinations (0H.4A/B) + Grade scale (0H.4C) --------------------

@@ -4,7 +4,7 @@ namespace Tests\Feature\LMS;
 
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\HR\Infrastructure\Employee;
-use App\Domain\LMS\Infrastructure\LearningContent;
+use App\Domain\LMS\Infrastructure\Assignment;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
 use App\Domain\TeachingAssignments\Infrastructure\TeachingAssignment;
 use App\Models\User;
@@ -21,8 +21,8 @@ use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
 
 /**
- * TCH.5C (ADR 0063 sections 20, 36): an owned teacher Learning Content write
- * -- an edit, a multi-Section creation, an attachment -- racing everything
+ * TCH.5D (ADR 0063 sections 20, 37): an owned teacher Assignment write -- an
+ * edit, a multi-Section creation, an attachment -- racing everything
  * that removes the teacher's authority: a TeachingAssignment ending (one of
  * several, too), the membership suspended, the Employee unlinked or archived,
  * the employment ended. Real OS processes with forced, observed overlap.
@@ -31,7 +31,7 @@ use Tests\TestCase;
  * change first commits and the write is refused. A last race proves the
  * audience lock order is the sorted Section order, not the client's.
  */
-class TeacherLearningContentConcurrencyTest extends TestCase
+class TeacherAssignmentConcurrencyTest extends TestCase
 {
     use CreatesLmsOwnershipFixtures, CreatesTeacherDeliveryFixtures, CreatesTeacherLearningContentFixtures, CreatesTeachingAssignmentFixtures, CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
@@ -85,7 +85,7 @@ class TeacherLearningContentConcurrencyTest extends TestCase
 
     private function op(array $w, string $op, User $user, string ...$args): array
     {
-        return $this->script('teacher-learning-content-op.php', $op, $w['school']->id, $user->id, ...$args);
+        return $this->script('teacher-assignment-op.php', $op, $w['school']->id, $user->id, ...$args);
     }
 
     private function end(array $w, TeachingAssignment $assignment): array
@@ -93,9 +93,9 @@ class TeacherLearningContentConcurrencyTest extends TestCase
         return $this->script('teaching-assignment-op.php', 'end', $w['school']->id, $w['admin']->id, $assignment->id, '2026-08-31', 'reassigned');
     }
 
-    private function title(array $w, LearningContent $content): string
+    private function title(array $w, Assignment $assignment): string
     {
-        return app(TenantContext::class)->withSchool($w['school'], fn () => $content->fresh()->title);
+        return app(TenantContext::class)->withSchool($w['school'], fn () => $assignment->fresh()->title);
     }
 
     private function documents(array $w): int
@@ -104,57 +104,57 @@ class TeacherLearningContentConcurrencyTest extends TestCase
     }
 
     #[Test]
-    public function an_edit_racing_the_assignment_end_serializes_both_ways(): void
+    public function an_edit_racing_the_teaching_assignment_end_serializes_both_ways(): void
     {
         $w = $this->world();
 
         // Edit first: the end waits on the held assignment row.
         [$user, , , [$a]] = $this->contentTeacher($w);
-        $row = $this->teacherContent($w, $user);
+        $row = $this->teacherAssignment($w, $user);
         [$holder, $contender] = $this->raceWithHeldHolder($this->op($w, 'update', $user, $row->id), $this->end($w, $a));
         $this->assertSame(['updated', 'ended'], [$holder, $contender]);
 
         // End first: the edit waits on the assignment row, then finds no
         // coverage under its lock.
         [$user2, , , [$a2]] = $this->contentTeacher($w);
-        $row2 = $this->teacherContent($w, $user2);
+        $row2 = $this->teacherAssignment($w, $user2);
         [$holder, $contender] = $this->raceWithHeldHolder($this->end($w, $a2), $this->op($w, 'update', $user2, $row2->id));
-        $this->assertSame(['ended', 'rejected:LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT'], [$holder, $contender]);
-        $this->assertSame('My reading', $this->title($w, $row2));
+        $this->assertSame(['ended', 'rejected:ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT'], [$holder, $contender]);
+        $this->assertSame('My worksheet', $this->title($w, $row2));
     }
 
     #[Test]
-    public function ending_one_of_several_audience_assignments_serializes_both_ways(): void
+    public function ending_one_of_several_audience_teaching_assignments_serializes_both_ways(): void
     {
         $w = $this->world();
 
         [$user, , , [, $b]] = $this->contentTeacher($w, ['sectionA', 'sectionB']);
-        $row = $this->teacherContent($w, $user, ['sectionA', 'sectionB'], 'published');
+        $row = $this->teacherAssignment($w, $user, ['sectionA', 'sectionB'], 'published');
         [$holder, $contender] = $this->raceWithHeldHolder($this->op($w, 'update', $user, $row->id), $this->end($w, $b));
         $this->assertSame(['updated', 'ended'], [$holder, $contender]);
 
         [$user2, , , [, $b2]] = $this->contentTeacher($w, ['sectionA', 'sectionB']);
-        $row2 = $this->teacherContent($w, $user2, ['sectionA', 'sectionB'], 'published');
+        $row2 = $this->teacherAssignment($w, $user2, ['sectionA', 'sectionB'], 'published');
         [$holder, $contender] = $this->raceWithHeldHolder($this->end($w, $b2), $this->op($w, 'update', $user2, $row2->id));
-        $this->assertSame(['ended', 'rejected:LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT'], [$holder, $contender]);
-        $this->assertSame('My reading', $this->title($w, $row2));
+        $this->assertSame(['ended', 'rejected:ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT'], [$holder, $contender]);
+        $this->assertSame('My worksheet', $this->title($w, $row2));
     }
 
     #[Test]
-    public function an_attachment_write_racing_the_assignment_end_serializes_both_ways(): void
+    public function an_attachment_write_racing_the_teaching_assignment_end_serializes_both_ways(): void
     {
         $w = $this->world();
 
         [$user, , , [$a]] = $this->contentTeacher($w);
-        $row = $this->teacherContent($w, $user);
+        $row = $this->teacherAssignment($w, $user);
         [$holder, $contender] = $this->raceWithHeldHolder($this->op($w, 'attach', $user, $row->id), $this->end($w, $a));
         $this->assertStringStartsWith('attached:', $holder);
         $this->assertSame('ended', $contender);
 
         [$user2, , , [$a2]] = $this->contentTeacher($w);
-        $row2 = $this->teacherContent($w, $user2);
+        $row2 = $this->teacherAssignment($w, $user2);
         [$holder, $contender] = $this->raceWithHeldHolder($this->end($w, $a2), $this->op($w, 'attach', $user2, $row2->id));
-        $this->assertSame(['ended', 'rejected:LEARNING_CONTENT_OUTSIDE_TEACHING_ASSIGNMENT'], [$holder, $contender]);
+        $this->assertSame(['ended', 'rejected:ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT'], [$holder, $contender]);
         $this->assertSame(1, $this->documents($w), 'The refused attachment left no Document row.');
     }
 
@@ -186,10 +186,10 @@ class TeacherLearningContentConcurrencyTest extends TestCase
             $this->assertSame($changed, $contender, $label);
 
             [$user2, $employee2, $membership2] = $this->contentTeacher($w);
-            $before = app(TenantContext::class)->withSchool($w['school'], fn () => LearningContent::query()->count());
+            $before = app(TenantContext::class)->withSchool($w['school'], fn () => Assignment::query()->count());
             [$holder, $contender] = $this->raceWithHeldHolder($this->script(...$change($employee2, $membership2)), $create($user2));
             $this->assertSame([$changed, $denied], [$holder, $contender], $label);
-            $this->assertSame($before, app(TenantContext::class)->withSchool($w['school'], fn () => LearningContent::query()->count()), $label);
+            $this->assertSame($before, app(TenantContext::class)->withSchool($w['school'], fn () => Assignment::query()->count()), $label);
         }
     }
 
@@ -222,6 +222,6 @@ class TeacherLearningContentConcurrencyTest extends TestCase
 
         $this->assertSame(['ended', 'rejected:LMS_AUDIENCE_SECTION_NOT_TAUGHT'], [$holder, $contender]);
         $this->assertTrue(app(TenantContext::class)->withSchool($w['school'], fn () => TeachingAssignment::query()->whereKey($higher->id)->value('ended_at') !== null));
-        $this->assertSame(0, app(TenantContext::class)->withSchool($w['school'], fn () => LearningContent::query()->count()));
+        $this->assertSame(0, app(TenantContext::class)->withSchool($w['school'], fn () => Assignment::query()->count()));
     }
 }

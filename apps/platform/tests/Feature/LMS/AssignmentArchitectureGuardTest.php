@@ -193,13 +193,14 @@ class AssignmentArchitectureGuardTest extends TestCase
 
                 return is_string($action) && (
                     str_contains($action, 'LMS\Http\Controllers\AssignmentController')
+                    || str_contains($action, 'LMS\Http\Controllers\TeacherAssignmentController')
                     || (str_contains($action, 'Documents\Http\Controllers\DocumentController') && str_contains($r->uri(), 'assignments'))
                 );
             })
             ->flatMap(fn ($r) => array_map(fn ($m) => $m.' /'.$r->uri(), array_values(array_diff($r->methods(), ['HEAD']))))
             ->sort()->values()->all();
 
-        $this->assertSame([
+        $this->assertEqualsCanonicalizing([
             'GET /api/v1/schools/{school}/assignments/{assignment}',
             'GET /api/v1/schools/{school}/assignments/{assignment}/documents',
             'GET /api/v1/schools/{school}/subject-offerings/{subjectOffering}/assignments',
@@ -207,24 +208,37 @@ class AssignmentArchitectureGuardTest extends TestCase
             'POST /api/v1/schools/{school}/assignments/{assignment}/close',
             'POST /api/v1/schools/{school}/assignments/{assignment}/documents',
             'POST /api/v1/schools/{school}/assignments/{assignment}/publish',
+            // TCH.5D: the owned teacher surface (ADR 0063 section 37).
+            'GET /api/v1/schools/{school}/my/assignment-contexts',
+            'GET /api/v1/schools/{school}/my/assignments',
+            'GET /api/v1/schools/{school}/my/assignments/{assignment}',
+            'PATCH /api/v1/schools/{school}/my/assignments/{assignment}',
+            'POST /api/v1/schools/{school}/my/assignments',
+            'POST /api/v1/schools/{school}/my/assignments/{assignment}/close',
+            'POST /api/v1/schools/{school}/my/assignments/{assignment}/publish',
             'POST /api/v1/schools/{school}/subject-offerings/{subjectOffering}/assignments',
-        ], $routes, 'Six API operations plus two Documents owner-arm routes -- no delete, no submit/grade/score route.');
+        ], $routes, 'Six Tier 1 API operations plus two Documents owner-arm routes and seven owned /my/ operations (TCH.5D) -- no delete, no submit/grade/score route.');
     }
 
     #[Test]
     public function the_registered_web_route_surface_is_exactly_the_sanctioned_one(): void
     {
         $routes = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn ($r) => str_starts_with($r->uri(), 'app/assignments'))
+            ->filter(fn ($r) => str_starts_with($r->uri(), 'app/assignments') || str_starts_with($r->uri(), 'app/my-assignments'))
             ->flatMap(fn ($r) => array_map(fn ($m) => $m.' /'.$r->uri(), array_values(array_diff($r->methods(), ['HEAD']))))
             ->sort()->values()->all();
 
-        $this->assertSame([
+        $this->assertEqualsCanonicalizing([
             'GET /app/assignments',
             'PATCH /app/assignments/{assignment}',
             'POST /app/assignments',
             'POST /app/assignments/{assignment}/close',
             'POST /app/assignments/{assignment}/publish',
+            'GET /app/my-assignments',
+            'PATCH /app/my-assignments/{assignment}',
+            'POST /app/my-assignments',
+            'POST /app/my-assignments/{assignment}/close',
+            'POST /app/my-assignments/{assignment}/publish',
         ], $routes);
     }
 }

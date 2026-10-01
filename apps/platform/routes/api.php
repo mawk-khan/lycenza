@@ -67,6 +67,7 @@ use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
 use App\Domain\LMS\Http\Controllers\AssignmentController;
 use App\Domain\LMS\Http\Controllers\LearningContentController;
+use App\Domain\LMS\Http\Controllers\TeacherAssignmentController;
 use App\Domain\LMS\Http\Controllers\TeacherLearningContentController;
 use App\Domain\Payments\Http\Controllers\LateFeeRunController;
 use App\Domain\Payments\Http\Controllers\PaymentController;
@@ -2106,6 +2107,37 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/assignments/{assignment}/documents', [DocumentController::class, 'indexForAssignment'])
                 ->middleware(['throttle:documents-reads', 'private-no-store'])
                 ->name('schools.assignments.documents.index');
+
+            // TCH.5D (ADR 0063 sections 34, 37) -- the OWNED teacher
+            // Assignment surface, the TCH.5C Learning Content pattern.
+            // `capability:lms.assignments.teacher` is only the outer check:
+            // TeacherAssignmentAccess adds the verified ActingEmployee and
+            // today's TeachingAssignment coverage, and AssignmentService holds
+            // both in every write. `private-no-store`: Assignments are
+            // Sensitive. No Idempotency-Key, exactly as the Tier 1 routes above.
+            // Re-publishing a closed Assignment is the same publish action.
+            // Attachments reuse the Documents routes above. No Submission route.
+            Route::get('/my/assignment-contexts', [TeacherAssignmentController::class, 'contexts'])
+                ->middleware(['private-no-store', 'capability:lms.assignments.teacher'])
+                ->name('schools.my.assignment-contexts.index');
+            Route::get('/my/assignments', [TeacherAssignmentController::class, 'index'])
+                ->middleware(['private-no-store', 'capability:lms.assignments.teacher'])
+                ->name('schools.my.assignments.index');
+            Route::post('/my/assignments', [TeacherAssignmentController::class, 'store'])
+                ->middleware(['private-no-store', 'capability:lms.assignments.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.assignments.store');
+            Route::get('/my/assignments/{assignment}', [TeacherAssignmentController::class, 'show'])
+                ->middleware(['private-no-store', 'capability:lms.assignments.teacher'])
+                ->name('schools.my.assignments.show');
+            Route::patch('/my/assignments/{assignment}', [TeacherAssignmentController::class, 'update'])
+                ->middleware(['private-no-store', 'capability:lms.assignments.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.assignments.update');
+            Route::post('/my/assignments/{assignment}/publish', [TeacherAssignmentController::class, 'publish'])
+                ->middleware(['private-no-store', 'capability:lms.assignments.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.assignments.publish');
+            Route::post('/my/assignments/{assignment}/close', [TeacherAssignmentController::class, 'close'])
+                ->middleware(['private-no-store', 'capability:lms.assignments.teacher', 'throttle:school-api-mutations'])
+                ->name('schools.my.assignments.close');
 
             // Phase 0H.3B (Curriculum Delivery -- the second concrete
             // Academics fact). Exactly FIVE operations: list/start

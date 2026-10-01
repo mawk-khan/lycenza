@@ -3,7 +3,6 @@
 namespace App\Domain\LMS\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\Section;
-use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\LMS\Application\Ownership\LmsResourceOwnership;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\School;
@@ -25,32 +24,15 @@ use Illuminate\Support\Collection;
  */
 class TeacherLearningContentReadService
 {
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly TeacherTeachingContexts $contexts,
+    ) {}
 
     /** @return list<array<string, mixed>> */
     public function contexts(School $school, TeacherLearningContentScope $scope): array
     {
-        return $this->context->withSchool($school, function () use ($scope) {
-            $offerings = SubjectOffering::query()
-                ->with(['subject', 'gradeLevel', 'campus', 'academicYear'])
-                ->whereIn('id', $scope->taughtOfferings())
-                ->get();
-            $sections = Section::query()->whereIn('id', array_column($scope->taught, 'section'))->get()->keyBy('id');
-
-            return $offerings
-                ->sortBy(fn (SubjectOffering $o) => [$o->gradeLevel?->sequence, $o->subject?->name])
-                ->map(fn (SubjectOffering $o) => [
-                    'subjectOfferingId' => $o->id,
-                    'subjectCode' => $o->subject?->code,
-                    'subjectName' => $o->subject?->name,
-                    'gradeLevelName' => $o->gradeLevel?->name,
-                    'campusName' => $o->campus?->name,
-                    'academicYearName' => $o->academicYear?->name,
-                    'sections' => collect($scope->taughtSections($o->id))
-                        ->map(fn (string $id) => ['id' => $id, 'code' => $sections->get($id)?->code, 'name' => $sections->get($id)?->name])
-                        ->sortBy('code')->values()->all(),
-                ])->values()->all();
-        });
+        return $this->contexts->forScope($school, $scope);
     }
 
     /** @return LengthAwarePaginator<int, array<string, mixed>> */

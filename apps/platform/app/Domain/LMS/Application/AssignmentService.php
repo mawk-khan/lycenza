@@ -79,6 +79,10 @@ class AssignmentService
     ) {}
 
     /**
+     * Administrative (Tier 1) creation, or -- given a SectionAudience -- a
+     * teacher-owned row written by trusted internal code. Every route calls
+     * it without one, so administrative rows stay Offering-wide.
+     *
      * @param  array{title: string, instructions?: string|null, due_on?: string|null}  $attributes
      */
     public function create(School $school, string $subjectOfferingId, array $attributes, User $actor, ?SectionAudience $audience = null): Assignment
@@ -94,42 +98,73 @@ class AssignmentService
                 $dueOn = $this->assertDueDateWithinYear($school, $offering, $attributes['due_on']);
             }
 
-            return $this->audiences->refusingForeignOwner('assignments', fn () => DB::transaction(function () use ($school, $offering, $attributes, $dueOn, $actor, $audience) {
-                $assignment = new Assignment;
-                $assignment->forceFill([
-                    'school_id' => $school->id,
-                    'subject_offering_id' => $offering->id,
-                    'title' => $attributes['title'],
-                    'instructions' => $attributes['instructions'] ?? null,
-                    'due_on' => $dueOn,
-                    'status' => Assignment::STATUS_DRAFT,
-                    // TCH.5B: an owner only for a teacher-owned row, whose
-                    // Section audience is written in this same transaction.
-                    // Administrative callers pass no SectionAudience, so
-                    // their rows stay Offering-wide (owner NULL, no audience).
-                    'owner_employee_id' => $audience?->ownerEmployeeId,
-                ]);
-                $assignment->save();
+            return $this->audiences->refusingForeignOwner('assignments', fn () => DB::transaction(
+                fn () => $this->insert($school, $offering, $attributes, $dueOn, $actor, $audience),
+            ));
+        });
+    }
 
-                if ($audience !== null) {
-                    $this->audiences->attach($assignment, $offering, $audience);
-                }
+    /**
+     * TCH.5D (ADR 0063 section 37) -- a teacher-owned Assignment. The guard
+     * runs first in this transaction: it holds the ActingEmployee and the
+     * TeachingAssignment of every requested Section and returns the ownership
+     * -- the owner is always the ActingEmployee, never client input. Only
+     * then is the (informational) due date validated, so an untaught
+     * Offering is a 404 before anything else. The same insert() as
+     * administrative creation writes the row and its audience atomically.
+     *
+     * @param  array{title: string, instructions?: string|null, due_on?: string|null}  $attributes
+     * @param  list<string>  $sectionIds
+     */
+    public function createOwned(School $school, string $subjectOfferingId, array $attributes, array $sectionIds, User $actor, AssignmentWriteGuard $guard): Assignment
+    {
+        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $attributes, $sectionIds, $actor, $guard) {
+            $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($subjectOfferingId);
 
-                // Bounded metadata: ids and the due date only. `title`/
-                // `instructions` are School-authored content and are
-                // deliberately never copied into audit metadata.
-                $this->audit->school($school, 'lms.assignment.created', actor: $actor, subject: $assignment, metadata: [
-                    'assignmentId' => $assignment->id,
-                    'subjectOfferingId' => $assignment->subject_offering_id,
-                    'dueOn' => $assignment->due_on?->toDateString(),
-                ] + ($audience === null ? [] : [
-                    'ownerEmployeeId' => $audience->ownerEmployeeId,
-                    'audienceSectionIds' => $audience->sectionIds,
-                ]));
+            return $this->audiences->refusingForeignOwner('assignments', fn () => DB::transaction(function () use ($school, $offering, $attributes, $sectionIds, $actor, $guard) {
+                $audience = $guard->beforeCreate($school, $offering, $sectionIds);
+                $dueOn = empty($attributes['due_on']) ? null : $this->assertDueDateWithinYear($school, $offering, $attributes['due_on']);
 
-                return $assignment;
+                return $this->insert($school, $offering, $attributes, $dueOn, $actor, $audience);
             }));
         });
+    }
+
+    /** @param  array{title: string, instructions?: string|null, due_on?: string|null}  $attributes */
+    private function insert(School $school, SubjectOffering $offering, array $attributes, ?string $dueOn, User $actor, ?SectionAudience $audience): Assignment
+    {
+        $assignment = new Assignment;
+        $assignment->forceFill([
+            'school_id' => $school->id,
+            'subject_offering_id' => $offering->id,
+            'title' => $attributes['title'],
+            'instructions' => $attributes['instructions'] ?? null,
+            'due_on' => $dueOn,
+            'status' => Assignment::STATUS_DRAFT,
+            // TCH.5B: an owner only for a teacher-owned row, whose Section
+            // audience is written in this same transaction. Without a
+            // SectionAudience the row is Offering-wide (owner NULL, no audience).
+            'owner_employee_id' => $audience?->ownerEmployeeId,
+        ]);
+        $assignment->save();
+
+        if ($audience !== null) {
+            $this->audiences->attach($assignment, $offering, $audience);
+        }
+
+        // Bounded metadata: ids and the due date only. `title`/`instructions`
+        // are School-authored content and are deliberately never copied into
+        // audit metadata. The actor is always the authenticated User.
+        $this->audit->school($school, 'lms.assignment.created', actor: $actor, subject: $assignment, metadata: [
+            'assignmentId' => $assignment->id,
+            'subjectOfferingId' => $assignment->subject_offering_id,
+            'dueOn' => $assignment->due_on?->toDateString(),
+        ] + ($audience === null ? [] : [
+            'ownerEmployeeId' => $audience->ownerEmployeeId,
+            'audienceSectionIds' => $audience->sectionIds,
+        ]));
+
+        return $assignment;
     }
 
     /**
@@ -139,9 +174,9 @@ class AssignmentService
      *
      * @param  array{title?: string, instructions?: string|null, due_on?: string|null}  $attributes
      */
-    public function update(School $school, Assignment $assignment, array $attributes, User $actor): Assignment
+    public function update(School $school, Assignment $assignment, array $attributes, User $actor, ?AssignmentWriteGuard $guard = null): Assignment
     {
-        return $this->context->withSchool($school, function () use ($school, $assignment, $attributes, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $assignment, $attributes, $actor, $guard) {
             $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($assignment->subject_offering_id);
 
             $dueOnProvided = array_key_exists('due_on', $attributes);
@@ -149,7 +184,10 @@ class AssignmentService
                 ? $this->assertDueDateWithinYear($school, $offering, $attributes['due_on'])
                 : null;
 
-            return DB::transaction(function () use ($school, $assignment, $attributes, $dueOnProvided, $dueOn, $actor) {
+            return DB::transaction(function () use ($school, $assignment, $attributes, $dueOnProvided, $dueOn, $actor, $guard) {
+                // TCH.5D Tier 2 only: identity and ownership held before the row lock.
+                $guard?->beforeWrite($school, $assignment);
+
                 $locked = Assignment::query()->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
 
                 $changedFields = array_keys($attributes);
@@ -186,9 +224,11 @@ class AssignmentService
      * LearningContentService's identical two-verb (publish/close)
      * design rather than a separate "reopen" action.
      */
-    public function publish(School $school, Assignment $assignment, User $actor): Assignment
+    public function publish(School $school, Assignment $assignment, User $actor, ?AssignmentWriteGuard $guard = null): Assignment
     {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $assignment, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $assignment, $actor, $guard) {
+            $guard?->beforeWrite($school, $assignment);
+
             $locked = Assignment::query()->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
 
             $this->assertLegalTransition($locked->status, Assignment::STATUS_PUBLISHED);
@@ -215,9 +255,11 @@ class AssignmentService
      * never deleted (rule 73, ADR 0039 §10): a closed Assignment
      * remains readable/correctable, and can be republished later.
      */
-    public function close(School $school, Assignment $assignment, User $actor): Assignment
+    public function close(School $school, Assignment $assignment, User $actor, ?AssignmentWriteGuard $guard = null): Assignment
     {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $assignment, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $assignment, $actor, $guard) {
+            $guard?->beforeWrite($school, $assignment);
+
             $locked = Assignment::query()->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
 
             $this->assertLegalTransition($locked->status, Assignment::STATUS_CLOSED);

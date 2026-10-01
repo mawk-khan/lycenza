@@ -14,8 +14,8 @@ owned teacher resource access
 **It grants nothing by itself.** It is one of the three facts that owned
 teacher access requires, read through `TeachingOwnership` (§8), for
 **Curriculum Delivery** (TCH.3, ADR 0063 §31), **Attendance** (TCH.4,
-§32) and **LMS Learning Content** (TCH.5C, §36). LMS Assignments (TCH.5D)
-and Timetable are still admin-only. Production enablement of the
+§32), **LMS Learning Content** (TCH.5C, §36) and **LMS Assignments**
+(TCH.5D, §37). Timetable is still admin-only. Production enablement of the
 teacher Attendance surface is blocked by the open legal/compliance
 determination TCH-L1 (ADR 0063 §26).
 
@@ -28,13 +28,13 @@ describes the as-built module.
   check) and Academic Structure (Section, SubjectOffering, AcademicYear), by
   composite foreign key and through tenant-scoped reads.
 - **Never depended on** by HR or Academic Structure.
-- **Three consumers,** all through `TeachingOwnership`/`OwnedTeachingPeriod`
+- **Four consumers,** all through `TeachingOwnership`/`OwnedTeachingPeriod`
   only:
   - Curriculum Delivery (TCH.3), on the delivery's dates;
   - Attendance (TCH.4), on the register's `attendance_date`;
-  - LMS Learning Content (TCH.5C), on the School-local current date --
-    every audience Section for writes (held in ascending Section id), any
-    for published reads.
+  - LMS Learning Content (TCH.5C) and LMS Assignments (TCH.5D), on the
+    School-local current date -- every audience Section for writes (held
+    in ascending Section id), any for published reads.
 
   Timetable, Syllabus and Examinations do not reference it.
 - **Not derived from anything else.** It never uses `TimetableEntry` (a

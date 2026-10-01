@@ -4731,6 +4731,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/my/assignment-contexts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Subject Offerings the teacher teaches today, each with only the Sections they teach (the audience picker). */
+        get: operations["listMyAssignmentContexts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every Assignment the teacher may read, filtered on the server; optionally one Subject Offering. Fixed page size of 50. */
+        get: operations["listMyAssignments"];
+        put?: never;
+        /** Creates a teacher-owned draft Assignment for one or more Sections the teacher teaches today in that Subject Offering. The owner is the teacher's own Employee record, set by the server. */
+        post: operations["createMyAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/assignments/{assignmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One Assignment the teacher may read. */
+        get: operations["getMyAssignment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edits title, instructions and/or due date of the teacher's own Assignment (never the audience or owner). */
+        patch: operations["updateMyAssignment"];
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/assignments/{assignmentId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publishes (or re-publishes a closed) Assignment of the teacher's own, through the same lifecycle as the School-wide operation; a due date is required. */
+        post: operations["publishMyAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/assignments/{assignmentId}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Closes the teacher's own published Assignment, through the same lifecycle as the School-wide operation. */
+        post: operations["closeMyAssignment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/subject-offerings/{subjectOfferingId}/curriculum-deliveries": {
         parameters: {
             query?: never;
@@ -8412,7 +8499,7 @@ export interface components {
                 sectionCode: string | null;
             }[];
         };
-        /** @description TCH.5C -- one Subject Offering the teacher teaches today, with only the Sections they teach. */
+        /** @description TCH.5C/TCH.5D -- one Subject Offering the teacher teaches today, with only the Sections they teach (the audience picker of both owned LMS surfaces). */
         MyLearningContentContext: {
             /** Format: uuid */
             subjectOfferingId: string;
@@ -8472,6 +8559,40 @@ export interface components {
             instructions?: string | null;
             /** Format: date */
             due_on?: string | null;
+        };
+        /** @description TCH.5D: an Assignment as the calling teacher sees it. The owner Employee is never exposed: `mine` says whether the teacher created it, `offeringWide` whether it is School material for the whole Subject Offering, and `canEdit` whether the teacher may change it today (their own Assignment, every audience Section still taught). Staff-authored only -- no Submission, Student or mark. */
+        MyAssignment: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            subjectOfferingId: string;
+            title: string;
+            instructions?: string | null;
+            /**
+             * Format: date
+             * @description Informational only; never an authorization date.
+             */
+            dueOn?: string | null;
+            status: components["schemas"]["AssignmentStatus"];
+            offeringWide: boolean;
+            mine: boolean;
+            canEdit: boolean;
+            /** @description The Sections a teacher-owned Assignment is for (empty for an Offering-wide one). Fixed at creation. */
+            audience: {
+                /** Format: uuid */
+                sectionId: string;
+                sectionCode: string | null;
+            }[];
+        };
+        /** @description TCH.5D. No owner field exists: the owner is always the teacher's own Employee record. Every audience Section must be one the teacher teaches for this Subject Offering today; the audience cannot be changed afterwards. */
+        MyAssignmentCreateInput: {
+            /** Format: uuid */
+            subject_offering_id: string;
+            title: string;
+            instructions?: string | null;
+            /** Format: date */
+            due_on?: string | null;
+            audience_section_ids: string[];
         };
         /**
          * @description The complete, closed CurriculumDelivery state vocabulary, mirrored by the database's own `curriculum_deliveries_status_check` CHECK constraint. `not_started` is deliberately NOT a member: the ABSENCE of a record is what "not started" means, so nothing is ever pre-seeded and a client showing every unit must start from the Syllabus list.
@@ -25777,6 +25898,399 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    listMyAssignmentContexts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLearningContentContext"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking lms.assignments.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listMyAssignments: {
+        parameters: {
+            query?: {
+                subject_offering_id?: string;
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyAssignment"][];
+                        meta: components["schemas"]["TimetablePaginationMeta"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking lms.assignments.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid query parameter. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    createMyAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyAssignmentCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyAssignment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking lms.assignments.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A Subject Offering the teacher teaches no Section of (or not found). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LMS_AUDIENCE_SECTION_NOT_TAUGHT (a Section the teacher does not teach for this Offering today, including one of several), a due date outside the Academic Year, or validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getMyAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                assignmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyAssignment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lacking lms.assignments.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not an Assignment this teacher may read (or not found, or another School's). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    updateMyAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                assignmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyAssignment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description As above, or ASSIGNMENT_NOT_OWNED -- the teacher may read this Assignment but did not create it (teacher writes are owner-only). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not an Assignment this teacher may read (or not found, or another School's). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), ASSIGNMENT_ILLEGAL_TRANSITION, a due date outside the Academic Year, or validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    publishMyAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                assignmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyAssignment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description As above, or ASSIGNMENT_NOT_OWNED -- the teacher may read this Assignment but did not create it (teacher writes are owner-only). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not an Assignment this teacher may read (or not found, or another School's). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), ASSIGNMENT_ILLEGAL_TRANSITION, ASSIGNMENT_DUE_DATE_REQUIRED, or validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    closeMyAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                assignmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyAssignment"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description As above, or ASSIGNMENT_NOT_OWNED -- the teacher may read this Assignment but did not create it (teacher writes are owner-only). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not an Assignment this teacher may read (or not found, or another School's). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT (the owner no longer teaches every audience Section), ASSIGNMENT_ILLEGAL_TRANSITION, or validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
         };
     };
     listCurriculumDeliveries: {

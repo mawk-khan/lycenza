@@ -12,8 +12,9 @@
   the Documents parent-authorization seam. **TCH.5C — Learning Content
   teacher adoption — is implemented** (§36): `lms.content.teacher`, owned
   reads/writes, `/my/` API, "My Learning Content" and attachments.
-  **Assignment teacher access remains unimplemented** (TCH.5D, next);
-  Submission remains cancelled.
+  **TCH.5D — Assignment teacher adoption — is implemented** (§37). TCH.6
+  (closure audit) is next and not implemented. **LMS Submission remains
+  cancelled and outside TCH.**
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -1942,3 +1943,142 @@ through the owned path. There is no Assignment teacher data.
   `MyAttendanceUiTest` (nav) and `DemoDataBuilderTest`.
 
 **Next:** TCH.5D — Assignment teacher adoption (not implemented).
+
+## 37. TCH.5D implementation (as built)
+
+TCH.5D (2026-10-01) builds §34 for **Assignments**. **Learning Content
+teacher adoption is implemented. Assignment teacher adoption is
+implemented. LMS Submission remains cancelled and outside TCH.**
+Assignments stay Sensitive (§35). There is no new legal gate: E21 is
+unchanged, and TCH-L1 remains Attendance-only.
+
+**Capability and role.**
+- New owned-scope capability `lms.assignments.teacher`.
+- The `teacher` role now carries exactly `curriculum.delivery.teacher`,
+  `attendance.teacher`, `lms.content.teacher` and `lms.assignments.teacher`.
+- `school_admin` also holds it, only for no-escalation grantability (§31).
+  It already holds `lms.assignments.manage`, and Tier 1 wins. `principal`
+  is unchanged.
+- Teachers get no `lms.*.view/.manage`, `teaching.assignments.*` or
+  `students.view`.
+- A non-`teacher` role carrying the capability works the same (tested).
+
+**Lifecycle and the meaning of `closed`.** The lifecycle is unchanged:
+`draft → published → closed → published`. Re-publication is the same
+publish action, and publishing still requires a due date.
+- `published` is the **only shared status**.
+- `closed` is the retiring state (ADR 0039 §9: "`closed` already serves
+  the retiring purpose" — there is no separate archive). It is therefore
+  treated like Learning Content's `archived` and like `draft`: **owner-only**
+  for teachers. That means the owner, while teaching every audience
+  Section.
+- No Student-facing meaning is added. Tier 1 reads of every status are
+  unchanged.
+
+**The formula.** The §36 Learning Content rule applies unchanged under
+`lms.assignments.teacher`, on the School-local current date.
+- **Create:** the owner is the ActingEmployee (any owner field in the
+  request is ignored), with ≥ 1 audience Section, every one taught today.
+  An untaught or elective Offering is 404 (TeachingAssignments are
+  required-only, so electives stay Tier 1); an untaught Section is 422
+  `LMS_AUDIENCE_SECTION_NOT_TAUGHT`.
+- **Write** (edit, publish, close, re-publish):
+  - visible, else 404;
+  - owner, else 403 `ASSIGNMENT_NOT_OWNED`;
+  - every audience Section taught, else 422
+    `ASSIGNMENT_OUTSIDE_TEACHING_ASSIGNMENT`.
+- **Read:** own rows in any status while teaching every Section; a
+  published teacher row for any taught Section; a published Offering-wide
+  row of a taught Offering; anything else is 404.
+- **`due_on` is never an authorization date.** It stays informational and
+  is validated against the Academic Year as before.
+- **Visibility before validation.** The teacher controllers check
+  visibility (fresh) before a write, so the service's pre-transaction
+  `due_on` validation can never reveal a row the teacher may not read.
+
+Co-teaching, hand-over, multi-Section behaviour, immutability and
+revocation are exactly §36's.
+
+**Shared implementation (refactor, behaviour unchanged).**
+- **Scope:** `TeacherLmsScope` (abstract) holds the read rule and the SQL
+  filter. `TeacherLearningContentScope` and `TeacherAssignmentScope` only
+  name their table and bridge.
+- **Guard:** `TeacherLmsGuard` (abstract) holds the create/write rule and
+  the lock order. `TeacherLearningContentGuard` and `TeacherAssignmentGuard`
+  supply the capability, the ownership read and their exceptions.
+- **Contexts:** `TeacherTeachingContexts` is the shared audience-picker
+  projection.
+- Every TCH.5C test passes unchanged.
+
+**Service reuse and lock order.**
+- `AssignmentService::createOwned()` runs the guard first in its
+  transaction, then validates `due_on`, then calls the same private
+  `insert()` as administrative creation.
+- `update()`/`publish()`/`close()` take an optional `AssignmentWriteGuard`,
+  run before the row lock.
+- Lock order is the §36 order: identity → TeachingAssignments in ascending
+  Section id → the `assignments` row → the Document row.
+
+**Documents.** `LmsParentResourceAuthorization` routes each parent kind to
+its own owned capability: Learning Content → `lms.content.teacher`,
+Assignment → `lms.assignments.teacher`.
+- **Read** follows the parent's read rule.
+- **Write** runs a fresh check before storage, then `holdWrite()` inside the
+  Documents transaction.
+- A role holding one kind's capability reaches only that kind's
+  attachments (tested both ways).
+- There is no Submission parent.
+
+**Surfaces.**
+- **API** under `/api/v1/schools/{school}/my/`, all
+  `capability:lms.assignments.teacher` + `private-no-store`, with no
+  Idempotency-Key:
+  - `assignment-contexts`;
+  - `assignments` (GET, POST);
+  - `assignments/{id}` (GET, PATCH);
+  - `…/{id}/publish`, `…/{id}/close`.
+
+  They are in OpenAPI (`MyAssignment`, `MyAssignmentCreateInput`; the
+  contexts reuse `MyLearningContentContext`), with regenerated shared
+  types. The owner Employee is never serialized.
+- **Page** `/app/my-assignments` ("My Assignments"), linked by the
+  capability.
+  - Taught classes only; create for taught Sections, with an optional due
+    date.
+  - Edit, publish and close the teacher's own rows; shared rows are
+    read-only.
+  - No Submission inbox, Student list, grading or attachment UI.
+- **Teacher navigation:** My Curriculum Delivery, My Attendance, My
+  Learning Content, My Assignments.
+
+**Audit and events.** The existing `lms.assignment.*` events. The actor is
+the User; the created event carries `ownerEmployeeId` and
+`audienceSectionIds`. No new event.
+
+**Demo.** Kavya Reddy holds the four capabilities. The demo adds a
+published Offering-wide G8 Mathematics worksheet (School Admin) and her
+own G8-A draft homework, created by her. There is no Submission data.
+
+**Tests.**
+- `TeacherAssignmentAccessTest` (19): §36's matrix, plus `closed` being
+  owner-only, `due_on` independence, the elective boundary, and 404
+  before validation.
+- `TeacherAssignmentDocumentsTest` (6): includes the Learning Content and
+  admin regression, and per-kind capability.
+- `MyAssignmentsUiTest` (4).
+- `TeacherAssignmentConcurrencyTest` (5, real processes):
+  - an edit vs a TeachingAssignment end, and one of two ends;
+  - an attachment vs an end;
+  - a creation vs a suspension, unlink, archive and employment end, in both
+    orders;
+  - the reverse-client-order lock proof.
+- Updated: `TeacherRoleRegistryTest`, `LmsOwnershipArchitectureGuardTest`
+  (shared primitives, Submission excluded, 14 owned operations pinned to
+  OpenAPI), `AssignmentArchitectureGuardTest` (route surfaces),
+  `TeachingAssignmentArchitectureGuardTest`, `MyAttendanceUiTest`,
+  `TeacherLearningContentDocumentsTest` and `DemoDataBuilderTest`.
+- **Test hygiene fix.** The TCH.5C/TCH.5D race tests now delete their whole
+  tenant storage directory. The isolated suite runs as root, and leftover
+  root-owned directories on the bind mount broke host tooling.
+
+**Next:** TCH.6 — TCH closure audit (not implemented).

@@ -3,8 +3,11 @@
 namespace Tests\Concerns;
 
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\LMS\Application\AssignmentService;
 use App\Domain\LMS\Application\LearningContentService;
+use App\Domain\LMS\Application\TeacherAssignmentAccess;
 use App\Domain\LMS\Application\TeacherLearningContentAccess;
+use App\Domain\LMS\Infrastructure\Assignment;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
 use App\Domain\TeachingAssignments\Infrastructure\TeachingAssignment;
@@ -12,7 +15,7 @@ use App\Models\SchoolMembership;
 use App\Models\User;
 
 /**
- * TCH.5C fixtures on top of CreatesLmsOwnershipFixtures' world (a required
+ * TCH.5C/TCH.5D fixtures on top of CreatesLmsOwnershipFixtures' world (a required
  * Offering with active Sections "A" and "B", a sibling Offering, Sections of
  * the wrong grade/campus/year): an administrator holding Tier 1 LMS and
  * TeachingAssignment administration, teachers who teach given Sections from
@@ -93,5 +96,43 @@ trait CreatesTeacherLearningContentFixtures
         $content = $step($content, 'published');
 
         return $status === 'archived' ? $step($content, 'archived') : $content;
+    }
+
+    /** An administrative (Offering-wide) Assignment in the given status (draft, published, closed). */
+    protected function adminAssignment(array $w, string $status = 'published', $offering = null): Assignment
+    {
+        $service = app(AssignmentService::class);
+        $assignment = $service->create($w['school'], ($offering ?? $w['offering'])->id, ['title' => 'School worksheet', 'due_on' => '2026-10-30'], $w['admin']);
+
+        return $this->assignmentToStatus($assignment, $status, fn ($a, $s) => $s === 'published'
+            ? $service->publish($w['school'], $a, $w['admin'])
+            : $service->close($w['school'], $a, $w['admin']));
+    }
+
+    /**
+     * A teacher-owned Assignment created through the owned path.
+     *
+     * @param  list<string>  $sections  keys of $w
+     */
+    protected function teacherAssignment(array $w, User $teacher, array $sections = ['sectionA'], string $status = 'draft'): Assignment
+    {
+        $service = app(AssignmentService::class);
+        $access = app(TeacherAssignmentAccess::class);
+        $assignment = $service->createOwned($w['school'], $w['offering']->id, ['title' => 'My worksheet', 'due_on' => '2026-10-30'],
+            array_map(fn (string $s) => $w[$s]->id, $sections), $teacher, $access->guard($teacher));
+
+        return $this->assignmentToStatus($assignment, $status, fn ($a, $s) => $s === 'published'
+            ? $service->publish($w['school'], $a, $teacher, $access->guard($teacher))
+            : $service->close($w['school'], $a, $teacher, $access->guard($teacher)));
+    }
+
+    private function assignmentToStatus(Assignment $assignment, string $status, callable $step): Assignment
+    {
+        if ($status === 'draft') {
+            return $assignment;
+        }
+        $assignment = $step($assignment, 'published');
+
+        return $status === 'closed' ? $step($assignment, 'closed') : $assignment;
     }
 }

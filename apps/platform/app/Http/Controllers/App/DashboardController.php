@@ -156,6 +156,8 @@ class DashboardController extends Controller
                 'canUseMyAttendance' => $school !== null && $capabilities->canInSchool($user, 'attendance.teacher', $school),
                 // TCH.5C: the owned Learning Content page, by capability (never the role key).
                 'canUseMyLearningContent' => $school !== null && $capabilities->canInSchool($user, 'lms.content.teacher', $school),
+                // TCH.5D: the owned Assignment page, by capability (never the role key).
+                'canUseMyAssignments' => $school !== null && $capabilities->canInSchool($user, 'lms.assignments.teacher', $school),
                 // Phase 9.9: Payroll workspace -- any one of its four
                 // top-level view capabilities is enough to show the entry
                 // point, mirroring Finance/HR's identical "any one view

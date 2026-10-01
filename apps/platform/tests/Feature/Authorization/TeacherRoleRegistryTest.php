@@ -40,8 +40,8 @@ class TeacherRoleRegistryTest extends TestCase
 
         $this->assertTrue($role->is_system);
         $this->assertSame('school', $role->scope);
-        // TCH.3 + TCH.4 + TCH.5C: exactly the three owned-scope capabilities.
-        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.content.teacher'], $this->capabilities('teacher'));
+        // TCH.3 + TCH.4 + TCH.5C + TCH.5D: exactly the four owned-scope capabilities.
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $this->capabilities('teacher'));
         $this->assertSame(1, Role::query()->where('key', 'like', '%teacher%')->count(), 'One Teacher role, no second teacher-like role.');
     }
 
@@ -51,7 +51,7 @@ class TeacherRoleRegistryTest extends TestCase
         $teacher = $this->capabilities('teacher');
 
         foreach (['curriculum.delivery.view', 'curriculum.delivery.manage', 'attendance.view', 'attendance.manage', 'teaching.assignments.view', 'teaching.assignments.manage', 'syllabus.view', 'syllabus.manage',
-            'lms.content.view', 'lms.content.manage', 'lms.assignments.view', 'lms.assignments.manage', 'lms.assignments.teacher', 'students.view'] as $key) {
+            'lms.content.view', 'lms.content.manage', 'lms.assignments.view', 'lms.assignments.manage', 'students.view'] as $key) {
             $this->assertNotContains($key, $teacher);
         }
 
@@ -59,13 +59,13 @@ class TeacherRoleRegistryTest extends TestCase
             $this->assertSame([], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, $prefix))), "No {$prefix}* capability.");
         }
         $this->assertSame(['attendance.teacher'], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, 'attendance.'))), 'Only the owned-scope Attendance capability.');
-        $this->assertSame(['lms.content.teacher'], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, 'lms.'))), 'Only the owned-scope Learning Content capability; no Assignment capability.');
+        $this->assertSame(['lms.assignments.teacher', 'lms.content.teacher'], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, 'lms.'))), 'Only the owned-scope LMS capabilities; no School-wide LMS capability.');
     }
 
     #[Test]
     public function the_owned_capabilities_are_carried_only_by_teacher_and_by_school_admin_for_grantability(): void
     {
-        foreach (['curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher'] as $key) {
+        foreach (['curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher'] as $key) {
             $holders = Role::query()->where('is_system', true)
                 ->whereHas('capabilities', fn ($q) => $q->where('key', $key))
                 ->pluck('key')->sort()->values()->all();
@@ -76,7 +76,7 @@ class TeacherRoleRegistryTest extends TestCase
             $this->assertSame('school', Capability::query()->where('key', $key)->value('namespace'));
         }
 
-        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.content.teacher'], Capability::query()->where('key', 'like', '%.teacher')->orderBy('key')->pluck('key')->all(), 'No Assignment or Timetable *.teacher capability (not adopted).');
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], Capability::query()->where('key', 'like', '%.teacher')->orderBy('key')->pluck('key')->all(), 'No Timetable or other *.teacher capability (not adopted).');
     }
 
     /** @return array{0: User, 1: School} */
@@ -103,6 +103,7 @@ class TeacherRoleRegistryTest extends TestCase
         app(StaffAccessService::class)->grantRole($school, $admin, $membership->id, 'teacher');
         $this->assertTrue(app(CapabilityResolver::class)->canInSchool($staff, 'curriculum.delivery.teacher', $school));
         $this->assertTrue(app(CapabilityResolver::class)->canInSchool($staff, 'lms.content.teacher', $school));
+        $this->assertTrue(app(CapabilityResolver::class)->canInSchool($staff, 'lms.assignments.teacher', $school));
 
         // A role grant creates no Employee link and no TeachingAssignment.
         app(TenantContext::class)->withSchool($school, function () use ($staff) {
@@ -113,6 +114,7 @@ class TeacherRoleRegistryTest extends TestCase
         app(StaffAccessService::class)->revokeRole($school, $admin, $membership->id, 'teacher');
         $this->assertFalse(app(CapabilityResolver::class)->canInSchool($staff, 'curriculum.delivery.teacher', $school), 'The existing cache invalidation applies.');
         $this->assertFalse(app(CapabilityResolver::class)->canInSchool($staff, 'lms.content.teacher', $school), 'Revocation removes LMS teacher access too.');
+        $this->assertFalse(app(CapabilityResolver::class)->canInSchool($staff, 'lms.assignments.teacher', $school));
     }
 
     #[Test]

@@ -310,8 +310,9 @@ active, `internal`-tier only, gated by `lms.content.*`/`lms.assignments.*`.
 Since TCH.5B, Documents asks LMS for that decision through
 `App\Domain\LMS\Application\LmsParentResourceAuthorization`
 (`authorizeRead`/`authorizeWrite`), which applies exactly those Tier 1
-capabilities today. TCH.5C/TCH.5D add the owned (teacher) branch there;
-Documents names no LMS capability, owner or audience.
+capabilities first; TCH.5C (Learning Content) and TCH.5D (Assignments) added
+the owned (teacher) branch there, per parent kind. Documents names no LMS
+capability, owner or audience.
 
 **`submission_id` — CANCELLED, not added, must not be added.** It was
 previously named as an approved-but-not-yet-implemented future owner
@@ -485,11 +486,9 @@ exists anywhere in `learning_content` (architecture-guard-tested).
     Sensitive when the persistence lands.
   - **Sequence.** TCH.5B persistence foundation (closed) → TCH.5C Learning
     Content adoption (`lms.content.teacher`, implemented) → TCH.5D
-    Assignment adoption (`lms.assignments.teacher`, next, not implemented).
+    Assignment adoption (`lms.assignments.teacher`, implemented, §17).
 
-  Assignments stay capability-only (§7): no `lms.assignments.teacher`
-  exists. Independent of Submission's cancellation, which TCH does not
-  reopen.
+  Independent of Submission's cancellation, which TCH does not reopen.
 - **SyllabusUnit/CurriculumDelivery references from LMS**: purely
   additive, nullable, not yet needed.
 - **External LMS integration/standards**: unscoped; requires its own
@@ -514,17 +513,15 @@ Every Learning Content and Assignment row is in exactly one state:
     have forced RLS.
 - **Existing rows.** Every existing row, and every row the administrative
   surfaces create, is Offering-wide. Nothing was backfilled.
-- **Reachability.** Teacher-owned **Learning Content** is created by
-  teachers since TCH.5C (§16). Teacher-owned **Assignments** are
-  foundation only, not reachable through teacher authorization, until
-  TCH.5D. No transport ever accepts an owner: it is always the
-  ActingEmployee.
+- **Reachability.** Teachers create teacher-owned Learning Content since
+  TCH.5C (§16) and teacher-owned Assignments since TCH.5D (§17). No
+  transport ever accepts an owner: it is always the ActingEmployee.
 - **Classification.** Both resources are Sensitive since TCH.5B.
 
 ## 16. Owned teacher Learning Content (TCH.5C, ADR 0063 §36)
 
-**Learning Content teacher adoption is implemented. Assignment teacher
-access remains unimplemented. Submission remains cancelled.**
+**Learning Content teacher adoption is implemented** (Assignments: §17).
+**Submission remains cancelled.**
 
 | | Tier 1 (unchanged) | Tier 2 (teacher) |
 |---|---|---|
@@ -555,3 +552,34 @@ access remains unimplemented. Submission remains cancelled.**
   - Only an owner who teaches every audience Section may upload or archive.
   - Assignment attachments stay Tier 1.
 - **Classification.** Sensitive, unchanged since TCH.5B. No new legal gate.
+
+## 17. Owned teacher Assignments (TCH.5D, ADR 0063 §37)
+
+**Learning Content teacher adoption is implemented. Assignment teacher
+adoption is implemented. LMS Submission remains cancelled and outside
+TCH.**
+
+Assignments follow §16's rule exactly, under `lms.assignments.teacher`;
+Tier 1 `lms.assignments.view/.manage` is unchanged.
+
+- **Lifecycle unchanged.** `draft → published → closed → published`.
+  Re-publication is the same publish action, and it needs a due date.
+- **Shared status: `published` only.** `closed` is the retiring state
+  (ADR 0039 §9), so a teacher's closed or draft Assignment is visible only
+  to its owner, while they teach every audience Section. Admin draft and
+  closed Assignments are never teacher-visible.
+- **`due_on` is informational.** It never decides authority: the
+  School-local current date does.
+- **Electives.** TeachingAssignments cover required Offerings only, so
+  elective Assignments have no teacher path and stay Tier 1.
+- **API** `/api/v1/schools/{school}/my/assignment-contexts`,
+  `/my/assignments` (GET, POST), `/my/assignments/{id}` (GET, PATCH) and
+  `…/publish`, `…/close`.
+  - All carry `capability:lms.assignments.teacher` + `private-no-store`.
+  - Non-disclosing 404s, decided before any field validation.
+- **Page** `/app/my-assignments` ("My Assignments"), linked by the
+  capability.
+- **Attachments** follow the parent Assignment through
+  `LmsParentResourceAuthorization`. Each parent kind needs its own owned
+  capability.
+- **Excluded.** No Student, Submission, mark, grade or feedback anywhere.

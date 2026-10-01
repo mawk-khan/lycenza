@@ -131,7 +131,7 @@ final class DemoAccountCatalog
             ['Platform Admin', 'platform.admin@example.test', 'Platform scope: elevated School entry (opens no School page), School Groups, platform audit log (needs MFA), Platform Auditor grants; no School membership.'],
             ['Platform Auditor', 'platform.auditor@example.test', 'Platform scope, review only: the platform audit log (enroll MFA first); no School, Group or other platform action.'],
             ['Group Admin', 'group.admin@example.test', 'Group scope only: views the Lycenza Demo Trust and its two Schools, enters one via elevated access (MFA required); no School permission.'],
-            ['Teacher', 'teacher@example.test', 'Teacher role, linked to an Employee: My Curriculum Delivery, My Attendance and My Learning Content for the one class she is assigned (G8-A Mathematics); every other module is 403.'],
+            ['Teacher', 'teacher@example.test', 'Teacher role, linked to an Employee: My Curriculum Delivery, My Attendance, My Learning Content and My Assignments for the one class she is assigned (G8-A Mathematics); every other module is 403.'],
             ['Student', 'student@example.test', 'Linked Student account: no student portal exists; modules are 403.'],
             ['Guardian', 'guardian01@example.test', 'Activated Guardian account: no parent portal exists; modules are 403.'],
         ];

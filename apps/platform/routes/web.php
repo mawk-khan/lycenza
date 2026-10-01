@@ -83,6 +83,7 @@ use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
 use App\Http\Controllers\App\LMS\AssignmentController as LmsAssignmentController;
 use App\Http\Controllers\App\LMS\LearningContentController as LmsLearningContentController;
+use App\Http\Controllers\App\LMS\MyAssignmentController;
 use App\Http\Controllers\App\LMS\MyLearningContentController;
 use App\Http\Controllers\App\Payroll\CompensationController as PayrollCompensationController;
 use App\Http\Controllers\App\Payroll\PayrollAccountingConfigurationController;
@@ -1422,6 +1423,17 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::patch('/{learningContent}', [LmsLearningContentController::class, 'update'])->name('update');
         Route::post('/{learningContent}/publish', [LmsLearningContentController::class, 'publish'])->name('publish');
         Route::post('/{learningContent}/archive', [LmsLearningContentController::class, 'archive'])->name('archive');
+    });
+
+    // TCH.5D (ADR 0063 section 37) -- "My Assignments": the owned teacher
+    // Assignment surface (the "My Learning Content" pattern). Authorization
+    // lives in TeacherAssignmentAccess and the service's write guard.
+    Route::prefix('app/my-assignments')->name('app.my-assignments.')->group(function (): void {
+        Route::get('/', [MyAssignmentController::class, 'index'])->name('index');
+        Route::post('/', [MyAssignmentController::class, 'store'])->name('store');
+        Route::patch('/{assignment}', [MyAssignmentController::class, 'update'])->name('update');
+        Route::post('/{assignment}/publish', [MyAssignmentController::class, 'publish'])->name('publish');
+        Route::post('/{assignment}/close', [MyAssignmentController::class, 'close'])->name('close');
     });
 
     // Phase 0I.3 -- the administrative Assignment surface (ADR 0039),
