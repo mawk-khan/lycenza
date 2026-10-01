@@ -890,7 +890,10 @@ determination.**
   other three owned-scope capabilities. Until E33 is answered, granting that
   role in production would also enable teacher Attendance, and no other
   system role carries the other three. ADR 0063 §39.3 records the decision
-  this leaves to the owner.
+  this leaves to the owner. **Decided 2026-10-01 (ADR 0063 §40):** no
+  production `teacher` role grants while E33 is OPEN, and no role split or
+  Attendance gate. E33's resolution is what permits that role in
+  production, subject to E21 and the rest of O1.
 - **E21 is unchanged.** "Others used in v1" in E21 includes TCH's
   authority-bearing history:
   - link history (audit only);

@@ -9,7 +9,8 @@
   (retention) stays open. TCH.6 found and fixed one closure defect
   (non-identical not-found bodies, §38.3). **Production readiness (§39):
   PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — TCH-L1 (ADR 0058
-  E33) and E21. **LMS Submission remains cancelled and outside TCH.**
+  E33) and E21. **Owner decision (§40): no production `teacher` role grants
+  while TCH-L1 / E33 is OPEN.** **LMS Submission remains cancelled and outside TCH.**
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -2453,9 +2454,9 @@ clearance.
 
 | Item | Type | TCH-specific? | Blocks |
 |---|---|---|---|
-| TCH-L1 (ADR 0058 E33) | Legal/compliance decision required | Yes | Production use of the `attendance.teacher` surface (§39.3) |
+| TCH-L1 (ADR 0058 E33) | Legal/compliance decision required | Yes | Production use of the `attendance.teacher` surface, and so (§40) any production `teacher` role grant |
 | E21 | Legal retention-policy decision required (an external policy decision; any later purge is owning-module implementation) | No — platform-wide; TCH history is part of "others used in v1" | ADR 0058 O1, and so any production deployment decision (ADR 0058 §2, §4.12) |
-| Role-bundle coupling (§39.3) | Owner/product decision on how to operate before TCH-L1 | Yes | Only granting `teacher` in production before E33 |
+| Role-bundle coupling (§39.3) | Owner/product decision — **RESOLVED by §40** (no production `teacher` grants while E33 is open; no role split or gate) | Yes | — (decided) |
 | Technical implementation | None required | — | — |
 | Documentation | Done by this section (ADR 0058 E33 + Note; roadmap; ATTENDANCE.md) | — | — |
 
@@ -2558,6 +2559,9 @@ either:
 
 Option (b) would be new work under its own approval. **This audit implements
 neither.**
+
+**Resolved (owner decision, 2026-10-01, §40): option (a).** There are no
+production `teacher` grants while E33 is open, and option (b) is declined.
 
 ### 39.4 The TCH-L1 decision record the authorized reviewer must complete
 
@@ -2709,15 +2713,77 @@ fixed here):
 |---|---|---|---|---|---|
 | ActingEmployee identity | Yes | Yes | E21 (link history via audit) | E21 (platform-wide) | Legal + Owner: E21 |
 | TeachingAssignment administration | Yes | Yes | E21 | E21 (platform-wide) | Legal + Owner: E21 |
-| Curriculum Delivery teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); granting `teacher` in production before E33 also enables Attendance (§39.3) | Owner: §39.3; Legal: E21 |
+| Curriculum Delivery teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); no production `teacher` grant while E33 is open (§40) | Legal: E33, then E21 |
 | **Attendance teacher access** | Yes | Yes | **TCH-L1 (E33)**; E21 | **Yes — E33**; E21 | Legal + Owner: §39.4 record |
-| Learning Content teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); §39.3 coupling | Owner: §39.3; Legal: E21 |
-| Assignment teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); §39.3 coupling | Owner: §39.3; Legal: E21 |
+| Learning Content teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); no production `teacher` grant while E33 is open (§40) | Legal: E33, then E21 |
+| Assignment teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); no production `teacher` grant while E33 is open (§40) | Legal: E33, then E21 |
 | E21 historical retention | n/a (no purge built, by design) | Immutability and delete protection as in §39.5 | **Yes** — §39.5 questions | Yes (O1, platform-wide) | Legal + Owner |
 
 **Required external decisions:**
 1. **TCH-L1 / E33:** the §39.4 record.
-2. **The operating choice before E33:** §39.3 (a) or (b).
+2. ~~**The operating choice before E33:** §39.3 (a) or (b).~~ **Decided by
+   the owner (§40): (a).**
 3. **E21:** the §39.5 questions, together with ADR 0042 items 4–6.
 
-None is answered here.
+Items 1 and 3 are not answered here.
+
+## 40. Owner decision — no production Teacher-role grants while TCH-L1 is open (2026-10-01)
+
+**Status: DECIDED (owner, 2026-10-01; docs only).** This resolves §39.3. No
+application code, capability, role, seed, route or test changes.
+
+**Decision.** While TCH-L1 / ADR 0058 **E33** is OPEN, production must not
+grant the `teacher` system role to any user. No role split and no
+Attendance feature gate is introduced to work around the open legal
+determination.
+
+**Reasons:**
+- The production `teacher` role intentionally represents the complete
+  adopted bundle: `curriculum.delivery.teacher`, `attendance.teacher`,
+  `lms.content.teacher` and `lms.assignments.teacher`. Granting it while
+  TCH-L1 is unresolved would enable teacher Attendance.
+- TCH-L1 is an external approval gate, not a missing technical control.
+- E21 independently blocks platform production sign-off (ADR 0058 O1), so
+  extra role or gate engineering would enable nothing in production now.
+
+**State:**
+
+| Question | Answer |
+|---|---|
+| Teacher role technically implemented | **YES** |
+| Teacher role technically production-capable | **YES** |
+| Teacher role currently permitted to be granted in production | **NO** |
+| Reason | TCH-L1 / E33 remains **OPEN** |
+| Technical feature deficiency | **NO** |
+| External decision required | **YES** (E33; and E21 for platform sign-off) |
+
+**Production role-grant rule:**
+
+| Situation | Rule |
+|---|---|
+| Development, demo, test | The existing `teacher` role continues unchanged. |
+| Production while E33 / TCH-L1 is OPEN | **Do not grant the `teacher` role.** |
+| TCH-L1 APPROVED | The existing role may be granted unchanged, subject to E21 and the platform production checklist (ADR 0058). |
+| TCH-L1 APPROVED WITH CONDITIONS | Evaluate the recorded conditions before enabling the role. Add controls only if the determination actually requires them. |
+| TCH-L1 REJECTED | Do not silently alter the existing role. Open a new, explicit product/architecture decision for the future production Teacher-role model. |
+
+**Not implemented, by decision:**
+- no `teacher_without_attendance`, `teacher_lms`, `teacher_academics` or
+  other production-only role or bundle;
+- no feature flag for `attendance.teacher`;
+- no environment-conditional capability seeding;
+- no role-name authorization.
+
+The Teacher capability bundle and the Curriculum Delivery, Attendance,
+Learning Content and Assignment authorization are unchanged.
+
+**Enforcement.** This rule is enforced by process, like E33 itself (§39.2):
+the operator and the School administrators who grant roles follow it. No
+code enforces it.
+
+**Still external, unanswered here:**
+- **E33 / TCH-L1** is OPEN. The authorized legal/compliance reviewer records
+  APPROVED, REJECTED or APPROVED WITH CONDITIONS in the §39.4 record.
+- **E21** is OPEN and platform-wide. It covers the §39.5 questions and ADR
+  0042 items 4–6. No retention duration, purge schedule, erasure policy,
+  tenant-deletion retention or audit duration is invented.

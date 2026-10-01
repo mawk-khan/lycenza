@@ -249,7 +249,10 @@ and `lms.assignments.teacher`:
 - It is a bundle, never a check: no code tests the role key, and any role
   carrying the capability behaves identically.
 - On its own it reaches nothing.
-- It is granted and revoked through the ordinary staff role path.
+- It is granted and revoked through the ordinary staff role path. **In
+  production it is not granted while TCH-L1 / ADR 0058 E33 is OPEN** (owner
+  decision, ADR 0063 §40). The rule is enforced by process; it is not a
+  missing technical control.
 - `school_admin` also holds all four capabilities, only so it can grant the
   role under the no-escalation rule.
 

@@ -72,6 +72,10 @@ an account that was never activated.
   pending per address.
 - **Roles** come only from the School role catalog, and only ones whose
   permissions you hold yourself.
+- **Production: do not grant the `teacher` role** while TCH-L1 / ADR 0058
+  E33 is OPEN (owner decision, ADR 0063 §40). The role also enables
+  teacher Attendance, which awaits a legal/compliance determination.
+  Development and demo environments are unaffected.
 - **Accepting an invitation.**
   - A new person chooses a name and password.
   - A person with an existing account signs in first, then opens the link
