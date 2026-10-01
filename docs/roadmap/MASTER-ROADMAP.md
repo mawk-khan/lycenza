@@ -2201,6 +2201,11 @@ parallel, and the email provider tail) — not started.
   adapter.
 - **Can start now:** E03 (protect `main`), E16 (the exception clock) and
   E17/E21 (decisions).
+- **E21.2 — Retention policy adopted for implementation (2026-10-01):**
+  `docs/security/E21-RETENTION-DETERMINATION.md`. It is project-adopted and
+  pending final legal/compliance ratification. Engineering is E21.2A
+  (operational pruning), then E21.2B–F, then the E21.2G audit. **E21 stays
+  OPEN** and O1 stays blocked.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**
   published / closed. It inventoried every v1 category and recorded 14 open
   decisions with neutral options, a determination template and no immediate

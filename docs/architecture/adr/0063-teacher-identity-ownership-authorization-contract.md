@@ -2621,7 +2621,7 @@ anywhere):
 | LMS Section audiences | Sensitive | trigger; append-only | **revoked** (with UPDATE) | NO ACTION; School CASCADE | the rows | yes |
 | `attendance_sessions` / `attendance_records` | Sensitive | no trigger. The header is immutable by service. A record's `status` is overwritten on correction (no corrector column) | granted; no app delete path | RESTRICT to Employee, user, entry and enrollment; School CASCADE | the rows. The previous status and the corrector are **audit only** | yes |
 | `curriculum_deliveries` | Confidential | lifecycle by CAS; dates correctable | granted; no app delete path | RESTRICT; School CASCADE | the rows. The actor is **audit only** | yes |
-| `membership_role_assignments` (Teacher grants) | — | history guard; revoke, never delete | **revoked** | membership CASCADE; grantor and revoker users SET NULL | the rows | yes |
+| `membership_role_assignments` (Teacher grants) | — | history guard; revoke, never delete | **revoked** | membership CASCADE; grantor and revoker declared `ON DELETE SET NULL`, **but the history guard refuses that change, so deleting a grantor or revoker User is refused** (corrected by E21.2) | the rows | yes |
 | `school_audit_events` / `platform_audit_events` | (ADR 0042 open item 1) | append-only | **revoked** (with UPDATE) | actor users **SET NULL**; school audit School **CASCADE** | permanent today | yes |
 
 **Lifecycle analysis (production paths only).**

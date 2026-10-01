@@ -100,6 +100,11 @@ file. `documents` is the only table this checkpoint adds.
   `active`. Never hard-deleted once created (rule 73's reference-
   entity-lifecycle pattern) — there is no delete path in this
   checkpoint at all, only the schema's own archival shape.
+  *Clarification (E21.2):* "never hard-deleted" means **no application
+  path** deletes a Document. It is not a database guarantee: the runtime
+  role still holds DELETE on `documents`, and every owner foreign key is
+  `ON DELETE CASCADE`. Retention-driven deletion follows E21-D5 (inherit
+  the owner's period; metadata and bytes together).
 
 ### Owning-entity boundary — the dangerous conflation this checkpoint had to resolve
 

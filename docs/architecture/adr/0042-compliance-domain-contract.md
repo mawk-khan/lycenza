@@ -218,6 +218,14 @@ gate (§13 items 4–5).
 decisions E21-D1, E21-D10 and E21-D11 in
 `docs/security/E21-RETENTION-DECISION-REQUEST.md`, the issued ADR 0058 E21
 decision request. Nothing is decided there, and this section is unchanged.
+*Update (E21.2, 2026-10-01):* the owner adopted a provisional policy for
+implementation, `docs/security/E21-RETENTION-DETERMINATION.md`:
+- audit: 7 years from the event, with an append-only, hold-aware expiry;
+- erasure: reviewed cases only;
+- tenant closure: no raw School delete.
+
+Final legal ratification is pending, and Compliance still deletes nothing
+itself: the owning modules implement it.
 
 ### 8. Exports and regulatory filings
 

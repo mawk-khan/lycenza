@@ -454,6 +454,21 @@ Student/Guardian data, Group/elevation history and statutory records
 (PHASE-0L-CLOSEOUT §6.2 **[LEGAL REVIEW REQUIRED]**). This ADR claims
 nothing about the legality of hard deletion.
 
+*Correction (E21.2, 2026-10-01, verified in the migrations):*
+- The "147 foreign keys" count is out of date: most tenant tables'
+  `school_id` foreign keys CASCADE, and their number grows with each
+  module.
+- `school_elevations.school_id` and `school_domains.school_id` are
+  **RESTRICT**. So a School with any elevation or domain row cannot be
+  deleted even administratively, and elevation and domain history do not
+  cascade away.
+- The runtime role cannot delete a School at all: DELETE is revoked, and
+  there is no `archived` transition.
+- Tenant closure is now defined by E21-D11
+  (`docs/security/E21-RETENTION-DETERMINATION.md`): freeze, archive, retain
+  per category, controlled purge. Raw School deletion is never the closure
+  workflow.
+
 Smallest database safeguard (Phase 0N.9), evaluated:
 
 | Option | Verdict |

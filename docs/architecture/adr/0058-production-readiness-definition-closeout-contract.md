@@ -937,3 +937,25 @@ No period, purge or legal basis was set.
   alone.
 - **Independence.** E21 and E33 (TCH-L1) stay separate rows. E30 is the
   receipt form, not retention.
+
+## Note — E21 policy adopted for implementation (E21.2, 2026-10-01)
+
+**E21 stays `LEGAL_REVIEW_REQUIRED` and still blocks O1.** Its state is now
+three separate things:
+1. **Owner policy: DECIDED, provisionally.**
+   `docs/security/E21-RETENTION-DETERMINATION.md` records a project-adopted
+   period, trigger and action for each of E21-D0–D13. It is not a legal
+   opinion and claims no statutory period.
+2. **Engineering: IN PROGRESS.**
+   - E21.2A (mail L1–L4 and periods, webhooks, outbox, failed jobs, the
+     School hold seam) implements the existing settings and prune paths
+     this row requires.
+   - E21.2B–F implement the remaining finite periods (D0: finite periods
+     must be enforceable before technical closeout).
+   - E21.2G is the closure audit.
+3. **Final legal/compliance ratification: PENDING.** The final
+   pre-production review may amend the policy, and any amendment is
+   implemented before O1 clears (determination §7).
+
+E21 moves only by a dated, reviewed change after items 2 and 3 are done.
+E33 (TCH-L1) is unaffected and still blocks production `teacher` grants.

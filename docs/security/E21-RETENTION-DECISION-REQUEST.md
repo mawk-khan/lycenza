@@ -1,6 +1,13 @@
 # E21 — Production Retention Decision Request (as issued)
 
-> ## STATUS: OPEN — OWNER / LEGAL / COMPLIANCE DECISIONS REQUIRED
+> ## STATUS (2026-10-01, E21.2): ANSWERED FOR IMPLEMENTATION — PENDING FINAL LEGAL/COMPLIANCE RATIFICATION
+>
+> The owner adopted a provisional policy for every decision E21-D0–D13 in
+> `docs/security/E21-RETENTION-DETERMINATION.md` (project-adopted, not a
+> legal opinion). E21 stays open until that policy is implemented and
+> ratified. The original request text below is unchanged.
+>
+> ## Original status: OPEN — OWNER / LEGAL / COMPLIANCE DECISIONS REQUIRED
 >
 > This document is the E21.1 evidence audit and decision contract
 > (2026-10-01, baseline `dbcf4ff`). It is a **request**, not a decision.
@@ -187,25 +194,28 @@ Recorded, not silently reconciled:
     administratively;
   - a static count of `school_id` CASCADE FKs is about 172.
 
-  This is fail-closed and needs no code change. Correct it in ADR 0047 when
-  D11 is decided.
+  This is fail-closed and needs no code change. *(Corrected in ADR 0047
+  §12 by E21.2.)*
 - **C2 — `DOCUMENTS.md`, "Never hard-deleted".**
   - This holds for every application path, but `documents` keeps the
     runtime DELETE grant and every owner FK is CASCADE.
   - An out-of-band owner delete would drop the metadata and orphan the
     bytes.
-  - It is latent (no app path) and feeds D5/D11.
+  - It is latent (no app path) and feeds D5/D11. *(Clarified in
+    `DOCUMENTS.md` by E21.2.)*
 - **C3 — `membership_role_assignments.assigned_by/revoked_by_user_id`.**
   - These are `ON DELETE SET NULL`, but the history guard refuses that
     change, so a User delete is refused rather than nulled.
-  - It is fail-closed and feeds D10.
+  - It is fail-closed and feeds D10. *(ADR 0063 §39.5 corrected by
+    E21.2.)*
 - **C4 — `docs/modules/COMPLIANCE.md` "Retention" row.** It listed two
   prunes and said "Nothing else is pruned". **Corrected by E21.1**: the
   account-recovery, staff-credential and email prunes exist.
 - **C5 — Logs.** `DATA-CLASSIFICATION.md` says "logs 30 days, metrics 90
   days" flatly, while ADR 0051 states them as minimums with no maximum.
-  `config/logging.php`'s unused `daily` channel keeps 14 files. Left for
-  D13, where the maximum is decided.
+  `config/logging.php`'s unused `daily` channel keeps 14 files. *(Resolved
+  by E21.2: DATA-CLASSIFICATION now separates the ADR 0051 minimums from
+  the adopted D13 maxima.)*
 - **C6 — `LMS-SUBMISSION-LEGAL-REVIEW.md`.** Its "no hits for erasure /
   anonymiz" is a dated point-in-time search. It is historical and
   unchanged.

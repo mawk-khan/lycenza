@@ -48,8 +48,9 @@ protection ☐ · 35-day retention ☐ · first restore drill scheduled ☐.
    separate encrypted destination under separate administrative control —
    with RPO ≤ 24 hours, so recovery never depends on the live bucket's own
    history.
-3. Lifecycle rules never expire current objects, or noncurrent versions of
-   records whose legal retention is unresolved.
+3. Lifecycle rules never expire current objects. Noncurrent (deleted or
+   overwritten) versions expire after at most 35 days (E21-D12,
+   project-adopted, pending legal ratification; ADR 0050 §8 amendment).
 4. `console platform:verify-storage` checks what the S3 API can prove
    (reachability, versioning, default encryption, public-access block);
    the independent copy is always `OPERATOR_EVIDENCE_REQUIRED` — record it

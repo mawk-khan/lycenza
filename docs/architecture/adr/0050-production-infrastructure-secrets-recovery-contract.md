@@ -269,6 +269,10 @@ S3-compatible, vendor-neutral, and:
 - **Lifecycle:** no rule may expire current objects or noncurrent versions
   of records whose legal retention is unresolved (the retention gate stays
   authoritative). Operational version retention is not legal retention.
+  *Amended (E21.2, 2026-10-01; E21-D12, project-adopted, pending legal
+  ratification):* noncurrent (deleted or overwritten) object versions may
+  expire after at most **35 days**. Current objects are still never expired
+  by lifecycle; their deletion follows database eligibility only (E21-D5).
 
 This is compatible with the application as built: it writes, reads and
 deletes by key only and never sets visibility or generates URLs.
