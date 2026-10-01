@@ -36,7 +36,7 @@ class RetentionExpiryFunctionsTest extends TestCase
     {
         $school = $this->createSchool();
 
-        foreach (['school_audit_events', 'membership_role_assignments', 'teaching_assignments'] as $table) {
+        foreach (['school_audit_events', 'membership_role_assignments', 'teaching_assignments', 'communication_delivery_policy_decisions'] as $table) {
             app(TenantContext::class)->withSchool($school, fn () => $this->refused(fn () => DB::table($table)->where('school_id', $school->id)->delete(), 'permission denied'));
         }
         foreach (['platform_audit_events', 'email_suppressions', 'school_elevations', 'group_role_assignments', 'platform_role_assignments'] as $table) {
@@ -60,7 +60,11 @@ class RetentionExpiryFunctionsTest extends TestCase
         $this->refused(fn () => DB::select('select retention_expire_platform_audit_events(?, 10, false)', [$young]), 'retention_floor');
         $this->refused(fn () => DB::select('select retention_expire_group_role_assignments(?, 10, false)', [$young]), 'retention_floor');
         $this->refused(fn () => DB::select('select retention_expire_platform_role_assignments(?, 10, false)', [$young]), 'retention_floor');
-        // One year for released suppressions.
+        // One year for released suppressions and (E21.2C) delivery policy decisions.
+        app(TenantContext::class)->withSchool($school, fn () => $this->refused(
+            fn () => DB::select('select retention_expire_communication_delivery_policy_decisions(?, ?, 10, false)', [$school->id, now('UTC')->subYear()->addDay()->format('Y-m-d H:i:s')]),
+            'retention_floor',
+        ));
         $this->refused(fn () => DB::select('select retention_expire_released_email_suppressions(?, 10, false)', [now('UTC')->subYear()->addDay()->format('Y-m-d H:i:s')]), 'retention_floor');
     }
 
@@ -75,6 +79,10 @@ class RetentionExpiryFunctionsTest extends TestCase
         $this->refused(fn () => DB::select('select retention_expire_school_audit_events(?, ?, 10, false)', [$a->id, $old]), 'retention_tenant');
         app(TenantContext::class)->withSchool($b, fn () => $this->refused(
             fn () => DB::select('select retention_expire_school_audit_events(?, ?, 10, false)', [$a->id, $old]),
+            'retention_tenant',
+        ));
+        app(TenantContext::class)->withSchool($b, fn () => $this->refused(
+            fn () => DB::select('select retention_expire_communication_delivery_policy_decisions(?, ?, 10, false)', [$a->id, $old]),
             'retention_tenant',
         ));
     }

@@ -47,6 +47,8 @@ class DatabaseRoleVerifier
         'retention_expire_released_email_suppressions', 'retention_expire_membership_role_assignments',
         'retention_expire_teaching_assignments', 'retention_expire_school_elevations',
         'retention_expire_group_role_assignments', 'retention_expire_platform_role_assignments',
+        // E21.2C
+        'retention_expire_communication_delivery_policy_decisions',
     ];
 
     /**

@@ -310,6 +310,23 @@ email recovery.
     ratification).
   - **Holds.** `RETENTION_HOLD_PLATFORM=true` holds every School-less
     record.
+- **E21.2C retention (2026-10-01):**
+  - **New daily tasks:** `communications-prune` (03:40) and
+    `storage-orphans-prune` (04:10).
+  - **Privilege model.** Communications content and deliveries are
+    ordinary School rows, deleted under RLS. Append-only delivery policy
+    decisions use one more narrow function from migration
+    `2026_11_07_090000` (`retention_functions_narrow` covers it).
+  - **Production sets** `COMMUNICATIONS_CONTENT_RETENTION_YEARS=3`,
+    `COMMUNICATIONS_DELIVERY_RETENTION_YEARS=1` and
+    `STORAGE_ORPHAN_RETENTION_DAYS=30` (project-adopted, pending
+    ratification). `RETENTION_ORPHAN_SCAN_LIMIT` defaults to 10000.
+  - **Documents are never purged by age.** Every owner type is deferred to
+    E21.2D/E21.2E. Object-store lifecycle expiry of current objects stays
+    disabled (D5/D12).
+  - **Before enabling,** run both with `--dry-run` and review the
+    `unresolved` count: a School whose Academic Years leave gaps or overlap
+    keeps that content until its calendar is corrected.
 
 ## 6. Seeding: production-safe versus demo
 

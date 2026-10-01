@@ -147,6 +147,21 @@ Schedule::command('platform:authority-history-prune')
     ->withoutOverlapping()
     ->name('authority-history-prune');
 
+// E21.2C (E21-D3/D5, project-adopted, pending legal ratification):
+// Communications content and delivery telemetry, then proven orphan
+// objects. The orphan run comes after, so attachment bytes whose delete
+// failed during the Communications purge are retried the same night.
+// Neither has a default: until configured each deletes nothing.
+Schedule::command('platform:communications-prune')
+    ->dailyAt('03:40')
+    ->withoutOverlapping()
+    ->name('communications-prune');
+
+Schedule::command('platform:storage-orphans-prune')
+    ->dailyAt('04:10')
+    ->withoutOverlapping()
+    ->name('storage-orphans-prune');
+
 // Phase 0O.10A (ADR 0056 section 13): ended password-recovery credentials
 // are deleted 24 hours later (technical data; the audit is separate).
 Schedule::command('platform:account-recovery-prune')

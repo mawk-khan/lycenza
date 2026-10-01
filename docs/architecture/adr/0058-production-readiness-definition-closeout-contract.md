@@ -990,3 +990,18 @@ role, which still holds no DELETE on any protected ledger
 (`DatabaseRoleVerifier`, `retention_functions_narrow`). LMS owner/audience
 stays with its parent resource. Remaining: E21.2C–F, then E21.2G and final
 ratification.
+
+## Note — E21.2C Communications and Documents retention (2026-10-01)
+
+**E21 stays `LEGAL_REVIEW_REQUIRED`.** E21.2C implemented the project-adopted
+periods for:
+- **D3 Communications:** content 3 years after the end of the Academic Year
+  in which it was sent (ambiguous year fails closed), delivery telemetry
+  1 year after the terminal state;
+- **D5 Documents:** inherited retention as a closed deferral (no Document is
+  purge-eligible until E21.2D/E21.2E decide its owner), and proven orphan
+  objects after 30 days.
+
+Append-only policy decisions use one more narrow retention function. The
+runtime role still holds no DELETE on any protected ledger. Remaining:
+E21.2D–F, then E21.2G and final ratification.

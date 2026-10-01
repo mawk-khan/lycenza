@@ -550,3 +550,14 @@ Phase 5A.7 candidates, in order of recommendation:
    turned on.
 
 This is a recommendation only — Phase 5A.7 has not been started.
+
+## Retention (E21.2C, 2026-10-01)
+
+Attachments follow their communication (E21-D3,
+`docs/security/E21-RETENTION-DETERMINATION.md`). `platform:communications-prune`
+deletes an announcement or thread, with its attachment rows, 3 years after
+the end of the Academic Year in which it was sent. The bytes are deleted
+after the commit. A failed byte delete is retried by
+`platform:storage-orphans-prune` once the object is 30 days old. Delivery
+telemetry expires 1 year after its terminal state; recipients and audience
+snapshots stay with their content.

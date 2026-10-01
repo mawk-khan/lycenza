@@ -170,7 +170,41 @@ The checkpoints are listed in §5.
     needs longer.
 - **Exception:** evidence still referenced by another retained record (for
   example consent events) is not deleted.
-- **Class B → E21.2C.**
+- **Class B → E21.2C, IMPLEMENTED.** `platform:communications-prune`
+  (`--only=content|deliveries`, `--dry-run`), with
+  `COMMUNICATIONS_CONTENT_RETENTION_YEARS=3` and
+  `COMMUNICATIONS_DELIVERY_RETENTION_YEARS=1`:
+
+  | Unit | Trigger | Purged with it | Fails closed when |
+  |---|---|---|---|
+  | Published announcement | the School-local date of `published_at` → the end of the one Academic Year containing it | its message, recipients, deliveries, attempts, policy decisions, audience, channels, cohorts, approval requests, attachments (metadata, then bytes) | the date is in no year or in two (`unresolved`, kept) |
+  | Thread | every message's School-local `created_at`; the LATEST year end wins | participants, messages and everything under them, attachments | any message date is in no year or in two (`unresolved`, kept) |
+  | Delivery (telemetry) | `greatest(delivered_at, read_at, failed_at)` for `delivered`/`read`/`failed`/`bounced`/`rejected`/`expired` | its attempts | never pending/queued/sending/accepted/sent |
+  | Policy decision | `created_at` (final when written) | — | through the narrow retention function (§5.1), 1-year database floor |
+
+  - **The Academic Year is the one that contains the sent date**, never
+    today's active year. Both ends are inclusive. A gap or an overlap
+    (non-overlap is an application rule only) keeps the unit.
+  - **Boundary:** strict. A unit whose year ended exactly on the cutoff
+    date is kept. Calendar years, with no 29 February overflow.
+  - **Concurrency:** each purge locks its unit row and recomputes
+    eligibility after the lock. A message committed into a thread during
+    the purge keeps the thread, and a message arriving after the purge
+    is refused by its FK. Both orders are proven with two real processes.
+  - **Bytes after metadata:** attachment bytes are deleted only after the
+    database commit. A failed byte delete leaves an unreferenced object
+    that the orphan run (D5) removes (`byte delete errors` count).
+  - **Recorded gaps (kept, never guessed):**
+    - a never-sent announcement (no `published_at`/message) and a thread
+      with no message have no sent anchor (`never sent`, kept);
+    - a `cancelled` delivery records no terminal time (`no terminal time`,
+      kept);
+    - consent events and domain preferences are consent evidence, not
+      content. No content purge reaches them (no FK), and they are kept.
+      No adopted decision names their period, so it is recorded for the
+      E21.2G closure audit, never guessed here;
+    - the Phase 0 `notifications` table is outside D3. It is noted for
+      the E21.2G closure audit.
 
 ### E21-D4 — Webhook delivery history and outbox
 
@@ -203,11 +237,33 @@ The checkpoints are listed in §5.
   - Archived Documents are never globally purged by a single age.
   - Object-storage lifecycle expiry is never enabled independently of
     database eligibility (current objects).
-- **Class C (inherited) → E21.2C.** Eligibility comes from owner type,
-  owner retention and hold.
-- **Orphans: class B → E21.2C.** No tracked orphan state exists today. A
-  failed compensation delete only increments `StorageMetrics`, so orphan
-  detection is part of that checkpoint.
+- **Class C (inherited) → E21.2C, IMPLEMENTED as a closed deferral.**
+  `App\Domain\Documents\Application\Retention\DocumentRetentionEligibility`
+  maps every arm of `documents_exactly_one_owner_check` to the checkpoint
+  that decides it: Employee → E21.2E (D9); Student and Guardian → E21.2D
+  (D7); Learning Content and Assignment → E21.2D (D7) with the D6
+  owner/audience minimum. Every owner is deferred today, so `mayPurge()` is
+  false for every Document. No Documents code encodes a duration, and no
+  retention command deletes or updates a `documents` row (architecture
+  test). An archived Document is retained exactly like an active one.
+  Communications attachments are not Documents (they go with their
+  communication, D3).
+- **Orphans: class B → E21.2C, IMPLEMENTED.** `platform:storage-orphans-prune`
+  (`--dry-run`), with `STORAGE_ORPHAN_RETENTION_DAYS=30` and a per-School
+  scan cap `RETENTION_ORPHAN_SCAN_LIMIT` (default 10000). An object is
+  deleted only when ALL hold:
+  - it is in a managed keyspace of an existing School
+    (`schools/{id}/documents/…` on the Documents disk,
+    `schools/{id}/communications/…` on the attachments disk). Nothing
+    outside these prefixes, and no unknown School's prefix, is listed;
+  - its object-store last-modified time is older than 30 days (strict);
+  - no committed `documents`, `communication_attachments` or
+    `employee_documents` row names it (same disk and path), re-checked
+    immediately before the delete;
+  - its School is not held (a held School only counts).
+  - An upload whose metadata has not committed yet is protected by the
+    30-day floor and its never-reused UUIDv7 key (proven with a real
+    second process holding the insert open).
 
 ### E21-D6 — Authority-bearing history
 
@@ -353,8 +409,8 @@ The checkpoints are listed in §5.
 |---|---|---|
 | **E21.2A** | Mail (L1–L4, 180 d), webhooks (30/90 d), outbox (30 d), failed jobs (30 d), the School hold seam | **Implemented** (E21.2A commit; full isolated regression) |
 | **E21.2B** | Audit (D1), authority history (D6), released-suppression expiry (D2): a narrowly privileged expiry path for protected ledgers | **Implemented** (E21.2B commit; full isolated regression) |
-| E21.2C | Communications (D3), Documents and orphans (D5) | **Next — not implemented** |
-| E21.2D | Student / academic (D7) | Not started |
+| **E21.2C** | Communications (D3), Documents and orphans (D5) | **Implemented** (E21.2C commit; full isolated regression) |
+| E21.2D | Student / academic (D7) | **Next — not started** |
 | E21.2E | Finance (D8), HR and payroll (D9) | Not started |
 | E21.2F | Erasure (D10) and tenant-closure orchestration (D11) | Not started |
 | E21.2G | Final retention closure audit | Not started |
@@ -389,6 +445,30 @@ The checkpoints are listed in §5.
   Migrate/rollback/re-apply was verified on the DDEV database
   (`pg_dump --schema-only`: migrated = re-applied; rolled back = before).
 
+### 5.2 Communications and orphan expiry (E21.2C)
+
+- **Communications content and deliveries** are ordinary School rows the
+  runtime role may delete under RLS. `CommunicationRetentionService` does
+  it inside the School's own tenant context, in bounded batches
+  (`FOR UPDATE SKIP LOCKED` for deliveries; one locked unit per
+  transaction for content).
+- **Policy decisions are append-only.** Migration `2026_11_07_090000` adds
+  one more narrow function,
+  `retention_expire_communication_delivery_policy_decisions`, with the
+  same shape as §5.1 (tenant tie, 1-year floor, cap 5000, dry-run). It is
+  called only through `RetentionExpiry`. `DatabaseRoleVerifier` lists it in
+  `retention_functions_narrow`. Its `down()` drops only the function
+  (migrate/rollback/re-apply verified on DDEV, as in §5.1).
+- **Orphans:** `App\Support\Retention\StorageOrphanReaper`, see D5.
+- **Execution:** `communications-prune` 03:40 and `storage-orphans-prune`
+  04:10, daily, without overlap. The orphan run follows the content purge,
+  so a failed byte delete is retried the same night once it is 30 days old.
+- **Logs and metrics are counts only:** `lycenza_retention_rows_total`
+  gains `communication_content`, `communication_delivery`,
+  `communication_policy_decision` and `storage_orphan`, with the outcomes
+  `eligible`/`deleted`/`held`/`skipped`/`unresolved`/`error`. No path,
+  name, subject or body is logged.
+
 **Deployment-side (operator, ADR 0058 E07/E09/E10):**
 - the log and metric backend retention (D13);
 - backup and bucket noncurrent-version lifecycle (D12);
@@ -411,6 +491,10 @@ is unset. Production must set them once their checkpoint ships.
 | `OUTBOX_RETENTION_DAYS` | 30 | E21.2A |
 | `FAILED_JOBS_RETENTION_DAYS` | 30 | E21.2A |
 | `RETENTION_HOLD_SCHOOL_IDS` | empty unless a hold is ordered | E21.2A |
+| `COMMUNICATIONS_CONTENT_RETENTION_YEARS` | 3 (calendar years after the Academic Year end) | E21.2C |
+| `COMMUNICATIONS_DELIVERY_RETENTION_YEARS` | 1 (calendar year after the terminal state) | E21.2C |
+| `STORAGE_ORPHAN_RETENTION_DAYS` | 30 | E21.2C |
+| `RETENTION_ORPHAN_SCAN_LIMIT` | 10000 per School per run (default) | E21.2C |
 
 ## 7. Ratification record (to be completed by the final reviewer)
 

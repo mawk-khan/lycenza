@@ -464,3 +464,18 @@ real environment:
   - no identifiers.
 
   A failed run is the scheduler task's failure metric (OBS-06).
+
+## E21.2C retention (2026-10-01)
+
+- **Scheduler.** The daily tasks `communications-prune` (03:40) and
+  `storage-orphans-prune` (04:10) are covered by OBS-06 with the
+  daily-cadence window (alert rules regenerated).
+- **Metric** `lycenza_retention_rows_total` gains:
+  - `operation` values `communication_content`, `communication_delivery`,
+    `communication_policy_decision` and `storage_orphan`;
+  - `outcome` values `skipped` (no anchor or no terminal time),
+    `unresolved` (the sent date is in no Academic Year or in two) and
+    `error` (a failed attachment or orphan byte delete).
+
+  No identifiers, paths or names. A failed byte delete also counts in the
+  existing storage `delete` failure metric.

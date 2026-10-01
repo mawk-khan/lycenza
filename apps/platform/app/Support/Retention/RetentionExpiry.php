@@ -43,12 +43,16 @@ final class RetentionExpiry
 
     public const PLATFORM_ROLE_GRANT = 'platform_role_grant';
 
+    /** E21.2C (E21-D3): append-only delivery policy decisions, 1 year after created_at. */
+    public const COMMUNICATION_POLICY_DECISION = 'communication_policy_decision';
+
     /** School-scoped categories => their fixed database function. */
     private const SCHOOL_FUNCTIONS = [
         self::SCHOOL_AUDIT => 'retention_expire_school_audit_events',
         self::SCHOOL_ROLE_GRANT => 'retention_expire_membership_role_assignments',
         self::TEACHING_ASSIGNMENT => 'retention_expire_teaching_assignments',
         self::SCHOOL_ELEVATION => 'retention_expire_school_elevations',
+        self::COMMUNICATION_POLICY_DECISION => 'retention_expire_communication_delivery_policy_decisions',
     ];
 
     /** Categories that belong to no School => their fixed database function. */

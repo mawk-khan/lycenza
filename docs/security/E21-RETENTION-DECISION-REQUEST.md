@@ -195,6 +195,11 @@ inside the E21 implementation checkpoint.
 implemented through narrow database retention functions (determination
 §5.1). The runtime role still has no DELETE on any protected ledger.
 
+*E21.2C (2026-10-01):* D3 (Communications) and D5 (Documents, orphans) are
+implemented (determination §5.2). Documents stay retained: every owner type
+is deferred to E21.2D/E21.2E. The 0E.2 compensation-failure orphan residual
+is now cleaned up by `platform:storage-orphans-prune`.
+
 ### 5.3 Documentation contradictions and latent schema conflicts
 
 Recorded, not silently reconciled:

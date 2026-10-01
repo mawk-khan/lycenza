@@ -2223,9 +2223,18 @@ parallel, and the email provider tail) — not started.
   - `RETENTION_HOLD_PLATFORM`;
   - LMS owner/audience kept with its parent.
 
-  E21.2A and E21.2B are closed. **Next: E21.2C — Communications &
-  Documents retention (not started).** E21 stays OPEN pending E21.2C–G and
-  final ratification.
+  E21.2A and E21.2B are closed.
+- **E21.2C — Communications & Documents retention (2026-10-01): closed.**
+  - `platform:communications-prune`: content 3 y after the end of its
+    sending Academic Year (gap/overlap fails closed), delivery telemetry
+    1 y after the terminal state; policy decisions through one more narrow
+    retention function;
+  - `platform:storage-orphans-prune`: proven orphans in the managed
+    keyspace after 30 d;
+  - Documents: inherited retention, every owner deferred (no age purge).
+
+  E21.2A–E21.2C are closed. **Next: E21.2D — Student / Academic retention
+  (not started).** E21 stays OPEN pending E21.2D–G and final ratification.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**
   published / closed. It inventoried every v1 category and recorded 14 open
   decisions with neutral options, a determination template and no immediate

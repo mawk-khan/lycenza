@@ -8,7 +8,7 @@ use App\Support\Domains\DomainState;
 use App\Support\Domains\DomainTelemetry;
 use App\Support\Email\EmailTelemetry;
 use App\Support\Observability\QueueName;
-use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionMetrics;
 use App\Support\ServiceAuth\ServiceAuthContract;
 use App\Support\ServiceAuth\ServiceAuthTelemetry;
 
@@ -84,7 +84,7 @@ final class MetricCatalog
             'lycenza_domain_indeterminate_max_age_seconds' => self::gauge('How long the oldest live custom domain has had only indeterminate DNS/TLS results (0 when none).', []),
             'lycenza_api_token_operation_errors_total' => self::counter('Human API token issue/revoke operations that failed unexpectedly.', ['operation' => ['issue', 'revoke']]),
             // E21.2B: retention maintenance rows per closed category; failures are the scheduler task metrics.
-            'lycenza_retention_rows_total' => self::counter('Retention maintenance rows by category and outcome (eligible, deleted, held).', ['operation' => RetentionExpiry::categories(), 'outcome' => ['eligible', 'deleted', 'held']]),
+            'lycenza_retention_rows_total' => self::counter('Retention maintenance rows by category and outcome.', ['operation' => RetentionMetrics::categories(), 'outcome' => RetentionMetrics::OUTCOMES]),
             'lycenza_idempotency_requests_total' => self::counter('Idempotency-Key outcomes (formerly idempotency_{outcome}_total log lines).', ['outcome' => ['new', 'replay', 'conflict', 'in_progress', 'failed']]),
 
             // Health and dependencies
@@ -192,11 +192,12 @@ final class MetricCatalog
             'email-messages-redispatch', 'email-prune', 'account-recovery-prune',
             'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune',
             'audit-prune', 'email-suppressions-prune', 'authority-history-prune',
+            'communications-prune', 'storage-orphans-prune',
         ];
     }
 
     /** Daily tasks (their staleness window is a day, not minutes). */
-    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune', 'audit-prune', 'email-suppressions-prune', 'authority-history-prune'];
+    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune', 'audit-prune', 'email-suppressions-prune', 'authority-history-prune', 'communications-prune', 'storage-orphans-prune'];
 
     /**
      * @param  array<string, string>  $labels

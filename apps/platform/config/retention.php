@@ -34,6 +34,16 @@ return [
     // E21-D2: released email suppressions, calendar years after release (adopted: 1).
     'released_suppression_years' => env('MAIL_RELEASED_SUPPRESSION_RETENTION_YEARS'),
 
+    // E21-D3: Communications content, calendar years after the END of the
+    // Academic Year it was sent in (adopted: 3); delivery telemetry,
+    // calendar years after the terminal delivery time (adopted: 1).
+    'communications_content_years' => env('COMMUNICATIONS_CONTENT_RETENTION_YEARS'),
+    'communications_delivery_years' => env('COMMUNICATIONS_DELIVERY_RETENTION_YEARS'),
+
+    // E21-D5: proven orphan objects, days after last modification (adopted: 30).
+    'orphan_object_days' => env('STORAGE_ORPHAN_RETENTION_DAYS'),
+    'orphan_scan_limit' => (int) env('RETENTION_ORPHAN_SCAN_LIMIT', 10000),
+
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 
 ];

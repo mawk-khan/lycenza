@@ -39,7 +39,10 @@ class MetricCatalogGuardTest extends TestCase
             foreach ($definition['labels'] as $label => $values) {
                 $this->assertContains($label, MetricCatalog::LABELS, "{$name}.{$label}");
                 $this->assertNotEmpty($values);
-                $this->assertLessThanOrEqual(20, count($values), "{$name}.{$label} must stay a small closed set");
+                // `scheduled_task` is pinned to the code-defined schedule
+                // (the_scheduled_task_vocabulary_is_the_live_schedule), one
+                // series per task, so it gets its own ceiling (E21.2C).
+                $this->assertLessThanOrEqual($label === 'scheduled_task' ? 30 : 20, count($values), "{$name}.{$label} must stay a small closed set");
                 foreach ($values as $value) {
                     $this->assertDoesNotMatchRegularExpression('/[0-9a-f]{8}-[0-9a-f]{4}-/', $value);
                 }

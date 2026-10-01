@@ -105,6 +105,10 @@ file. `documents` is the only table this checkpoint adds.
   role still holds DELETE on `documents`, and every owner foreign key is
   `ON DELETE CASCADE`. Retention-driven deletion follows E21-D5 (inherit
   the owner's period; metadata and bytes together).
+  *E21.2C:* `DocumentRetentionEligibility` maps every owner type to its
+  deciding checkpoint (E21.2D/E21.2E). All are deferred, so no Document is
+  purge-eligible, and **archive is not retention**: an archived Document
+  is kept exactly like an active one.
 
 ### Owning-entity boundary — the dangerous conflation this checkpoint had to resolve
 
@@ -447,6 +451,11 @@ object on the disk — but this is still a genuine residual data-
 retention/privacy/operational risk, not a resolved one, until some
 future storage-level cleanup actually removes it. Classified P3 (Low)
 accordingly, not "no impact."
+*Update (E21.2C, 2026-10-01):* resolved by `platform:storage-orphans-prune`
+(E21-D5). It deletes an object only when it is in a School's managed
+keyspace, older than 30 days and named by no `documents`,
+`communication_attachments` or `employee_documents` row (re-checked just
+before the delete). Held Schools keep theirs.
 
 ### Metadata provenance
 
