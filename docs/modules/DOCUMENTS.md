@@ -109,6 +109,11 @@ file. `documents` is the only table this checkpoint adds.
   deciding checkpoint (E21.2D/E21.2E). All are deferred, so no Document is
   purge-eligible, and **archive is not retention**: an archived Document
   is kept exactly like an active one.
+  *E21.2D:* Student Documents now go only with their Student's D7 core
+  purge (`DocumentParentRetention`, active or archived alike; bytes after
+  commit). Guardian, Learning Content and Assignment Documents stay kept
+  (no adopted parent period, E21.2F/G). Employee Documents wait for
+  E21.2E. No Document is ever purged on its own.
 
 ### Owning-entity boundary — the dangerous conflation this checkpoint had to resolve
 

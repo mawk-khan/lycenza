@@ -228,7 +228,17 @@ class StorageOrphanRetentionTest extends TestCase
         );
         $this->assertNotEmpty($files);
 
-        foreach ($files as $file) {
+        // E21.2D: the one sanctioned exception is the parent seam, which deletes only
+        // a Student's own Documents inside that Student's core purge.
+        $seam = app_path('Domain/Documents/Application/Retention/DocumentParentRetention.php');
+        $this->assertContains($seam, $files);
+        $seamCode = (string) file_get_contents($seam);
+        $this->assertSame(substr_count($seamCode, "table('documents')"), substr_count($seamCode, "table('documents')->where('student_id', \$studentId)"), 'every seam query is scoped to one Student owner');
+        $callers = [];
+        exec('grep -rlF --include=*.php '.escapeshellarg('use App\\Domain\\Documents\\Application\\Retention\\DocumentParentRetention;').' '.escapeshellarg(app_path()), $callers);
+        $this->assertSame([app_path('Domain/Students/Application/Retention/StudentRecordRetentionService.php')], $callers, 'only the Student core purge uses the seam');
+
+        foreach (array_diff($files, [$seam]) as $file) {
             $code = (string) file_get_contents($file);
             $this->assertDoesNotMatchRegularExpression("/table\\('(documents|employee_documents)'\\)[^;]*->(delete|update|forceDelete)\\(/s", $code, $file);
             $this->assertDoesNotMatchRegularExpression('/Document::[^;]*->(delete|forceDelete)\\(/s', $code, $file);

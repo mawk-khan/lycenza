@@ -162,6 +162,15 @@ Schedule::command('platform:storage-orphans-prune')
     ->withoutOverlapping()
     ->name('storage-orphans-prune');
 
+// E21.2D (E21-D7): Student operational history (7 y) and core academic
+// record (25 y) after final exit. No default: until configured it deletes
+// nothing. It runs after the Communications and orphan runs. Correctness
+// does not depend on the order: each purge rechecks under its own lock.
+Schedule::command('platform:student-retention-prune')
+    ->dailyAt('04:30')
+    ->withoutOverlapping()
+    ->name('student-retention-prune');
+
 // Phase 0O.10A (ADR 0056 section 13): ended password-recovery credentials
 // are deleted 24 hours later (technical data; the audit is separate).
 Schedule::command('platform:account-recovery-prune')

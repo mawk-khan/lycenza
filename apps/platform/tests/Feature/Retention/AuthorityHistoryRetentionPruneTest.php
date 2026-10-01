@@ -211,6 +211,11 @@ class AuthorityHistoryRetentionPruneTest extends TestCase
         $owner = $this->inSchool($w['school'], fn () => DB::table('learning_content')->where('id', $row->id)->value('owner_employee_id'));
         $audience = $this->inSchool($w['school'], fn () => LearningContentSectionAudience::query()->where('learning_content_id', $row->id)->count());
 
+        // The database floor compares against PostgreSQL now(), the test
+        // transaction's START. The fixture above takes real time, so a cutoff
+        // from the current PHP clock can land a second past that floor and be
+        // refused. Step the PHP clock back so the cutoff is strictly older.
+        $this->travelTo(now()->subMinute());
         $this->artisan('platform:authority-history-prune')->assertSuccessful();
 
         $this->assertSame($owner, $this->inSchool($w['school'], fn () => DB::table('learning_content')->where('id', $row->id)->value('owner_employee_id')));

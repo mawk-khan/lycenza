@@ -2233,8 +2233,21 @@ parallel, and the email provider tail) — not started.
     keyspace after 30 d;
   - Documents: inherited retention, every owner deferred (no age purge).
 
-  E21.2A–E21.2C are closed. **Next: E21.2D — Student / Academic retention
-  (not started).** E21 stays OPEN pending E21.2D–G and final ratification.
+  E21.2A–E21.2C are closed.
+- **E21.2D — Student / Academic retention (2026-10-01): closed.**
+  - `platform:student-retention-prune`, from a dated final exit (`inactive`
+    plus the last `completed`/`withdrawn` placement; anything ambiguous is
+    kept; re-entry restarts the clock);
+  - operational (7 y): attendance records, rollover items, Guardian
+    relationships;
+  - core (25 y): identity, placements, subject enrollments and Student
+    Documents, only when no other retained row references the Student
+    (FK-catalog check, never a cascade);
+  - School academic content, attendance sessions, Guardian personal data,
+    processing authorizations and Admissions are recorded for E21.2G.
+
+  E21.2A–E21.2D are closed. **Next: E21.2E — Finance & HR retention (not
+  started).** E21 stays OPEN pending E21.2E–G and final ratification.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**
   published / closed. It inventoried every v1 category and recorded 14 open
   decisions with neutral options, a determination template and no immediate

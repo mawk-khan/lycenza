@@ -44,6 +44,14 @@ return [
     'orphan_object_days' => env('STORAGE_ORPHAN_RETENTION_DAYS'),
     'orphan_scan_limit' => (int) env('RETENTION_ORPHAN_SCAN_LIMIT', 10000),
 
+    // E21.2D (E21-D7, project-adopted, pending ratification): calendar years
+    // after a Student's final exit (StudentRetentionEligibility). Operational
+    // history (attendance, rollover items, Guardian relationships), adopted 7;
+    // the core academic record (identity, placements, subject enrollments,
+    // Student Documents), adopted 25. No default: unset deletes nothing.
+    'student_operational_years' => env('STUDENT_OPERATIONAL_RETENTION_YEARS'),
+    'student_core_years' => env('STUDENT_CORE_RETENTION_YEARS'),
+
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 
 ];

@@ -200,6 +200,22 @@ implemented (determination §5.2). Documents stay retained: every owner type
 is deferred to E21.2D/E21.2E. The 0E.2 compensation-failure orphan residual
 is now cleaned up by `platform:storage-orphans-prune`.
 
+*E21.2D (2026-10-01):* D7 (Student / academic) is implemented
+(determination D7 and §5.3).
+- Exit trigger: final exit from dated Enrollment departures; anything
+  ambiguous is kept.
+- Operational history (7 y): attendance records, rollover items and
+  relationships.
+- Core record (25 y): identity, placements, subject enrollments and
+  Student Documents.
+- The row-8 "relationship unlink" and "draft rollover mapping" hard deletes
+  are unchanged: workflow deletes with D1 audit history, not retention.
+- The row-9 attendance-correction overwrite keeps its audit-only history
+  (D1).
+- Categories D7 does not govern are recorded for E21.2G: Curriculum
+  Delivery, Syllabus, Examinations, LMS content, attendance sessions,
+  Guardian personal data, processing authorizations and Admissions.
+
 ### 5.3 Documentation contradictions and latent schema conflicts
 
 Recorded, not silently reconciled:

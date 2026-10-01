@@ -479,3 +479,14 @@ real environment:
 
   No identifiers, paths or names. A failed byte delete also counts in the
   existing storage `delete` failure metric.
+
+## E21.2D retention (2026-10-01)
+
+- **Scheduler.** The daily task `student-retention-prune` (04:30) is covered
+  by OBS-06 with the daily-cadence window (alert rules regenerated).
+- **Metric** `lycenza_retention_rows_total` gains:
+  - the `operation` values `student_attendance`, `student_rollover_item`,
+    `student_guardian_relationship` and `student_core`;
+  - the `outcome` value `dependency_blocked`.
+
+  The units are Students. No identifiers.

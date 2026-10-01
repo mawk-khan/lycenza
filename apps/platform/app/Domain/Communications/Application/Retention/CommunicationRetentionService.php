@@ -4,15 +4,13 @@ namespace App\Domain\Communications\Application\Retention;
 
 use App\Domain\AcademicStructure\Application\AcademicYearCalendar;
 use App\Models\School;
-use App\Support\Observability\StorageMetrics;
+use App\Support\Retention\ObjectDeletion;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
-use Throwable;
 
 /**
  * E21-D3 (docs/security/E21-RETENTION-DETERMINATION.md, project-adopted,
@@ -265,20 +263,6 @@ final class CommunicationRetentionService
             return ['deleted' => false, 'errors' => 0];
         }
 
-        $errors = 0;
-        foreach ($objects as $object) {
-            try {
-                $ok = Storage::disk($object->storage_disk)->delete($object->storage_path);
-            } catch (Throwable) {
-                $ok = false;
-            }
-
-            if (! $ok) {
-                StorageMetrics::failed('delete');
-                $errors++;
-            }
-        }
-
-        return ['deleted' => true, 'errors' => $errors];
+        return ['deleted' => true, 'errors' => ObjectDeletion::afterCommit($objects)];
     }
 }

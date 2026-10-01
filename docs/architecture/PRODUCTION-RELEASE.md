@@ -327,6 +327,21 @@ email recovery.
   - **Before enabling,** run both with `--dry-run` and review the
     `unresolved` count: a School whose Academic Years leave gaps or overlap
     keeps that content until its calendar is corrected.
+- **E21.2D retention (2026-10-01):**
+  - **New daily task:** `student-retention-prune` (04:30).
+  - **Privilege model.** Unchanged: ordinary School rows under RLS, no new
+    function, grant or migration.
+  - **Production sets** `STUDENT_OPERATIONAL_RETENTION_YEARS=7` and
+    `STUDENT_CORE_RETENTION_YEARS=25` (project-adopted, pending
+    ratification). The core purge also needs
+    `AUTHORITY_HISTORY_RETENTION_YEARS` before a revoked Student account
+    link may go.
+  - **Before enabling,** run it with `--dry-run`:
+    - `unresolved exit` counts inactive Students without a dated
+      departure, for example never placed or last placement
+      `transferred`. They are kept until staff record the departure;
+    - `dependency-blocked` counts Students another retained record still
+      needs.
 
 ## 6. Seeding: production-safe versus demo
 

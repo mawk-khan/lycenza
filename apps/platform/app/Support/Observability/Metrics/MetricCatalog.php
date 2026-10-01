@@ -192,12 +192,12 @@ final class MetricCatalog
             'email-messages-redispatch', 'email-prune', 'account-recovery-prune',
             'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune',
             'audit-prune', 'email-suppressions-prune', 'authority-history-prune',
-            'communications-prune', 'storage-orphans-prune',
+            'communications-prune', 'storage-orphans-prune', 'student-retention-prune',
         ];
     }
 
     /** Daily tasks (their staleness window is a day, not minutes). */
-    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune', 'audit-prune', 'email-suppressions-prune', 'authority-history-prune', 'communications-prune', 'storage-orphans-prune'];
+    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune', 'audit-prune', 'email-suppressions-prune', 'authority-history-prune', 'communications-prune', 'storage-orphans-prune', 'student-retention-prune'];
 
     /**
      * @param  array<string, string>  $labels

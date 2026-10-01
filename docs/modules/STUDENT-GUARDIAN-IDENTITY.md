@@ -1381,3 +1381,21 @@ DELETE route; classified Highly Sensitive
 design (lifecycle, concurrency, read-service contract) and
 `docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md` for the
 underlying legal/privacy determination this exists to satisfy.
+
+## Retention (E21.2D, 2026-10-01)
+
+Under E21-D7 (`docs/security/E21-RETENTION-DETERMINATION.md`, project-adopted,
+pending ratification) the Student identity is part of the core academic
+record:
+- It is kept 25 calendar years after the Student's final exit (see
+  `STUDENT-ENROLLMENT.md`, "Retention"), then purged by
+  `platform:student-retention-prune` as the LAST step. That happens only
+  when no other retained row references the Student.
+- `inactive` stays a visibility flag. It never deletes anything by itself;
+  it is one of the conditions of a dated final exit.
+- **Student↔Guardian relationships** are operational history: they go 7
+  years after final exit. A relationship a processing authorization
+  references stays, and so does its Student.
+- **The Guardian, its contacts and its Documents** are kept. They are
+  Guardian personal data with no adopted period (D10, E21.2F/G).
+- **Processing authorizations** stay undeletable.

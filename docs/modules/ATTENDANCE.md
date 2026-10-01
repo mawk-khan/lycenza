@@ -671,3 +671,18 @@ Neither that column nor `timetable_entries.teacher_id` authorizes. So:
 **Unchanged:** the schema, the Sensitive classification, the audit events
 (the acting User is the actor, as for Tier 1), zero domain events, and every
 section 5–14 rule.
+
+## 19. Retention (E21.2D, 2026-10-01)
+
+Attendance records are operational Student history under E21-D7
+(`docs/security/E21-RETENTION-DETERMINATION.md`, project-adopted, pending
+ratification). They are deleted 7 calendar years after the Student's final
+exit by `platform:student-retention-prune`, through
+`App\Domain\Attendance\Application\Retention\AttendanceRetentionService`.
+- This is the ONLY delete path for a record, and it never runs on a
+  request (`AttendanceArchitectureGuardTest`).
+- An unresolved exit, a re-entry or a held School keeps every record.
+- Sessions (register headers) are not Student records and are never
+  deleted. A session may therefore keep fewer records than the roster it
+  was taken against.
+- Correction history stays in the audit ledger on its own D1 clock.

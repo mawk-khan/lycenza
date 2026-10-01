@@ -1005,3 +1005,20 @@ periods for:
 Append-only policy decisions use one more narrow retention function. The
 runtime role still holds no DELETE on any protected ledger. Remaining:
 E21.2D–F, then E21.2G and final ratification.
+
+## Note — E21.2D Student and academic retention (2026-10-01)
+
+**E21 stays `LEGAL_REVIEW_REQUIRED`.** E21.2D implemented D7:
+- **Operational Student history** (attendance records, rollover items,
+  Guardian relationships): 7 years after final exit.
+- **The core academic record** (identity, placements, subject enrollments,
+  Student Documents): 25 years after final exit.
+
+The final exit comes from dated Enrollment departures plus the `inactive`
+Student status; anything ambiguous is kept. Any row in another table that
+references the Student blocks the purge, which never cascades. That
+includes Finance, which awaits E21.2E. No database privilege was added.
+Categories D7 does not govern are recorded for E21.2G: School academic
+content, attendance sessions, Guardian personal data, processing
+authorizations and Admissions. Remaining: E21.2E–F, then E21.2G and final
+ratification.

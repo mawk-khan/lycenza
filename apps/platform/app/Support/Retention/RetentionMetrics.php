@@ -10,7 +10,7 @@ use App\Support\Observability\MetricsRecorder;
  */
 final class RetentionMetrics
 {
-    public const OUTCOMES = ['eligible', 'deleted', 'held', 'skipped', 'unresolved', 'error'];
+    public const OUTCOMES = ['eligible', 'deleted', 'held', 'skipped', 'unresolved', 'dependency_blocked', 'error'];
 
     /** E21.2C maintenance categories that are not database retention functions. */
     public const COMMUNICATION_CONTENT = 'communication_content';
@@ -19,10 +19,22 @@ final class RetentionMetrics
 
     public const STORAGE_ORPHAN = 'storage_orphan';
 
+    /** E21.2D (E21-D7) Student categories; their units are Students. */
+    public const STUDENT_ATTENDANCE = 'student_attendance';
+
+    public const STUDENT_ROLLOVER_ITEM = 'student_rollover_item';
+
+    public const STUDENT_GUARDIAN_RELATIONSHIP = 'student_guardian_relationship';
+
+    public const STUDENT_CORE = 'student_core';
+
     /** @return list<string> */
     public static function categories(): array
     {
-        return array_merge(RetentionExpiry::categories(), [self::COMMUNICATION_CONTENT, self::COMMUNICATION_DELIVERY, self::STORAGE_ORPHAN]);
+        return array_merge(RetentionExpiry::categories(), [
+            self::COMMUNICATION_CONTENT, self::COMMUNICATION_DELIVERY, self::STORAGE_ORPHAN,
+            self::STUDENT_ATTENDANCE, self::STUDENT_ROLLOVER_ITEM, self::STUDENT_GUARDIAN_RELATIONSHIP, self::STUDENT_CORE,
+        ]);
     }
 
     /**

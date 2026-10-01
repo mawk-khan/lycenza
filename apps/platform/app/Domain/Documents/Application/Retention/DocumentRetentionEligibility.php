@@ -12,9 +12,9 @@ use App\Domain\Documents\Infrastructure\Document;
  * owner, through that domain's own retention operation.
  *
  * Documents encodes no duration and decides no other domain's retention.
- * This closed map records, per owner type, which retention checkpoint owns
- * the decision. Until that checkpoint ships, `mayPurge()` answers false, so
- * no age, archive status or generic command can remove a Document early.
+ * This closed map records, per owner type, which retention decision governs
+ * it. `mayPurge()` answers false for every Document, so no age, archive
+ * status or generic command can remove one on its own.
  * An archived Document is retained exactly like an active one: archive is
  * operational lifecycle only.
  *
@@ -24,19 +24,21 @@ use App\Domain\Documents\Infrastructure\Document;
  */
 final class DocumentRetentionEligibility
 {
-    /** owner type => the retention checkpoint that will decide it (none implemented yet). */
+    /** owner type => the retention decision that governs it. */
     public const OWNER_RETENTION = [
         'employee' => 'E21-D9 HR (E21.2E)',
-        'student' => 'E21-D7 Student/academic (E21.2D)',
-        'guardian' => 'E21-D7 Student/academic (E21.2D)',
-        'learning_content' => 'LMS parent: E21-D7 (E21.2D) with the E21-D6 owner/audience minimum',
-        'assignment' => 'LMS parent: E21-D7 (E21.2D) with the E21-D6 owner/audience minimum',
+        'student' => 'E21-D7 core (E21.2D): purged only with its Student, by platform:student-retention-prune',
+        'guardian' => 'Guardian personal data: no adopted period (D10, E21.2F/E21.2G); kept',
+        'learning_content' => 'LMS School content, not Student-rooted: no adopted period (E21.2G); kept, with the E21-D6 owner/audience minimum',
+        'assignment' => 'LMS School content, not Student-rooted: no adopted period (E21.2G); kept, with the E21-D6 owner/audience minimum',
     ];
 
     /**
-     * E21.2C: every owner type is deferred (OWNER_RETENTION), so no Document
-     * is purge-eligible. A later checkpoint answers here for its own owner
-     * type by asking that owner's domain, never by an age.
+     * No Document is ever purged on its own, by age or by archive status:
+     * this answers false for every owner type. A Student's Documents go
+     * only inside that Student's own D7 core purge
+     * (DocumentParentRetention, E21.2D). Every other owner type has no
+     * decided purge yet (OWNER_RETENTION).
      */
     public function mayPurge(Document $document): bool
     {

@@ -70,6 +70,23 @@ class AttendanceArchitectureGuardTest extends TestCase
     }
 
     #[Test]
+    public function attendance_records_are_only_ever_deleted_by_attendance_retention(): void
+    {
+        // E21.2D (E21-D7): the one delete path is the 7-year operational
+        // expiry after a Student's final exit, run only by
+        // `platform:student-retention-prune`. Nothing else deletes a record.
+        $files = [];
+        exec('grep -rl --include=*.php '.escapeshellarg('AttendanceRecord').' '.escapeshellarg($this->appPath()).' 2>/dev/null', $files);
+        $deleters = array_values(array_filter($files, fn (string $file) => str_contains((string) file_get_contents($file), '->delete(')));
+        $this->assertSame([$this->appPath('Domain/Attendance/Application/Retention/AttendanceRetentionService.php')], $deleters,
+            'Only AttendanceRetentionService may delete attendance records.');
+
+        $source = (string) file_get_contents($this->appPath('Domain/Attendance/Application/Retention/AttendanceRetentionService.php'));
+        $this->assertStringContainsString('purgeExitedBefore(', $source, 'Attendance records go only through the Student exit purge.');
+        $this->assertStringNotContainsString('attendance_sessions', preg_replace('#/\*.*?\*/|//[^\n]*#s', '', $source), 'Retention never touches register headers.');
+    }
+
+    #[Test]
     public function no_parent_module_depends_on_attendance(): void
     {
         // Attendance depends OUTWARD on Timetable, Students/SIS,

@@ -602,3 +602,15 @@ Tier 1 `lms.assignments.view/.manage` is unchanged.
   `LmsParentResourceAuthorization`. Each parent kind needs its own owned
   capability.
 - **Excluded.** No Student, Submission, mark, grade or feedback anywhere.
+
+## 18. Retention classification (E21.2D, 2026-10-01)
+
+Learning Content and Assignments are School academic content. They
+reference Offerings and Sections, never a Student, so E21-D7 (Student
+retention, `docs/security/E21-RETENTION-DETERMINATION.md`) does not govern
+them.
+- They, their owner and Section audiences, and their Documents are kept,
+  with no adopted period. This is recorded for E21.2G, not guessed.
+- Any future parent purge must still satisfy the D6 minimum
+  (`EmbeddedAuthorityRetention::mayRemoveWithParent()`).
+- Submission stays cancelled; no retention exists for it.

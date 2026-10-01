@@ -237,6 +237,10 @@ The checkpoints are listed in §5.
   - Archived Documents are never globally purged by a single age.
   - Object-storage lifecycle expiry is never enabled independently of
     database eligibility (current objects).
+- **E21.2D:** Student-owned Documents now go with their Student's D7 core
+  purge (`DocumentParentRetention`), metadata in the purge transaction and
+  bytes after commit; a failed byte delete is left to the orphan run.
+  Guardian and LMS Documents stay kept (no adopted parent period).
 - **Class C (inherited) → E21.2C, IMPLEMENTED as a closed deferral.**
   `App\Domain\Documents\Application\Retention\DocumentRetentionEligibility`
   maps every arm of `documents_exactly_one_owner_check` to the checkpoint
@@ -314,8 +318,90 @@ The checkpoints are listed in §5.
   withdrawal or exit. This covers attendance, operational enrollment
   history and ordinary SIS lifecycle history.
 - **Overlaps:** finance or another longer category wins.
-- **Class B/C → E21.2D.** The core-versus-operational split per table and
-  the exit trigger must be proven first.
+- **Class B/C → E21.2D, IMPLEMENTED.** `platform:student-retention-prune`
+  (`--only=operational|core`, `--dry-run`), with
+  `STUDENT_OPERATIONAL_RETENTION_YEARS=7` and
+  `STUDENT_CORE_RETENTION_YEARS=25`:
+  - **Final exit (the trigger).** The repository has no dated "left the
+    School" record: `students.status` is only `active`/`inactive`, has no
+    date and can be reactivated, and re-admission is deferred
+    (`docs/students/PHASE-1E-0-STUDENT-LIFECYCLE-ARCHITECTURE.md`). The
+    dated facts are Enrollment terminal transitions (`ends_on`, inclusive).
+    `StudentRetentionEligibility` (Students) says a Student has EXITED only
+    when all of these hold:
+    - the Student is `inactive`;
+    - no non-cancelled placement is `active` or open, and no Subject
+      Enrollment is `active`;
+    - the latest non-cancelled placement ended `completed` or `withdrawn`.
+
+    The exit date is that `ends_on`. A `cancelled` placement never ran, so
+    it never dates an exit. Every other inactive state is **unresolved and
+    kept**: never placed, only cancelled, still placed, last placement
+    `transferred`, or an open end. Nothing is inferred from `updated_at`,
+    attendance or inactivity.
+  - **Re-entry.** A new Enrollment or a reactivation makes the Student
+    current again. The exit is recomputed every run and again inside each
+    purge after the Student row is locked. Across years, campuses and
+    re-entries, the clock runs from the LAST departure.
+  - **Core academic record (25 y).** These records are needed to
+    reproduce the formal academic history:
+    - the Student identity (number, names, date of birth);
+    - its placements (`student_enrollments`, cancelled ones included as
+      the administrative record);
+    - its Subject Enrollments, the only academic outcome implemented.
+      There are no marks, results, report cards or transcripts
+      (Examinations holds windows, papers and grade scales only).
+
+    The Student's Documents go with it (D5). Everything is deleted as one
+    unit per Student, with the root LAST.
+  - **Operational Student history (7 y).**
+    - attendance records (Attendance);
+    - enrollment rollover items, the per-Student workflow lines
+      (Students);
+    - Guardian relationships, ordinary SIS history (Guardians). The
+      formal record reads without them.
+  - **Longest period wins, by construction.** Any row in any other table
+    that still references the Student, a placement, a Subject Enrollment
+    or a relationship blocks the purge (`dependency_blocked`, kept). The
+    check reads the live FK catalog (`ReferencingRows`), so a future table
+    blocks until classified. Nothing is cascaded. This keeps the Student
+    for, among others:
+    - Finance (E21.2E);
+    - retained Communications rows;
+    - Admissions conversions;
+    - processing authorizations;
+    - Library, Transport, Hostel and Canteen rows;
+    - identity invitations.
+
+    A Student account link must be revoked and past the D6 authority
+    period; otherwise it blocks. Unexpired operational rows block the core
+    record, and one run clears them first.
+  - **Per-table classification:** pinned against the catalog by
+    `StudentRetentionClassificationTest`.
+- **D7 scope findings (recorded, not guessed):**
+  - **Curriculum Delivery, Syllabus, Examinations and LMS Learning
+    Content/Assignments are not Student-rooted.** They reference Sections
+    and Offerings only and are School academic content, so D7 does not
+    govern them. They are kept, with no adopted period (E21.2G). LMS
+    owner/audience stays with its parent (D6 minimum,
+    `EmbeddedAuthorityRetention`). Their Documents stay with them. LMS
+    Submission stays cancelled.
+  - **Attendance sessions** are the Section's register headers (Section,
+    offering, teacher, period), not Student records. Only the per-Student
+    records expire. Sessions are kept (E21.2G).
+  - **Guardians.** The Guardian, its contacts and its Documents are
+    Guardian personal data, not D7. They are kept: no adopted period
+    exists (D10, E21.2F/G). Unlink stays a hard delete whose history is
+    audit (D1). The formal record does not need relationship history, so
+    there is no contradiction.
+  - **Processing authorizations** are undeletable legal-basis evidence
+    (`reject_direct_delete`) with no adopted period. A Student or
+    relationship that holds them is kept indefinitely (E21.2G).
+  - **Admissions:** applicants and non-converted applications have no
+    Student exit trigger, and converted applications have no decided
+    category. They are kept and block their Student (E21.2G).
+  - **Draft rollover mappings** are School configuration, not Student
+    data, and are deleted while draft as before (history in D1).
 
 ### E21-D8 — Finance
 
@@ -410,8 +496,8 @@ The checkpoints are listed in §5.
 | **E21.2A** | Mail (L1–L4, 180 d), webhooks (30/90 d), outbox (30 d), failed jobs (30 d), the School hold seam | **Implemented** (E21.2A commit; full isolated regression) |
 | **E21.2B** | Audit (D1), authority history (D6), released-suppression expiry (D2): a narrowly privileged expiry path for protected ledgers | **Implemented** (E21.2B commit; full isolated regression) |
 | **E21.2C** | Communications (D3), Documents and orphans (D5) | **Implemented** (E21.2C commit; full isolated regression) |
-| E21.2D | Student / academic (D7) | **Next — not started** |
-| E21.2E | Finance (D8), HR and payroll (D9) | Not started |
+| **E21.2D** | Student / academic (D7) | **Implemented** (E21.2D commit; full isolated regression) |
+| E21.2E | Finance (D8), HR and payroll (D9) | **Next — not started** |
 | E21.2F | Erasure (D10) and tenant-closure orchestration (D11) | Not started |
 | E21.2G | Final retention closure audit | Not started |
 
@@ -469,6 +555,43 @@ The checkpoints are listed in §5.
   `eligible`/`deleted`/`held`/`skipped`/`unresolved`/`error`. No path,
   name, subject or body is logged.
 
+### 5.3 Student and academic expiry (E21.2D)
+
+- **No new database privilege.** Every D7 table is an ordinary School
+  table the runtime role may delete under RLS. No migration, function or
+  index was added: the existing `(school_id, student_id)` and FK indexes
+  serve the scans. Processing authorizations stay undeletable.
+- **One canonical loop.** `StudentRetentionEligibility::purgeExitedBefore()`
+  walks one School's inactive Students in id order, in bounded chunks
+  (`RETENTION_PRUNE_BATCH_SIZE`). It runs ONE transaction per Student:
+  1. lock the Student row FOR UPDATE;
+  2. recheck the exit;
+  3. recheck the dependencies;
+  4. delete the module's own rows;
+  5. after commit, delete any bytes.
+
+  A database failure on one Student rolls back only that Student, counts
+  as `error` and is retried next run. Each module deletes only its own
+  rows: Attendance, Guardians, Students and Documents (through the
+  Student). Attendance and Guardians already depend on Students, so no
+  dependency direction changes.
+- **Dry run** uses the same rule and dependency check. When both phases
+  run, it treats the operational rows as cleared when counting the core
+  record, as the destructive run clears them first.
+- **Concurrency:**
+  - the Student-row lock conflicts with an Enrollment insert (FOR KEY
+    SHARE) and with any Student update;
+  - a re-entry or reactivation committed first keeps the Student;
+  - a purge committed first makes a late re-enrollment fail on its FK;
+  - all three are proven with two real processes.
+  Section and Enrollment lock orders are untouched.
+- **Execution:** `student-retention-prune`, daily 04:30, without overlap.
+- **Metrics:** `lycenza_retention_rows_total` gains the operations
+  `student_attendance`, `student_rollover_item`,
+  `student_guardian_relationship` and `student_core`, and the outcome
+  `dependency_blocked`. The units are Students. Logs and metrics carry
+  counts only.
+
 **Deployment-side (operator, ADR 0058 E07/E09/E10):**
 - the log and metric backend retention (D13);
 - backup and bucket noncurrent-version lifecycle (D12);
@@ -495,6 +618,8 @@ is unset. Production must set them once their checkpoint ships.
 | `COMMUNICATIONS_DELIVERY_RETENTION_YEARS` | 1 (calendar year after the terminal state) | E21.2C |
 | `STORAGE_ORPHAN_RETENTION_DAYS` | 30 | E21.2C |
 | `RETENTION_ORPHAN_SCAN_LIMIT` | 10000 per School per run (default) | E21.2C |
+| `STUDENT_OPERATIONAL_RETENTION_YEARS` | 7 (calendar years after final exit) | E21.2D |
+| `STUDENT_CORE_RETENTION_YEARS` | 25 (calendar years after final exit; never shorter than operational) | E21.2D |
 
 ## 7. Ratification record (to be completed by the final reviewer)
 

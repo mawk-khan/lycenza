@@ -2656,3 +2656,25 @@ unchanged from the domain layer's own existing invariants.
   `unique(['id', 'school_id'])` specifically so those future modules
   can reference it via the same composite-FK pattern without a later
   migration.
+
+## Retention (E21.2D, 2026-10-01)
+
+E21-D7 (`docs/security/E21-RETENTION-DETERMINATION.md`, project-adopted,
+pending ratification) runs every period from the Student's **final exit**.
+`App\Domain\Students\Application\Retention\StudentRetentionEligibility`
+is the single rule:
+- the Student is `inactive`;
+- no non-cancelled placement is `active` or open, and no Subject
+  Enrollment is `active`;
+- the latest non-cancelled placement ended `completed` or `withdrawn`.
+
+The exit date is that `ends_on`. Every other state is unresolved and kept.
+- Re-enrollment, always a new row, restarts the clock from the next
+  departure.
+- Placements, cancelled ones included, and Subject Enrollments are the core
+  academic record. They are kept 25 years after final exit, then purged
+  with the Student by `platform:student-retention-prune`.
+- Rollover items are operational and go after 7 years. Plans and their
+  grade/subject mappings are School configuration and stay.
+- No request path deletes any of these. The purge never cascades another
+  module's rows: any referencing row keeps the Student.
