@@ -152,6 +152,17 @@ class OutboxRetentionPruneTest extends TestCase
     }
 
     #[Test]
+    public function the_platform_hold_keeps_school_less_rows(): void
+    {
+        config(['retention.hold_platform' => true]);
+        $platform = $this->outbox(null, 'dispatched', 200);
+
+        $this->artisan('platform:outbox-prune')->assertSuccessful();
+
+        $this->assertTrue($this->exists($platform));
+    }
+
+    #[Test]
     public function batches_dry_run_and_reruns_are_safe(): void
     {
         config(['retention.batch_size' => 2]);

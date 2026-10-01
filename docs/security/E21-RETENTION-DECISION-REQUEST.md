@@ -191,6 +191,10 @@ inside the E21 implementation checkpoint.
   (`Tests\Feature\Email\EmailRetentionPruneTest`).
 - The staff-credentials prune test remains open (technical TTL, not E21).
 
+*E21.2B (2026-10-01):* D1, D2 (released suppressions) and D6 are
+implemented through narrow database retention functions (determination
+§5.1). The runtime role still has no DELETE on any protected ledger.
+
 ### 5.3 Documentation contradictions and latent schema conflicts
 
 Recorded, not silently reconciled:

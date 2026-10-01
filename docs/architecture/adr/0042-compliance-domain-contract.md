@@ -226,6 +226,11 @@ implementation, `docs/security/E21-RETENTION-DETERMINATION.md`:
 
 Final legal ratification is pending, and Compliance still deletes nothing
 itself: the owning modules implement it.
+*E21.2B (2026-10-01):* audit expiry is implemented. `platform:audit-prune`
+runs through narrow database retention functions (the runtime role still
+cannot delete either ledger), with the School hold and
+`RETENTION_HOLD_PLATFORM`. School audit therefore no longer depends on
+School deletion for its end of life.
 
 ### 8. Exports and regulatory filings
 

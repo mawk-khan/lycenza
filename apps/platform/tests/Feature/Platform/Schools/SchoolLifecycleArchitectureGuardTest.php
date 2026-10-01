@@ -48,6 +48,8 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'RedispatchDueEmailMessages.php',        // expiry purges sealed email content on time; submits only for active Schools
         'PruneEmailRecords.php',                 // retention maintenance
         'PruneOutboxEvents.php',                 // retention maintenance (E21-D4)
+        'PruneAuditEvents.php',                  // retention maintenance (E21-D1)
+        'PruneAuthorityHistory.php',             // retention maintenance (E21-D6)
         'RetryMailMessage.php',                  // one named School; the submission claim re-checks the lifecycle
         'RekeyMailSuppressions.php',             // reads a stored recipient to re-key suppression; no School effect
         'SendFakeEmailEvent.php',                // local/testing only; one named School

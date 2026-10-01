@@ -2624,6 +2624,14 @@ anywhere):
 | `membership_role_assignments` (Teacher grants) | — | history guard; revoke, never delete | **revoked** | membership CASCADE; grantor and revoker declared `ON DELETE SET NULL`, **but the history guard refuses that change, so deleting a grantor or revoker User is refused** (corrected by E21.2) | the rows | yes |
 | `school_audit_events` / `platform_audit_events` | (ADR 0042 open item 1) | append-only | **revoked** (with UPDATE) | actor users **SET NULL**; school audit School **CASCADE** | permanent today | yes |
 
+*Update (E21.2B, 2026-10-01):* "purge = none" no longer holds for every
+row above:
+- Revoked role grants, ended TeachingAssignments, finished elevations and
+  audit events now expire after 7 years through narrow database retention
+  functions (`docs/security/E21-RETENTION-DETERMINATION.md` §5.1).
+- The runtime role still cannot delete them directly.
+- LMS owner/audience is never removed on its own.
+
 **Lifecycle analysis (production paths only).**
 - **User deletion.** No application path deletes a `users` row. If one were
   deleted out of band:

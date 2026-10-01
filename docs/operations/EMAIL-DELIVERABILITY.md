@@ -83,8 +83,15 @@ prints codes only.
   - keeps a provider event that a suppression still references;
   - skips held Schools (`RETENTION_HOLD_SCHOOL_IDS`).
 
-  Suppressions are released, never pruned, here. Expiry of released
-  suppressions comes with E21.2B.
+  Suppressions are released, never pruned, here.
+- **`platform:email-suppressions-prune [--dry-run]`** (scheduler, daily;
+  E21.2B) — deletes a **released** suppression
+  `MAIL_RELEASED_SUPPRESSION_RETENTION_YEARS` (project-adopted 1, pending
+  ratification) calendar year after `released_at`. It goes through the
+  narrow database retention function; the runtime role still has no DELETE
+  here. An active suppression never expires. `RETENTION_HOLD_PLATFORM`
+  holds them. The event a deleted suppression referenced is then pruned by
+  `platform:email-prune`.
 
 ## Deployment evidence checklist (ADR 0055 §17, §18, §23)
 

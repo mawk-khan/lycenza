@@ -50,7 +50,7 @@ class WebhookSignerTest extends TestCase
     #[Test]
     public function an_expired_timestamp_fails_verification(): void
     {
-        $timestamp = time() - 301;
+        $timestamp = time() - 330; // well past the window: a 1 s margin is flaky across a second boundary
         $signature = $this->signer->sign('secret', 'delivery-1', $timestamp, '{"a":1}');
 
         $this->assertFalse($this->signer->verify('secret', 'delivery-1', $timestamp, '{"a":1}', $signature, toleranceSeconds: 300));
@@ -59,7 +59,7 @@ class WebhookSignerTest extends TestCase
     #[Test]
     public function a_future_timestamp_beyond_tolerance_fails_verification(): void
     {
-        $timestamp = time() + 301;
+        $timestamp = time() + 330; // well past the window: a 1 s margin is flaky across a second boundary
         $signature = $this->signer->sign('secret', 'delivery-1', $timestamp, '{"a":1}');
 
         $this->assertFalse($this->signer->verify('secret', 'delivery-1', $timestamp, '{"a":1}', $signature, toleranceSeconds: 300));

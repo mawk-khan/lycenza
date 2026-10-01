@@ -70,8 +70,11 @@ class EmailProviderEventWebhookTest extends TestCase
             'missing' => '',
             'garbage' => 'not-a-signature',
             'wrong secret' => FakeEmailEventAdapter::sign($body, 'another-deployment-secret-0000000000000'),
-            'stale' => FakeEmailEventAdapter::sign($body, $this->secret(), time() - 301),
-            'future' => FakeEmailEventAdapter::sign($body, $this->secret(), time() + 301),
+            // Well outside the 300 s window: a one-second margin was flaky,
+            // because `future` became exactly 300 s (accepted) whenever a
+            // second boundary passed between signing and verifying.
+            'stale' => FakeEmailEventAdapter::sign($body, $this->secret(), time() - 330),
+            'future' => FakeEmailEventAdapter::sign($body, $this->secret(), time() + 330),
             'other body' => FakeEmailEventAdapter::sign($body.' ', $this->secret()),
         ] as $case => $signature) {
             $response = $this->postEvents([], $signature, body: $body);

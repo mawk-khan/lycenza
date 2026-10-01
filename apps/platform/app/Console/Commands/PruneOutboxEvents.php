@@ -82,7 +82,8 @@ class PruneOutboxEvents extends Command
             }
         });
 
-        $platformRows = $this->prune(fn () => $this->eligible($cutoff)->whereNull('school_id'), $batch, $dryRun);
+        // School-less rows are held by RETENTION_HOLD_PLATFORM (E21.2B).
+        $platformRows = $holds->platformHeld() ? 0 : $this->prune(fn () => $this->eligible($cutoff)->whereNull('school_id'), $batch, $dryRun);
 
         Log::info($dryRun ? 'retention.outbox_prune.dry_run' : 'retention.outbox_prune.completed', [
             'retention_days' => $days,

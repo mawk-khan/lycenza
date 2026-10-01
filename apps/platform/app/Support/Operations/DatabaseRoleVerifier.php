@@ -32,6 +32,21 @@ class DatabaseRoleVerifier
         'schools', 'platform_role_assignments', 'school_groups', 'api_clients', 'api_client_credentials',
         'platform_audit_events', 'school_audit_events', 'email_suppressions',
         'membership_role_assignments',
+        // E21.2B: authority history expired only through the retention functions.
+        'teaching_assignments', 'group_role_assignments', 'school_elevations',
+    ];
+
+    /**
+     * E21.2B: the narrow retention functions (migration 2026_11_06_090000).
+     * They are the ONLY sanctioned way the runtime role removes protected
+     * history: SECURITY DEFINER, `search_path` pinned, not owned by the
+     * runtime role, executable by it and never by PUBLIC.
+     */
+    public const RETENTION_FUNCTIONS = [
+        'retention_expire_school_audit_events', 'retention_expire_platform_audit_events',
+        'retention_expire_released_email_suppressions', 'retention_expire_membership_role_assignments',
+        'retention_expire_teaching_assignments', 'retention_expire_school_elevations',
+        'retention_expire_group_role_assignments', 'retention_expire_platform_role_assignments',
     ];
 
     /**
@@ -111,6 +126,20 @@ class DatabaseRoleVerifier
              from pg_trigger t join pg_proc p on p.oid = t.tgfoid where t.tgname = 'trg_platform_role_assignments_governance'",
         );
         $results[] = CheckResult::of('platform_root_boundary', $boundary !== null && $boundary->enabled && $boundary->owner_check);
+
+        $functions = DB::select(
+            "select p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config,
+                    pg_get_userbyid(p.proowner) as owner, has_function_privilege(?, p.oid, 'EXECUTE') as runtime_exec,
+                    (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0 and a.privilege_type = 'EXECUTE')) as public_exec
+             from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'retention\\_%'",
+            [$role],
+        );
+        $narrow = array_filter($functions, fn ($f) => in_array($f->proname, self::RETENTION_FUNCTIONS, true)
+            && $f->prosecdef && str_contains($f->config, 'search_path=') && $f->owner !== $role && $f->runtime_exec && ! $f->public_exec);
+        // Every retention_* function the runtime role can execute must be one
+        // of the sanctioned, narrow ones (the assert helpers are not executable).
+        $unexpected = array_filter($functions, fn ($f) => $f->runtime_exec && ! in_array($f->proname, self::RETENTION_FUNCTIONS, true));
+        $results[] = CheckResult::of('retention_functions_narrow', count($narrow) === count(self::RETENTION_FUNCTIONS) && $unexpected === []);
 
         return $results;
     }

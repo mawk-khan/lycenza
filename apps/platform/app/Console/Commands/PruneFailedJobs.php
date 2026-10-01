@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
 use Illuminate\Console\Command;
 use Illuminate\Queue\Failed\FailedJobProviderInterface;
@@ -21,8 +22,8 @@ use InvalidArgumentException;
  * There is no default: unset deletes nothing. Retrying, forgetting and
  * inspecting a failed job stay the operator's `platform:failed-jobs` / queue
  * commands. This only bounds how long an unhandled failure is kept.
- * Failed jobs carry no School column, so the School hold seam does not
- * apply. Counts only in logs; `--dry-run` only counts.
+ * Failed jobs carry no School column, so RETENTION_HOLD_PLATFORM holds them
+ * (E21.2B). Counts only in logs; `--dry-run` only counts.
  */
 class PruneFailedJobs extends Command
 {
@@ -31,7 +32,7 @@ class PruneFailedJobs extends Command
 
     protected $description = 'Deletes failed_jobs rows older than FAILED_JOBS_RETENTION_DAYS after their failure (E21-D13; nothing while unset).';
 
-    public function handle(FailedJobProviderInterface $failer): int
+    public function handle(FailedJobProviderInterface $failer, RetentionHolds $holds): int
     {
         try {
             $days = RetentionPeriod::days(config('retention.failed_jobs_days'));
@@ -44,6 +45,14 @@ class PruneFailedJobs extends Command
         if ($days === null) {
             Log::info('retention.failed_jobs_prune.unconfigured');
             $this->info('Failed-job retention is not configured (FAILED_JOBS_RETENTION_DAYS); nothing was deleted.');
+
+            return self::SUCCESS;
+        }
+
+        // Failed jobs belong to no School: RETENTION_HOLD_PLATFORM holds them (E21.2B).
+        if ($holds->platformHeld()) {
+            Log::info('retention.failed_jobs_prune.held');
+            $this->info('Platform records are on retention hold (RETENTION_HOLD_PLATFORM); nothing was deleted.');
 
             return self::SUCCESS;
         }

@@ -125,6 +125,28 @@ Schedule::command('platform:failed-jobs-prune')
     ->withoutOverlapping()
     ->name('failed-jobs-prune');
 
+// E21.2B (E21-D1/D2/D6, project-adopted, pending legal ratification): audit,
+// released suppressions and authority history expire through the narrow
+// database retention functions (RetentionExpiry). The runtime role still
+// holds no DELETE on those ledgers, so the ordinary scheduler needs no
+// elevated credentials. Audit runs before authority history, so elevations
+// whose audit events have expired become eligible the same night. Each has
+// no default: until configured it deletes nothing.
+Schedule::command('platform:audit-prune')
+    ->dailyAt('03:00')
+    ->withoutOverlapping()
+    ->name('audit-prune');
+
+Schedule::command('platform:email-suppressions-prune')
+    ->dailyAt('03:10')
+    ->withoutOverlapping()
+    ->name('email-suppressions-prune');
+
+Schedule::command('platform:authority-history-prune')
+    ->dailyAt('03:20')
+    ->withoutOverlapping()
+    ->name('authority-history-prune');
+
 // Phase 0O.10A (ADR 0056 section 13): ended password-recovery credentials
 // are deleted 24 hours later (technical data; the audit is separate).
 Schedule::command('platform:account-recovery-prune')

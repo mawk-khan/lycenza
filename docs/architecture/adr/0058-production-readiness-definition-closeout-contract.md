@@ -975,3 +975,18 @@ pending ratification):
 Production evidence still needs the values set in the real environment
 (E09). Remaining engineering is E21.2B–F (released-suppression expiry moved
 to E21.2B), then E21.2G, then final ratification.
+
+## Note — E21.2B audit, authority history and released suppressions (2026-10-01)
+
+**E21 stays `LEGAL_REVIEW_REQUIRED`.** E21.2B implemented the project-adopted
+periods for:
+- **D1 audit:** 7 years;
+- **D2 released suppressions:** 1 year;
+- **D6 authority history:** 7 years.
+
+It uses a narrow privileged path: `SECURITY DEFINER` functions with fixed
+predicates, a database age floor and a tenant tie, executable by the runtime
+role, which still holds no DELETE on any protected ledger
+(`DatabaseRoleVerifier`, `retention_functions_narrow`). LMS owner/audience
+stays with its parent resource. Remaining: E21.2C–F, then E21.2G and final
+ratification.

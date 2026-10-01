@@ -206,6 +206,20 @@ class EmailRetentionPruneTest extends TestCase
     }
 
     #[Test]
+    public function the_platform_hold_keeps_identity_level_messages_and_events(): void
+    {
+        // E21.2B: records that belong to no School are held as one group.
+        config(['retention.hold_platform' => true]);
+        $identity = $this->identityMessage($this->days(400));
+        $event = $this->event($this->days(400));
+
+        $this->artisan('platform:email-prune')->assertSuccessful();
+
+        $this->assertTrue($this->messageExists(null, $identity));
+        $this->assertTrue(EmailEvent::query()->whereKey($event->id)->exists());
+    }
+
+    #[Test]
     public function batches_dry_run_and_reruns_are_safe(): void
     {
         config(['retention.batch_size' => 2]);

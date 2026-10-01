@@ -90,9 +90,11 @@ class PruneEmailRecords extends Command
         });
 
         // E21.1 L1: identity-level mail (account recovery, security notices).
-        $identityMessages = $platformScope->run(fn () => $this->pruneMessages($cutoff, $batch, $dryRun));
-
-        $events = $this->pruneEvents($cutoff, $batch, $dryRun);
+        // Provider events belong to no School either. Both are held by
+        // RETENTION_HOLD_PLATFORM (E21.2B).
+        $platformHeld = $holds->platformHeld();
+        $identityMessages = $platformHeld ? 0 : $platformScope->run(fn () => $this->pruneMessages($cutoff, $batch, $dryRun));
+        $events = $platformHeld ? 0 : $this->pruneEvents($cutoff, $batch, $dryRun);
 
         $heartbeats->recordSuccess('email-prune');
         Log::info($dryRun ? 'platform.email_prune.dry_run' : 'platform.email_prune.completed', [

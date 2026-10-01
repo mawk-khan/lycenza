@@ -22,6 +22,18 @@ return [
     // E21-D13: failed_jobs rows after their terminal failure.
     'failed_jobs_days' => env('FAILED_JOBS_RETENTION_DAYS'),
 
+    // E21.2B: hold every record that belongs to no School (RetentionHolds::platformHeld()).
+    'hold_platform' => filter_var(env('RETENTION_HOLD_PLATFORM', false), FILTER_VALIDATE_BOOLEAN),
+
+    // E21-D1: audit ledgers, calendar years after `occurred_at` (adopted: 7).
+    'audit_years' => env('AUDIT_RETENTION_YEARS'),
+
+    // E21-D6: revoked/ended authority, calendar years after the end (adopted: 7).
+    'authority_history_years' => env('AUTHORITY_HISTORY_RETENTION_YEARS'),
+
+    // E21-D2: released email suppressions, calendar years after release (adopted: 1).
+    'released_suppression_years' => env('MAIL_RELEASED_SUPPRESSION_RETENTION_YEARS'),
+
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 
 ];

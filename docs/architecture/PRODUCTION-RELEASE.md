@@ -294,6 +294,22 @@ email recovery.
   - **Holds.** `RETENTION_HOLD_SCHOOL_IDS` lists any School under a legal
     hold.
   - **Before enabling a prune**, run it once with `--dry-run`.
+- **E21.2B retention (2026-10-01):**
+  - **New daily tasks:** `audit-prune` (03:00), `email-suppressions-prune`
+    (03:10) and `authority-history-prune` (03:20).
+  - **Privilege model (ADR 0050 database roles).** The runtime role gains
+    no DELETE. Migration `2026_11_06_090000` adds narrow `SECURITY DEFINER`
+    retention functions: fixed table and predicate, a database age floor, a
+    tenant tie, EXECUTE for the runtime role only.
+    `platform:verify-database` checks them (`retention_functions_narrow`)
+    and still refuses any runtime DELETE on the protected ledgers. The
+    scheduler needs no admin credential.
+  - **Production sets** `AUDIT_RETENTION_YEARS=7`,
+    `AUTHORITY_HISTORY_RETENTION_YEARS=7` and
+    `MAIL_RELEASED_SUPPRESSION_RETENTION_YEARS=1` (project-adopted, pending
+    ratification).
+  - **Holds.** `RETENTION_HOLD_PLATFORM=true` holds every School-less
+    record.
 
 ## 6. Seeding: production-safe versus demo
 

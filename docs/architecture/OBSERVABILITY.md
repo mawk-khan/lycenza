@@ -451,3 +451,16 @@ real environment:
 - **Logs.** Every prune logs counts only (`retention.*`,
   `platform.email_prune.*`, `webhooks.deliveries_prune.*`), never a
   deleted payload.
+
+## E21.2B retention (2026-10-01)
+
+- **Scheduler.** The daily tasks `audit-prune`, `email-suppressions-prune` and
+  `authority-history-prune` are covered by OBS-06 with the daily-cadence
+  window (alert rules regenerated).
+- **Metric** `lycenza_retention_rows_total`:
+  - type: counter;
+  - labels: `operation` (the closed `RetentionExpiry` categories) and
+    `outcome` (`eligible`, `deleted`, `held`);
+  - no identifiers.
+
+  A failed run is the scheduler task's failure metric (OBS-06).

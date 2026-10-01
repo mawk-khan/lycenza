@@ -2212,8 +2212,20 @@ parallel, and the email provider tail) — not started.
   - new outbox and failed-job prunes, 30 d each;
   - the School hold seam.
 
-  Released-suppression expiry moved to E21.2B. Next: E21.2B (audit,
-  authority history, released suppressions) — not started.
+  Released-suppression expiry moved to E21.2B.
+- **E21.2B — Audit, authority-history and released-suppression retention
+  (2026-10-01): closed.**
+  - narrow `SECURITY DEFINER` retention functions (fixed predicates, a
+    database age floor, a tenant tie; no runtime DELETE);
+  - `platform:audit-prune` (7 y), `platform:email-suppressions-prune` (1 y)
+    and `platform:authority-history-prune` (7 y: grants, TeachingAssignments,
+    elevations);
+  - `RETENTION_HOLD_PLATFORM`;
+  - LMS owner/audience kept with its parent.
+
+  E21.2A and E21.2B are closed. **Next: E21.2C — Communications &
+  Documents retention (not started).** E21 stays OPEN pending E21.2C–G and
+  final ratification.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**
   published / closed. It inventoried every v1 category and recorded 14 open
   decisions with neutral options, a determination template and no immediate

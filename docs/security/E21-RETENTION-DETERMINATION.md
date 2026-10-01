@@ -59,7 +59,11 @@ narrow exclusion seam `RETENTION_HOLD_SCHOOL_IDS` (`config/retention.php`):
 a School listed there is skipped by every tenant-scoped retention command.
 Its rows are counted as held, and nothing of it is deleted.
 - This is a predicate, not case management.
-- Platform-level rows (no School) are not School-holdable.
+- Platform-level rows (no School) are not School-holdable. Since E21.2B,
+  `RETENTION_HOLD_PLATFORM=true` holds every School-less record as one
+  group: the platform audit, email suppressions, Group and platform grants,
+  identity-level email and events, School-less outbox rows and failed jobs.
+  Nothing School-less is ever purged without a hold key.
 - Finer holds (per subject, per record) are designed in the checkpoint
   whose category needs them (§5).
 
@@ -111,10 +115,18 @@ The checkpoints are listed in §5.
 - **Tenant closure (D11):** School audit is retained per this period, not
   per School deletion. The current `school_id` CASCADE is never used as the
   closure path.
-- **Class B → E21.2B.** This needs a narrowly privileged expiry path for
-  append-only ledgers (the runtime role must stay unable to delete) and an
-  actor-anonymization design.
-- **Status:** not implemented.
+- **Class B → E21.2B: IMPLEMENTED.**
+  - **Command:** `platform:audit-prune`, with `AUDIT_RETENTION_YEARS=7`
+    calendar years from `occurred_at`. The boundary is strict (a row
+    exactly at the cutoff is kept), and 29 February never overflows.
+  - **Privileged path:** the narrow retention functions in §5.1, with a
+    database age floor of 7 years. The runtime role still has no DELETE on
+    either ledger.
+  - **Integrity:** the ledgers have no hash chain, sequence or parent link,
+    so expiry is a plain deletion with no tombstone.
+  - **Actor ids:** no separate proactive actor anonymization. An actor id
+    leaves with its event at expiry, and erasure before expiry stays D10
+    (E21.2F).
 
 ### E21-D2 — Transactional email
 
@@ -135,12 +147,16 @@ The checkpoints are listed in §5.
 - **Prerequisites:** the E21.1 findings L1–L4 must be fixed first. They
   were fixed and tested in E21.2A, so 180 is now the approved production
   value (pending ratification).
-- **Released-suppression expiry: class B → E21.2B.** The runtime role has
-  no DELETE on `email_suppressions`, by design: `DatabaseRoleVerifier` and
-  the raw-SQL invariants pin it. So expiring released rows needs the same
-  narrowly privileged expiry path as the audit ledgers (D1). Until then,
-  released suppressions are kept, and so are the provider events they
-  reference.
+- **Released-suppression expiry: class B → E21.2B, IMPLEMENTED.**
+  - **Command:** `platform:email-suppressions-prune`, with
+    `MAIL_RELEASED_SUPPRESSION_RETENTION_YEARS=1` calendar year after
+    `released_at` (never `created_at`).
+  - **Privileged path:** a narrow retention function with a 1-year floor.
+    The runtime role still has no DELETE on `email_suppressions`.
+  - **Active suppressions** are never eligible.
+  - **Provider events:** the event a deleted suppression referenced is
+    freed, and `platform:email-prune` deletes it on its next run once it is
+    past 180 days.
 - **Class A → E21.2A (implemented).**
 
 ### E21-D3 — Communications
@@ -208,7 +224,27 @@ The checkpoints are listed in §5.
   the later expiry wins.
 - **Constraint:** the ability to reconstruct who held authority at a
   historical point must never be destroyed before expiry.
-- **Class B → E21.2B** (with D1).
+- **Class B → E21.2B, IMPLEMENTED.** `platform:authority-history-prune`,
+  with `AUTHORITY_HISTORY_RETENTION_YEARS=7` calendar years, deletes through
+  the narrow retention functions:
+
+  | Record | Authority-end trigger | Mechanism | Pruned now? |
+  |---|---|---|---|
+  | School role grants (`membership_role_assignments`) | `revoked_at` | `retention_expire_membership_role_assignments` | **Yes**. Active grants never |
+  | TeachingAssignments | `ends_on`, the last effective day, on the School-local date | `retention_expire_teaching_assignments` | **Yes**. Open and future rows never |
+  | Elevations (`school_elevations`) | `ended_at`, else `expires_at`; finished only | `retention_expire_school_elevations` | **Yes**, once no School audit event references them |
+  | Group grants (`group_role_assignments`) | `revoked_at` | `retention_expire_group_role_assignments` | **Yes**, once no elevation references them |
+  | Platform role grants | `revoked_at` | `retention_expire_platform_role_assignments` | **Yes**. Active grants never |
+  | Employee↔User link | the unlink/link audit time | the audit ledger (D1) | **Through D1**. No separate history table |
+  | Group membership (`school_group_members`) | removal | already hard-deleted on removal; history is platform audit | **Through D1** |
+  | LMS owner and Section audience | — | kept with the parent resource | **No, deferred.** Never removed while the parent survives |
+  | Revoked API client credentials | — | — | **Deferred to E21.2G**: integration lifecycle, and no production partner scopes exist |
+
+- **Longest period wins, enforced by the database.** An elevation is
+  skipped while an audit event references it, and a Group grant while an
+  elevation does (RESTRICT FKs).
+- **LMS:** a future parent purge must also satisfy
+  `EmbeddedAuthorityRetention::mayRemoveWithParent()`.
 
 ### E21-D7 — Student / academic history
 
@@ -316,12 +352,42 @@ The checkpoints are listed in §5.
 | Checkpoint | Scope | State |
 |---|---|---|
 | **E21.2A** | Mail (L1–L4, 180 d), webhooks (30/90 d), outbox (30 d), failed jobs (30 d), the School hold seam | **Implemented** (E21.2A commit; full isolated regression) |
-| E21.2B | Audit (D1), authority history (D6), released-suppression expiry (D2): a narrowly privileged expiry path for protected ledgers | Not started |
-| E21.2C | Communications (D3), Documents and orphans (D5) | Not started |
+| **E21.2B** | Audit (D1), authority history (D6), released-suppression expiry (D2): a narrowly privileged expiry path for protected ledgers | **Implemented** (E21.2B commit; full isolated regression) |
+| E21.2C | Communications (D3), Documents and orphans (D5) | **Next — not implemented** |
 | E21.2D | Student / academic (D7) | Not started |
 | E21.2E | Finance (D8), HR and payroll (D9) | Not started |
 | E21.2F | Erasure (D10) and tenant-closure orchestration (D11) | Not started |
 | E21.2G | Final retention closure audit | Not started |
+
+### 5.1 The privileged retention path (E21.2B)
+
+- **Database functions.** Migration `2026_11_06_090000` adds one
+  `SECURITY DEFINER` function per protected table: School audit, platform
+  audit, released suppressions, School/Group/platform grants, elevations
+  and TeachingAssignments. Each has:
+  - a pinned `search_path` and schema-qualified tables;
+  - a fixed table and eligibility predicate, with no caller-supplied SQL;
+  - a database **age floor** (7 years, or 1 year for suppressions), so no
+    caller can expire a row early;
+  - for School tables, a **tenant tie**: the School must be the caller's
+    own `app.current_school_id`;
+  - a batch capped at 5000, `ORDER BY id`, `SKIP LOCKED`, and the predicate
+    re-applied in the DELETE;
+  - a `p_dry_run` count.
+- **Grants.** EXECUTE is revoked from PUBLIC and granted to the runtime
+  role only. The runtime role gains **no** DELETE: `DatabaseRoleVerifier`
+  still refuses one, and its new `retention_functions_narrow` check proves
+  the functions are the only executable `retention_*` ones and stay narrow.
+- **Callers.** `App\Support\Retention\RetentionExpiry` is the only caller
+  (architecture test). It uses a closed category map, the hold seam and the
+  `lycenza_retention_rows_total{operation,outcome}` metric.
+- **Execution.** The ordinary scheduler runs these as daily maintenance
+  (`audit-prune` 03:00, `email-suppressions-prune` 03:10,
+  `authority-history-prune` 03:20) with the runtime credentials. It needs
+  no elevated database credential. No request path calls them.
+- **Rollback.** `down()` drops only the functions, never history.
+  Migrate/rollback/re-apply was verified on the DDEV database
+  (`pg_dump --schema-only`: migrated = re-applied; rolled back = before).
 
 **Deployment-side (operator, ADR 0058 E07/E09/E10):**
 - the log and metric backend retention (D13);
@@ -336,7 +402,10 @@ is unset. Production must set them once their checkpoint ships.
 | Setting | Adopted value | Checkpoint |
 |---|---|---|
 | `MAIL_RETENTION_DAYS` | 180 | E21.2A |
-| (released suppressions, 365 days) | setting defined by E21.2B | E21.2B |
+| `MAIL_RELEASED_SUPPRESSION_RETENTION_YEARS` | 1 (calendar year) | E21.2B |
+| `AUDIT_RETENTION_YEARS` | 7 (calendar years) | E21.2B |
+| `AUTHORITY_HISTORY_RETENTION_YEARS` | 7 (calendar years) | E21.2B |
+| `RETENTION_HOLD_PLATFORM` | false unless a hold is ordered | E21.2B |
 | `WEBHOOKS_DELIVERY_RETENTION_DAYS` | 30 (delivered) | E21.2A |
 | `WEBHOOKS_FAILED_DELIVERY_RETENTION_DAYS` | 90 (failed/abandoned) | E21.2A |
 | `OUTBOX_RETENTION_DAYS` | 30 | E21.2A |
