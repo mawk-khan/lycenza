@@ -5038,3 +5038,25 @@ defaulted silently; each item fails closed or keeps its documented default.
   - E02/E15 qualification of a release image that contains FEE (the last
     VERIFIED digests predate FEE.1);
   - a fresh E16 decision.
+
+## Retention (E21.2E, 2026-10-01)
+
+E21-D8 adopts **8 years after the financial year closes** for
+authoritative financial evidence
+(`docs/security/E21-RETENTION-DETERMINATION.md`, project-adopted, pending
+ratification). **No financial evidence expires yet:**
+- every balance is derived from all postings and allocations ("Balance
+  derivation" above);
+- accounting-period close is deferred;
+- so deleting a closed year's evidence would change today's account
+  balances and dues.
+
+Expiry first needs a financial-year close design: closing entries,
+carried-forward opening balances and a locked period. That is recorded for
+E21.2G and is not guessed here.
+- The financial-year start month (`fee_settings`) is immutable only once
+  receipts exist.
+- No retention or prune code names a Finance, Fees, Payments or
+  payroll-ledger table (`FinanceRetentionGuardTest`).
+- Retained Finance keeps its Student (E21.2D) and its Employee (E21.2E).
+- Draft working rows keep their existing draft-only lifecycle.

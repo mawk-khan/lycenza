@@ -228,15 +228,30 @@ class StorageOrphanRetentionTest extends TestCase
         );
         $this->assertNotEmpty($files);
 
-        // E21.2D: the one sanctioned exception is the parent seam, which deletes only
-        // a Student's own Documents inside that Student's core purge.
+        // E21.2D/E21.2E: the one sanctioned exception for `documents` is the parent
+        // seam, which deletes only one owner's Documents inside that owner's purge.
         $seam = app_path('Domain/Documents/Application/Retention/DocumentParentRetention.php');
         $this->assertContains($seam, $files);
         $seamCode = (string) file_get_contents($seam);
-        $this->assertSame(substr_count($seamCode, "table('documents')"), substr_count($seamCode, "table('documents')->where('student_id', \$studentId)"), 'every seam query is scoped to one Student owner');
+        $this->assertSame(substr_count($seamCode, "table('documents')"), substr_count($seamCode, "table('documents')->where(\$"), 'every seam query is scoped to one owner');
+        $this->assertStringContainsString("private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id'];", $seamCode, 'a closed owner map');
         $callers = [];
         exec('grep -rlF --include=*.php '.escapeshellarg('use App\\Domain\\Documents\\Application\\Retention\\DocumentParentRetention;').' '.escapeshellarg(app_path()), $callers);
-        $this->assertSame([app_path('Domain/Students/Application/Retention/StudentRecordRetentionService.php')], $callers, 'only the Student core purge uses the seam');
+        sort($callers);
+        $this->assertSame([
+            app_path('Domain/HR/Application/Retention/EmployeeRecordRetentionService.php'),
+            app_path('Domain/Students/Application/Retention/StudentRecordRetentionService.php'),
+        ], $callers, 'only the Student core purge and the Employee evidence purge use the seam');
+
+        // E21.2E: HR's own `employee_documents` go only with their Employee, in HR's
+        // evidence purge. The only other retention files naming the table are
+        // read-only (the dependency catalog's closed parent list, the orphan
+        // reaper's reference check).
+        $hr = app_path('Domain/HR/Application/Retention/EmployeeRecordRetentionService.php');
+        $naming = array_values(array_filter($files, fn (string $f) => str_contains((string) file_get_contents($f), "'employee_documents'")));
+        sort($naming);
+        $this->assertSame([$hr, app_path('Support/Retention/ReferencingRows.php'), app_path('Support/Retention/StorageOrphanReaper.php')], $naming);
+        $this->assertStringContainsString('public function pruneEvidence(', (string) file_get_contents($hr));
 
         foreach (array_diff($files, [$seam]) as $file) {
             $code = (string) file_get_contents($file);

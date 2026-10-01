@@ -28,12 +28,20 @@ final class RetentionMetrics
 
     public const STUDENT_CORE = 'student_core';
 
+    /** E21.2E (E21-D9) Employee categories; their units are Employees. */
+    public const EMPLOYEE_ANCILLARY = 'employee_ancillary';
+
+    public const PAYROLL_EMPLOYEE_RECORD = 'payroll_employee_record';
+
+    public const EMPLOYEE_EVIDENCE = 'employee_evidence';
+
     /** @return list<string> */
     public static function categories(): array
     {
         return array_merge(RetentionExpiry::categories(), [
             self::COMMUNICATION_CONTENT, self::COMMUNICATION_DELIVERY, self::STORAGE_ORPHAN,
             self::STUDENT_ATTENDANCE, self::STUDENT_ROLLOVER_ITEM, self::STUDENT_GUARDIAN_RELATIONSHIP, self::STUDENT_CORE,
+            self::EMPLOYEE_ANCILLARY, self::PAYROLL_EMPLOYEE_RECORD, self::EMPLOYEE_EVIDENCE,
         ]);
     }
 

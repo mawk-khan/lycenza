@@ -848,3 +848,18 @@ special threshold (₹25,000) remains
 0036) -- this is a deliberate, disclosed legal gap, not an
 implementation gap. See the Phase 9.6 Final Readiness Report for the
 publication verdict.
+
+## Retention (E21.2E, 2026-10-01)
+
+Under E21-D9 (`docs/security/E21-RETENTION-DETERMINATION.md`, project-adopted,
+pending ratification), Payroll's per-employment configuration goes 8
+calendar years after the Employee's final separation. That is compensation
+assignments (their append-only values follow by FK cascade) and the
+statutory identifiers, tax, PF and ESI profiles.
+- It is removed by `PayrollEmployeeRetentionService`, just before HR's
+  evidence purge.
+- **Never while a payroll result, adjustment or LWF charge references the
+  employment.** Payroll results and postings are ledger evidence (D8). The
+  ledger has no financial-year close, so they are never expired, and the
+  Employee is kept.
+- Draft runs and results keep their existing lifecycle.

@@ -237,6 +237,9 @@ The checkpoints are listed in §5.
   - Archived Documents are never globally purged by a single age.
   - Object-storage lifecycle expiry is never enabled independently of
     database eligibility (current objects).
+- **E21.2E:** Employee-owned Documents and HR `employee_documents` go with
+  their Employee's D9 evidence purge (bytes after commit). No Finance
+  Documents exist.
 - **E21.2D:** Student-owned Documents now go with their Student's D7 core
   purge (`DocumentParentRetention`), metadata in the purge transaction and
   bytes after commit; a failed byte delete is left to the orphan run.
@@ -413,8 +416,61 @@ The checkpoints are listed in §5.
   existing lifecycle.
 - **Unchanged:** immutability and reversal semantics.
 - **Legal hold:** overrides.
-- **Class B → E21.2E.** The finance store is append-only by design, so
-  expiry needs an archive-aware design.
+- **Class B → E21.2E. AUDITED; EXPIRY BLOCKED (fail-closed), recorded for
+  E21.2G.** E21.2E found that no posted financial evidence can expire
+  safely yet. Nothing in Finance, Fees, Payments or the payroll ledger is
+  deleted, and `FinanceRetentionGuardTest` keeps every retention path off
+  those tables.
+  - **Why: balances are derived from all history.** Every balance is the
+    sum of all postings and allocations (`FINANCE.md`, "Balance
+    derivation"): an account balance, a charge's outstanding amount, a
+    Student's dues. There is no accounting-period close and no carried-
+    forward opening balance (`FINANCE.md`: "Accounting-period close/lock …
+    deferred"). Deleting a financial year's evidence would silently change
+    today's balances. So expiry needs a financial-year close design first:
+    closing entries, carried-forward balances and a locked period. That is
+    a Finance correction contract (ADR) to design, not to guess here.
+  - **Financial-year trigger (for that future design):**
+    - The source is `fee_settings.financial_year_start_month` (default
+      April).
+    - The database refuses a change once any receipt exists
+      (`payments_guard_receipt_numbering_settings`). Before the first
+      receipt it can change, so rows created before then have no fixed
+      financial year: **ambiguous, fail closed**.
+    - Receipts carry their series key (`payments_fy_series_key`).
+    - Journal entries carry only `posted_at`; there is no `effective_date`.
+  - **Classification:**
+    - **A, authoritative (journal-bound):**
+      - journal entries and lines;
+      - charges;
+      - payments with their allocations, provider events and receipts;
+      - fee assessments, adjustments and concessions;
+      - late-fee assessments;
+      - payroll run postings and statutory run postings.
+    - **B, supporting:**
+      - fee and late-fee assessment runs with their committed items;
+      - optional selections;
+      - receipt counters;
+      - frozen payroll results and result lines.
+    - **C, draft/working:**
+      - draft run items;
+      - draft fee structure lines and installments;
+      - draft payroll results.
+
+      These keep their existing draft-only delete lifecycle, unchanged.
+      Their triggers already refuse deletes once posted.
+    - **D, configuration (kept):**
+      - ledger accounts;
+      - fee heads, structures, late-fee rules and settings;
+      - payroll accounting and statutory rule versions.
+    - **E, telemetry:** none separate (provider events are authoritative
+      evidence).
+  - **No Finance Documents** exist (no Finance owner on `documents`).
+  - **Dependencies:**
+    - retained Finance keeps its Student (E21.2D `dependency_blocked`);
+    - retained Finance keeps its Employee through payroll results
+      (E21.2E);
+    - Guardians are not referenced by Finance.
 
 ### E21-D9 — HR and payroll
 
@@ -427,7 +483,62 @@ The checkpoints are listed in §5.
   - Employment history, authority history, payroll evidence and audit
     evidence are never deleted under the short rule.
 - **Overlaps:** the longest period wins.
-- **Class B → E21.2E.**
+- **Class B → E21.2E, IMPLEMENTED.** `platform:employee-retention-prune`
+  (`--only=ancillary|evidence`, `--dry-run`), with
+  `EMPLOYEE_ANCILLARY_RETENTION_YEARS=2` and
+  `EMPLOYEE_EVIDENCE_RETENTION_YEARS=8`:
+  - **Final separation (the trigger).** `EmployeeRetentionEligibility`
+    (HR) reads EmploymentRecords. `EmploymentService::end()` is the only
+    path to a terminal status from the closed set (`separated`,
+    `terminated`, `retired`, `deceased`), with an inclusive `ends_on`.
+    - **Separated:** at least one record, ALL terminal, all dated. The
+      date is the latest `ends_on`.
+    - **Current:** any draft, pre-joining, active or notice-period record,
+      i.e. a current or future employment.
+    - **Unresolved and kept:** no record, or a terminal record without
+      `ends_on`.
+    - **Rehire** is a new record, so the clock runs from the LAST
+      separation.
+    - Archive (`record_status`), the User link and membership are never
+      used.
+  - **Ancillary (2 y),** the D9-named sub-records, each confirmed
+    unreferenced and already hard-deletable by HR during employment:
+    - addresses, emergency contacts and notes;
+    - qualifications, experience and certifications.
+  - **Evidence (8 y),** in two module purges:
+    - **Payroll:** compensation assignments (their append-only values
+      follow by FK cascade) and the statutory identifiers, tax, PF and ESI
+      profiles. Only when no payroll result, adjustment or LWF charge
+      references the employment.
+    - **HR, then:** the Employee root with its employment records,
+      assignments, personal details (date of birth and nationality are not
+      in the ancillary list), HR documents (`employee_documents`) and
+      Employee-owned Documents. Bytes are deleted after commit; a failure
+      is left to the orphan run.
+  - **Longest period wins, by construction.** Any other row referencing the
+    Employee, an employment, an assignment or a compensation assignment
+    blocks it (`dependency_blocked`, kept). The check reads the FK catalog
+    (`ReferencingRows`); nothing is cascaded. This keeps the Employee for:
+    - payroll results (ledger, D8);
+    - TeachingAssignments (D6, 7 y after they end);
+    - Attendance sessions, timetable entries and LMS ownership;
+    - Transport and Visitor rows;
+    - another Employee's assignment naming one of its assignments as
+      manager.
+  - **A linked User blocks it.** Retention never unlinks a User (D10,
+    E21.2F).
+  - **Pinned:** the per-table classification is checked against the
+    catalog by `EmployeeRetentionClassificationTest`.
+- **D9 findings (recorded, not guessed):**
+  - **Paid staff are kept.** An Employee with payroll results stays until
+    D8 can expire ledger evidence.
+  - **Staff who taught are kept** while the Section-level teaching records
+    that reference them have no adopted period (E21.2G).
+  - **Personal details** mix identity (date of birth, nationality) with
+    personal contact (email, phone). They stay with the 8-year evidence.
+    Minimising the contact columns earlier would be column-level erasure
+    (D10, E21.2F).
+  - **`employees.work_email`/`work_phone`** stay with the root.
 
 ### E21-D10 — Data-subject erasure and anonymization
 
@@ -497,8 +608,8 @@ The checkpoints are listed in §5.
 | **E21.2B** | Audit (D1), authority history (D6), released-suppression expiry (D2): a narrowly privileged expiry path for protected ledgers | **Implemented** (E21.2B commit; full isolated regression) |
 | **E21.2C** | Communications (D3), Documents and orphans (D5) | **Implemented** (E21.2C commit; full isolated regression) |
 | **E21.2D** | Student / academic (D7) | **Implemented** (E21.2D commit; full isolated regression) |
-| E21.2E | Finance (D8), HR and payroll (D9) | **Next — not started** |
-| E21.2F | Erasure (D10) and tenant-closure orchestration (D11) | Not started |
+| **E21.2E** | Finance (D8), HR and payroll (D9) | **Implemented** for D9 (E21.2E commit; full isolated regression). D8 **audited, expiry blocked**: no financial-year close or carried-forward balances (recorded for E21.2G) |
+| E21.2F | Erasure (D10) and tenant-closure orchestration (D11) | **Next — not started** |
 | E21.2G | Final retention closure audit | Not started |
 
 ### 5.1 The privileged retention path (E21.2B)
@@ -592,6 +703,36 @@ The checkpoints are listed in §5.
   `dependency_blocked`. The units are Students. Logs and metrics carry
   counts only.
 
+### 5.4 HR and payroll expiry (E21.2E)
+
+- **No new database privilege.** Every D9 table is an ordinary School
+  table under RLS. The append-only compensation values go only by their
+  FK cascade from a compensation assignment. No migration, function or
+  index was added. The existing indexes serve the scans: `employee_id`,
+  `(employee_id, ends_on)`, and the Payroll profiles'
+  `(school_id, employment_record_id, …)` composites (the RLS School
+  predicate supplies `school_id`).
+- **Shared discipline.** `App\Support\Retention\RetentionUnit` handles
+  one unit per transaction for both D7 and D9:
+  1. lock the root row (FOR UPDATE);
+  2. recheck the trigger;
+  3. recheck the dependencies;
+  4. delete only the module's own rows;
+  5. delete any bytes after commit.
+
+  A per-unit failure counts as `error` and is retried next run.
+- **Locking.** The Employee-row lock is the one
+  `EmploymentService::create()` takes for every hire:
+  - a rehire committed first keeps everything;
+  - an evidence purge committed first makes a late rehire fail on its FK;
+  - all of this is proven with two real processes.
+- **Dry run.** It counts the HR root as if Payroll's purge of the same run
+  had already cleared Payroll's rows.
+- **Execution:** `employee-retention-prune`, daily 04:50, without overlap.
+- **Metrics:** `lycenza_retention_rows_total` gains `employee_ancillary`,
+  `payroll_employee_record` and `employee_evidence`. The units are
+  Employees, and only counts are recorded.
+
 **Deployment-side (operator, ADR 0058 E07/E09/E10):**
 - the log and metric backend retention (D13);
 - backup and bucket noncurrent-version lifecycle (D12);
@@ -620,6 +761,9 @@ is unset. Production must set them once their checkpoint ships.
 | `RETENTION_ORPHAN_SCAN_LIMIT` | 10000 per School per run (default) | E21.2C |
 | `STUDENT_OPERATIONAL_RETENTION_YEARS` | 7 (calendar years after final exit) | E21.2D |
 | `STUDENT_CORE_RETENTION_YEARS` | 25 (calendar years after final exit; never shorter than operational) | E21.2D |
+| `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 (calendar years after final separation) | E21.2E |
+| `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 (calendar years after final separation; never shorter than ancillary) | E21.2E |
+| *(D8 Finance)* | 8 years after the financial year closes: **no setting, no expiry yet** (needs a financial-year close) | E21.2E (blocked) |
 
 ## 7. Ratification record (to be completed by the final reviewer)
 

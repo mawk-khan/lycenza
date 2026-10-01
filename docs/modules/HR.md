@@ -3754,3 +3754,36 @@ It is administrative planning, not identity: `ActingEmployeeResolver`
 remains the only way to identify an acting User, with its stricter
 `active`/`notice_period` on-the-day rule. HR depends on no consumer of
 either answer.
+
+## Retention (E21.2E, 2026-10-01)
+
+E21-D9 (`docs/security/E21-RETENTION-DETERMINATION.md`, project-adopted,
+pending ratification) runs from the Employee's **final separation**:
+- every EmploymentRecord is terminal (`separated`, `terminated`, `retired`
+  or `deceased`, set only by `EmploymentService::end()`) with an `ends_on`;
+- the separation date is the latest `ends_on`;
+- any draft, pre-joining, active or notice-period record keeps the Employee
+  current;
+- a rehire (a new record) restarts the clock;
+- no record, or a terminal one without `ends_on`, is unresolved and kept.
+
+`App\Domain\HR\Application\Retention\EmployeeRetentionEligibility` is
+the single rule. It locks the Employee row exactly like
+`EmploymentService::create()`.
+- **2 years after separation:** addresses, emergency contacts, notes,
+  qualifications, experience and certifications are deleted by
+  `platform:employee-retention-prune`. The ordinary audited hard-deletes
+  during employment are unchanged.
+- **8 years after separation:** the Employee goes, with:
+  - employment records and assignments;
+  - personal details;
+  - `employee_documents` and Employee-owned Documents.
+
+  It goes only when nothing else references it: payroll results, teaching
+  history, Attendance sessions, timetable entries, LMS ownership,
+  Transport, Visitor, or a manager reference from another Employee.
+  Nothing is cascaded.
+- **A linked User keeps the Employee.** Retention never unlinks a User or
+  changes a membership (D10, E21.2F).
+- **Active Employees are never eligible**, so retention cannot affect
+  ActingEmployee or Teacher authorization.

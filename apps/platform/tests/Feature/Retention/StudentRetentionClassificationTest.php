@@ -17,7 +17,7 @@ use Tests\TestCase;
 class StudentRetentionClassificationTest extends TestCase
 {
     /** parent => referencing table => how D7 treats it */
-    private const CLASSIFICATION = [
+    public const CLASSIFICATION = [
         'students' => [
             'student_enrollments' => 'D7 core (25 y): placements, purged with the Student',
             'student_subject_enrollments' => 'D7 core (25 y): subject history, purged with the Student',
@@ -66,10 +66,10 @@ class StudentRetentionClassificationTest extends TestCase
     {
         $references = app(ReferencingRows::class);
 
-        foreach (ReferencingRows::PARENTS as $parent) {
+        foreach (array_keys(self::CLASSIFICATION) as $parent) {
             $live = array_values(array_unique(array_column($references->to($parent), 'table')));
             sort($live);
-            $classified = array_keys(self::CLASSIFICATION[$parent] ?? []);
+            $classified = array_keys(self::CLASSIFICATION[$parent]);
             sort($classified);
 
             $this->assertSame($classified, $live, "references to {$parent} changed: classify them for E21-D7");

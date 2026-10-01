@@ -216,6 +216,20 @@ is now cleaned up by `platform:storage-orphans-prune`.
   Delivery, Syllabus, Examinations, LMS content, attendance sessions,
   Guardian personal data, processing authorizations and Admissions.
 
+*E21.2E (2026-10-01):*
+- **D9 (HR and payroll) is implemented** (determination D9 and §5.4).
+  - Trigger: final separation from terminal EmploymentRecords; rehire
+    restarts the clock.
+  - Ancillary sub-records: 2 years.
+  - Employment and payroll evidence with the Employee: 8 years.
+  - Row 11's "personal sub-records hard-deleted" stays an ordinary HR
+    workflow, separate from retention.
+- **D8 (Finance) is audited, but expiry is blocked.** Row 10 is unchanged:
+  nothing is pruned. Every balance is derived from all postings, and no
+  financial-year close or carried-forward balance exists. The design is
+  recorded for E21.2G. The financial-year start month also stays mutable
+  until the first receipt.
+
 ### 5.3 Documentation contradictions and latent schema conflicts
 
 Recorded, not silently reconciled:

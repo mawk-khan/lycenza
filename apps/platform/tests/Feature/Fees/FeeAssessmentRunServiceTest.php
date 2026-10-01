@@ -625,7 +625,8 @@ class FeeAssessmentRunServiceTest extends TestCase
 
         $events = $this->inSchool($w['school'], fn () => SchoolAuditEvent::query()->where('event_type', 'like', 'fee_assessment%')->get());
         foreach ($events as $event) {
-            $json = json_encode($event->metadata);
+            // UUIDv7 identifiers may contain the digits by chance: strip them first.
+            $json = preg_replace('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i', '<id>', (string) json_encode($event->metadata));
             $this->assertStringNotContainsString('5000', (string) $json, $event->event_type);
             $this->assertStringNotContainsString('Tuition', (string) $json, $event->event_type);
         }

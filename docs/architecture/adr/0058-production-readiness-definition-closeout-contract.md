@@ -1022,3 +1022,26 @@ Categories D7 does not govern are recorded for E21.2G: School academic
 content, attendance sessions, Guardian personal data, processing
 authorizations and Admissions. Remaining: E21.2E–F, then E21.2G and final
 ratification.
+
+## Note — E21.2E Finance and HR retention (2026-10-01)
+
+**E21 stays `LEGAL_REVIEW_REQUIRED`.**
+
+**D9 is implemented:**
+- ancillary HR sub-records go 2 years after final separation;
+- employment and payroll evidence, with the Employee, goes 8 years after
+  it;
+- the trigger is terminal EmploymentRecords (rehire restarts the clock);
+  anything ambiguous is kept;
+- any row in another table that references the Employee blocks the
+  purge: payroll results, teaching history, LMS ownership. Nothing is
+  cascaded, and a User is never unlinked.
+
+**D8 is audited, but expiry is BLOCKED.** No financial evidence is deleted:
+- every balance is derived from all postings;
+- there is no financial-year close or carried-forward opening balance;
+- expiring evidence first needs a financial-year close design (an ADR),
+  recorded for E21.2G.
+
+No database privilege was added. Remaining: E21.2F, then E21.2G (including
+the D8 prerequisite) and final ratification.

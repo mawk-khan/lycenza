@@ -91,7 +91,7 @@ final class StudentRecordRetentionService
             null,
             fn (string $studentId): array => array_filter([$this->coreBlocker($school->id, $studentId, $authorityCutoff, $cleared)]),
             function (string $studentId): array {
-                $objects = $this->documents->purgeWithStudent($studentId);
+                $objects = $this->documents->purgeWithOwner('student', $studentId);
                 DB::table('student_subject_enrollments')->where('student_id', $studentId)->delete();
                 DB::table('student_enrollments')->where('student_id', $studentId)->delete();
                 DB::table('students')->where('id', $studentId)->delete();
@@ -126,6 +126,6 @@ final class StudentRecordRetentionService
 
         return $this->references->first('student_enrollments', $schoolId, DB::table('student_enrollments')->where('student_id', $studentId)->pluck('id')->all(), ['student_subject_enrollments', ...$cleared])
             ?? $this->references->first('student_subject_enrollments', $schoolId, DB::table('student_subject_enrollments')->where('student_id', $studentId)->pluck('id')->all())
-            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedByStudent($studentId));
+            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('student', $studentId));
     }
 }

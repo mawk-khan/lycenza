@@ -342,6 +342,19 @@ email recovery.
       `transferred`. They are kept until staff record the departure;
     - `dependency-blocked` counts Students another retained record still
       needs.
+- **E21.2E retention (2026-10-01):**
+  - **New daily task:** `employee-retention-prune` (04:50).
+  - **Privilege model.** Unchanged: no new function, grant or migration.
+  - **Production sets** `EMPLOYEE_ANCILLARY_RETENTION_YEARS=2` and
+    `EMPLOYEE_EVIDENCE_RETENTION_YEARS=8` (project-adopted, pending
+    ratification).
+  - **Finance (D8):** there is no setting and no expiry. Posted financial
+    evidence is kept until a financial-year close design exists.
+  - **Before enabling,** run it with `--dry-run`:
+    - `unresolved separation` counts Employees with no employment record,
+      or with a terminal one missing its end date;
+    - `dependency-blocked` counts Employees another retained record still
+      needs (payroll results, teaching history, a linked User).
 
 ## 6. Seeding: production-safe versus demo
 

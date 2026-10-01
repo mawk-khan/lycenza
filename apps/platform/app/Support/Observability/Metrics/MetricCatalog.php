@@ -192,12 +192,12 @@ final class MetricCatalog
             'email-messages-redispatch', 'email-prune', 'account-recovery-prune',
             'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune',
             'audit-prune', 'email-suppressions-prune', 'authority-history-prune',
-            'communications-prune', 'storage-orphans-prune', 'student-retention-prune',
+            'communications-prune', 'storage-orphans-prune', 'student-retention-prune', 'employee-retention-prune',
         ];
     }
 
     /** Daily tasks (their staleness window is a day, not minutes). */
-    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune', 'audit-prune', 'email-suppressions-prune', 'authority-history-prune', 'communications-prune', 'storage-orphans-prune', 'student-retention-prune'];
+    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune', 'audit-prune', 'email-suppressions-prune', 'authority-history-prune', 'communications-prune', 'storage-orphans-prune', 'student-retention-prune', 'employee-retention-prune'];
 
     /**
      * @param  array<string, string>  $labels

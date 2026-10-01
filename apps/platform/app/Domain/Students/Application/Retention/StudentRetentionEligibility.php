@@ -3,11 +3,10 @@
 namespace App\Domain\Students\Application\Retention;
 
 use App\Models\School;
-use App\Support\Retention\ObjectDeletion;
+use App\Support\Retention\RetentionUnit;
 use App\Support\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -158,38 +157,13 @@ final class StudentRetentionEligibility
         $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
 
         $result['unresolved'] = $this->exitedBefore($school, $cutoffDate, $batch, $withRows, function (string $studentId) use (&$result, $dryRun, $cutoffDate, $blockers, $purge): void {
-            $result['eligible']++;
-
-            if ($dryRun) {
-                $result['dependency_blocked'] += $blockers($studentId) === [] ? 0 : 1;
-
-                return;
-            }
-
-            try {
-                $outcome = DB::transaction(function () use ($studentId, $cutoffDate, $blockers, $purge): array|string {
-                    if ($this->lockExit($studentId)?->exitedBefore($cutoffDate) !== true) {
-                        return 'kept';
-                    }
-
-                    if ($blockers($studentId) !== []) {
-                        return 'dependency_blocked';
-                    }
-
-                    return $purge($studentId) ?? 'kept';
-                });
-            } catch (QueryException) {
-                $result['errors']++;
-
-                return;
-            }
-
-            if (is_array($outcome)) {
-                $result['deleted']++;
-                $result['errors'] += ObjectDeletion::afterCommit($outcome);
-            } elseif ($outcome === 'dependency_blocked') {
-                $result['dependency_blocked']++;
-            }
+            RetentionUnit::purge(
+                $result,
+                $dryRun,
+                fn (): bool => $this->lockExit($studentId)?->exitedBefore($cutoffDate) === true,
+                fn (): array => $blockers($studentId),
+                fn (): ?array => $purge($studentId),
+            );
         });
 
         return $result;

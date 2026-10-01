@@ -52,6 +52,14 @@ return [
     'student_operational_years' => env('STUDENT_OPERATIONAL_RETENTION_YEARS'),
     'student_core_years' => env('STUDENT_CORE_RETENTION_YEARS'),
 
+    // E21.2E (E21-D9, project-adopted, pending ratification): calendar years
+    // after an Employee's final separation (EmployeeRetentionEligibility).
+    // Ancillary personal sub-records, adopted 2; employment and payroll
+    // evidence with the Employee root, adopted 8. No default: unset deletes
+    // nothing. Finance (D8) has no expiry until a financial-year close exists.
+    'employee_ancillary_years' => env('EMPLOYEE_ANCILLARY_RETENTION_YEARS'),
+    'employee_evidence_years' => env('EMPLOYEE_EVIDENCE_RETENTION_YEARS'),
+
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 
 ];

@@ -490,3 +490,12 @@ real environment:
   - the `outcome` value `dependency_blocked`.
 
   The units are Students. No identifiers.
+
+## E21.2E retention (2026-10-01)
+
+- **Scheduler.** The daily task `employee-retention-prune` (04:50) is
+  covered by OBS-06 with the daily-cadence window (alert rules
+  regenerated).
+- **Metric** `lycenza_retention_rows_total` gains the `operation` values
+  `employee_ancillary`, `payroll_employee_record` and `employee_evidence`.
+  The units are Employees. No identifiers, pay or personal details.

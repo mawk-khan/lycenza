@@ -539,15 +539,19 @@ class FeeConcessionServiceTest extends TestCase
         $concession = $this->requestTargeted($w, '321.00', 'scholarship');
         $this->concessions()->approve($w['school'], $concession->id, $w['checker']);
 
+        // Identifiers are random UUIDv7s and may contain "321" by chance; the
+        // amount must not appear anywhere else, in any representation.
+        $withoutIds = fn (mixed $value): string => (string) preg_replace('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i', '<id>', (string) json_encode($value));
+
         $events = $this->inSchool($w['school'], fn () => SchoolAuditEvent::query()->whereIn('event_type', ['fee_concession.requested', 'fee_concession.approved', 'fee_adjustment.posted'])->get());
         $this->assertCount(3, $events);
         foreach ($events as $event) {
-            $this->assertStringNotContainsString('321', json_encode($event->metadata), 'No amounts in audit metadata.');
+            $this->assertStringNotContainsString('321', $withoutIds($event->metadata), 'No amounts in audit metadata.');
         }
 
         $payloads = $this->inSchool($w['school'], fn () => DomainEventOutbox::query()->where('event_type', 'like', 'fee_%')->pluck('payload'));
         foreach ($payloads as $payload) {
-            $this->assertStringNotContainsString('321', json_encode($payload), 'No amounts in event payloads.');
+            $this->assertStringNotContainsString('321', $withoutIds($payload), 'No amounts in event payloads.');
         }
     }
 }

@@ -53,6 +53,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'PruneCommunications.php',               // retention maintenance (E21-D3)
         'PruneStorageOrphans.php',               // retention maintenance (E21-D5)
         'PruneStudentRecords.php',               // retention maintenance (E21-D7)
+        'PruneEmployeeRecords.php',              // retention maintenance (E21-D9)
         'RetryMailMessage.php',                  // one named School; the submission claim re-checks the lifecycle
         'RekeyMailSuppressions.php',             // reads a stored recipient to re-key suppression; no School effect
         'SendFakeEmailEvent.php',                // local/testing only; one named School

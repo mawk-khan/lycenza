@@ -171,6 +171,15 @@ Schedule::command('platform:student-retention-prune')
     ->withoutOverlapping()
     ->name('student-retention-prune');
 
+// E21.2E (E21-D9): ancillary HR details (2 y) and employment/payroll
+// evidence (8 y) after final separation. No default: until configured it
+// deletes nothing. Each purge rechecks under its own lock, so correctness
+// does not depend on the order.
+Schedule::command('platform:employee-retention-prune')
+    ->dailyAt('04:50')
+    ->withoutOverlapping()
+    ->name('employee-retention-prune');
+
 // Phase 0O.10A (ADR 0056 section 13): ended password-recovery credentials
 // are deleted 24 hours later (technical data; the audit is separate).
 Schedule::command('platform:account-recovery-prune')

@@ -26,6 +26,12 @@ final class ReferencingRows
     public const PARENTS = [
         'students', 'student_enrollments', 'student_subject_enrollments', 'student_guardian_relationships',
         'attendance_records', 'enrollment_rollover_items', 'documents',
+        // E21.2E (E21-D9): the Employee root, its employment evidence and its sub-records.
+        'employees', 'employment_records', 'employee_assignments', 'employee_personal_details', 'employee_documents',
+        'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',
+        'employee_experience_records', 'employee_certifications',
+        'employee_compensation_assignments', 'employee_statutory_identifiers', 'employee_tax_profile',
+        'employee_pf_status', 'employee_esi_coverage',
     ];
 
     /** @var array<string, list<array{table: string, column: string, tenant: bool}>> */

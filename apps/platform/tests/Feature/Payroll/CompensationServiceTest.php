@@ -250,7 +250,8 @@ class CompensationServiceTest extends TestCase
         );
 
         $this->assertNotNull($event);
-        $metadataJson = json_encode($event->metadata);
+        // UUIDv7 identifiers may contain the digits by chance: strip them first.
+        $metadataJson = (string) preg_replace('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i', '<id>', (string) json_encode($event->metadata));
         $this->assertStringNotContainsString('50000', $metadataJson);
         $this->assertSame($employmentRecord->id, $event->metadata['employmentRecordId']);
     }

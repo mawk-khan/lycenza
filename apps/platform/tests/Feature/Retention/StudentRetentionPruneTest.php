@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CreatesFeesFixtures;
+use Tests\Concerns\CreatesFinanceFixtures;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
 use Tests\TestCase;
 
@@ -28,7 +30,7 @@ use Tests\TestCase;
  */
 class StudentRetentionPruneTest extends TestCase
 {
-    use CreatesAttendanceFixtures;
+    use CreatesAttendanceFixtures, CreatesFeesFixtures, CreatesFinanceFixtures;
 
     private string $disk;
 
@@ -427,5 +429,25 @@ class StudentRetentionPruneTest extends TestCase
         } finally {
             Storage::disk('s3')->delete($path);
         }
+    }
+
+    #[Test]
+    public function a_retained_finance_record_keeps_its_student_and_is_never_touched(): void
+    {
+        // E21.2E: Finance (D8) has no expiry while every balance is derived from
+        // all postings, so a Student with a charge stays dependency-blocked. The
+        // Student run never deletes, cascades or rewrites a Finance row.
+        $w = $this->world();
+        $student = $this->leaver($w, '2026-09-30');
+        $charge = $this->assessCharge($w['school'], $student, $w['year'], $this->createLedgerAccount($w['school'], ['type' => 'asset']), $this->createLedgerAccount($w['school'], ['type' => 'income']), '300.00');
+        $ledger = fn () => $this->inSchool($w['school'], fn () => [DB::table('charges')->count(), DB::table('journal_entries')->count(), DB::table('journal_lines')->count()]);
+        $before = $ledger();
+
+        $this->at('2090-01-01');
+        $this->prune()->expectsOutputToContain('core record of 0 Student(s) (unresolved exit: 0, dependency-blocked: 1')->assertSuccessful();
+
+        $this->assertTrue($this->has($w['school'], 'students', 'id', $student->id));
+        $this->assertTrue($this->has($w['school'], 'charges', 'id', $charge->id));
+        $this->assertSame($before, $ledger());
     }
 }

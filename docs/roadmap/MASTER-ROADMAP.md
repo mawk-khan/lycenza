@@ -2246,8 +2246,22 @@ parallel, and the email provider tail) — not started.
   - School academic content, attendance sessions, Guardian personal data,
     processing authorizations and Admissions are recorded for E21.2G.
 
-  E21.2A–E21.2D are closed. **Next: E21.2E — Finance & HR retention (not
-  started).** E21 stays OPEN pending E21.2E–G and final ratification.
+  E21.2A–E21.2D are closed.
+- **E21.2E — Finance & HR retention (2026-10-01): closed.**
+  - `platform:employee-retention-prune`, from final separation (terminal
+    EmploymentRecords; rehire restarts the clock):
+    - ancillary sub-records: 2 y;
+    - Payroll's compensation and statutory rows, then the Employee with its
+      employment evidence and Documents: 8 y, only when no other retained
+      row references it;
+  - **D8 Finance: audited, expiry blocked.** Every balance is derived from
+    all postings, and no financial-year close or carried-forward balance
+    exists. Nothing financial is deleted (`FinanceRetentionGuardTest`). The
+    design prerequisite is recorded for E21.2G.
+
+  E21.2A–E21.2E are closed. **Next: E21.2F — Erasure & tenant closure (not
+  started).** E21 stays OPEN pending E21.2F–G, the D8 prerequisite and
+  final ratification.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**
   published / closed. It inventoried every v1 category and recorded 14 open
   decisions with neutral options, a determination template and no immediate

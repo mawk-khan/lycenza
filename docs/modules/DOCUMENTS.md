@@ -114,6 +114,9 @@ file. `documents` is the only table this checkpoint adds.
   commit). Guardian, Learning Content and Assignment Documents stay kept
   (no adopted parent period, E21.2F/G). Employee Documents wait for
   E21.2E. No Document is ever purged on its own.
+  *E21.2E:* Employee Documents (and HR `employee_documents`) now go only
+  with their Employee's D9 evidence purge, 8 years after final separation
+  (bytes after commit). There is no Finance Document owner.
 
 ### Owning-entity boundary — the dangerous conflation this checkpoint had to resolve
 
