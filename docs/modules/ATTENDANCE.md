@@ -19,7 +19,9 @@ exists alongside the administrative one — see section 18. The "admin-only"
 and "no teacher self-service" statements below describe Phase 0H.2 and are
 superseded for that path only. **Teacher Attendance functionality is
 implemented but production enablement remains blocked by TCH-L1 until the
-required legal/compliance determination is recorded.**
+required legal/compliance determination is recorded.** TCH-L1 is ADR 0058
+register row **E33**. It is enforced by process, not by a runtime flag; the
+decision record and the facts for the reviewer are in ADR 0063 §39.
 
 ## 2. The two entities
 

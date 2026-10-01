@@ -7,8 +7,9 @@
   is implemented but production enablement remains blocked by TCH-L1 until
   the required legal/compliance determination is recorded** (§26). E21
   (retention) stays open. TCH.6 found and fixed one closure defect
-  (non-identical not-found bodies, §38.3). **LMS Submission remains
-  cancelled and outside TCH.**
+  (non-identical not-found bodies, §38.3). **Production readiness (§39):
+  PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — TCH-L1 (ADR 0058
+  E33) and E21. **LMS Submission remains cancelled and outside TCH.**
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -652,7 +653,8 @@ roles, HRX, RES, POR, Lesson Planning or LMS Submission.
 No other item here is legal: roles, ownership shape, MFA and denial
 semantics are product and architecture choices.
 
-**TCH-L1 status: OPEN** (TCH.4, §32). Development blocker: **no**.
+**TCH-L1 status: OPEN** (TCH.4, §32; carried into the ADR 0058 §6
+register as **E33** on 2026-10-01, §39). Development blocker: **no**.
 Production blocker: **yes**, for the teacher Attendance surface
 (`attendance.teacher`). No determination has been recorded, and none is
 implied by the TCH.4 implementation or its tests.
@@ -2406,7 +2408,7 @@ The §27 findings for other programmes:
 
 | ID | State | Affects |
 |---|---|---|
-| **TCH-L1** | **OPEN** — no legal/compliance determination is recorded; none is implied by the implementation or its tests | Production enablement of teacher Attendance (`attendance.teacher`). Development blocker: no |
+| **TCH-L1** (ADR 0058 **E33**, §39) | **OPEN** — no legal/compliance determination is recorded; none is implied by the implementation or its tests | Production enablement of teacher Attendance (`attendance.teacher`). Development blocker: no |
 | **E21** | **OPEN** (ADR 0058) | Retention of link history, TeachingAssignment history and LMS owner/audience history |
 
 - No new legal or security blocker was found. Learning Content and
@@ -2431,3 +2433,291 @@ The §27 findings for other programmes:
 - **The closure commit is the new regression checkpoint** (counter 0/5).
 
 No further TCH implementation checkpoint remains.
+
+## 39. Production readiness and open gates (post-closure audit, 2026-10-01)
+
+**Status: read-only audit of `ff867e6`, docs only.** No TCH feature is
+reopened, and no code changed. **Result: PRODUCTION READY EXCEPT DOCUMENTED
+EXTERNAL GATES.** TCH's implementation and technical controls are complete.
+Two external decisions remain, and both are mandatory production blockers
+in the ADR 0058 §6 register:
+- **E33 = TCH-L1** (legal) — teacher Attendance;
+- **E21** (legal; retention) — platform-wide, including TCH history.
+
+Production also stays subject to the platform's other O1 items (ADR 0058:
+E02, E03, E05–E20, E22, E23, E29–E32). Those are not TCH items and are
+listed only as context. Development closure (§38) is not production
+clearance.
+
+### 39.1 Blocker types (never combined)
+
+| Item | Type | TCH-specific? | Blocks |
+|---|---|---|---|
+| TCH-L1 (ADR 0058 E33) | Legal/compliance decision required | Yes | Production use of the `attendance.teacher` surface (§39.3) |
+| E21 | Legal retention-policy decision required (an external policy decision; any later purge is owning-module implementation) | No — platform-wide; TCH history is part of "others used in v1" | ADR 0058 O1, and so any production deployment decision (ADR 0058 §2, §4.12) |
+| Role-bundle coupling (§39.3) | Owner/product decision on how to operate before TCH-L1 | Yes | Only granting `teacher` in production before E33 |
+| Technical implementation | None required | — | — |
+| Documentation | Done by this section (ADR 0058 E33 + Note; roadmap; ATTENDANCE.md) | — | — |
+
+### 39.2 TCH-L1 — what the reviewer assesses (facts, no conclusion)
+
+**Exact question (§26).** Does expanding access to identifiable Student
+attendance, from the current administrative actors to assigned teachers,
+require an updated children's-data/privacy assessment, processing record or
+equivalent production approval?
+
+**Data teachers see.** Only for a Section + required SubjectOffering they
+own on the register's `attendance_date`:
+- the register header: date, class, period, the timetabled teacher's id and
+  name (provenance), and the submitter's user id;
+- per Student: enrollment id, Student id, roll number, composed full name,
+  status (`present`/`absent`/`late`/`excused`) and `correctedAt`;
+- for an owned class on a date, the roster preview (enrollment id, Student
+  id, roll number, full name).
+
+Nothing else is exposed:
+- no reason, note or health data (none exists in the module);
+- no Guardian data;
+- no Student directory (`students.view` is not granted).
+
+The data is **Sensitive** (`DATA-CLASSIFICATION.md`), unchanged by TCH.4.
+
+**Actions teachers take.**
+- Submit one complete register for an owned class and date. It is refused
+  by the database if one exists already.
+- Correct one record's status with an expected-status compare-and-swap.
+- Nothing else: no delete, no edit of the register header, no
+  administrative Attendance page.
+
+**Who and where.**
+- Only School staff with an eligible Employee record: no Guardian or
+  Student access, and no portal.
+- Nothing leaves the tenant. Attendance has no outbox event, no webhook
+  registration and no export, and every row is RLS-scoped to its School.
+- This is purely a widening of the role able to reach existing data. There
+  is no new data, purpose, recipient or transfer.
+
+**Technical controls already in place.** These are the reviewer's inputs:
+- **Capability.** The `attendance.teacher` capability is least-privilege,
+  with no Tier 1 Attendance and no `students.view`.
+- **Verified ActingEmployee:**
+  - active membership and enabled User;
+  - linked active Employee;
+  - exactly one `active`/`notice_period` employment on the School-local
+    date.
+- **Ownership.**
+  - TeachingAssignment ownership of the exact Section + SubjectOffering on
+    the register's `attendance_date`;
+  - the Timetable confers nothing;
+  - cover works only through a dated assignment.
+- **Server-side filtering.** Lists, scheduled classes and roster preview
+  are filtered on the server, owned classes only.
+- **Non-disclosure.**
+  - Another class, another School or an unknown id answers the identical
+    404 (§38.3).
+  - Responses are `private, no-store`, and pages are `no-store, private`.
+- **Audit.**
+  - `attendance.session.submitted` and `attendance.record.corrected`, with
+    the User as actor; a correction records the previous and new status.
+  - Role grant and revoke are audited.
+- **Revocation without TTL.** Revoking the role clears the capability
+  cache. Suspension, unlink, Employee archive, employment end and
+  assignment end refuse the next write: identity and ownership are held
+  `FOR SHARE` inside the write transaction, proven by two-process tests.
+- **Tenancy and integrity.**
+  - Forced RLS on every table involved.
+  - Composite same-School foreign keys.
+  - Session headers are immutable after insert.
+  - Records are never hard-deleted by the application.
+
+**Production gating mechanism: A — documentation/process only.**
+- No feature flag, configuration or environment switch disables teacher
+  Attendance. Comments mark the routes and controllers as gated by TCH-L1.
+- ADR 0063 deliberately treats TCH-L1 as a production-approval gate, not a
+  runtime flag. This audit keeps that, and adds no flag.
+- The repository's `FeatureFlagResolver` exists, but no ADR assigns it to
+  TCH-L1.
+
+### 39.3 The operational consequence of the role bundle
+
+The only production School role carrying any `*.teacher` capability is
+`teacher`, and it bundles all four (§38.2). There are no tenant-custom roles,
+and `school_admin` already holds Tier 1. So, in production before E33 is
+answered:
+- granting `teacher` to anyone also enables teacher Attendance for their
+  assigned classes;
+- no supported path gives a teacher Curriculum Delivery or LMS access
+  without it.
+
+**Owner decision required** (not decided here). Before E33 is answered,
+either:
+- (a) grant no production `teacher` role; or
+- (b) approve a separately reviewed change that decouples
+  `attendance.teacher` from production teacher access, for example a
+  production role variant without it, or a dedicated feature gate.
+
+Option (b) would be new work under its own approval. **This audit implements
+neither.**
+
+### 39.4 The TCH-L1 decision record the authorized reviewer must complete
+
+Record it as `docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`, in
+the shape of `STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md`. Then update §26
+and ADR 0058 E33 by a dated, reviewed change (ADR 0058 §6). Engineering does
+not fill in any field below.
+
+```text
+Decision:          Teacher Attendance production access — APPROVED /
+                   REJECTED / APPROVED WITH CONDITIONS
+Scope:             assigned teachers only (attendance.teacher + verified
+                   ActingEmployee + TeachingAssignment on attendance_date);
+                   no Student/Guardian access
+Data:              identifiable Student attendance roster (enrollment id,
+                   Student id, roll number, name) and status for owned
+                   classes/dates (§39.2)
+Actions:           submit an owned register; correct a record's status
+Technical controls reviewed:  §39.2 list (and any reviewer additions)
+Jurisdiction / policy basis:  to be supplied by the authorized reviewer
+Conditions:        to be supplied by the authorized reviewer (e.g. any
+                   required processing record, notice or assessment)
+Approving authority:          role of the authorized reviewer
+Decision date:     the actual date of the decision
+Outcome:           APPROVED / REJECTED / APPROVED WITH CONDITIONS
+Does not approve:  anything outside the stated scope
+```
+
+### 39.5 E21 — retention, as it applies to TCH
+
+**Authoritative definition.** ADR 0058 §6, E21: "Retention decisions for v1
+categories (mail, webhook deliveries, Documents, audit, others used in v1)".
+It is Legal, Mandatory and `LEGAL_REVIEW_REQUIRED`. Its required evidence is
+a "qualified decision recorded; settings implemented where they exist". It
+blocks O1 (§4.12: mandatory before Phase 0O closeout; engineering never
+invents periods). ADR 0042 §7 and §13 items 4–6 add three open legal
+questions:
+- the retention period per category, including audit ledgers;
+- whether audit must survive School deletion, and legal holds;
+- data-subject access, correction and erasure.
+
+**Production impact (repository semantics, not a guess).** E21 is a
+**platform-wide O1 blocker**. Under ADR 0058 §2 it therefore blocks
+authorizing **any** production deployment, TCH included.
+- It is not a TCH-specific gate.
+- It does not block development, and it blocks no TCH surface separately.
+
+**Retention and history matrix** (verified in code; "purge" = none
+anywhere):
+
+| Record | Class. | Immutability | Runtime DELETE | FK behaviour | History kept by | E21 |
+|---|---|---|---|---|---|---|
+| Employee↔User link (`employees.user_id`) | Sensitive | None on the column. Link and unlink are explicit and locked, and unlink overwrites with NULL | granted; no app path deletes an Employee | users RESTRICT; School CASCADE | **audit only** (`employee.user_linked/unlinked`, old and new ids). There is no link-history table | yes |
+| `employment_records` | Sensitive | status CHECK only | granted; no app delete path | employees CASCADE; School CASCADE | the rows plus HR audit | yes (HR) |
+| `teaching_assignments` | Sensitive | history trigger: identity frozen, one shortening end | **revoked** | Employee, Section, Offering and users RESTRICT; School CASCADE | the rows plus `teaching_assignment.*` audit | yes |
+| LMS owner (`owner_employee_id`) | Sensitive | trigger, every role | granted on the parent tables; no app delete path | composite NO ACTION; School CASCADE | the row | yes |
+| LMS Section audiences | Sensitive | trigger; append-only | **revoked** (with UPDATE) | NO ACTION; School CASCADE | the rows | yes |
+| `attendance_sessions` / `attendance_records` | Sensitive | no trigger. The header is immutable by service. A record's `status` is overwritten on correction (no corrector column) | granted; no app delete path | RESTRICT to Employee, user, entry and enrollment; School CASCADE | the rows. The previous status and the corrector are **audit only** | yes |
+| `curriculum_deliveries` | Confidential | lifecycle by CAS; dates correctable | granted; no app delete path | RESTRICT; School CASCADE | the rows. The actor is **audit only** | yes |
+| `membership_role_assignments` (Teacher grants) | — | history guard; revoke, never delete | **revoked** | membership CASCADE; grantor and revoker users SET NULL | the rows | yes |
+| `school_audit_events` / `platform_audit_events` | (ADR 0042 open item 1) | append-only | **revoked** (with UPDATE) | actor users **SET NULL**; school audit School **CASCADE** | permanent today | yes |
+
+**Lifecycle analysis (production paths only).**
+- **User deletion.** No application path deletes a `users` row. If one were
+  deleted out of band:
+  - RESTRICT blocks it when the User is linked to an Employee, created or
+    ended an assignment, or submitted Attendance;
+  - otherwise it would CASCADE the User's memberships and grants, and
+    SET NULL the audit actor (a referential action bypasses the REVOKE).
+
+  That is the open ADR 0042 item 6 (erasure) question, not a TCH defect.
+- **Employee archival** changes only `record_status`, and access stops
+  through ActingEmployee. Assignments, LMS owner and audience rows,
+  Attendance provenance and audit are untouched. No path deletes an
+  Employee.
+- **Membership removal** is suspension plus grant revocation. No path
+  deletes a membership.
+- **School deletion.** The runtime role cannot delete a School (DELETE
+  revoked; no `archived` transition; `SchoolLifecycleService`: "no archive
+  and no delete"). Only an admin-connection test helper deletes one,
+  cascading every TCH table and `school_audit_events`. Whether history must
+  outlive a School is the open ADR 0042 item 5. **Production behaviour
+  today: School deletion is not an operation.**
+- **LMS parents ageing.**
+  - Owner and audience rows never change.
+  - Teacher reads use only TeachingAssignment date coverage, with no
+    Section, Offering or Year status filter, so a historical owner keeps no
+    access once their assignment ends.
+  - Tier 1 reads are unaffected by an archived Section, an inactive
+    Offering or a closed Year.
+
+**Audit-log retention today:**
+- the ledgers are append-only and kept indefinitely;
+- there is no purge and no configurable period;
+- there is no documented duration;
+- School audit is deleted only with its School, which is not a production
+  operation.
+
+E21 and ADR 0042 items 4–5 are the open policy.
+
+**E21 reduced to exact questions for TCH** (owner, legal and compliance).
+Engineering answers none.
+1. How long must each TCH history category be retained after it stops
+   granting authority? The categories are:
+   - link history (audit);
+   - ended TeachingAssignments;
+   - LMS owner and audience rows;
+   - teacher-written Attendance and Curriculum Delivery history;
+   - the Teacher role grant history.
+2. When, if ever, may each be purged, and by which owning-module job?
+3. Must audit evidence of teacher actions (actor User ids) survive a User's
+   erasure? Today an out-of-band User delete would SET NULL the actor.
+4. Must TCH history and audit survive the removal of a School tenant, or
+   be held?
+5. How do data-subject requests by a Student, Guardian or teacher interact
+   with authority-bearing history?
+
+These are **OPEN — RETENTION POLICY DECISION REQUIRED**. No duration,
+purge, archive or hold is invented here.
+
+### 39.6 Other blockers, observations and the readiness matrix
+
+**No additional TCH production blockers found.** I searched docs, ADRs,
+module and security docs and the roadmap for `TCH-`, `E21`, `BLOCKER`,
+production blocker, teacher and ownership. Nothing changed since `ff867e6`
+on any TCH control, so the §38 audit stands:
+- non-disclosure, RLS and cross-School FKs;
+- the role-name prohibition;
+- transactional holds and caching;
+- the role bundle.
+
+**Non-blocking observations** (no adopted contract is violated; none is
+fixed here):
+- `DatabaseRoleVerifier::NO_RUNTIME_DELETE` (the `platform:verify-database`
+  deployment check) lists 9 core tables. It omits `teaching_assignments`
+  and the LMS audience bridges, as it omits most delete-revoked tables
+  (journal entries, payments, fee tables, …). Those tables' migrations and
+  raw-SQL tests prove the protection. A complete, derived verifier list
+  would be a future platform hardening.
+- Two in-place overwrites keep their prior value only in audit, by design:
+  - the Employee link on unlink;
+  - an Attendance record's status on correction.
+
+  Their retention is therefore the audit's retention (E21).
+
+**Production-readiness matrix:**
+
+| Area | Development complete | Technical controls complete | External decision required | Production blocker | Next owner / action |
+|---|---|---|---|---|---|
+| ActingEmployee identity | Yes | Yes | E21 (link history via audit) | E21 (platform-wide) | Legal + Owner: E21 |
+| TeachingAssignment administration | Yes | Yes | E21 | E21 (platform-wide) | Legal + Owner: E21 |
+| Curriculum Delivery teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); granting `teacher` in production before E33 also enables Attendance (§39.3) | Owner: §39.3; Legal: E21 |
+| **Attendance teacher access** | Yes | Yes | **TCH-L1 (E33)**; E21 | **Yes — E33**; E21 | Legal + Owner: §39.4 record |
+| Learning Content teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); §39.3 coupling | Owner: §39.3; Legal: E21 |
+| Assignment teacher access | Yes | Yes | E21; no TCH-specific legal gate | E21 (platform-wide); §39.3 coupling | Owner: §39.3; Legal: E21 |
+| E21 historical retention | n/a (no purge built, by design) | Immutability and delete protection as in §39.5 | **Yes** — §39.5 questions | Yes (O1, platform-wide) | Legal + Owner |
+
+**Required external decisions:**
+1. **TCH-L1 / E33:** the §39.4 record.
+2. **The operating choice before E33:** §39.3 (a) or (b).
+3. **E21:** the §39.5 questions, together with ADR 0042 items 4–6.
+
+None is answered here.

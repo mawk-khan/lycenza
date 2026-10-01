@@ -598,6 +598,7 @@ with secrets.
 | E30 | Fee receipt statutory form / GST (ADR 0062 decision J): whether a prescribed receipt or tax invoice, GSTIN, HSN/SAC, taxable value or tax lines are required, and how any fee is treated | ADR 0062 §17.5; FEE.4 note | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — FEE.4 ships a payment acknowledgement only) | Qualified answer recorded; the receipt form changed only if the answer requires it | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
 | E31 | Fee regulation: limits on late fees and in-year fee changes (owner product decision H recorded 2026-09-30; the legal question stays open) | ADR 0062 §16, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised for FEE.5; H decided 2026-09-30) | Qualified answer recorded before late fees are enabled in production | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
 | E32 | RTE / statutory free-seat obligations for fee assessment and concessions | ADR 0062 §14.2, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised; no RTE label or rule exists) | Qualified answer recorded; any required fee treatment decided by the owner | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
+| E33 | TCH-L1 — teacher Attendance: whether widening access to identifiable Student attendance from administrative actors to assigned teachers needs an updated children's-data/privacy assessment, processing record or equivalent production approval | ADR 0063 §26, §39 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — TCH.4 built and development-closed) | Qualified determination recorded; the `attendance.teacher` surface stays out of production use until then | Future `docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md` + ADR 0063 amendment | Legal + Owner | Yes |
 
 A row moves to `EVIDENCE_COMPLETE` only by a dated, reviewed repository
 change that names its evidence location. The move is appended to
@@ -869,3 +870,33 @@ valid through 2026-10-28.
     the legal question stays open and E31 stays a production blocker.
   - **E32** — RTE / statutory free seats.
 - **Retention.** Stays **E21**: no FEE table has a purge.
+
+## Note — TCH legal gate carried to production readiness (2026-10-01)
+
+TCH (ADR 0063) is development-closed (TCH.6, `ff867e6`). The post-closure
+production-readiness audit (ADR 0063 §39) carries TCH's legal items into
+this register under the FEE.4 note's rule. **This is not a legal
+determination.**
+
+- **New row E33 — TCH-L1** (ADR 0063 §26). Teacher Attendance is built.
+  The open question is whether widening access to identifiable Student
+  attendance, from administrators to assigned teachers, needs an updated
+  children's-data/privacy assessment, processing record or equivalent
+  production approval. It is a mandatory production blocker for the
+  `attendance.teacher` surface. It does not block development.
+- **Gate enforcement.** E33 is enforced by **process, not runtime
+  configuration.** No feature flag or setting disables teacher Attendance.
+  The one production `teacher` role bundles `attendance.teacher` with the
+  other three owned-scope capabilities. Until E33 is answered, granting that
+  role in production would also enable teacher Attendance, and no other
+  system role carries the other three. ADR 0063 §39.3 records the decision
+  this leaves to the owner.
+- **E21 is unchanged.** "Others used in v1" in E21 includes TCH's
+  authority-bearing history:
+  - link history (audit only);
+  - `teaching_assignments`;
+  - LMS owner and Section-audience rows;
+  - the Attendance and Curriculum Delivery history teachers now write;
+  - the audit ledgers.
+
+  None has a purge. ADR 0063 §39.5 lists the exact questions.
