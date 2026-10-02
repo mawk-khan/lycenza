@@ -25,9 +25,16 @@ trait CreatesFeeConcessionFixtures
 {
     use CreatesFeeAssessmentFixtures, CreatesFeesFixtures, CreatesPaymentsFixtures;
 
-    protected function concessionWorld(bool $configureAccount = true): array
+    /**
+     * `$startMonth` sets the financial-year start month BEFORE the first
+     * posting: since E21.3A it cannot change once anything is posted.
+     */
+    protected function concessionWorld(bool $configureAccount = true, ?int $startMonth = null): array
     {
         $w = $this->assessmentWorld();
+        if ($startMonth !== null) {
+            app(FeeSettingsService::class)->setReceiptNumbering($w['school'], 'RCPT', $startMonth, $w['actor']);
+        }
         $w['expense'] = $this->createLedgerAccount($w['school'], ['code' => 'EXP-CONC', 'type' => 'expense']);
         if ($configureAccount) {
             app(FeeSettingsService::class)->setConcessionAccount($w['school'], $w['expense']->id, $w['actor']);

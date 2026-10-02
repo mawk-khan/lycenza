@@ -2272,6 +2272,20 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21.3A — Financial Year Close & Retention Foundation (2026-10-02):
+  published / closed.** ADR 0064 adds:
+  - `financial_periods`, with a period on every journal entry (DB trigger,
+    `FOR SHARE`);
+  - an irreversible, audited, MFA-gated close (`finance.periods.manage`)
+    with one lock order;
+  - immutable account and charge baselines;
+  - dual-read verification;
+  - a fail-closed backfill and the operator commands;
+  - Finance → Financial periods.
+
+  **D8: FOUNDATION READY — RETENTION CUTOVER STILL REQUIRED.** No Finance
+  evidence is deleted. Next: **E21.3A2 — Finance Retention Cutover &
+  Historical Expiry**, then E21.3B–E21.3E. **E21 — OPEN.**
 - **E21.2G — Final retention closure audit (2026-10-01): closed.**
   `docs/security/E21-CLOSURE-AUDIT.md`:
   - D0–D13 matrix;
@@ -2283,8 +2297,7 @@ parallel, and the email provider tail) — not started.
   - three stale docs corrected.
 
   **E21 — OPEN / TECHNICAL BLOCKERS REMAIN.**
-  - D8 is BLOCKED: next is **E21.3A — Financial Year Close & Retention
-    Foundation** (not started).
+  - D8 was BLOCKED; **E21.3A** (above) has since built the foundation.
   - Then the mechanism checkpoints E21.3B–E21.3E.
   - Final ratification is deferred to the pre-production closeout.
 - **E21.1 — Production retention policy audit (2026-10-01, docs only):**

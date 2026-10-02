@@ -15,6 +15,10 @@
 > REMAIN**.
 > - D8 Finance is **blocked by architecture**: a financial-year close is
 >   required (E21.3A).
+>
+> **E21.3A (2026-10-02, ADR 0064):** the close foundation exists.
+> D8 is **FOUNDATION READY — RETENTION CUTOVER STILL REQUIRED** (E21.3A2).
+> No Finance evidence is deleted.
 > - The periods adopted at the audit for every remaining category ship in
 >   E21.3B–E21.3E.
 > - Final ratification is deferred to the pre-production project closeout.
@@ -711,7 +715,8 @@ The checkpoints are listed in §5.
 | **E21.2E** | Finance (D8), HR and payroll (D9) | **Implemented** for D9 (E21.2E commit; full isolated regression). D8 **audited, expiry blocked**: no financial-year close or carried-forward balances (recorded for E21.2G) |
 | **E21.2F** | Erasure (D10) and tenant-closure orchestration (D11) | **Implemented** (E21.2F commit; full isolated regression). Reviewed retention-aware erasure cases; closure freeze and readiness. Tenant destruction **not authorized** |
 | **E21.2G** | Final retention closure audit and blocker consolidation | **Implemented** (closure audit, decisions for every remaining category, technical-TTL dry runs, readiness `mechanism_pending`; `E21-CLOSURE-AUDIT.md`) |
-| E21.3A | Financial Year Close & Retention Foundation (D8) | **Next — not started** (architecture brief: closure audit §6) |
+| E21.3A | Financial Year Close & Retention Foundation (D8) | **Implemented** (ADR 0064; full isolated regression). Period entity, posting identity, close, baselines, dual-read verifier, backfill. No deletion |
+| E21.3A2 | Finance Retention Cutover & Historical Expiry (D8) | **Next — not started** (ADR 0064 §8) |
 | E21.3B | Student-linked evidence and modules (consent, preferences, processing authorizations, converted admissions, Library/Transport/Hostel, portal invitations) | Not started |
 | E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | Not started |
 | E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | Not started |

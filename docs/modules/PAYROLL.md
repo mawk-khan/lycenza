@@ -863,3 +863,20 @@ statutory identifiers, tax, PF and ESI profiles.
   ledger has no financial-year close, so they are never expired, and the
   Employee is kept.
 - Draft runs and results keep their existing lifecycle.
+
+## Financial periods (E21.3A, 2026-10-02, ADR 0064)
+
+Payroll has no financial period of its own. Payroll periods stay pay
+months, and a payroll posting's or reversal's financial year is its
+journal entry's Finance period:
+- **dating:** the School-local posting date, assigned by the database;
+- **in the close:** payroll totals are ledger-account totals, so they are
+  carried in the account baselines, and the dual-read check covers them;
+- **closed year:** a posting dated in it is refused
+  (`FinancialPeriodClosedException`) and leaves the run approved;
+- **reversal:** a reversal of a run posted in a closed year posts in the
+  open year.
+
+A close and a payroll posting serialize on the period lock
+(`FinancialPeriodConcurrencyTest`). Payroll results and postings stay
+ledger evidence (D8): nothing expires until E21.3A2.

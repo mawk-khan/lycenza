@@ -2,6 +2,7 @@
 
 namespace App\Support\Retention;
 
+use App\Domain\Finance\Application\Periods\FinancialPeriodService;
 use App\Domain\HR\Application\Retention\EmployeeRetentionEligibility;
 use App\Domain\Students\Application\Retention\StudentRetentionEligibility;
 use App\Models\School;
@@ -19,7 +20,9 @@ use Illuminate\Support\Facades\DB;
  * catalog does not know fails closed (`unclassified_tables`). A category
  * with rows reports why it is still kept:
  * - its adopted period is running (with the earliest date when known);
- * - it is a technical blocker (D8);
+ * - it is a technical blocker (D8: the financial-period close exists since
+ *   E21.3A, the Finance retention cutover does not, E21.3A2; journal
+ *   entries without a period add `d8_finance_period_mapping_incomplete`);
  * - its period is adopted but its mechanism is still pending (E21.3B-E);
  * - its policy is unresolved;
  * - it is tenant-lifetime configuration.
@@ -41,6 +44,7 @@ final class TenantClosureReadiness
         private readonly RetentionHolds $holds,
         private readonly StudentRetentionEligibility $students,
         private readonly EmployeeRetentionEligibility $employees,
+        private readonly FinancialPeriodService $periods,
     ) {}
 
     /**
@@ -91,7 +95,8 @@ final class TenantClosureReadiness
         $gates = array_values(array_filter([
             $closed ? null : 'school_not_closed',
             $held ? 'legal_hold' : null,
-            $has(TenantRetentionCatalog::TECHNICAL_BLOCKER) ? 'd8_financial_year_close' : null,
+            $has(TenantRetentionCatalog::TECHNICAL_BLOCKER) ? 'd8_finance_retention_cutover_pending' : null,
+            $this->periods->unmappedEntryCount($school) > 0 ? 'd8_finance_period_mapping_incomplete' : null,
             $has(TenantRetentionCatalog::POLICY_UNRESOLVED) ? 'policy_unresolved' : null,
             $has(TenantRetentionCatalog::MECHANISM_PENDING) ? 'retention_mechanism_pending' : null,
             $unclassified !== [] ? 'unclassified_tables' : null,

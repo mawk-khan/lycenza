@@ -1085,3 +1085,22 @@ Next: E21.2G, the final closure audit and blocker consolidation.
   NTP is listed in §9.
 - **Tenant destruction stays NOT AUTHORIZED.**
 - **E33 and the other gates** in this register are independent.
+
+## Note — E21.3A financial period close foundation (2026-10-02)
+
+**E21: still OPEN.** ADR 0064 adds the Finance foundation the D8 brief asked
+for:
+- an authoritative financial period per School and year, and an
+  immutable period identity on every journal entry;
+- a transactional, audited, MFA-gated, irreversible close with immutable
+  carried-forward baselines (accounts, charges, so Student dues);
+- dual-read verification (all history = baseline + later detail, exactly);
+- a fail-closed backfill.
+
+**D8: FOUNDATION READY — RETENTION CUTOVER STILL REQUIRED.**
+- No historical Finance evidence is deleted, and none can be:
+  `FinanceRetentionGuardTest` still forbids it.
+- The cutover (read models on baselines, narrow floored expiry) is
+  **E21.3A2**, followed by E21.3B–E21.3E.
+- Final ratification stays deferred to the pre-production closeout.
+- E33 / TCH-L1 is unaffected and stays open independently.

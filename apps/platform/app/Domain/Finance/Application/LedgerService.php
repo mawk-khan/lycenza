@@ -2,6 +2,7 @@
 
 namespace App\Domain\Finance\Application;
 
+use App\Domain\Finance\Application\Exceptions\FinancialPeriodClosedException;
 use App\Domain\Finance\Application\Exceptions\InvalidJournalCurrencyException;
 use App\Domain\Finance\Application\Exceptions\InvalidJournalEntryException;
 use App\Domain\Finance\Application\Exceptions\JournalEntryAlreadyReversedException;
@@ -96,38 +97,40 @@ class LedgerService
         $this->assertValidShape($data);
         $this->assertBalanced($data);
 
-        return $this->context->withSchool($school, function () use ($school, $data, $actor) {
-            return DB::transaction(function () use ($school, $data, $actor) {
-                $accounts = $this->resolveAccounts($data->lines);
+        return $this->context->withSchool($school, fn () => $this->refusingClosedPeriods(fn () => DB::transaction(function () use ($school, $data, $actor) {
+            $accounts = $this->resolveAccounts($data->lines);
 
-                $entry = JournalEntry::query()->create([
+            // E21.3A: the application clock dates the posting, so its
+            // financial period (resolved by the database trigger from the
+            // School-local date) agrees with every School-local "today".
+            $entry = JournalEntry::query()->create([
+                'school_id' => $school->id,
+                'currency' => $data->currency,
+                'description' => $data->description,
+                'posted_at' => now(),
+            ]);
+
+            foreach ($data->lines as $line) {
+                $account = $accounts->get($line->ledgerAccountId);
+
+                $entry->lines()->create([
                     'school_id' => $school->id,
+                    'ledger_account_id' => $account->id,
                     'currency' => $data->currency,
-                    'description' => $data->description,
+                    'debit_amount' => $line->side === JournalSide::Debit ? $line->amount->amount() : null,
+                    'credit_amount' => $line->side === JournalSide::Credit ? $line->amount->amount() : null,
                 ]);
+            }
 
-                foreach ($data->lines as $line) {
-                    $account = $accounts->get($line->ledgerAccountId);
+            $this->audit->school($school, 'journal_entry.posted', actor: $actor, subject: $entry, metadata: [
+                'currency' => $data->currency,
+                'lineCount' => count($data->lines),
+            ]);
 
-                    $entry->lines()->create([
-                        'school_id' => $school->id,
-                        'ledger_account_id' => $account->id,
-                        'currency' => $data->currency,
-                        'debit_amount' => $line->side === JournalSide::Debit ? $line->amount->amount() : null,
-                        'credit_amount' => $line->side === JournalSide::Credit ? $line->amount->amount() : null,
-                    ]);
-                }
+            event(new JournalEntryPosted($school->id, $entry->id, $data->currency, count($data->lines)));
 
-                $this->audit->school($school, 'journal_entry.posted', actor: $actor, subject: $entry, metadata: [
-                    'currency' => $data->currency,
-                    'lineCount' => count($data->lines),
-                ]);
-
-                event(new JournalEntryPosted($school->id, $entry->id, $data->currency, count($data->lines)));
-
-                return JournalEntryResult::fromModel($entry->refresh(), count($data->lines));
-            });
-        });
+            return JournalEntryResult::fromModel($entry->refresh(), count($data->lines));
+        })));
     }
 
     /**
@@ -172,12 +175,16 @@ class LedgerService
             }
 
             try {
-                return DB::transaction(function () use ($original, $actor, $reason) {
+                return $this->refusingClosedPeriods(fn () => DB::transaction(function () use ($original, $actor, $reason) {
+                    // E21.3A: a reversal posts in the CURRENT open period,
+                    // linked to the original, even when the original's period
+                    // is closed. The original is never touched.
                     $reversal = JournalEntry::query()->create([
                         'school_id' => $original->school_id,
                         'currency' => $original->currency,
                         'description' => $reason ?? "Reversal of journal entry {$original->id}.",
                         'reversal_of_journal_entry_id' => $original->id,
+                        'posted_at' => now(),
                     ]);
 
                     foreach ($original->lines as $line) {
@@ -198,7 +205,7 @@ class LedgerService
                     event(new JournalEntryReversed($original->school_id, $reversal->id, $original->id));
 
                     return JournalEntryResult::fromModel($reversal->refresh(), $original->lines->count());
-                });
+                }));
             } catch (QueryException $e) {
                 // Phase 0O.11A: a subledger guard trigger (today
                 // journal_entries_payment_reversal_guard) refuses the
@@ -280,6 +287,29 @@ class LedgerService
             ->get()
             ->map(fn (LedgerAccount $account) => LedgerAccountSummary::fromModel($account))
             ->values());
+    }
+
+    /**
+     * E21.3A: maps the database's closed-period refusal (SQLSTATE 55000,
+     * `financial_period_closed`) to the domain error. Every other failure
+     * propagates unchanged.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    private function refusingClosedPeriods(callable $callback): mixed
+    {
+        try {
+            return $callback();
+        } catch (QueryException $e) {
+            if ($e->getCode() === FinancialPeriodClosedException::SQLSTATE && FinancialPeriodClosedException::matches($e)) {
+                throw new FinancialPeriodClosedException;
+            }
+
+            throw $e;
+        }
     }
 
     /**

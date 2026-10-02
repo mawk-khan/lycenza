@@ -459,6 +459,12 @@ class CapabilityAndRoleSeeder extends Seeder
             // `finance.ledger.view`. Assessment, concession and receipt
             // capabilities belong to FEE.2+ and are NOT registered yet.
             ['key' => 'finance.accounts.manage', 'label' => 'Create, activate and deactivate Finance ledger accounts', 'namespace' => 'school'],
+            // E21.3A (ADR 0064 §7): close a financial period. Irreversible (no
+            // reopen), so it is its own capability rather than riding on
+            // `finance.ledger.post`/`.reverse`; the browser action also needs
+            // a fresh MFA verification. Viewing periods stays on
+            // `finance.ledger.view`.
+            ['key' => 'finance.periods.manage', 'label' => 'Close Finance financial periods (irreversible)', 'namespace' => 'school'],
             ['key' => 'finance.fee_structures.view', 'label' => 'View fee heads, fee structures and optional-fee selections', 'namespace' => 'school'],
             ['key' => 'finance.fee_structures.manage', 'label' => 'Manage fee heads, fee structures and optional-fee selections', 'namespace' => 'school'],
             // FEE.2 (ADR 0062 §19): create, preview, exclude items of,
@@ -1018,6 +1024,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // default. NOT granted to Principal (no Finance
                     // capability, the same reasoning as ledger/charges).
                     'finance.accounts.manage',
+                    // E21.3A (ADR 0064 §7): School Admin closes financial
+                    // periods, as it holds every other Finance mutation.
+                    // Never Principal, never Teacher.
+                    'finance.periods.manage',
                     'finance.fee_structures.view', 'finance.fee_structures.manage',
                     // FEE.2 (ADR 0062 §19): School Admin runs fee assessments;
                     // never Principal.

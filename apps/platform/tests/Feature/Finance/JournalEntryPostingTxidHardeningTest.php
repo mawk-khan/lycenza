@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Finance;
 
+use App\Domain\Finance\Infrastructure\FinancialPeriod;
 use App\Domain\Finance\Infrastructure\JournalLine;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
@@ -75,6 +76,7 @@ class JournalEntryPostingTxidHardeningTest extends TestCase
         $cash = $this->createLedgerAccount($this->school, ['type' => 'asset']);
         $income = $this->createLedgerAccount($this->school, ['type' => 'income']);
 
+        $this->ensureCurrentFinancialPeriod();
         $this->setSchool($this->school->id);
 
         $spoofed = '1';
@@ -167,12 +169,22 @@ class JournalEntryPostingTxidHardeningTest extends TestCase
     }
 
     /**
+     * E21.3A: a raw journal-entry INSERT needs its financial period to exist
+     * (the application creates it; the database trigger only assigns it).
+     */
+    private function ensureCurrentFinancialPeriod(): void
+    {
+        app(TenantContext::class)->withSchool($this->school, fn () => FinancialPeriod::ensureContaining($this->school->id, $this->school->timezone ?: 'UTC', now()));
+    }
+
+    /**
      * Creates a real, genuinely committed, balanced two-line entry
      * whose header INSERT explicitly (and unsuccessfully) attempts to
      * plant `posting_txid = '1'::xid8`. Returns the entry's id.
      */
     private function createBalancedEntryWithSpoofedPostingTxid(string $debitAccountId, string $creditAccountId): string
     {
+        $this->ensureCurrentFinancialPeriod();
         $this->setSchool($this->school->id);
 
         return DB::connection('pgsql')->transaction(function () use ($debitAccountId, $creditAccountId) {

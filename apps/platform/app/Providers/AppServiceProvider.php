@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Finance\Application\Periods\FinancialPeriodCloseParticipant;
+use App\Domain\Payments\Application\ChargePeriodStateParticipant;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
@@ -73,6 +75,11 @@ class AppServiceProvider extends ServiceProvider
         // Phase 0N.3 (ADR 0044): the request-scoped platform elevation
         // reference -- scoped for the same reason as TenantContext.
         $this->app->scoped(ElevationContext::class);
+
+        // E21.3A (ADR 0064 §5): the subledgers that carry state across a
+        // financial-period close. Registered here, not in Finance, so
+        // Finance never references the modules that depend on it.
+        $this->app->tag([ChargePeriodStateParticipant::class], FinancialPeriodCloseParticipant::TAG);
 
         // Phase 0O.1: no (string) cast -- a missing key stays missing and
         // AiContextTokenService refuses to sign or verify with it.

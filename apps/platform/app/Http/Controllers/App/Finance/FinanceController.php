@@ -25,6 +25,8 @@ class FinanceController extends Controller
             'can' => [
                 'viewLedger' => $capabilities->canInSchool($user, 'finance.ledger.view', $school),
                 'postLedger' => $capabilities->canInSchool($user, 'finance.ledger.post', $school),
+                // E21.3A: closing a financial period.
+                'closePeriods' => $capabilities->canInSchool($user, 'finance.periods.manage', $school),
                 'viewCharges' => $capabilities->canInSchool($user, 'finance.charges.view', $school),
                 'manageCharges' => $capabilities->canInSchool($user, 'finance.charges.manage', $school),
                 'viewPayments' => $capabilities->canInSchool($user, 'finance.payments.view', $school),

@@ -5060,3 +5060,86 @@ E21.2G and is not guessed here.
   payroll-ledger table (`FinanceRetentionGuardTest`).
 - Retained Finance keeps its Student (E21.2D) and its Employee (E21.2E).
 - Draft working rows keep their existing draft-only lifecycle.
+
+## E21.3A as-built — Financial periods and close (2026-10-02, ADR 0064)
+
+The foundation the retention section above was waiting for. **Nothing is
+deleted.** Every read still uses all history; the cutover is E21.3A2.
+
+**Periods.** `financial_periods`: one row per School financial year.
+- Key: the receipt series key. Range: from the start month.
+- Status: `open` or `closed`.
+- Database-guarded: no overlap; immutable boundaries; a closed row never
+  changes; no period before a closed one; no runtime DELETE; RLS.
+- Created by the application on demand with a UUIDv7 id
+  (`FinancialPeriod::ensureContaining`).
+
+**Posting identity.** `journal_entries.financial_period_id` is set by a
+BEFORE INSERT trigger from the School-local posting date. It covers every
+path, raw SQL included. The trigger holds the period `FOR SHARE` and
+refuses a closed period (55000 `financial_period_closed`, mapped to
+`FinancialPeriodClosedException`, 409). `LedgerService` dates postings with
+the application clock.
+
+**Close.** `FinancialPeriodCloseService::close()`:
+- Needs `finance.periods.manage` (School Admin by default; never Principal
+  or Teacher). The browser also needs the typed period key and a fresh MFA
+  code.
+- Runs as one transaction:
+  1. lock all open periods `FOR UPDATE`, by `starts_on`;
+  2. validate:
+     - ended before the School-local today;
+     - earlier years closed;
+     - no unmapped entries inside;
+  3. write the baselines;
+  4. mark the period closed (fingerprint);
+  5. dual-read verify, rolling back on any mismatch;
+  6. audit `financial_period.closed`.
+- There is no reopen. Corrections post in the open period, linked to their
+  original:
+  - reversal;
+  - charge cancellation;
+  - adjustment void;
+  - payroll reversal.
+
+**Baselines** (append-only, written only while the period is open):
+- `financial_period_account_balances`: cumulative debit/credit per
+  account through the year (Finance).
+- `financial_period_charge_states`: each charge's amount, allocations,
+  live adjustments and cancellation as of the year. It is Payments'
+  `ChargePeriodStateParticipant`, through Finance's
+  `FinancialPeriodCloseParticipant` contract, so Finance still has no
+  Fees/Payments dependency.
+- Student dues are their sum.
+
+**Verification.** `FinancialBalanceVerifier` compares two readings, which
+must be exactly equal for every account, charge and Student:
+- all history (the current reads, `ChargeOutstandingReader` included);
+- latest baseline + later detail.
+
+Operator check: `platform:finance-balances-verify` (read-only, REPEATABLE
+READ).
+
+**Backfill.** `platform:finance-periods-backfill [--school] [--dry-run]`:
+- maps pre-E21.3A entries by date;
+- fails closed as `ambiguous` when an audited start-month change came at
+  or after the posting, or the posting's own audit event is gone;
+- writes only through the narrow `finance_assign_journal_entry_period`.
+
+**Start month.** It is frozen once any period exists (the first posting).
+A concurrent first posting and month change serialize; the loser is
+refused.
+
+**Receipts** keep their settlement-date series. A late-recorded payment
+can carry the previous year's receipt number while posting in the open
+year (close notice `charges.receipt_series_differs_from_period`).
+
+**UI.** Finance → Financial periods (`/app/finance/periods`).
+
+**Retention.** `FinanceRetentionReadiness` is never ready; it always
+reports `retention_cutover_not_implemented`. Tenant closure readiness
+reports:
+- `d8_finance_retention_cutover_pending`;
+- `d8_finance_period_mapping_incomplete`, while any entry lacks a period.
+
+`FinanceRetentionGuardTest` still forbids any Finance deletion.

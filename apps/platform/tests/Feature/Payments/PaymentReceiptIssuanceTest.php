@@ -200,15 +200,14 @@ class PaymentReceiptIssuanceTest extends TestCase
     #[Test]
     public function a_configured_start_month_and_prefix_shape_the_number_and_academic_years_do_not(): void
     {
-        $w = $this->concessionWorld();
+        $w = $this->concessionWorld(startMonth: 1);
         $this->setNumbering($w, ' sch-a ', 1);
 
         // The AcademicYear runs 2026-06-01..2027-05-31; it has no effect.
         $this->assertSame('SCH-A/2026-27/000001', $this->receiptOf($w, $this->pay($w, '10.00', '2026-01-15')->paymentId)->receipt_number);
         $this->assertSame('SCH-A/2025-26/000001', $this->receiptOf($w, $this->pay($w, '10.00', '2025-12-31')->paymentId)->receipt_number);
 
-        $july = $this->concessionWorld();
-        $this->setNumbering($july, 'RCPT', 7);
+        $july = $this->concessionWorld(startMonth: 7);
         $this->assertSame('RCPT/2025-26/000001', $this->receiptOf($july, $this->pay($july, '10.00', '2026-06-30')->paymentId)->receipt_number);
         $this->assertSame('RCPT/2026-27/000001', $this->receiptOf($july, $this->pay($july, '10.00', '2026-07-01')->paymentId)->receipt_number);
     }

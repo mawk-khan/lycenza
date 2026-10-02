@@ -38,7 +38,16 @@ class DatabaseRoleVerifier
         'teaching_assignments', 'group_role_assignments', 'school_elevations',
         // E21.2F: erasure cases expire only through their retention function.
         'erasure_cases',
+        // E21.3A (ADR 0064): financial periods and their close baselines.
+        'financial_periods', 'financial_period_account_balances', 'financial_period_charge_states',
     ];
+
+    /**
+     * E21.3A (ADR 0064 §3): the one narrow Finance definer function, the
+     * backfill's NULL -> containing-open-period assignment. Same shape rules
+     * as the retention functions.
+     */
+    public const FINANCE_FUNCTIONS = ['finance_assign_journal_entry_period'];
 
     /**
      * E21.2B: the narrow retention functions (migration 2026_11_06_090000).
@@ -148,6 +157,17 @@ class DatabaseRoleVerifier
         // of the sanctioned, narrow ones (the assert helpers are not executable).
         $unexpected = array_filter($functions, fn ($f) => $f->runtime_exec && ! in_array($f->proname, self::RETENTION_FUNCTIONS, true));
         $results[] = CheckResult::of('retention_functions_narrow', count($narrow) === count(self::RETENTION_FUNCTIONS) && $unexpected === []);
+
+        $finance = DB::select(
+            "select p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config,
+                    pg_get_userbyid(p.proowner) as owner, has_function_privilege(?, p.oid, 'EXECUTE') as runtime_exec,
+                    (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0 and a.privilege_type = 'EXECUTE')) as public_exec
+             from pg_proc p where p.pronamespace = 'public'::regnamespace and p.prosecdef and p.proname like 'finance\\_%'",
+            [$role],
+        );
+        $narrowFinance = array_filter($finance, fn ($f) => in_array($f->proname, self::FINANCE_FUNCTIONS, true)
+            && str_contains($f->config, 'search_path=') && $f->owner !== $role && $f->runtime_exec && ! $f->public_exec);
+        $results[] = CheckResult::of('finance_period_functions_narrow', count($narrowFinance) === count(self::FINANCE_FUNCTIONS) && count($finance) === count(self::FINANCE_FUNCTIONS));
 
         return $results;
     }

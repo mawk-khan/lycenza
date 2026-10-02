@@ -45,6 +45,7 @@ use App\Http\Controllers\App\Finance\FeeConcessionController as FinanceFeeConces
 use App\Http\Controllers\App\Finance\FeeSetupController as FinanceFeeSetupController;
 use App\Http\Controllers\App\Finance\FeeStatementController as FinanceFeeStatementController;
 use App\Http\Controllers\App\Finance\FinanceController;
+use App\Http\Controllers\App\Finance\FinancialPeriodController as FinanceFinancialPeriodController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
 use App\Http\Controllers\App\Finance\LateFeeController as FinanceLateFeeController;
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
@@ -1082,6 +1083,12 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         // below, matching this file's own established convention
         // (e.g. 'announcements'/'templates' inside the Communications
         // group above).
+        // E21.3A (ADR 0064 §7): financial periods. View under
+        // finance.ledger.view; close (irreversible, no reopen) under
+        // finance.periods.manage + typed period key + fresh MFA.
+        Route::get('/periods', [FinanceFinancialPeriodController::class, 'index'])->name('periods.index');
+        Route::post('/periods/{period}/close', [FinanceFinancialPeriodController::class, 'close'])->whereUuid('period')->name('periods.close');
+
         Route::get('/journal-entries/create', [FinanceJournalEntryController::class, 'create'])->name('journal-entries.create');
         Route::get('/journal-entries', [FinanceJournalEntryController::class, 'index'])->name('journal-entries.index');
         Route::post('/journal-entries', [FinanceJournalEntryController::class, 'store'])->name('journal-entries.store');

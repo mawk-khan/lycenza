@@ -376,6 +376,28 @@ email recovery.
   - the scheduler and alerts.
 
   All technical-TTL prunes now support `--dry-run`.
+- **E21.3A financial period close (2026-10-02, ADR 0064):**
+  - **Migrations** `2026_11_09_090000` / `090100`:
+    - `financial_periods`;
+    - `journal_entries.financial_period_id`, with its assigning trigger;
+    - the baseline tables;
+    - the narrow `finance_assign_journal_entry_period`.
+
+    `platform:verify-database` checks it (`finance_period_functions_narrow`).
+    Their `down()` refuses once any period is closed or any baseline exists.
+  - **Release step, once per environment, after migrating:** run
+    `platform:finance-periods-backfill --dry-run`, review the counts, then
+    run it without `--dry-run`. Entries that stay `ambiguous` keep their
+    year closable only after an explicit decision. Then run
+    `platform:finance-balances-verify`, which must report
+    `verification=passed`.
+  - **Seeder:** `finance.periods.manage` (School Admin) must be seeded
+    (`DatabaseSeeder`).
+  - **Behaviour change:** the financial-year start month freezes at a
+    School's first posting, not its first receipt.
+  - **Closing a year** is an irreversible School Admin action (typed key +
+    fresh MFA) under Finance → Financial periods. Nothing is scheduled.
+  - **No Finance expiry exists.** Finance retention needs E21.3A2.
 
 ## 6. Seeding: production-safe versus demo
 

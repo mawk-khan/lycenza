@@ -2,6 +2,7 @@
 
 namespace App\Domain\Finance\Infrastructure;
 
+use App\Models\School;
 use App\Support\Identifiers\GeneratesUuidV7;
 use App\Support\Tenancy\BelongsToSchool;
 use Database\Factories\JournalEntryFactory;
@@ -33,6 +34,7 @@ use Illuminate\Support\Carbon;
  * @property string $description
  * @property Carbon $posted_at
  * @property string|null $reversal_of_journal_entry_id
+ * @property string|null $financial_period_id E21.3A: assigned by the database on INSERT (ADR 0064); NULL only for entries posted before it, until backfilled
  * @property string $posting_txid Internal PostgreSQL transaction-identity
  *                                metadata, NOT a Finance business attribute. Unconditionally assigned/
  *                                overwritten by a BEFORE INSERT database trigger
@@ -61,6 +63,24 @@ class JournalEntry extends Model
         return [
             'posted_at' => 'datetime',
         ];
+    }
+
+    /**
+     * E21.3A (ADR 0064): every entry is dated by the application clock, and
+     * its financial period exists before the INSERT. The database trigger
+     * then assigns and checks the period; it never creates one.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (JournalEntry $entry): void {
+            if ($entry->getAttribute('posted_at') === null) {
+                $entry->posted_at = now();
+            }
+            $school = School::query()->find($entry->school_id);
+            if ($school !== null) {
+                FinancialPeriod::ensureContaining($school->id, $school->timezone ?: 'UTC', $entry->posted_at);
+            }
+        });
     }
 
     protected static function newFactory(): JournalEntryFactory

@@ -97,10 +97,13 @@ class PaymentReceiptUiTest extends TestCase
         $this->post('/app/finance/fee-setup/receipt-numbering', ['receipt_prefix' => 'SCH', 'financial_year_start_month' => 4])->assertForbidden();
 
         $this->memberWith(['finance.fee_structures.view', 'finance.fee_structures.manage'], $w['school']);
-        $this->post('/app/finance/fee-setup/receipt-numbering', ['receipt_prefix' => 'sch', 'financial_year_start_month' => 7])->assertRedirect()->assertSessionHasNoErrors();
-        $this->get('/app/finance/fee-setup')->assertInertia(fn ($page) => $page->where('receiptNumbering.prefix', 'SCH')->where('receiptNumbering.financialYearStartMonth', 7));
+        $this->post('/app/finance/fee-setup/receipt-numbering', ['receipt_prefix' => 'sch', 'financial_year_start_month' => 4])->assertRedirect()->assertSessionHasNoErrors();
+        $this->get('/app/finance/fee-setup')->assertInertia(fn ($page) => $page->where('receiptNumbering.prefix', 'SCH')->where('receiptNumbering.financialYearStartMonth', 4));
+        // E21.3A (ADR 0064): the start month defines the financial periods, so
+        // it is frozen once anything is posted (the world assessed a charge).
+        $this->post('/app/finance/fee-setup/receipt-numbering', ['receipt_prefix' => 'SCH', 'financial_year_start_month' => 7])->assertSessionHasErrors('action');
 
         $this->pay($w, '10.00', $this->today($w));
-        $this->post('/app/finance/fee-setup/receipt-numbering', ['receipt_prefix' => 'OTHER', 'financial_year_start_month' => 7])->assertSessionHasErrors('action');
+        $this->post('/app/finance/fee-setup/receipt-numbering', ['receipt_prefix' => 'OTHER', 'financial_year_start_month' => 4])->assertSessionHasErrors('action');
     }
 }

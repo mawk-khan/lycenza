@@ -498,6 +498,63 @@ class ChargeService
             ->values());
     }
 
+    /**
+     * E21.3A (ADR 0064 §5): every charge of the School with the journal
+     * entries that assessed and cancelled it, for Payments' charge-state
+     * baseline and dual-read check. Trusted, read-only, no capability check
+     * (the financial-period close authorizes). Ordered by id.
+     *
+     * @return list<ChargeLedgerFact>
+     */
+    public function ledgerFacts(School $school): array
+    {
+        return $this->context->withSchool($school, function () use ($school) {
+            $facts = [];
+            foreach (Charge::query()->where('school_id', $school->id)->orderBy('id')
+                ->toBase()->select(['id', 'student_id', 'amount', 'currency', 'journal_entry_id', 'cancelled_at', 'cancellation_journal_entry_id'])
+                ->cursor() as $row) {
+                $facts[] = new ChargeLedgerFact(
+                    id: (string) $row->id,
+                    studentId: (string) $row->student_id,
+                    amount: (string) $row->amount,
+                    currency: (string) $row->currency,
+                    journalEntryId: (string) $row->journal_entry_id,
+                    cancelled: $row->cancelled_at !== null,
+                    cancellationJournalEntryId: $row->cancellation_journal_entry_id === null ? null : (string) $row->cancellation_journal_entry_id,
+                );
+            }
+
+            return $facts;
+        });
+    }
+
+    /**
+     * E21.3A: every fee adjustment of the School (live or voided) with its
+     * posting and void journal entries. Same contract as `ledgerFacts()`.
+     *
+     * @return list<FeeAdjustmentLedgerFact>
+     */
+    public function adjustmentLedgerFacts(School $school): array
+    {
+        return $this->context->withSchool($school, function () use ($school) {
+            $facts = [];
+            foreach (FeeAdjustment::query()->where('school_id', $school->id)->orderBy('id')
+                ->toBase()->select(['id', 'charge_id', 'amount', 'journal_entry_id', 'cancelled_at', 'cancellation_journal_entry_id'])
+                ->cursor() as $row) {
+                $facts[] = new FeeAdjustmentLedgerFact(
+                    id: (string) $row->id,
+                    chargeId: (string) $row->charge_id,
+                    amount: (string) $row->amount,
+                    journalEntryId: (string) $row->journal_entry_id,
+                    cancelled: $row->cancelled_at !== null,
+                    cancellationJournalEntryId: $row->cancellation_journal_entry_id === null ? null : (string) $row->cancellation_journal_entry_id,
+                );
+            }
+
+            return $facts;
+        });
+    }
+
     private function violatesConstraint(QueryException $e, string $constraintName): bool
     {
         return str_contains($e->getMessage(), $constraintName);

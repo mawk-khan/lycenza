@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Postgres;
 
+use App\Domain\Finance\Infrastructure\FinancialPeriod;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
@@ -243,6 +244,9 @@ class FinanceRawIsolationTest extends TestCase
         $school = $this->createSchool();
         $cash = $this->createLedgerAccount($school, ['type' => 'asset']);
         $income = $this->createLedgerAccount($school, ['type' => 'income']);
+        // E21.3A: a raw entry needs its financial period to exist (the
+        // application creates periods; the trigger only assigns them).
+        app(TenantContext::class)->withSchool($school, fn () => FinancialPeriod::ensureContaining($school->id, $school->timezone ?: 'UTC', now()));
 
         $this->setSchool($school->id);
 

@@ -190,21 +190,22 @@ class PaymentReceiptConcurrencyTest extends TestCase
     }
 
     #[Test]
-    public function a_start_month_change_that_commits_first_is_used_by_the_waiting_first_receipt(): void
+    public function a_start_month_change_is_refused_once_anything_is_posted_even_before_any_receipt(): void
     {
+        // E21.3A (ADR 0064): the start month defines the financial periods,
+        // so it freezes at the School's first posting, not its first receipt.
+        // The race between a first posting and a month change is proven in
+        // Tests\Feature\Finance\FinancialPeriodConcurrencyTest.
         $w = $this->world();
 
-        // 2026-02-15 is financial year 2025-26 with the default April start
-        // and 2026-27 with a January start: the series shows which settings
-        // the issuer used.
-        [$holder, $contender] = $this->raceWithHeldHolder($this->setNumbering($w, 'RCPT', 1), $this->recordOn($w, '2026-02-15'));
+        try {
+            app(FeeSettingsService::class)->setReceiptNumbering($w['school'], 'RCPT', 1, $w['actor']);
+            $this->fail('The start month must not change once the ledger has postings.');
+        } catch (ReceiptNumberingLockedException $e) {
+            $this->assertStringContainsString('posted to the ledger', $e->getMessage());
+        }
 
-        $this->assertSame('numbering:RCPT:1', $holder);
-        $this->assertStringStartsWith('recorded:', $contender);
-        $receipt = $this->receiptOf($w, substr($contender, strlen('recorded:')));
-        $this->assertSame('2026-27', $receipt->series_key, 'The waiting issuer used the January start committed before it.');
-        $this->assertSame('RCPT/2026-27/000001', $receipt->receipt_number);
-        $this->assertSame(['RCPT', 1], $this->numberingOf($w));
+        $this->assertSame(['RCPT', 4], $this->numberingOf($w));
     }
 
     #[Test]

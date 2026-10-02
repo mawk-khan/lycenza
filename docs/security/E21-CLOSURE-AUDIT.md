@@ -27,10 +27,10 @@
 |---|---|
 | What is technically implemented? | D0–D7, D9 (classified data), D10 (reviewed erasure cases), D11 (freeze and readiness), D12 and D13 (repository side). See §2. |
 | What owner/project decisions remain unresolved? | **One:** erasing a User identity, i.e. anonymising audit actors and authority history. It needs a qualified legal decision (§8, I5). Every other category has a project decision. |
-| What engineering blockers remain? | **D8 Finance**: a financial-year close is required (§6, checkpoint E21.3A). Plus four bounded mechanism checkpoints for periods adopted here: E21.3B–E21.3E (§7). |
+| What engineering blockers remain? | **D8 Finance**: the financial-period close foundation exists since E21.3A (ADR 0064); the retention cutover is still required (§6, checkpoint E21.3A2). Plus four bounded mechanism checkpoints for periods adopted here: E21.3B–E21.3E (§7). |
 | What final legal/compliance ratification remains? | All of D0–D13 and the E21.2G decisions (§10). Deferred to the pre-production closeout. |
 | Can E21 close now? | **No.** It is technically open: D8 is blocked, and the E21.3B–E mechanisms are not built. |
-| What must happen before E21 can close? | E21.3A, then E21.3B–E21.3E. After those: production configuration (§9) and final ratification (§10). |
+| What must happen before E21 can close? | E21.3A2 (E21.3A is done), then E21.3B–E21.3E. After those: production configuration (§9) and final ratification (§10). |
 
 ## 2. D0–D13 matrix
 
@@ -44,7 +44,7 @@
 | D5 | Documents inherit their owner; orphans 30 d | **IMPLEMENTED** for Student and Employee owners and orphans. Guardian/LMS Documents follow their parents' E21.2G periods | `storage-orphans-prune`; parent purges | Parents' mechanisms (E21.3C/D) |
 | D6 | Authority 7 y after it ends | **IMPLEMENTED** (grants, TeachingAssignments, elevations). **E21.2G:** ended API credentials 7 y | `authority-history-prune` | API credential mechanism (E21.3E) |
 | D7 | Core 25 y and operational 7 y after final exit | **IMPLEMENTED** for classified D7 data. **E21.2G:** Library, Transport and Hostel student rows are D7 operational; consent, preferences, processing authorizations and converted admissions go with the core record | `student-retention-prune` | E21.3B |
-| D8 | 8 y after the financial year closes | **BLOCKED BY ARCHITECTURE** | none (`FinanceRetentionGuardTest` forbids it) | E21.3A |
+| D8 | 8 y after the financial year closes | **FOUNDATION READY — RETENTION CUTOVER STILL REQUIRED** (E21.3A, ADR 0064) | period close, baselines, dual-read verifier; no expiry (`FinanceRetentionGuardTest` forbids it) | E21.3A2 |
 | D9 | Ancillary 2 y; evidence 8 y after final separation | **IMPLEMENTED** for classified D9 data | `employee-retention-prune` (HR + Payroll) | Paid staff wait for D8; teaching staff wait for E21.3D |
 | D10 | Reviewed cases; retention wins; 30-day target | **IMPLEMENTED** (orchestration) | `erasure-case-*` (operator) | User-identity erasure: legal decision (I5) |
 | D11 | Freeze → retain → controlled purge; no hard-delete | **IMPLEMENTED** as freeze and readiness. Tenant purge **NOT AUTHORIZED** | Close/Reopen; `school-closure-status` | Purge prerequisites (§5) |
@@ -206,8 +206,19 @@ failure.
 
 ## 6. D8 — Finance retention: BLOCKED (architecture brief for E21.3A)
 
-**Status: BLOCKED BY ARCHITECTURE.** Nothing financial is deleted, by
-design.
+**Status (E21.3A, 2026-10-02): FOUNDATION READY — RETENTION CUTOVER STILL
+REQUIRED.** ADR 0064 implements items 1–4, 6 and 7 below:
+- the period entity and posting identity;
+- close validation, as amended in ADR 0064 §4.3;
+- the period lock;
+- account and charge baselines (Student dues are their sum);
+- receipt-series compatibility;
+- the backfill and the dual-read check.
+
+Item 5 (read models computing from baselines) and item 8 (expiry) are
+**E21.3A2**. Nothing financial is deleted, by design.
+
+The original brief follows (status at E21.2G: BLOCKED BY ARCHITECTURE).
 
 **Problem: the balance model.** Every balance is derived from the complete
 posting history (`FINANCE.md`, "Balance derivation"):
@@ -293,7 +304,8 @@ retention metric within its ceiling by consolidating operations.
 
 | Checkpoint | Scope |
 |---|---|
-| **E21.3A** | Financial Year Close & Retention Foundation (§6) |
+| **E21.3A** | Financial Year Close & Retention Foundation (§6): **done** (ADR 0064) |
+| **E21.3A2 — Finance Retention Cutover & Historical Expiry** | Read models on baseline + retained detail; narrow, floored, held, dry-run expiry of a closed period's detail 8 y after the year closes, with the dual-read verifier as a precondition; rewritten `FinanceRetentionGuardTest` contract |
 | **E21.3B — Student-linked evidence and modules** | D7 operational participants for Library loans, Transport and Hostel assignments. Consent events, domain preferences, processing authorizations and converted admission applications (with their applicant) go with the Student core record, through a narrow path because consent and authorization rows are append-only or undeletable. Ended portal invitations 7 d after they ended. |
 | **E21.3C — Admissions and Guardian lifecycle markers** | A decision timestamp for rejected/withdrawn applications (expired 1 y after it; undated history stays unresolved). A durable Guardian "no relationship since" marker, then Guardian personal data, contacts, Documents, account links and consent 1 y after it, unless a retained dependent remains. |
 | **E21.3D — Year-bound academic operations** | Curriculum deliveries, timetable entries, LMS content and assignments (with audiences, Documents and the D6 owner minimum), and attendance register headers (only once empty): 7 y after the end of their Academic Year. This releases teaching Employees. |

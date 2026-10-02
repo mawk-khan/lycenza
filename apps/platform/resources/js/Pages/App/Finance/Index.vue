@@ -3,6 +3,7 @@ interface Props {
     can: {
         viewLedger: boolean;
         postLedger: boolean;
+        closePeriods: boolean;
         viewCharges: boolean;
         manageCharges: boolean;
         viewPayments: boolean;
@@ -40,6 +41,16 @@ defineProps<Props>();
                 >
                 <p class="mt-1 text-sm text-slate-500">
                     Posted ledger history{{ can.postLedger ? ', and post new entries' : '' }}.
+                </p>
+            </li>
+            <li v-if="can.viewLedger" class="px-4 py-3">
+                <a class="text-sm font-medium underline" href="/app/finance/periods"
+                    >Financial periods</a
+                >
+                <p class="mt-1 text-sm text-slate-500">
+                    Financial years and their close status{{
+                        can.closePeriods ? ', and close a finished year' : ''
+                    }}.
                 </p>
             </li>
             <li v-if="can.viewFeeSetup" class="px-4 py-3">

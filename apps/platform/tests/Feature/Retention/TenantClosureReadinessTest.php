@@ -62,7 +62,7 @@ class TenantClosureReadinessTest extends TestCase
         $categories = $this->byCategory($report);
 
         $this->assertFalse($report['purge_ready']);
-        foreach (['school_not_closed', 'd8_financial_year_close', 'retention_mechanism_pending', 'retention_periods_running', 'final_ratification_pending', 'no_tenant_purge_authorized'] as $gate) {
+        foreach (['school_not_closed', 'd8_finance_retention_cutover_pending', 'retention_mechanism_pending', 'retention_periods_running', 'final_ratification_pending', 'no_tenant_purge_authorized'] as $gate) {
             $this->assertContains($gate, $report['gates']);
         }
         $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, $categories['finance_ledger']['outcome']);

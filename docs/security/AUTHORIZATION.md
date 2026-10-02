@@ -818,6 +818,36 @@ already received.
   non-member, platform root (plain and elevated), Group admin (plain and
   Group-derived elevation), and a recorder of another School.
 
+## Financial period close (E21.3A, ADR 0064)
+
+`finance.periods.manage` (School namespace) closes a financial period. The
+close is irreversible: there is no reopen action, state or capability.
+
+- **Grant.** School Admin only, by default; never Principal or Teacher.
+- **What does not imply it:** `finance.ledger.view`, `.post` and
+  `.reverse`, and every other Finance capability.
+- **Viewing** periods and a close's blockers needs `finance.ledger.view`.
+- **Order (browser):**
+  1. membership/TenantContext;
+  2. capability (controller);
+  3. typed period key and **fresh MFA code** (`FreshMfaRequirement`; a
+     refused person never spends a code);
+  4. `FinancialPeriodCloseService::close()` checks the capability again
+     for the actor it is given.
+- **Other authority.** An elevated platform session is refused on the
+  route (rule 83); Group authority has no School capability (rule 84).
+- **Database.** Whatever the caller holds, the database refuses changing a
+  closed period, posting into one, and deleting periods or baselines.
+- **Tests.**
+  - `Tests\Feature\App\FinancialPeriodUiTest`:
+    - a ledger post/reverse holder is denied;
+    - missing, invalid and absent-factor MFA;
+    - a wrong key;
+    - another School's period (404);
+    - an allowed close.
+  - `Tests\Feature\Finance\FinancialPeriodCloseTest` (service allow/deny,
+    including the default School Admin grant).
+
 ## What is NOT yet implemented
 
 Tenant-custom roles (role *assignment* exists: Settings → Staff accounts

@@ -39,7 +39,8 @@ final class TenantRetentionCatalog
 
     /** category => [status, decision, tables] */
     public const CATEGORIES = [
-        'finance_ledger' => [self::TECHNICAL_BLOCKER, 'D8: 8 y after the financial year closes; blocked until a financial-year close exists', [
+        'finance_ledger' => [self::TECHNICAL_BLOCKER, 'D8: 8 y after the financial year closes; the period close exists (E21.3A), the retention cutover does not (E21.3A2)', [
+            'financial_periods', 'financial_period_account_balances', 'financial_period_charge_states',
             'journal_entries', 'journal_lines', 'charges', 'fee_adjustments', 'fee_assessments', 'fee_assessment_runs',
             'fee_assessment_run_items', 'fee_concessions', 'fee_optional_selections', 'late_fee_assessments', 'late_fee_runs',
             'late_fee_run_items', 'payments', 'payment_allocations', 'payment_provider_events', 'payment_receipts',

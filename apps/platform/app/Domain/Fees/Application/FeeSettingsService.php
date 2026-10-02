@@ -178,6 +178,9 @@ class FeeSettingsService
                     if (str_contains($message, 'the receipt prefix cannot change')) {
                         throw new ReceiptNumberingLockedException('The receipt prefix cannot change while this financial year\'s receipt series has receipts.');
                     }
+                    if (str_contains($message, 'start month cannot change once financial periods exist')) {
+                        throw new ReceiptNumberingLockedException('The financial-year start month cannot change once anything has been posted to the ledger.');
+                    }
                     if (str_contains($message, 'start month cannot change')) {
                         throw new ReceiptNumberingLockedException('The financial-year start month cannot change once receipts have been issued.');
                     }

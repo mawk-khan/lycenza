@@ -62,6 +62,8 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'ProvisionSchoolAdminAccount.php',       // one named School, which must be `provisioning` (ADR 0059 section 5)
         'PruneStaffAccountCredentials.php',      // technical credential cleanup (ADR 0059 section 21)
         'BackfillPaymentReceipts.php',           // one named School; refused unless active, and each receipt re-checks the lifecycle (ADR 0062 I2)
+        'BackfillFinancialPeriods.php',          // integrity maintenance of retained ledger evidence: maps entries to periods, no business effect (ADR 0064)
+        'VerifyFinanceBalances.php',             // read-only dual-read verification (ADR 0064)
     ];
 
     #[Test]
