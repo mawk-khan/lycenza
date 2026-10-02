@@ -16,11 +16,12 @@ namespace App\Support\Retention;
  *
  * Statuses:
  * - `adopted`: an implemented retention period expires these rows;
- * - `technical_blocker`: cannot expire yet (D8: every balance is derived
- *   from all postings; no financial-year close exists);
+ * - `technical_blocker`: cannot expire yet for a structural reason. Unused
+ *   since E21.3F: the last one (the D8 x D9 payroll ledger) is now adopted;
  * - `mechanism_pending`: a project period is adopted (E21.2G closure audit,
  *   pending ratification) but its expiry mechanism ships in a named follow-up
- *   checkpoint (E21.3B-E21.3E). The rows are kept until it does;
+ *   checkpoint (E21.3B-E21.3F). The rows are kept until it does. Unused
+ *   since E21.3F: every adopted period has its mechanism;
  * - `policy_unresolved`: no adopted period;
  * - `tenant_lifetime`: School configuration that lives as long as the
  *   School itself. It goes only with a future authorized tenant purge.
@@ -63,10 +64,11 @@ final class TenantRetentionCatalog
         'finance_period_evidence' => [self::TENANT_LIFETIME, 'D8: financial periods, their cumulative account baselines and the expiry lineage carry every later balance; kept with the School', [
             'financial_periods', 'financial_period_account_balances', 'financial_period_expiries',
         ]],
-        'payroll_ledger' => [self::TECHNICAL_BLOCKER, 'D8 x D9: posted payroll records are D9 evidence and keep their journal entries; no Payroll D9 expiry mechanism exists yet (E21.3A2 recorded intersection)', [
-            'payroll_periods', 'payroll_runs', 'payroll_run_results', 'payroll_run_result_lines', 'payroll_run_postings',
+        'payroll_ledger' => [self::ADOPTED, 'D9 x D8 (E21.3F, implemented): posted payroll evidence (results with lines and statutory results, adjustments, LWF charges) 8 y after the Employee\'s final separation, once every run holding it and every posting is that old too (platform:payroll-retention-prune); an emptied run with its corrections then loses its postings, which releases its journal entries to D8 (they expire only once their financial period is 8 y closed); draft, calculated and approved runs are working state', [
+            'payroll_runs', 'payroll_run_results', 'payroll_run_result_lines', 'payroll_run_postings',
             'payroll_statutory_calculation_results', 'payroll_statutory_run_postings', 'payroll_adjustments', 'payroll_lwf_annual_charges',
         ]],
+        'payroll_calendar' => [self::TENANT_LIFETIME, 'E21.3F: monthly payroll period headers (dates and status; no personal data, no amount), School payroll configuration kept with the School', ['payroll_periods']],
         'finance_configuration' => [self::TENANT_LIFETIME, 'interprets the retained ledger', [
             'ledger_accounts', 'fee_heads', 'fee_structures', 'fee_structure_lines', 'fee_structure_installments', 'fee_late_fee_rules',
             'fee_settings', 'payroll_accounting_configurations', 'payroll_statutory_accounting_configurations',

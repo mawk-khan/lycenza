@@ -486,6 +486,24 @@ email recovery.
     ratification). Unset skips a category; run with `--dry-run` first
     (visits never checked out show as unresolved).
   - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops all of them per School.
+- **E21.3F payroll evidence retention (2026-10-02):**
+  - **Migration** `2026_11_15_090000`: `retention_expire_payroll_employee_evidence`
+    and `retention_expire_payroll_run` (checked by `platform:verify-database`),
+    the guarded `payroll_runs.results_expired_at` marker and the three
+    flag-gated freeze-trigger allowances. Its `down()` removes the
+    mechanism and refuses once any run carries the marker.
+  - **New daily task:** `payroll-retention-prune` (05:20), covered by
+    OBS-06. It uses the existing `EMPLOYEE_EVIDENCE_RETENTION_YEARS=8`
+    (project-adopted, pending ratification): **code complete is not
+    production configured**, and once that value is set this task also
+    expires posted payroll evidence. It refuses a value under 8; unset
+    deletes nothing. Run it with `--dry-run` first (a draft/approved run,
+    a late reversal or correction, or unposted statutory results show as
+    dependency-blocked).
+  - **Finance:** released payroll journal entries expire only through
+    `finance-retention-prune` (`FINANCE_RETENTION_ENABLED`), never through
+    Payroll.
+  - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops it per School.
 
 ## 6. Seeding: production-safe versus demo
 

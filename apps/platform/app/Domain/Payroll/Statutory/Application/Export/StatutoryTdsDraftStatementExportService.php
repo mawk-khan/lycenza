@@ -4,6 +4,7 @@ namespace App\Domain\Payroll\Statutory\Application\Export;
 
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryFormNotYetEffectiveException;
+use App\Domain\Payroll\Statutory\Application\Exceptions\StatutoryRunResultsExpiredException;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeStatutoryIdentifier;
 use App\Domain\Payroll\Statutory\Infrastructure\EmployeeTaxProfile;
 use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryCalculationResult;
@@ -52,6 +53,10 @@ class StatutoryTdsDraftStatementExportService
         return $this->context->withSchool($school, function () use ($school, $run, $actor) {
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.exports.generate', $school);
             $this->authorizeCapabilityFor($actor, 'payroll.statutory.view', $school);
+            // E21.3F: never a silently partial filing after payroll retention.
+            if ($run->fresh()?->results_expired_at !== null) {
+                throw new StatutoryRunResultsExpiredException($run->id);
+            }
 
             $periodMonth = Carbon::parse($run->period->period_month)->startOfMonth();
             if ($periodMonth->lt(Carbon::parse(self::FORM_138_EFFECTIVE_FROM))) {

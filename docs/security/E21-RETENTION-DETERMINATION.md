@@ -60,6 +60,17 @@
 > automation executions (1 y) and ended API credentials (D6, 7 y).
 > Memberships, membership preferences and Inventory stay tenant lifetime;
 > notifications stay not applicable. The only engineering left is E21.3F.
+>
+> **E21.3F (2026-10-02, §5.10, ADR 0064 §21 amended):** posted payroll
+> evidence (results with lines and statutory results, adjustments, LWF
+> charges) goes 8 calendar years after the Employee's final separation,
+> once every run holding it and every posting is that old too; an emptied
+> run then loses its postings and runs, which releases its journal entries
+> to D8 (they expire only once their financial period is itself 8 years
+> closed). Paid Employees are no longer kept indefinitely. **No
+> retention-mechanism checkpoint remains: E21 engineering is complete.** E21
+> stays **OPEN**: final ratification and the User-identity erasure legal
+> decision (closure audit §8 I5) remain.
 > - Final ratification is deferred to the pre-production project closeout.
 > - The consolidated reference, with matrices, the D8 brief and the
 >   ratification package, is `docs/security/E21-CLOSURE-AUDIT.md`. Its §8
@@ -528,6 +539,12 @@ The checkpoints are listed in §5.
     - retained Finance keeps its Employee through payroll results
       (E21.2E);
     - Guardians are not referenced by Finance.
+- **E21.3A2 / E21.3F:** D8 is implemented (closure audit, ADR 0064). Payroll
+  run postings and their journal entries never expire through D8 while a
+  payroll posting references them (`payroll_evidence_retained`). Since
+  E21.3F, Payroll's own D9 expiry deletes the postings of an emptied run,
+  and the entries become ordinary Finance units that D8 expires once their
+  period is 8 years closed (§5.10). The longest period always wins.
 
 ### E21-D9 — HR and payroll
 
@@ -576,7 +593,8 @@ The checkpoints are listed in §5.
     Employee, an employment, an assignment or a compensation assignment
     blocks it (`dependency_blocked`, kept). The check reads the FK catalog
     (`ReferencingRows`); nothing is cascaded. This keeps the Employee for:
-    - payroll results (ledger, D8);
+    - payroll results, adjustments and LWF charges, until Payroll's own D9
+      expiry removes them (E21.3F, §5.10);
     - TeachingAssignments (D6, 7 y after they end);
     - Attendance sessions, timetable entries and LMS ownership;
     - Transport and Visitor rows;
@@ -589,7 +607,10 @@ The checkpoints are listed in §5.
 - **D9 findings (recorded, not guessed). E21.2G: closure audit §8 E1–E3;
   payroll results are the D8 blocker.**
   - **Paid staff are kept.** An Employee with payroll results stays until
-    D8 can expire ledger evidence.
+    D8 can expire ledger evidence. **Resolved by E21.3F (§5.10):** posted
+    payroll evidence has its own D9 expiry; the next
+    `employee-retention-prune` then releases the Employee (other blockers
+    still apply).
   - **Staff who taught are kept** while the Section-level teaching records
     that reference them have no adopted period (E21.2G).
   - **Personal details** mix identity (date of birth, nationality) with
@@ -760,7 +781,7 @@ The checkpoints are listed in §5.
 | E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | **Implemented** (§5.7; full isolated regression) |
 | E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | **Implemented** (§5.8; full isolated regression) |
 | E21.3E | Communications and platform residuals (never-sent and empty threads, visitors, automation, driver assignments, API credentials) | **Implemented** (§5.9; full isolated regression) |
-| E21.3F (provisional) | Payroll Evidence Retention & Employee Release: a Payroll D9 result-expiry mechanism, releasing payroll-linked journal entries (D8 × D9, ADR 0064 §21) and paid Employees | Not started |
+| E21.3F | Payroll Evidence Retention & Employee Release: Payroll D9 evidence expiry, releasing payroll-linked journal entries to D8 (ADR 0064 §21 amended) and paid Employees | **Implemented** (§5.10; full isolated regression). The last retention-mechanism checkpoint |
 
 ### 5.1 The privileged retention path (E21.2B)
 
@@ -1165,6 +1186,90 @@ the transition's own transaction, and is never `updated_at`.
 - **Metrics:** never-sent and empty-thread in `communications`; credentials
   in `authority`; one deliberate new family `operations` (eleven values).
 
+### 5.10 Payroll evidence and the D8 × D9 release (E21.3F)
+
+Resolves the D8 × D9 intersection recorded by E21.3A2 (ADR 0064 §21,
+amended). Project-adopted D9, pending ratification. Neither policy is
+weakened: the longest period wins.
+
+- **Inventory and classification:**
+
+  | Record | Classification | Trigger / period | Expiry behaviour |
+  |---|---|---|---|
+  | `payroll_run_results` + `payroll_run_result_lines` | C/D: authoritative per-Employee result and its lines (posted runs) | final separation + 8 y, and every run/posting older than the cutoff | with the Employee's payroll unit; lines by cascade |
+  | `payroll_statutory_calculation_results` | E: statutory payroll evidence (PF/ESI/PT/LWF/TDS per result) | as its result | by cascade with the result |
+  | `payroll_adjustments` | F: manual overrides / correction deltas (how a result was determined) | as the Employee's results | with the Employee's unit, never on their own |
+  | `payroll_lwf_annual_charges` | G: once-per-cycle LWF marker (payroll evidence; the amount is in the statutory result and the ledger) | as its result | with the Employee's unit |
+  | `payroll_run_postings`, `payroll_statutory_run_postings` | H: the journal linkage (run-level, all Employees) | the run is emptied, every run and posting older than the cutoff | with the emptied run group, reversals first |
+  | `payroll_runs` (regular + its corrections) | run header (no amount, no personal data) | as its postings | with the emptied group |
+  | `journal_entries` / lines | I: Finance evidence | D8 (8 y after its period closes) | **Finance only**, once no payroll posting references it |
+  | `payroll_periods` | payroll calendar configuration | none | tenant lifetime (`payroll_calendar`) |
+  | components, structures, accounting and statutory configuration, rule versions | A: configuration | none | tenant lifetime (unchanged) |
+  | draft/calculated/approved runs and their rows | B: working state | none | existing lifecycle unchanged; their rows keep the Employee |
+  | compensation assignments, statutory profiles | D9 per-employment configuration (E21.2E) | 8 y after separation | unchanged (`employee-retention-prune`), now reachable |
+
+- **Trigger:** `EmployeeRetentionEligibility`, the one canonical final
+  separation (latest `ends_on`, every EmploymentRecord terminal and dated;
+  rehire restarts it; current, future and notice-period employment is
+  current; undated is unresolved and kept). Never last pay, archive, login
+  or User link. One D9 setting: `EMPLOYEE_EVIDENCE_RETENTION_YEARS` (adopted
+  8). The payroll command refuses a value under 8 and deletes nothing while
+  it is unset.
+- **Evidence unit** (`platform:payroll-retention-prune`, phase 1), one
+  Employee per transaction: the Employee's results (lines, statutory
+  results), adjustments and LWF charges. The narrow function
+  `retention_expire_payroll_employee_evidence` re-proves in the database:
+  tenant; cutoff at least 8 calendar years back; the Employee and its
+  EmploymentRecords locked FOR UPDATE, every record terminal and ended
+  before the cutoff; every run holding the evidence locked, POSTED, posted
+  before the cutoff, every posting (original, reversal, statutory) created
+  before the cutoff, and a run with statutory results statutorily posted.
+  A late reversal or correction is new evidence: it keeps the Employee's
+  evidence until it is itself old enough. The run, its postings and journal
+  entry stay; the run records `results_expired_at`.
+- **Run release** (phase 2), one regular run with its corrections per
+  transaction, once retention has emptied every run of the group and every
+  run and posting predates the cutoff: the postings and runs are deleted by
+  `retention_expire_payroll_run` (8-year database floor). This RELEASES the
+  journal entries; Payroll never deletes one.
+- **D8 × D9:**
+
+  | D8 (period closed ≥ 8 y) | D9 (separation + 8 y, postings old) | Result |
+  |---|---|---|
+  | due | due | payroll evidence expires, the run is released, the NEXT `finance-retention-prune` removes the entries |
+  | due | not due | everything stays; Finance reports the entry `dependency_blocked` (`payroll_evidence_retained`) |
+  | not due | due | payroll evidence expires and the run is released; the entry stays with Finance until its period is 8 y closed |
+  | not due | not due | everything stays |
+
+- **Accounting:** nothing in the ledger changes; payroll totals are
+  ledger-account totals carried in the baselines. Tests prove every account
+  balance, charge outstanding, Student due and receipt series exactly
+  unchanged across payroll expiry and the later Finance expiry.
+- **Employees:** payroll retention never deletes an Employee. The next
+  `employee-retention-prune` removes Payroll's per-employment configuration
+  and then the Employee, unless another blocker remains (a User link,
+  manager reference, D6 history, other retained rows, a hold).
+- **After expiry:** a payslip of an expired result is an ordinary 404;
+  the run page and API (`resultsExpiredAt`) say the run's results no longer
+  cover the whole run; the three statutory exports refuse with 409
+  `PAYROLL_RESULTS_EXPIRED` rather than return a partial filing. Nothing is
+  reconstructed from Finance. Payslips are rendered on demand; no payroll
+  Document exists.
+- **Privileges:** no runtime privilege widened. Results, lines and
+  statutory results stay frozen by trigger (a delete is allowed only inside
+  the employee function: a transaction-local flag plus the owner's
+  privileges); adjustments and postings stay append-only, now also listed
+  in `DatabaseRoleVerifier::NO_RUNTIME_DELETE`. Migration `2026_11_15_090000`
+  (rollback removes the mechanism and refuses once any run carries the
+  marker).
+- **Holds, dry run, batches:** a held School only counts; `--dry-run` uses
+  the database's own verdict (phase by phase, against the current state);
+  units are bounded and id-ordered; a rerun deletes nothing new.
+- **Schedule:** daily 05:20, after the Employee (04:50) and Finance (05:10)
+  runs; what it releases they take on their next run.
+- **Metrics:** `payroll_evidence` and `payroll_run`, in the existing
+  `employee` family (no new label value).
+
 ## 6. Production settings
 
 The values below are fail-closed: a command deletes nothing while its value
@@ -1197,9 +1302,9 @@ is unset. Production must set them once their checkpoint ships.
 | `OPERATIONS_VISIT_RETENTION_YEARS` | 1 (calendar year after a visit's checkout) | E21.3E |
 | `OPERATIONS_AUTOMATION_RETENTION_YEARS` | 1 (calendar year after an automation execution's completion) | E21.3E |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 (calendar years after final separation) | E21.2E |
-| `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 (calendar years after final separation; never shorter than ancillary) | E21.2E |
+| `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 (calendar years after final separation; never shorter than ancillary). E21.3F: also the payroll evidence period (`platform:payroll-retention-prune` refuses less than 8) | E21.2E, E21.3F |
 | `ERASURE_CASE_RETENTION_YEARS` | 7 (calendar years after a case closed) | E21.2F |
-| *(D8 Finance)* | 8 years after the financial year closes: **no setting, no expiry yet** (needs a financial-year close) | E21.2E (blocked) |
+| *(D8 Finance)* | 8 years after the financial year closes: **no setting, no expiry yet** (needs a financial-year close) | E21.2E (blocked). Superseded: `FINANCE_RETENTION_ENABLED` + `FINANCE_RETENTION_YEARS` (8), E21.3A2 |
 
 ## 7. Ratification record (to be completed by the final reviewer)
 

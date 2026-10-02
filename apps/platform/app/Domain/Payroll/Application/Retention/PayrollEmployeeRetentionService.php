@@ -19,10 +19,11 @@ use Illuminate\Support\Facades\DB;
  *   their FK cascade) and the statutory profiles (identifiers, tax, PF,
  *   ESI).
  * - Never while any payroll RESULT, adjustment or LWF charge references the
- *   employment. Those are payroll evidence posted to the ledger (D8). The
- *   ledger has no financial-year close or carried-forward balances yet, so
- *   they are never expired (determination, D8). The Employee then counts
- *   as `dependency_blocked` and everything is kept.
+ *   employment. Those are posted payroll evidence with their own D9 expiry
+ *   (E21.3F, PayrollEvidenceRetentionService, `platform:payroll-retention-prune`),
+ *   which also waits for every posting of their runs to be old enough. Until
+ *   it has removed them the Employee counts as `dependency_blocked` and
+ *   everything is kept; the next run re-evaluates.
  * - Runs before HR's evidence purge, which keeps the Employee root while
  *   any of these rows remain.
  */

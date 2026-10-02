@@ -7570,6 +7570,11 @@ paths:
           content:
             text/plain:
               schema: { type: string }
+        "409":
+          description: PAYROLL_RESULTS_EXPIRED -- E21.3F, payroll retention has deleted results from this run, so the export would be incomplete.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Authenticated but lacking payroll.statutory.exports.generate or .identifiers.view.
           content:
@@ -7597,6 +7602,11 @@ paths:
           content:
             text/csv:
               schema: { type: string }
+        "409":
+          description: PAYROLL_RESULTS_EXPIRED -- E21.3F, payroll retention has deleted results from this run, so the export would be incomplete.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Authenticated but lacking payroll.statutory.exports.generate.
           content:
@@ -7621,6 +7631,11 @@ paths:
           content:
             text/csv:
               schema: { type: string }
+        "409":
+          description: PAYROLL_RESULTS_EXPIRED -- E21.3F, payroll retention has deleted results from this run, so the export would be incomplete.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Authenticated but lacking payroll.statutory.exports.generate.
           content:
@@ -15030,6 +15045,11 @@ components:
         postedByUserId: { type: string, format: uuid, nullable: true }
         approvedAt: { type: string, format: date-time, nullable: true }
         postedAt: { type: string, format: date-time, nullable: true }
+        resultsExpiredAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: "E21.3F (E21-D9): when payroll retention first deleted a separated Employee's results from this run (8 calendar years after final separation). Non-null means the run's per-Employee results and statutory exports no longer cover the whole run; its ledger posting is unchanged."
     PayrollCalculationOutcome:
       type: object
       required: [resolvedCount, unresolvedEmploymentRecordIds, transitionedToCalculated]

@@ -82,6 +82,11 @@ final class RetentionMetrics
 
     public const EMPLOYEE_EVIDENCE = 'employee_evidence';
 
+    /** E21.3F (E21-D9): posted payroll evidence (units: Employees) and emptied payroll runs (units: regular runs). */
+    public const PAYROLL_EVIDENCE = 'payroll_evidence';
+
+    public const PAYROLL_RUN = 'payroll_run';
+
     /** E21.3A2 (E21-D8): settled Finance units of periods closed >= 8 years ago. */
     public const FINANCE_UNIT = 'finance_unit';
 
@@ -131,6 +136,9 @@ final class RetentionMetrics
         self::EMPLOYEE_ANCILLARY => 'employee',
         self::PAYROLL_EMPLOYEE_RECORD => 'employee',
         self::EMPLOYEE_EVIDENCE => 'employee',
+        // E21.3F: payroll evidence is D9 employment evidence; no new family.
+        self::PAYROLL_EVIDENCE => 'employee',
+        self::PAYROLL_RUN => 'employee',
         self::FINANCE_UNIT => 'finance',
     ];
 

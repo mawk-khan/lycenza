@@ -11,17 +11,22 @@ use App\Domain\Payroll\Statutory\Infrastructure\PayrollStatutoryRunPosting;
 use App\Models\School;
 
 /**
- * E21.3A2 (E21-D8 x E21-D9, ADR 0064 §17): payroll postings reference
+ * E21.3A2 (E21-D8 x E21-D9, ADR 0064 §17, §21): payroll postings reference
  * their journal entries, and payroll runs, results and postings are D9
  * employment/payroll evidence. Finance D8 never deletes them, and so never
- * deletes the journal entries they reference: every such entry at or before
- * the horizon is reported as a RETAINED unit
- * (`payroll_evidence_retained`).
+ * deletes a journal entry a payroll posting still references: every such
+ * entry at or before the horizon is reported as a RETAINED unit
+ * (`payroll_evidence_retained`, counted dependency-blocked).
  *
- * This is the recorded D8/D9 intersection. Payroll ledger detail stays
- * until a Payroll-owned D9 mechanism expires the payroll records
- * themselves (none exists). Payroll totals stay exact either way: they
- * are ledger-account totals, carried in the account baselines.
+ * E21.3F resolved the intersection without weakening either side:
+ * Payroll's own D9 expiry (PayrollEvidenceRetentionService,
+ * `platform:payroll-retention-prune`) deletes the posted evidence 8 years
+ * after final separation and then an emptied run's postings. From then on
+ * no payroll posting claims those entries, so Finance treats them as its
+ * own standalone units, which expire only once their financial period is
+ * itself 8 years closed (and the database function still refuses any entry
+ * a payroll posting references). Payroll totals stay exact either way:
+ * they are ledger-account totals, carried in the account baselines.
  */
 class PayrollLedgerRetentionParticipant implements FinanceRetentionParticipant
 {

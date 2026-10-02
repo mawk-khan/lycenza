@@ -291,6 +291,7 @@ class PayrollRunController extends Controller
                 'approvedAt' => $summary->approvedAt?->toIso8601String(),
                 'postedAt' => $summary->postedAt?->toIso8601String(),
                 'isReversed' => $isReversed,
+                'resultsExpiredAt' => $summary->resultsExpiredAt?->toIso8601String(),
             ],
             'postings' => $postings->map(fn (PayrollRunPosting $p) => [
                 'id' => $p->id,

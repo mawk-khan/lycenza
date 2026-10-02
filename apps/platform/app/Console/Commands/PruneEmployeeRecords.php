@@ -29,6 +29,9 @@ use InvalidArgumentException;
  *   compensation and statutory rows (Payroll), then the Employee with its
  *   employment records, assignments, personal details and Documents (HR).
  *   It runs only when no other retained row references the Employee.
+ *   Posted payroll results are not deleted here: they have their own D9
+ *   expiry (`platform:payroll-retention-prune`, E21.3F), and this command
+ *   re-evaluates an Employee once that has released it.
  *
  * Ancillary runs first.
  * - Each School is processed in its own context, suspended ones included.

@@ -22,8 +22,9 @@ use Illuminate\Support\Facades\DB;
  * catalog does not know fails closed (`unclassified_tables`). A category
  * with rows reports why it is still kept:
  * - its adopted period is running (with the earliest date when known);
- * - it is a technical blocker (the D8 x D9 payroll ledger:
- *   `d8_d9_payroll_ledger_retained`);
+ * - it is a technical blocker (`d8_d9_payroll_ledger_retained`, the D8 x D9
+ *   payroll ledger until E21.3F implemented payroll evidence expiry; no
+ *   category is one any more, the gate stays for a future one);
  * - Finance (D8, E21.3A2) adds its own prerequisites:
  *   - `d8_finance_period_mapping_incomplete`: unmapped entries;
  *   - `d8_finance_periods_unclosed`: an ended year still open;
@@ -160,6 +161,23 @@ final class TenantClosureReadiness
         ]));
     }
 
+    /**
+     * E21.3F: payroll evidence waits for the final separation AND for every
+     * run posting (a late correction or reversal has its own clock): the
+     * later of the latest separation and the latest posting date.
+     */
+    private function latestPayrollEvidence(School $school, ?string $latestSeparation): ?string
+    {
+        $dates = array_filter([
+            $latestSeparation,
+            DB::table('payroll_runs')->where('school_id', $school->id)->max('posted_at'),
+            DB::table('payroll_run_postings')->where('school_id', $school->id)->max('created_at'),
+            DB::table('payroll_statutory_run_postings')->where('school_id', $school->id)->max('created_at'),
+        ]);
+
+        return $dates === [] ? null : max(array_map(fn ($d): string => substr((string) $d, 0, 10), $dates));
+    }
+
     /** The earliest day the category could be empty, when it can be known (else null). */
     private function notBefore(School $school, string $category): ?string
     {
@@ -172,6 +190,7 @@ final class TenantClosureReadiness
             'student_core', 'processing_authorizations' => ($s = $this->students->latestExit($school))['pending'] === 0 ? $after($s['latest'], $years('student_core_years')) : null,
             'student_operational', 'student_operational_modules' => ($s = $this->students->latestExit($school))['pending'] === 0 ? $after($s['latest'], $years('student_operational_years')) : null,
             'hr_evidence' => ($e = $this->employees->latestSeparation($school))['pending'] === 0 ? $after($e['latest'], $years('employee_evidence_years')) : null,
+            'payroll_ledger' => ($e = $this->employees->latestSeparation($school))['pending'] === 0 ? $after($this->latestPayrollEvidence($school, $e['latest']), $years('employee_evidence_years')) : null,
             default => null,
         };
     }

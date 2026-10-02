@@ -236,6 +236,17 @@ Schedule::command('platform:finance-retention-prune')
     ->withoutOverlapping()
     ->name('finance-retention-prune');
 
+// E21.3F (E21-D9 x E21-D8): posted payroll evidence, EMPLOYEE_EVIDENCE_RETENTION_YEARS
+// (at least 8) after final separation, then emptied payroll runs (releasing
+// their journal entries to Finance). Unset deletes nothing. It runs after
+// the Employee and Finance runs: what it releases they re-evaluate the next
+// day, and each unit rechecks under its own locks, so correctness never
+// depends on the order.
+Schedule::command('platform:payroll-retention-prune')
+    ->dailyAt('05:20')
+    ->withoutOverlapping()
+    ->name('payroll-retention-prune');
+
 // Phase 0O.10A (ADR 0056 section 13): ended password-recovery credentials
 // are deleted 24 hours later (technical data; the audit is separate).
 Schedule::command('platform:account-recovery-prune')

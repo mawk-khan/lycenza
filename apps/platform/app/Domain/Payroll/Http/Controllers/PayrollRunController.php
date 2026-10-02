@@ -147,6 +147,7 @@ class PayrollRunController extends Controller
             'postedByUserId' => $summary->postedByUserId,
             'approvedAt' => $summary->approvedAt?->toIso8601String(),
             'postedAt' => $summary->postedAt?->toIso8601String(),
+            'resultsExpiredAt' => $summary->resultsExpiredAt?->toIso8601String(),
         ];
     }
 }

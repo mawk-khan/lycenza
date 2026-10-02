@@ -210,6 +210,46 @@ final class RetentionExpiry
     }
 
     /**
+     * E21.3F (E21-D9): removes ONE Employee's posted payroll evidence
+     * (results with lines and statutory results, adjustments, LWF charges)
+     * through its fixed function, which re-proves in the database: tenant
+     * context; the Employee locked and finally separated before a cutoff at
+     * least 8 calendar years back; every run holding the evidence locked,
+     * posted, and with every posting older than the cutoff. Journal entries
+     * are never touched. Runs inside the caller's School context and unit
+     * transaction.
+     *
+     * @param  string  $cutoffDate  the School-local cutoff (Y-m-d)
+     */
+    public function payrollEmployeeEvidence(School $school, string $employeeId, string $cutoffDate, bool $dryRun): int
+    {
+        if (! Str::isUuid($employeeId)) {
+            throw new InvalidArgumentException('Not a uuid.');
+        }
+
+        return $this->call('retention_expire_payroll_employee_evidence', [$school->id, $employeeId, $cutoffDate, $dryRun]);
+    }
+
+    /**
+     * E21.3F (E21-D9 x E21-D8): removes ONE emptied regular payroll run with
+     * its correction runs and their postings (payroll and statutory), which
+     * releases their journal entries to Finance's own D8 expiry. The
+     * database re-proves: tenant context; every run posted before a cutoff
+     * at least 8 years back, emptied by payroll retention, holding no
+     * result or adjustment; every posting older than the cutoff.
+     *
+     * @return int the postings removed (each one journal entry released)
+     */
+    public function payrollRun(School $school, string $runId, CarbonInterface $cutoff, bool $dryRun): int
+    {
+        if (! Str::isUuid($runId)) {
+            throw new InvalidArgumentException('Not a uuid.');
+        }
+
+        return $this->call('retention_expire_payroll_run', [$school->id, $runId, $cutoff->copy()->utc()->format('Y-m-d H:i:s'), $dryRun]);
+    }
+
+    /**
      * E21.3D (E21.2G A1): removes ONE LMS resource (`learning_content` or
      * `assignment`) with its Section audiences through its fixed function,
      * which re-proves in the database: tenant context; the resource locked;

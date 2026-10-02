@@ -273,7 +273,7 @@ class EmployeeRetentionPruneTest extends TestCase
                 $school, $employment, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($basicComponentId, '50000.00')], $actor,
             ));
         }
-        // Only $paid is in the calculated run: it now has payroll results (ledger-bound evidence).
+        // Only $paid is in the calculated run: it now has payroll results (payroll evidence).
         $this->inSchool($school, fn () => DB::table('employment_records')->where('id', $configuredEmployment->id)->update(['status' => 'separated', 'ends_on' => '2025-01-31']));
         $this->inSchool($school, function () use ($school, $actor): void {
             $periods = app(PayrollPeriodService::class);
@@ -292,7 +292,7 @@ class EmployeeRetentionPruneTest extends TestCase
         // The configured-only Employee: compensation (and its append-only values) and the root are gone.
         $this->assertFalse($this->exists($school, $configured->id));
         $this->assertSame(0, $this->inSchool($school, fn () => DB::table('employee_compensation_assignments')->where('employment_record_id', $configuredEmployment->id)->count()));
-        // The paid Employee: payroll results are ledger evidence (D8 has no expiry), so everything stays.
+        // The paid Employee: its results keep everything here (they leave only through platform:payroll-retention-prune, E21.3F, and only once posted).
         $this->assertTrue($this->exists($school, $paid->id));
         $this->assertSame(1, $this->inSchool($school, fn () => DB::table('employee_compensation_assignments')->where('employment_record_id', $paidEmployment->id)->count()));
         $this->assertSame(1, $this->inSchool($school, fn () => DB::table('payroll_run_results')->where('employee_id', $paid->id)->count()));

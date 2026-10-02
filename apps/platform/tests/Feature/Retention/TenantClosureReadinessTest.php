@@ -177,10 +177,11 @@ class TenantClosureReadinessTest extends TestCase
     }
 
     #[Test]
-    public function every_mechanism_is_implemented_and_only_the_payroll_residual_remains(): void
+    public function every_mechanism_is_implemented_and_no_technical_blocker_remains(): void
     {
-        // E21.3E: no category waits for a mechanism checkpoint any more; the
-        // D8 x D9 payroll ledger (E21.3F) is the only technical blocker left.
+        // E21.3E: no category waits for a mechanism checkpoint any more.
+        // E21.3F: the D8 x D9 payroll ledger, the last technical blocker, is
+        // adopted (payroll evidence expiry, emptied runs released to D8).
         $tables = TenantRetentionCatalog::tables();
         $this->assertSame([], TenantRetentionCatalog::PENDING_ROWS);
         foreach (array_keys(TenantRetentionCatalog::UNRESOLVED_ROWS) as $table) {
@@ -189,16 +190,17 @@ class TenantClosureReadinessTest extends TestCase
         }
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status]) {
             $this->assertNotSame(TenantRetentionCatalog::MECHANISM_PENDING, $status, "{$category} still waits for a mechanism");
+            $this->assertNotSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, $status, "{$category} is still a technical blocker");
         }
-        foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules', 'academic_operations', 'communications', 'api_credentials', 'operational_logs'] as $category) {
+        foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules', 'academic_operations', 'communications', 'api_credentials', 'operational_logs', 'payroll_ledger'] as $category) {
             $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
-        // Tenant lifetime by decision, never age-pruned: memberships, membership preferences, Inventory, notifications, academic configuration.
-        foreach (['identity', 'communication_configuration', 'inventory_history', 'notifications', 'academic_configuration'] as $category) {
+        // Tenant lifetime by decision, never age-pruned: memberships, membership preferences, Inventory, notifications, academic configuration, payroll periods.
+        foreach (['identity', 'communication_configuration', 'inventory_history', 'notifications', 'academic_configuration', 'payroll_calendar'] as $category) {
             $this->assertSame(TenantRetentionCatalog::TENANT_LIFETIME, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
-        $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, TenantRetentionCatalog::CATEGORIES['payroll_ledger'][0], 'the D8 x D9 payroll residual stays visible (E21.3F)');
-        $this->assertStringContainsString('D9', TenantRetentionCatalog::CATEGORIES['payroll_ledger'][1]);
+        $this->assertStringContainsString('D9 x D8 (E21.3F, implemented)', TenantRetentionCatalog::CATEGORIES['payroll_ledger'][1]);
+        $this->assertSame('payroll_calendar', $tables['payroll_periods']);
         $this->assertSame(['final_ratification_pending', 'no_tenant_purge_authorized'], TenantClosureReadiness::PERMANENT_GATES);
     }
 
@@ -209,12 +211,12 @@ class TenantClosureReadinessTest extends TestCase
         // period without a mechanism names the follow-up checkpoint that ships it.
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
             $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
+            $this->assertNotSame('', trim($decision), "{$category} has no decision text");
             if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
                 $this->fail("{$category}: E21.3E implemented the last pending mechanism");
             }
             if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {
-                $this->assertSame('payroll_ledger', $category, 'E21.3A2: the only technical blocker left is the D8 x D9 payroll ledger');
-                $this->assertStringContainsString('D9', $decision);
+                $this->fail("{$category}: E21.3F resolved the last technical blocker (the D8 x D9 payroll ledger)");
             }
         }
     }

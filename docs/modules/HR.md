@@ -3779,10 +3779,11 @@ the single rule. It locks the Employee row exactly like
   - personal details;
   - `employee_documents` and Employee-owned Documents.
 
-  It goes only when nothing else references it: payroll results, teaching
-  history, Attendance sessions, timetable entries, LMS ownership,
-  Transport, Visitor, or a manager reference from another Employee.
-  Nothing is cascaded.
+  It goes only when nothing else references it: payroll results (until
+  Payroll's own D9 expiry removes them, E21.3F), teaching history,
+  Attendance sessions, timetable entries, LMS ownership, Transport,
+  Visitor, or a manager reference from another Employee. Nothing is
+  cascaded.
 - **A linked User keeps the Employee.** Retention never unlinks a User or
   changes a membership (D10, E21.2F).
 - **Active Employees are never eligible**, so retention cannot affect
@@ -3808,3 +3809,17 @@ resources keep their Employee only until they themselves expire (E21.2G A1,
 own D9 clock (`platform:employee-retention-prune`); D9 periods are
 unchanged. Payroll evidence (E21.3F), D6 TeachingAssignments and manager
 references still keep an Employee.
+
+## Payroll evidence and Employee release (E21.3F, 2026-10-02)
+
+Posted payroll evidence (results, adjustments, LWF charges) no longer keeps
+a separated Employee indefinitely. `platform:payroll-retention-prune`
+removes it 8 calendar years after the final separation from this module's
+`EmployeeRetentionEligibility` (the same rule, the same Employee lock), once
+every payroll run and posting holding it is that old too. It never deletes
+the Employee: the next `platform:employee-retention-prune` re-evaluates and
+removes Payroll's per-employment configuration and then the Employee, unless
+another blocker remains (a linked User, a manager reference, D6 history,
+other retained rows, a hold). Active, future-employed, notice-period and
+rehired Employees are never eligible, so ActingEmployee and Teacher
+authorization are unaffected.

@@ -1,6 +1,9 @@
 # E21 Closure Audit (E21.2G)
 
-> ## STATUS: E21 — OPEN / TECHNICAL BLOCKERS REMAIN
+> ## STATUS: E21 — OPEN / LEGAL DECISION REMAINS (E21 ENGINEERING COMPLETE, E21.3F)
+>
+> *History: E21.2G recorded "OPEN / TECHNICAL BLOCKERS REMAIN"; E21.3A–E21.3F
+> resolved every technical blocker.*
 >
 > **PROJECT POLICY IMPLEMENTED (where marked) — PENDING FINAL
 > LEGAL/COMPLIANCE RATIFICATION.**
@@ -10,8 +13,8 @@
 >
 > No period here is claimed to be statutory, and no legal clearance is
 > claimed. This document consolidates the repository state at the E21.2G
-> audit (2026-10-01), updated at E21.3A/E21.3A2, E21.3B, E21.3C, E21.3D and
-> E21.3E (2026-10-02).
+> audit (2026-10-01), updated at E21.3A/E21.3A2, E21.3B, E21.3C, E21.3D,
+> E21.3E and E21.3F (2026-10-02).
 > It is the project reference until the pre-production review.
 
 - **Inputs:**
@@ -28,16 +31,16 @@
 |---|---|
 | What is technically implemented? | D0–D7, D9 (classified data), D10 (reviewed erasure cases), D11 (freeze and readiness), D12 and D13 (repository side). See §2. |
 | What owner/project decisions remain unresolved? | **One:** erasing a User identity, i.e. anonymising audit actors and authority history. It needs a qualified legal decision (§8, I5). Every other category has a project decision. |
-| What engineering blockers remain? | **D8 Finance is IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064). **E21.3B (Student-linked evidence and modules), E21.3C (Admissions and Guardian lifecycle markers), E21.3D (year-bound academic operations) and E21.3E (communications and platform residuals) are IMPLEMENTED.** One recorded intersection remains: payroll-linked Finance detail stays while D9 payroll evidence references it, and no Payroll D9 expiry mechanism exists (ADR 0064 §21) — now the bounded follow-up **E21.3F** (provisional name). No other mechanism checkpoint remains (§7). |
+| What engineering blockers remain? | **None.** D8 Finance is IMPLEMENTED (E21.3A + E21.3A2, ADR 0064). E21.3B (Student-linked evidence and modules), E21.3C (Admissions and Guardian lifecycle markers), E21.3D (year-bound academic operations) and E21.3E (communications and platform residuals) are IMPLEMENTED. **E21.3F resolved the last one, the D8 × D9 payroll intersection** (ADR 0064 §21 amended): posted payroll evidence expires 8 y after final separation, an emptied run releases its journal entries to D8, and paid Employees are no longer kept indefinitely. No retention-mechanism checkpoint remains (§7). |
 | What final legal/compliance ratification remains? | All of D0–D13 and the E21.2G decisions (§10). Deferred to the pre-production closeout. |
-| Can E21 close now? | **No.** It is technically open: the payroll D8 × D9 intersection has no mechanism (E21.3F); final ratification is pending and User-identity erasure needs a legal decision. |
-| What must happen before E21 can close? | E21.3F (E21.3A–E are done) (payroll-result expiry, D9, releasing payroll-linked Finance detail and paid Employees). After those: production configuration (§9) and final ratification (§10). |
+| Can E21 close now? | **No.** Engineering is complete (E21.3F), but E21 closes on a qualified decision per v1 category (ADR 0058): User-identity erasure needs a legal decision (I5) and final ratification is pending. |
+| What must happen before E21 can close? | The User-identity erasure legal decision (I5), production configuration (§9) and final ratification (§10). Tenant purge additionally needs explicit authorization (§5). No engineering checkpoint remains. |
 
 ## 2. D0–D13 matrix
 
 | D | Adopted project policy | State | Mechanism | Remaining |
 |---|---|---|---|---|
-| D0 | Finite periods need an enforceable, tested mechanism | **IMPLEMENTED** for every adopted period except the payroll D8 × D9 intersection | Every implemented period has a command and tests | E21.3F |
+| D0 | Finite periods need an enforceable, tested mechanism | **IMPLEMENTED** for every adopted period (E21.3F: the payroll D8 × D9 intersection too) | Every implemented period has a command and tests | Ratification |
 | D1 | Audit 7 y after `occurred_at` | **IMPLEMENTED** | `audit-prune` → narrow functions (7-y DB floor) | Ratification |
 | D2 | Email metadata 180 d after terminal state; released suppressions 1 y after release | **IMPLEMENTED** | `email-prune`; `email-suppressions-prune` → narrow function | Ratification |
 | D3 | Content 3 y after its Academic Year ends; telemetry 1 y after terminal | **IMPLEMENTED** for sent content and telemetry; cancelled deliveries go with their content. **E21.3E (implemented):** never-sent cancelled/rejected announcements 1 y after `cancelled_at` / the rejection decision; empty threads 1 y after `last_activity_at` | `communications-prune` (+ `--only=residual`; policy-decision function) | Ratification |
@@ -45,8 +48,8 @@
 | D5 | Documents inherit their owner; orphans 30 d | **IMPLEMENTED** for Student, Employee, (E21.3C) Guardian and (E21.3D) LMS Learning Content/Assignment owners, and orphans | `storage-orphans-prune`; parent purges | Ratification |
 | D6 | Authority 7 y after it ends | **IMPLEMENTED** (grants, TeachingAssignments, elevations). **E21.2G:** ended API credentials 7 y after LEAST(revoked_at, expires_at) (**E21.3E, implemented**). **E21.3B (I2, implemented):** ended portal invitations 7 d after they ended | `authority-history-prune`; `portal-invitations-prune` | Ratification |
 | D7 | Core 25 y and operational 7 y after final exit | **IMPLEMENTED** for classified D7 data. **E21.3B (implemented):** returned Library loans and ended Transport/Hostel assignments are D7 operational (an open one keeps the Student); processing authorizations, converted admission applications (with applicants that have nothing else), the Student subject's consent events and domain preferences, and the Guardian relationships an authorization names go with the core record in its unit | `student-retention-prune` (via `StudentRetention`); two core-floored functions (`retention_expire_student_processing_authorizations`, `retention_expire_student_consent_events`) | Ratification; Guardian-subject rows and rejected/withdrawn applications (E21.3C) |
-| D8 | 8 y after the financial period closes (`closed_at`) | **IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064) | carry-forward reads; `finance-retention-prune` → `retention_expire_finance_unit` (closed period, 8-calendar-year DB floor, settled units, holds, accounting proof) | Ratification; payroll-linked detail waits for a D9 payroll mechanism (§21 of ADR 0064) |
-| D9 | Ancillary 2 y; evidence 8 y after final separation | **IMPLEMENTED** for classified D9 data | `employee-retention-prune` (HR + Payroll) | Paid staff wait for a Payroll result-expiry mechanism (no longer D8: ADR 0064 §21); teaching references are released as their academic rows expire (E21.3D) |
+| D8 | 8 y after the financial period closes (`closed_at`) | **IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064) | carry-forward reads; `finance-retention-prune` → `retention_expire_finance_unit` (closed period, 8-calendar-year DB floor, settled units, holds, accounting proof) | Ratification. Payroll-linked detail leaves only once Payroll's D9 expiry released it AND its period is 8 y closed (E21.3F, ADR 0064 §21 amended) |
+| D9 | Ancillary 2 y; evidence 8 y after final separation | **IMPLEMENTED** for classified D9 data. **E21.3F (implemented):** posted payroll evidence (results, lines, statutory results, adjustments, LWF charges) 8 y after final separation once every run and posting is that old; emptied runs release their journal entries to D8 | `employee-retention-prune` (HR + Payroll configuration); `payroll-retention-prune` → `retention_expire_payroll_employee_evidence`, `retention_expire_payroll_run` (separation- and 8-year-floored) | Ratification; teaching references are released as their academic rows expire (E21.3D) |
 | D10 | Reviewed cases; retention wins; 30-day target | **IMPLEMENTED** (orchestration). **E21.3C:** a Guardian case now follows G1 (related, unresolved, running, blocked, held or eligible) | `erasure-case-*` (operator) | User-identity erasure: legal decision (I5) |
 | D11 | Freeze → retain → controlled purge; no hard-delete | **IMPLEMENTED** as freeze and readiness. Tenant purge **NOT AUTHORIZED** | Close/Reopen; `school-closure-status` | Purge prerequisites (§5) |
 | D12 | Backups 35 d; noncurrent object versions ≤ 35 d | **IMPLEMENTED** in the repository (ADR 0050 amended, runbook, checklist) | Deployment configuration | **PRODUCTION CONFIGURATION** (PITR window, bucket lifecycle) |
@@ -78,6 +81,8 @@ depends on the order.
 | 04:45 | `academic-retention-prune` (E21.3D) | A1 | `ACADEMIC_OPERATIONS_RETENTION_YEARS` (+ `AUTHORITY_HISTORY_RETENTION_YEARS` for teacher-owned LMS) | yes | 500 rows per transaction (`SKIP LOCKED`); 1 LMS resource per transaction | School | RLS, runtime; LMS through two narrow functions |
 | 04:48 | `operations-retention-prune` (E21.3E) | O2, O3, O4 | `OPERATIONS_*_RETENTION_YEARS` | yes | 500 rows (`SKIP LOCKED`); 1 visitor per transaction | School | RLS, runtime |
 | 04:50 | `employee-retention-prune` | D9 | `EMPLOYEE_*_RETENTION_YEARS` | yes | 500; 1 Employee per transaction | School | RLS, runtime |
+| 05:10 | `finance-retention-prune` (E21.3A2) | D8 | `FINANCE_RETENTION_ENABLED` + `FINANCE_RETENTION_YEARS` (≥ 8) | yes | per-School unit limit; 1 unit per transaction | School | narrow function (period-floored) |
+| 05:20 | `payroll-retention-prune` (E21.3F) | D9 payroll evidence | `EMPLOYEE_EVIDENCE_RETENTION_YEARS` (≥ 8) | yes | 500; 1 Employee / 1 run group per transaction | School | two narrow functions (separation- and 8-year-floored) |
 | hourly | `account-recovery-prune` | technical TTL (24 h) | fixed (ADR 0056) | **yes (E21.2G)** | 5000 | exempt by design¹ | runtime |
 | hourly | `staff-account-credentials-prune` | technical TTL (24 h / 7 d) | fixed (ADR 0059) | **yes (E21.2G)** | 5000 | exempt by design¹ | RLS, runtime |
 | operator | `erasure-case-execute` | D10 | the domain periods above | yes | 100; 1 subject | School/platform | domain purges |
@@ -121,7 +126,7 @@ failure.
 | `OPERATIONS_AUTOMATION_RETENTION_YEARS` | 1 | calendar year after `completed_at` (E21.3E) |
 | `GUARDIAN_RETENTION_YEARS` | 1 | calendar year after `guardians.no_relationship_since` (UTC timestamp) (E21.3C; database floor 1 for its consent evidence) |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 | calendar years after final separation |
-| `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 | calendar years after final separation |
+| `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 | calendar years after final separation (E21.3F: also posted payroll evidence; `payroll-retention-prune` refuses less than 8; one D9 setting) |
 | `ERASURE_CASE_RETENTION_YEARS` | 7 | calendar years after the case closed |
 | `RETENTION_HOLD_SCHOOL_IDS` | empty unless a hold is ordered | — |
 | `RETENTION_HOLD_PLATFORM` | false unless a hold is ordered | — |
@@ -280,13 +285,15 @@ failure.
     mechanism (E21.3B restores the original processing-authorization
     guard verbatim); E21.3A2's refuses once lineage exists, and E21.3C's
     once any lifecycle marker carries evidence. E21.3D and E21.3E remove
-    only functions/triggers.
+    only functions/triggers. E21.3F's removes its functions, trigger
+    allowances and marker, and refuses once any payroll run carries the
+    marker.
   - Migrate, rollback and re-apply were verified on DDEV per checkpoint
     (schema identical).
   - E21.2A and 2E added none.
 - **Tenant purge prerequisites (D11).** A destructive tenant purge needs
   ALL of:
-  - final category coverage (E21.3A–F done; only E21.3F remains);
+  - final category coverage (E21.3A–F done);
   - D8 resolved;
   - no hold;
   - no unresolved dependency;
@@ -320,7 +327,9 @@ Item 5 (read models computing from baselines) and item 8 (expiry) are
 
 The golden test proves every account balance, charge outstanding, Student
 due, payroll total and receipt series unchanged across expiry. Payroll-linked
-detail stays (the D8 × D9 intersection, ADR 0064 §21).
+detail stays (the D8 × D9 intersection, ADR 0064 §21) until E21.3F's
+payroll expiry releases it; the E21.3F matrix test proves the same readings
+unchanged across payroll expiry and the later Finance expiry.
 
 The original brief follows (status at E21.2G: BLOCKED BY ARCHITECTURE).
 
@@ -413,8 +422,8 @@ retention metric within its ceiling by consolidating operations.
 | **E21.3B — Student-linked evidence and modules** | **Done (2026-10-02).** D7 operational: returned Library loans, ended Transport assignments and ended Hostel residencies, 7 y after final exit (open ones keep the Student). With the core record (25 y): processing authorizations and the Student subject's consent events through two core-floored functions; converted admission applications (with applicants that have nothing else) and domain preferences; Guardian relationships an authorization names. Ended portal invitations 7 d after they ended (`portal-invitations-prune`). No new parent owns Documents. Guardian-subject rows and rejected/withdrawn applications stay for E21.3C. |
 | **E21.3C — Admissions and Guardian lifecycle markers** | **Done (2026-10-02).** A database-owned, immutable `terminal_at` for rejected/withdrawn applications (1 y after it; undated legacy rows unresolved and kept; evidence backfill from the transition's own audit event). A durable Guardian `no_relationship_since` maintained by a relationship trigger (cleared on re-link, restarted on the next final unlink; evidence backfill only from complete audit history). Guardian personal data (Guardian, contacts, Documents, revoked account links past D6, its own consent and preferences) 1 y after it, unless a retained dependent remains. |
 | **E21.3D — Year-bound academic operations** | **Done (2026-10-02).** Curriculum deliveries, attendance register headers (once empty), timetable entries (once no header references them) and LMS Learning Content/Assignments (with audiences and Documents, past the D6 owner/audience minimum) 7 y after the end of their authoritative Academic Year (`platform:academic-retention-prune`); Academic Year dates frozen; Employee teaching references released by these rows' own expiry. Syllabus and examination configuration stay (A2). |
-| **E21.3F — Payroll Evidence Retention & Employee Release** (provisional) | The recorded D8 × D9 intersection (ADR 0064 §21): a Payroll D9 result-expiry mechanism for posted payroll results and their postings, after which payroll-linked journal entries can expire through D8 and paid Employees can reach their D9 evidence expiry. Not started; not part of E21.3B–E. |
 | **E21.3E — Communications and platform residuals** | **Done (2026-10-02).** Never-sent cancelled/rejected announcements 1 y after `cancelled_at` / the rejection decision (`decided_at` of the latest, rejected, approval request); empty threads 1 y after `last_activity_at` (`communications-prune --only=residual`); ended driver assignments 7 y after `ends_on`, visits 1 y after `checked_out_at` (a visitor with its last visit), completed automation executions 1 y after `completed_at` (`operations-retention-prune`); ended API credentials 7 y after LEAST(revoked_at, expires_at) (`authority-history-prune`, narrow function). No new lifecycle marker was needed. Memberships, membership preferences and Inventory pinned tenant lifetime; notifications re-verified not applicable. |
+| **E21.3F — Payroll Evidence Retention & Employee Release** | **Done (2026-10-02).** The recorded D8 × D9 intersection (ADR 0064 §21 amended). Posted payroll evidence (results with lines and statutory results, adjustments, LWF charges) 8 calendar years after the Employee's final separation, once every run holding it and every posting is that old (`payroll-retention-prune`, `retention_expire_payroll_employee_evidence`); an emptied regular run with its corrections then loses its postings and runs (`retention_expire_payroll_run`), releasing its journal entries to D8, which expires them only once their period is 8 y closed. Paid Employees are released by the next `employee-retention-prune`. Payroll periods are tenant lifetime. **The last retention-mechanism checkpoint.** |
 
 ## 8. E21.2G project decisions
 
@@ -528,7 +537,7 @@ RATIFICATION.**
   is a final-ratification item; it adds no finite period.
 
 **Employees**
-- **E1.** **Payroll results** were the D8 blocker. Since E21.3A2 they are the recorded D8 × D9 intersection: D8 exists, but no Payroll D9 mechanism expires payroll results and postings, so they and their journal entries stay (ADR 0064 §21).
+- **E1.** **Payroll results** were the D8 blocker. Since E21.3A2 they are the recorded D8 × D9 intersection: D8 exists, but no Payroll D9 mechanism expires payroll results and postings, so they and their journal entries stay (ADR 0064 §21). **RESOLVED by E21.3F:** Payroll's own D9 expiry removes posted evidence and releases emptied runs' journal entries to D8 (`E21-RETENTION-DETERMINATION.md` §5.10).
 - **E2.** **Teaching references** (attendance sessions, timetable, LMS) are
   released by A1 (**implemented**, E21.3D: by the rows' own expiry; the
   Employee then follows its own D9 clock). **Transport** by O2, **Visitor hosts** by O3.
@@ -541,7 +550,10 @@ RATIFICATION.**
 **Repository implementation is complete for these; the values are
 environment-specific.**
 
-1. **Retention settings:** every value in §4.
+1. **Retention settings:** every value in §4, plus `FINANCE_RETENTION_ENABLED`
+   (D8). Code complete is not production configured: setting
+   `EMPLOYEE_EVIDENCE_RETENTION_YEARS` now also enables posted payroll
+   evidence expiry (E21.3F).
 2. **Holds:** `RETENTION_HOLD_*` as legal holds require.
 3. **D12:**
    - PostgreSQL PITR with a 35-day window;
@@ -576,8 +588,8 @@ environment-specific.**
 
 ## 11. Other production gates (not E21)
 
-**O1 cannot clear today.** Besides E21 (E21.3F, ratification and
-§9), ADR 0058's register keeps separate mandatory gates open. Among them:
+**O1 cannot clear today.** Besides E21 (the User-identity legal decision,
+ratification and §9; engineering is complete), ADR 0058's register keeps separate mandatory gates open. Among them:
 - **E33 / TCH-L1** (teacher Attendance legal determination): no production
   `teacher` role grants while it is open (ADR 0063 §40);
 - **E02:** final qualification on protected `main`;

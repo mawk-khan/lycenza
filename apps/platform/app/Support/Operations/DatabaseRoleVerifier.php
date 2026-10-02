@@ -44,6 +44,8 @@ class DatabaseRoleVerifier
         'financial_period_expiries', 'journal_entries', 'journal_lines', 'charges', 'payments', 'payment_allocations', 'payment_receipts',
         // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
         'communication_domain_consent_events',
+        // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
+        'payroll_adjustments', 'payroll_run_postings', 'payroll_statutory_run_postings',
     ];
 
     /**
@@ -78,6 +80,8 @@ class DatabaseRoleVerifier
         'retention_expire_learning_content', 'retention_expire_assignment',
         // E21.3E (E21.2G I3, E21-D6): ended API client credentials, 7-year floor
         'retention_expire_api_client_credentials',
+        // E21.3F (E21-D9): one Employee's posted payroll evidence, separation-floored; one emptied payroll run
+        'retention_expire_payroll_employee_evidence', 'retention_expire_payroll_run',
     ];
 
     /**

@@ -7873,6 +7873,11 @@ export interface components {
             approvedAt?: string | null;
             /** Format: date-time */
             postedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description E21.3F (E21-D9): when payroll retention first deleted a separated Employee's results from this run (8 calendar years after final separation). Non-null means the run's per-Employee results and statutory exports no longer cover the whole run; its ledger posting is unchanged.
+             */
+            resultsExpiredAt?: string | null;
         };
         PayrollCalculationOutcome: {
             resolvedCount: number;
@@ -21064,6 +21069,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description PAYROLL_RESULTS_EXPIRED -- E21.3F, payroll retention has deleted results from this run, so the export would be incomplete. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description STATUTORY_IDENTIFIER_MISSING -- a member has no recorded UAN. */
             422: {
                 headers: {
@@ -21106,6 +21120,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description PAYROLL_RESULTS_EXPIRED -- E21.3F, payroll retention has deleted results from this run, so the export would be incomplete. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     exportStatutoryTdsDraftStatement: {
@@ -21132,6 +21155,15 @@ export interface operations {
             };
             /** @description Authenticated but lacking payroll.statutory.exports.generate. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description PAYROLL_RESULTS_EXPIRED -- E21.3F, payroll retention has deleted results from this run, so the export would be incomplete. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

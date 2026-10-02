@@ -20,6 +20,7 @@ interface Run {
     approvedAt: string | null;
     postedAt: string | null;
     isReversed: boolean;
+    resultsExpiredAt: string | null;
 }
 
 interface Posting {
@@ -276,6 +277,15 @@ const reversalPosting = computed(
             <dt class="text-slate-500">Posted at</dt>
             <dd>{{ run.postedAt ?? '—' }}</dd>
         </dl>
+
+        <p
+            v-if="run.resultsExpiredAt"
+            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600"
+        >
+            Under the retention policy, the results of separated staff whose retention period ended
+            were deleted from this run. Its Finance posting and totals are unchanged; the remaining
+            results and statutory exports no longer cover the whole run.
+        </p>
 
         <!-- Postings / Finance linkage -->
         <section v-if="postings.length > 0" class="mt-6 border-t border-slate-200 pt-4">

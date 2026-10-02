@@ -13,6 +13,11 @@ use Illuminate\Support\Carbon;
  * `payroll.compensation.sensitive.view` via `PayrollRunResultReadService`)
  * -- this DTO is therefore a complete, safe mirror of the row, never a
  * raw Eloquent model.
+ *
+ * E21.3F: `resultsExpiredAt` is when payroll retention (E21-D9) first
+ * removed a separated Employee's results from this run: from then on the
+ * run's per-Employee detail is no longer complete (its ledger posting and
+ * totals are unchanged).
  */
 final class PayrollRunSummary
 {
@@ -27,6 +32,7 @@ final class PayrollRunSummary
         public readonly ?string $postedByUserId,
         public readonly ?Carbon $approvedAt,
         public readonly ?Carbon $postedAt,
+        public readonly ?Carbon $resultsExpiredAt = null,
     ) {}
 
     public static function fromModel(PayrollRun $run): self
@@ -42,6 +48,7 @@ final class PayrollRunSummary
             postedByUserId: $run->posted_by_user_id,
             approvedAt: $run->approved_at,
             postedAt: $run->posted_at,
+            resultsExpiredAt: $run->results_expired_at,
         );
     }
 }

@@ -1209,3 +1209,22 @@ for:
   production legal clearance is claimed.
 - **Tenant destruction:** NOT AUTHORIZED. **E33 / TCH-L1:** open
   independently.
+
+## Note — E21.3F payroll evidence retention and Employee release (2026-10-02)
+
+**E21: still OPEN — LEGAL DECISION REMAINS. E21.3F: IMPLEMENTED**
+(`docs/security/E21-RETENTION-DETERMINATION.md` §5.10, ADR 0064 §25–§30).
+- Posted payroll evidence expires 8 calendar years after final separation
+  (once every run and posting is that old); an emptied run releases its
+  journal entries to D8, which expires them only once their period is 8
+  years closed. Paid Employees are released by their own D9 run.
+- **E21 engineering is complete:** no retention-mechanism checkpoint
+  remains and no catalog category is `mechanism_pending` or a technical
+  blocker.
+- **E21 does not close:** this row closes on a qualified decision per v1
+  category. User-identity erasure (closure audit I5) still needs a legal
+  decision, and final ratification is deferred to the pre-production
+  closeout. Production retention configuration (closure audit §9) is
+  separate from code completion. No production legal clearance is claimed.
+- **Tenant destruction:** NOT AUTHORIZED. **E33 / TCH-L1:** open
+  independently; no Teacher change.

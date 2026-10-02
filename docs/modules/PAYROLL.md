@@ -861,7 +861,8 @@ statutory identifiers, tax, PF and ESI profiles.
 - **Never while a payroll result, adjustment or LWF charge references the
   employment.** Payroll results and postings are ledger evidence (D8). The
   ledger has no financial-year close, so they are never expired, and the
-  Employee is kept.
+  Employee is kept. *(E21.3F: posted payroll evidence now has its own D9
+  expiry; see "Payroll evidence retention" below.)*
 - Draft runs and results keep their existing lifecycle.
 
 ## Financial periods (E21.3A, 2026-10-02, ADR 0064)
@@ -892,6 +893,47 @@ Payroll runs, results and postings are D9 employment/payroll evidence, and
 no Payroll D9 mechanism expires them yet. This is the recorded D8 × D9
 intersection: paid Employees and their payroll ledger detail stay until
 such a mechanism exists (a dedicated checkpoint, outside E21.3B–E21.3E).
+*(Resolved by E21.3F below.)*
 
 Payroll totals are unaffected by any Finance expiry: they are ledger-account
 totals, carried in the account baselines (`LedgerBalanceReader`).
+
+## Payroll evidence retention (E21.3F, 2026-10-02, ADR 0064 §25–§30)
+
+E21-D9 (project-adopted, pending ratification): posted payroll evidence is
+kept **8 calendar years after the Employee's final separation**
+(`EmployeeRetentionEligibility`; the one D9 setting,
+`EMPLOYEE_EVIDENCE_RETENTION_YEARS`, at least 8), then deleted by
+`platform:payroll-retention-prune` (`PayrollEvidenceRetentionService`):
+
+- **Evidence, one Employee per transaction:** results with their lines and
+  statutory results, adjustments (manual overrides, correction deltas) and
+  LWF annual charges. Only when every run holding them is posted, was
+  posted, reversed or corrected before the cutoff (a late correction or
+  reversal is new evidence with its own clock), and is statutorily posted
+  if it carries statutory results. Draft, calculated and approved runs are
+  working state: their rows keep the Employee and are never aged. The
+  database function `retention_expire_payroll_employee_evidence` re-proves
+  all of it, with the Employee and its EmploymentRecords locked (a rehire
+  or a new payroll row waits).
+- **Runs, one regular run with its corrections per transaction:** once
+  every run of the group is emptied and old enough, its postings (payroll
+  and statutory) and runs are deleted (`retention_expire_payroll_run`).
+  That releases the journal entries; **Payroll never deletes a journal
+  entry.** Finance's D8 expiry removes them once their financial period has
+  been closed 8 years.
+- **What stays:** payroll periods (tenant lifetime), components, structures,
+  accounting and statutory configuration, rule versions. Payroll's
+  per-employment configuration and the Employee follow in the next
+  `employee-retention-prune`.
+- **Ledger:** unchanged. Payroll totals are ledger-account totals in the
+  account baselines; nothing is recomputed from results.
+- **After expiry:** a payslip is an ordinary 404; the run (web and API
+  `resultsExpiredAt`) states that its results no longer cover the whole
+  run; ECR, ESI and TDS exports refuse with 409 `PAYROLL_RESULTS_EXPIRED`.
+  Payslips are rendered on demand; no payroll Document exists.
+- **Immutability unchanged:** results stay frozen and adjustments/postings
+  append-only; only the two retention functions (flag + owner privileges)
+  can remove posted evidence (`PayrollRetentionGuardTest`).
+- Holds count only; `--dry-run` uses the database's own verdict; daily at
+  05:20.

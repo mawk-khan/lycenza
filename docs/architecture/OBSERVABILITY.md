@@ -608,3 +608,16 @@ real environment:
 - **Logs** (counts only; never message content, visitor data, a secret, a
   payload or a driver): `retention.operations_prune.completed`/`.dry_run`/
   `.unconfigured`; the residual counts in `retention.communications_prune.*`.
+
+## E21.3F payroll evidence retention (2026-10-02)
+
+- **Scheduler.** New daily task `payroll-retention-prune` (05:20), covered
+  by the OBS-06 daily staleness alert (regenerated rules); `scheduled_task`
+  now has 30 values, **at its ceiling of 30**: a further scheduled task
+  must consolidate an existing one or raise the ceiling by a reviewed
+  change.
+- **Metric labels.** `payroll_evidence` and `payroll_run` join the existing
+  `employee` family: still eleven `operation` values (ceiling 20). Outcomes
+  unchanged.
+- **Logs** (counts only; never a salary, name, tax identifier or payroll
+  value): `retention.payroll_prune.completed`/`.dry_run`/`.unconfigured`.

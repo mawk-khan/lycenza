@@ -2272,6 +2272,24 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21.3F — Payroll Evidence Retention & Employee Release (2026-10-02):
+  published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
+  §5.10, ADR 0064 §25–§30:
+  - posted payroll evidence (results with lines and statutory results,
+    adjustments, LWF charges) 8 y after final separation, once every run
+    and posting is that old (`payroll-retention-prune`, two narrow,
+    floored functions);
+  - emptied runs release their journal entries to D8; Finance alone
+    deletes them, once their period is 8 y closed (D8 × D9 matrix proven);
+  - paid Employees released by the next `employee-retention-prune`;
+  - payslips 404, runs flag `resultsExpiredAt`, statutory exports refuse
+    (409) after expiry.
+
+  **E21 ENGINEERING: COMPLETE** (no retention-mechanism checkpoint left).
+  **E21 — OPEN / LEGAL DECISION REMAINS:** User-identity erasure (I5) needs
+  a legal decision; final ratification deferred to the pre-production
+  closeout; production retention configuration separate. Tenant
+  destruction NOT AUTHORIZED. E33 / TCH-L1 open independently.
 - **E21.3E — Communications & Platform Residuals (2026-10-02): published /
   closed.** `docs/security/E21-RETENTION-DETERMINATION.md` §5.9:
   - never-sent cancelled/rejected announcements and empty threads, 1 y

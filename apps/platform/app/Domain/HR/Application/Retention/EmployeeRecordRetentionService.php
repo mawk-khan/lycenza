@@ -31,7 +31,8 @@ use Illuminate\Support\Facades\DB;
  * still needs the Employee:
  * - every referencing row in every other table blocks it (ReferencingRows,
  *   read from the FK catalog). That covers payroll results, adjustments
- *   and LWF charges (ledger-linked, D8), Payroll's own compensation and
+ *   and LWF charges (until Payroll's own D9 expiry removes them, E21.3F),
+ *   Payroll's own compensation and
  *   statutory rows until Payroll's own purge removes them, TeachingAssignments
  *   (D6), Attendance sessions, timetable entries, LMS ownership,
  *   transport and visitor rows, and another Employee's assignment that

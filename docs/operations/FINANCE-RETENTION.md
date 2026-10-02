@@ -70,7 +70,11 @@ units are counted as `held`. Closing a period is unaffected.
 - Owing charges, until settled and aged past a later close.
 - Anything with activity after the eligible horizon.
 - **Payroll-linked journal entries** while D9 payroll evidence references
-  them (the D8 × D9 intersection, ADR 0064 §21).
+  them (the D8 × D9 intersection, ADR 0064 §21). Since E21.3F,
+  `platform:payroll-retention-prune` (05:20) deletes the postings of an
+  emptied payroll run; the next run of this command then expires those
+  entries like any standalone entry, once their period is 8 years closed
+  (ADR 0064 §25–§30).
 - Canteen-linked charges.
 - Unlinked provider events.
 

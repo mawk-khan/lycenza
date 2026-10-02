@@ -5205,3 +5205,18 @@ daily 05:10. It is off unless `FINANCE_RETENTION_ENABLED` and
 `ready`); tenant-closure readiness has the `d8_*` gates.
 
 Runbook: `docs/operations/FINANCE-RETENTION.md`.
+
+## E21.3F — Payroll-linked entries released to D8 (2026-10-02, ADR 0064 §25–§30)
+
+The D8 × D9 intersection is resolved on the Payroll side; nothing in
+Finance's expiry changed:
+- `PayrollLedgerRetentionParticipant` still claims every entry a payroll
+  posting references (`payroll_evidence_retained`, dependency-blocked), and
+  `retention_expire_finance_unit` still refuses such an entry.
+- Payroll's own D9 expiry (`platform:payroll-retention-prune`) deletes the
+  postings of an emptied payroll run; from then on the entries are ordinary
+  standalone units (with their reversal group) and expire through
+  `finance-retention-prune` once their period has been closed 8 calendar
+  years. Payroll never deletes a journal entry.
+- Account balances, charge outstanding, Student dues and receipt series are
+  unchanged across both expiries (E21.3F matrix test).

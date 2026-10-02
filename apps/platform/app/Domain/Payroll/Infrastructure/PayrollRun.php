@@ -33,6 +33,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $posted_by_user_id
  * @property Carbon|null $approved_at
  * @property Carbon|null $posted_at
+ * @property Carbon|null $results_expired_at E21.3F: set only by payroll retention
  */
 class PayrollRun extends Model
 {
@@ -56,6 +57,8 @@ class PayrollRun extends Model
         return [
             'approved_at' => 'datetime',
             'posted_at' => 'datetime',
+            // E21.3F: set only by payroll retention (database-guarded), never fillable.
+            'results_expired_at' => 'datetime',
         ];
     }
 

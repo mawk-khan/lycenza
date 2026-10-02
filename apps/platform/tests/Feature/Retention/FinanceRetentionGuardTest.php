@@ -25,6 +25,13 @@ use Tests\TestCase;
  *     (`retention_expire_finance_unit`: closed period, 8-calendar-year
  *     floor, settled, closed under references).
  *
+ * - E21.3F (ADR 0064 §21 amended): Payroll's own D9 evidence (results,
+ *   adjustments, LWF charges, postings, runs) MAY expire, but ONLY through
+ *   the approved D9 payroll path (D9_PAYROLL_FILES): one command, one
+ *   Payroll service, two gateway calls and two fixed-purpose database
+ *   functions. That path names payroll evidence tables but never a Finance
+ *   ledger table: it releases journal entries, Finance alone deletes them.
+ *
  * No other retention, prune or Finance code may delete, or name, a ledger
  * table. Ordinary domain code never deletes a ledger row. Weakening any of
  * this needs a new ADR, not a test edit.
@@ -40,6 +47,19 @@ class FinanceRetentionGuardTest extends TestCase
         'Domain/Payments/Application/Retention/ChargeRetentionParticipant.php',
         'Domain/Payroll/Application/Retention/PayrollLedgerRetentionParticipant.php',
     ];
+
+    /**
+     * E21.3F: the approved D9 payroll path. These may name payroll evidence
+     * tables (TenantClosureReadiness only to read the latest posting date);
+     * they may never name a Finance ledger table (FINANCE_BOUND).
+     */
+    private const D9_PAYROLL_FILES = [
+        'Domain/Payroll/Application/Retention/PayrollEvidenceRetentionService.php',
+        'Console/Commands/PrunePayrollEvidence.php',
+        'Support/Retention/TenantClosureReadiness.php',
+    ];
+
+    private const FINANCE_BOUND = "/'(financial_period[a-z_]*|journal_[a-z_]+|ledger_accounts|charges|fee_[a-z_]+|payments|payment_[a-z_]+|late_fee_[a-z_]+|canteen_orders)'/";
 
     private const LEDGER_BOUND = "/'(financial_period[a-z_]*|journal_[a-z_]+|ledger_accounts|charges|fee_[a-z_]+|payments|payment_[a-z_]+|late_fee_[a-z_]+|payroll_run_[a-z_]+|payroll_runs|payroll_adjustments|payroll_lwf_annual_charges|payroll_statutory_[a-z_]+|canteen_orders)'/";
 
@@ -69,8 +89,14 @@ class FinanceRetentionGuardTest extends TestCase
         }
 
         $approved = array_map(fn (string $f) => app_path($f), self::D8_FILES);
-        foreach (array_diff($files, [$catalog], $approved) as $file) {
+        $payroll = array_map(fn (string $f) => app_path($f), self::D9_PAYROLL_FILES);
+        foreach (array_diff($files, [$catalog], $approved, $payroll) as $file) {
             $this->assertDoesNotMatchRegularExpression(self::LEDGER_BOUND, $this->code($file), $file);
+        }
+        foreach ($payroll as $file) {
+            $this->assertContains($file, $files);
+            $this->assertDoesNotMatchRegularExpression(self::FINANCE_BOUND, $this->code($file), "{$file}: the D9 payroll path never names a Finance ledger table");
+            $this->assertDoesNotMatchRegularExpression(self::DELETES, $this->code($file), "{$file}: deletes only through its database functions");
         }
     }
 
