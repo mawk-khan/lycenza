@@ -148,6 +148,31 @@ class ErasureCaseTest extends TestCase
     }
 
     #[Test]
+    public function a_case_uses_the_e21_3b_module_and_core_evidence_purges_and_an_open_assignment_keeps_the_record(): void
+    {
+        // E21.3B: the case composes the same closed lists as the scheduled run.
+        [$school, $student] = $this->leaver();
+        $copy = $this->createLibraryCopy($this->createLibraryTitle($school));
+        $this->createLibraryLoan($copy, $student, ['status' => 'returned', 'checked_out_at' => '2026-07-01 09:00:00', 'due_at' => '2026-07-15 09:00:00', 'checked_in_at' => '2026-07-10 09:00:00']);
+        $route = $this->createTransportRoute($school);
+        $this->createTransportStudentAssignment($student, $route, ['status' => 'active', 'starts_on' => '2026-06-01 00:00:00', 'ends_on' => null]);
+        $this->travelTo(Carbon::parse('2052-01-01 12:00:00', 'UTC'));
+        $case = $this->approved($school, 'student', $student->id);
+
+        $plan = $this->outcomes($this->cases()->execute($case->id, true));
+        $this->assertSame(ErasureCategory::ELIGIBLE, $plan['student_operational']->outcome);
+        $this->assertSame(ErasureCategory::DEPENDENCY_BLOCKED, $plan['student_core']->outcome);
+        $this->assertSame('transport_student_assignments', $plan['student_core']->reason, 'an active assignment keeps the record, even in the plan');
+
+        $done = $this->outcomes($this->cases()->execute($case->id, false));
+        $this->assertSame(ErasureCategory::COMPLETED, $done['student_operational']->outcome);
+        $this->assertSame(ErasureCategory::DEPENDENCY_BLOCKED, $done['student_core']->outcome);
+        $this->assertFalse($this->inSchool($school, fn () => DB::table('library_loans')->where('student_id', $student->id)->exists()));
+        $this->assertTrue($this->inSchool($school, fn () => DB::table('transport_student_assignments')->where('student_id', $student->id)->exists()));
+        $this->assertTrue($this->inSchool($school, fn () => DB::table('students')->where('id', $student->id)->exists()));
+    }
+
+    #[Test]
     public function finance_and_a_legal_hold_keep_everything(): void
     {
         [$school, $student, $year] = $this->leaver();

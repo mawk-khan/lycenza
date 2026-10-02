@@ -370,3 +370,19 @@ obtained through approved School procedure.
   future append-only table that also needs row-locking should follow
   this same trigger-based pattern rather than bare privilege
   revocation.
+
+## Amendment — E21.3B retention (2026-10-02)
+
+The registry's "indefinite pending an explicit future retention policy" is
+replaced by the adopted policy (E21.2G P1, project-adopted, pending legal
+ratification): a Student's processing authorizations are kept **with the
+Student core record**, 25 calendar years after the Student's final exit,
+and removed in the core purge's one-Student transaction.
+- Still no DELETE route, and still append-only for every runtime path: the
+  guard trigger admits a delete only inside
+  `retention_expire_student_processing_authorizations` (transaction-local
+  flag AND the table owner's privileges), which re-proves the core floor
+  in the database.
+- A guardian-consent authorization's relationship goes with it.
+- An authorization of a current Student is never eligible.
+See `docs/security/E21-RETENTION-DETERMINATION.md` §5.6.

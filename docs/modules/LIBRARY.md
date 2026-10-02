@@ -334,3 +334,20 @@ double-checkin-prevention), a real two-OS-process concurrency proof,
 `/api/v1` contract tests including idempotency replay/conflict/
 capability-revocation-on-replay, and Inertia UI tests for every page
 and action.
+
+## Retention (E21.3B, 2026-10-02)
+
+A Student's **returned** loans are D7 operational Student history: they are
+deleted 7 calendar years after the Student's final exit
+(`StudentRetentionEligibility`), by `platform:student-retention-prune`
+through `App\Domain\Library\Application\Retention\LibraryLoanRetentionService`,
+one Student per transaction under the Student-row lock.
+- An **unreturned** (`active`) loan is never deleted on age, and it keeps
+  the Student's core record.
+- A re-entry (new Enrollment or reactivation) restarts the clock.
+- Titles and copies are School inventory and stay. Library has no fines,
+  fees or Finance link, so no D8 evidence is involved.
+
+Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
+§5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
+counts with the same rule.

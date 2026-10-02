@@ -1124,3 +1124,30 @@ for:
 - **Final ratification:** deferred to the pre-production closeout.
 - **Tenant destruction:** NOT AUTHORIZED.
 - **E33 / TCH-L1:** open independently.
+
+## Note — E21.3B Student-linked evidence and operational modules (2026-10-02)
+
+**E21: still OPEN. E21.3B: IMPLEMENTED** (`docs/security/E21-RETENTION-DETERMINATION.md`
+§5.6, `docs/security/E21-CLOSURE-AUDIT.md` §7).
+- **D7 operational (7 y after final exit):** returned Library loans, ended
+  Transport assignments and ended Hostel residencies. An open one is never
+  deleted on age and keeps the Student.
+- **With the Student core record (25 y after final exit), in its unit:**
+  processing authorizations and the Student subject's consent events
+  (append-only; two narrow, core-floored database functions), converted
+  admission applications with applicants that have nothing else, the
+  Student subject's domain preferences, and the Guardian relationships an
+  authorization names.
+- **Ended portal invitations:** 7 days after their canonical end
+  (`platform:portal-invitations-prune`, `PORTAL_INVITATION_RETENTION_DAYS`).
+- Holds, dry runs, bounded per-Student transactions, same-School tenant
+  ties and real-process races as for E21.2D; closure readiness reports
+  only the E21.3C rows of those tables as `mechanism_pending`.
+- **Remaining engineering:** E21.3C–E21.3E, and **E21.3F — Payroll Evidence
+  Retention & Employee Release** (provisional), the bounded follow-up for
+  the recorded payroll D8 × D9 intersection (ADR 0064 §21).
+- **Final ratification:** deferred to the pre-production closeout. No
+  production legal clearance is claimed.
+- **Tenant destruction:** NOT AUTHORIZED.
+- **E33 / TCH-L1:** open independently; no Teacher role, capability or
+  authorization change.

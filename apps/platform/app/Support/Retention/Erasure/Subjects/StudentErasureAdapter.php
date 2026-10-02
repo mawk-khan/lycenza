@@ -2,10 +2,7 @@
 
 namespace App\Support\Retention\Erasure\Subjects;
 
-use App\Domain\Attendance\Application\Retention\AttendanceRetentionService;
-use App\Domain\Guardians\Application\Retention\GuardianRelationshipRetentionService;
 use App\Domain\Students\Application\Retention\StudentExit;
-use App\Domain\Students\Application\Retention\StudentRecordRetentionService;
 use App\Domain\Students\Application\Retention\StudentRetentionEligibility;
 use App\Models\School;
 use App\Support\Retention\Erasure\ErasureCategory;
@@ -13,6 +10,7 @@ use App\Support\Retention\Erasure\ErasurePeriods;
 use App\Support\Retention\Erasure\ErasureSubjectAdapter;
 use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
+use App\Support\Retention\StudentRetention;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -31,19 +29,21 @@ use Illuminate\Support\Facades\DB;
  * The identity of a retained record is never minimised earlier: it goes
  * with the core record (E21.2G decision).
  *
- * It lives in Compliance, the orchestrator above Students, Attendance and
- * Guardians, because it composes their purges (a Students-side adapter
- * would invert the Attendance -> Students dependency). Every eligibility
- * rule stays in the owning domain; this only composes them.
+ * It lives in Compliance, the orchestrator above Students and the modules
+ * that depend on it, because it composes their purges (a Students-side
+ * adapter would invert those dependencies). E21.3B: it reaches them only
+ * through StudentRetention, the same closed list the scheduled run uses
+ * (Library, Transport and Hostel operational rows; processing
+ * authorizations, converted admissions, consent and preferences with the
+ * core record). Every eligibility rule stays in the owning domain; this
+ * only composes them.
  */
 final class StudentErasureAdapter implements ErasureSubjectAdapter
 {
     public function __construct(
         private readonly TenantContext $context,
         private readonly StudentRetentionEligibility $eligibility,
-        private readonly StudentRecordRetentionService $records,
-        private readonly AttendanceRetentionService $attendance,
-        private readonly GuardianRelationshipRetentionService $relationships,
+        private readonly StudentRetention $retention,
         private readonly RetentionHolds $holds,
     ) {}
 
@@ -73,11 +73,7 @@ final class StudentErasureAdapter implements ErasureSubjectAdapter
 
         $operational = $this->period($school, 'student_operational', $exit, $operationalYears, function () use ($school, $subjectId, $operationalYears): ErasureCategory {
             $cutoff = ErasurePeriods::cutoff($school, (int) $operationalYears);
-            $counts = [
-                $this->attendance->prune($school, $cutoff, 1, true, $subjectId),
-                $this->records->pruneRolloverItems($school, $cutoff, 1, true, $subjectId),
-                $this->relationships->prune($school, $cutoff, 1, true, $subjectId),
-            ];
+            $counts = array_values($this->retention->operational($school, $cutoff, 1, true, $subjectId));
 
             return match (true) {
                 array_sum(array_column($counts, 'dependency_blocked')) > 0 => new ErasureCategory('student_operational', ErasureCategory::DEPENDENCY_BLOCKED, 'retained_dependency'),
@@ -88,9 +84,9 @@ final class StudentErasureAdapter implements ErasureSubjectAdapter
 
         $core = $this->period($school, 'student_core', $exit, $coreYears, function () use ($school, $subjectId, $operational): ErasureCategory {
             // The operational rows go first in the same execution, unless they stay for a reason.
-            $cleared = in_array($operational->outcome, [ErasureCategory::ELIGIBLE, ErasureCategory::COMPLETED], true) ? StudentRecordRetentionService::OPERATIONAL_TABLES : [];
+            $afterOperational = in_array($operational->outcome, [ErasureCategory::ELIGIBLE, ErasureCategory::COMPLETED], true);
             $authorityYears = RetentionPeriod::years(config('retention.authority_history_years'));
-            $blocker = $this->records->coreBlockerFor($school, $subjectId, $authorityYears === null ? null : RetentionPeriod::yearsBeforeNow($authorityYears), $cleared);
+            $blocker = $this->retention->coreBlockerFor($school, $subjectId, $authorityYears === null ? null : RetentionPeriod::yearsBeforeNow($authorityYears), $afterOperational);
 
             return $blocker === null
                 ? new ErasureCategory('student_core', ErasureCategory::ELIGIBLE, 'period_passed')
@@ -109,14 +105,12 @@ final class StudentErasureAdapter implements ErasureSubjectAdapter
 
         if ($school !== null && $eligible('student_operational')) {
             $cutoff = ErasurePeriods::cutoff($school, (int) ErasurePeriods::years('student_operational_years'));
-            $this->attendance->prune($school, $cutoff, 100, false, $subjectId);
-            $this->records->pruneRolloverItems($school, $cutoff, 100, false, $subjectId);
-            $this->relationships->prune($school, $cutoff, 100, false, $subjectId);
+            $this->retention->operational($school, $cutoff, 100, false, $subjectId);
         }
 
         if ($school !== null && $eligible('student_core')) {
             $authorityYears = RetentionPeriod::years(config('retention.authority_history_years'));
-            $this->records->pruneCore($school, ErasurePeriods::cutoff($school, (int) ErasurePeriods::years('student_core_years')),
+            $this->retention->core($school, ErasurePeriods::cutoff($school, (int) ErasurePeriods::years('student_core_years')),
                 $authorityYears === null ? null : RetentionPeriod::yearsBeforeNow($authorityYears), 100, false, false, $subjectId);
         }
 

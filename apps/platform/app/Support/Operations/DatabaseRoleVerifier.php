@@ -42,6 +42,8 @@ class DatabaseRoleVerifier
         'financial_periods', 'financial_period_account_balances', 'financial_period_charge_states',
         // E21.3A2: Finance ledgers lose detail only through retention_expire_finance_unit.
         'financial_period_expiries', 'journal_entries', 'journal_lines', 'charges', 'payments', 'payment_allocations', 'payment_receipts',
+        // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
+        'communication_domain_consent_events',
     ];
 
     /**
@@ -68,6 +70,8 @@ class DatabaseRoleVerifier
         'retention_expire_erasure_cases',
         // E21.3A2 (E21-D8): one settled Finance unit, period-floored in the database
         'retention_expire_finance_unit',
+        // E21.3B (E21-D7 core): one Student's append-only core evidence, core-floored in the database
+        'retention_expire_student_processing_authorizations', 'retention_expire_student_consent_events',
     ];
 
     /**

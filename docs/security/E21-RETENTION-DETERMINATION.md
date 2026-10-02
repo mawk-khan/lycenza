@@ -29,6 +29,16 @@
 > - The period stays project-adopted, pending ratification.
 > - The periods adopted at the audit for every remaining category ship in
 >   E21.3B–E21.3E.
+>
+> **E21.3B (2026-10-02, §5.6):** the Student-linked residuals are
+> **IMPLEMENTED**: Library loans and Transport/Hostel assignments as D7
+> operational history (7 y; an open one keeps the Student); processing
+> authorizations, converted admission applications, the Student subject's
+> consent events and domain preferences with the Student core record
+> (25 y); ended portal invitations 7 days after they ended. Guardian-subject
+> rows and rejected/withdrawn applications stay for E21.3C. The payroll
+> D8 × D9 residual is the bounded follow-up **E21.3F** (provisional). E21
+> stays **OPEN**.
 > - Final ratification is deferred to the pre-production project closeout.
 > - The consolidated reference, with matrices, the D8 brief and the
 >   ratification package, is `docs/security/E21-CLOSURE-AUDIT.md`. Its §8
@@ -725,10 +735,11 @@ The checkpoints are listed in §5.
 | **E21.2G** | Final retention closure audit and blocker consolidation | **Implemented** (closure audit, decisions for every remaining category, technical-TTL dry runs, readiness `mechanism_pending`; `E21-CLOSURE-AUDIT.md`) |
 | E21.3A | Financial Year Close & Retention Foundation (D8) | **Implemented** (ADR 0064; full isolated regression). Period entity, posting identity, close, baselines, dual-read verifier, backfill. No deletion |
 | E21.3A2 | Finance Retention Cutover & Historical Expiry (D8) | **Implemented** (ADR 0064 §14–§24; full isolated regression). Carry-forward reads, D8 eligibility from `closed_at`, settled-unit expiry, holds, dry run, per-unit accounting proof. Residual: payroll D8 × D9 intersection |
-| E21.3B | Student-linked evidence and modules (consent, preferences, processing authorizations, converted admissions, Library/Transport/Hostel, portal invitations) | Not started |
+| E21.3B | Student-linked evidence and modules (consent, preferences, processing authorizations, converted admissions, Library/Transport/Hostel, portal invitations) | **Implemented** (§5.6; full isolated regression) |
 | E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | Not started |
 | E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | Not started |
 | E21.3E | Communications and platform residuals (never-sent and empty threads, visitors, automation, driver assignments, API credentials) | Not started |
+| E21.3F (provisional) | Payroll Evidence Retention & Employee Release: a Payroll D9 result-expiry mechanism, releasing payroll-linked journal entries (D8 × D9, ADR 0064 §21) and paid Employees | Not started |
 
 ### 5.1 The privileged retention path (E21.2B)
 
@@ -878,6 +889,85 @@ The checkpoints are listed in §5.
 - backup and bucket noncurrent-version lifecycle (D12);
 - setting the retention environment values in production (§6).
 
+### 5.6 Student-linked evidence and operational modules (E21.3B)
+
+Implements E21.2G O1, P1, AD1, C4, C5 and I2 (`E21-CLOSURE-AUDIT.md` §8).
+Project-adopted, pending ratification.
+
+- **One composition.** `App\Support\Retention\StudentRetention` composes
+  every Student-linked purge for the scheduled run and for a reviewed
+  erasure case (the same closed lists). Every rule and delete stays in the
+  owning module; the final exit is still only
+  `StudentRetentionEligibility`. Module dependencies stay one-way (each
+  participant depends on Students, never the reverse).
+- **Operational (7 y after final exit), terminal rows only:**
+  - returned Library loans (`LibraryLoanRetentionService`). Library has no
+    fines, fees or Finance link; titles and copies stay;
+  - ended Transport assignments (`TransportAssignmentRetentionService`);
+    routes, stops and vehicles stay; driver assignments are E21.3E;
+  - ended Hostel residencies (`HostelResidencyRetentionService`); hostels,
+    rooms and beds stay.
+
+  An unreturned loan or an active assignment is never deleted on age and
+  keeps the Student (the core purge treats it as a retained reference, and
+  the dry run knows it). A returned loan is never reopened and an ended
+  assignment never reactivated, and new ones are created active, so the
+  re-entry race (Student-row lock) is the only material one.
+- **With the core record (25 y after final exit), in its one-Student
+  transaction, never on a clock of their own:**
+  - **processing authorizations** (Students). There is no canonical end
+    field and none is needed: the core record's eligibility is the
+    trigger. "Active" authorization means the authorization of a current
+    (or unresolved) Student, which is never eligible. A recorded,
+    unterminated grant of a Student whose core period has passed explains
+    only a record that leaves in the same unit, so it leaves with it;
+  - **converted admission applications** (Admissions participant). The
+    linkage is `converted_student_id`, set with the conversion
+    (AdmissionConversionService) and tied to `status = 'converted'` by a
+    CHECK. The applicant leaves too, but only once no other application of
+    it remains. An application converted into another Student that names
+    one of this Student's placements keeps it;
+  - **the Student subject's consent events and domain preferences**
+    (Communications participant). Consent is evidence, not a transient
+    preference: it is kept exactly as long as the record it explains;
+  - **Guardian relationships an authorization names** (Guardians
+    participant): the relationship is the consent provider's identity, so
+    it is the authorization's evidence. The operational phase now removes
+    only relationships nothing references.
+- **Privileged path.** Processing authorizations and consent events are
+  append-only. Migration `2026_11_11_090000` adds
+  `retention_expire_student_processing_authorizations` and
+  `retention_expire_student_consent_events` (E21.2B pattern): definer,
+  pinned `search_path`, one Student's rows, tenant tie, EXECUTE for the
+  runtime role only. Each re-proves the core floor in the database (the
+  Student row locked; `inactive`; no active Subject Enrollment; every
+  non-cancelled placement ended before a cutoff at least 25 calendar years
+  before the School-local date). The authorization guard trigger admits a
+  delete only with the transaction-local flag AND the table owner's
+  privileges (the E21.3A2 pattern). The runtime role gains no DELETE;
+  `communication_domain_consent_events` is now pinned in
+  `NO_RUNTIME_DELETE`. Rollback drops the functions and restores the
+  original guard verbatim.
+  The 25-year floor also binds configuration: a
+  `STUDENT_CORE_RETENTION_YEARS` below 25 cannot remove this evidence (the
+  database refuses; such a Student counts as `error` and is kept).
+- **Ended portal invitations (I2).** `platform:portal-invitations-prune`
+  (daily 04:20) deletes `identity_account_invitations`
+  `PORTAL_INVITATION_RETENTION_DAYS` (7) after their canonical end:
+  `accepted_at`, `revoked_at`, or `expires_at` while still pending. Never
+  `updated_at`, never a usable invitation, never a terminal row without its
+  timestamp. The secret was unusable from the moment it ended; nothing is
+  reopened. Held Schools are counted only. Batches lock `SKIP LOCKED` and
+  re-apply the predicate, so a row being accepted or revoked is skipped.
+- **Kept for E21.3C:** Guardian-subject consent and preferences, Guardian
+  account links, Guardian personal data, rejected/withdrawn (and live)
+  applications. Readiness keeps them `mechanism_pending`
+  (`TenantRetentionCatalog::PENDING_ROWS`).
+- **Documents:** none of the new parents owns a Document, so D5 is
+  unchanged (Student Documents still go with the core record).
+- **Metrics:** new categories inside existing families only (`student`;
+  portal invitations under `authority`): still nine `operation` values.
+
 ## 6. Production settings
 
 The values below are fail-closed: a command deletes nothing while its value
@@ -900,7 +990,8 @@ is unset. Production must set them once their checkpoint ships.
 | `STORAGE_ORPHAN_RETENTION_DAYS` | 30 | E21.2C |
 | `RETENTION_ORPHAN_SCAN_LIMIT` | 10000 per School per run (default) | E21.2C |
 | `STUDENT_OPERATIONAL_RETENTION_YEARS` | 7 (calendar years after final exit) | E21.2D |
-| `STUDENT_CORE_RETENTION_YEARS` | 25 (calendar years after final exit; never shorter than operational) | E21.2D |
+| `STUDENT_CORE_RETENTION_YEARS` | 25 (calendar years after final exit; never shorter than operational; E21.3B: with its core evidence, database floor 25) | E21.2D |
+| `PORTAL_INVITATION_RETENTION_DAYS` | 7 (days after an ended portal invitation ended) | E21.3B |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 (calendar years after final separation) | E21.2E |
 | `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 (calendar years after final separation; never shorter than ancillary) | E21.2E |
 | `ERASURE_CASE_RETENTION_YEARS` | 7 (calendar years after a case closed) | E21.2F |

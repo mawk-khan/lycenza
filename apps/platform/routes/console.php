@@ -162,6 +162,15 @@ Schedule::command('platform:storage-orphans-prune')
     ->withoutOverlapping()
     ->name('storage-orphans-prune');
 
+// E21.3B (E21.2G I2): ended portal invitations, PORTAL_INVITATION_RETENTION_DAYS
+// (7) after they ended. No default: until configured it deletes nothing. A
+// Student-subject one ended long enough ago no longer keeps its Student, but
+// correctness does not depend on running before the Student run.
+Schedule::command('platform:portal-invitations-prune')
+    ->dailyAt('04:20')
+    ->withoutOverlapping()
+    ->name('portal-invitations-prune');
+
 // E21.2D (E21-D7): Student operational history (7 y) and core academic
 // record (25 y) after final exit. No default: until configured it deletes
 // nothing. It runs after the Communications and orphan runs. Correctness

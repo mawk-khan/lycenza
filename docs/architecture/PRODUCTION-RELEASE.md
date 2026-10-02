@@ -422,6 +422,24 @@ email recovery.
   - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops it per School.
   - **Payroll-linked detail is never expired by D8** (D9 evidence; ADR 0064
     §21).
+- **E21.3B Student-linked residual expiry (2026-10-02):**
+  - **Migration** `2026_11_11_090000`: the two Student-core evidence
+    functions (`retention_expire_student_processing_authorizations`,
+    `retention_expire_student_consent_events`, checked by
+    `platform:verify-database` `retention_functions_narrow`) and the
+    processing-authorization guard patch. Its `down()` removes only the
+    mechanism and restores the original guard.
+  - **`student-retention-prune` widens** under the existing
+    `STUDENT_*_RETENTION_YEARS`: returned Library loans and ended
+    Transport/Hostel assignments go with the operational phase (7 y); the
+    core record (25 y) takes its processing authorizations, converted
+    admissions, Student-subject consent and preferences with it. Run it
+    with `--dry-run` first: an open loan or assignment now shows as
+    `dependency-blocked` (close the loan/assignment or leave the Student).
+  - **New daily task:** `portal-invitations-prune` (04:20), covered by
+    OBS-06. Production sets `PORTAL_INVITATION_RETENTION_DAYS=7`
+    (project-adopted, pending ratification); unset deletes nothing.
+  - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops both per School.
 
 ## 6. Seeding: production-safe versus demo
 

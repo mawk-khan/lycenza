@@ -5,8 +5,10 @@ namespace App\Domain\Students\Application\Retention;
 use App\Domain\Documents\Application\Retention\DocumentParentRetention;
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
+use Closure;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -28,14 +30,26 @@ use Illuminate\Support\Facades\DB;
  * implemented today. No marks, results, report cards or transcripts exist.
  * It goes as one unit, and only when nothing else still needs the Student:
  * - every referencing row in every other table blocks it (ReferencingRows,
- *   read from the FK catalog). That covers Finance, Communications,
- *   Admissions, processing authorizations, Library, Transport, Hostel,
- *   Canteen and invitations, and also operational rows not yet expired.
- *   The Student is then `dependency_blocked` and kept; nothing is cascaded;
+ *   read from the FK catalog). That covers Finance, Communications D3,
+ *   Canteen, open Library loans and Transport/Hostel assignments,
+ *   invitations, and also operational rows not yet expired. The Student is
+ *   then `dependency_blocked` and kept; nothing is cascaded;
  * - a Student account link must be revoked and older than the D6 authority
  *   period (`retention.authority_history_years`); otherwise it blocks;
  * - the Student's Documents go with it (DocumentParentRetention), bytes
  *   after commit.
+ *
+ * E21.3B (E21.2G P1/C4/C5/AD1): evidence that is kept WITH the core record
+ * goes in the same unit, never on a clock of its own:
+ * - the Student's processing authorizations (this module), through their
+ *   fixed, core-floored database function (they are append-only);
+ * - the participants' rows (StudentCoreParticipant, a closed list passed by
+ *   the orchestrator): converted admission applications and their released
+ *   applicants (Admissions); the Student's consent events and domain
+ *   preferences (Communications); Guardian relationships kept only because
+ *   a processing authorization names them (Guardians).
+ * Without the participants, their tables keep blocking (fail-closed).
+ *
  * The root is deleted LAST, after the rows above, so its remaining
  * cascades reach only the verified, approved set (revoked old account
  * links). It is never a raw `DELETE FROM students WHERE ...`.
@@ -48,15 +62,20 @@ final class StudentRecordRetentionService
      * evaluates the core record, because the destructive run removes them
      * first. A destructive core run always checks the real rows.
      */
-    public const OPERATIONAL_TABLES = ['attendance_records', 'enrollment_rollover_items', 'student_guardian_relationships'];
+    public const OPERATIONAL_TABLES = [
+        'attendance_records', 'enrollment_rollover_items', 'student_guardian_relationships',
+        // E21.3B (E21.2G O1): terminal rows only; an open loan or assignment stays and keeps the Student.
+        'library_loans', 'transport_student_assignments', 'hostel_residency_assignments',
+    ];
 
     /** Dependents the core purge removes itself (or that it verified above). */
-    private const CORE_HANDLED = ['student_enrollments', 'student_subject_enrollments', 'documents', 'student_guardian_account_links'];
+    private const CORE_HANDLED = ['student_enrollments', 'student_subject_enrollments', 'documents', 'student_guardian_account_links', 'student_processing_authorizations'];
 
     public function __construct(
         private readonly StudentRetentionEligibility $students,
         private readonly ReferencingRows $references,
         private readonly DocumentParentRetention $documents,
+        private readonly RetentionExpiry $expiry,
     ) {}
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
@@ -78,12 +97,13 @@ final class StudentRecordRetentionService
 
     /**
      * @param  CarbonInterface|null  $authorityCutoff  UTC: an account link revoked before it is past D6; null = D6 unset, links block
-     * @param  bool  $afterOperational  counting only: the operational phase of the same run clears OPERATIONAL_TABLES first
+     * @param  list<StudentCoreParticipant>  $participants  rows other modules keep with the core record (the orchestrator's closed list)
+     * @param  array<string, (Closure(string): bool)|null>  $cleared  counting only: tables the operational phase of the same run clears first => whether it leaves open rows of a Student (null: it clears all)
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
-    public function pruneCore(School $school, string $cutoffDate, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, bool $afterOperational = false, ?string $only = null): array
+    public function pruneCore(School $school, string $cutoffDate, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, array $participants = [], array $cleared = [], ?string $only = null): array
     {
-        $cleared = $dryRun && $afterOperational ? self::OPERATIONAL_TABLES : [];
+        $cleared = $dryRun ? $cleared : [];
 
         return $this->students->purgeExitedBefore(
             $school,
@@ -91,9 +111,16 @@ final class StudentRecordRetentionService
             $batch,
             $dryRun,
             null,
-            fn (string $studentId): array => array_filter([$this->coreBlocker($school->id, $studentId, $authorityCutoff, $cleared)]),
-            function (string $studentId): array {
+            fn (string $studentId): array => array_filter([$this->coreBlocker($school->id, $studentId, $authorityCutoff, $cleared, $participants)]),
+            function (string $studentId) use ($school, $cutoffDate, $participants): array {
                 $objects = $this->documents->purgeWithOwner('student', $studentId);
+                // Append-only legal-basis evidence first: Guardian relationships it names go after it.
+                if (DB::table('student_processing_authorizations')->where('school_id', $school->id)->where('student_id', $studentId)->exists()) {
+                    $this->expiry->studentCoreEvidence(RetentionExpiry::STUDENT_PROCESSING_AUTHORIZATION, $school, $studentId, $cutoffDate, false);
+                }
+                foreach ($participants as $participant) {
+                    $participant->purge($school, $studentId, $cutoffDate);
+                }
                 DB::table('student_subject_enrollments')->where('student_id', $studentId)->delete();
                 DB::table('student_enrollments')->where('student_id', $studentId)->delete();
                 DB::table('students')->where('id', $studentId)->delete();
@@ -108,25 +135,38 @@ final class StudentRecordRetentionService
      * E21.2F (erasure planning, read-only): the retained dependent that keeps
      * one Student's core record, or null.
      *
-     * @param  list<string>  $cleared  tables an earlier purge of the same run clears first
+     * @param  list<StudentCoreParticipant>  $participants
+     * @param  array<string, (Closure(string): bool)|null>  $cleared  tables an earlier purge of the same run clears first
      */
-    public function coreBlockerFor(School $school, string $studentId, ?CarbonInterface $authorityCutoff, array $cleared = []): ?string
+    public function coreBlockerFor(School $school, string $studentId, ?CarbonInterface $authorityCutoff, array $participants = [], array $cleared = []): ?string
     {
-        return app(TenantContext::class)->withSchool($school, fn (): ?string => $this->coreBlocker($school->id, $studentId, $authorityCutoff, $cleared));
+        return app(TenantContext::class)->withSchool($school, fn (): ?string => $this->coreBlocker($school->id, $studentId, $authorityCutoff, $cleared, $participants));
     }
 
     /**
      * The first retained dependent that keeps this Student, or null. Student
      * references are checked first (most are indexed by `(school_id,
-     * student_id)` and catch Finance at once), then placements, subjects
-     * and Documents.
+     * student_id)` and catch Finance at once), then what the operational
+     * phase leaves open, the account links, processing authorizations,
+     * placements, subjects, Documents and the participants' own rows.
+     *
+     * @param  array<string, (Closure(string): bool)|null>  $cleared
+     * @param  list<StudentCoreParticipant>  $participants
      */
-    /** @param  list<string>  $cleared */
-    private function coreBlocker(string $schoolId, string $studentId, ?CarbonInterface $authorityCutoff, array $cleared): ?string
+    private function coreBlocker(string $schoolId, string $studentId, ?CarbonInterface $authorityCutoff, array $cleared, array $participants): ?string
     {
-        $blocker = $this->references->first('students', $schoolId, [$studentId], [...self::CORE_HANDLED, ...$cleared]);
+        $unit = [...self::CORE_HANDLED, ...array_merge([], ...array_map(fn (StudentCoreParticipant $p): array => $p->tables(), $participants))];
+        $clearedTables = array_keys($cleared);
+
+        $blocker = $this->references->first('students', $schoolId, [$studentId], [...$unit, ...$clearedTables]);
         if ($blocker !== null) {
             return $blocker;
+        }
+
+        foreach ($cleared as $table => $leavesOpen) {
+            if ($leavesOpen !== null && $leavesOpen($studentId)) {
+                return $table;
+            }
         }
 
         $liveLink = DB::table('student_guardian_account_links')->where('school_id', $schoolId)->where('student_id', $studentId)
@@ -138,8 +178,22 @@ final class StudentRecordRetentionService
             return 'student_guardian_account_links';
         }
 
-        return $this->references->first('student_enrollments', $schoolId, DB::table('student_enrollments')->where('student_id', $studentId)->pluck('id')->all(), ['student_subject_enrollments', ...$cleared])
+        $enrollmentIds = DB::table('student_enrollments')->where('student_id', $studentId)->pluck('id')->all();
+        $blocker = $this->references->first('student_processing_authorizations', $schoolId, DB::table('student_processing_authorizations')->where('school_id', $schoolId)->where('student_id', $studentId)->pluck('id')->all(), $unit)
+            ?? $this->references->first('student_enrollments', $schoolId, $enrollmentIds, [...$unit, ...$clearedTables])
             ?? $this->references->first('student_subject_enrollments', $schoolId, DB::table('student_subject_enrollments')->where('student_id', $studentId)->pluck('id')->all())
             ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('student', $studentId));
+        if ($blocker !== null) {
+            return $blocker;
+        }
+
+        foreach ($participants as $participant) {
+            $blocker = $participant->blocker($schoolId, $studentId, $enrollmentIds, $clearedTables, $unit);
+            if ($blocker !== null) {
+                return $blocker;
+            }
+        }
+
+        return null;
     }
 }

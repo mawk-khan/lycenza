@@ -1,7 +1,7 @@
 <?php
 
-use App\Domain\Students\Application\Retention\StudentRecordRetentionService;
 use App\Models\School;
+use App\Support\Retention\StudentRetention;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +15,8 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-retention-op.php re-enroll  <schoolId> <studentId> <sectionId>
 //   php student-retention-op.php reactivate <schoolId> <studentId>
 //   php student-retention-op.php core-prune <schoolId> <cutoffDate>
+//   php student-retention-op.php operational-prune <schoolId> <cutoffDate>   (E21.3B: deleted Library-loan units)
+//   php student-retention-op.php record-authorization <schoolId> <studentId> <userId>   (E21.3B)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -45,7 +47,17 @@ try {
 
                 return 'reactivated';
             }),
-            'core-prune' => 'deleted:'.$app->make(StudentRecordRetentionService::class)->pruneCore($school, $args[1], null, 100, false)['deleted'],
+            'core-prune' => 'deleted:'.$app->make(StudentRetention::class)->core($school, $args[1], null, 100, false)['deleted'],
+            'operational-prune' => 'deleted:'.$app->make(StudentRetention::class)->operational($school, $args[1], 100, false)['student_library_loan']['deleted'],
+            'record-authorization' => $context->withSchool($school, function () use ($school, $args): string {
+                DB::table('student_processing_authorizations')->insert([
+                    'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'student_id' => $args[1], 'purpose' => 'academic_records',
+                    'basis_type' => 'statutory_school_purpose', 'status' => 'recorded', 'recorded_at' => now(), 'recorded_by_user_id' => $args[2],
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+
+                return 'recorded';
+            }),
             default => throw new InvalidArgumentException("unknown operation {$operation}"),
         };
     });

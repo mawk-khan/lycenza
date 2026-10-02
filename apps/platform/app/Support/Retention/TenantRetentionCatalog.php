@@ -24,6 +24,13 @@ namespace App\Support\Retention;
  * - `policy_unresolved`: no adopted period;
  * - `tenant_lifetime`: School configuration that lives as long as the
  *   School itself. It goes only with a future authorized tenant purge.
+ *
+ * E21.3B: a few tables hold rows of two kinds, one implemented and one
+ * still waiting for a follow-up checkpoint (a Student subject's consent
+ * vs a Guardian subject's; a converted application vs a rejected one).
+ * Each table stays in ONE category; PENDING_ROWS names, as a fixed literal
+ * predicate, the rows whose mechanism is still pending, so readiness keeps
+ * reporting them `mechanism_pending` and never clears an E21.3C-E blocker.
  */
 final class TenantRetentionCatalog
 {
@@ -69,7 +76,7 @@ final class TenantRetentionCatalog
             'communication_threads', 'communication_thread_participants', 'communication_deliveries', 'communication_delivery_attempts',
             'communication_delivery_policy_decisions',
         ]],
-        'communication_consent' => [self::MECHANISM_PENDING, 'E21.2G: consent evidence and domain preferences follow their subject (Student core record; Guardian personal data); mechanism E21.3B/E21.3C', [
+        'communication_consent' => [self::ADOPTED, 'E21.2G C4/C5: consent evidence and domain preferences follow their subject: a Student subject\'s go with the Student core record (25 y, E21.3B, implemented); a Guardian subject\'s with Guardian personal data (mechanism E21.3C, pending rows)', [
             'communication_domain_consent_events', 'communication_domain_preferences',
         ]],
         'communication_configuration' => [self::TENANT_LIFETIME, 'School configuration', [
@@ -85,14 +92,14 @@ final class TenantRetentionCatalog
         'identity' => [self::TENANT_LIFETIME, 'E21.2G: memberships are authority provenance (suspended, never deleted, rule 92); ended staff invitations are a technical TTL (7 d, implemented)', [
             'school_memberships', 'staff_account_invitations', 'staff_account_invitation_roles',
         ]],
-        'identity_subject_links' => [self::MECHANISM_PENDING, 'E21.2G: ended portal invitations 7 d after they ended (E21.3B); Student account links go with the Student core record; Guardian links with Guardian personal data (E21.3C)', [
+        'identity_subject_links' => [self::ADOPTED, 'E21.2G I2/I4: ended portal invitations 7 d after they ended (platform:portal-invitations-prune, E21.3B, implemented); Student account links go with the Student core record (implemented); Guardian links with Guardian personal data (mechanism E21.3C, pending rows)', [
             'identity_account_invitations', 'student_guardian_account_links',
         ]],
         'student_core' => [self::ADOPTED, 'D7: 25 y after final exit', ['students', 'student_enrollments', 'student_subject_enrollments']],
         'student_operational' => [self::ADOPTED, 'D7: 7 y after final exit', ['attendance_records', 'enrollment_rollover_items', 'student_guardian_relationships']],
         'student_rollover_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['enrollment_rollover_plans', 'enrollment_rollover_mappings', 'enrollment_rollover_subject_mappings']],
-        'processing_authorizations' => [self::MECHANISM_PENDING, 'E21.2G: legal-basis evidence for the academic record, kept with the Student core record (25 y); mechanism E21.3B', ['student_processing_authorizations']],
-        'admissions' => [self::MECHANISM_PENDING, 'E21.2G: converted applications with the Student core record (E21.3B); rejected/withdrawn 1 y after the decision, needs a decision timestamp (E21.3C); live applications are working state', ['applicants', 'admission_applications']],
+        'processing_authorizations' => [self::ADOPTED, 'E21.2G P1: legal-basis evidence for the academic record, kept with the Student core record (25 y) and removed in its unit through a core-floored function (E21.3B, implemented)', ['student_processing_authorizations']],
+        'admissions' => [self::ADOPTED, 'E21.2G AD1/AD2: converted applications (and applicants with nothing else) with the Student core record (E21.3B, implemented); rejected/withdrawn 1 y after the decision, needs a decision timestamp (mechanism E21.3C, pending rows); live applications are working state', ['applicants', 'admission_applications']],
         'guardians' => [self::MECHANISM_PENDING, 'E21.2G: Guardian personal data 1 y after the Guardian has no relationship and no retained dependent; needs a durable no-relationship marker (E21.3C)', ['guardians', 'guardian_contacts']],
         'documents' => [self::ADOPTED, 'D5: inherits its owner (Student, Employee); others kept with their parent', ['documents']],
         'academic_operations' => [self::MECHANISM_PENDING, 'E21.2G: year-bound academic operations, 7 y after the end of their Academic Year (LMS with the D6 owner/audience minimum; a register header only once it holds no record); mechanism E21.3D', [
@@ -116,7 +123,7 @@ final class TenantRetentionCatalog
             'employee_experience_records', 'employee_certifications',
         ]],
         'hr_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['employee_categories', 'hr_departments', 'positions', 'hr_employee_number_counters']],
-        'student_operational_modules' => [self::MECHANISM_PENDING, 'E21.2G: D7 operational history, 7 y after the Student\'s final exit (an open loan or assignment keeps the Student); mechanism E21.3B', [
+        'student_operational_modules' => [self::ADOPTED, 'E21.2G O1: D7 operational history, 7 y after the Student\'s final exit; returned loans and ended assignments expire through platform:student-retention-prune (E21.3B, implemented); an open loan or assignment keeps the Student', [
             'hostel_residency_assignments', 'library_loans', 'transport_student_assignments',
         ]],
         'operational_logs' => [self::MECHANISM_PENDING, 'E21.2G: driver assignments 7 y after they end; visits 1 y after check-out (a visitor once no visit remains); automation records 1 y after completion; mechanism E21.3E', [
@@ -131,6 +138,20 @@ final class TenantRetentionCatalog
         'school_configuration' => [self::TENANT_LIFETIME, 'School configuration and platform governance', [
             'school_settings', 'school_domains', 'feature_flag_school_overrides', 'school_group_members', 'platform_idempotency_demo_counters',
         ]],
+    ];
+
+    /**
+     * E21.3B: table => the literal predicate selecting its rows whose
+     * mechanism is still pending (a closed list; never caller-supplied).
+     */
+    public const PENDING_ROWS = [
+        // E21.3C (G1): a Guardian subject's consent and preference, and Guardian account links.
+        'communication_domain_consent_events' => 'guardian_id IS NOT NULL',
+        'communication_domain_preferences' => 'guardian_id IS NOT NULL',
+        'student_guardian_account_links' => 'guardian_id IS NOT NULL',
+        // E21.3C (AD2): everything not converted (rejected/withdrawn need a decision timestamp; live ones are working state).
+        'admission_applications' => "status <> 'converted'",
+        'applicants' => "NOT EXISTS (SELECT 1 FROM admission_applications a WHERE a.applicant_id = applicants.id AND a.status = 'converted')",
     ];
 
     /** @return array<string, string> table => category */

@@ -2272,6 +2272,29 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21.3B — Student-Linked Evidence & Operational Modules (2026-10-02):
+  published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
+  §5.6:
+  - D7 operational (7 y after final exit): returned Library loans, ended
+    Transport assignments, ended Hostel residencies; an open one keeps the
+    Student;
+  - with the Student core record (25 y), in its unit: processing
+    authorizations and the Student subject's consent events (two narrow,
+    core-floored database functions), converted admission applications
+    with applicants that have nothing else, Student-subject domain
+    preferences, Guardian relationships an authorization names;
+  - `platform:portal-invitations-prune`: ended portal invitations 7 days
+    after their canonical end;
+  - one composition (`StudentRetention`) for the scheduled run and erasure;
+    readiness keeps the E21.3C rows `mechanism_pending`.
+
+  **E21 — OPEN.** Remaining engineering: **E21.3C** (Admissions & Guardian
+  lifecycle markers), **E21.3D** (year-bound academic operations),
+  **E21.3E** (communications & platform residuals) and **E21.3F — Payroll
+  Evidence Retention & Employee Release** (provisional; the recorded
+  payroll D8 × D9 intersection). Final ratification is deferred to the
+  pre-production closeout. Tenant destruction NOT AUTHORIZED. E33 / TCH-L1
+  open independently.
 - **E21.3A2 — Finance Retention Cutover & Historical Expiry (2026-10-02):
   published / closed.** ADR 0064 §14–§24 and
   `docs/operations/FINANCE-RETENTION.md`:

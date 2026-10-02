@@ -35,6 +35,16 @@ final class RetentionMetrics
 
     public const STUDENT_CORE = 'student_core';
 
+    /** E21.3B (E21.2G O1) Student operational module categories; their units are Students. */
+    public const STUDENT_LIBRARY_LOAN = 'student_library_loan';
+
+    public const STUDENT_TRANSPORT_ASSIGNMENT = 'student_transport_assignment';
+
+    public const STUDENT_HOSTEL_RESIDENCY = 'student_hostel_residency';
+
+    /** E21.3B (E21.2G I2): ended portal invitations, 7 days after they ended. */
+    public const PORTAL_INVITATION = 'portal_invitation';
+
     /** E21.2E (E21-D9) Employee categories; their units are Employees. */
     public const EMPLOYEE_ANCILLARY = 'employee_ancillary';
 
@@ -64,6 +74,11 @@ final class RetentionMetrics
         self::STUDENT_ROLLOVER_ITEM => 'student',
         self::STUDENT_GUARDIAN_RELATIONSHIP => 'student',
         self::STUDENT_CORE => 'student',
+        self::STUDENT_LIBRARY_LOAN => 'student',
+        self::STUDENT_TRANSPORT_ASSIGNMENT => 'student',
+        self::STUDENT_HOSTEL_RESIDENCY => 'student',
+        // E21.3B: an invitation is an offer of account authority; it joins the authority family.
+        self::PORTAL_INVITATION => 'authority',
         self::EMPLOYEE_ANCILLARY => 'employee',
         self::PAYROLL_EMPLOYEE_RECORD => 'employee',
         self::EMPLOYEE_EVIDENCE => 'employee',

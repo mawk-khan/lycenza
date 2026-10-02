@@ -135,6 +135,59 @@ class TenantClosureReadinessTest extends TestCase
     }
 
     #[Test]
+    public function e21_3b_categories_report_retained_while_their_e21_3c_rows_stay_mechanism_pending(): void
+    {
+        // E21.3B implemented the Student-linked mechanisms; the Guardian-subject
+        // and rejected/withdrawn rows of the same tables still wait for E21.3C.
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $grade = $this->createGradeLevel($school);
+        $year = $this->createAcademicYear($school);
+        $student = $this->createStudent($school, ['status' => 'inactive']);
+        $this->createStudentEnrollment($student, $this->createSection($year, $campus, $grade), ['status' => 'withdrawn', 'starts_on' => $year->starts_on, 'ends_on' => $year->starts_on]);
+        $enrollmentId = app(TenantContext::class)->withSchool($school, fn () => DB::table('student_enrollments')->where('student_id', $student->id)->value('id'));
+        $applicant = $this->createApplicant($school);
+        $this->createAdmissionApplication($applicant, $year, $campus, $grade, ['status' => 'converted', 'converted_student_id' => $student->id, 'converted_student_enrollment_id' => $enrollmentId, 'converted_at' => now()]);
+        $this->createLibraryLoan($this->createLibraryCopy($this->createLibraryTitle($school)), $student, ['status' => 'returned', 'checked_in_at' => now()]);
+        $consent = fn (string $column, string $id) => app(TenantContext::class)->withSchool($school, fn () => DB::table('communication_domain_consent_events')->insert([
+            'id' => (string) Str::uuid7(), 'school_id' => $school->id, $column => $id, 'channel' => 'email', 'status' => 'granted',
+            'recorded_at' => now(), 'recorded_by_user_id' => $this->createUser()->id, 'created_at' => now(), 'updated_at' => now(),
+        ]));
+        $consent('student_id', $student->id);
+
+        $categories = $this->byCategory($this->report($school));
+        foreach (['admissions', 'communication_consent', 'student_operational_modules'] as $category) {
+            $this->assertSame('retained', $categories[$category]['outcome'], $category);
+        }
+
+        $consent('guardian_id', $this->createGuardian($school)->id);
+        $this->createAdmissionApplication($this->createApplicant($school), $year, $campus, $grade, ['status' => 'rejected']);
+
+        $report = $this->report($school);
+        $categories = $this->byCategory($report);
+        $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, $categories['communication_consent']['outcome'], 'a Guardian subject\'s consent waits for E21.3C');
+        $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, $categories['admissions']['outcome'], 'a rejected application waits for E21.3C');
+        $this->assertContains('retention_mechanism_pending', $report['gates']);
+        $this->assertFalse($report['purge_ready']);
+    }
+
+    #[Test]
+    public function every_pending_row_predicate_belongs_to_a_classified_table_and_names_its_checkpoint(): void
+    {
+        $tables = TenantRetentionCatalog::tables();
+        foreach (array_keys(TenantRetentionCatalog::PENDING_ROWS) as $table) {
+            $this->assertArrayHasKey($table, $tables, "{$table} is not a classified tenant table");
+            [, $decision] = TenantRetentionCatalog::CATEGORIES[$tables[$table]];
+            $this->assertMatchesRegularExpression('/E21\.3[C-E]/', $decision, "{$table}: its category must name the checkpoint its pending rows wait for");
+        }
+        // E21.3B adopted no other residual: Guardians, academic operations and platform residuals stay pending.
+        foreach (['guardians', 'academic_operations', 'operational_logs', 'api_credentials'] as $category) {
+            $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
+        }
+        $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, TenantRetentionCatalog::CATEGORIES['payroll_ledger'][0], 'the D8 x D9 payroll residual stays visible');
+    }
+
+    #[Test]
     public function every_category_has_a_decision_and_every_pending_mechanism_names_its_checkpoint(): void
     {
         // E21.2G: no category is left without a project decision. A decided
@@ -142,7 +195,7 @@ class TenantClosureReadinessTest extends TestCase
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
             $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
             if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
-                $this->assertMatchesRegularExpression('/E21\.3[B-E]/', $decision, "{$category} must name its follow-up checkpoint");
+                $this->assertMatchesRegularExpression('/E21\.3[C-E]/', $decision, "{$category} must name its follow-up checkpoint");
             }
             if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {
                 $this->assertSame('payroll_ledger', $category, 'E21.3A2: the only technical blocker left is the D8 x D9 payroll ledger');

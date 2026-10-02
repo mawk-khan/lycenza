@@ -231,17 +231,8 @@ class StudentRetentionPruneTest extends TestCase
         $freeDocument = $this->documentOf($free);
         $this->accountLink($free, 'revoked', '2026-10-01 00:00:00');
 
-        // A guardian-consent processing authorization: it cannot be deleted, so it keeps its relationship and Student.
-        $authorized = $this->leaver($w, '2026-09-30');
-        $this->guardianOf($authorized);
-        $relationshipId = $this->inSchool($w['school'], fn () => DB::table('student_guardian_relationships')->where('student_id', $authorized->id)->value('id'));
-        $this->inSchool($w['school'], fn () => DB::table('student_processing_authorizations')->insert([
-            'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'student_id' => $authorized->id, 'purpose' => 'academic_records',
-            'basis_type' => 'guardian_consent', 'status' => 'recorded', 'student_guardian_relationship_id' => $relationshipId,
-            'recorded_at' => '2026-06-01 00:00:00', 'recorded_by_user_id' => $this->createUser()->id, 'created_at' => now(), 'updated_at' => now(),
-        ]));
-
-        // A Library loan (ON DELETE CASCADE from students): never cascaded away.
+        // An unreturned Library loan (ON DELETE CASCADE from students): an open
+        // relationship keeps its Student and is never cascaded away (E21.3B).
         $borrower = $this->leaver($w, '2026-09-30');
         $this->inSchool($w['school'], function () use ($w, $borrower): void {
             $title = (string) Str::uuid7();
@@ -249,8 +240,16 @@ class StudentRetentionPruneTest extends TestCase
             DB::table('library_titles')->insert(['id' => $title, 'school_id' => $w['school']->id, 'title' => 'Atlas', 'status' => 'active']);
             DB::table('library_copies')->insert(['id' => $copy, 'school_id' => $w['school']->id, 'library_title_id' => $title, 'code' => 'C1', 'status' => 'active']);
             DB::table('library_loans')->insert(['id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'library_copy_id' => $copy, 'student_id' => $borrower->id,
-                'status' => 'returned', 'checked_out_at' => '2026-07-01 09:00:00', 'due_at' => '2026-07-15 09:00:00', 'checked_in_at' => '2026-07-10 09:00:00']);
+                'status' => 'active', 'checked_out_at' => '2026-07-01 09:00:00', 'due_at' => '2026-07-15 09:00:00', 'checked_in_at' => null]);
         });
+
+        // A usable Student-subject portal invitation keeps its Student too.
+        $invited = $this->leaver($w, '2026-09-30');
+        $this->inSchool($w['school'], fn () => DB::table('identity_account_invitations')->insert([
+            'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'student_id' => $invited->id, 'token_hash' => hash('sha256', Str::random(40)),
+            'destination_email_hash' => hash('sha256', Str::random(12)), 'status' => 'pending', 'expires_at' => '2099-01-01 00:00:00',
+            'invited_by_user_id' => $this->createUser()->id, 'created_at' => now(), 'updated_at' => now(),
+        ]));
 
         $this->at('2051-09-30');
         $this->prune()->expectsOutputToContain('core record of 0 Student(s)')->assertSuccessful();
@@ -265,10 +264,10 @@ class StudentRetentionPruneTest extends TestCase
         Storage::disk($this->disk)->assertMissing($freeDocument);
         $this->assertTrue($this->has($w['school'], 'guardians', 'id', $freeGuardian), 'Guardian personal data has no adopted period: kept');
 
-        $this->assertTrue($this->has($w['school'], 'students', 'id', $authorized->id));
-        $this->assertTrue($this->has($w['school'], 'student_guardian_relationships', 'id', $relationshipId));
         $this->assertTrue($this->has($w['school'], 'students', 'id', $borrower->id));
         $this->assertTrue($this->has($w['school'], 'library_loans', 'student_id', $borrower->id));
+        $this->assertTrue($this->has($w['school'], 'students', 'id', $invited->id));
+        $this->assertTrue($this->has($w['school'], 'identity_account_invitations', 'student_id', $invited->id));
     }
 
     #[Test]

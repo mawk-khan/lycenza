@@ -51,6 +51,21 @@ final class RetentionExpiry
     /** E21.2F (E21-D10): a closed erasure case, 7 years after it closed. */
     public const ERASURE_CASE = 'erasure_case';
 
+    /** E21.3B (E21.2G P1): a Student's processing authorizations, with its core record. */
+    public const STUDENT_PROCESSING_AUTHORIZATION = 'student_processing_authorization';
+
+    /** E21.3B (E21.2G C4): a Student's consent events, with its core record. */
+    public const STUDENT_CONSENT_EVENT = 'student_consent_event';
+
+    /**
+     * E21.3B: Student-core evidence => its fixed database function. Each
+     * removes ONE Student's rows inside the core purge transaction.
+     */
+    private const STUDENT_CORE_FUNCTIONS = [
+        self::STUDENT_PROCESSING_AUTHORIZATION => 'retention_expire_student_processing_authorizations',
+        self::STUDENT_CONSENT_EVENT => 'retention_expire_student_consent_events',
+    ];
+
     /** School-scoped categories => their fixed database function. */
     private const SCHOOL_FUNCTIONS = [
         self::SCHOOL_AUDIT => 'retention_expire_school_audit_events',
@@ -145,6 +160,29 @@ final class RetentionExpiry
             'SELECT retention_expire_finance_unit(?, ?::uuid[], ?::uuid[], ?, ?) AS n',
             [$school->id, $array($chargeIds), $array($entryIds), (string) new UuidV7, $dryRun ? 'true' : 'false'],
         )->n;
+    }
+
+    /**
+     * E21.3B (E21-D7 core): removes one Student's rows of an append-only
+     * Student-core evidence table through its fixed function, which
+     * re-proves the core floor in the database (the School is the tenant
+     * context; the Student row locked; inactive; every placement ended
+     * before a cutoff at least 25 calendar years back). With `$dryRun` it
+     * validates and counts only. Runs inside the caller's School
+     * TenantContext and one-Student purge transaction; the Student core
+     * purge owns holds, metrics and eligibility.
+     *
+     * @param  string  $cutoffDate  the School-local core cutoff (Y-m-d)
+     * @return int rows (that would be) removed
+     */
+    public function studentCoreEvidence(string $category, School $school, string $studentId, string $cutoffDate, bool $dryRun): int
+    {
+        $function = self::STUDENT_CORE_FUNCTIONS[$category] ?? throw new InvalidArgumentException("Not a Student-core evidence category: {$category}");
+        if (! Str::isUuid($studentId)) {
+            throw new InvalidArgumentException('Not a uuid.');
+        }
+
+        return $this->call($function, [$school->id, $studentId, $cutoffDate, $dryRun]);
     }
 
     /**

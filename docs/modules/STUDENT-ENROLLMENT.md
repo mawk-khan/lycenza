@@ -2678,3 +2678,12 @@ The exit date is that `ends_on`. Every other state is unresolved and kept.
   grade/subject mappings are School configuration and stay.
 - No request path deletes any of these. The purge never cascades another
   module's rows: any referencing row keeps the Student.
+- **E21.3B (2026-10-02):** the same final exit also governs returned
+  Library loans and ended Transport/Hostel assignments (7 years; an open
+  one keeps the Student), and the core evidence that goes with the record
+  (processing authorizations, converted admission applications, the Student
+  subject's consent events and domain preferences). A converted
+  application's `converted_student_enrollment_id` therefore no longer keeps
+  the placement once the Student is eligible; one converted into ANOTHER
+  Student still does. Every composition is
+  `App\Support\Retention\StudentRetention`.

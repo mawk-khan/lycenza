@@ -372,3 +372,11 @@ authorized step — not executed here.
 
 **PHASE 5D.3 REMOTE PUBLICATION GATE** (not executed — requires separate,
 explicit authorization per root CLAUDE.md rule 16).
+
+## Later amendment — E21.3B retention (2026-10-02)
+
+Ended `identity_account_invitations` (accepted, revoked, or expired while
+pending) are deleted `PORTAL_INVITATION_RETENTION_DAYS` (adopted 7) after
+that canonical end by `platform:portal-invitations-prune`; a usable
+invitation is never touched, and the secret is unusable from the moment it
+ended. See `docs/security/E21-RETENTION-DETERMINATION.md` §5.6.

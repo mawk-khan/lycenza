@@ -610,3 +610,22 @@ established for Phase 1C's subject enrollment guards.
 See `docs/admissions/PHASE-1D-0-ADMISSIONS-ARCHITECTURE.md` §"Implementation
 slices" for the proposed 1D.1-1D.6 breakdown and the exact recommended
 next checkpoint.
+
+## Retention (E21.3B, 2026-10-02)
+
+- A **converted** application (and its applicant) is supporting history of
+  the Student it became (E21.2G AD1). It is kept with that Student's core
+  record and deleted in the same unit, 25 calendar years after the
+  Student's final exit, by `platform:student-retention-prune` through
+  `App\Domain\Admissions\Application\Retention\ConvertedApplicationRetentionService`.
+  It is never aged from its creation or conversion date. The linkage is
+  `converted_student_id` (set with the conversion,
+  `admission_applications_conversion_provenance_check`).
+- The **applicant** goes too only once no application of it remains.
+- **Rejected and withdrawn** applications are kept: their 1-year period
+  needs a durable decision timestamp (E21.3C), and `updated_at` is never
+  used. Draft, submitted and accepted applications are live working state.
+
+Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
+§5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
+counts with the same rule.

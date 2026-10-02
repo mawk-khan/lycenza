@@ -53,6 +53,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'PruneCommunications.php',               // retention maintenance (E21-D3)
         'PruneStorageOrphans.php',               // retention maintenance (E21-D5)
         'PruneStudentRecords.php',               // retention maintenance (E21-D7)
+        'PrunePortalInvitations.php',            // retention maintenance (E21.2G I2)
         'PruneEmployeeRecords.php',              // retention maintenance (E21-D9)
         'PruneFinanceRecords.php',               // retention maintenance (E21-D8)
         'OpenErasureCase.php',                   // looks up ONE School by id for an erasure case (E21-D10); not a walk

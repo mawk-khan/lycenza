@@ -29,7 +29,9 @@ use Illuminate\Support\Facades\DB;
  *   - `d8_finance_periods_unclosed`: an ended year still open;
  *   - `d8_finance_verification_failed`: the dual-read check differs;
  *   - `d8_finance_retention_not_enabled`: the expiry is switched off;
- * - its period is adopted but its mechanism is still pending (E21.3B-E);
+ * - its period is adopted but its mechanism is still pending (E21.3C-E),
+ *   for the whole category or (E21.3B) only for the rows
+ *   TenantRetentionCatalog::PENDING_ROWS names;
  * - its policy is unresolved;
  * - it is tenant-lifetime configuration.
  *
@@ -75,9 +77,13 @@ final class TenantClosureReadiness
             $rows = [];
             foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision, $tables]) {
                 $present = 0;
+                $pending = false;
                 foreach ($tables as $table) {
-                    if (in_array($table, $live, true) && DB::selectOne('SELECT EXISTS (SELECT 1 FROM "'.str_replace('"', '""', $table).'" WHERE school_id = ?) AS hit', [$school->id])->hit) {
+                    $quoted = '"'.str_replace('"', '""', $table).'"';
+                    if (in_array($table, $live, true) && DB::selectOne("SELECT EXISTS (SELECT 1 FROM {$quoted} WHERE school_id = ?) AS hit", [$school->id])->hit) {
                         $present++;
+                        $predicate = TenantRetentionCatalog::PENDING_ROWS[$table] ?? null;
+                        $pending = $pending || ($predicate !== null && DB::selectOne("SELECT EXISTS (SELECT 1 FROM {$quoted} WHERE school_id = ? AND ({$predicate})) AS hit", [$school->id])->hit);
                     }
                 }
 
@@ -86,11 +92,12 @@ final class TenantClosureReadiness
                     'status' => $status,
                     'decision' => $decision,
                     'tables_with_rows' => $present,
-                    'outcome' => $present === 0 ? 'empty' : match ($status) {
-                        TenantRetentionCatalog::ADOPTED => 'retained',
+                    'outcome' => $present === 0 ? 'empty' : match (true) {
+                        $status === TenantRetentionCatalog::ADOPTED && $pending => TenantRetentionCatalog::MECHANISM_PENDING,
+                        $status === TenantRetentionCatalog::ADOPTED => 'retained',
                         default => $status,
                     },
-                    'not_before' => $present > 0 && $status === TenantRetentionCatalog::ADOPTED ? $this->notBefore($school, $category) : null,
+                    'not_before' => $present > 0 && $status === TenantRetentionCatalog::ADOPTED && ! $pending ? $this->notBefore($school, $category) : null,
                 ];
             }
 
@@ -152,7 +159,8 @@ final class TenantClosureReadiness
 
         return match ($category) {
             'audit' => $after(DB::table('school_audit_events')->where('school_id', $school->id)->max('occurred_at'), $years('audit_years')),
-            'student_core' => ($s = $this->students->latestExit($school))['pending'] === 0 ? $after($s['latest'], $years('student_core_years')) : null,
+            'student_core', 'processing_authorizations' => ($s = $this->students->latestExit($school))['pending'] === 0 ? $after($s['latest'], $years('student_core_years')) : null,
+            'student_operational', 'student_operational_modules' => ($s = $this->students->latestExit($school))['pending'] === 0 ? $after($s['latest'], $years('student_operational_years')) : null,
             'hr_evidence' => ($e = $this->employees->latestSeparation($school))['pending'] === 0 ? $after($e['latest'], $years('employee_evidence_years')) : null,
             default => null,
         };

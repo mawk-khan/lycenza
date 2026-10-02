@@ -50,9 +50,12 @@ return [
 
     // E21.2D (E21-D7, project-adopted, pending ratification): calendar years
     // after a Student's final exit (StudentRetentionEligibility). Operational
-    // history (attendance, rollover items, Guardian relationships), adopted 7;
+    // history (attendance, rollover items, Guardian relationships; E21.3B:
+    // returned Library loans, ended Transport/Hostel assignments), adopted 7;
     // the core academic record (identity, placements, subject enrollments,
-    // Student Documents), adopted 25. No default: unset deletes nothing.
+    // Student Documents; E21.3B: with processing authorizations, converted
+    // admissions, consent events and domain preferences), adopted 25. No
+    // default: unset deletes nothing.
     'student_operational_years' => env('STUDENT_OPERATIONAL_RETENTION_YEARS'),
     'student_core_years' => env('STUDENT_CORE_RETENTION_YEARS'),
 
@@ -72,6 +75,13 @@ return [
     // historical closes and a passing platform:finance-balances-verify.
     'finance_years' => env('FINANCE_RETENTION_YEARS'),
     'finance_enabled' => filter_var(env('FINANCE_RETENTION_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+    // E21.3B (E21.2G I2, project-adopted, pending ratification): days after an
+    // ended portal invitation (identity_account_invitations) ended -- accepted,
+    // revoked, or expired unaccepted -- adopted 7. No default: unset deletes
+    // nothing. The invitation secret is unusable from the moment it ended;
+    // this is only how long its metadata stays.
+    'portal_invitation_days' => env('PORTAL_INVITATION_RETENTION_DAYS'),
 
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 

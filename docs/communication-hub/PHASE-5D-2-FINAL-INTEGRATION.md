@@ -355,3 +355,13 @@ identically to the feature branch's own report, plus independent
 re-verification of every architectural claim against the merged
 source and a live database. See the top-level session report for the
 Go/No-Go verdict and next recommendation.
+
+## Later amendment — E21.3B retention (2026-10-02)
+
+A **Student** subject's consent events and domain preferences are kept with
+the Student core record (25 years after final exit) and removed in its unit;
+consent events stay append-only for every runtime path and leave only
+through `retention_expire_student_consent_events` (core-floored). A
+**Guardian** subject's rows stay until the Guardian personal-data mechanism
+(E21.3C). Membership email preferences (`communication_preferences`) follow
+the membership. See `docs/security/E21-RETENTION-DETERMINATION.md` §5.6.

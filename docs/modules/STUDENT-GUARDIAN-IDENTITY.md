@@ -1402,6 +1402,19 @@ record:
   E21.3C, so they are kept until then.
 - **Processing authorizations** stay undeletable.
 
+**E21.3B amendment (2026-10-02):** processing authorizations, converted
+admission applications, the Student subject's consent events and domain
+preferences now go **with the core record** (25 years after final exit), in
+its one-Student transaction and never earlier. Processing authorizations
+and consent events stay append-only for every runtime path: only two narrow,
+core-floored database functions remove them, inside the core purge. A
+relationship an authorization names is that authorization's evidence and
+goes with the core record; the operational phase removes only relationships
+nothing references. The Guardian, its contacts, Documents, account links and
+its own consent and preferences stay (E21.3C). Ended portal invitations go
+7 days after they ended (`platform:portal-invitations-prune`). See
+`docs/security/E21-RETENTION-DETERMINATION.md` §5.6.
+
 ## Erasure cases (E21.2F, 2026-10-01)
 
 A data-subject erasure request about a Student or Guardian is a reviewed

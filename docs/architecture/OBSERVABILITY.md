@@ -543,3 +543,27 @@ real environment:
 - **Scheduler.** The daily task `finance-retention-prune` (05:10) is covered
   by OBS-06 with the daily-cadence window (alert rules regenerated). It
   records its heartbeat even while switched off.
+
+## E21.3B Student-linked retention (2026-10-02)
+
+- **Scheduler.** New daily task `portal-invitations-prune` (04:20), covered
+  by the OBS-06 daily staleness alert (regenerated
+  `docs/operations/alerts/lycenza-alerts.rules.yml`). `scheduled_task` now
+  has 25 values (its own ceiling is 30). `student-retention-prune` (04:30)
+  is unchanged as a task; it runs more categories.
+- **Metric labels.** No new family: still nine `operation` values.
+  - `student`: also returned Library loans, ended Transport assignments and
+    ended Hostel residencies (units are Students); the core-record evidence
+    (processing authorizations, converted admissions, consent, preferences)
+    counts within the existing `student_core` unit;
+  - `authority`: ended portal invitations (rows).
+
+  Outcomes stay the closed set (`eligible`, `deleted`, `held`,
+  `unresolved`, `dependency_blocked`, `error`).
+- **Logs** (counts only; never a Student, applicant, Guardian, address,
+  token hash or application detail):
+  - `retention.student_prune.completed`/`.dry_run` now list the categories
+    `student_library_loan`, `student_transport_assignment`,
+    `student_hostel_residency`;
+  - `retention.portal_invitations_prune.completed`/`.dry_run`/
+    `.unconfigured`.

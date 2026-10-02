@@ -527,3 +527,20 @@ No P0/P1/P2/P3 findings remain open.
   assertions (`tests/Feature/App/TransportAdminUiTest.php`).
 
 Total: 116 tests, 319 assertions, all passing, zero skipped.
+
+## Retention (E21.3B, 2026-10-02)
+
+A Student's **ended** Transport assignments are D7 operational Student
+history: they are deleted 7 calendar years after the Student's final exit,
+by `platform:student-retention-prune` through
+`App\Domain\Transport\Application\Retention\TransportAssignmentRetentionService`,
+one Student per transaction under the Student-row lock.
+- An **active** assignment is never deleted on age, and it keeps the
+  Student's core record.
+- Routes, stops and vehicles are School configuration and stay. Driver
+  (route) assignments are E21.3E (7 y after `ends_on`). No Finance row
+  references a Student assignment.
+
+Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
+§5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
+counts with the same rule.
