@@ -91,6 +91,14 @@ return [
     'admissions_terminal_years' => env('ADMISSIONS_TERMINAL_RETENTION_YEARS'),
     'guardian_years' => env('GUARDIAN_RETENTION_YEARS'),
 
+    // E21.3D (E21.2G A1, project-adopted, pending ratification): calendar
+    // years after the end of the authoritative Academic Year of a curriculum
+    // delivery, an empty attendance register header, a timetable entry, or an
+    // LMS Learning Content/Assignment, adopted 7 (the LMS database floor is 7;
+    // teacher-owned LMS also needs authority_history_years). No default:
+    // unset deletes nothing.
+    'academic_operations_years' => env('ACADEMIC_OPERATIONS_RETENTION_YEARS'),
+
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 
 ];

@@ -493,3 +493,14 @@ should be inferred from anything above:
 - Bell-schedule variants (e.g. a different Period set on different
   days of the week) — one Period catalogue applies uniformly across
   all seven days.
+
+## Retention (E21.3D, 2026-10-02)
+
+A timetable entry is deleted 7 calendar years after the end of its Academic
+Year (`timetable_entries.academic_year_id`) by
+`platform:academic-retention-prune`, but only once no attendance register
+header references it. Its teacher reference goes with it, never earlier.
+Periods, rooms and other reusable configuration are not year-bound and stay.
+A current or future year is never eligible.
+
+Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.8).

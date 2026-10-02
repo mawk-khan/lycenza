@@ -614,3 +614,20 @@ them.
 - Any future parent purge must still satisfy the D6 minimum
   (`EmbeddedAuthorityRetention::mayRemoveWithParent()`).
 - Submission stays cancelled; no retention exists for it.
+
+## Retention (E21.3D, 2026-10-02)
+
+Learning Content and Assignments (draft, published or archived) are deleted
+7 calendar years after the end of their Offering's Academic Year, with their
+Section audiences and Documents, by `platform:academic-retention-prune`
+(`App\Support\Retention\LmsResourceRetention`). A resource has exactly one
+year: its audiences are pinned to its Offering and a Section of the same
+year. A teacher-owned resource also waits for the E21-D6 minimum
+(`AUTHORITY_HISTORY_RETENTION_YEARS` after the owner's authority over its
+audience last applied; an open TeachingAssignment keeps it). The owner and
+audience never leave on their own: the audience is removed only by the
+floored functions `retention_expire_learning_content` /
+`retention_expire_assignment`. No TCH authorization changes. Submissions do
+not exist (out of scope).
+
+Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.8).

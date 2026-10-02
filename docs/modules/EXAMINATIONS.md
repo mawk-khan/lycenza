@@ -698,3 +698,10 @@ complete: its foundations (§1–§19) are delivered as built.
 - **StudentMark determination:** unchanged and not widened. It must be
   revalidated when StudentMark is reopened (ADR 0061 §2.4).
 - **Nothing resumes automatically** (ADR 0061 §2.5).
+
+## Retention (E21.3D, 2026-10-02)
+
+Examinations and examination papers are tenant-lifetime School academic
+configuration without personal data (E21.2G A2): no E21 mechanism expires
+them (`AcademicRetentionArchitectureGuardTest`). Student marks and results
+are not implemented.

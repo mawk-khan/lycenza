@@ -10,7 +10,7 @@ use App\Support\Observability\MetricsRecorder;
  *
  * E21.3A2: the `operation` label is a small, stable FAMILY (audit, email,
  * authority, communications, storage, student, employee, erasure,
- * finance), not one value per category: the category list kept growing
+ * finance; E21.3D: academic), not one value per category: the category list kept growing
  * towards the label ceiling (MetricCatalogGuardTest). Logs keep the exact
  * category; a new category joins an existing family, or a new family is a
  * deliberate catalog change.
@@ -47,6 +47,17 @@ final class RetentionMetrics
 
     /** E21.3C (E21.2G G1): Guardian personal data; units are Guardians. */
     public const GUARDIAN_RECORD = 'guardian_record';
+
+    /** E21.3D (E21.2G A1) year-bound academic operations; units are rows (LMS: resources). */
+    public const CURRICULUM_DELIVERY = 'curriculum_delivery';
+
+    public const ATTENDANCE_SESSION = 'attendance_session';
+
+    public const TIMETABLE_ENTRY = 'timetable_entry';
+
+    public const LEARNING_CONTENT = 'learning_content';
+
+    public const ASSIGNMENT = 'assignment';
 
     /** E21.3B (E21.2G I2): ended portal invitations, 7 days after they ended. */
     public const PORTAL_INVITATION = 'portal_invitation';
@@ -86,6 +97,13 @@ final class RetentionMetrics
         // E21.3C: Admissions and Guardian records are Student-linked SIS data.
         self::ADMISSION_APPLICATION => 'student',
         self::GUARDIAN_RECORD => 'student',
+        // E21.3D: School teaching evidence, not Student- or Employee-rooted: one
+        // deliberate new family (`academic`), keeping the label far below its ceiling.
+        self::CURRICULUM_DELIVERY => 'academic',
+        self::ATTENDANCE_SESSION => 'academic',
+        self::TIMETABLE_ENTRY => 'academic',
+        self::LEARNING_CONTENT => 'academic',
+        self::ASSIGNMENT => 'academic',
         // E21.3B: an invitation is an offer of account authority; it joins the authority family.
         self::PORTAL_INVITATION => 'authority',
         self::EMPLOYEE_ANCILLARY => 'employee',

@@ -3799,3 +3799,12 @@ purges:
 
 It is never a path around the 8-year evidence period. It never unlinks a
 User.
+
+## Teaching references and retention (E21.3D, 2026-10-02)
+
+Timetable entries, attendance register headers and teacher-owned LMS
+resources keep their Employee only until they themselves expire (E21.2G A1,
+7 calendar years after their Academic Year). The Employee then follows its
+own D9 clock (`platform:employee-retention-prune`); D9 periods are
+unchanged. Payroll evidence (E21.3F), D6 TeachingAssignments and manager
+references still keep an Employee.

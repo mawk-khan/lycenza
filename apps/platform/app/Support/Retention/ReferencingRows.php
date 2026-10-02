@@ -39,6 +39,8 @@ final class ReferencingRows
         'identity_account_invitations',
         // E21.3C: the Guardian root and its sub-records.
         'guardians', 'guardian_contacts', 'student_guardian_account_links',
+        // E21.3D: year-bound academic operations.
+        'curriculum_deliveries', 'attendance_sessions', 'timetable_entries', 'learning_content', 'assignments',
     ];
 
     /** @var array<string, list<array{table: string, column: string, tenant: bool}>> */

@@ -32,10 +32,10 @@ class EmployeeRetentionClassificationTest extends TestCase
             'employee_certifications' => 'D9 ancillary (2 y)',
             'payroll_run_results' => 'retained, blocks: payroll evidence posted to the ledger (D8 has no expiry yet)',
             'teaching_assignments' => 'retained, blocks: D6 authority history (E21.2B, 7 y after it ends)',
-            'attendance_sessions' => 'retained, blocks: register provenance, no adopted period (E21.2G)',
-            'timetable_entries' => 'retained, blocks: School scheduling, no adopted period (E21.2G)',
-            'learning_content' => 'retained, blocks: LMS owner, D6 minimum, no adopted period (E21.2G)',
-            'assignments' => 'retained, blocks: LMS owner, D6 minimum, no adopted period (E21.2G)',
+            'attendance_sessions' => 'retained, blocks: register provenance until the header itself expires (A1, E21.3D: 7 y after its Academic Year, once empty)',
+            'timetable_entries' => 'retained, blocks: until the entry itself expires (A1, E21.3D: 7 y after its Academic Year, once no header references it)',
+            'learning_content' => 'retained, blocks: LMS owner until the resource expires (A1 + D6 minimum, E21.3D)',
+            'assignments' => 'retained, blocks: LMS owner until the resource expires (A1 + D6 minimum, E21.3D)',
             'transport_route_assignments' => 'retained, blocks: Transport, no adopted period (E21.2G)',
             'visitor_visits' => 'retained, blocks: Visitor, no adopted period (E21.2G)',
         ],
@@ -80,7 +80,7 @@ class EmployeeRetentionClassificationTest extends TestCase
     #[Test]
     public function every_retention_parent_is_classified_by_exactly_one_checkpoint(): void
     {
-        $parents = [...array_keys(StudentRetentionClassificationTest::CLASSIFICATION), ...array_keys(self::CLASSIFICATION), ...array_keys(GuardianRetentionClassificationTest::CLASSIFICATION)];
+        $parents = [...array_keys(StudentRetentionClassificationTest::CLASSIFICATION), ...array_keys(self::CLASSIFICATION), ...array_keys(GuardianRetentionClassificationTest::CLASSIFICATION), ...array_keys(AcademicRetentionClassificationTest::CLASSIFICATION)];
         sort($parents);
         $declared = ReferencingRows::PARENTS;
         sort($declared);

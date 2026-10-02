@@ -2084,3 +2084,12 @@ only inside the Guardian purge (`platform:guardian-retention-prune`) through
 byte deletes left to the orphan run. No Document carries a period of its own;
 a retained Guardian keeps its Documents and bytes. LMS-owned Documents are
 still kept (E21.3D).
+
+## LMS owner retention (E21.3D, 2026-10-02)
+
+Learning Content and Assignment Documents now follow their parent (E21.2G
+A1): they are deleted only inside the LMS resource purge
+(`platform:academic-retention-prune`) through `DocumentParentRetention`
+(owners `learning_content`, `assignment`), bytes after commit, a failed byte
+delete left to the orphan run. A retained parent keeps its Documents and
+bytes; no Document carries a period of its own.

@@ -117,9 +117,12 @@ class CurriculumDeliveryArchitectureGuardTest extends TestCase
     public function only_the_application_service_writes_the_model(): void
     {
         $service = app_path('Domain/CurriculumDelivery/Application/CurriculumDeliveryService.php');
+        // E21.3D (E21.2G A1): the one other writer is the year-end retention expiry, run only by
+        // `platform:academic-retention-prune` (StudentLinkedRetentionArchitectureGuardTest pins it).
+        $retention = app_path('Domain/CurriculumDelivery/Application/Retention/CurriculumDeliveryRetentionService.php');
 
         foreach ($this->moduleSources() as $file) {
-            if ($file === $service) {
+            if ($file === $service || $file === $retention) {
                 continue;
             }
 

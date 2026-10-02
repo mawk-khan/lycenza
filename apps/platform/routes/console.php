@@ -196,6 +196,17 @@ Schedule::command('platform:guardian-retention-prune')
     ->withoutOverlapping()
     ->name('guardian-retention-prune');
 
+// E21.3D (E21.2G A1): year-bound academic operations, 7 y after their Academic
+// Year ended. No default: until configured it deletes nothing. It runs after
+// the Student run (which removes the attendance records that keep a register
+// header) and before the Employee run (which these rows' teacher references
+// may keep), but every unit rechecks under its own lock, so the order only
+// decides how soon a released row goes, never whether it may.
+Schedule::command('platform:academic-retention-prune')
+    ->dailyAt('04:45')
+    ->withoutOverlapping()
+    ->name('academic-retention-prune');
+
 // E21.2E (E21-D9): ancillary HR details (2 y) and employment/payroll
 // evidence (8 y) after final separation. No default: until configured it
 // deletes nothing. Each purge rechecks under its own lock, so correctness

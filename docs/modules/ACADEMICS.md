@@ -699,3 +699,14 @@ School-wide `syllabus.view`.
   CLOSED FOR PHASE ZERO, and Academics is **not** complete.
 - **Reopening:** a post-v1 initiative starts with a fresh audit and needs
   explicit owner authorization (ADR 0061 §2.5).
+
+## Retention (E21.3D, 2026-10-02)
+
+- **Curriculum deliveries** are deleted 7 calendar years after the end of
+  their Academic Year (`curriculum_deliveries.academic_year_id`) by
+  `platform:academic-retention-prune`, whatever their status. They hold no
+  Employee reference and own no Document.
+- **Syllabus units** are tenant-lifetime School academic configuration
+  (E21.2G A2): nothing expires them.
+
+Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.8).

@@ -686,3 +686,16 @@ exit by `platform:student-retention-prune`, through
   deleted. A session may therefore keep fewer records than the roster it
   was taken against.
 - Correction history stays in the audit ledger on its own D1 clock.
+
+## Register-header retention (E21.3D, 2026-10-02)
+
+An attendance register header (`attendance_sessions`) is deleted 7 calendar
+years after the end of its Academic Year (`attendance_sessions.academic_year_id`,
+never the session date) by `platform:academic-retention-prune`, and only once
+it is EMPTY: any attendance record left (each Student's record goes on its
+own D7 clock, E21.2D) keeps it. The check is the live rows under a
+`SKIP LOCKED` row lock; a late record either keeps the header or fails on its
+foreign key. Correction history stays in the audit ledger (D1). The teacher
+provenance goes with the header.
+
+Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.8).

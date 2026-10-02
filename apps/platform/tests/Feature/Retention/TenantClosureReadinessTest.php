@@ -177,7 +177,7 @@ class TenantClosureReadinessTest extends TestCase
     }
 
     #[Test]
-    public function the_e21_3c_categories_are_adopted_and_only_e21_3d_e_remain_pending(): void
+    public function the_e21_3c_and_e21_3d_categories_are_adopted_and_only_e21_3e_remains_pending(): void
     {
         $tables = TenantRetentionCatalog::tables();
         $this->assertSame([], TenantRetentionCatalog::PENDING_ROWS, 'E21.3C implemented the last mixed-table pending rows');
@@ -185,10 +185,12 @@ class TenantClosureReadinessTest extends TestCase
             $this->assertArrayHasKey($table, $tables, "{$table} is not a classified tenant table");
             $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$tables[$table]][0], $table);
         }
-        foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules'] as $category) {
+        foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules', 'academic_operations'] as $category) {
             $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
-        foreach (['academic_operations', 'operational_logs', 'api_credentials'] as $category) {
+        // E21.2G A2: syllabus and examination schedules are tenant-lifetime configuration, never pending.
+        $this->assertSame(TenantRetentionCatalog::TENANT_LIFETIME, TenantRetentionCatalog::CATEGORIES['academic_configuration'][0]);
+        foreach (['operational_logs', 'api_credentials'] as $category) {
             $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
         $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, TenantRetentionCatalog::CATEGORIES['payroll_ledger'][0], 'the D8 x D9 payroll residual stays visible (E21.3F)');

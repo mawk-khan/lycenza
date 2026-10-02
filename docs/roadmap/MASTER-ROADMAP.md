@@ -2272,6 +2272,21 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21.3D — Year-Bound Academic Operations (2026-10-02): published /
+  closed.** `docs/security/E21-RETENTION-DETERMINATION.md` §5.8:
+  - `platform:academic-retention-prune`: curriculum deliveries, empty
+    attendance register headers, unreferenced timetable entries and LMS
+    Learning Content/Assignments (audiences, Documents, D6 owner/audience
+    minimum) 7 y after the end of their authoritative Academic Year;
+  - Academic Year dates frozen; one-year-per-LMS-resource invariant pinned;
+  - syllabus and examination configuration tenant lifetime;
+  - teaching Employees released by those rows' own expiry.
+
+  **E21 — OPEN.** Remaining engineering: **E21.3E** (communications &
+  platform residuals) and **E21.3F — Payroll Evidence Retention & Employee
+  Release** (provisional). Final ratification deferred to the
+  pre-production closeout. Tenant destruction NOT AUTHORIZED. E33 / TCH-L1
+  open independently.
 - **E21.3C — Admissions & Guardian Lifecycle Markers (2026-10-02):
   published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
   §5.7:

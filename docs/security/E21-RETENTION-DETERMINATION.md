@@ -46,6 +46,13 @@
 > goes 1 calendar year after it when nothing retained needs them. Undated
 > legacy rows stay unresolved and kept. Remaining engineering: E21.3D,
 > E21.3E, E21.3F.
+>
+> **E21.3D (2026-10-02, §5.8):** curriculum deliveries, empty attendance
+> register headers, unreferenced timetable entries and LMS Learning
+> Content/Assignments go 7 calendar years after the end of their
+> authoritative Academic Year (LMS past the D6 owner/audience minimum);
+> Academic Year dates are frozen; syllabus and examination configuration
+> stay. Remaining engineering: E21.3E, E21.3F.
 > - Final ratification is deferred to the pre-production project closeout.
 > - The consolidated reference, with matrices, the D8 brief and the
 >   ratification package, is `docs/security/E21-CLOSURE-AUDIT.md`. Its §8
@@ -744,7 +751,7 @@ The checkpoints are listed in §5.
 | E21.3A2 | Finance Retention Cutover & Historical Expiry (D8) | **Implemented** (ADR 0064 §14–§24; full isolated regression). Carry-forward reads, D8 eligibility from `closed_at`, settled-unit expiry, holds, dry run, per-unit accounting proof. Residual: payroll D8 × D9 intersection |
 | E21.3B | Student-linked evidence and modules (consent, preferences, processing authorizations, converted admissions, Library/Transport/Hostel, portal invitations) | **Implemented** (§5.6; full isolated regression) |
 | E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | **Implemented** (§5.7; full isolated regression) |
-| E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | Not started |
+| E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | **Implemented** (§5.8; full isolated regression) |
 | E21.3E | Communications and platform residuals (never-sent and empty threads, visitors, automation, driver assignments, API credentials) | Not started |
 | E21.3F (provisional) | Payroll Evidence Retention & Employee Release: a Payroll D9 result-expiry mechanism, releasing payroll-linked journal entries (D8 × D9, ADR 0064 §21) and paid Employees | Not started |
 
@@ -1045,6 +1052,55 @@ pending ratification.
 - **Metrics:** `admission_application` and `guardian_record` join the
   `student` family: still nine `operation` values.
 
+### 5.8 Year-bound academic operations (E21.3D)
+
+Implements E21.2G A1, A2 and E2 (`E21-CLOSURE-AUDIT.md` §8).
+Project-adopted, pending ratification.
+
+- **The clock.** Every row's year is its own `academic_year_id` (curriculum
+  deliveries, timetable entries, attendance register headers), pinned by
+  its composite foreign keys to its Section and SubjectOffering; for LMS it
+  is the resource's SubjectOffering's year, and every audience row is
+  pinned to that Offering and a Section of the same year, so a resource has
+  exactly one year (no cross-year audience exists; pinned by a test). A row
+  is past its period when that year's `ends_on` is strictly before the
+  School-local date `ACADEMIC_OPERATIONS_RETENTION_YEARS` (7) calendar years
+  ago (`subYearsNoOverflow`; a 29 February end goes on 1 March). Never
+  `created_at`, a status, a session/due/start date or the current year.
+  Because every row has a mandatory year by FK, no row is ambiguous.
+- **The clock cannot move.** Migration `2026_11_13_090000` makes
+  `academic_years.starts_on`/`ends_on` immutable for every role (no
+  application path edits them; the API edits name/code only).
+- **Rows, in dependency order** (`platform:academic-retention-prune`, daily
+  04:45; bounded batches, `FOR UPDATE SKIP LOCKED`, predicate re-applied,
+  any FK-referenced row kept as `dependency_blocked`):
+  - curriculum deliveries (no Employee reference, no Document);
+  - attendance register headers, only once no attendance record (D7, a
+    Student's own 7-year clock) or other row references them; their teacher
+    provenance goes with them;
+  - timetable entries, only once no header references them; their teacher
+    reference goes with them. Periods, rooms and other reusable
+    configuration stay.
+- **LMS** (`LmsResourceRetention`, one resource per transaction): Learning
+  Content and Assignments, draft/published/archived alike, with their
+  audiences and Documents (DocumentParentRetention; bytes after commit, a
+  failed byte delete left to the orphan run). A teacher-owned resource also
+  needs the D6 minimum: the owner's authority last applied at the later of
+  the year's end and the end of the owner's TeachingAssignments over the
+  audience Sections (an open one keeps it); both clocks are computed
+  independently and the longer wins. The audience leaves only through
+  `retention_expire_learning_content` / `retention_expire_assignment`, which
+  re-prove in the database the tenant context, the 7-year year floor, the
+  D6 floor and that no Document is left.
+- **Tenant lifetime (A2):** syllabus units, examinations and examination
+  papers. No E21 mechanism expires them (architecture guard).
+- **Employees (E2).** Timetable, register-header and LMS-owner references
+  are released only by those rows' own expiry; the Employee then follows
+  its own D9 clock (`employee-retention-prune`). Payroll (E21.3F), D6
+  TeachingAssignments and manager references still block.
+- **Metrics:** one deliberate new family, `academic` (ten `operation`
+  values, ceiling 20).
+
 ## 6. Production settings
 
 The values below are fail-closed: a command deletes nothing while its value
@@ -1071,6 +1127,7 @@ is unset. Production must set them once their checkpoint ships.
 | `PORTAL_INVITATION_RETENTION_DAYS` | 7 (days after an ended portal invitation ended) | E21.3B |
 | `ADMISSIONS_TERMINAL_RETENTION_YEARS` | 1 (calendar year after a rejected/withdrawn application's `terminal_at`) | E21.3C |
 | `GUARDIAN_RETENTION_YEARS` | 1 (calendar year after the Guardian last had a Student relationship) | E21.3C |
+| `ACADEMIC_OPERATIONS_RETENTION_YEARS` | 7 (calendar years after the end of the authoritative Academic Year) | E21.3D |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 (calendar years after final separation) | E21.2E |
 | `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 (calendar years after final separation; never shorter than ancillary) | E21.2E |
 | `ERASURE_CASE_RETENTION_YEARS` | 7 (calendar years after a case closed) | E21.2F |

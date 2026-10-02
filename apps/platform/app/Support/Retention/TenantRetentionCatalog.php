@@ -109,7 +109,7 @@ final class TenantRetentionCatalog
         'admissions' => [self::ADOPTED, 'E21.2G AD1/AD2: converted applications (and applicants with nothing else) with the Student core record (E21.3B, implemented); rejected/withdrawn 1 y after their canonical terminal_at (platform:admissions-retention-prune, E21.3C, implemented; undated legacy rows unresolved and kept); live applications are working state', ['applicants', 'admission_applications']],
         'guardians' => [self::ADOPTED, 'E21.2G G1: Guardian personal data 1 y after the Guardian last had a Student relationship (durable guardians.no_relationship_since) and nothing retained needs it (platform:guardian-retention-prune, E21.3C, implemented; unmarked legacy Guardians unresolved and kept)', ['guardians', 'guardian_contacts']],
         'documents' => [self::ADOPTED, 'D5: inherits its owner (Student, Employee); others kept with their parent', ['documents']],
-        'academic_operations' => [self::MECHANISM_PENDING, 'E21.2G: year-bound academic operations, 7 y after the end of their Academic Year (LMS with the D6 owner/audience minimum; a register header only once it holds no record); mechanism E21.3D', [
+        'academic_operations' => [self::ADOPTED, 'E21.2G A1: year-bound academic operations, 7 y after the end of their authoritative Academic Year (curriculum deliveries; attendance register headers once empty; timetable entries once no header references them; LMS with audiences and Documents, past the D6 owner/audience minimum): platform:academic-retention-prune (E21.3D, implemented)', [
             'curriculum_deliveries', 'learning_content', 'learning_content_section_audiences', 'assignments', 'assignment_section_audiences',
             'timetable_entries', 'attendance_sessions',
         ]],

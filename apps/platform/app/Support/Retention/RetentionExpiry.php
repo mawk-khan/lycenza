@@ -206,6 +206,29 @@ final class RetentionExpiry
     }
 
     /**
+     * E21.3D (E21.2G A1): removes ONE LMS resource (`learning_content` or
+     * `assignment`) with its Section audiences through its fixed function,
+     * which re-proves in the database: tenant context; the resource locked;
+     * its Academic Year ended before a cutoff at least 7 calendar years
+     * back; for an owned resource no TeachingAssignment of the owner over
+     * an audience Section open or ended on/after the cutoff (D6); no
+     * Document left. Runs inside the caller's School context and unit
+     * transaction.
+     *
+     * @param  string  $cutoffDate  the School-local cutoff (Y-m-d)
+     */
+    public function lmsResource(string $kind, School $school, string $id, string $cutoffDate, bool $dryRun): int
+    {
+        $function = ['learning_content' => 'retention_expire_learning_content', 'assignment' => 'retention_expire_assignment'][$kind]
+            ?? throw new InvalidArgumentException("Not an LMS resource kind: {$kind}");
+        if (! Str::isUuid($id)) {
+            throw new InvalidArgumentException('Not a uuid.');
+        }
+
+        return $this->call($function, [$school->id, $id, $cutoffDate, $dryRun]);
+    }
+
+    /**
      * @param  callable(int, bool): int  $expire
      * @return array{eligible: int, deleted: int, held: int}
      */

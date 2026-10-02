@@ -20,7 +20,8 @@ use Illuminate\Support\Facades\DB;
  * - Scope: only `attendance_records`, the one Student's rows.
  * - Sessions are kept. An `attendance_sessions` row is the Section's
  *   register header (Section, offering, teacher, period), not a Student
- *   record. D7 does not govern it (determination, D7 gaps).
+ *   record. D7 does not govern it: A1 does, once it is empty
+ *   (AttendanceSessionRetentionService, E21.3D).
  * - Corrections overwrite `status`; their prior values live only in the
  *   audit ledger, which expires on its own D1 clock. Nothing is copied
  *   into new audit events.

@@ -10,8 +10,8 @@
 >
 > No period here is claimed to be statutory, and no legal clearance is
 > claimed. This document consolidates the repository state at the E21.2G
-> audit (2026-10-01), updated at E21.3A/E21.3A2, E21.3B and E21.3C
-> (2026-10-02).
+> audit (2026-10-01), updated at E21.3A/E21.3A2, E21.3B, E21.3C and
+> E21.3D (2026-10-02).
 > It is the project reference until the pre-production review.
 
 - **Inputs:**
@@ -28,25 +28,25 @@
 |---|---|
 | What is technically implemented? | D0–D7, D9 (classified data), D10 (reviewed erasure cases), D11 (freeze and readiness), D12 and D13 (repository side). See §2. |
 | What owner/project decisions remain unresolved? | **One:** erasing a User identity, i.e. anonymising audit actors and authority history. It needs a qualified legal decision (§8, I5). Every other category has a project decision. |
-| What engineering blockers remain? | **D8 Finance is IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064). **E21.3B (Student-linked evidence and modules) and E21.3C (Admissions and Guardian lifecycle markers) are IMPLEMENTED.** One recorded intersection remains: payroll-linked Finance detail stays while D9 payroll evidence references it, and no Payroll D9 expiry mechanism exists (ADR 0064 §21) — now the bounded follow-up **E21.3F** (provisional name). Plus two bounded mechanism checkpoints for periods adopted here: E21.3D–E21.3E (§7). |
+| What engineering blockers remain? | **D8 Finance is IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064). **E21.3B (Student-linked evidence and modules), E21.3C (Admissions and Guardian lifecycle markers) and E21.3D (year-bound academic operations) are IMPLEMENTED.** One recorded intersection remains: payroll-linked Finance detail stays while D9 payroll evidence references it, and no Payroll D9 expiry mechanism exists (ADR 0064 §21) — now the bounded follow-up **E21.3F** (provisional name). Plus one bounded mechanism checkpoint for periods adopted here: E21.3E (§7). |
 | What final legal/compliance ratification remains? | All of D0–D13 and the E21.2G decisions (§10). Deferred to the pre-production closeout. |
-| Can E21 close now? | **No.** It is technically open: the E21.3D–E mechanisms are not built, and the payroll D8 × D9 intersection has no mechanism (E21.3F). |
-| What must happen before E21 can close? | E21.3D–E21.3E (E21.3A, E21.3A2, E21.3B and E21.3C are done), and E21.3F (payroll-result expiry, D9, releasing payroll-linked Finance detail and paid Employees). After those: production configuration (§9) and final ratification (§10). |
+| Can E21 close now? | **No.** It is technically open: the E21.3E mechanisms are not built, and the payroll D8 × D9 intersection has no mechanism (E21.3F). |
+| What must happen before E21 can close? | E21.3E (E21.3A, E21.3A2, E21.3B, E21.3C and E21.3D are done), and E21.3F (payroll-result expiry, D9, releasing payroll-linked Finance detail and paid Employees). After those: production configuration (§9) and final ratification (§10). |
 
 ## 2. D0–D13 matrix
 
 | D | Adopted project policy | State | Mechanism | Remaining |
 |---|---|---|---|---|
-| D0 | Finite periods need an enforceable, tested mechanism | **PARTIALLY IMPLEMENTED** | Every implemented period has a command and tests | E21.3D–E mechanisms; E21.3F |
+| D0 | Finite periods need an enforceable, tested mechanism | **PARTIALLY IMPLEMENTED** | Every implemented period has a command and tests | E21.3E mechanisms; E21.3F |
 | D1 | Audit 7 y after `occurred_at` | **IMPLEMENTED** | `audit-prune` → narrow functions (7-y DB floor) | Ratification |
 | D2 | Email metadata 180 d after terminal state; released suppressions 1 y after release | **IMPLEMENTED** | `email-prune`; `email-suppressions-prune` → narrow function | Ratification |
 | D3 | Content 3 y after its Academic Year ends; telemetry 1 y after terminal | **IMPLEMENTED** for sent content and telemetry; cancelled deliveries go with their content. **E21.2G:** never-sent cancelled/rejected announcements and empty threads 1 y | `communications-prune` (+ policy-decision function) | Never-sent and empty-thread mechanism (E21.3E) |
 | D4 | Delivered 30 d, failed/abandoned 90 d; outbox 30 d after `processed_at` | **IMPLEMENTED** | `webhook-deliveries-prune`, `outbox-prune` | Ratification |
-| D5 | Documents inherit their owner; orphans 30 d | **IMPLEMENTED** for Student, Employee and (E21.3C) Guardian owners and orphans. LMS Documents follow their parents' E21.2G period (E21.3D) | `storage-orphans-prune`; parent purges | LMS parents (E21.3D) |
+| D5 | Documents inherit their owner; orphans 30 d | **IMPLEMENTED** for Student, Employee, (E21.3C) Guardian and (E21.3D) LMS Learning Content/Assignment owners, and orphans | `storage-orphans-prune`; parent purges | Ratification |
 | D6 | Authority 7 y after it ends | **IMPLEMENTED** (grants, TeachingAssignments, elevations). **E21.2G:** ended API credentials 7 y (E21.3E). **E21.3B (I2, implemented):** ended portal invitations 7 d after they ended | `authority-history-prune`; `portal-invitations-prune` | API credential mechanism (E21.3E) |
 | D7 | Core 25 y and operational 7 y after final exit | **IMPLEMENTED** for classified D7 data. **E21.3B (implemented):** returned Library loans and ended Transport/Hostel assignments are D7 operational (an open one keeps the Student); processing authorizations, converted admission applications (with applicants that have nothing else), the Student subject's consent events and domain preferences, and the Guardian relationships an authorization names go with the core record in its unit | `student-retention-prune` (via `StudentRetention`); two core-floored functions (`retention_expire_student_processing_authorizations`, `retention_expire_student_consent_events`) | Ratification; Guardian-subject rows and rejected/withdrawn applications (E21.3C) |
 | D8 | 8 y after the financial period closes (`closed_at`) | **IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064) | carry-forward reads; `finance-retention-prune` → `retention_expire_finance_unit` (closed period, 8-calendar-year DB floor, settled units, holds, accounting proof) | Ratification; payroll-linked detail waits for a D9 payroll mechanism (§21 of ADR 0064) |
-| D9 | Ancillary 2 y; evidence 8 y after final separation | **IMPLEMENTED** for classified D9 data | `employee-retention-prune` (HR + Payroll) | Paid staff wait for a Payroll result-expiry mechanism (no longer D8: ADR 0064 §21); teaching staff wait for E21.3D |
+| D9 | Ancillary 2 y; evidence 8 y after final separation | **IMPLEMENTED** for classified D9 data | `employee-retention-prune` (HR + Payroll) | Paid staff wait for a Payroll result-expiry mechanism (no longer D8: ADR 0064 §21); teaching references are released as their academic rows expire (E21.3D) |
 | D10 | Reviewed cases; retention wins; 30-day target | **IMPLEMENTED** (orchestration). **E21.3C:** a Guardian case now follows G1 (related, unresolved, running, blocked, held or eligible) | `erasure-case-*` (operator) | User-identity erasure: legal decision (I5) |
 | D11 | Freeze → retain → controlled purge; no hard-delete | **IMPLEMENTED** as freeze and readiness. Tenant purge **NOT AUTHORIZED** | Close/Reopen; `school-closure-status` | Purge prerequisites (§5) |
 | D12 | Backups 35 d; noncurrent object versions ≤ 35 d | **IMPLEMENTED** in the repository (ADR 0050 amended, runbook, checklist) | Deployment configuration | **PRODUCTION CONFIGURATION** (PITR window, bucket lifecycle) |
@@ -75,6 +75,7 @@ depends on the order.
 | 04:30 | `student-retention-prune` (E21.3B: + Library/Transport/Hostel; core evidence) | D7 | `STUDENT_*_RETENTION_YEARS` | yes | 500; 1 Student per transaction | School | RLS, runtime; core evidence through two narrow functions |
 | 04:35 | `admissions-retention-prune` (E21.3C) | AD2 | `ADMISSIONS_TERMINAL_RETENTION_YEARS` | yes | 500; 1 applicant per transaction | School | RLS, runtime |
 | 04:40 | `guardian-retention-prune` (E21.3C) | G1 | `GUARDIAN_RETENTION_YEARS` (+ `AUTHORITY_HISTORY_RETENTION_YEARS` for revoked links) | yes | 500; 1 Guardian per transaction | School | RLS, runtime; Guardian consent through one narrow function |
+| 04:45 | `academic-retention-prune` (E21.3D) | A1 | `ACADEMIC_OPERATIONS_RETENTION_YEARS` (+ `AUTHORITY_HISTORY_RETENTION_YEARS` for teacher-owned LMS) | yes | 500 rows per transaction (`SKIP LOCKED`); 1 LMS resource per transaction | School | RLS, runtime; LMS through two narrow functions |
 | 04:50 | `employee-retention-prune` | D9 | `EMPLOYEE_*_RETENTION_YEARS` | yes | 500; 1 Employee per transaction | School | RLS, runtime |
 | hourly | `account-recovery-prune` | technical TTL (24 h) | fixed (ADR 0056) | **yes (E21.2G)** | 5000 | exempt by design¹ | runtime |
 | hourly | `staff-account-credentials-prune` | technical TTL (24 h / 7 d) | fixed (ADR 0059) | **yes (E21.2G)** | 5000 | exempt by design¹ | RLS, runtime |
@@ -112,6 +113,7 @@ failure.
 | `STUDENT_CORE_RETENTION_YEARS` | 25 | calendar years after final exit (E21.3B: with processing authorizations, converted admissions, consent and preferences; database floor 25) |
 | `PORTAL_INVITATION_RETENTION_DAYS` | 7 | days after an ended portal invitation ended (accepted, revoked, or expired unaccepted) (E21.3B) |
 | `ADMISSIONS_TERMINAL_RETENTION_YEARS` | 1 | calendar year after a rejected/withdrawn application's `terminal_at` (UTC timestamp) (E21.3C) |
+| `ACADEMIC_OPERATIONS_RETENTION_YEARS` | 7 | calendar years after the authoritative Academic Year's `ends_on` (School-local date) (E21.3D; LMS database floor 7) |
 | `GUARDIAN_RETENTION_YEARS` | 1 | calendar year after `guardians.no_relationship_since` (UTC timestamp) (E21.3C; database floor 1 for its consent evidence) |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 | calendar years after final separation |
 | `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 | calendar years after final separation |
@@ -135,10 +137,10 @@ failure.
   - The runtime role has **no DELETE** on `schools`, either audit ledger,
     email suppressions, any authority history, erasure cases, policy
     decisions, API clients/credentials or any posted Finance table.
-  - Exactly fourteen `SECURITY DEFINER` retention functions exist, all
+  - Exactly sixteen `SECURITY DEFINER` retention functions exist, all
     `retention_expire_*` (ten at E21.2G; E21.3A2 added the Finance unit;
     E21.3B the two Student-core evidence functions; E21.3C the Guardian
-    consent function): fixed table and predicate, a database floor (1, 7,
+    consent function; E21.3D the two LMS resource functions): fixed table and predicate, a database floor (1, 7,
     8 or 25 years), tenant tie where
     School-scoped, a bounded batch or unit, pinned `search_path`, EXECUTE
     for the runtime role only, never PUBLIC. (The one other definer
@@ -184,6 +186,14 @@ failure.
     `GuardianRetentionClassificationTest` pins every Guardian reference.
   - `TenantRetentionCatalog` lists every tenant table literally; a new one
     makes readiness fail closed (`TenantClosureReadinessTest`).
+  - **E21.3D.** The year clock is only the authoritative Academic Year's
+    `ends_on` (AcademicYearRetention), and `academic_years` dates are now
+    immutable for every role (trigger), so the clock cannot move. Three row
+    services go through `RetentionBatch` (FK-catalog "unreferenced" check,
+    `SKIP LOCKED`), the LMS unit through `LmsResourceRetention` and two
+    floored functions; `AcademicRetentionClassificationTest` and
+    `AcademicRetentionArchitectureGuardTest` pin the closed list and that
+    syllabus and examination configuration are never expired.
   - The erasure adapters are a closed map.
   - `FinanceRetentionGuardTest` keeps all retention code off the ledger.
   - The Documents seam serves two owners only.
@@ -211,6 +221,11 @@ failure.
     processing authorization (both orders); portal-invitation expiry vs a
     revocation holding the row (two connections). Returned loans and ended
     assignments are never reopened, so no other transition race exists;
+  - E21.3D: an empty register header vs a late attendance record, and a
+    timetable entry vs a late register header (two connections: the
+    in-flight child keeps its parent; an expiry first makes the late
+    child fail); an LMS resource vs a new Document (two processes, both
+    orders). An audience can never be added to an existing resource;
   - E21.3C: Guardian purge vs a new relationship (both orders) and vs a new
     account link; Admissions purge vs a new application for the same
     applicant (both orders). A rejected/withdrawn application can never be
@@ -234,10 +249,11 @@ failure.
     by weakening a floor.
 - **Metrics cardinality.**
   - `lycenza_retention_rows_total.operation` was consolidated to nine
-    stable families in E21.3A2. E21.3B adds categories only inside
-    existing families (`student` for Library/Transport/Hostel; `authority`
-    for portal invitations): still nine values.
-  - `scheduled_task` (27 since E21.3C) has its own justified ceiling of
+    stable families in E21.3A2. E21.3B and E21.3C add categories only inside
+    existing families. E21.3D adds one deliberate family, `academic` (School
+    teaching evidence is neither Student- nor Employee-rooted): ten values,
+    far below the ceiling of 20.
+  - `scheduled_task` (28 since E21.3D) has its own justified ceiling of
     30: it is pinned to the code-defined schedule.
 - **Migrations.**
   - E21.2B–2F and E21.3B migrations: each `down()` removes only the
@@ -375,7 +391,7 @@ retention metric within its ceiling by consolidating operations.
 | **E21.3A2 — Finance Retention Cutover & Historical Expiry** | **Done** (ADR 0064 §14–§24): carry-forward reads; settled-unit expiry 8 calendar years after the period close; DB-floored function; holds; dry run; per-unit accounting proof; rewritten `FinanceRetentionGuardTest` contract. Residual: the payroll D8 × D9 intersection (§21) |
 | **E21.3B — Student-linked evidence and modules** | **Done (2026-10-02).** D7 operational: returned Library loans, ended Transport assignments and ended Hostel residencies, 7 y after final exit (open ones keep the Student). With the core record (25 y): processing authorizations and the Student subject's consent events through two core-floored functions; converted admission applications (with applicants that have nothing else) and domain preferences; Guardian relationships an authorization names. Ended portal invitations 7 d after they ended (`portal-invitations-prune`). No new parent owns Documents. Guardian-subject rows and rejected/withdrawn applications stay for E21.3C. |
 | **E21.3C — Admissions and Guardian lifecycle markers** | **Done (2026-10-02).** A database-owned, immutable `terminal_at` for rejected/withdrawn applications (1 y after it; undated legacy rows unresolved and kept; evidence backfill from the transition's own audit event). A durable Guardian `no_relationship_since` maintained by a relationship trigger (cleared on re-link, restarted on the next final unlink; evidence backfill only from complete audit history). Guardian personal data (Guardian, contacts, Documents, revoked account links past D6, its own consent and preferences) 1 y after it, unless a retained dependent remains. |
-| **E21.3D — Year-bound academic operations** | Curriculum deliveries, timetable entries, LMS content and assignments (with audiences, Documents and the D6 owner minimum), and attendance register headers (only once empty): 7 y after the end of their Academic Year. This releases teaching Employees. |
+| **E21.3D — Year-bound academic operations** | **Done (2026-10-02).** Curriculum deliveries, attendance register headers (once empty), timetable entries (once no header references them) and LMS Learning Content/Assignments (with audiences and Documents, past the D6 owner/audience minimum) 7 y after the end of their authoritative Academic Year (`platform:academic-retention-prune`); Academic Year dates frozen; Employee teaching references released by these rows' own expiry. Syllabus and examination configuration stay (A2). |
 | **E21.3F — Payroll Evidence Retention & Employee Release** (provisional) | The recorded D8 × D9 intersection (ADR 0064 §21): a Payroll D9 result-expiry mechanism for posted payroll results and their postings, after which payroll-linked journal entries can expire through D8 and paid Employees can reach their D9 evidence expiry. Not started; not part of E21.3B–E. |
 | **E21.3E — Communications and platform residuals** | Cancelled/rejected never-sent announcements (1 y after cancellation or rejection decision); empty threads (1 y after last activity); visits (1 y after check-out) and visitors once no visit remains; automation records (1 y after completion); driver assignments (7 y after they end); ended API credentials (7 y; narrow path). |
 
@@ -421,7 +437,7 @@ RATIFICATION.**
   - attendance register headers, only once no record remains.
 
   These are School teaching evidence, never tied to a Student's exit.
-  Mechanism: E21.3D.
+  Mechanism: E21.3D (**implemented**).
 - **A2.** Syllabus units, examinations and examination papers are School
   academic configuration without personal data: **tenant lifetime**.
 
@@ -485,7 +501,8 @@ RATIFICATION.**
 **Employees**
 - **E1.** **Payroll results** were the D8 blocker. Since E21.3A2 they are the recorded D8 × D9 intersection: D8 exists, but no Payroll D9 mechanism expires payroll results and postings, so they and their journal entries stay (ADR 0064 §21).
 - **E2.** **Teaching references** (attendance sessions, timetable, LMS) are
-  released by A1. **Transport** by O2, **Visitor hosts** by O3.
+  released by A1 (**implemented**, E21.3D: by the rows' own expiry; the
+  Employee then follows its own D9 clock). **Transport** by O2, **Visitor hosts** by O3.
 - **E3.** A **manager reference** from another Employee's assignment is
   that Employee's employment history. It is never nulled for retention,
   and it is released when the referencing Employee's evidence expires.
@@ -530,7 +547,7 @@ environment-specific.**
 
 ## 11. Other production gates (not E21)
 
-**O1 cannot clear today.** Besides E21 (E21.3D–F, ratification and
+**O1 cannot clear today.** Besides E21 (E21.3E–F, ratification and
 §9), ADR 0058's register keeps separate mandatory gates open. Among them:
 - **E33 / TCH-L1** (teacher Attendance legal determination): no production
   `teacher` role grants while it is open (ADR 0063 §40);

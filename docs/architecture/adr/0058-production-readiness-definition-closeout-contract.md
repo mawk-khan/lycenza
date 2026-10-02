@@ -1173,3 +1173,21 @@ for:
   production legal clearance is claimed.
 - **Tenant destruction:** NOT AUTHORIZED. **E33 / TCH-L1:** open
   independently; no Teacher change.
+
+## Note — E21.3D year-bound academic operations (2026-10-02)
+
+**E21: still OPEN. E21.3D: IMPLEMENTED** (`docs/security/E21-RETENTION-DETERMINATION.md`
+§5.8).
+- Curriculum deliveries, attendance register headers (once empty),
+  timetable entries (once unreferenced) and LMS Learning
+  Content/Assignments (with audiences and Documents, past the D6
+  owner/audience minimum) go 7 calendar years after the end of their
+  authoritative Academic Year (`platform:academic-retention-prune`).
+- Academic Year dates are immutable; syllabus and examination configuration
+  are tenant lifetime.
+- Teaching Employees are released only by those rows' own expiry.
+- **Remaining engineering:** E21.3E and E21.3F (provisional).
+- **Final ratification:** deferred to the pre-production closeout. No
+  production legal clearance is claimed.
+- **Tenant destruction:** NOT AUTHORIZED. **E33 / TCH-L1:** open
+  independently; no Teacher role, capability or authorization change.

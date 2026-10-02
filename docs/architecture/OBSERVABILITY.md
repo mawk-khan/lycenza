@@ -581,3 +581,15 @@ real environment:
   application detail): `retention.admissions_prune.completed`/`.dry_run`/
   `.unconfigured`, `retention.guardian_prune.completed`/`.dry_run`/
   `.unconfigured`, `retention.lifecycle_markers_backfill.completed`/`.dry_run`.
+
+## E21.3D academic retention (2026-10-02)
+
+- **Scheduler.** New daily task `academic-retention-prune` (04:45), covered
+  by the OBS-06 daily staleness alert (regenerated rules); `scheduled_task`
+  now has 28 values (ceiling 30).
+- **Metric labels.** One deliberate new family, `academic` (categories
+  `curriculum_delivery`, `attendance_session`, `timetable_entry`,
+  `learning_content`, `assignment`): ten `operation` values, ceiling 20.
+  Outcomes unchanged.
+- **Logs** (counts only; never a title, Section, teacher or Student):
+  `retention.academic_prune.completed`/`.dry_run`/`.unconfigured`.

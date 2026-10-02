@@ -15,7 +15,9 @@ use LogicException;
  * domain has a decided purge (a closed map):
  * - the Student (E21.2D, the D7 core record);
  * - the Employee (E21.2E, D9 employment evidence);
- * - the Guardian (E21.3C, G1 Guardian personal data).
+ * - the Guardian (E21.3C, G1 Guardian personal data);
+ * - LMS Learning Content and Assignments (E21.3D, A1 year-bound academic
+ *   operations).
  *
  * The caller runs it inside its locked purge transaction, after proving the
  * parent eligible. Rows go immediately, active and archived alike (archive
@@ -25,7 +27,7 @@ use LogicException;
 final class DocumentParentRetention
 {
     /** Owner types with a decided parent purge => their owner column. */
-    private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id', 'guardian' => 'guardian_id'];
+    private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id', 'guardian' => 'guardian_id', 'learning_content' => 'learning_content_id', 'assignment' => 'assignment_id'];
 
     /** @return list<string> ids of the Documents the owner's purge removes */
     public function idsOwnedBy(string $owner, string $ownerId): array

@@ -234,8 +234,8 @@ class StorageOrphanRetentionTest extends TestCase
         $this->assertContains($seam, $files);
         $seamCode = (string) file_get_contents($seam);
         $this->assertSame(substr_count($seamCode, "table('documents')"), substr_count($seamCode, "table('documents')->where(\$"), 'every seam query is scoped to one owner');
-        // E21.3C: the Guardian (G1) is the third decided owner.
-        $this->assertStringContainsString("private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id', 'guardian' => 'guardian_id'];", $seamCode, 'a closed owner map');
+        // E21.3C: the Guardian (G1); E21.3D: LMS Learning Content and Assignments (A1).
+        $this->assertStringContainsString("private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id', 'guardian' => 'guardian_id', 'learning_content' => 'learning_content_id', 'assignment' => 'assignment_id'];", $seamCode, 'a closed owner map');
         $callers = [];
         exec('grep -rlF --include=*.php '.escapeshellarg('use App\\Domain\\Documents\\Application\\Retention\\DocumentParentRetention;').' '.escapeshellarg(app_path()), $callers);
         sort($callers);
@@ -243,7 +243,8 @@ class StorageOrphanRetentionTest extends TestCase
             app_path('Domain/Guardians/Application/Retention/GuardianRecordRetentionService.php'),
             app_path('Domain/HR/Application/Retention/EmployeeRecordRetentionService.php'),
             app_path('Domain/Students/Application/Retention/StudentRecordRetentionService.php'),
-        ], $callers, 'only the Student core, Employee evidence and Guardian purges use the seam');
+            app_path('Support/Retention/LmsResourceRetention.php'),
+        ], $callers, 'only the Student core, Employee evidence, Guardian and LMS purges use the seam');
 
         // E21.2E: HR's own `employee_documents` go only with their Employee, in HR's
         // evidence purge. The only other retention files naming the table are

@@ -457,6 +457,19 @@ email recovery.
     `AUTHORITY_HISTORY_RETENTION_YEARS` before a revoked account link may
     go. Unset deletes nothing; run each with `--dry-run` first.
   - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops both per School.
+- **E21.3D year-bound academic operations (2026-10-02):**
+  - **Migration** `2026_11_13_090000`: `academic_years` dates become
+    immutable (trigger), and the two LMS functions
+    `retention_expire_learning_content` / `retention_expire_assignment`
+    (checked by `platform:verify-database`). Its `down()` removes only the
+    mechanism.
+  - **New daily task:** `academic-retention-prune` (04:45), covered by
+    OBS-06. Production sets `ACADEMIC_OPERATIONS_RETENTION_YEARS=7`
+    (project-adopted, pending ratification); teacher-owned LMS also needs
+    `AUTHORITY_HISTORY_RETENTION_YEARS`. Unset deletes nothing; run it with
+    `--dry-run` first (a register header with Student records left, or an
+    entry a header references, shows as dependency-blocked).
+  - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops it per School.
 
 ## 6. Seeding: production-safe versus demo
 

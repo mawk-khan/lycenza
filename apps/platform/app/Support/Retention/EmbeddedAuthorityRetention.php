@@ -12,8 +12,9 @@ use Carbon\CarbonInterface;
  * They are never removed on their own: the owner and audience are
  * immutable, and nulling or deleting them would turn a teacher-owned row
  * into Offering-wide admin material. They leave only with their parent
- * resource. That parent's purge (a later E21 checkpoint) must hold BOTH its
- * own period AND this minimum (longest period wins). Unset means never.
+ * resource. That parent's purge (E21.3D, LmsResourceRetention) must
+ * hold BOTH its own period AND this minimum (longest period wins). Unset
+ * means never.
  */
 final class EmbeddedAuthorityRetention
 {
