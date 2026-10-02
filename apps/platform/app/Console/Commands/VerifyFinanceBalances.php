@@ -8,9 +8,9 @@ use Illuminate\Console\Command;
 
 /**
  * E21.3A (ADR 0064 §6, §8): read-only. For each School, runs the dual-read
- * check (all history against the latest closed baseline + later detail)
- * in one REPEATABLE READ snapshot and prints its Finance retention
- * blockers. Ids and codes only, never amounts. Exits non-zero on any
+ * check (retained history against the latest closed baseline + later
+ * detail) in one REPEATABLE READ snapshot and prints its Finance retention
+ * blockers and how many periods are ready for D8 expiry (E21.3A2). Ids and codes only, never amounts. Exits non-zero on any
  * mismatch.
  *
  * Walks every School, suspended and closed ones included: it only reads.
@@ -39,8 +39,10 @@ class VerifyFinanceBalances extends Command
         foreach ($schools as $school) {
             $report = $readiness->assess($school);
             $failed = $failed || $report['verification'] !== 'passed';
-            $this->line(sprintf('school=%s verification=%s mismatches=%d closed_through=%s unmapped_entries=%d blockers=%s',
-                $school->id, $report['verification'], $report['mismatches'], $report['closed_through'] ?? 'none', $report['unmapped_entries'], implode(',', $report['blockers'])));
+            $ready = count(array_filter($report['periods'], fn (array $codes) => $codes === ['ready']));
+            $this->line(sprintf('school=%s verification=%s mismatches=%d closed_through=%s expired_through=%s unmapped_entries=%d ready_periods=%d blockers=%s',
+                $school->id, $report['verification'], $report['mismatches'], $report['closed_through'] ?? 'none', $report['expired_through'] ?? 'none',
+                $report['unmapped_entries'], $ready, implode(',', $report['blockers']) ?: 'none'));
         }
 
         return $failed ? self::FAILURE : self::SUCCESS;

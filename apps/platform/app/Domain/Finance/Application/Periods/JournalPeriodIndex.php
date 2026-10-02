@@ -25,6 +25,12 @@ final class JournalPeriodIndex
         public readonly ?FinancialPeriodSummary $latestClosed,
     ) {}
 
+    /** @return list<string> every journal entry of the School */
+    public function entryIds(): array
+    {
+        return array_map('strval', array_keys($this->entryPeriodStarts));
+    }
+
     public function has(string $entryId): bool
     {
         return array_key_exists($entryId, $this->entryPeriodStarts);

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Finance\Application\Periods;
 
+use App\Domain\Finance\Application\LedgerBalanceReader;
 use App\Models\School;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Uid\UuidV7;
@@ -64,37 +65,43 @@ class LedgerPeriodBalances
     }
 
     /**
-     * Dual-read in ONE statement (one snapshot): per account and currency,
-     * all-history totals against latest baseline + later lines.
+     * Dual-read in ONE statement (one snapshot), per account and currency:
+     * - OLD, the reconstruction from the retained history: every line, or,
+     *   once detail has been expired (E21.3A2), the expiry anchor's
+     *   baseline + every line after it (detail at or before the anchor may
+     *   be gone; the anchor's baseline was verified when it closed);
+     * - NEW, the production read (`LedgerBalanceReader`): the latest closed
+     *   baseline + later lines.
      *
      * @return list<string> "account:<id>:<currency>" for each difference
      */
     public function mismatches(School $school): array
     {
+        $anchor = DB::selectOne(
+            'SELECT p.id, p.starts_on FROM financial_periods p
+              WHERE p.school_id = ? AND EXISTS (SELECT 1 FROM financial_period_expiries x WHERE x.school_id = p.school_id AND x.financial_period_id = p.id)
+              ORDER BY p.starts_on DESC LIMIT 1',
+            [$school->id],
+        );
+
         $rows = DB::select(
-            "WITH latest AS (
-                SELECT id, starts_on FROM financial_periods WHERE school_id = ? AND status = 'closed' ORDER BY starts_on DESC LIMIT 1
-             ), old AS (
-                SELECT ledger_account_id, currency, sum(coalesce(debit_amount, 0)) AS d, sum(coalesce(credit_amount, 0)) AS c
-                  FROM journal_lines WHERE school_id = ? GROUP BY ledger_account_id, currency
-             ), new AS (
+            'WITH old AS (
                 SELECT ledger_account_id, currency, sum(d) AS d, sum(c) AS c FROM (
                     SELECT b.ledger_account_id, b.currency, b.debit_total AS d, b.credit_total AS c
-                      FROM financial_period_account_balances b JOIN latest ON latest.id = b.financial_period_id
+                      FROM financial_period_account_balances b WHERE b.school_id = ? AND b.financial_period_id = ?
                     UNION ALL
                     SELECT l.ledger_account_id, l.currency, coalesce(l.debit_amount, 0), coalesce(l.credit_amount, 0)
                       FROM journal_lines l
                       JOIN journal_entries e ON e.id = l.journal_entry_id AND e.school_id = l.school_id
                       LEFT JOIN financial_periods p ON p.id = e.financial_period_id AND p.school_id = e.school_id
-                     WHERE l.school_id = ?
-                       AND (NOT EXISTS (SELECT 1 FROM latest) OR p.id IS NULL OR p.starts_on > (SELECT starts_on FROM latest))
-                ) x GROUP BY ledger_account_id, currency
-             )
+                     WHERE l.school_id = ? AND (?::date IS NULL OR p.id IS NULL OR p.starts_on > ?::date)
+                ) o GROUP BY ledger_account_id, currency
+             ), new AS ('.LedgerBalanceReader::CARRY_FORWARD_SQL.')
              SELECT coalesce(o.ledger_account_id, n.ledger_account_id) AS account, coalesce(o.currency, n.currency) AS currency
                FROM old o FULL JOIN new n ON n.ledger_account_id = o.ledger_account_id AND n.currency = o.currency
-              WHERE o.d IS DISTINCT FROM n.d OR o.c IS DISTINCT FROM n.c
-              ORDER BY 1, 2",
-            [$school->id, $school->id, $school->id],
+              WHERE o.d IS DISTINCT FROM n.debit_total OR o.c IS DISTINCT FROM n.credit_total
+              ORDER BY 1, 2',
+            [$school->id, $anchor?->id, $school->id, $anchor?->starts_on, $anchor?->starts_on, $school->id, $school->id],
         );
 
         return array_map(fn ($row) => "account:{$row->account}:{$row->currency}", $rows);

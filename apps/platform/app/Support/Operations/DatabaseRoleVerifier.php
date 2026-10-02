@@ -40,6 +40,8 @@ class DatabaseRoleVerifier
         'erasure_cases',
         // E21.3A (ADR 0064): financial periods and their close baselines.
         'financial_periods', 'financial_period_account_balances', 'financial_period_charge_states',
+        // E21.3A2: Finance ledgers lose detail only through retention_expire_finance_unit.
+        'financial_period_expiries', 'journal_entries', 'journal_lines', 'charges', 'payments', 'payment_allocations', 'payment_receipts',
     ];
 
     /**
@@ -64,6 +66,8 @@ class DatabaseRoleVerifier
         'retention_expire_communication_delivery_policy_decisions',
         // E21.2F
         'retention_expire_erasure_cases',
+        // E21.3A2 (E21-D8): one settled Finance unit, period-floored in the database
+        'retention_expire_finance_unit',
     ];
 
     /**

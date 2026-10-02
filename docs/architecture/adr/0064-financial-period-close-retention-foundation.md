@@ -1,8 +1,9 @@
 # ADR 0064: Financial Period Close and Finance Retention Foundation
 
-- Status: Accepted and implemented (E21.3A, 2026-10-02). **Foundation
-  only:** no historical Finance evidence is deleted, and none can be. The
-  retention cutover is E21.3A2.
+- Status: Accepted and implemented. E21.3A (2026-10-02) built the
+  foundation. **E21.3A2 (2026-10-02) amends it with the read cutover and
+  D8 historical expiry (§14–§24 below). D8 is IMPLEMENTED; its period
+  remains project-adopted, pending final legal/compliance ratification.**
 - Date: 2026-10-02
 - Programme: **E21 — Retention** (`docs/security/E21-RETENTION-DETERMINATION.md`,
   `docs/security/E21-CLOSURE-AUDIT.md` §6, the D8 brief).
@@ -367,3 +368,235 @@ computed from the ledger.
 Both are deliberate: closed periods and baselines are authoritative
 Finance evidence. Before any close, both migrations roll back and reapply
 cleanly (verified on DDEV with a schema-dump comparison).
+
+---
+
+# Amendment — E21.3A2: Finance retention cutover and historical expiry (2026-10-02)
+
+Baseline: `origin/main` `d7bd7e7` (E21.3A, regression checkpoint).
+
+## 14. The read cutover
+
+Before this amendment every production read derived from the whole history.
+Now the authoritative reads are:
+
+- **Account balances:** `LedgerBalanceReader` (Finance). Balance = the
+  latest closed period's cumulative baseline + the lines of every later or
+  unmapped entry.
+  - Finding: before E21.3A2 no production code summed account balances at
+    all. This reader is the only one.
+- **Charge state:** `Payments\Application\Charges\ChargeStateReader`.
+  State = the carried state in the latest closed period + later facts, by
+  journal entry:
+  - later allocations;
+  - minus adjustments posted through the period and voided later;
+  - plus later live adjustments;
+  - a later cancellation.
+
+  It covers outstanding, allocated, adjusted and cancelled. Every consumer
+  goes through it:
+  - `ChargeOutstandingReader` (`forCharges`, `locked`), and through it late
+    fees;
+  - the settlement capacity pre-check (`SettledPaymentRecorder`);
+  - the manual-payment form;
+  - the Student fee statement.
+- **Student dues:** the sum of `ChargeStateReader` outstanding. No Student
+  balance table exists.
+- **Payroll totals:** ledger-account totals, so `LedgerBalanceReader`. No
+  payroll carry-forward ledger exists.
+
+**The old computations are verification only.**
+- `AllHistoryChargeReader` is used solely by the balance verifier's charge
+  participant.
+- The all-history account sum lives only in `LedgerPeriodBalances::mismatches`.
+- `FinanceReadCutoverGuardTest` pins all of this.
+
+Once detail has been expired, the verifier's all-history side starts from
+the **expiry anchor**: the latest period with an expiry record. It reads
+that period's baseline plus every later line.
+
+Per-charge integrity checks (the allocation-capacity trigger, cancellation
+guards) still read the charge's own facts. That is exact, because a
+retained charge always keeps all of its facts (§16).
+
+## 15. D8 eligibility
+
+- **Trigger:** the period's close. A period's detail is age-eligible exactly
+  when `closed_at <= now − N calendar years`, with N =
+  `FINANCE_RETENTION_YEARS`, at least 8.
+- **Arithmetic:** no month overflow, identical to the database floor
+  `now() − interval '8 years'`:
+  - closed 2028-02-29 12:00 becomes eligible at 2036-02-29 12:00, the
+    boundary inclusive;
+  - closed 2092-02-29 becomes eligible at 2100-03-01 (2100 has no
+    29 February).
+- **Never eligible:** an open period, an unmapped entry, a period without
+  its baseline, a held School.
+- **Not the trigger:** posting, creation and receipt dates.
+- **Backfilled historical years:** E21.3A closes them at the cutover, so
+  `closed_at` is the cutover date. Their retention clock starts then. Legacy
+  detail is therefore kept longer than 8 years after its business year. That
+  is deliberate and safer than inventing a close date.
+- **Horizon:** the latest closed period up to which every period, oldest
+  first, is eligible (`FinanceRetentionEligibility::horizon`).
+
+## 16. Retention units
+
+| Resource | Treatment |
+|---|---|
+| Charge + its fee assessment, assessment run items, adjustments, targeted concessions, carried states | Expires with its **cluster**: charges sharing a Payment, a late-fee charge with its source. Only when **every** entry of the cluster is at or before the horizon and every charge is cancelled or owes exactly 0.00. An owing charge stays (`open_charge`) until it is settled and that settlement has aged past a later close. |
+| Payment, allocations, receipt, provider event | With the cluster that holds all its allocations. A provider event goes only when no remaining Payment references it. Unlinked provider events stay. |
+| Late-fee assessment, run items | With the cluster holding both the source and the late-fee charge. |
+| Standalone journal entry (manual posting) | With its reversal group (an entry and every reversal of it). All of the group must be at or before the horizon; a reversal in a later period keeps the whole group. |
+| Journal entry referenced by a module | Only with that module's unit, never on its own. |
+| Payroll postings and their journal entries | **Never through D8.** Payroll runs, results and postings are D9 evidence and reference their entries. Reported as retained (`payroll_evidence_retained`). |
+| Canteen-linked charge | Retained; the database refuses a charge a canteen order references. |
+| Receipt counters | Never touched: no receipt number is reused, and every retained receipt keeps its series. |
+| Financial periods, account baselines, expiry lineage | Kept for the School's lifetime. They carry every later balance. |
+| Fee and late-fee run headers, standing concessions | Kept (configuration and decisions); they hold no per-Student amounts that affect a balance. |
+
+## 17. The privileged path
+
+The runtime role still has no DELETE on any ledger (`DatabaseRoleVerifier`).
+Expiry runs through one fixed-purpose SECURITY DEFINER function,
+`retention_expire_finance_unit(school, charge ids, entry ids, record id, dry run)`.
+
+**What it verifies itself:**
+- the School is the current tenant;
+- the unit is closed under every reference: all allocations of its
+  Payments, both late-fee sides, all reversal links, and no outside charge,
+  adjustment, Payment, payroll posting or canteen order;
+- every charge is settled;
+- every entry is in a period that is closed with `closed_at <= now − 8 years`;
+- the latest closed period has its account baseline.
+
+**Locks:** the School's period-maintenance lock first (the close takes it
+too), then the charges, then the entries.
+
+**What it records:** one `financial_period_expiries` row per unit: the
+latest period touched, when, and counts.
+
+**How deletes get through:** three cascade-only guards (receipts, fee and
+late-fee run items) also open when two conditions hold together:
+- a transaction-local flag that only this function sets;
+- the owner's privileges, which the runtime role never has.
+
+**Access:** EXECUTE for the runtime role only. Only `RetentionExpiry::financeUnit`
+calls it, and only `FinanceRetentionService` calls that
+(`FinanceRetentionGuardTest`).
+
+## 18. Orchestration and accounting proof
+
+`platform:finance-retention-prune [--school] [--dry-run]` runs daily at 05:10.
+
+**Fail-closed:**
+- deletion needs `FINANCE_RETENTION_ENABLED=true` and
+  `FINANCE_RETENTION_YEARS` of at least 8;
+- a dry run needs only the period;
+- invalid configuration exits non-zero.
+
+**Per School (`FinanceRetentionService`):**
+1. Holds: a held School only counts.
+2. Compute the horizon.
+3. Run the dual-read check **before** anything is deleted; on failure,
+   delete nothing.
+4. Expire units in deterministic order, up to a batch limit. Each unit is
+   **one REPEATABLE READ transaction**:
+   - exact readings (every account balance, each affected charge's
+     outstanding, each affected Student's dues, every receipt series' next
+     number);
+   - the database expiry;
+   - the same readings again.
+
+   Any difference rolls the unit back.
+5. Run the dual-read check again.
+
+Output, logs and metrics are counts only. Real two-process races cover
+expiry against posting, reversal (both orders), adjustment void (both
+orders), payment and close (both orders).
+
+## 19. Product behaviour after expiry
+
+- An expired journal entry, Payment or receipt is an ordinary not-found
+  (404) in the browser and the API. No "deleted by retention" message
+  exists, so there is no oracle.
+- Lists keep working.
+- The fee statement carries `detailExpiredThrough` and explains that earlier
+  years' settled charges are no longer listed. Its outstanding total is
+  unchanged.
+- No transaction is fabricated from a baseline.
+- No Analytics report or export reads Finance detail.
+
+## 20. Readiness
+
+`FinanceRetentionReadiness` reports, per period:
+- `period_not_closed`;
+- `period_too_young`;
+- `period_mapping_incomplete`;
+- `baseline_missing`;
+- `legal_hold`;
+- `retention_cutover_not_enabled`;
+- `dependency_blocked`;
+- `ready`.
+
+At School level it reports:
+- `unmapped_journal_entries`;
+- `no_closed_financial_period`;
+- `balance_verification_failed`;
+- `retention_cutover_not_enabled`;
+- `legal_hold`.
+
+Tenant-closure readiness has these Finance gates:
+- `d8_finance_period_mapping_incomplete`;
+- `d8_finance_periods_unclosed`;
+- `d8_finance_verification_failed`;
+- `d8_finance_retention_not_enabled`;
+- `d8_d9_payroll_ledger_retained` (the recorded intersection, §21).
+
+The catalog's `finance_ledger` category is now **adopted**.
+`finance_period_evidence` is tenant-lifetime.
+
+## 21. The D8 × D9 intersection (recorded, not weakened)
+
+Payroll-linked journal entries stay while D9 payroll evidence references
+them. No Payroll D9 mechanism expires payroll runs, results or postings
+(E21.2E kept them as ledger evidence). Until one exists:
+- payroll ledger detail is retained;
+- paid Employees stay retained (E21.2E);
+- the catalog keeps `payroll_ledger` as the one technical blocker.
+
+Payroll totals are exact either way. They are account totals, carried in
+the baselines.
+
+A Payroll D9 result-expiry mechanism is not in E21.3B–E21.3E. It needs its
+own checkpoint.
+
+## 22. Rollback
+
+`2026_11_10_090000`'s `down()` removes the mechanism (function, flag helper,
+guard patches, lineage table) and refuses once any unit has been expired.
+Deleted evidence cannot be restored, and the lineage must stay with the
+baselines.
+
+On DDEV, rollback restored the E21.3A schema exactly (schema-dump
+comparison), and reapply was identical.
+
+## 23. Metrics
+
+`lycenza_retention_rows_total.operation` is now a closed set of **families**:
+- audit, email, authority, communications, erasure, storage;
+- student, employee, finance.
+
+It is no longer one value per category, which had reached the label
+ceiling. Logs keep the exact category.
+
+## 24. What this does not do
+
+- No reopen.
+- No tenant purge: still unauthorized.
+- No Student or Employee deletion from Finance. Their own retention runs
+  re-evaluate the references that Finance expiry released.
+- No change to E21.3B–E21.3E or to TCH / E33.
+- Eight years is the project-adopted D8 period, not a claimed statutory
+  minimum. Final ratification remains deferred to the pre-production
+  closeout.

@@ -2272,6 +2272,20 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21.3A2 — Finance Retention Cutover & Historical Expiry (2026-10-02):
+  published / closed.** ADR 0064 §14–§24 and
+  `docs/operations/FINANCE-RETENTION.md`:
+  - carry-forward reads (`LedgerBalanceReader`, `ChargeStateReader`);
+  - D8 eligibility from `closed_at` + 8 calendar years;
+  - settled, dependency-safe unit expiry through one DB-floored function;
+  - `platform:finance-retention-prune` (off by default), holds, dry run,
+    per-unit accounting proof;
+  - expired records are ordinary 404s; the statement shows detail expiry;
+  - metric labels consolidated into families.
+
+  **D8 — IMPLEMENTED.** Recorded residual: payroll-linked detail stays while
+  D9 payroll evidence references it (no Payroll D9 mechanism). **E21 —
+  OPEN:** E21.3B–E21.3E and final ratification remain.
 - **E21.3A — Financial Year Close & Retention Foundation (2026-10-02):
   published / closed.** ADR 0064 adds:
   - `financial_periods`, with a period on every journal entry (DB trigger,

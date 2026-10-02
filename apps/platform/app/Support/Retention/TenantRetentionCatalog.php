@@ -39,14 +39,17 @@ final class TenantRetentionCatalog
 
     /** category => [status, decision, tables] */
     public const CATEGORIES = [
-        'finance_ledger' => [self::TECHNICAL_BLOCKER, 'D8: 8 y after the financial year closes; the period close exists (E21.3A), the retention cutover does not (E21.3A2)', [
-            'financial_periods', 'financial_period_account_balances', 'financial_period_charge_states',
+        'finance_ledger' => [self::ADOPTED, 'D8: 8 y after the financial period closes; settled, dependency-safe units expire through platform:finance-retention-prune (E21.3A2); unsettled, payroll-linked and canteen-linked detail stays', [
+            'financial_period_charge_states',
             'journal_entries', 'journal_lines', 'charges', 'fee_adjustments', 'fee_assessments', 'fee_assessment_runs',
             'fee_assessment_run_items', 'fee_concessions', 'fee_optional_selections', 'late_fee_assessments', 'late_fee_runs',
             'late_fee_run_items', 'payments', 'payment_allocations', 'payment_provider_events', 'payment_receipts',
             'payment_receipt_counters', 'canteen_orders', 'canteen_order_lines', 'canteen_order_stock_consumptions',
         ]],
-        'payroll_ledger' => [self::TECHNICAL_BLOCKER, 'D8/D9: posted payroll evidence; blocked with the ledger', [
+        'finance_period_evidence' => [self::TENANT_LIFETIME, 'D8: financial periods, their cumulative account baselines and the expiry lineage carry every later balance; kept with the School', [
+            'financial_periods', 'financial_period_account_balances', 'financial_period_expiries',
+        ]],
+        'payroll_ledger' => [self::TECHNICAL_BLOCKER, 'D8 x D9: posted payroll records are D9 evidence and keep their journal entries; no Payroll D9 expiry mechanism exists yet (E21.3A2 recorded intersection)', [
             'payroll_periods', 'payroll_runs', 'payroll_run_results', 'payroll_run_result_lines', 'payroll_run_postings',
             'payroll_statutory_calculation_results', 'payroll_statutory_run_postings', 'payroll_adjustments', 'payroll_lwf_annual_charges',
         ]],

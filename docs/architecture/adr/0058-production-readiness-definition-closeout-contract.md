@@ -1104,3 +1104,23 @@ for:
   **E21.3A2**, followed by E21.3B–E21.3E.
 - Final ratification stays deferred to the pre-production closeout.
 - E33 / TCH-L1 is unaffected and stays open independently.
+
+## Note — E21.3A2 Finance retention cutover and historical expiry (2026-10-02)
+
+**E21: still OPEN. D8 Finance: IMPLEMENTED** (ADR 0064 §14–§24).
+- Production Finance reads use carry-forward + later detail; the
+  all-history reads are verification only.
+- Settled, dependency-safe units expire 8 calendar years after their
+  period's close, through one database-floored function. The command is
+  `platform:finance-retention-prune`, fail-closed until
+  `FINANCE_RETENTION_ENABLED` and `FINANCE_RETENTION_YEARS` (>= 8) are set,
+  with holds, a dry run and a per-unit accounting proof.
+- The golden test proves balances, charge outstanding, Student dues,
+  payroll totals and receipt series exactly unchanged.
+- **Recorded intersection:** payroll-linked Finance detail stays while D9
+  payroll evidence references it. No Payroll D9 result-expiry mechanism
+  exists (ADR 0064 §21).
+- **Remaining engineering:** E21.3B–E21.3E.
+- **Final ratification:** deferred to the pre-production closeout.
+- **Tenant destruction:** NOT AUTHORIZED.
+- **E33 / TCH-L1:** open independently.

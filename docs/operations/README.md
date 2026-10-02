@@ -60,6 +60,7 @@ Phase 0O.5A: [alert index](alerts/README.md) and generated rules,
 | `php artisan platform:verify-storage` | the S3 disk | Disk/bucket/endpoint configuration, reachability, versioning, default encryption, public-access block where the API supports it; the independent copy is always operator evidence |
 | `php artisan platform:verify-restore` | runtime | A restored environment: boot, database checks, migrations, readiness, RLS fails closed and isolates Schools, sampled Document objects present with their recorded size, the observed recovery point |
 | `php artisan platform:recover-queued-work` | runtime | Runs every PostgreSQL-driven re-dispatch sweep once (they also run on the scheduler) |
+| `php artisan platform:finance-balances-verify` | runtime | Finance dual-read check per School (carry-forward = retained history), expired-through year and D8 retention blockers; ids and codes only (`FINANCE-RETENTION.md`) |
 
 Each prints one line per check — `PASS`, `FAIL` or
 `OPERATOR_EVIDENCE_REQUIRED` — and exits non-zero on any `FAIL`. None

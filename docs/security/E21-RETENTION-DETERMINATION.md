@@ -17,8 +17,16 @@
 >   required (E21.3A).
 >
 > **E21.3A (2026-10-02, ADR 0064):** the close foundation exists.
-> D8 is **FOUNDATION READY — RETENTION CUTOVER STILL REQUIRED** (E21.3A2).
-> No Finance evidence is deleted.
+>
+> **E21.3A2 (2026-10-02, ADR 0064 §14–§24):** **D8 is IMPLEMENTED.**
+> - The production reads use carry-forward + later detail.
+> - Settled, dependency-safe Finance units expire 8 calendar years after
+>   their period's CLOSE, through `platform:finance-retention-prune`. It is
+>   off unless `FINANCE_RETENTION_ENABLED` and `FINANCE_RETENTION_YEARS`
+>   (>= 8) are set, and it runs one database-floored function.
+> - Payroll-linked detail stays while D9 payroll evidence references it
+>   (the recorded D8 × D9 intersection, ADR 0064 §21).
+> - The period stays project-adopted, pending ratification.
 > - The periods adopted at the audit for every remaining category ship in
 >   E21.3B–E21.3E.
 > - Final ratification is deferred to the pre-production project closeout.
@@ -716,7 +724,7 @@ The checkpoints are listed in §5.
 | **E21.2F** | Erasure (D10) and tenant-closure orchestration (D11) | **Implemented** (E21.2F commit; full isolated regression). Reviewed retention-aware erasure cases; closure freeze and readiness. Tenant destruction **not authorized** |
 | **E21.2G** | Final retention closure audit and blocker consolidation | **Implemented** (closure audit, decisions for every remaining category, technical-TTL dry runs, readiness `mechanism_pending`; `E21-CLOSURE-AUDIT.md`) |
 | E21.3A | Financial Year Close & Retention Foundation (D8) | **Implemented** (ADR 0064; full isolated regression). Period entity, posting identity, close, baselines, dual-read verifier, backfill. No deletion |
-| E21.3A2 | Finance Retention Cutover & Historical Expiry (D8) | **Next — not started** (ADR 0064 §8) |
+| E21.3A2 | Finance Retention Cutover & Historical Expiry (D8) | **Implemented** (ADR 0064 §14–§24; full isolated regression). Carry-forward reads, D8 eligibility from `closed_at`, settled-unit expiry, holds, dry run, per-unit accounting proof. Residual: payroll D8 × D9 intersection |
 | E21.3B | Student-linked evidence and modules (consent, preferences, processing authorizations, converted admissions, Library/Transport/Hostel, portal invitations) | Not started |
 | E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | Not started |
 | E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | Not started |

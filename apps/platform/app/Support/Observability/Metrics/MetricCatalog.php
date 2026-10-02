@@ -84,7 +84,7 @@ final class MetricCatalog
             'lycenza_domain_indeterminate_max_age_seconds' => self::gauge('How long the oldest live custom domain has had only indeterminate DNS/TLS results (0 when none).', []),
             'lycenza_api_token_operation_errors_total' => self::counter('Human API token issue/revoke operations that failed unexpectedly.', ['operation' => ['issue', 'revoke']]),
             // E21.2B: retention maintenance rows per closed category; failures are the scheduler task metrics.
-            'lycenza_retention_rows_total' => self::counter('Retention maintenance rows by category and outcome.', ['operation' => RetentionMetrics::categories(), 'outcome' => RetentionMetrics::OUTCOMES]),
+            'lycenza_retention_rows_total' => self::counter('Retention maintenance rows by family and outcome.', ['operation' => RetentionMetrics::families(), 'outcome' => RetentionMetrics::OUTCOMES]),
             // E21.2F: reviewed data-subject erasure case transitions (no subject identifiers).
             'lycenza_erasure_case_transitions_total' => self::counter('Reviewed erasure case lifecycle transitions.', ['state' => ['requested', 'approved', 'partially_approved', 'denied', 'executing', 'completed']]),
             'lycenza_idempotency_requests_total' => self::counter('Idempotency-Key outcomes (formerly idempotency_{outcome}_total log lines).', ['outcome' => ['new', 'replay', 'conflict', 'in_progress', 'failed']]),
@@ -194,12 +194,12 @@ final class MetricCatalog
             'email-messages-redispatch', 'email-prune', 'account-recovery-prune',
             'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune',
             'audit-prune', 'email-suppressions-prune', 'authority-history-prune',
-            'communications-prune', 'storage-orphans-prune', 'student-retention-prune', 'employee-retention-prune',
+            'communications-prune', 'storage-orphans-prune', 'student-retention-prune', 'employee-retention-prune', 'finance-retention-prune',
         ];
     }
 
     /** Daily tasks (their staleness window is a day, not minutes). */
-    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune', 'audit-prune', 'email-suppressions-prune', 'authority-history-prune', 'communications-prune', 'storage-orphans-prune', 'student-retention-prune', 'employee-retention-prune'];
+    public const DAILY_TASKS = ['idempotency-prune', 'webhook-deliveries-prune', 'email-prune', 'account-recovery-prune', 'staff-account-credentials-prune', 'outbox-prune', 'failed-jobs-prune', 'audit-prune', 'email-suppressions-prune', 'authority-history-prune', 'communications-prune', 'storage-orphans-prune', 'student-retention-prune', 'employee-retention-prune', 'finance-retention-prune'];
 
     /**
      * @param  array<string, string>  $labels

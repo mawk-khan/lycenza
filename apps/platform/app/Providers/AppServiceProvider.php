@@ -3,7 +3,10 @@
 namespace App\Providers;
 
 use App\Domain\Finance\Application\Periods\FinancialPeriodCloseParticipant;
+use App\Domain\Finance\Application\Retention\FinanceRetentionParticipant;
 use App\Domain\Payments\Application\ChargePeriodStateParticipant;
+use App\Domain\Payments\Application\Retention\ChargeRetentionParticipant;
+use App\Domain\Payroll\Application\Retention\PayrollLedgerRetentionParticipant;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
@@ -80,6 +83,10 @@ class AppServiceProvider extends ServiceProvider
         // financial-period close. Registered here, not in Finance, so
         // Finance never references the modules that depend on it.
         $this->app->tag([ChargePeriodStateParticipant::class], FinancialPeriodCloseParticipant::TAG);
+
+        // E21.3A2 (ADR 0064 §17): the modules that decide when Finance
+        // evidence they reference may expire (Payroll: never, under D9).
+        $this->app->tag([ChargeRetentionParticipant::class, PayrollLedgerRetentionParticipant::class], FinanceRetentionParticipant::TAG);
 
         // Phase 0O.1: no (string) cast -- a missing key stays missing and
         // AiContextTokenService refuses to sign or verify with it.

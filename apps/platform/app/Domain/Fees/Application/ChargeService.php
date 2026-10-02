@@ -502,15 +502,21 @@ class ChargeService
      * E21.3A (ADR 0064 §5): every charge of the School with the journal
      * entries that assessed and cancelled it, for Payments' charge-state
      * baseline and dual-read check. Trusted, read-only, no capability check
-     * (the financial-period close authorizes). Ordered by id.
+     * (the financial-period close authorizes). Ordered by id. E21.3A2:
+     * `$chargeIds` limits it to those charges (the carry-forward reads).
      *
+     * @param  list<string>|null  $chargeIds
      * @return list<ChargeLedgerFact>
      */
-    public function ledgerFacts(School $school): array
+    public function ledgerFacts(School $school, ?array $chargeIds = null): array
     {
-        return $this->context->withSchool($school, function () use ($school) {
+        if ($chargeIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $chargeIds) {
             $facts = [];
-            foreach (Charge::query()->where('school_id', $school->id)->orderBy('id')
+            foreach (Charge::query()->where('school_id', $school->id)->when($chargeIds !== null, fn ($q) => $q->whereIn('id', $chargeIds))->orderBy('id')
                 ->toBase()->select(['id', 'student_id', 'amount', 'currency', 'journal_entry_id', 'cancelled_at', 'cancellation_journal_entry_id'])
                 ->cursor() as $row) {
                 $facts[] = new ChargeLedgerFact(
@@ -532,13 +538,18 @@ class ChargeService
      * E21.3A: every fee adjustment of the School (live or voided) with its
      * posting and void journal entries. Same contract as `ledgerFacts()`.
      *
+     * @param  list<string>|null  $chargeIds
      * @return list<FeeAdjustmentLedgerFact>
      */
-    public function adjustmentLedgerFacts(School $school): array
+    public function adjustmentLedgerFacts(School $school, ?array $chargeIds = null): array
     {
-        return $this->context->withSchool($school, function () use ($school) {
+        if ($chargeIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $chargeIds) {
             $facts = [];
-            foreach (FeeAdjustment::query()->where('school_id', $school->id)->orderBy('id')
+            foreach (FeeAdjustment::query()->where('school_id', $school->id)->when($chargeIds !== null, fn ($q) => $q->whereIn('charge_id', $chargeIds))->orderBy('id')
                 ->toBase()->select(['id', 'charge_id', 'amount', 'journal_entry_id', 'cancelled_at', 'cancellation_journal_entry_id'])
                 ->cursor() as $row) {
                 $facts[] = new FeeAdjustmentLedgerFact(

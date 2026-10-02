@@ -180,6 +180,16 @@ Schedule::command('platform:employee-retention-prune')
     ->withoutOverlapping()
     ->name('employee-retention-prune');
 
+// E21.3A2 (E21-D8, ADR 0064): settled Finance detail of periods closed
+// >= FINANCE_RETENTION_YEARS (8) ago. Off unless FINANCE_RETENTION_ENABLED;
+// until then it is a clean no-op (the heartbeat still proves it runs).
+// Each unit rechecks under its own lock and accounting check, so
+// correctness does not depend on the order relative to the other runs.
+Schedule::command('platform:finance-retention-prune')
+    ->dailyAt('05:10')
+    ->withoutOverlapping()
+    ->name('finance-retention-prune');
+
 // Phase 0O.10A (ADR 0056 section 13): ended password-recovery credentials
 // are deleted 24 hours later (technical data; the audit is separate).
 Schedule::command('platform:account-recovery-prune')

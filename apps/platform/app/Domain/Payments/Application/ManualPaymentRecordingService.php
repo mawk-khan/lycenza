@@ -6,6 +6,7 @@ use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\ChargeSummary;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerService;
+use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Domain\Payments\Application\Exceptions\InvalidManualPaymentException;
 use App\Domain\Payments\Application\Exceptions\ManualPaymentIdempotencyConflictException;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
@@ -68,6 +69,7 @@ class ManualPaymentRecordingService
         private readonly ChargeService $charges,
         private readonly SchoolOperationalGuard $guard,
         private readonly TenantContext $context,
+        private readonly ChargeStateReader $states,
     ) {}
 
     public function record(School $school, RecordManualPaymentData $data, User $actor): ManualPaymentResult
@@ -154,20 +156,14 @@ class ManualPaymentRecordingService
 
         $charges = $this->charges->uncancelledChargesForStudent($school, $studentId, self::MAX_OPEN_CHARGES);
 
-        $allocated = $this->context->withSchool($school, fn () => PaymentAllocation::query()
-            ->where('school_id', $school->id)
-            ->whereIn('charge_id', $charges->pluck('chargeId')->all())
-            ->groupBy('charge_id')
-            ->selectRaw('charge_id, sum(amount) as total')
-            ->pluck('total', 'charge_id'));
+        // FEE.3 (ADR 0062 §15): net of live fee adjustments. E21.3A2: through
+        // the carry-forward read (latest closed state + later facts).
+        $states = $this->states->forCharges($school, $charges->pluck('chargeId')->all());
 
-        // FEE.3 (ADR 0062 §15): net of live fee adjustments, through Fees.
-        $adjusted = $this->charges->liveAdjustmentTotalsFor($school, $charges->pluck('chargeId')->all());
-
-        return $charges->map(function (ChargeSummary $charge) use ($allocated, $adjusted) {
+        return $charges->map(function (ChargeSummary $charge) use ($states) {
             $amount = Money::of($charge->amount, $charge->currency);
-            $paid = Money::of((string) ($allocated[$charge->chargeId] ?? '0.00'), $charge->currency);
-            $concession = $adjusted[$charge->chargeId] ?? Money::of('0.00', $charge->currency);
+            $paid = $states[$charge->chargeId]->allocated ?? Money::of('0.00', $charge->currency);
+            $concession = $states[$charge->chargeId]->adjusted ?? Money::of('0.00', $charge->currency);
 
             return new OutstandingCharge(
                 chargeId: $charge->chargeId,

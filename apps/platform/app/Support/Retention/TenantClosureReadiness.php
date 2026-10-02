@@ -2,7 +2,9 @@
 
 namespace App\Support\Retention;
 
+use App\Domain\Finance\Application\Periods\FinancialBalanceVerifier;
 use App\Domain\Finance\Application\Periods\FinancialPeriodService;
+use App\Domain\Finance\Application\Retention\FinanceRetentionEligibility;
 use App\Domain\HR\Application\Retention\EmployeeRetentionEligibility;
 use App\Domain\Students\Application\Retention\StudentRetentionEligibility;
 use App\Models\School;
@@ -20,9 +22,13 @@ use Illuminate\Support\Facades\DB;
  * catalog does not know fails closed (`unclassified_tables`). A category
  * with rows reports why it is still kept:
  * - its adopted period is running (with the earliest date when known);
- * - it is a technical blocker (D8: the financial-period close exists since
- *   E21.3A, the Finance retention cutover does not, E21.3A2; journal
- *   entries without a period add `d8_finance_period_mapping_incomplete`);
+ * - it is a technical blocker (the D8 x D9 payroll ledger:
+ *   `d8_d9_payroll_ledger_retained`);
+ * - Finance (D8, E21.3A2) adds its own prerequisites:
+ *   - `d8_finance_period_mapping_incomplete`: unmapped entries;
+ *   - `d8_finance_periods_unclosed`: an ended year still open;
+ *   - `d8_finance_verification_failed`: the dual-read check differs;
+ *   - `d8_finance_retention_not_enabled`: the expiry is switched off;
  * - its period is adopted but its mechanism is still pending (E21.3B-E);
  * - its policy is unresolved;
  * - it is tenant-lifetime configuration.
@@ -45,6 +51,8 @@ final class TenantClosureReadiness
         private readonly StudentRetentionEligibility $students,
         private readonly EmployeeRetentionEligibility $employees,
         private readonly FinancialPeriodService $periods,
+        private readonly FinancialBalanceVerifier $verifier,
+        private readonly FinanceRetentionEligibility $financeEligibility,
     ) {}
 
     /**
@@ -95,8 +103,8 @@ final class TenantClosureReadiness
         $gates = array_values(array_filter([
             $closed ? null : 'school_not_closed',
             $held ? 'legal_hold' : null,
-            $has(TenantRetentionCatalog::TECHNICAL_BLOCKER) ? 'd8_finance_retention_cutover_pending' : null,
-            $this->periods->unmappedEntryCount($school) > 0 ? 'd8_finance_period_mapping_incomplete' : null,
+            $has(TenantRetentionCatalog::TECHNICAL_BLOCKER) ? 'd8_d9_payroll_ledger_retained' : null,
+            ...$this->financeGates($school),
             $has(TenantRetentionCatalog::POLICY_UNRESOLVED) ? 'policy_unresolved' : null,
             $has(TenantRetentionCatalog::MECHANISM_PENDING) ? 'retention_mechanism_pending' : null,
             $unclassified !== [] ? 'unclassified_tables' : null,
@@ -107,6 +115,32 @@ final class TenantClosureReadiness
         // Never purge-ready: PERMANENT_GATES always stand, because no tenant
         // purge mechanism or authorization exists in this repository.
         return ['closed' => $closed, 'held' => $held, 'purge_ready' => false, 'gates' => $gates, 'unclassified' => $unclassified, 'categories' => $categories];
+    }
+
+    /**
+     * E21.3A2 (D8): Finance's own prerequisites for its expiry to run at all.
+     *
+     * @return list<string>
+     */
+    private function financeGates(School $school): array
+    {
+        if ($this->periods->periods($school) === [] && $this->periods->unmappedEntryCount($school) === 0) {
+            return []; // no Finance evidence: nothing for D8 to gate
+        }
+        $today = CarbonImmutable::now($school->timezone ?: 'UTC')->toDateString();
+        $unclosed = array_filter($this->periods->periods($school), fn ($p) => ! $p->isClosed() && $p->endsOn < $today) !== [];
+        try {
+            $enabled = $this->financeEligibility->enabled() && $this->financeEligibility->years() !== null;
+        } catch (\InvalidArgumentException) {
+            $enabled = false;
+        }
+
+        return array_values(array_filter([
+            $this->periods->unmappedEntryCount($school) > 0 ? 'd8_finance_period_mapping_incomplete' : null,
+            $unclosed ? 'd8_finance_periods_unclosed' : null,
+            $this->verifier->verifySnapshot($school)->passed() ? null : 'd8_finance_verification_failed',
+            $enabled ? null : 'd8_finance_retention_not_enabled',
+        ]));
     }
 
     /** The earliest day the category could be empty, when it can be known (else null). */

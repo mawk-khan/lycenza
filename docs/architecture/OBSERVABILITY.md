@@ -511,4 +511,35 @@ real environment:
 - **School closure** is recorded in platform audit
   (`platform.school.closed`/`reopened`).
 - **Closed-case expiry** counts under `lycenza_retention_rows_total`
-  (`operation=erasure_case`).
+  (`operation=erasure_case`; since E21.3A2 the `erasure` family).
+
+## E21.3A2 Finance retention (2026-10-02)
+
+- **Metric labels consolidated.** `lycenza_retention_rows_total.operation`
+  had reached the guard ceiling (20 values, one per category). It is now a
+  closed set of nine stable **families**:
+  - `audit`, `email`, `authority`;
+  - `communications`, `erasure`, `storage`;
+  - `student`, `employee`, `finance`.
+
+  `RetentionMetrics::family()` maps each category to its family. Logs keep
+  the exact category (`categories` in `retention.*` log lines). No alert or
+  dashboard referenced the old values; a dashboard should now group by
+  family. The guard ceiling was not raised.
+- **Finance outcomes** (`operation=finance`):
+  - `eligible`, `deleted`, `held`;
+  - `dependency_blocked`: an owing charge, payroll evidence, a canteen
+    link, a database refusal;
+  - `error`: including a failed accounting check.
+
+  Units only. Never a balance, payment value, Student name, receipt or
+  payroll value.
+- **Logs:**
+  - `retention.finance_prune.completed`/`.dry_run`/`.disabled` (counts only);
+  - `retention.finance_prune.verification_failed` (error, School id,
+    phase `before`/`after`);
+  - `retention.finance_prune.unit_rolled_back` (`reason=reading_changed`);
+  - `retention.finance_prune.unit_failed` (exception class only).
+- **Scheduler.** The daily task `finance-retention-prune` (05:10) is covered
+  by OBS-06 with the daily-cadence window (alert rules regenerated). It
+  records its heartbeat even while switched off.

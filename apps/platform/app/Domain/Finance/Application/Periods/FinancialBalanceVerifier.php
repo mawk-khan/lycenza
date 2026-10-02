@@ -27,7 +27,11 @@ class FinancialBalanceVerifier
         #[Tag(FinancialPeriodCloseParticipant::TAG)] private readonly iterable $participants,
     ) {}
 
-    /** Inside the caller's transaction (the close holds the period locks). */
+    /**
+     * Inside the caller's transaction (the close holds the period locks).
+     *
+     * @phpstan-impure
+     */
     public function verify(School $school): FinancialBalanceVerification
     {
         return $this->context->withSchool($school, function () use ($school) {
@@ -48,6 +52,8 @@ class FinancialBalanceVerifier
     /**
      * One consistent read-only snapshot (REPEATABLE READ), for the verify
      * command. Inside an existing transaction it reads in that transaction.
+     *
+     * @phpstan-impure
      */
     public function verifySnapshot(School $school): FinancialBalanceVerification
     {

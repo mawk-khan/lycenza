@@ -78,6 +78,10 @@ class FinancialPeriodCloseService
         $this->authorizeCapabilityFor($actor, 'finance.periods.manage', $school);
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $periodId, $confirmation, $actor) {
+            // E21.3A2: the School's period-maintenance lock first, the same
+            // lock Finance retention expiry takes, so a close and an expiry
+            // never interleave (one order: this lock, then period rows).
+            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', [self::maintenanceLockKey($school)]);
             $this->periods->current($school);
 
             $open = FinancialPeriod::query()
@@ -139,6 +143,12 @@ class FinancialPeriodCloseService
 
             return FinancialPeriodSummary::fromModel($model->refresh());
         }));
+    }
+
+    /** The School's period-maintenance lock key (also taken by the Finance retention expiry function). */
+    public static function maintenanceLockKey(School $school): string
+    {
+        return 'finance.period_maintenance:'.$school->id;
     }
 
     private function assess(School $school, FinancialPeriodSummary $period): FinancialPeriodCloseEvaluation

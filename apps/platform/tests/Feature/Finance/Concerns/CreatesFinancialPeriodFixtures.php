@@ -183,8 +183,9 @@ trait CreatesFinancialPeriodFixtures
             $structure = $structures->activate($structure, $preparer);
 
             $employee = Employee::factory()->for($school, 'school')->create();
-            $record = EmploymentRecord::factory()->create(['school_id' => $school->id, 'employee_id' => $employee->id, 'starts_on' => '2025-01-01']);
-            app(CompensationService::class)->assign($school, $record, $structure, Carbon::parse('2025-01-01'), [new FixedComponentValueInput($component->id, '50000.00')], $preparer);
+            $starts = min('2025-01-01', Carbon::parse($month)->subYear()->startOfYear()->toDateString());
+            $record = EmploymentRecord::factory()->create(['school_id' => $school->id, 'employee_id' => $employee->id, 'starts_on' => $starts]);
+            app(CompensationService::class)->assign($school, $record, $structure, Carbon::parse($starts), [new FixedComponentValueInput($component->id, '50000.00')], $preparer);
 
             $periods = app(PayrollPeriodService::class);
             $period = $periods->open($periods->createPeriod($school, Carbon::parse($month), null, $preparer), $preparer);

@@ -398,6 +398,30 @@ email recovery.
   - **Closing a year** is an irreversible School Admin action (typed key +
     fresh MFA) under Finance → Financial periods. Nothing is scheduled.
   - **No Finance expiry exists.** Finance retention needs E21.3A2.
+- **E21.3A2 Finance retention cutover (2026-10-02, ADR 0064 §14–§24):**
+  - **Migration** `2026_11_10_090000`:
+    - `financial_period_expiries`;
+    - `retention_expire_finance_unit`, checked by `platform:verify-database`
+      (`retention_functions_narrow`);
+    - the three guard patches.
+
+    Its `down()` refuses once any unit has expired.
+  - **Reads switch at deploy:** carry-forward + later detail is the only
+    production path. Run `platform:finance-balances-verify` after deploying.
+  - **New daily task:** `finance-retention-prune` (05:10), covered by OBS-06.
+    It is a clean no-op until **both** `FINANCE_RETENTION_YEARS=8` (>= 8;
+    less is refused) and `FINANCE_RETENTION_ENABLED=true` are set (default
+    off).
+  - **Enable only by the runbook** `docs/operations/FINANCE-RETENTION.md`:
+    1. backfill;
+    2. resolve every ambiguous entry;
+    3. close the historical years (the clock starts at that close);
+    4. verify;
+    5. configure and enable;
+    6. dry run, review, run, verify.
+  - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops it per School.
+  - **Payroll-linked detail is never expired by D8** (D9 evidence; ADR 0064
+    §21).
 
 ## 6. Seeding: production-safe versus demo
 

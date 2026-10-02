@@ -4,6 +4,8 @@ namespace App\Domain\Payments\Application;
 
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\ChargeStatementLine;
+use App\Domain\Finance\Application\Periods\FinancialPeriodService;
+use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Domain\Payments\Infrastructure\LateFeeAssessment;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
@@ -42,6 +44,8 @@ class StudentFeeStatementReadService
         private readonly ChargeService $charges,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ChargeStateReader $states,
+        private readonly FinancialPeriodService $periods,
     ) {}
 
     public function statementFor(School $school, string $studentId, ?string $academicYearId, User $actor): StudentFeeStatement
@@ -73,15 +77,19 @@ class StudentFeeStatementReadService
             $totals = ['charged' => Money::of('0.00', $currency), 'adjusted' => Money::of('0.00', $currency), 'paid' => Money::of('0.00', $currency), 'outstanding' => Money::of('0.00', $currency)];
             $lines = [];
 
+            // E21.3A2: amounts through the carry-forward read; the payment
+            // rows below are the retained detail behind them.
+            $states = $this->states->forCharges($school, $chargeIds);
+
             foreach ($facts as $fact) {
+                $state = $states[$fact->chargeId];
                 $amount = Money::of($fact->amount, $fact->currency);
-                $adjusted = Money::of($fact->liveAdjustedTotal, $fact->currency);
-                $paid = Money::of('0.00', $fact->currency);
+                $adjusted = $state->adjusted;
+                $paid = $state->allocated;
                 $rows = [];
 
                 foreach ($allocations->where('charge_id', $fact->chargeId)->sortBy(fn (PaymentAllocation $a) => ($payments->get($a->payment_id)?->settled_at->format('Y-m-d H:i:s') ?? '').$a->payment_id) as $allocation) {
                     $payment = $payments->get($allocation->payment_id);
-                    $paid = $paid->add(Money::of($allocation->amount, $allocation->currency));
                     $rows[] = [
                         'paymentId' => $allocation->payment_id,
                         'amount' => $allocation->amount,
@@ -92,8 +100,8 @@ class StudentFeeStatementReadService
                     ];
                 }
 
-                $cancelled = $fact->cancelledAt !== null;
-                $outstanding = $cancelled ? Money::of('0.00', $fact->currency) : $amount->add($paid->negated())->add($adjusted->negated());
+                $cancelled = $state->cancelled;
+                $outstanding = $state->outstanding();
 
                 if (! $cancelled) {
                     $totals['charged'] = $totals['charged']->add($amount);
@@ -137,6 +145,7 @@ class StudentFeeStatementReadService
                 currency: $currency,
                 lines: $lines,
                 totals: array_map(fn (Money $m) => $m->amount(), $totals),
+                detailExpiredThrough: $this->periods->expiryAnchor($school)?->key,
             );
         });
     }

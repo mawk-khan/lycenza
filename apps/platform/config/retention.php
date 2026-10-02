@@ -60,9 +60,18 @@ return [
     // after an Employee's final separation (EmployeeRetentionEligibility).
     // Ancillary personal sub-records, adopted 2; employment and payroll
     // evidence with the Employee root, adopted 8. No default: unset deletes
-    // nothing. Finance (D8) has no expiry until a financial-year close exists.
+    // nothing.
     'employee_ancillary_years' => env('EMPLOYEE_ANCILLARY_RETENTION_YEARS'),
     'employee_evidence_years' => env('EMPLOYEE_EVIDENCE_RETENTION_YEARS'),
+
+    // E21.3A2 (E21-D8, ADR 0064, project-adopted, pending ratification):
+    // calendar years after a financial period's CLOSE, adopted 8; less than
+    // 8 is refused (the database floor is 8). Deletion additionally needs
+    // the explicit switch: off by default, so deploying the code deletes
+    // nothing. Enable only after the backfill, ambiguity resolution, the
+    // historical closes and a passing platform:finance-balances-verify.
+    'finance_years' => env('FINANCE_RETENTION_YEARS'),
+    'finance_enabled' => filter_var(env('FINANCE_RETENTION_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 

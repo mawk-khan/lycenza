@@ -5143,3 +5143,65 @@ reports:
 - `d8_finance_period_mapping_incomplete`, while any entry lacks a period.
 
 `FinanceRetentionGuardTest` still forbids any Finance deletion.
+
+## E21.3A2 as-built — Finance retention cutover and historical expiry (2026-10-02, ADR 0064 §14–§24)
+
+**Reads.**
+- Account balances come from `LedgerBalanceReader`: latest closed baseline
+  + later lines. It is the first and only production balance read.
+- Charge state comes from `Payments\…\ChargeStateReader`: latest closed
+  state + later facts. It covers outstanding, Student dues, statements,
+  settlement capacity, the manual-payment form and late fees.
+- The all-history versions are verification only:
+  - `AllHistoryChargeReader`;
+  - `LedgerPeriodBalances::mismatches`, which anchors at the latest expired
+    period once detail has expired.
+
+  `FinanceReadCutoverGuardTest` pins this.
+
+**Eligibility** (`FinanceRetentionEligibility`):
+- `closed_at <= now − FINANCE_RETENTION_YEARS` (>= 8) calendar years, the
+  same arithmetic as the database floor;
+- the period is closed, fully mapped, has its baseline and is not held;
+- the horizon is the latest period up to which all are eligible;
+- a backfilled historical year starts its clock at its cutover close.
+
+**Units** (`FinanceRetentionService`, Payments' `ChargeRetentionParticipant`,
+Payroll's `PayrollLedgerRetentionParticipant`):
+- settled charge clusters (charges sharing a Payment, late fee + source),
+  with their Payments, allocations, receipts, provider events, adjustments,
+  targeted concessions, fee assessments, run items and carried states;
+- standalone journal entries with their reversal group.
+
+Eligible only when everything is at or before the horizon. Owing charges,
+later activity, canteen links and **payroll-linked entries** (D9) stay.
+
+**Deletion.** Only `retention_expire_finance_unit`, through
+`RetentionExpiry::financeUnit`. It is fixed-purpose and SECURITY DEFINER,
+and re-verifies:
+- tenant;
+- references;
+- settled;
+- closed period and 8-year floor;
+- baseline.
+
+It records `financial_period_expiries` lineage. Each unit runs in one
+REPEATABLE READ transaction with exact before/after readings (every
+account, the unit's charges, its Students' dues, the receipt series). Any
+difference rolls back. The dual-read check runs before and after each
+School pass.
+
+**Command.** `platform:finance-retention-prune [--school] [--dry-run]`,
+daily 05:10. It is off unless `FINANCE_RETENTION_ENABLED` and
+`FINANCE_RETENTION_YEARS` are set. Counts only.
+
+**After expiry.**
+- Expired entries, Payments and receipts are ordinary 404s.
+- The fee statement shows `detailExpiredThrough`; outstanding is unchanged.
+- Periods, account baselines, receipt counters and lineage are kept for the
+  School's lifetime.
+
+**Readiness.** `FinanceRetentionReadiness` reports per-period codes (through
+`ready`); tenant-closure readiness has the `d8_*` gates.
+
+Runbook: `docs/operations/FINANCE-RETENTION.md`.

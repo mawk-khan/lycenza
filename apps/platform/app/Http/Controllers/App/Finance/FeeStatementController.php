@@ -78,6 +78,7 @@ class FeeStatementController extends Controller
                     ])->all(),
                 ])->all(),
                 'totals' => $statement->totals,
+                'detailExpiredThrough' => $statement->detailExpiredThrough,
             ],
             'academicYears' => $years->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name])->values()->all(),
             'filters' => ['academic_year_id' => $yearId ?? ''],

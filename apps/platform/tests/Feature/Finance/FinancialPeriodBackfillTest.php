@@ -132,7 +132,7 @@ class FinancialPeriodBackfillTest extends TestCase
 
         $readiness = app(FinanceRetentionReadiness::class)->assess($w['school']);
         $this->assertContains('unmapped_journal_entries', $readiness['blockers']);
-        $this->assertContains('retention_cutover_not_implemented', $readiness['blockers']);
+        $this->assertContains('retention_cutover_not_enabled', $readiness['blockers']);
         $this->assertContains('d8_finance_period_mapping_incomplete', app(TenantClosureReadiness::class)->report($w['school'])['gates']);
     }
 
@@ -186,7 +186,7 @@ class FinancialPeriodBackfillTest extends TestCase
             ->expectsOutputToContain("[applied] school={$w['school']->id} mapped={$total}")
             ->assertSuccessful();
         $this->artisan('platform:finance-balances-verify', ['--school' => $w['school']->id])
-            ->expectsOutputToContain('verification=passed mismatches=0 closed_through=none unmapped_entries=0 blockers=no_closed_financial_period,retention_cutover_not_implemented')
+            ->expectsOutputToContain('verification=passed mismatches=0 closed_through=none expired_through=none unmapped_entries=0 ready_periods=0 blockers=no_closed_financial_period,retention_cutover_not_enabled')
             ->assertSuccessful();
         $this->artisan('platform:finance-periods-backfill', ['--school' => (string) Str::uuid()])->assertFailed();
     }

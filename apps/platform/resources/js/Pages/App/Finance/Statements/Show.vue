@@ -41,6 +41,7 @@ interface Props {
         currency: string;
         lines: StatementLine[];
         totals: { charged: string; adjusted: string; paid: string; outstanding: string };
+        detailExpiredThrough: string | null;
     };
     academicYears: Array<{ id: string; name: string }>;
     filters: { academic_year_id: string };
@@ -76,6 +77,15 @@ function filterYear(id: string): void {
                 <option v-for="y in academicYears" :key="y.id" :value="y.id">{{ y.name }}</option>
             </select>
         </div>
+
+        <p
+            v-if="statement.detailExpiredThrough"
+            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600"
+        >
+            Detailed records of financial years up to {{ statement.detailExpiredThrough }} have
+            expired under the retention policy. Settled charges from those years are no longer
+            listed; they owe nothing, so the outstanding total is unaffected.
+        </p>
 
         <dl class="mt-6 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
             <div class="rounded border border-slate-200 p-3">

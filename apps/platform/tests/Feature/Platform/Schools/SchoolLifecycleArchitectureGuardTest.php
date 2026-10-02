@@ -54,6 +54,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'PruneStorageOrphans.php',               // retention maintenance (E21-D5)
         'PruneStudentRecords.php',               // retention maintenance (E21-D7)
         'PruneEmployeeRecords.php',              // retention maintenance (E21-D9)
+        'PruneFinanceRecords.php',               // retention maintenance (E21-D8)
         'OpenErasureCase.php',                   // looks up ONE School by id for an erasure case (E21-D10); not a walk
         'SchoolClosureStatus.php',               // read-only readiness of ONE School, closed ones included (E21-D11)
         'RetryMailMessage.php',                  // one named School; the submission claim re-checks the lifecycle

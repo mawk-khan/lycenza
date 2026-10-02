@@ -62,10 +62,11 @@ class TenantClosureReadinessTest extends TestCase
         $categories = $this->byCategory($report);
 
         $this->assertFalse($report['purge_ready']);
-        foreach (['school_not_closed', 'd8_finance_retention_cutover_pending', 'retention_mechanism_pending', 'retention_periods_running', 'final_ratification_pending', 'no_tenant_purge_authorized'] as $gate) {
+        foreach (['school_not_closed', 'd8_finance_retention_not_enabled', 'retention_mechanism_pending', 'retention_periods_running', 'final_ratification_pending', 'no_tenant_purge_authorized'] as $gate) {
             $this->assertContains($gate, $report['gates']);
         }
-        $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, $categories['finance_ledger']['outcome']);
+        $this->assertSame('retained', $categories['finance_ledger']['outcome'], 'E21.3A2: D8 is an adopted, implemented period');
+        $this->assertSame(TenantRetentionCatalog::TENANT_LIFETIME, $categories['finance_period_evidence']['outcome']);
         $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, $categories['guardians']['outcome']);
         $this->assertSame('retained', $categories['student_core']['outcome']);
         $this->assertSame('empty', $categories['hr_evidence']['outcome']);
@@ -144,7 +145,8 @@ class TenantClosureReadinessTest extends TestCase
                 $this->assertMatchesRegularExpression('/E21\.3[B-E]/', $decision, "{$category} must name its follow-up checkpoint");
             }
             if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {
-                $this->assertStringContainsString('D8', $decision, "{$category}: the only technical blocker is D8");
+                $this->assertSame('payroll_ledger', $category, 'E21.3A2: the only technical blocker left is the D8 x D9 payroll ledger');
+                $this->assertStringContainsString('D9', $decision);
             }
         }
     }

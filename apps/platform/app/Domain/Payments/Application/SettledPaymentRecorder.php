@@ -8,6 +8,7 @@ use App\Domain\Finance\Application\JournalLineData;
 use App\Domain\Finance\Application\LedgerService;
 use App\Domain\Finance\Application\PostJournalEntryData;
 use App\Domain\Finance\Domain\JournalSide;
+use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Domain\Payments\Application\Exceptions\AllocationDoesNotSumToPaymentAmountException;
 use App\Domain\Payments\Application\Exceptions\ChargeAllocationExceedsChargeAmountException;
 use App\Domain\Payments\Application\Exceptions\ChargeIsCancelledException;
@@ -59,6 +60,7 @@ class SettledPaymentRecorder
         private readonly ChargeService $charges,
         private readonly AuditRecorder $audit,
         private readonly ReceiptIssuer $receipts,
+        private readonly ChargeStateReader $states,
     ) {}
 
     /**
@@ -136,16 +138,20 @@ class SettledPaymentRecorder
             $snapshots[$chargeId] = $snapshot;
         }
 
+        // E21.3A2: read under the locks just taken, through the carry-forward
+        // read (latest closed state + later facts).
+        $states = $this->states->forCharges($school, $chargeIds->all());
+
         foreach ($data->allocations as $allocation) {
-            $snapshot = $snapshots[$allocation->chargeId];
-            $alreadyAllocated = $this->sumExistingAllocations($allocation->chargeId, $data->amount->currency());
-            $projected = $alreadyAllocated->add($allocation->amount);
+            $state = $states[$allocation->chargeId];
+            $projected = $state->allocated->add($allocation->amount);
             // FEE.3 (ADR 0062 §15): capacity is the amount net of live fee
             // adjustments; the Payments-owned trigger stays authoritative.
-            $remaining = $snapshot->netAmount()->add($projected->negated());
+            $capacity = $state->amount->add($state->adjusted->negated());
+            $remaining = $capacity->add($projected->negated());
 
             if ($remaining->isNegative()) {
-                throw new ChargeAllocationExceedsChargeAmountException($allocation->chargeId, $projected->amount(), $snapshot->netAmount()->amount());
+                throw new ChargeAllocationExceedsChargeAmountException($allocation->chargeId, $projected->amount(), $capacity->amount());
             }
         }
 
@@ -191,12 +197,5 @@ class SettledPaymentRecorder
         $this->receipts->issue($school, $payment, ReceiptIssuer::ISSUANCE_SETTLEMENT, $actor);
 
         return $payment;
-    }
-
-    private function sumExistingAllocations(string $chargeId, string $currency): Money
-    {
-        $sum = PaymentAllocation::query()->where('charge_id', $chargeId)->sum('amount');
-
-        return Money::of((string) $sum, $currency);
     }
 }

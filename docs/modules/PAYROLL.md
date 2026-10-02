@@ -880,3 +880,18 @@ journal entry's Finance period:
 A close and a payroll posting serialize on the period lock
 (`FinancialPeriodConcurrencyTest`). Payroll results and postings stay
 ledger evidence (D8): nothing expires until E21.3A2.
+
+## Finance retention and Payroll (E21.3A2, 2026-10-02, ADR 0064 §21)
+
+Finance's D8 expiry **never** deletes payroll evidence or the journal
+entries payroll postings reference. `PayrollLedgerRetentionParticipant`
+claims those entries and reports each one in an eligible year as retained
+(`payroll_evidence_retained`); the database function refuses them anyway.
+
+Payroll runs, results and postings are D9 employment/payroll evidence, and
+no Payroll D9 mechanism expires them yet. This is the recorded D8 × D9
+intersection: paid Employees and their payroll ledger detail stay until
+such a mechanism exists (a dedicated checkpoint, outside E21.3B–E21.3E).
+
+Payroll totals are unaffected by any Finance expiry: they are ledger-account
+totals, carried in the account baselines (`LedgerBalanceReader`).

@@ -7,7 +7,9 @@ use App\Support\Observability\MetricsRecorder;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Symfony\Component\Uid\UuidV7;
 
 /**
  * E21.2B (E21-D1/D2/D6): the ONLY caller of the database retention
@@ -122,6 +124,30 @@ final class RetentionExpiry
     }
 
     /**
+     * E21.3A2 (E21-D8): expires ONE settled Finance unit -- the given charges
+     * with everything that depends on them, plus the given standalone
+     * journal entries -- through `retention_expire_finance_unit`, which
+     * re-verifies the whole unit in the database (closed under references,
+     * settled, every entry in a period closed >= 8 calendar years ago,
+     * baseline present). With `$dryRun` it validates and counts only.
+     * Runs inside the caller's School TenantContext and transaction;
+     * the caller (Finance retention) owns holds, metrics and verification.
+     *
+     * @param  list<string>  $chargeIds
+     * @param  list<string>  $entryIds
+     * @return int journal entries in the unit
+     */
+    public function financeUnit(School $school, array $chargeIds, array $entryIds, bool $dryRun): int
+    {
+        $array = fn (array $ids): string => '{'.implode(',', array_map(fn (string $id) => Str::isUuid($id) ? $id : throw new InvalidArgumentException('Not a uuid.'), $ids)).'}';
+
+        return (int) DB::selectOne(
+            'SELECT retention_expire_finance_unit(?, ?::uuid[], ?::uuid[], ?, ?) AS n',
+            [$school->id, $array($chargeIds), $array($entryIds), (string) new UuidV7, $dryRun ? 'true' : 'false'],
+        )->n;
+    }
+
+    /**
      * @param  callable(int, bool): int  $expire
      * @return array{eligible: int, deleted: int, held: int}
      */
@@ -141,7 +167,7 @@ final class RetentionExpiry
 
         foreach ($result as $outcome => $count) {
             if ($count > 0) {
-                $this->metrics->counter('lycenza_retention_rows_total', $count, ['operation' => $category, 'outcome' => $outcome]);
+                $this->metrics->counter('lycenza_retention_rows_total', $count, ['operation' => RetentionMetrics::family($category), 'outcome' => $outcome]);
             }
         }
 

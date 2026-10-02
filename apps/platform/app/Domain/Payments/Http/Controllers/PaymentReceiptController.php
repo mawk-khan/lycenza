@@ -62,6 +62,7 @@ class PaymentReceiptController extends Controller
             'currency' => $statement->currency,
             'lines' => $statement->lines,
             'totals' => $statement->totals,
+            'detailExpiredThrough' => $statement->detailExpiredThrough,
         ]]);
     }
 }
