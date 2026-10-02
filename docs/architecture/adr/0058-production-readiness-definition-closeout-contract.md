@@ -1191,3 +1191,21 @@ for:
   production legal clearance is claimed.
 - **Tenant destruction:** NOT AUTHORIZED. **E33 / TCH-L1:** open
   independently; no Teacher role, capability or authorization change.
+
+## Note — E21.3E communications and platform residuals (2026-10-02)
+
+**E21: still OPEN. E21.3E: IMPLEMENTED** (`docs/security/E21-RETENTION-DETERMINATION.md`
+§5.9).
+- Never-sent cancelled/rejected announcements and empty threads (1 y),
+  ended driver assignments (7 y), checked-out visits with their last visitor
+  (1 y), completed automation executions (1 y) and ended API credentials
+  (D6, 7 y) now expire, each on a canonical end time.
+- Memberships, membership preferences and Inventory are pinned tenant
+  lifetime; notifications re-verified not applicable; Canteen follows D8.
+- **No mechanism checkpoint remains except E21.3F** (payroll evidence, the
+  recorded D8 × D9 intersection).
+- **User-identity erasure:** legal decision pending (I5), untouched.
+- **Final ratification:** deferred to the pre-production closeout. No
+  production legal clearance is claimed.
+- **Tenant destruction:** NOT AUTHORIZED. **E33 / TCH-L1:** open
+  independently.

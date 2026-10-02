@@ -544,3 +544,11 @@ one Student per transaction under the Student-row lock.
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
 §5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
 counts with the same rule.
+
+## Driver-assignment retention (E21.3E, 2026-10-02)
+
+An ended driver (route) assignment is deleted 7 calendar years after its
+`ends_on` by `platform:operations-retention-prune`
+(`DriverAssignmentRetentionService`). Ending is one-way (a new assignment is
+a new row); an active assignment is never eligible. The driver reference
+goes with the row; routes, stops and vehicles stay. Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.9).

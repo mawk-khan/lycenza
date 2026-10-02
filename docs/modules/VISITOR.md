@@ -534,3 +534,12 @@ documented as lessons for future tests in this codebase.
   (`tests/Feature/App/VisitorAdminUiTest.php`).
 
 Total: 68 tests, 178 assertions, all passing, zero skipped.
+
+## Retention (E21.3E, 2026-10-02)
+
+A checked-out visit is deleted 1 calendar year after `checked_out_at` by
+`platform:operations-retention-prune` (`VisitorRetentionService`), one
+visitor per transaction; the visitor goes only with its last visit, so a
+returning visitor keeps its identity. A visit never checked out is reported
+unresolved and kept (no checkout is ever inferred). Host references go with
+the visit. Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.9).

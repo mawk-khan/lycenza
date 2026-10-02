@@ -29,8 +29,9 @@ use Illuminate\Support\Facades\DB;
  *   them, and its attachments.
  * Fails closed:
  * - a sent date in no year, or in two, makes the unit `unresolved` (kept);
- * - a never-sent announcement and a thread with no message have no anchor
- *   (`skipped`, kept).
+ * - a never-sent announcement and a thread with no message have no D3
+ *   anchor (`skipped` here); their own residual clock is
+ *   CommunicationResidualRetentionService's (E21.3E).
  *
  * DELIVERY TELEMETRY is retained N calendar years after its terminal
  * timestamp. That is `delivered_at`, `read_at` or `failed_at` (the latest),

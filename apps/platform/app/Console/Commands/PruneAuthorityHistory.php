@@ -27,10 +27,13 @@ use InvalidArgumentException;
  *    on the School-local date. Open and future rows are never eligible;
  * 3. finished elevations (`ended_at`, else `expires_at`) no School audit
  *    event references any more (`platform:audit-prune` runs first).
+ * 4. (E21.3E, E21.2G I3) ended API client credentials: their authority
+ *    ended at LEAST(revoked_at, expires_at); a revocation is final and an
+ *    expiry is never extended, so a current credential is never eligible.
  *
  * Platform-wide (RETENTION_HOLD_PLATFORM holds them):
- * 4. revoked Group grants no elevation references any more;
- * 5. revoked platform role grants.
+ * 5. revoked Group grants no elevation references any more;
+ * 6. revoked platform role grants.
  *
  * Not touched here, by design (determination E21-D6):
  * - the Employee↔User link history, which lives in the audit ledger
@@ -84,6 +87,8 @@ class PruneAuthorityHistory extends Command
                 $add(RetentionExpiry::SCHOOL_ROLE_GRANT, $expiry->forSchool(RetentionExpiry::SCHOOL_ROLE_GRANT, $school, $cutoff, $batch, $dryRun));
                 $add(RetentionExpiry::TEACHING_ASSIGNMENT, $expiry->forSchool(RetentionExpiry::TEACHING_ASSIGNMENT, $school, $localCutoff, $batch, $dryRun));
                 $add(RetentionExpiry::SCHOOL_ELEVATION, $expiry->forSchool(RetentionExpiry::SCHOOL_ELEVATION, $school, $cutoff, $batch, $dryRun));
+                // E21.3E (E21.2G I3): ended API client credentials, LEAST(revoked_at, expires_at).
+                $add(RetentionExpiry::SCHOOL_API_CREDENTIAL, $expiry->forSchool(RetentionExpiry::SCHOOL_API_CREDENTIAL, $school, $cutoff, $batch, $dryRun));
             }
         });
 

@@ -542,3 +542,15 @@ has the lowest integration cost of the four adapter-ready channels), OR
 class/section academic-audience resolution once it's product-prioritized
 relative to Phase 1A's Student/Guardian timeline. Not started in this
 execution.
+
+## Later amendment — E21.3E residual retention (2026-10-02)
+
+A never-sent announcement that was cancelled (`cancelled_at`) or rejected
+(the latest approval request's `decided_at`) is deleted 1 calendar year
+later, with its draft audience, channels, cohorts, approval requests and
+attachments, by `platform:communications-prune --only=residual`
+(`CommunicationResidualRetentionService`). Anything ever published stays
+under D3. A rejected announcement edited back to draft is live again and
+kept. An empty thread (no message, no attachment) is deleted 1 calendar year
+after `last_activity_at`. See `docs/security/E21-RETENTION-DETERMINATION.md`
+§5.9.

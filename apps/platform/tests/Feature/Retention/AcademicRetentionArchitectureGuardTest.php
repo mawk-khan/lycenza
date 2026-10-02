@@ -80,6 +80,9 @@ class AcademicRetentionArchitectureGuardTest extends TestCase
             'Domain/Attendance/Application/Retention/AttendanceSessionRetentionService.php',
             'Domain/CurriculumDelivery/Application/Retention/CurriculumDeliveryRetentionService.php',
             'Domain/Timetable/Application/Retention/TimetableEntryRetentionService.php',
+            // E21.3E: the operational residual row services.
+            'Domain/Transport/Application/Retention/DriverAssignmentRetentionService.php',
+            'Support/Retention/AutomationExecutionRetention.php',
         ], array_values(array_filter($this->filesContaining('RetentionBatch'), fn ($f) => ! str_ends_with($f, 'RetentionBatch.php'))));
 
         $this->assertSame(['Support/Retention/LmsResourceRetention.php', 'Support/Retention/RetentionExpiry.php'], $this->filesContaining('lmsResource('));

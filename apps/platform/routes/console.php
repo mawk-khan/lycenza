@@ -207,6 +207,16 @@ Schedule::command('platform:academic-retention-prune')
     ->withoutOverlapping()
     ->name('academic-retention-prune');
 
+// E21.3E (E21.2G O2-O4): ended driver assignments (7 y), checked-out visits
+// (1 y) and completed automation executions (1 y). No default: an unset
+// period skips its category. It runs before the Employee run (driver and
+// host references may keep an Employee), but each unit rechecks under its
+// own lock, so the order never decides whether a row may go.
+Schedule::command('platform:operations-retention-prune')
+    ->dailyAt('04:48')
+    ->withoutOverlapping()
+    ->name('operations-retention-prune');
+
 // E21.2E (E21-D9): ancillary HR details (2 y) and employment/payroll
 // evidence (8 y) after final separation. No default: until configured it
 // deletes nothing. Each purge rechecks under its own lock, so correctness

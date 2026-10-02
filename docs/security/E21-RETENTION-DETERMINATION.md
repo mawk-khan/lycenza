@@ -53,6 +53,13 @@
 > authoritative Academic Year (LMS past the D6 owner/audience minimum);
 > Academic Year dates are frozen; syllabus and examination configuration
 > stay. Remaining engineering: E21.3E, E21.3F.
+>
+> **E21.3E (2026-10-02, §5.9):** the communications and platform residuals
+> are implemented: never-sent cancelled/rejected announcements and empty
+> threads (1 y), ended driver assignments (7 y), visits (1 y), completed
+> automation executions (1 y) and ended API credentials (D6, 7 y).
+> Memberships, membership preferences and Inventory stay tenant lifetime;
+> notifications stay not applicable. The only engineering left is E21.3F.
 > - Final ratification is deferred to the pre-production project closeout.
 > - The consolidated reference, with matrices, the D8 brief and the
 >   ratification package, is `docs/security/E21-CLOSURE-AUDIT.md`. Its §8
@@ -752,7 +759,7 @@ The checkpoints are listed in §5.
 | E21.3B | Student-linked evidence and modules (consent, preferences, processing authorizations, converted admissions, Library/Transport/Hostel, portal invitations) | **Implemented** (§5.6; full isolated regression) |
 | E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | **Implemented** (§5.7; full isolated regression) |
 | E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | **Implemented** (§5.8; full isolated regression) |
-| E21.3E | Communications and platform residuals (never-sent and empty threads, visitors, automation, driver assignments, API credentials) | Not started |
+| E21.3E | Communications and platform residuals (never-sent and empty threads, visitors, automation, driver assignments, API credentials) | **Implemented** (§5.9; full isolated regression) |
 | E21.3F (provisional) | Payroll Evidence Retention & Employee Release: a Payroll D9 result-expiry mechanism, releasing payroll-linked journal entries (D8 × D9, ADR 0064 §21) and paid Employees | Not started |
 
 ### 5.1 The privileged retention path (E21.2B)
@@ -1101,6 +1108,63 @@ Project-adopted, pending ratification.
 - **Metrics:** one deliberate new family, `academic` (ten `operation`
   values, ceiling 20).
 
+### 5.9 Communications and platform residuals (E21.3E)
+
+Implements E21.2G C1, C2, O2, O3, O4 and I3, and re-verifies C6, C7, O5
+and I1 (`E21-CLOSURE-AUDIT.md` §8). Project-adopted, pending ratification.
+No new lifecycle marker was needed: every trigger already exists, is set in
+the transition's own transaction, and is never `updated_at`.
+
+- **Never-sent announcements (C1)** (`platform:communications-prune
+  --only=residual`, `COMMUNICATIONS_ABANDONED_RETENTION_YEARS`, adopted 1):
+  never published (`published_at` and `message_id` NULL, no message, no
+  recipient), and either `cancelled` (trigger `cancelled_at`, set by the
+  cancelling UPDATE; cancel is only possible from draft or scheduled) or
+  `rejected` (trigger: `decided_at` of the latest approval request, which
+  must be `rejected`; written with the status). A rejected announcement is
+  still editable and editing returns it to draft, so the status is rechecked
+  under the row lock. Undated rows are `unresolved` and kept. It goes with
+  its draft audience, channels, cohorts, approval requests and attachments
+  (bytes after commit).
+- **Empty threads (C2):** no message and no attachment (a thread starts with
+  participants only and no message is ever deleted on its own, so an empty
+  thread never held content). Trigger `last_activity_at`, the documented
+  activity time (creation or last change); NULL is unresolved. A new
+  message takes FOR KEY SHARE on its thread and the purge locks the thread
+  FOR UPDATE, so a message that committed first keeps it.
+- **Driver assignments (O2)** (`platform:operations-retention-prune`,
+  `OPERATIONS_DRIVER_ASSIGNMENT_RETENTION_YEARS`, adopted 7): `status =
+  'ended'`, 7 calendar years after `ends_on` (UTC). Ending is one-way; a new
+  assignment is a new row. The driver reference is released with the row.
+- **Visits (O3)** (`OPERATIONS_VISIT_RETENTION_YEARS`, adopted 1):
+  `checked_out`, 1 calendar year after `checked_out_at`; a checkout is
+  one-way. One visitor per transaction: the visitor goes only with its last
+  visit. A visit never checked out is unresolved and kept. Host references
+  go with the visit.
+- **Automation (O4)** (`OPERATIONS_AUTOMATION_RETENTION_YEARS`, adopted 1):
+  `succeeded`/`skipped`/`failed`/`abandoned` with `completed_at`, 1 calendar
+  year after it, with their attempts and review items (ON DELETE CASCADE).
+  Pending, running and retrying executions are never eligible; a terminal
+  execution is never reclaimed. Rule instances (configuration) stay.
+- **API credentials (I3, D6)** (`platform:authority-history-prune`): an
+  ended credential, 7 calendar years after its authority ended at
+  LEAST(revoked_at, expires_at); a revocation is final and an expiry is
+  never extended (database trigger), so a current credential is never
+  eligible. The runtime role keeps no DELETE; migration `2026_11_14_090000`
+  adds the narrow, 7-year-floored `retention_expire_api_client_credentials`.
+  The secret is only ever a hash, unusable from that end. `last_used_at` is
+  never the trigger; API clients stay.
+- **Tenant lifetime, pinned by guards:** memberships (suspended, never
+  deleted, rule 92), membership email preferences (follow the membership),
+  Inventory balances and movements. **Notifications** stay not applicable:
+  the only writer is the Phase 0C demo consumer, whose event emitter has no
+  production caller. **Canteen** orders and stock consumptions follow
+  Finance (D8) only.
+- **Employees:** driver and host references are released only by those
+  rows' own expiry; payroll evidence (E21.3F) still blocks.
+- **Metrics:** never-sent and empty-thread in `communications`; credentials
+  in `authority`; one deliberate new family `operations` (eleven values).
+
 ## 6. Production settings
 
 The values below are fail-closed: a command deletes nothing while its value
@@ -1128,6 +1192,10 @@ is unset. Production must set them once their checkpoint ships.
 | `ADMISSIONS_TERMINAL_RETENTION_YEARS` | 1 (calendar year after a rejected/withdrawn application's `terminal_at`) | E21.3C |
 | `GUARDIAN_RETENTION_YEARS` | 1 (calendar year after the Guardian last had a Student relationship) | E21.3C |
 | `ACADEMIC_OPERATIONS_RETENTION_YEARS` | 7 (calendar years after the end of the authoritative Academic Year) | E21.3D |
+| `COMMUNICATIONS_ABANDONED_RETENTION_YEARS` | 1 (calendar year after a never-sent announcement's cancellation/rejection or an empty thread's last activity) | E21.3E |
+| `OPERATIONS_DRIVER_ASSIGNMENT_RETENTION_YEARS` | 7 (calendar years after an ended driver assignment's `ends_on`) | E21.3E |
+| `OPERATIONS_VISIT_RETENTION_YEARS` | 1 (calendar year after a visit's checkout) | E21.3E |
+| `OPERATIONS_AUTOMATION_RETENTION_YEARS` | 1 (calendar year after an automation execution's completion) | E21.3E |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 (calendar years after final separation) | E21.2E |
 | `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 (calendar years after final separation; never shorter than ancillary) | E21.2E |
 | `ERASURE_CASE_RETENTION_YEARS` | 7 (calendar years after a case closed) | E21.2F |

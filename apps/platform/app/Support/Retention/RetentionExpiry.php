@@ -48,6 +48,9 @@ final class RetentionExpiry
     /** E21.2C (E21-D3): append-only delivery policy decisions, 1 year after created_at. */
     public const COMMUNICATION_POLICY_DECISION = 'communication_policy_decision';
 
+    /** E21.3E (E21.2G I3, E21-D6): an ended API client credential, 7 years after its authority ended. */
+    public const SCHOOL_API_CREDENTIAL = 'school_api_credential';
+
     /** E21.2F (E21-D10): a closed erasure case, 7 years after it closed. */
     public const ERASURE_CASE = 'erasure_case';
 
@@ -73,6 +76,7 @@ final class RetentionExpiry
         self::TEACHING_ASSIGNMENT => 'retention_expire_teaching_assignments',
         self::SCHOOL_ELEVATION => 'retention_expire_school_elevations',
         self::COMMUNICATION_POLICY_DECISION => 'retention_expire_communication_delivery_policy_decisions',
+        self::SCHOOL_API_CREDENTIAL => 'retention_expire_api_client_credentials',
     ];
 
     /** Categories that belong to no School => their fixed database function. */

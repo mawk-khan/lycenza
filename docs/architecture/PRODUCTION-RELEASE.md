@@ -470,6 +470,22 @@ email recovery.
     `--dry-run` first (a register header with Student records left, or an
     entry a header references, shows as dependency-blocked).
   - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops it per School.
+- **E21.3E communications and platform residuals (2026-10-02):**
+  - **Migration** `2026_11_14_090000`: `retention_expire_api_client_credentials`
+    (checked by `platform:verify-database`). Its `down()` drops only the
+    function.
+  - **`communications-prune` gains `--only=residual`** (never-sent
+    cancelled/rejected announcements, empty threads) under
+    `COMMUNICATIONS_ABANDONED_RETENTION_YEARS=1`.
+  - **`authority-history-prune` gains ended API credentials** under the
+    existing `AUTHORITY_HISTORY_RETENTION_YEARS=7`.
+  - **New daily task:** `operations-retention-prune` (04:48), covered by
+    OBS-06: `OPERATIONS_DRIVER_ASSIGNMENT_RETENTION_YEARS=7`,
+    `OPERATIONS_VISIT_RETENTION_YEARS=1`,
+    `OPERATIONS_AUTOMATION_RETENTION_YEARS=1` (project-adopted, pending
+    ratification). Unset skips a category; run with `--dry-run` first
+    (visits never checked out show as unresolved).
+  - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops all of them per School.
 
 ## 6. Seeding: production-safe versus demo
 

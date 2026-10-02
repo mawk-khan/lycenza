@@ -10,7 +10,8 @@ use App\Support\Observability\MetricsRecorder;
  *
  * E21.3A2: the `operation` label is a small, stable FAMILY (audit, email,
  * authority, communications, storage, student, employee, erasure,
- * finance; E21.3D: academic), not one value per category: the category list kept growing
+ * finance; E21.3D: academic; E21.3E: operations), not one value per
+ * category: the category list kept growing
  * towards the label ceiling (MetricCatalogGuardTest). Logs keep the exact
  * category; a new category joins an existing family, or a new family is a
  * deliberate catalog change.
@@ -59,6 +60,18 @@ final class RetentionMetrics
 
     public const ASSIGNMENT = 'assignment';
 
+    /** E21.3E (E21.2G C1/C2): never-sent cancelled/rejected announcements and empty threads. */
+    public const COMMUNICATION_NEVER_SENT = 'communication_never_sent';
+
+    public const COMMUNICATION_EMPTY_THREAD = 'communication_empty_thread';
+
+    /** E21.3E (E21.2G O2/O3/O4): operational module residuals. */
+    public const DRIVER_ASSIGNMENT = 'driver_assignment';
+
+    public const VISITOR_VISIT = 'visitor_visit';
+
+    public const AUTOMATION_EXECUTION = 'automation_execution';
+
     /** E21.3B (E21.2G I2): ended portal invitations, 7 days after they ended. */
     public const PORTAL_INVITATION = 'portal_invitation';
 
@@ -104,6 +117,15 @@ final class RetentionMetrics
         self::TIMETABLE_ENTRY => 'academic',
         self::LEARNING_CONTENT => 'academic',
         self::ASSIGNMENT => 'academic',
+        // E21.3E: never-sent communication residuals stay in the communications family;
+        // ended API credentials join authority; operational module residuals form one
+        // deliberate family (`operations`), keeping the label far below its ceiling.
+        self::COMMUNICATION_NEVER_SENT => 'communications',
+        self::COMMUNICATION_EMPTY_THREAD => 'communications',
+        RetentionExpiry::SCHOOL_API_CREDENTIAL => 'authority',
+        self::DRIVER_ASSIGNMENT => 'operations',
+        self::VISITOR_VISIT => 'operations',
+        self::AUTOMATION_EXECUTION => 'operations',
         // E21.3B: an invitation is an offer of account authority; it joins the authority family.
         self::PORTAL_INVITATION => 'authority',
         self::EMPLOYEE_ANCILLARY => 'employee',

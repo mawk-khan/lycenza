@@ -177,23 +177,29 @@ class TenantClosureReadinessTest extends TestCase
     }
 
     #[Test]
-    public function the_e21_3c_and_e21_3d_categories_are_adopted_and_only_e21_3e_remains_pending(): void
+    public function every_mechanism_is_implemented_and_only_the_payroll_residual_remains(): void
     {
+        // E21.3E: no category waits for a mechanism checkpoint any more; the
+        // D8 x D9 payroll ledger (E21.3F) is the only technical blocker left.
         $tables = TenantRetentionCatalog::tables();
-        $this->assertSame([], TenantRetentionCatalog::PENDING_ROWS, 'E21.3C implemented the last mixed-table pending rows');
+        $this->assertSame([], TenantRetentionCatalog::PENDING_ROWS);
         foreach (array_keys(TenantRetentionCatalog::UNRESOLVED_ROWS) as $table) {
             $this->assertArrayHasKey($table, $tables, "{$table} is not a classified tenant table");
             $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$tables[$table]][0], $table);
         }
-        foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules', 'academic_operations'] as $category) {
+        foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status]) {
+            $this->assertNotSame(TenantRetentionCatalog::MECHANISM_PENDING, $status, "{$category} still waits for a mechanism");
+        }
+        foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules', 'academic_operations', 'communications', 'api_credentials', 'operational_logs'] as $category) {
             $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
-        // E21.2G A2: syllabus and examination schedules are tenant-lifetime configuration, never pending.
-        $this->assertSame(TenantRetentionCatalog::TENANT_LIFETIME, TenantRetentionCatalog::CATEGORIES['academic_configuration'][0]);
-        foreach (['operational_logs', 'api_credentials'] as $category) {
-            $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
+        // Tenant lifetime by decision, never age-pruned: memberships, membership preferences, Inventory, notifications, academic configuration.
+        foreach (['identity', 'communication_configuration', 'inventory_history', 'notifications', 'academic_configuration'] as $category) {
+            $this->assertSame(TenantRetentionCatalog::TENANT_LIFETIME, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
         $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, TenantRetentionCatalog::CATEGORIES['payroll_ledger'][0], 'the D8 x D9 payroll residual stays visible (E21.3F)');
+        $this->assertStringContainsString('D9', TenantRetentionCatalog::CATEGORIES['payroll_ledger'][1]);
+        $this->assertSame(['final_ratification_pending', 'no_tenant_purge_authorized'], TenantClosureReadiness::PERMANENT_GATES);
     }
 
     #[Test]
@@ -204,7 +210,7 @@ class TenantClosureReadinessTest extends TestCase
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
             $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
             if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
-                $this->assertMatchesRegularExpression('/E21\.3[D-E]/', $decision, "{$category} must name its follow-up checkpoint");
+                $this->fail("{$category}: E21.3E implemented the last pending mechanism");
             }
             if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {
                 $this->assertSame('payroll_ledger', $category, 'E21.3A2: the only technical blocker left is the D8 x D9 payroll ledger');

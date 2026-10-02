@@ -593,3 +593,18 @@ real environment:
   Outcomes unchanged.
 - **Logs** (counts only; never a title, Section, teacher or Student):
   `retention.academic_prune.completed`/`.dry_run`/`.unconfigured`.
+
+## E21.3E residual retention (2026-10-02)
+
+- **Scheduler.** New daily task `operations-retention-prune` (04:48), covered
+  by the OBS-06 daily staleness alert (regenerated rules); `scheduled_task`
+  now has 29 values (ceiling 30). The communications residuals run inside
+  `communications-prune` and API credentials inside `authority-history-prune`.
+- **Metric labels.** `communication_never_sent` and
+  `communication_empty_thread` join `communications`, `school_api_credential`
+  joins `authority`, and one deliberate new family `operations`
+  (`driver_assignment`, `visitor_visit`, `automation_execution`): eleven
+  `operation` values, ceiling 20. Outcomes unchanged.
+- **Logs** (counts only; never message content, visitor data, a secret, a
+  payload or a driver): `retention.operations_prune.completed`/`.dry_run`/
+  `.unconfigured`; the residual counts in `retention.communications_prune.*`.

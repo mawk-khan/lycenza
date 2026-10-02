@@ -76,7 +76,7 @@ final class TenantRetentionCatalog
         'audit' => [self::ADOPTED, 'D1: 7 y after the event', ['school_audit_events']],
         'erasure_cases' => [self::ADOPTED, 'D10: a closed erasure case, 7 y after it closed', ['erasure_cases']],
         'email' => [self::ADOPTED, 'D2: 180 d after the terminal state', ['email_messages', 'email_submission_attempts', 'email_provider_references']],
-        'communications' => [self::ADOPTED, 'D3: content 3 y after its Academic Year; telemetry 1 y; cancelled deliveries go with their content. E21.2G: cancelled/rejected never-sent announcements and empty threads, 1 y after cancellation/rejection/last activity (mechanism E21.3E); live drafts are working state', [
+        'communications' => [self::ADOPTED, 'D3: content 3 y after its Academic Year; telemetry 1 y; cancelled deliveries go with their content. E21.2G C1/C2 (E21.3E, implemented): never-sent cancelled/rejected announcements 1 y after cancelled_at / the rejection decision, empty threads 1 y after last_activity_at (platform:communications-prune --only=residual); live drafts are working state', [
             'communication_announcements', 'communication_announcement_academic_cohorts', 'communication_announcement_audience_members',
             'communication_announcement_channels', 'communication_announcement_domain_audience_members', 'communication_announcement_recipients',
             'communication_approval_requests', 'communication_attachments', 'communication_messages', 'communication_recipients',
@@ -86,17 +86,17 @@ final class TenantRetentionCatalog
         'communication_consent' => [self::ADOPTED, 'E21.2G C4/C5: consent evidence and domain preferences follow their subject: a Student subject\'s go with the Student core record (25 y, E21.3B, implemented); a Guardian subject\'s with Guardian personal data (1 y, E21.3C, implemented)', [
             'communication_domain_consent_events', 'communication_domain_preferences',
         ]],
-        'communication_configuration' => [self::TENANT_LIFETIME, 'School configuration', [
+        'communication_configuration' => [self::TENANT_LIFETIME, 'School configuration; membership email preferences (communication_preferences) follow their membership (E21.2G C6): no clock of their own', [
             'communication_approval_policies', 'communication_channel_policies', 'communication_conversation_policies',
             'communication_delivery_timing_policies', 'communication_templates', 'communication_preferences',
         ]],
-        'notifications' => [self::TENANT_LIFETIME, 'E21.2G: Phase 0 demo with no production producer (not applicable); a producer must adopt a D13 period first', ['notifications']],
+        'notifications' => [self::TENANT_LIFETIME, 'E21.2G C7, reverified at E21.3E: not applicable. The only writer is the Phase 0C demonstration consumer of school.setting.changed.v1, whose emitter (SchoolSettingsService) has no production caller; a production producer must adopt a D13 period first', ['notifications']],
         'integrations' => [self::ADOPTED, 'D4: deliveries 30/90 d, outbox 30 d', ['webhook_deliveries', 'webhook_delivery_attempts', 'domain_event_outbox', 'event_consumer_receipts']],
         'integration_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['webhook_endpoints', 'webhook_subscriptions', 'api_clients']],
-        'api_credentials' => [self::MECHANISM_PENDING, 'E21.2G (D6): an ended credential, 7 y after it was revoked, superseded or expired; mechanism E21.3E', ['api_client_credentials']],
+        'api_credentials' => [self::ADOPTED, 'E21.2G I3 (D6): an ended credential, 7 y after its authority ended (LEAST(revoked_at, expires_at)), through its narrow, floored retention function in platform:authority-history-prune (E21.3E, implemented)', ['api_client_credentials']],
         'technical_ttl' => [self::ADOPTED, 'technical TTL (48 h idempotency)', ['api_idempotency_keys']],
         'authority' => [self::ADOPTED, 'D6: 7 y after the authority ends', ['membership_role_assignments', 'teaching_assignments', 'school_elevations']],
-        'identity' => [self::TENANT_LIFETIME, 'E21.2G: memberships are authority provenance (suspended, never deleted, rule 92); ended staff invitations are a technical TTL (7 d, implemented)', [
+        'identity' => [self::TENANT_LIFETIME, 'E21.2G I1: memberships are authority provenance (suspended, never deleted, rule 92): tenant lifetime, no age-based expiry; ended staff invitations are a technical TTL (7 d, implemented)', [
             'school_memberships', 'staff_account_invitations', 'staff_account_invitation_roles',
         ]],
         'identity_subject_links' => [self::ADOPTED, 'E21.2G I2/I4: ended portal invitations 7 d after they ended (platform:portal-invitations-prune, E21.3B, implemented); Student account links go with the Student core record; revoked Guardian links past D6 with Guardian personal data (E21.3C, implemented); an active link keeps its subject', [
@@ -133,10 +133,10 @@ final class TenantRetentionCatalog
         'student_operational_modules' => [self::ADOPTED, 'E21.2G O1: D7 operational history, 7 y after the Student\'s final exit; returned loans and ended assignments expire through platform:student-retention-prune (E21.3B, implemented); an open loan or assignment keeps the Student', [
             'hostel_residency_assignments', 'library_loans', 'transport_student_assignments',
         ]],
-        'operational_logs' => [self::MECHANISM_PENDING, 'E21.2G: driver assignments 7 y after they end; visits 1 y after check-out (a visitor once no visit remains); automation records 1 y after completion; mechanism E21.3E', [
+        'operational_logs' => [self::ADOPTED, 'E21.2G O2/O3/O4 (E21.3E, implemented): driver assignments 7 y after ends_on; visits 1 y after checked_out_at, a visitor with its last visit; automation executions (attempts, review items) 1 y after completed_at: platform:operations-retention-prune', [
             'transport_route_assignments', 'visitors', 'visitor_visits', 'automation_executions', 'automation_execution_attempts', 'automation_review_items',
         ]],
-        'inventory_history' => [self::TENANT_LIFETIME, 'E21.2G: stock balances and movements, School operations without personal data', ['inventory_stock_balances', 'stock_movements']],
+        'inventory_history' => [self::TENANT_LIFETIME, 'E21.2G O5: stock balances and movements, School operations without personal data: tenant lifetime, no age-based expiry; Canteen stock consumptions follow their orders (D8)', ['inventory_stock_balances', 'stock_movements']],
         'operational_configuration' => [self::TENANT_LIFETIME, 'School configuration', [
             'hostels', 'hostel_rooms', 'hostel_beds', 'library_titles', 'library_copies', 'transport_routes', 'transport_stops',
             'transport_vehicles', 'inventory_items', 'inventory_locations', 'canteen_outlets', 'canteen_items',
@@ -163,6 +163,9 @@ final class TenantRetentionCatalog
     public const UNRESOLVED_ROWS = [
         'admission_applications' => "status IN ('rejected', 'withdrawn') AND terminal_at IS NULL",
         'guardians' => 'no_relationship_since IS NULL AND NOT EXISTS (SELECT 1 FROM student_guardian_relationships r WHERE r.guardian_id = guardians.id)',
+        // E21.3E: a never-sent cancelled announcement without its cancellation time, a rejected one without its rejected request, an empty thread without activity time.
+        'communication_announcements' => "published_at IS NULL AND message_id IS NULL AND ((status = 'cancelled' AND cancelled_at IS NULL) OR (status = 'rejected' AND NOT EXISTS (SELECT 1 FROM communication_approval_requests r WHERE r.announcement_id = communication_announcements.id AND r.status = 'rejected' AND r.decided_at IS NOT NULL)))",
+        'communication_threads' => 'last_activity_at IS NULL AND NOT EXISTS (SELECT 1 FROM communication_messages m WHERE m.thread_id = communication_threads.id)',
     ];
 
     /** @return array<string, string> table => category */

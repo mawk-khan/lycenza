@@ -36,8 +36,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'timetable_entries' => 'retained, blocks: until the entry itself expires (A1, E21.3D: 7 y after its Academic Year, once no header references it)',
             'learning_content' => 'retained, blocks: LMS owner until the resource expires (A1 + D6 minimum, E21.3D)',
             'assignments' => 'retained, blocks: LMS owner until the resource expires (A1 + D6 minimum, E21.3D)',
-            'transport_route_assignments' => 'retained, blocks: Transport, no adopted period (E21.2G)',
-            'visitor_visits' => 'retained, blocks: Visitor, no adopted period (E21.2G)',
+            'transport_route_assignments' => 'retained, blocks: until the driver assignment itself expires (O2, E21.3E: 7 y after ends_on)',
+            'visitor_visits' => 'retained, blocks: as host until the visit itself expires (O3, E21.3E: 1 y after checkout)',
         ],
         'employment_records' => [
             'employee_assignments' => 'D9 evidence (8 y): employment history, purged with the Employee',
@@ -80,7 +80,7 @@ class EmployeeRetentionClassificationTest extends TestCase
     #[Test]
     public function every_retention_parent_is_classified_by_exactly_one_checkpoint(): void
     {
-        $parents = [...array_keys(StudentRetentionClassificationTest::CLASSIFICATION), ...array_keys(self::CLASSIFICATION), ...array_keys(GuardianRetentionClassificationTest::CLASSIFICATION), ...array_keys(AcademicRetentionClassificationTest::CLASSIFICATION)];
+        $parents = [...array_keys(StudentRetentionClassificationTest::CLASSIFICATION), ...array_keys(self::CLASSIFICATION), ...array_keys(GuardianRetentionClassificationTest::CLASSIFICATION), ...array_keys(AcademicRetentionClassificationTest::CLASSIFICATION), ...array_keys(ResidualRetentionClassificationTest::CLASSIFICATION)];
         sort($parents);
         $declared = ReferencingRows::PARENTS;
         sort($declared);

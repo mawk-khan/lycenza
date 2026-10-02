@@ -292,3 +292,13 @@ gets one empty 401.
 
 This is separate from outbound webhooks (ADR 0026/0027, rules 35–49) and
 from payment-provider callbacks (rule 34).
+
+## API credential history retention (E21.3E, 2026-10-02)
+
+An ended API client credential is D6 authority history: it is deleted 7
+calendar years after its authority ended, LEAST(revoked_at, expires_at), by
+`platform:authority-history-prune` through one narrow, 7-year-floored
+database function (the runtime role keeps no DELETE). A revocation is final
+and an expiry is never extended, so a current credential is never eligible;
+the secret is only a hash and unusable from that end. `last_used_at` is never
+the trigger; API clients (configuration) stay. Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.9).

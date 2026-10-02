@@ -99,6 +99,19 @@ return [
     // unset deletes nothing.
     'academic_operations_years' => env('ACADEMIC_OPERATIONS_RETENTION_YEARS'),
 
+    // E21.3E (E21.2G C1/C2/O2/O3/O4, project-adopted, pending ratification),
+    // calendar years, no default (unset deletes nothing):
+    // - never-sent cancelled/rejected announcements and empty threads after
+    //   their cancellation/rejection or last activity, adopted 1;
+    // - ended driver assignments after `ends_on`, adopted 7;
+    // - checked-out visits after `checked_out_at`, adopted 1;
+    // - completed automation executions after `completed_at`, adopted 1.
+    // Ended API credentials are D6 authority history (authority_history_years).
+    'communications_abandoned_years' => env('COMMUNICATIONS_ABANDONED_RETENTION_YEARS'),
+    'driver_assignment_years' => env('OPERATIONS_DRIVER_ASSIGNMENT_RETENTION_YEARS'),
+    'visit_years' => env('OPERATIONS_VISIT_RETENTION_YEARS'),
+    'automation_years' => env('OPERATIONS_AUTOMATION_RETENTION_YEARS'),
+
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 
 ];

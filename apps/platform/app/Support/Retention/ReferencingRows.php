@@ -41,6 +41,9 @@ final class ReferencingRows
         'guardians', 'guardian_contacts', 'student_guardian_account_links',
         // E21.3D: year-bound academic operations.
         'curriculum_deliveries', 'attendance_sessions', 'timetable_entries', 'learning_content', 'assignments',
+        // E21.3E: communication and platform residuals.
+        'communication_announcements', 'communication_threads', 'transport_route_assignments', 'visitors', 'visitor_visits',
+        'automation_executions',
     ];
 
     /** @var array<string, list<array{table: string, column: string, tenant: bool}>> */

@@ -10,8 +10,8 @@
 >
 > No period here is claimed to be statutory, and no legal clearance is
 > claimed. This document consolidates the repository state at the E21.2G
-> audit (2026-10-01), updated at E21.3A/E21.3A2, E21.3B, E21.3C and
-> E21.3D (2026-10-02).
+> audit (2026-10-01), updated at E21.3A/E21.3A2, E21.3B, E21.3C, E21.3D and
+> E21.3E (2026-10-02).
 > It is the project reference until the pre-production review.
 
 - **Inputs:**
@@ -28,22 +28,22 @@
 |---|---|
 | What is technically implemented? | D0–D7, D9 (classified data), D10 (reviewed erasure cases), D11 (freeze and readiness), D12 and D13 (repository side). See §2. |
 | What owner/project decisions remain unresolved? | **One:** erasing a User identity, i.e. anonymising audit actors and authority history. It needs a qualified legal decision (§8, I5). Every other category has a project decision. |
-| What engineering blockers remain? | **D8 Finance is IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064). **E21.3B (Student-linked evidence and modules), E21.3C (Admissions and Guardian lifecycle markers) and E21.3D (year-bound academic operations) are IMPLEMENTED.** One recorded intersection remains: payroll-linked Finance detail stays while D9 payroll evidence references it, and no Payroll D9 expiry mechanism exists (ADR 0064 §21) — now the bounded follow-up **E21.3F** (provisional name). Plus one bounded mechanism checkpoint for periods adopted here: E21.3E (§7). |
+| What engineering blockers remain? | **D8 Finance is IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064). **E21.3B (Student-linked evidence and modules), E21.3C (Admissions and Guardian lifecycle markers), E21.3D (year-bound academic operations) and E21.3E (communications and platform residuals) are IMPLEMENTED.** One recorded intersection remains: payroll-linked Finance detail stays while D9 payroll evidence references it, and no Payroll D9 expiry mechanism exists (ADR 0064 §21) — now the bounded follow-up **E21.3F** (provisional name). No other mechanism checkpoint remains (§7). |
 | What final legal/compliance ratification remains? | All of D0–D13 and the E21.2G decisions (§10). Deferred to the pre-production closeout. |
-| Can E21 close now? | **No.** It is technically open: the E21.3E mechanisms are not built, and the payroll D8 × D9 intersection has no mechanism (E21.3F). |
-| What must happen before E21 can close? | E21.3E (E21.3A, E21.3A2, E21.3B, E21.3C and E21.3D are done), and E21.3F (payroll-result expiry, D9, releasing payroll-linked Finance detail and paid Employees). After those: production configuration (§9) and final ratification (§10). |
+| Can E21 close now? | **No.** It is technically open: the payroll D8 × D9 intersection has no mechanism (E21.3F); final ratification is pending and User-identity erasure needs a legal decision. |
+| What must happen before E21 can close? | E21.3F (E21.3A–E are done) (payroll-result expiry, D9, releasing payroll-linked Finance detail and paid Employees). After those: production configuration (§9) and final ratification (§10). |
 
 ## 2. D0–D13 matrix
 
 | D | Adopted project policy | State | Mechanism | Remaining |
 |---|---|---|---|---|
-| D0 | Finite periods need an enforceable, tested mechanism | **PARTIALLY IMPLEMENTED** | Every implemented period has a command and tests | E21.3E mechanisms; E21.3F |
+| D0 | Finite periods need an enforceable, tested mechanism | **IMPLEMENTED** for every adopted period except the payroll D8 × D9 intersection | Every implemented period has a command and tests | E21.3F |
 | D1 | Audit 7 y after `occurred_at` | **IMPLEMENTED** | `audit-prune` → narrow functions (7-y DB floor) | Ratification |
 | D2 | Email metadata 180 d after terminal state; released suppressions 1 y after release | **IMPLEMENTED** | `email-prune`; `email-suppressions-prune` → narrow function | Ratification |
-| D3 | Content 3 y after its Academic Year ends; telemetry 1 y after terminal | **IMPLEMENTED** for sent content and telemetry; cancelled deliveries go with their content. **E21.2G:** never-sent cancelled/rejected announcements and empty threads 1 y | `communications-prune` (+ policy-decision function) | Never-sent and empty-thread mechanism (E21.3E) |
+| D3 | Content 3 y after its Academic Year ends; telemetry 1 y after terminal | **IMPLEMENTED** for sent content and telemetry; cancelled deliveries go with their content. **E21.3E (implemented):** never-sent cancelled/rejected announcements 1 y after `cancelled_at` / the rejection decision; empty threads 1 y after `last_activity_at` | `communications-prune` (+ `--only=residual`; policy-decision function) | Ratification |
 | D4 | Delivered 30 d, failed/abandoned 90 d; outbox 30 d after `processed_at` | **IMPLEMENTED** | `webhook-deliveries-prune`, `outbox-prune` | Ratification |
 | D5 | Documents inherit their owner; orphans 30 d | **IMPLEMENTED** for Student, Employee, (E21.3C) Guardian and (E21.3D) LMS Learning Content/Assignment owners, and orphans | `storage-orphans-prune`; parent purges | Ratification |
-| D6 | Authority 7 y after it ends | **IMPLEMENTED** (grants, TeachingAssignments, elevations). **E21.2G:** ended API credentials 7 y (E21.3E). **E21.3B (I2, implemented):** ended portal invitations 7 d after they ended | `authority-history-prune`; `portal-invitations-prune` | API credential mechanism (E21.3E) |
+| D6 | Authority 7 y after it ends | **IMPLEMENTED** (grants, TeachingAssignments, elevations). **E21.2G:** ended API credentials 7 y after LEAST(revoked_at, expires_at) (**E21.3E, implemented**). **E21.3B (I2, implemented):** ended portal invitations 7 d after they ended | `authority-history-prune`; `portal-invitations-prune` | Ratification |
 | D7 | Core 25 y and operational 7 y after final exit | **IMPLEMENTED** for classified D7 data. **E21.3B (implemented):** returned Library loans and ended Transport/Hostel assignments are D7 operational (an open one keeps the Student); processing authorizations, converted admission applications (with applicants that have nothing else), the Student subject's consent events and domain preferences, and the Guardian relationships an authorization names go with the core record in its unit | `student-retention-prune` (via `StudentRetention`); two core-floored functions (`retention_expire_student_processing_authorizations`, `retention_expire_student_consent_events`) | Ratification; Guardian-subject rows and rejected/withdrawn applications (E21.3C) |
 | D8 | 8 y after the financial period closes (`closed_at`) | **IMPLEMENTED** (E21.3A + E21.3A2, ADR 0064) | carry-forward reads; `finance-retention-prune` → `retention_expire_finance_unit` (closed period, 8-calendar-year DB floor, settled units, holds, accounting proof) | Ratification; payroll-linked detail waits for a D9 payroll mechanism (§21 of ADR 0064) |
 | D9 | Ancillary 2 y; evidence 8 y after final separation | **IMPLEMENTED** for classified D9 data | `employee-retention-prune` (HR + Payroll) | Paid staff wait for a Payroll result-expiry mechanism (no longer D8: ADR 0064 §21); teaching references are released as their academic rows expire (E21.3D) |
@@ -68,14 +68,15 @@ depends on the order.
 | 02:50 | `failed-jobs-prune` | D13 | `FAILED_JOBS_RETENTION_DAYS` | yes | 1000 (framework) | platform | runtime |
 | 03:00 | `audit-prune` (+ closed erasure cases) | D1, D10 | `AUDIT_RETENTION_YEARS`, `ERASURE_CASE_RETENTION_YEARS` | yes | ≤5000/function call | School + platform | narrow functions |
 | 03:10 | `email-suppressions-prune` | D2 | `MAIL_RELEASED_SUPPRESSION_RETENTION_YEARS` | yes | ≤5000 | platform | narrow function |
-| 03:20 | `authority-history-prune` | D6 | `AUTHORITY_HISTORY_RETENTION_YEARS` | yes | ≤5000 | School + platform | narrow functions |
-| 03:40 | `communications-prune` | D3 | `COMMUNICATIONS_*_RETENTION_YEARS` | yes | 500; 1 unit per transaction | School | RLS + narrow function |
+| 03:20 | `authority-history-prune` (E21.3E: + ended API credentials) | D6 | `AUTHORITY_HISTORY_RETENTION_YEARS` | yes | ≤5000 | School + platform | narrow functions |
+| 03:40 | `communications-prune` (E21.3E: + `residual`) | D3, C1, C2 | `COMMUNICATIONS_*_RETENTION_YEARS` | yes | 500; 1 unit per transaction | School | RLS + narrow function |
 | 04:10 | `storage-orphans-prune` | D5 | `STORAGE_ORPHAN_RETENTION_DAYS`, scan limit | yes | 10000/School | School | runtime; references re-checked |
 | 04:20 | `portal-invitations-prune` (E21.3B) | I2 | `PORTAL_INVITATION_RETENTION_DAYS` | yes | 500, `SKIP LOCKED`; 1 batch per transaction | School | RLS, runtime |
 | 04:30 | `student-retention-prune` (E21.3B: + Library/Transport/Hostel; core evidence) | D7 | `STUDENT_*_RETENTION_YEARS` | yes | 500; 1 Student per transaction | School | RLS, runtime; core evidence through two narrow functions |
 | 04:35 | `admissions-retention-prune` (E21.3C) | AD2 | `ADMISSIONS_TERMINAL_RETENTION_YEARS` | yes | 500; 1 applicant per transaction | School | RLS, runtime |
 | 04:40 | `guardian-retention-prune` (E21.3C) | G1 | `GUARDIAN_RETENTION_YEARS` (+ `AUTHORITY_HISTORY_RETENTION_YEARS` for revoked links) | yes | 500; 1 Guardian per transaction | School | RLS, runtime; Guardian consent through one narrow function |
 | 04:45 | `academic-retention-prune` (E21.3D) | A1 | `ACADEMIC_OPERATIONS_RETENTION_YEARS` (+ `AUTHORITY_HISTORY_RETENTION_YEARS` for teacher-owned LMS) | yes | 500 rows per transaction (`SKIP LOCKED`); 1 LMS resource per transaction | School | RLS, runtime; LMS through two narrow functions |
+| 04:48 | `operations-retention-prune` (E21.3E) | O2, O3, O4 | `OPERATIONS_*_RETENTION_YEARS` | yes | 500 rows (`SKIP LOCKED`); 1 visitor per transaction | School | RLS, runtime |
 | 04:50 | `employee-retention-prune` | D9 | `EMPLOYEE_*_RETENTION_YEARS` | yes | 500; 1 Employee per transaction | School | RLS, runtime |
 | hourly | `account-recovery-prune` | technical TTL (24 h) | fixed (ADR 0056) | **yes (E21.2G)** | 5000 | exempt by design¹ | runtime |
 | hourly | `staff-account-credentials-prune` | technical TTL (24 h / 7 d) | fixed (ADR 0059) | **yes (E21.2G)** | 5000 | exempt by design¹ | RLS, runtime |
@@ -114,6 +115,10 @@ failure.
 | `PORTAL_INVITATION_RETENTION_DAYS` | 7 | days after an ended portal invitation ended (accepted, revoked, or expired unaccepted) (E21.3B) |
 | `ADMISSIONS_TERMINAL_RETENTION_YEARS` | 1 | calendar year after a rejected/withdrawn application's `terminal_at` (UTC timestamp) (E21.3C) |
 | `ACADEMIC_OPERATIONS_RETENTION_YEARS` | 7 | calendar years after the authoritative Academic Year's `ends_on` (School-local date) (E21.3D; LMS database floor 7) |
+| `COMMUNICATIONS_ABANDONED_RETENTION_YEARS` | 1 | calendar year after a never-sent announcement's cancellation/rejection or an empty thread's `last_activity_at` (E21.3E) |
+| `OPERATIONS_DRIVER_ASSIGNMENT_RETENTION_YEARS` | 7 | calendar years after `ends_on` (E21.3E) |
+| `OPERATIONS_VISIT_RETENTION_YEARS` | 1 | calendar year after `checked_out_at` (E21.3E) |
+| `OPERATIONS_AUTOMATION_RETENTION_YEARS` | 1 | calendar year after `completed_at` (E21.3E) |
 | `GUARDIAN_RETENTION_YEARS` | 1 | calendar year after `guardians.no_relationship_since` (UTC timestamp) (E21.3C; database floor 1 for its consent evidence) |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 | calendar years after final separation |
 | `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 | calendar years after final separation |
@@ -137,10 +142,11 @@ failure.
   - The runtime role has **no DELETE** on `schools`, either audit ledger,
     email suppressions, any authority history, erasure cases, policy
     decisions, API clients/credentials or any posted Finance table.
-  - Exactly sixteen `SECURITY DEFINER` retention functions exist, all
+  - Exactly seventeen `SECURITY DEFINER` retention functions exist, all
     `retention_expire_*` (ten at E21.2G; E21.3A2 added the Finance unit;
     E21.3B the two Student-core evidence functions; E21.3C the Guardian
-    consent function; E21.3D the two LMS resource functions): fixed table and predicate, a database floor (1, 7,
+    consent function; E21.3D the two LMS resource functions; E21.3E the API
+    credential function): fixed table and predicate, a database floor (1, 7,
     8 or 25 years), tenant tie where
     School-scoped, a bounded batch or unit, pinned `search_path`, EXECUTE
     for the runtime role only, never PUBLIC. (The one other definer
@@ -186,6 +192,15 @@ failure.
     `GuardianRetentionClassificationTest` pins every Guardian reference.
   - `TenantRetentionCatalog` lists every tenant table literally; a new one
     makes readiness fail closed (`TenantClosureReadinessTest`).
+  - **E21.3E.** Never-sent announcements and empty threads (Communications),
+    driver assignments (Transport), visits (Visitor), automation executions
+    (Support, because the Automation module may not use the query builder)
+    and API credentials (`RetentionExpiry`, D6) are a closed list reached
+    only by their commands; `ResidualRetentionClassificationTest` pins every
+    reference (owned children must be ON DELETE CASCADE) and
+    `ResidualRetentionArchitectureGuardTest` pins that memberships, their
+    preferences and Inventory are never age-pruned, that notifications still
+    have no production producer, and that Canteen orders follow Finance only.
   - **E21.3D.** The year clock is only the authoritative Academic Year's
     `ends_on` (AcademicYearRetention), and `academic_years` dates are now
     immutable for every role (trigger), so the clock cannot move. Three row
@@ -221,6 +236,11 @@ failure.
     processing authorization (both orders); portal-invitation expiry vs a
     revocation holding the row (two connections). Returned loans and ended
     assignments are never reopened, so no other transition race exists;
+  - E21.3E: empty-thread expiry vs a new message (both orders); never-sent
+    expiry vs editing a rejected announcement; visitor expiry vs a new visit
+    (two processes). Ended driver assignments, checkouts, completed
+    executions and ended credentials are one-way (pinned; credentials by the
+    database);
   - E21.3D: an empty register header vs a late attendance record, and a
     timetable entry vs a late register header (two connections: the
     in-flight child keeps its parent; an expiry first makes the late
@@ -251,21 +271,22 @@ failure.
   - `lycenza_retention_rows_total.operation` was consolidated to nine
     stable families in E21.3A2. E21.3B and E21.3C add categories only inside
     existing families. E21.3D adds one deliberate family, `academic` (School
-    teaching evidence is neither Student- nor Employee-rooted): ten values,
-    far below the ceiling of 20.
-  - `scheduled_task` (28 since E21.3D) has its own justified ceiling of
+    teaching evidence is neither Student- nor Employee-rooted); E21.3E adds
+    `operations`: eleven values, far below the ceiling of 20.
+  - `scheduled_task` (29 since E21.3E) has its own justified ceiling of
     30: it is pinned to the code-defined schedule.
 - **Migrations.**
   - E21.2B–2F and E21.3B migrations: each `down()` removes only the
     mechanism (E21.3B restores the original processing-authorization
     guard verbatim); E21.3A2's refuses once lineage exists, and E21.3C's
-    once any lifecycle marker carries evidence.
+    once any lifecycle marker carries evidence. E21.3D and E21.3E remove
+    only functions/triggers.
   - Migrate, rollback and re-apply were verified on DDEV per checkpoint
     (schema identical).
   - E21.2A and 2E added none.
 - **Tenant purge prerequisites (D11).** A destructive tenant purge needs
   ALL of:
-  - final category coverage (E21.3A–F done);
+  - final category coverage (E21.3A–F done; only E21.3F remains);
   - D8 resolved;
   - no hold;
   - no unresolved dependency;
@@ -393,7 +414,7 @@ retention metric within its ceiling by consolidating operations.
 | **E21.3C — Admissions and Guardian lifecycle markers** | **Done (2026-10-02).** A database-owned, immutable `terminal_at` for rejected/withdrawn applications (1 y after it; undated legacy rows unresolved and kept; evidence backfill from the transition's own audit event). A durable Guardian `no_relationship_since` maintained by a relationship trigger (cleared on re-link, restarted on the next final unlink; evidence backfill only from complete audit history). Guardian personal data (Guardian, contacts, Documents, revoked account links past D6, its own consent and preferences) 1 y after it, unless a retained dependent remains. |
 | **E21.3D — Year-bound academic operations** | **Done (2026-10-02).** Curriculum deliveries, attendance register headers (once empty), timetable entries (once no header references them) and LMS Learning Content/Assignments (with audiences and Documents, past the D6 owner/audience minimum) 7 y after the end of their authoritative Academic Year (`platform:academic-retention-prune`); Academic Year dates frozen; Employee teaching references released by these rows' own expiry. Syllabus and examination configuration stay (A2). |
 | **E21.3F — Payroll Evidence Retention & Employee Release** (provisional) | The recorded D8 × D9 intersection (ADR 0064 §21): a Payroll D9 result-expiry mechanism for posted payroll results and their postings, after which payroll-linked journal entries can expire through D8 and paid Employees can reach their D9 evidence expiry. Not started; not part of E21.3B–E. |
-| **E21.3E — Communications and platform residuals** | Cancelled/rejected never-sent announcements (1 y after cancellation or rejection decision); empty threads (1 y after last activity); visits (1 y after check-out) and visitors once no visit remains; automation records (1 y after completion); driver assignments (7 y after they end); ended API credentials (7 y; narrow path). |
+| **E21.3E — Communications and platform residuals** | **Done (2026-10-02).** Never-sent cancelled/rejected announcements 1 y after `cancelled_at` / the rejection decision (`decided_at` of the latest, rejected, approval request); empty threads 1 y after `last_activity_at` (`communications-prune --only=residual`); ended driver assignments 7 y after `ends_on`, visits 1 y after `checked_out_at` (a visitor with its last visit), completed automation executions 1 y after `completed_at` (`operations-retention-prune`); ended API credentials 7 y after LEAST(revoked_at, expires_at) (`authority-history-prune`, narrow function). No new lifecycle marker was needed. Memberships, membership preferences and Inventory pinned tenant lifetime; notifications re-verified not applicable. |
 
 ## 8. E21.2G project decisions
 
@@ -405,12 +426,14 @@ RATIFICATION.**
   announcements are working state with no retention clock; they are kept
   while live. A never-published **cancelled** (`cancelled_at`) or
   **rejected** (approval `decided_at`) announcement is abandoned working
-  state: **1 calendar year** after that time. Mechanism: E21.3E.
+  state: **1 calendar year** after that time. Mechanism: E21.3E (**implemented**;
+  a rejected announcement is still editable, so the status is rechecked
+  under its lock).
 - **C2.** An **empty thread** (no message; possible because
   `createThread` adds participants only) holds no communication content:
   **1 calendar year after `last_activity_at`**. That is the documented
   trigger: for an empty thread it is its creation or last change.
-  Mechanism: E21.3E.
+  Mechanism: E21.3E (**implemented**).
 - **C3. Cancelled deliveries** have no terminal time, so they have no
   separate clock. They go with their content (D3 content purge cascades).
   **Implemented.** `updated_at` is never used.
@@ -423,9 +446,12 @@ RATIFICATION.**
 - **C6.** **Membership email preferences** (`communication_preferences`)
   are an ordinary account preference. They follow the membership (tenant
   lifetime).
+  **E21.3E:** pinned: no independent clock (architecture guard).
 - **C7.** **`notifications`** is a Phase 0 demo with no production
   producer (`AUTOMATION.md`): **not applicable**. Any future producer must
   adopt a D13 period first.
+  **E21.3E:** re-verified: the only writer is the Phase 0C demo consumer;
+  its emitter (`SchoolSettingsService`) has no production caller (guard).
 
 **Academic**
 - **A1.** Year-bound academic operations go **7 calendar years after the
@@ -473,25 +499,28 @@ RATIFICATION.**
   (**implemented**). Library has no fines or Finance link; no Finance row
   references a Transport or Hostel assignment.
 - **O2.** **Driver (route) assignments** go 7 y after `ends_on`.
-  Mechanism: E21.3E.
+  Mechanism: E21.3E (**implemented**).
 - **O3.** A **visit** goes 1 y after `checked_out_at`; a visitor goes once
-  no visit remains. Mechanism: E21.3E.
+  no visit remains. Mechanism: E21.3E (**implemented**).
 - **O4.** **Automation executions, attempts and review items** go 1 y
-  after `completed_at`. Mechanism: E21.3E.
+  after `completed_at`. Mechanism: E21.3E (**implemented**).
 - **O5.** **Inventory balances and stock movements** carry no personal
   data: tenant lifetime. **Canteen stock consumptions** follow their
   orders (D8).
+  **E21.3E:** pinned: no age-based Inventory expiry (guard).
 
 **Identity**
 - **I1.** **Memberships** are authority provenance, suspended and never
   deleted (rule 92): tenant lifetime. **Ended staff invitations** keep
   their implemented 7-day TTL.
+  **E21.3E:** pinned: no membership is ever deleted (guard).
 - **I2.** **Ended portal invitations** (`identity_account_invitations`)
   go 7 days after they ended. Mechanism: E21.3B (**implemented**: the end
   is `accepted_at`, `revoked_at`, or `expires_at` while still pending;
   never `updated_at`; held Schools are kept).
 - **I3.** **Ended API credentials** (revoked, superseded or expired) are
-  D6: 7 y. Mechanism: E21.3E.
+  D6: 7 y. Mechanism: E21.3E (**implemented**: authority ends at
+  LEAST(revoked_at, expires_at); revocation is final).
 - **I4.** **Student account links** go with the Student core record
   (implemented). **Guardian links** go with G1.
 - **I5. User-identity erasure: POLICY UNRESOLVED.** It means anonymising
@@ -547,7 +576,7 @@ environment-specific.**
 
 ## 11. Other production gates (not E21)
 
-**O1 cannot clear today.** Besides E21 (E21.3E–F, ratification and
+**O1 cannot clear today.** Besides E21 (E21.3F, ratification and
 §9), ADR 0058's register keeps separate mandatory gates open. Among them:
 - **E33 / TCH-L1** (teacher Attendance legal determination): no production
   `teacher` role grants while it is open (ADR 0063 §40);

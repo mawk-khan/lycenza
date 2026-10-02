@@ -76,6 +76,8 @@ class DatabaseRoleVerifier
         'retention_expire_guardian_consent_events',
         // E21.3D (E21.2G A1): one LMS resource with its audiences, year- and D6-floored in the database
         'retention_expire_learning_content', 'retention_expire_assignment',
+        // E21.3E (E21.2G I3, E21-D6): ended API client credentials, 7-year floor
+        'retention_expire_api_client_credentials',
     ];
 
     /**

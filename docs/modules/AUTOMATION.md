@@ -260,3 +260,14 @@ School row FOR SHARE inside the evaluation transaction, so it serializes
 with a suspension. `automation:executions-redispatch` keeps walking
 suspended Schools so each pending execution reaches that terminal state
 exactly once.
+
+## Retention (E21.3E, 2026-10-02)
+
+A completed execution (`succeeded`, `skipped`, `failed` or `abandoned` with
+`completed_at`) is deleted 1 calendar year after `completed_at`, with its
+attempts and review items, by `platform:operations-retention-prune`
+(`App\Support\Retention\AutomationExecutionRetention`; in Support because
+this module may not use the query builder). Pending, running and retrying
+executions are never eligible; rule instances stay. The Phase 0C
+`notifications` demo still has no production producer (E21.2G C7): not
+applicable. Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.9).

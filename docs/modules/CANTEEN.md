@@ -827,3 +827,10 @@ regression counts with independent re-verification that the
 pre-existing Communications/Events/Webhooks/Announcement-UI failure
 cluster is unrelated to Canteen (confirmed to fail identically with
 zero Canteen files touched, in an isolated Webhooks/Events-only run).
+
+## Retention (E21.3E re-verification, 2026-10-02)
+
+Canteen orders, their lines and stock consumptions are Finance evidence and
+follow D8 (`platform:finance-retention-prune`, E21.3A2) only; no other
+retention path names them (guard). Outlets, items and requirements are
+tenant-lifetime configuration.

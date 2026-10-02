@@ -21,7 +21,8 @@ use Illuminate\Support\Facades\DB;
  *   relationship: it is never deleted on age, and it keeps the Student (the
  *   core purge sees it as a retained reference).
  * - Routes, stops and vehicles are School configuration and stay; driver
- *   assignments are E21.3E. No Finance row references an assignment.
+ *   assignments expire on their own clock (DriverAssignmentRetentionService,
+ *   E21.3E). No Finance row references an assignment.
  * - Locking, the exit recheck (a re-entry that committed first keeps
  *   everything) and one transaction per Student come from
  *   StudentRetentionEligibility::purgeExitedBefore(). The predicate is

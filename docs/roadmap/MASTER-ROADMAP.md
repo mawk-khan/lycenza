@@ -2272,6 +2272,23 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21.3E — Communications & Platform Residuals (2026-10-02): published /
+  closed.** `docs/security/E21-RETENTION-DETERMINATION.md` §5.9:
+  - never-sent cancelled/rejected announcements and empty threads, 1 y
+    (`communications-prune --only=residual`);
+  - ended driver assignments 7 y, checked-out visits (visitor with its last
+    visit) 1 y, completed automation executions 1 y
+    (`operations-retention-prune`);
+  - ended API credentials, D6 7 y after LEAST(revoked_at, expires_at)
+    (narrow function, `authority-history-prune`);
+  - memberships, membership preferences, Inventory tenant lifetime;
+    notifications not applicable (re-verified); Canteen follows D8.
+
+  **E21 — OPEN.** Remaining engineering: **E21.3F — Payroll Evidence
+  Retention & Employee Release** (the only mechanism checkpoint left).
+  User-identity erasure: legal decision pending. Final ratification
+  deferred to the pre-production closeout. Tenant destruction NOT
+  AUTHORIZED. E33 / TCH-L1 open independently.
 - **E21.3D — Year-Bound Academic Operations (2026-10-02): published /
   closed.** `docs/security/E21-RETENTION-DETERMINATION.md` §5.8:
   - `platform:academic-retention-prune`: curriculum deliveries, empty

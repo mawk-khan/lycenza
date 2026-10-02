@@ -57,6 +57,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'PruneAdmissionApplications.php',        // retention maintenance (E21.2G AD2)
         'PruneGuardianRecords.php',              // retention maintenance (E21.2G G1)
         'PruneAcademicOperations.php',           // retention maintenance (E21.2G A1)
+        'PruneOperationalRecords.php',           // retention maintenance (E21.2G O2-O4)
         'BackfillLifecycleMarkers.php',          // lifecycle-marker backfill from audit evidence; no business effect (E21.3C)
         'PruneEmployeeRecords.php',              // retention maintenance (E21-D9)
         'PruneFinanceRecords.php',               // retention maintenance (E21-D8)

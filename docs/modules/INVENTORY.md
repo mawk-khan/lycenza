@@ -692,3 +692,10 @@ Total: 124 tests (120 in the `Inventory`-filtered run plus the 4
 architecture-guard tests counted within it), 299+ assertions, all
 passing, zero skipped. Full-project regression (default and random
 order): 3648 tests, 11886/11909 assertions respectively, 0 failures.
+
+## Retention (E21.3E, 2026-10-02)
+
+Inventory balances and stock movements are tenant-lifetime School operations
+without personal data (E21.2G O5): no E21 mechanism expires them (pinned by
+`ResidualRetentionArchitectureGuardTest`). Canteen stock consumptions follow
+their orders under Finance (D8).

@@ -514,3 +514,11 @@ A closed School is a `suspended` School with a durable closure record (ADR
   read-only (`platform:school-closure-status`).
 - An erasure case is planned only inside its own School's context; a
   platform-scope User case reads no School's records.
+
+## Membership retention (E21.3E, 2026-10-02)
+
+School memberships are authority provenance: suspended, never deleted (rule
+92), so they live as long as the School (E21.2G I1). Membership email
+preferences (`communication_preferences`) follow their membership (C6). No E21
+mechanism expires either; `ResidualRetentionArchitectureGuardTest` pins it. A
+School closure freezes, it never expires memberships.
