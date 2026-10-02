@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Retention;
 
+use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Models\School;
 use App\Support\Retention\TenantClosureReadiness;
 use App\Support\Retention\TenantRetentionCatalog;
@@ -62,12 +63,13 @@ class TenantClosureReadinessTest extends TestCase
         $categories = $this->byCategory($report);
 
         $this->assertFalse($report['purge_ready']);
-        foreach (['school_not_closed', 'd8_finance_retention_not_enabled', 'retention_mechanism_pending', 'retention_periods_running', 'final_ratification_pending', 'no_tenant_purge_authorized'] as $gate) {
+        foreach (['school_not_closed', 'd8_finance_retention_not_enabled', 'retention_periods_running', 'final_ratification_pending', 'no_tenant_purge_authorized'] as $gate) {
             $this->assertContains($gate, $report['gates']);
         }
         $this->assertSame('retained', $categories['finance_ledger']['outcome'], 'E21.3A2: D8 is an adopted, implemented period');
         $this->assertSame(TenantRetentionCatalog::TENANT_LIFETIME, $categories['finance_period_evidence']['outcome']);
-        $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, $categories['guardians']['outcome']);
+        $this->assertSame('retained', $categories['guardians']['outcome'], 'E21.3C: G1 is implemented; a new unlinked Guardian runs its clock from creation');
+        $this->assertNotContains('retention_mechanism_pending', $report['gates'], 'no E21.3D/E row exists in this School');
         $this->assertSame('retained', $categories['student_core']['outcome']);
         $this->assertSame('empty', $categories['hr_evidence']['outcome']);
     }
@@ -135,10 +137,12 @@ class TenantClosureReadinessTest extends TestCase
     }
 
     #[Test]
-    public function e21_3b_categories_report_retained_while_their_e21_3c_rows_stay_mechanism_pending(): void
+    public function e21_3b_and_e21_3c_categories_are_retained_and_an_unmarked_guardian_is_unresolved(): void
     {
-        // E21.3B implemented the Student-linked mechanisms; the Guardian-subject
-        // and rejected/withdrawn rows of the same tables still wait for E21.3C.
+        // E21.3B + E21.3C implemented every Student-linked, Admissions and
+        // Guardian mechanism: those rows are `retained` (periods running).
+        // A Guardian without a relationship and without a trustworthy
+        // marker is `unresolved` and keeps the School from purge.
         $school = $this->createSchool();
         $campus = $this->createCampus($school);
         $grade = $this->createGradeLevel($school);
@@ -148,43 +152,46 @@ class TenantClosureReadinessTest extends TestCase
         $enrollmentId = app(TenantContext::class)->withSchool($school, fn () => DB::table('student_enrollments')->where('student_id', $student->id)->value('id'));
         $applicant = $this->createApplicant($school);
         $this->createAdmissionApplication($applicant, $year, $campus, $grade, ['status' => 'converted', 'converted_student_id' => $student->id, 'converted_student_enrollment_id' => $enrollmentId, 'converted_at' => now()]);
+        $this->createAdmissionApplication($this->createApplicant($school), $year, $campus, $grade, ['status' => 'rejected']);
         $this->createLibraryLoan($this->createLibraryCopy($this->createLibraryTitle($school)), $student, ['status' => 'returned', 'checked_in_at' => now()]);
         $consent = fn (string $column, string $id) => app(TenantContext::class)->withSchool($school, fn () => DB::table('communication_domain_consent_events')->insert([
             'id' => (string) Str::uuid7(), 'school_id' => $school->id, $column => $id, 'channel' => 'email', 'status' => 'granted',
             'recorded_at' => now(), 'recorded_by_user_id' => $this->createUser()->id, 'created_at' => now(), 'updated_at' => now(),
         ]));
         $consent('student_id', $student->id);
-
-        $categories = $this->byCategory($this->report($school));
-        foreach (['admissions', 'communication_consent', 'student_operational_modules'] as $category) {
-            $this->assertSame('retained', $categories[$category]['outcome'], $category);
-        }
-
         $consent('guardian_id', $this->createGuardian($school)->id);
-        $this->createAdmissionApplication($this->createApplicant($school), $year, $campus, $grade, ['status' => 'rejected']);
 
         $report = $this->report($school);
         $categories = $this->byCategory($report);
-        $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, $categories['communication_consent']['outcome'], 'a Guardian subject\'s consent waits for E21.3C');
-        $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, $categories['admissions']['outcome'], 'a rejected application waits for E21.3C');
-        $this->assertContains('retention_mechanism_pending', $report['gates']);
+        foreach (['admissions', 'communication_consent', 'student_operational_modules', 'guardians'] as $category) {
+            $this->assertSame('retained', $categories[$category]['outcome'], $category);
+        }
+        $this->assertNotContains('retention_mechanism_pending', $report['gates']);
+        $this->assertNotContains('retention_trigger_unresolved', $report['gates']);
+
+        app(TenantContext::class)->withSchool($school, fn () => Guardian::factory()->create(['school_id' => $school->id, 'no_relationship_since' => null]));
+        $report = $this->report($school);
+        $this->assertSame('unresolved', $this->byCategory($report)['guardians']['outcome']);
+        $this->assertContains('retention_trigger_unresolved', $report['gates']);
         $this->assertFalse($report['purge_ready']);
     }
 
     #[Test]
-    public function every_pending_row_predicate_belongs_to_a_classified_table_and_names_its_checkpoint(): void
+    public function the_e21_3c_categories_are_adopted_and_only_e21_3d_e_remain_pending(): void
     {
         $tables = TenantRetentionCatalog::tables();
-        foreach (array_keys(TenantRetentionCatalog::PENDING_ROWS) as $table) {
+        $this->assertSame([], TenantRetentionCatalog::PENDING_ROWS, 'E21.3C implemented the last mixed-table pending rows');
+        foreach (array_keys(TenantRetentionCatalog::UNRESOLVED_ROWS) as $table) {
             $this->assertArrayHasKey($table, $tables, "{$table} is not a classified tenant table");
-            [, $decision] = TenantRetentionCatalog::CATEGORIES[$tables[$table]];
-            $this->assertMatchesRegularExpression('/E21\.3[C-E]/', $decision, "{$table}: its category must name the checkpoint its pending rows wait for");
+            $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$tables[$table]][0], $table);
         }
-        // E21.3B adopted no other residual: Guardians, academic operations and platform residuals stay pending.
-        foreach (['guardians', 'academic_operations', 'operational_logs', 'api_credentials'] as $category) {
+        foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules'] as $category) {
+            $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
+        }
+        foreach (['academic_operations', 'operational_logs', 'api_credentials'] as $category) {
             $this->assertSame(TenantRetentionCatalog::MECHANISM_PENDING, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
-        $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, TenantRetentionCatalog::CATEGORIES['payroll_ledger'][0], 'the D8 x D9 payroll residual stays visible');
+        $this->assertSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, TenantRetentionCatalog::CATEGORIES['payroll_ledger'][0], 'the D8 x D9 payroll residual stays visible (E21.3F)');
     }
 
     #[Test]
@@ -195,7 +202,7 @@ class TenantClosureReadinessTest extends TestCase
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
             $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
             if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
-                $this->assertMatchesRegularExpression('/E21\.3[C-E]/', $decision, "{$category} must name its follow-up checkpoint");
+                $this->assertMatchesRegularExpression('/E21\.3[D-E]/', $decision, "{$category} must name its follow-up checkpoint");
             }
             if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {
                 $this->assertSame('payroll_ledger', $category, 'E21.3A2: the only technical blocker left is the D8 x D9 payroll ledger');

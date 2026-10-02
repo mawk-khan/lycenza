@@ -2272,6 +2272,26 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21.3C — Admissions & Guardian Lifecycle Markers (2026-10-02):
+  published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
+  §5.7:
+  - database-owned, immutable `admission_applications.terminal_at`;
+    `platform:admissions-retention-prune` (rejected/withdrawn 1 y after it;
+    applicant once nothing else remains);
+  - durable `guardians.no_relationship_since` maintained by a relationship
+    trigger (re-link clears, next final unlink restarts);
+    `platform:guardian-retention-prune` (Guardian personal data 1 y after
+    it, unless a retained dependent remains);
+  - `platform:lifecycle-markers-backfill` from audit evidence only; undated
+    rows unresolved and kept (readiness `retention_trigger_unresolved`);
+  - Guardian erasure cases follow G1; Guardian Documents follow their
+    Guardian.
+
+  **E21 — OPEN.** Remaining engineering: **E21.3D** (year-bound academic
+  operations), **E21.3E** (communications & platform residuals) and
+  **E21.3F — Payroll Evidence Retention & Employee Release** (provisional).
+  Final ratification deferred to the pre-production closeout. Tenant
+  destruction NOT AUTHORIZED. E33 / TCH-L1 open independently.
 - **E21.3B — Student-Linked Evidence & Operational Modules (2026-10-02):
   published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
   §5.6:

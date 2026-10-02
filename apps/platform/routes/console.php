@@ -180,6 +180,22 @@ Schedule::command('platform:student-retention-prune')
     ->withoutOverlapping()
     ->name('student-retention-prune');
 
+// E21.3C (E21.2G AD2/G1): rejected/withdrawn applications 1 y after their
+// terminal decision, and Guardian personal data 1 y after the Guardian last
+// had a Student relationship. No default: until configured each deletes
+// nothing. Each unit rechecks under its own lock, so the order relative to
+// the Student run (which may end a Guardian's last relationship) does not
+// matter: the Guardian clock starts only when that commits.
+Schedule::command('platform:admissions-retention-prune')
+    ->dailyAt('04:35')
+    ->withoutOverlapping()
+    ->name('admissions-retention-prune');
+
+Schedule::command('platform:guardian-retention-prune')
+    ->dailyAt('04:40')
+    ->withoutOverlapping()
+    ->name('guardian-retention-prune');
+
 // E21.2E (E21-D9): ancillary HR details (2 y) and employment/payroll
 // evidence (8 y) after final separation. No default: until configured it
 // deletes nothing. Each purge rechecks under its own lock, so correctness

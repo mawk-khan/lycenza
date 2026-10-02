@@ -22,8 +22,9 @@ use Illuminate\Support\Facades\DB;
  * - The existing unlink is already a hard delete whose history lives only
  *   in audit (D1). Retention does not change that workflow.
  * - Only the link row goes. The Guardian, its contacts and its Documents
- *   are Guardian personal data (E21.2G G1, mechanism E21.3C), so they are
- *   kept.
+ *   are Guardian personal data (E21.2G G1). This purge keeps them; they
+ *   follow the Guardian's own clock (GuardianRecordRetentionService,
+ *   E21.3C), which starts when the last relationship is removed.
  * - Locking and the exit recheck come from
  *   StudentRetentionEligibility::purgeExitedBefore(). Units are Students.
  *

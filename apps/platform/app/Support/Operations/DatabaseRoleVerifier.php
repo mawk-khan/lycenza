@@ -72,6 +72,8 @@ class DatabaseRoleVerifier
         'retention_expire_finance_unit',
         // E21.3B (E21-D7 core): one Student's append-only core evidence, core-floored in the database
         'retention_expire_student_processing_authorizations', 'retention_expire_student_consent_events',
+        // E21.3C (E21.2G G1): one Guardian's consent events, Guardian-floored in the database
+        'retention_expire_guardian_consent_events',
     ];
 
     /**

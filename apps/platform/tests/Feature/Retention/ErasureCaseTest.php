@@ -3,6 +3,7 @@
 namespace Tests\Feature\Retention;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\ErasureCase;
 use App\Models\PlatformAuditEvent;
@@ -13,6 +14,7 @@ use App\Support\Retention\Erasure\ErasureCategory;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
@@ -38,6 +40,7 @@ class ErasureCaseTest extends TestCase
             'retention.employee_ancillary_years' => 2,
             'retention.employee_evidence_years' => 8,
             'retention.authority_history_years' => 7,
+            'retention.guardian_years' => 1,
             'retention.hold_school_ids' => [],
         ]);
     }
@@ -173,6 +176,54 @@ class ErasureCaseTest extends TestCase
     }
 
     #[Test]
+    public function a_guardian_case_follows_the_guardian_lifecycle_and_never_shortens_it(): void
+    {
+        // E21.3C (G1): related -> current; unmarked -> unresolved; running -> retained
+        // until; a live account link -> blocked; held -> held; past + free -> removed.
+        $school = $this->createSchool();
+        $guardian = fn (?string $since) => $this->inSchool($school, fn () => Guardian::factory()->create(['school_id' => $school->id, 'no_relationship_since' => $since]));
+        $related = $guardian(null);
+        $this->createStudentGuardianRelationship($this->createStudent($school), $related);
+        $unmarked = $guardian(null);
+        $recent = $guardian('2025-12-01 00:00:00');
+        $linked = $guardian('2020-01-01 00:00:00');
+        $user = $this->createUser();
+        $membership = $this->createMembership($user, $school);
+        $this->inSchool($school, fn () => DB::table('student_guardian_account_links')->insert([
+            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'guardian_id' => $linked->id, 'school_membership_id' => $membership->id,
+            'status' => 'active', 'linked_by_user_id' => $user->id, 'linked_at' => '2019-06-01 00:00:00', 'created_at' => now(), 'updated_at' => now(),
+        ]));
+        $gone = $guardian('2020-01-01 00:00:00');
+        $this->travelTo(Carbon::parse('2026-06-15 12:00:00', 'UTC'));
+
+        $cases = [];
+        $plan = function ($g) use ($school, &$cases) {
+            $cases[$g->id] ??= $this->approved($school, 'guardian', $g->id)->id;
+
+            return $this->outcomes($this->cases()->execute($cases[$g->id], false))['guardian_personal_data'] ?? null;
+        };
+        $this->assertSame('subject_current', $plan($related)->reason);
+        $this->assertSame('trigger_unresolved', $plan($unmarked)->reason);
+        $running = $plan($recent);
+        $this->assertSame(ErasureCategory::RETAINED_UNTIL, $running->outcome);
+        $this->assertSame('2026-12-01', $running->notBefore);
+        $blocked = $plan($linked);
+        $this->assertSame(ErasureCategory::DEPENDENCY_BLOCKED, $blocked->outcome);
+        $this->assertSame('student_guardian_account_links', $blocked->reason);
+
+        config(['retention.hold_school_ids' => [$school->id]]);
+        $this->assertSame(ErasureCategory::LEGAL_HOLD, $plan($gone)->outcome);
+        $this->assertTrue($this->inSchool($school, fn () => DB::table('guardians')->where('id', $gone->id)->exists()));
+
+        config(['retention.hold_school_ids' => []]);
+        $this->assertNull($plan($gone), 'executed: only the absent-subject category is left');
+        $this->assertFalse($this->inSchool($school, fn () => DB::table('guardians')->where('id', $gone->id)->exists()));
+        foreach ([$related, $unmarked, $recent, $linked] as $kept) {
+            $this->assertTrue($this->inSchool($school, fn () => DB::table('guardians')->where('id', $kept->id)->exists()));
+        }
+    }
+
+    #[Test]
     public function finance_and_a_legal_hold_keep_everything(): void
     {
         [$school, $student, $year] = $this->leaver();
@@ -235,7 +286,7 @@ class ErasureCaseTest extends TestCase
         $guardianId = $this->inSchool($schoolB, fn () => DB::table('student_guardian_relationships')->where('student_id', $studentB->id)->value('guardian_id'));
         $guardianPlan = $this->outcomes($this->cases()->execute($this->approved($schoolB, 'guardian', $guardianId)->id, false));
         $this->assertSame(ErasureCategory::RETAINED_UNTIL, $guardianPlan['guardian_personal_data']->outcome);
-        $this->assertSame('mechanism_pending', $guardianPlan['guardian_personal_data']->reason);
+        $this->assertSame('subject_current', $guardianPlan['guardian_personal_data']->reason, 'E21.3C: a related Guardian is never eligible');
         $this->assertTrue($this->inSchool($schoolB, fn () => DB::table('guardians')->where('id', $guardianId)->exists()));
 
         $user = $this->createUser();

@@ -60,9 +60,15 @@ class AdmissionApplication extends Model
         'converted_at',
     ];
 
+    /**
+     * E21.3C: `terminal_at` (the canonical end of a rejected/withdrawn
+     * application) is owned by the database trigger
+     * `admission_applications_guard_terminal_at`; it is deliberately not
+     * fillable.
+     */
     protected function casts(): array
     {
-        return ['converted_at' => 'datetime'];
+        return ['converted_at' => 'datetime', 'terminal_at' => 'datetime'];
     }
 
     protected static function newFactory(): AdmissionApplicationFactory

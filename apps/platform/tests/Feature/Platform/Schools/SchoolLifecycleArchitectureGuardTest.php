@@ -54,6 +54,9 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
         'PruneStorageOrphans.php',               // retention maintenance (E21-D5)
         'PruneStudentRecords.php',               // retention maintenance (E21-D7)
         'PrunePortalInvitations.php',            // retention maintenance (E21.2G I2)
+        'PruneAdmissionApplications.php',        // retention maintenance (E21.2G AD2)
+        'PruneGuardianRecords.php',              // retention maintenance (E21.2G G1)
+        'BackfillLifecycleMarkers.php',          // lifecycle-marker backfill from audit evidence; no business effect (E21.3C)
         'PruneEmployeeRecords.php',              // retention maintenance (E21-D9)
         'PruneFinanceRecords.php',               // retention maintenance (E21-D8)
         'OpenErasureCase.php',                   // looks up ONE School by id for an erasure case (E21-D10); not a walk

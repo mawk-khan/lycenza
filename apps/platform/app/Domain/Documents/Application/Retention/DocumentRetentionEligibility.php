@@ -28,7 +28,7 @@ final class DocumentRetentionEligibility
     public const OWNER_RETENTION = [
         'employee' => 'E21-D9 HR evidence (E21.2E): purged only with its Employee, by platform:employee-retention-prune',
         'student' => 'E21-D7 core (E21.2D): purged only with its Student, by platform:student-retention-prune',
-        'guardian' => 'Guardian personal data: no adopted period (D10, E21.2F/E21.2G); kept',
+        'guardian' => 'E21.2G G1 Guardian personal data (E21.3C): purged only with its Guardian, by platform:guardian-retention-prune',
         'learning_content' => 'LMS School content, not Student-rooted: no adopted period (E21.2G); kept, with the E21-D6 owner/audience minimum',
         'assignment' => 'LMS School content, not Student-rooted: no adopted period (E21.2G); kept, with the E21-D6 owner/audience minimum',
     ];
@@ -37,7 +37,7 @@ final class DocumentRetentionEligibility
      * No Document is ever purged on its own, by age or by archive status:
      * this answers false for every owner type. A Student's or Employee's
      * Documents go only inside that owner's own purge (DocumentParentRetention:
-     * D7 core, E21.2D; D9 evidence, E21.2E). Every other owner type has no
+     * D7 core, E21.2D; D9 evidence, E21.2E; G1 Guardian, E21.3C). Every other owner type has no
      * decided purge yet (OWNER_RETENTION).
      */
     public function mayPurge(Document $document): bool

@@ -83,6 +83,14 @@ return [
     // this is only how long its metadata stays.
     'portal_invitation_days' => env('PORTAL_INVITATION_RETENTION_DAYS'),
 
+    // E21.3C (E21.2G AD2/G1, project-adopted, pending ratification): calendar
+    // years after a rejected/withdrawn application's canonical `terminal_at`,
+    // adopted 1; and after a Guardian last had a Student relationship
+    // (`guardians.no_relationship_since`), adopted 1 (the database floor of
+    // its consent evidence is 1). No default: unset deletes nothing.
+    'admissions_terminal_years' => env('ADMISSIONS_TERMINAL_RETENTION_YEARS'),
+    'guardian_years' => env('GUARDIAN_RETENTION_YEARS'),
+
     'batch_size' => (int) env('RETENTION_PRUNE_BATCH_SIZE', 500),
 
 ];

@@ -56,6 +56,12 @@ use Throwable;
  * capability check a future controller applies before ever reaching
  * this service.
  *
+ * E21.3C: entering `rejected` or `withdrawn` also sets the canonical
+ * `terminal_at` in the SAME UPDATE -- the database trigger
+ * `admission_applications_guard_terminal_at` assigns it (transaction time)
+ * and keeps it immutable. It starts the 1-year retention clock of a
+ * non-converted application; `updated_at` never does.
+ *
  * Audit metadata never carries an Applicant's name/date_of_birth or an
  * AdmissionApplication's `decision_note` (Sensitive personal data /
  * internal staff note, docs/security/DATA-CLASSIFICATION.md) -- only

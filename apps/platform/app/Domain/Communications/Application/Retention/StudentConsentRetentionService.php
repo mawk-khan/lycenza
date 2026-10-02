@@ -22,7 +22,8 @@ use Illuminate\Support\Facades\DB;
  *   Consent events are append-only (no runtime DELETE): only their fixed,
  *   core-floored database function removes them (RetentionExpiry).
  * - Only the Student SUBJECT's rows. A Guardian subject's rows are
- *   Guardian personal data (E21.2G G1, mechanism E21.3C) and stay.
+ *   Guardian personal data (E21.2G G1): they go with the Guardian
+ *   (GuardianConsentRetentionService, E21.3C), not here.
  * - Membership email preferences (`communication_preferences`) are an
  *   account preference with the membership's lifetime (E21.2G C6): not
  *   touched.

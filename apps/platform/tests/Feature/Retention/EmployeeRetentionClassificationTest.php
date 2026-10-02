@@ -80,7 +80,7 @@ class EmployeeRetentionClassificationTest extends TestCase
     #[Test]
     public function every_retention_parent_is_classified_by_exactly_one_checkpoint(): void
     {
-        $parents = [...array_keys(StudentRetentionClassificationTest::CLASSIFICATION), ...array_keys(self::CLASSIFICATION)];
+        $parents = [...array_keys(StudentRetentionClassificationTest::CLASSIFICATION), ...array_keys(self::CLASSIFICATION), ...array_keys(GuardianRetentionClassificationTest::CLASSIFICATION)];
         sort($parents);
         $declared = ReferencingRows::PARENTS;
         sort($declared);

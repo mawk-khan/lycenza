@@ -1415,6 +1415,19 @@ its own consent and preferences stay (E21.3C). Ended portal invitations go
 7 days after they ended (`platform:portal-invitations-prune`). See
 `docs/security/E21-RETENTION-DETERMINATION.md` §5.6.
 
+**E21.3C amendment (2026-10-02):** `guardians.no_relationship_since` is the
+durable "no relationship since" marker. A trigger on
+`student_guardian_relationships` keeps it for every writer (link, unlink,
+conversion, D7 retention, cascades), under the Guardian row lock: NULL
+while any relationship exists, the moment the last one went otherwise; a
+re-link clears it and the next final unlink restarts it. Guardian personal
+data (the Guardian, contacts, Documents, revoked account links past the D6
+authority period, its own consent and preferences) goes 1 calendar year
+after it (`platform:guardian-retention-prune`), never while an active
+account link, a usable invitation, retained Communications content or any
+other dependent remains. Retention never unlinks an account. See §5.7 of
+the retention determination.
+
 ## Erasure cases (E21.2F, 2026-10-01)
 
 A data-subject erasure request about a Student or Guardian is a reviewed

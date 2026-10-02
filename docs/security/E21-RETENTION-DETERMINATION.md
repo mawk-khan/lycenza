@@ -39,6 +39,13 @@
 > rows and rejected/withdrawn applications stay for E21.3C. The payroll
 > D8 × D9 residual is the bounded follow-up **E21.3F** (provisional). E21
 > stays **OPEN**.
+>
+> **E21.3C (2026-10-02, §5.7):** rejected/withdrawn applications now carry a
+> database-owned, immutable `terminal_at` and go 1 calendar year after it;
+> Guardians carry a durable `no_relationship_since` and their personal data
+> goes 1 calendar year after it when nothing retained needs them. Undated
+> legacy rows stay unresolved and kept. Remaining engineering: E21.3D,
+> E21.3E, E21.3F.
 > - Final ratification is deferred to the pre-production project closeout.
 > - The consolidated reference, with matrices, the D8 brief and the
 >   ratification package, is `docs/security/E21-CLOSURE-AUDIT.md`. Its §8
@@ -736,7 +743,7 @@ The checkpoints are listed in §5.
 | E21.3A | Financial Year Close & Retention Foundation (D8) | **Implemented** (ADR 0064; full isolated regression). Period entity, posting identity, close, baselines, dual-read verifier, backfill. No deletion |
 | E21.3A2 | Finance Retention Cutover & Historical Expiry (D8) | **Implemented** (ADR 0064 §14–§24; full isolated regression). Carry-forward reads, D8 eligibility from `closed_at`, settled-unit expiry, holds, dry run, per-unit accounting proof. Residual: payroll D8 × D9 intersection |
 | E21.3B | Student-linked evidence and modules (consent, preferences, processing authorizations, converted admissions, Library/Transport/Hostel, portal invitations) | **Implemented** (§5.6; full isolated regression) |
-| E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | Not started |
+| E21.3C | Admissions decision timestamp; Guardian no-relationship marker and personal-data expiry | **Implemented** (§5.7; full isolated regression) |
 | E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | Not started |
 | E21.3E | Communications and platform residuals (never-sent and empty threads, visitors, automation, driver assignments, API credentials) | Not started |
 | E21.3F (provisional) | Payroll Evidence Retention & Employee Release: a Payroll D9 result-expiry mechanism, releasing payroll-linked journal entries (D8 × D9, ADR 0064 §21) and paid Employees | Not started |
@@ -968,6 +975,76 @@ Project-adopted, pending ratification.
 - **Metrics:** new categories inside existing families only (`student`;
   portal invitations under `authority`): still nine `operation` values.
 
+### 5.7 Admissions and Guardian lifecycle markers (E21.3C)
+
+Implements E21.2G AD2 and G1 (`E21-CLOSURE-AUDIT.md` §8). Project-adopted,
+pending ratification.
+
+- **Admissions terminal states.** `rejected` and `withdrawn` are the only
+  non-converted terminal states (AdmissionApplicationService: no transition
+  leaves them; `converted` is the Student path, E21.3B). Migration
+  `2026_11_12_090000` adds `admission_applications.terminal_at`:
+  - set by the database trigger `admission_applications_guard_terminal_at`
+    to the transaction time in the very UPDATE that enters the terminal
+    state (so it is atomic with the transition and its audit event);
+  - immutable once set; only a terminal row may carry it (CHECK);
+  - no new reason field: the existing optional `decision_note` is kept as
+    is.
+- **Admissions expiry.** `platform:admissions-retention-prune` (daily 04:35,
+  `ADMISSIONS_TERMINAL_RETENTION_YEARS`, adopted 1) deletes a rejected or
+  withdrawn application strictly more than one calendar year after
+  `terminal_at` (UTC timestamp; `subYearsNoOverflow`). The unit is the
+  applicant (locked FOR UPDATE, then its applications): the applicant goes
+  only once no application of it remains, so a shared applicant keeps its
+  identity while another application (converted, live or not yet expired)
+  exists. No Admissions row owns a Document, a Finance or a consent record;
+  any other referencing row blocks (ReferencingRows).
+- **Guardian marker.** `guardians.no_relationship_since` is NULL while any
+  `student_guardian_relationships` row exists (an existing row is an active
+  relationship: there is no end column, an unlink is a hard delete, D7
+  removes a departed Student's rows after 7 years). The trigger
+  `student_guardian_relationships_track_guardian` maintains it for every
+  writer, in the writer's transaction: it locks the Guardian row first,
+  then reads the remaining relationships with a fresh snapshot, and sets
+  the statement time when the last one goes. A re-link clears it; the next
+  final unlink restarts it. A Guardian created without a relationship starts
+  its clock at creation. Direct writes are refused, except a past-dated
+  backfill of a still-unset, unrelated Guardian. Lock order: Student (the
+  writer's own) -> Guardian (the trigger); the Guardian purge takes only
+  the Guardian.
+- **Guardian expiry.** `platform:guardian-retention-prune` (daily 04:40,
+  `GUARDIAN_RETENTION_YEARS`, adopted 1) deletes, one Guardian per
+  transaction under its row lock, a Guardian with no relationship whose
+  marker is strictly more than one calendar year old, and only when nothing
+  retained needs it: its Documents (DocumentParentRetention, bytes after
+  commit), its own consent events (append-only; the Guardian-floored
+  `retention_expire_guardian_consent_events`) and domain preferences, its
+  revoked account links past the D6 authority period, its contacts, and the
+  root last. Kept (`dependency_blocked`): an active account link, or a
+  revoked one younger than D6 (retention never unlinks a User; I5 stays
+  open); retained Communications content naming the Guardian (D3); a usable
+  portal invitation; any table added later until classified. A relationship
+  named by a Student's processing authorization is Student-core evidence
+  (E21.3B), so the Guardian stays related and no clock runs.
+- **Backfill.** `platform:lifecycle-markers-backfill` (operator, dry run,
+  rerunnable, counts only) sets a marker once from audit evidence only:
+  - an application: exactly one `admission_application.rejected|withdrawn`
+    event for it, matching its status; its `occurred_at`;
+  - a Guardian without a relationship: its `guardian.created` event must
+    survive (audit expiry removes the oldest events first, so the history
+    is complete), and every `student_guardian.linked` relationship must
+    have its own `student_guardian.unlinked` event; the marker is the last
+    unlink (or the creation, when never linked).
+  Everything else stays NULL: unresolved and kept; readiness reports it
+  (`retention_trigger_unresolved`). Never `updated_at`.
+- **Erasure.** A Guardian case follows G1 (related, unresolved, running with
+  a not-before date, blocked, held, eligible) through the same purge. No
+  generic Admissions erasure was added.
+- **Documents:** Guardian is the third decided owner of
+  DocumentParentRetention; no Admissions row owns a Document.
+- **Metrics:** `admission_application` and `guardian_record` join the
+  `student` family: still nine `operation` values.
+
 ## 6. Production settings
 
 The values below are fail-closed: a command deletes nothing while its value
@@ -992,6 +1069,8 @@ is unset. Production must set them once their checkpoint ships.
 | `STUDENT_OPERATIONAL_RETENTION_YEARS` | 7 (calendar years after final exit) | E21.2D |
 | `STUDENT_CORE_RETENTION_YEARS` | 25 (calendar years after final exit; never shorter than operational; E21.3B: with its core evidence, database floor 25) | E21.2D |
 | `PORTAL_INVITATION_RETENTION_DAYS` | 7 (days after an ended portal invitation ended) | E21.3B |
+| `ADMISSIONS_TERMINAL_RETENTION_YEARS` | 1 (calendar year after a rejected/withdrawn application's `terminal_at`) | E21.3C |
+| `GUARDIAN_RETENTION_YEARS` | 1 (calendar year after the Guardian last had a Student relationship) | E21.3C |
 | `EMPLOYEE_ANCILLARY_RETENTION_YEARS` | 2 (calendar years after final separation) | E21.2E |
 | `EMPLOYEE_EVIDENCE_RETENTION_YEARS` | 8 (calendar years after final separation; never shorter than ancillary) | E21.2E |
 | `ERASURE_CASE_RETENTION_YEARS` | 7 (calendar years after a case closed) | E21.2F |

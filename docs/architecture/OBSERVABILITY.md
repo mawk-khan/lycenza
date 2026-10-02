@@ -567,3 +567,17 @@ real environment:
     `student_hostel_residency`;
   - `retention.portal_invitations_prune.completed`/`.dry_run`/
     `.unconfigured`.
+
+## E21.3C Admissions and Guardian retention (2026-10-02)
+
+- **Scheduler.** New daily tasks `admissions-retention-prune` (04:35) and
+  `guardian-retention-prune` (04:40), covered by the OBS-06 daily staleness
+  alert (regenerated rules). `scheduled_task` now has 27 values (ceiling 30).
+  `lifecycle-markers-backfill` is an operator command, not scheduled.
+- **Metric labels.** No new family: `admission_application` (units:
+  applicants) and `guardian_record` (units: Guardians) join `student`.
+  Still nine `operation` values; outcomes unchanged.
+- **Logs** (counts only; never an applicant, Guardian, contact or
+  application detail): `retention.admissions_prune.completed`/`.dry_run`/
+  `.unconfigured`, `retention.guardian_prune.completed`/`.dry_run`/
+  `.unconfigured`, `retention.lifecycle_markers_backfill.completed`/`.dry_run`.

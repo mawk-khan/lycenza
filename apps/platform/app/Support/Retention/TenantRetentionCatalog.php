@@ -31,6 +31,13 @@ namespace App\Support\Retention;
  * Each table stays in ONE category; PENDING_ROWS names, as a fixed literal
  * predicate, the rows whose mechanism is still pending, so readiness keeps
  * reporting them `mechanism_pending` and never clears an E21.3C-E blocker.
+ * (E21.3C implemented the last such rows; the list is empty, the rule
+ * stays for the next mixed table.)
+ *
+ * E21.3C: UNRESOLVED_ROWS names, the same way, the rows of an implemented
+ * category whose trigger is unknown (legacy rows the marker backfill found
+ * no trustworthy evidence for). They are kept forever until resolved, and
+ * readiness reports them `unresolved` (gate `retention_trigger_unresolved`).
  */
 final class TenantRetentionCatalog
 {
@@ -76,7 +83,7 @@ final class TenantRetentionCatalog
             'communication_threads', 'communication_thread_participants', 'communication_deliveries', 'communication_delivery_attempts',
             'communication_delivery_policy_decisions',
         ]],
-        'communication_consent' => [self::ADOPTED, 'E21.2G C4/C5: consent evidence and domain preferences follow their subject: a Student subject\'s go with the Student core record (25 y, E21.3B, implemented); a Guardian subject\'s with Guardian personal data (mechanism E21.3C, pending rows)', [
+        'communication_consent' => [self::ADOPTED, 'E21.2G C4/C5: consent evidence and domain preferences follow their subject: a Student subject\'s go with the Student core record (25 y, E21.3B, implemented); a Guardian subject\'s with Guardian personal data (1 y, E21.3C, implemented)', [
             'communication_domain_consent_events', 'communication_domain_preferences',
         ]],
         'communication_configuration' => [self::TENANT_LIFETIME, 'School configuration', [
@@ -92,15 +99,15 @@ final class TenantRetentionCatalog
         'identity' => [self::TENANT_LIFETIME, 'E21.2G: memberships are authority provenance (suspended, never deleted, rule 92); ended staff invitations are a technical TTL (7 d, implemented)', [
             'school_memberships', 'staff_account_invitations', 'staff_account_invitation_roles',
         ]],
-        'identity_subject_links' => [self::ADOPTED, 'E21.2G I2/I4: ended portal invitations 7 d after they ended (platform:portal-invitations-prune, E21.3B, implemented); Student account links go with the Student core record (implemented); Guardian links with Guardian personal data (mechanism E21.3C, pending rows)', [
+        'identity_subject_links' => [self::ADOPTED, 'E21.2G I2/I4: ended portal invitations 7 d after they ended (platform:portal-invitations-prune, E21.3B, implemented); Student account links go with the Student core record; revoked Guardian links past D6 with Guardian personal data (E21.3C, implemented); an active link keeps its subject', [
             'identity_account_invitations', 'student_guardian_account_links',
         ]],
         'student_core' => [self::ADOPTED, 'D7: 25 y after final exit', ['students', 'student_enrollments', 'student_subject_enrollments']],
         'student_operational' => [self::ADOPTED, 'D7: 7 y after final exit', ['attendance_records', 'enrollment_rollover_items', 'student_guardian_relationships']],
         'student_rollover_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['enrollment_rollover_plans', 'enrollment_rollover_mappings', 'enrollment_rollover_subject_mappings']],
         'processing_authorizations' => [self::ADOPTED, 'E21.2G P1: legal-basis evidence for the academic record, kept with the Student core record (25 y) and removed in its unit through a core-floored function (E21.3B, implemented)', ['student_processing_authorizations']],
-        'admissions' => [self::ADOPTED, 'E21.2G AD1/AD2: converted applications (and applicants with nothing else) with the Student core record (E21.3B, implemented); rejected/withdrawn 1 y after the decision, needs a decision timestamp (mechanism E21.3C, pending rows); live applications are working state', ['applicants', 'admission_applications']],
-        'guardians' => [self::MECHANISM_PENDING, 'E21.2G: Guardian personal data 1 y after the Guardian has no relationship and no retained dependent; needs a durable no-relationship marker (E21.3C)', ['guardians', 'guardian_contacts']],
+        'admissions' => [self::ADOPTED, 'E21.2G AD1/AD2: converted applications (and applicants with nothing else) with the Student core record (E21.3B, implemented); rejected/withdrawn 1 y after their canonical terminal_at (platform:admissions-retention-prune, E21.3C, implemented; undated legacy rows unresolved and kept); live applications are working state', ['applicants', 'admission_applications']],
+        'guardians' => [self::ADOPTED, 'E21.2G G1: Guardian personal data 1 y after the Guardian last had a Student relationship (durable guardians.no_relationship_since) and nothing retained needs it (platform:guardian-retention-prune, E21.3C, implemented; unmarked legacy Guardians unresolved and kept)', ['guardians', 'guardian_contacts']],
         'documents' => [self::ADOPTED, 'D5: inherits its owner (Student, Employee); others kept with their parent', ['documents']],
         'academic_operations' => [self::MECHANISM_PENDING, 'E21.2G: year-bound academic operations, 7 y after the end of their Academic Year (LMS with the D6 owner/audience minimum; a register header only once it holds no record); mechanism E21.3D', [
             'curriculum_deliveries', 'learning_content', 'learning_content_section_audiences', 'assignments', 'assignment_section_audiences',
@@ -143,15 +150,19 @@ final class TenantRetentionCatalog
     /**
      * E21.3B: table => the literal predicate selecting its rows whose
      * mechanism is still pending (a closed list; never caller-supplied).
+     * Empty since E21.3C implemented the last such rows.
+     *
+     * @var array<string, string>
      */
-    public const PENDING_ROWS = [
-        // E21.3C (G1): a Guardian subject's consent and preference, and Guardian account links.
-        'communication_domain_consent_events' => 'guardian_id IS NOT NULL',
-        'communication_domain_preferences' => 'guardian_id IS NOT NULL',
-        'student_guardian_account_links' => 'guardian_id IS NOT NULL',
-        // E21.3C (AD2): everything not converted (rejected/withdrawn need a decision timestamp; live ones are working state).
-        'admission_applications' => "status <> 'converted'",
-        'applicants' => "NOT EXISTS (SELECT 1 FROM admission_applications a WHERE a.applicant_id = applicants.id AND a.status = 'converted')",
+    public const PENDING_ROWS = [];
+
+    /**
+     * E21.3C: table => the literal predicate selecting rows of an implemented
+     * category whose retention trigger is unknown (a closed list).
+     */
+    public const UNRESOLVED_ROWS = [
+        'admission_applications' => "status IN ('rejected', 'withdrawn') AND terminal_at IS NULL",
+        'guardians' => 'no_relationship_since IS NULL AND NOT EXISTS (SELECT 1 FROM student_guardian_relationships r WHERE r.guardian_id = guardians.id)',
     ];
 
     /** @return array<string, string> table => category */

@@ -186,6 +186,26 @@ final class RetentionExpiry
     }
 
     /**
+     * E21.3C (E21.2G G1/C4): removes one Guardian subject's consent events
+     * through `retention_expire_guardian_consent_events`, which re-proves the
+     * Guardian floor in the database (tenant context; the Guardian row
+     * locked; no relationship; `no_relationship_since` strictly before a
+     * cutoff at least one calendar year old). With `$dryRun` it validates
+     * and counts only. Runs inside the caller's School TenantContext and
+     * one-Guardian purge transaction.
+     *
+     * @param  CarbonInterface  $cutoff  UTC
+     */
+    public function guardianConsentEvents(School $school, string $guardianId, CarbonInterface $cutoff, bool $dryRun): int
+    {
+        if (! Str::isUuid($guardianId)) {
+            throw new InvalidArgumentException('Not a uuid.');
+        }
+
+        return $this->call('retention_expire_guardian_consent_events', [$school->id, $guardianId, $cutoff->copy()->utc()->format('Y-m-d H:i:s'), $dryRun]);
+    }
+
+    /**
      * @param  callable(int, bool): int  $expire
      * @return array{eligible: int, deleted: int, held: int}
      */

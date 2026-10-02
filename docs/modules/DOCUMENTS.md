@@ -2075,3 +2075,12 @@ accepted, unchanged P3 residual. It does **not** mean every
 schema-supported owner type is activated, or that every possible future
 Documents feature has been built — those remain explicitly deferred
 (above), and are not prerequisites to this closure.
+
+## Guardian owner retention (E21.3C, 2026-10-02)
+
+Guardian Documents now follow their Guardian (E21.2G G1): they are deleted
+only inside the Guardian purge (`platform:guardian-retention-prune`) through
+`DocumentParentRetention` (owner `guardian`), bytes after commit, failed
+byte deletes left to the orphan run. No Document carries a period of its own;
+a retained Guardian keeps its Documents and bytes. LMS-owned Documents are
+still kept (E21.3D).

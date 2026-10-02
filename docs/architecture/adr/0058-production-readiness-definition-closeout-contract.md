@@ -1151,3 +1151,25 @@ for:
 - **Tenant destruction:** NOT AUTHORIZED.
 - **E33 / TCH-L1:** open independently; no Teacher role, capability or
   authorization change.
+
+## Note — E21.3C Admissions and Guardian lifecycle markers (2026-10-02)
+
+**E21: still OPEN. E21.3C: IMPLEMENTED** (`docs/security/E21-RETENTION-DETERMINATION.md`
+§5.7).
+- Rejected/withdrawn applications carry a database-owned, immutable
+  `terminal_at` and go 1 calendar year after it
+  (`platform:admissions-retention-prune`); converted ones stay with the
+  Student core record (E21.3B).
+- Guardians carry a durable `no_relationship_since` maintained by the
+  database for every relationship writer; Guardian personal data goes 1
+  calendar year after it, only when no account link, retained
+  Communications content, invitation or other dependent needs it
+  (`platform:guardian-retention-prune`).
+- Legacy rows get a marker only from complete audit evidence
+  (`platform:lifecycle-markers-backfill`); the rest stays unresolved and
+  kept, and readiness reports it.
+- **Remaining engineering:** E21.3D, E21.3E and E21.3F (provisional).
+- **Final ratification:** deferred to the pre-production closeout. No
+  production legal clearance is claimed.
+- **Tenant destruction:** NOT AUTHORIZED. **E33 / TCH-L1:** open
+  independently; no Teacher change.

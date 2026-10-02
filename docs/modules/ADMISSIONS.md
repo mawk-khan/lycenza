@@ -629,3 +629,22 @@ next checkpoint.
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
 §5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
 counts with the same rule.
+
+## Lifecycle marker and expiry (E21.3C, 2026-10-02)
+
+- Entering `rejected` or `withdrawn` sets `admission_applications.terminal_at`
+  in the same UPDATE (database trigger `admission_applications_guard_terminal_at`,
+  transaction time). It is immutable, and only those two states may carry
+  it. It is the ONE retention clock of a non-converted application;
+  `updated_at` and `created_at` never are.
+- `platform:admissions-retention-prune` deletes such an application 1
+  calendar year after `terminal_at` (`ADMISSIONS_TERMINAL_RETENTION_YEARS`),
+  with its applicant once no application of it remains. One applicant per
+  transaction, applicant row locked first. Held Schools are kept.
+- Applications that ended before the column existed get it only from their
+  own transition audit event (`platform:lifecycle-markers-backfill`); the
+  rest stay unresolved and kept.
+- Converted applications are unchanged (Student core record, E21.3B).
+
+Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
+§5.7).

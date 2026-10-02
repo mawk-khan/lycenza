@@ -32,6 +32,9 @@ use Illuminate\Support\Facades\DB;
  * - its period is adopted but its mechanism is still pending (E21.3C-E),
  *   for the whole category or (E21.3B) only for the rows
  *   TenantRetentionCatalog::PENDING_ROWS names;
+ * - (E21.3C) its rows' trigger is unknown (TenantRetentionCatalog::UNRESOLVED_ROWS:
+ *   undated legacy terminal applications, unmarked Guardians without a
+ *   relationship): `unresolved`, gate `retention_trigger_unresolved`;
  * - its policy is unresolved;
  * - it is tenant-lifetime configuration.
  *
@@ -78,12 +81,17 @@ final class TenantClosureReadiness
             foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision, $tables]) {
                 $present = 0;
                 $pending = false;
+                $unresolved = false;
                 foreach ($tables as $table) {
                     $quoted = '"'.str_replace('"', '""', $table).'"';
                     if (in_array($table, $live, true) && DB::selectOne("SELECT EXISTS (SELECT 1 FROM {$quoted} WHERE school_id = ?) AS hit", [$school->id])->hit) {
                         $present++;
-                        $predicate = TenantRetentionCatalog::PENDING_ROWS[$table] ?? null;
+                        /** @var array<string, string> $pendingRows */
+                        $pendingRows = TenantRetentionCatalog::PENDING_ROWS;
+                        $predicate = $pendingRows[$table] ?? null;
                         $pending = $pending || ($predicate !== null && DB::selectOne("SELECT EXISTS (SELECT 1 FROM {$quoted} WHERE school_id = ? AND ({$predicate})) AS hit", [$school->id])->hit);
+                        $predicate = TenantRetentionCatalog::UNRESOLVED_ROWS[$table] ?? null;
+                        $unresolved = $unresolved || ($predicate !== null && DB::selectOne("SELECT EXISTS (SELECT 1 FROM {$quoted} WHERE school_id = ? AND ({$predicate})) AS hit", [$school->id])->hit);
                     }
                 }
 
@@ -94,10 +102,11 @@ final class TenantClosureReadiness
                     'tables_with_rows' => $present,
                     'outcome' => $present === 0 ? 'empty' : match (true) {
                         $status === TenantRetentionCatalog::ADOPTED && $pending => TenantRetentionCatalog::MECHANISM_PENDING,
+                        $status === TenantRetentionCatalog::ADOPTED && $unresolved => 'unresolved',
                         $status === TenantRetentionCatalog::ADOPTED => 'retained',
                         default => $status,
                     },
-                    'not_before' => $present > 0 && $status === TenantRetentionCatalog::ADOPTED && ! $pending ? $this->notBefore($school, $category) : null,
+                    'not_before' => $present > 0 && $status === TenantRetentionCatalog::ADOPTED && ! $pending && ! $unresolved ? $this->notBefore($school, $category) : null,
                 ];
             }
 
@@ -114,6 +123,7 @@ final class TenantClosureReadiness
             ...$this->financeGates($school),
             $has(TenantRetentionCatalog::POLICY_UNRESOLVED) ? 'policy_unresolved' : null,
             $has(TenantRetentionCatalog::MECHANISM_PENDING) ? 'retention_mechanism_pending' : null,
+            $has('unresolved') ? 'retention_trigger_unresolved' : null,
             $unclassified !== [] ? 'unclassified_tables' : null,
             $has('retained') ? 'retention_periods_running' : null,
             ...self::PERMANENT_GATES,

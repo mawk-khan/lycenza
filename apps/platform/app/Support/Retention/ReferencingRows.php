@@ -37,6 +37,8 @@ final class ReferencingRows
         'communication_domain_consent_events', 'communication_domain_preferences',
         'library_loans', 'transport_student_assignments', 'hostel_residency_assignments',
         'identity_account_invitations',
+        // E21.3C: the Guardian root and its sub-records.
+        'guardians', 'guardian_contacts', 'student_guardian_account_links',
     ];
 
     /** @var array<string, list<array{table: string, column: string, tenant: bool}>> */

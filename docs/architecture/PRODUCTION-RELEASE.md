@@ -440,6 +440,23 @@ email recovery.
     OBS-06. Production sets `PORTAL_INVITATION_RETENTION_DAYS=7`
     (project-adopted, pending ratification); unset deletes nothing.
   - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops both per School.
+- **E21.3C Admissions and Guardian lifecycle markers (2026-10-02):**
+  - **Migration** `2026_11_12_090000`: `admission_applications.terminal_at`
+    and `guardians.no_relationship_since` (existing rows start NULL), their
+    triggers, and `retention_expire_guardian_consent_events` (checked by
+    `platform:verify-database`). Its `down()` refuses once any marker
+    carries evidence.
+  - **Before enabling,** run `platform:lifecycle-markers-backfill --dry-run`,
+    then without it: rows without trustworthy audit evidence stay
+    unresolved and kept (closure readiness reports
+    `retention_trigger_unresolved`).
+  - **New daily tasks:** `admissions-retention-prune` (04:35) and
+    `guardian-retention-prune` (04:40), covered by OBS-06. Production sets
+    `ADMISSIONS_TERMINAL_RETENTION_YEARS=1` and `GUARDIAN_RETENTION_YEARS=1`
+    (project-adopted, pending ratification); the Guardian run also needs
+    `AUTHORITY_HISTORY_RETENTION_YEARS` before a revoked account link may
+    go. Unset deletes nothing; run each with `--dry-run` first.
+  - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops both per School.
 
 ## 6. Seeding: production-safe versus demo
 

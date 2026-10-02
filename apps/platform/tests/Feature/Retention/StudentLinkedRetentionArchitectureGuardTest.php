@@ -21,19 +21,22 @@ use Tests\TestCase;
  */
 class StudentLinkedRetentionArchitectureGuardTest extends TestCase
 {
-    /** table => the one file that may delete from it */
+    /** table => the file(s) that may delete from it */
     private const DELETERS = [
         'library_loans' => 'Domain/Library/Application/Retention/LibraryLoanRetentionService.php',
         'transport_student_assignments' => 'Domain/Transport/Application/Retention/TransportAssignmentRetentionService.php',
         'hostel_residency_assignments' => 'Domain/Hostel/Application/Retention/HostelResidencyRetentionService.php',
-        'admission_applications' => 'Domain/Admissions/Application/Retention/ConvertedApplicationRetentionService.php',
-        'applicants' => 'Domain/Admissions/Application/Retention/ConvertedApplicationRetentionService.php',
-        'communication_domain_preferences' => 'Domain/Communications/Application/Retention/StudentConsentRetentionService.php',
+        // E21.3C: converted (E21.3B) and terminal non-converted applications have one service each.
+        'admission_applications' => ['Domain/Admissions/Application/Retention/ConvertedApplicationRetentionService.php', 'Domain/Admissions/Application/Retention/TerminalApplicationRetentionService.php'],
+        'applicants' => ['Domain/Admissions/Application/Retention/ConvertedApplicationRetentionService.php', 'Domain/Admissions/Application/Retention/TerminalApplicationRetentionService.php'],
+        'guardians' => 'Domain/Guardians/Application/Retention/GuardianRecordRetentionService.php',
+        'guardian_contacts' => 'Domain/Guardians/Application/Retention/GuardianRecordRetentionService.php',
+        'communication_domain_preferences' => ['Domain/Communications/Application/Retention/StudentConsentRetentionService.php', 'Domain/Communications/Application/Retention/GuardianConsentRetentionService.php'],
         'identity_account_invitations' => 'Domain/Identity/Application/Retention/PortalInvitationRetentionService.php',
     ];
 
     /** Eloquent models of those tables. */
-    private const MODELS = ['LibraryLoan', 'TransportStudentAssignment', 'HostelResidencyAssignment', 'AdmissionApplication', 'Applicant', 'CommunicationDomainPreference', 'GuardianAccountInvitation'];
+    private const MODELS = ['LibraryLoan', 'TransportStudentAssignment', 'HostelResidencyAssignment', 'AdmissionApplication', 'Applicant', 'CommunicationDomainPreference', 'GuardianAccountInvitation', 'Guardian', 'GuardianContact'];
 
     /** service => the only files (besides itself) that may reference it */
     private const CALLERS = [
@@ -43,6 +46,13 @@ class StudentLinkedRetentionArchitectureGuardTest extends TestCase
         'ConvertedApplicationRetentionService' => ['Support/Retention/StudentRetention.php'],
         'StudentConsentRetentionService' => ['Support/Retention/StudentRetention.php'],
         'PortalInvitationRetentionService' => ['Console/Commands/PrunePortalInvitations.php'],
+        // E21.3C
+        'TerminalApplicationRetentionService' => ['Console/Commands/PruneAdmissionApplications.php', 'Domain/Admissions/Application/Retention/AdmissionDecisionBackfill.php'],
+        'GuardianRecordRetentionService' => ['Support/Retention/GuardianRetention.php'],
+        'GuardianConsentRetentionService' => ['Support/Retention/GuardianRetention.php'],
+        'GuardianRetention;' => ['Console/Commands/PruneGuardianRecords.php', 'Support/Retention/Erasure/Subjects/GuardianErasureAdapter.php'],
+        'AdmissionDecisionBackfill' => ['Console/Commands/BackfillLifecycleMarkers.php'],
+        'GuardianMarkerBackfill' => ['Console/Commands/BackfillLifecycleMarkers.php'],
         'StudentRetention;' => ['Console/Commands/PruneStudentRecords.php', 'Support/Retention/Erasure/Subjects/StudentErasureAdapter.php'],
     ];
 
@@ -71,7 +81,7 @@ class StudentLinkedRetentionArchitectureGuardTest extends TestCase
             foreach (self::DELETERS as $table => $owner) {
                 $names = str_contains($code, "table('{$table}") || str_contains($code, "= '{$table}';");
                 if ($names && str_contains($code, '->delete(')) {
-                    $this->assertSame($owner, $relative, "{$relative} names {$table} and deletes: only {$owner} may delete those rows");
+                    $this->assertContains($relative, (array) $owner, "{$relative} names {$table} and deletes: only ".implode(', ', (array) $owner).' may delete those rows');
                 }
             }
             foreach (self::MODELS as $model) {
@@ -97,6 +107,7 @@ class StudentLinkedRetentionArchitectureGuardTest extends TestCase
         ], $callers);
 
         foreach (['communication_domain_consent_events', 'student_processing_authorizations'] as $table) {
+            // (E21.3C: a Guardian's consent events leave only through guardianConsentEvents(), from its one owner.)
             foreach ($this->phpFiles() as $file) {
                 $this->assertDoesNotMatchRegularExpression("/table\\('{$table}'\\)[^;]*->delete\\(/s", $this->code($file), "{$file} must not delete {$table} directly");
             }
