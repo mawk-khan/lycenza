@@ -3881,3 +3881,32 @@ on it.
 - **Excluded:** no medical detail, certificate, free-text reason or
   biometrics (HRX-L1/L2). Requests and approvals are HRX.2, Staff
   Attendance is HRX.3, and self-service is HRX.4.
+
+## HRX.2 — Leave Requests & Approval (implemented, 2026-10-03)
+
+ADR 0065 §23. Leave still depends on HR one way. HRX.2 adds two HR
+Application contracts, both identity-and-relationship answers that
+authorize nothing on their own.
+
+- **`ReportingLine`** gives the manager of an EmploymentRecord on a date,
+  read fresh from the live `manager_assignment_id` pointer:
+  - the subordinate assignment is the one open that day (the `is_primary`
+    one when several are open, none when several are open and none is
+    primary);
+  - the manager assignment must also be open that day.
+
+  It has two entry points:
+  - `holdManagerOf()` holds both assignments FOR SHARE in the caller's
+    transaction, so `ReportingHierarchyService::setManager()` serializes
+    with a leave decision;
+  - `reportsOf()` lists a manager's current direct reports for the
+    manager approvals page.
+- **`EmploymentCoverage::holdRecordCovering()`** is `holdRecord()`, but the
+  planned or current engagement must span the whole requested period.
+- **Who resolves the acting Employee.** Only through
+  `ActingEmployeeResolver`, in Leave's two request services. There is no
+  second User → Employee resolver.
+- **Retention.** Leave requests, decisions, chargeable days and year-close
+  items reference the EmploymentRecord and Employee with RESTRICT. A
+  manager's decision also keeps the deciding manager's Employee. All of it
+  is D9 leave evidence until HRX.6 (`EmployeeRetentionClassificationTest`).

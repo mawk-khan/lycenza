@@ -20,6 +20,19 @@ enum DayPortion: string
         return $this === self::Full ? 2 : 1;
     }
 
+    /** @param  list<int>  $halves  (1 = first, 2 = second); null when empty */
+    public static function fromHalves(array $halves): ?self
+    {
+        sort($halves);
+
+        return match ($halves) {
+            [1, 2] => self::Full,
+            [1] => self::FirstHalf,
+            [2] => self::SecondHalf,
+            default => null,
+        };
+    }
+
     /** @return list<int> the halves this portion covers (1 = first, 2 = second) */
     public function halves(): array
     {

@@ -4,14 +4,15 @@ namespace Tests\Feature\Leave;
 
 use App\Domain\Leave\Http\Controllers\LeaveConfigurationController;
 use App\Domain\Leave\Http\Controllers\LeaveLedgerController;
+use App\Domain\Leave\Http\Controllers\LeaveRequestController;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
  * HRX.1 (ADR 0065 §16): bidirectional proof that the OpenAPI contract's
- * Leave paths exactly match the live `/api/v1` routes of the two Leave
- * controllers. Mirrors Tests\Feature\Examinations\GradeScaleOpenApiCoverageTest.
+ * Leave paths exactly match the live `/api/v1` routes of the three Leave
+ * controllers (HRX.2 adds LeaveRequestController). Mirrors Tests\Feature\Examinations\GradeScaleOpenApiCoverageTest.
  */
 class LeaveOpenApiCoverageTest extends TestCase
 {
@@ -24,15 +25,15 @@ class LeaveOpenApiCoverageTest extends TestCase
         $this->assertSame([], array_values(array_diff($live, $documented)), 'Live Leave route(s) missing from the OpenAPI contract');
         $this->assertSame([], array_values(array_diff($documented, $live)), 'OpenAPI Leave operation(s) with no matching live route');
 
-        $this->assertCount(25, $live, 'Expected exactly 25 live Leave API routes -- update this pin (and the contract) deliberately.');
-        $this->assertCount(25, $documented);
+        $this->assertCount(40, $live, 'Expected exactly 40 live Leave API routes -- update this pin (and the contract) deliberately.');
+        $this->assertCount(40, $documented);
     }
 
     #[Test]
-    public function the_contract_documents_no_request_approval_attendance_or_self_service_operation(): void
+    public function the_contract_documents_no_attendance_self_service_or_payroll_operation(): void
     {
         foreach ($this->documentedOperations() as $operation) {
-            $this->assertDoesNotMatchRegularExpression('#/requests|approv|attendance|/me\b|self|consum|payslip#i', $operation, 'HRX.2-HRX.5 operations are not part of HRX.1');
+            $this->assertDoesNotMatchRegularExpression('#attendance|/me\b|/my\b|self|payslip|payroll|ncp|loss-of-pay#i', $operation, 'HRX.3-HRX.5 operations are not part of HRX.1/HRX.2');
         }
         $deletes = array_values(array_filter($this->documentedOperations(), fn (string $o) => str_starts_with($o, 'DELETE ')));
         $this->assertSame(['DELETE /schools/{param}/leave/calendar/holidays/{param}'], $deletes, 'only a holiday is removable; ledger, policies and assignments never are');
@@ -56,7 +57,7 @@ class LeaveOpenApiCoverageTest extends TestCase
                 return;
             }
             [$controller] = explode('@', $action, 2) + [null];
-            if (! in_array($controller, [LeaveConfigurationController::class, LeaveLedgerController::class], true)) {
+            if (! in_array($controller, [LeaveConfigurationController::class, LeaveLedgerController::class, LeaveRequestController::class], true)) {
                 return;
             }
             $path = preg_replace('/\{[^}]+\}/', '{param}', '/'.preg_replace('#^api/v1/#', '', $route->uri()));

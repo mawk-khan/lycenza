@@ -6,7 +6,8 @@
   the day-portion contract (§4.4); HRX.1 — Leave Foundation is built. A
   later HRX.1 correction clarifies the leave year as prospectively
   configurable (§22.1a) and records the HRX.2 approved-leave invariant
-  (§22.6). The
+  (§22.6). **HRX.2 — Leave Requests & Approval is built** (§23, decisions
+  recorded before coding; as-built notes in §23.15). The
   remaining **[OWNER DECISION]** defaults still apply to HRX.2–HRX.6 unless
   the owner records a different choice before the checkpoint that needs it.
 - Date: 2026-10-03
@@ -758,3 +759,289 @@ owner decisions**; they supersede the matching recommended defaults above.
 - A configuration change affects only requests not yet approved. Approved
   leave is changed only by cancellation (`reversal`) and a new request
   (§4.8).
+
+## 23. HRX.2 — Leave Requests & Approval: decisions recorded before coding (2026-10-03)
+
+Baseline `f1001ec`. These close the open details of §5, §6, §16 and §17 for
+HRX.2. Where they narrow a default above, this section governs.
+
+### 23.1 Request shape
+- A request names one EmploymentRecord and one leave type. It has
+  `starts_on` + `start_portion` and `ends_on` + `end_portion`.
+- **One day** (`starts_on = ends_on`): both portions are equal, and they are
+  `full`, `first_half` or `second_half`.
+- **Several days:**
+  - the first day is `full` or `second_half` (the leave starts at the half
+    break);
+  - the last day is `full` or `first_half`;
+  - every day in between is `full`.
+- Every other combination is refused by a database CHECK. A non-`full`
+  portion needs a leave type that `allows_half_day`.
+- **Expansion is deterministic.** Each date contributes the halves above.
+  A request is one contiguous run of half-days, stored as generated
+  integer half-day indices (`first_half_index`, `last_half_index`).
+- Dates, portions, type and employment never change after submission
+  (database trigger). A changed request is a new request.
+
+### 23.2 Overlap
+- A `submitted` or `approved` request reserves its half-days.
+- A trigger under the per-employment advisory lock `leave.requests:{school}:{employment}`
+  refuses any live request whose half-day run intersects another live
+  request of the same EmploymentRecord (`leave_request_overlap`), whatever
+  the leave type.
+- Opposite halves of one day never intersect. `rejected`, `withdrawn` and
+  `cancelled` requests reserve nothing.
+- The repository's no-`btree_gist` precedent is kept.
+
+### 23.3 Closed reason codes (no free text, nothing health-related)
+- **Request (optional):** `personal`, `family`, `official_duty`, `other`.
+- **Rejection (required):** `staffing_need`, `policy_not_met`,
+  `duplicate_request`, `entered_in_error`, `other`.
+- **Withdrawal / cancellation (required):** `plans_changed`,
+  `entered_in_error`, `administrative_correction`, `other`.
+
+### 23.4 Chargeable-day evidence (immutable, §22.6)
+- **Calculation at approval.** A working half is a requested half that is
+  working in the weekly pattern and not covered by a staff holiday. The
+  calendar must be fully configured (`LEAVE_CALENDAR_NOT_CONFIGURED`).
+- **Evidence rows.** Approval writes one `leave_request_days` row per date
+  with at least one chargeable half: date, portion, units (1 or 2), the
+  materialized leave year, and — for a balance-tracked type — the policy
+  assignment and policy version effective on that date. The table is
+  append-only for the runtime role.
+- **Never recomputed.** Display, cancellation and year close read these
+  rows; `WorkingDayCalculator` is never re-run for an approved request.
+- **No chargeable half.** Submission is refused
+  (`LEAVE_REQUEST_NO_WORKING_DAYS`), and so is an approval whose fresh
+  calculation finds none.
+- **Policy and years.**
+  - Every chargeable date of a tracked type needs an effective policy
+    assignment (`LEAVE_NO_POLICY_ASSIGNMENT`).
+  - Every chargeable date needs a materialized leave year
+    (`LEAVE_YEAR_NOT_OPEN`).
+  - A request crossing a leave-year or policy boundary is **split by
+    date**. Each day carries its own year and policy, and consumption is
+    one `consumption` ledger entry per (request, leave year). Each entry
+    passes its own balance invariant. A unique index allows one consumption
+    per request × year.
+
+### 23.5 Decisions and self-decision
+- **Evidence.** `leave_decisions` is append-only. Each row has the request,
+  the decision (`approved`, `rejected`, `withdrawn`, `cancelled`), the path
+  (`manager` or `administrative`), the deciding User, the Employee linked
+  to that User (set by a database trigger, never by the caller), the
+  requester's Employee, a closed reason code, and the time.
+- **One decision of each kind.** At most one `approved`/`rejected`/
+  `withdrawn` decision and one `cancelled` decision per request (partial
+  unique indexes). The request's status changes only by a conditional
+  transition in the same transaction.
+- **No person approves or rejects their own request, on either path.** A
+  database CHECK requires the decider's Employee to differ from the
+  requester's Employee for `approved` and `rejected` decisions. Because the
+  trigger derives both Employees, raw SQL cannot bypass it. The service
+  refuses first (`LEAVE_SELF_DECISION`). An administrative override for
+  one's own request is **not** permitted. Withdrawal and cancellation by
+  the requester are allowed (HRX.4 uses them).
+
+### 23.6 Manager path (capability AND fresh ownership)
+- **The rule.** The manager path needs `hr.leave.approve` and that the
+  acting Employee (`ActingEmployeeResolver::hold()`) is the requester's
+  current manager.
+- **Who the manager is.** HR answers that through a new HR Application
+  contract, `ReportingLine`, read FOR SHARE at decision time:
+  - take the requester's assignment open today (with several, the
+    `is_primary` one; otherwise none);
+  - take its `manager_assignment_id`, which must also be open today;
+  - the manager is that assignment's Employee.
+
+  The answer is never snapshotted at submission.
+- **No relationship.** A request outside the actor's current direct
+  reports is the private 404 (`/leave/approvals/...`). The manager list is
+  built server-side from `ReportingLine`.
+
+### 23.7 Administrative path
+- `hr.leave.manage` decides any request of the School (approve, reject,
+  withdraw on behalf, cancel at any time), recorded with path
+  `administrative`.
+- HRX.2 submits on behalf through `hr.leave.manage`. The same
+  `LeaveRequestService::submit()` is what HRX.4 will call for
+  self-service.
+
+### 23.8 Year close
+- **Scope.** One run per School × leave year (`leave_year_closes`, unique)
+  covers every balance-tracked type. Preview, then execute
+  (`hr.leave.manage`, idempotent, audited).
+- **Refused unless all of these hold:**
+  - the year has ended in the School's timezone (`LEAVE_YEAR_NOT_ENDED`);
+  - the adjacent previous year, if materialized, is closed
+    (`LEAVE_YEAR_CLOSE_ORDER`);
+  - the adjacent next year (starting the day after it ends; a transition
+    year counts) is materialized (`LEAVE_NEXT_YEAR_NOT_OPEN`);
+  - no `submitted` request overlaps the year's dates
+    (`LEAVE_YEAR_CLOSE_PENDING_REQUESTS`).
+- **Items.** For every (employment, type) with ledger entries in the year,
+  the run writes an immutable `leave_year_close_items` row. It holds the
+  closing balance (ledger-derived) and the policy used: the assignment
+  effective on the year's last day, else the latest assignment overlapping
+  the year. It also holds the carried units, the lapsed units and the
+  carried units' expiry date (`CarryForwardCalculator`).
+- **Ledger entries.**
+  - `carry_forward_out` (closing year) and `carry_forward_in` (next year)
+    of the carried units;
+  - `expiry` (closing year) of the lapsed units.
+
+  The closing year's balance is then zero.
+- **Carried-unit in-year expiry is recorded, not executed, in HRX.2.**
+  `carry_forward_expiry_days` produces the item's `carried_expires_on`. The
+  scheduled lapse of unused carried units inside the next year needs a
+  consumption-ordering rule (which units are used first) and its own
+  reconciliation. That is deferred to a later checkpoint and is shown in
+  the UI as recorded, not enforced. Nothing is silently lapsed.
+- **A closed year is sealed.** The ledger trigger takes a shared
+  `leave.year:{school}:{year}` advisory lock for every entry (the close
+  takes it exclusively). In a closed year it allows only `reversal`
+  entries and the close's or a reconciliation's own `carry_forward_out`/
+  `expiry` entries (`LEAVE_YEAR_CLOSED`). Allocation, adjustment,
+  consumption and `carry_forward_in` into a closed year are refused.
+
+### 23.9 Cancellation after close: reconciliation
+- **When.** Cancelling an approved request whose consumption sits in a
+  closed year reconciles that year in the **same transaction**. This is
+  automatic, deterministic and never a rerun of the close.
+- **Steps.** With `u` the reversed units:
+  - read the year's close item, its recorded policy cap, and the prior
+    reconciliations;
+  - the previous closing balance `B` is the item's closing balance plus the
+    units of earlier reconciliations;
+  - the previous carried figure `C` is the item's carried units plus their
+    `Δc`;
+  - the new carried figure is `C' = min(B + u, cap)` (0 when carry-forward
+    is not allowed);
+  - so `Δc = C' − C` and `Δl = u − Δc`. Both are ≥ 0.
+- **Entries.** `carry_forward_out Δc` and `expiry Δl` in the closed year,
+  and `carry_forward_in Δc` in the next year. They are linked to a
+  `leave_year_close_reconciliations` row (close item, reversal entry,
+  request, units, Δc, Δl). The original close, items, consumption and
+  reversal stay untouched. The closed year returns to zero.
+- **Policy.** The original item's policy governs. Today's policy is never
+  used.
+- **Two consecutive closed years.** If the next year is also closed, the
+  cancellation is refused (`LEAVE_CANCELLATION_CLOSE_CHAIN`). Correcting
+  across two closed years needs a chained reconciliation design that v1
+  does not build; the administrator corrects in the open year with an
+  adjustment.
+- **Uniqueness.** One reconciliation per reversal entry.
+
+### 23.10 Lock order (deadlock-free)
+1. School `FOR SHARE` (`SchoolOperationalGuard`), then the request row
+   `FOR UPDATE`.
+2. HR rows: ActingEmployee `hold()`, employment coverage, then the
+   reporting line `FOR SHARE`.
+3. `leave.years:{school}`, then `leave.calendar:{school}` (shared for
+   readers; exclusive for every calendar writer, holidays included), then
+   policy-assignment keys.
+4. `leave.year:{school}:{year}`, shared, in leave-year order.
+5. The balance keys, in sorted order.
+
+The year close takes 1, then 4 exclusively, then 5. A submission takes the
+request lock (2.2) and the year locks for the years it touches.
+
+### 23.11 Events (outbox; not webhook-publishable)
+- `leave.request.approved.v1` carries: the request id, employment record
+  id, employee id, leave type id, `isPaid`, `tracksBalance`, and the days
+  as `[{date, portion, units, leaveYearId}]` plus the total units.
+- `leave.request.cancelled.v1` carries the same identifiers and the
+  reversed units per leave year.
+- There is no free text and no health data. Nothing consumes them before
+  HRX.5.
+
+### 23.12 Capability
+- `hr.leave.approve` is registered in HRX.2 and granted to `school_admin`
+  and `principal`. It is **not** added to `teacher` (E33).
+- In development and tests, a manager receives it through the ordinary
+  grant mechanism (`createUserWithCapabilities`, or a School role
+  assignment).
+- `hr.leave.self` and `staff_self_service` stay HRX.4.
+
+### 23.13 Retention
+- `leave_requests`, `leave_request_days`, `leave_decisions`,
+  `leave_year_close_items` and `leave_year_close_reconciliations` are D9
+  employment evidence (`leave_evidence`, mechanism pending HRX.6). They are
+  RESTRICT to the EmploymentRecord.
+- `leave_year_closes` (the header) is tenant lifetime.
+
+### 23.14 Admin UI
+- **Session-authenticated Inertia pages** under `/app/leave/*`:
+  - configuration (settings, years, types, policies, calendar);
+  - entitlements (assignments, allocations, adjustments, runs, balances);
+  - requests (submit on behalf, decide, withdraw, cancel, evidence);
+  - year close;
+  - the manager's approvals.
+- **Server-side gates.** Every page checks capabilities, and the services
+  check them again. The manager page lists only server-resolved direct
+  reports. No self-service screen and no Teacher-specific screen.
+
+### 23.15 HRX.2 as built
+- **Tables (6), all with forced RLS and composite same-School RESTRICT
+  foreign keys:**
+  - `leave_requests`;
+  - `leave_request_days` (append-only);
+  - `leave_decisions` (append-only);
+  - `leave_year_closes` (append-only);
+  - `leave_year_close_items` (append-only);
+  - `leave_year_close_reconciliations` (append-only).
+
+  The ledger gains `leave_request_id`, `year_close_id` and
+  `year_close_reconciliation_id`. A links CHECK ties consumption/reversal
+  to a request and carry/expiry movements to a close. Unique indexes allow
+  one consumption per request × year and one close movement per kind and
+  key.
+- **What the database enforces itself:**
+  - the request shape;
+  - live-request overlap (half-day indices, advisory lock);
+  - immutable request content;
+  - the closed status graph, where every transition needs its decision
+    evidence;
+  - an approval needs day evidence and, for a tracked type, a consumption
+    for every charged year;
+  - a cancellation needs a reversal for every consumption;
+  - day evidence written only while approving, inside the request dates,
+    with the year containing the date and the assignment effective on it;
+  - both Employees on a decision derived by trigger, with the no-self
+    CHECK;
+  - a consumption equal to that year's day evidence;
+  - a reversal of exactly one consumption of the same request;
+  - the year-close seal.
+- **HR contracts used (HR Application, Leave depends one way):**
+  - `ReportingLine::holdManagerOf()` / `reportsOf()`, which is new;
+  - `EmploymentCoverage::holdRecordCovering()`, new (the employment must
+    span the whole request);
+  - `ActingEmployeeResolver::hold()/resolve()`, only in
+    `LeaveRequestService` and `LeaveRequestReadService` (guarded).
+- **Locks.** `LeaveLocks` holds every Leave advisory key. The HRX.1
+  allocation path now takes the year (shared) before the balance key, and
+  holiday add/remove take the calendar lock.
+- **API.** 15 new operations, 40 in all:
+  - `/leave/requests` (7: list, submit, show, approve, reject, withdraw,
+    cancel);
+  - `/leave/approvals` (4);
+  - `/leave/year-closes` (4).
+
+  Approve, cancel and year-close execute complete their idempotency
+  record inside the business transaction (rule 33). Submit, reject and
+  withdraw use the generic `idempotent` completion, because their
+  conditional transition is itself duplicate-safe.
+- **Manager reads.** `hr.leave.approve` reads leave-type id, code and name
+  only (`LeaveReadService::typeNames()`), never the rest of the
+  configuration.
+- **UI.** `/app/leave/{configuration,entitlements,requests,requests/{id},
+  year-close}` (administration) and `/app/leave/approvals` (manager). The
+  Dashboard links are gated by `hr.leave.view` / `hr.leave.approve`.
+- **Events.** `leave.request.approved.v1` and
+  `leave.request.cancelled.v1` go through the outbox. They are not in
+  `WebhookEventRegistry`.
+- **Audit.** `leave.request.submitted/approved/rejected/withdrawn/cancelled`
+  (with path, reason code, days and units),
+  `leave.year_close.executed` and `leave.year_close.reconciled`.
+- **Recorded, not executed.** The in-year lapse of carried units
+  (`carried_expires_on`), see §23.8.

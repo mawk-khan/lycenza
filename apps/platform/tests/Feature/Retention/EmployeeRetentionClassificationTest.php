@@ -38,6 +38,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'assignments' => 'retained, blocks: LMS owner until the resource expires (A1 + D6 minimum, E21.3D)',
             'transport_route_assignments' => 'retained, blocks: until the driver assignment itself expires (O2, E21.3E: 7 y after ends_on)',
             'visitor_visits' => 'retained, blocks: as host until the visit itself expires (O3, E21.3E: 1 y after checkout)',
+            'leave_requests' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
+            'leave_decisions' => 'retained, blocks: D9 leave evidence -- as requester, and as the deciding manager -- until HRX.6 (ADR 0065 §23.13)',
         ],
         'employment_records' => [
             'employee_assignments' => 'D9 evidence (8 y): employment history, purged with the Employee',
@@ -51,6 +53,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'payroll_lwf_annual_charges' => 'retained, blocks: posted payroll evidence until its D9 expiry (E21.3F)',
             'leave_policy_assignments' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §18)',
             'leave_ledger_entries' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §18)',
+            'leave_requests' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
+            'leave_year_close_items' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
         ],
         'employee_assignments' => [
             'employee_assignments' => 'retained, blocks: another Employee names it as manager (ON DELETE SET NULL would rewrite their history)',

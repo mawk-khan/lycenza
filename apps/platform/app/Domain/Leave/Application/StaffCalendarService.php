@@ -46,7 +46,7 @@ class StaffCalendarService
 
         $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $pattern, $actor) {
             $this->guard->requireOperational($school->id);
-            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['leave.calendar:'.$school->id]);
+            LeaveLocks::calendar($school, shared: false);
             $before = $this->pattern($school);
             foreach ($pattern as $weekday => $portion) {
                 StaffWorkingWeekday::query()->updateOrCreate(
@@ -64,6 +64,8 @@ class StaffCalendarService
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $date, $portion, $name, $actor) {
             $this->guard->requireOperational($school->id);
+            // Every calendar writer holds the calendar lock, so an approval reads one consistent calendar (ADR 0065 §23.10).
+            LeaveLocks::calendar($school, shared: false);
             try {
                 $holiday = StaffHoliday::query()->create(['school_id' => $school->id, 'holiday_on' => $date, 'portion' => $portion->value, 'name' => trim($name), 'created_by_user_id' => $actor->id]);
             } catch (UniqueConstraintViolationException) {
@@ -81,6 +83,7 @@ class StaffCalendarService
 
         $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $holidayId, $actor) {
             $this->guard->requireOperational($school->id);
+            LeaveLocks::calendar($school, shared: false);
             $holiday = StaffHoliday::query()->where('school_id', $school->id)->lockForUpdate()->findOrFail($holidayId);
             $holiday->delete();
             $this->audit->school($school, 'leave.calendar.holiday_removed', actor: $actor, metadata: ['date' => $holiday->holiday_on->toDateString(), 'portion' => $holiday->portion]);

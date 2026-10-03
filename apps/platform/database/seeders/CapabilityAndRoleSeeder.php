@@ -302,6 +302,9 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'hr.leave.configure', 'label' => 'Configure leave types, policies, leave year and staff calendar', 'namespace' => 'school'],
             ['key' => 'hr.leave.view', 'label' => 'View leave configuration, assignments, ledgers and balances', 'namespace' => 'school'],
             ['key' => 'hr.leave.manage', 'label' => 'Assign leave policies, allocate and adjust leave', 'namespace' => 'school'],
+            // HRX.2 (ADR 0065 §23.12): decide a DIRECT REPORT's leave request --
+            // always together with a fresh reporting relationship. Never on `teacher` (E33).
+            ['key' => 'hr.leave.approve', 'label' => "Approve or reject direct reports' leave requests", 'namespace' => 'school'],
             ['key' => 'hr.categories.view', 'label' => 'View Employee Categories', 'namespace' => 'school'],
             ['key' => 'hr.categories.manage', 'label' => 'Manage Employee Categories', 'namespace' => 'school'],
 
@@ -1177,7 +1180,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     // TeachingAssignments are School Admin and Principal.
                     'teaching.assignments.view', 'teaching.assignments.manage',
                     // HRX.1 (ADR 0065 §12): default Leave administrators.
-                    'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage',
+                    'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage', 'hr.leave.approve',
                     // TCH.3: held so School Admin can GRANT the Teacher role --
                     // StaffRoleCatalog only lets an actor grant a role whose
                     // every capability they hold (no escalation). It adds no
@@ -1360,7 +1363,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     // teaches which class.
                     'teaching.assignments.view', 'teaching.assignments.manage',
                     // HRX.1 (ADR 0065 §12): same default as school_admin.
-                    'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage',
+                    'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage', 'hr.leave.approve',
                 ],
             ],
             // TCH.3 (ADR 0063 section 12, T1): the one minimum production

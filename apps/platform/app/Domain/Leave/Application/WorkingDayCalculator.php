@@ -38,6 +38,21 @@ final class WorkingDayCalculator
         return count(array_intersect($portion->halves(), $working));
     }
 
+    /**
+     * HRX.2 (ADR 0065 §23.4): the working part of a requested portion on a
+     * date, as a portion, or null when none of it is working time.
+     */
+    public function chargeable(string $date, DayPortion $requested): ?DayPortion
+    {
+        $weekday = CarbonImmutable::createFromFormat('!Y-m-d', $date)->dayOfWeekIso;
+        $working = self::WEEKDAY_HALVES[$this->weekdays[$weekday]];
+        if (isset($this->holidays[$date])) {
+            $working = array_diff($working, DayPortion::from($this->holidays[$date])->halves());
+        }
+
+        return DayPortion::fromHalves(array_values(array_intersect($requested->halves(), $working)));
+    }
+
     public function isWorkingDay(string $date): bool
     {
         return $this->units($date, DayPortion::Full) > 0;

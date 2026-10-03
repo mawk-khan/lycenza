@@ -75,6 +75,26 @@ class LeaveReadService
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::VIEW, $school);
 
+        return $this->typeRows($school);
+    }
+
+    /**
+     * HRX.2: the leave-type names a manager needs to read their direct
+     * reports' requests -- `hr.leave.approve` reads type id, code and name
+     * only, never the rest of the configuration.
+     *
+     * @return list<array{id: string, code: string, name: string}>
+     */
+    public function typeNames(School $school, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::APPROVE, $school);
+
+        return array_map(fn (array $t) => ['id' => $t['id'], 'code' => $t['code'], 'name' => $t['name']], $this->typeRows($school));
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function typeRows(School $school): array
+    {
         return $this->read($school, fn () => LeaveType::query()->where('school_id', $school->id)->orderBy('code')->get()
             ->map(fn (LeaveType $t) => self::type($t))->all());
     }
@@ -196,7 +216,9 @@ class LeaveReadService
         return [
             'id' => $e->id, 'employmentRecordId' => $e->employment_record_id, 'leaveTypeId' => $e->leave_type_id, 'leaveYearId' => $e->leave_year_id,
             'kind' => $e->kind, 'direction' => $e->direction, 'units' => $e->units, 'reasonCode' => $e->reason_code,
-            'allocationRunId' => $e->allocation_run_id, 'reversesEntryId' => $e->reverses_entry_id, 'createdAt' => $e->created_at->toIso8601String(),
+            'allocationRunId' => $e->allocation_run_id, 'reversesEntryId' => $e->reverses_entry_id,
+            'leaveRequestId' => $e->leave_request_id, 'yearCloseId' => $e->year_close_id, 'yearCloseReconciliationId' => $e->year_close_reconciliation_id,
+            'createdAt' => $e->created_at->toIso8601String(),
         ];
     }
 

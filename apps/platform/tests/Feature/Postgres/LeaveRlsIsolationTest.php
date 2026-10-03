@@ -3,6 +3,7 @@
 namespace Tests\Feature\Postgres;
 
 use App\Domain\Leave\Application\LeaveLedgerService;
+use App\Domain\Leave\Application\LeaveRequestService;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class LeaveRlsIsolationTest extends TestCase
     private const TABLES = [
         'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_types', 'leave_policies', 'leave_policy_assignments',
         'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs', 'leave_ledger_entries',
+        'leave_requests', 'leave_request_days', 'leave_decisions', 'leave_year_closes', 'leave_year_close_items', 'leave_year_close_reconciliations',
     ];
 
     private function context(?string $schoolId): void
@@ -100,6 +102,43 @@ class LeaveRlsIsolationTest extends TestCase
             [(string) Str::uuid7(), $b['school']->id, $b['employment']->id, $b['type']->id, $a['year']->id, 'allocation', $b['admin']->id],
         ));
         $this->assertStringContainsString('leave_ledger_entries_year_fk', $message);
+        $this->context(null);
+    }
+
+    #[Test]
+    public function request_decision_and_day_evidence_is_isolated_by_rls_and_same_school_foreign_keys(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $a = $this->leaveWorld();
+        $b = $this->leaveWorld();
+        $this->workingWeek($a['school'], $a['admin']);
+        $this->allocate($a);
+        $request = $this->submitLeave($a, '2026-10-12', '2026-10-12');
+        app(LeaveRequestService::class)->approve($a['school'], $request->id, $a['admin']);
+
+        $this->context(null);
+        foreach (['leave_requests', 'leave_request_days', 'leave_decisions'] as $table) {
+            $this->assertSame(0, (int) DB::selectOne("select count(*) as c from {$table}")->c, "{$table}: no context, no rows");
+        }
+        $this->context($b['school']->id);
+        foreach (['leave_requests', 'leave_request_days', 'leave_decisions'] as $table) {
+            $this->assertSame(0, (int) DB::selectOne("select count(*) as c from {$table}")->c, "{$table}: School B sees none of A's rows");
+        }
+        $this->assertSame(0, DB::update('update leave_requests set status = ? where id = ?', ['cancelled', $request->id]), 'School B cannot touch A\'s request');
+
+        // A School B request naming School A's employment fails the composite foreign key (the trigger cannot even resolve the Employee).
+        $this->assertNotSame('', $this->refused(fn () => DB::insert(
+            "insert into leave_requests (id, school_id, employment_record_id, employee_id, leave_type_id, starts_on, start_portion, ends_on, end_portion, submitted_units, status, submitted_by_user_id, created_at, updated_at) values (?, ?, ?, ?, ?, '2026-10-13', 'full', '2026-10-13', 'full', 2, 'submitted', ?, now(), now())",
+            [(string) Str::uuid7(), $b['school']->id, $a['employment']->id, $a['employment']->employee_id, $b['type']->id, $b['admin']->id],
+        )));
+        // A School B day row pointing at School A's request: A's request is invisible to the trigger under RLS, and the composite FK refuses it too.
+        $this->assertMatchesRegularExpression('/leave_request_evidence_invalid|leave_request_days_request_fk/', $this->refused(fn () => DB::insert(
+            "insert into leave_request_days (id, school_id, leave_request_id, leave_date, portion, units, leave_year_id) values (?, ?, ?, '2026-10-12', 'full', 2, ?)",
+            [(string) Str::uuid7(), $b['school']->id, $request->id, $b['year']->id],
+        )));
+
+        $this->context($a['school']->id);
+        $this->assertSame([1, 1, 1], [(int) DB::selectOne('select count(*) as c from leave_requests')->c, (int) DB::selectOne('select count(*) as c from leave_request_days')->c, (int) DB::selectOne('select count(*) as c from leave_decisions')->c]);
         $this->context(null);
     }
 }

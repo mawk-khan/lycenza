@@ -610,7 +610,10 @@ The checkpoints are listed in §5.
     - another Employee's assignment naming one of its assignments as
       manager.
     - HRX leave evidence (`leave_policy_assignments`,
-      `leave_ledger_entries`, HRX.1, ADR 0065 §18/§22). This is D9
+      `leave_ledger_entries`, HRX.1; `leave_requests`, `leave_request_days`,
+      `leave_decisions`, `leave_year_close_items`,
+      `leave_year_close_reconciliations`, HRX.2; ADR 0065 §18/§22/§23.13).
+      A manager's decision also keeps the deciding manager's Employee. This is D9
       employment evidence; its expiry mechanism is pending
       (`leave_evidence`, `MECHANISM_PENDING`) until HRX.6 adds the purge
       participant. Until then a leave-holding Employee is

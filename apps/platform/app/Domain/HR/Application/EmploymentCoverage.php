@@ -93,11 +93,28 @@ class EmploymentCoverage
      */
     public function holdRecord(School $school, string $employmentRecordId, string $from, ?string $to): string
     {
+        return $this->holdRecordFor($school, $employmentRecordId, $from, $to, whole: false);
+    }
+
+    /**
+     * HRX.2 (ADR 0065 §23): holdRecord(), but the planned or current
+     * engagement must cover the WHOLE of [from, to] -- a leave request is
+     * only for days the employment actually spans.
+     *
+     * @return self::COVERED|self::RECORD_NOT_FOUND|self::EMPLOYEE_UNAVAILABLE|self::NOT_EMPLOYED
+     */
+    public function holdRecordCovering(School $school, string $employmentRecordId, string $from, string $to): string
+    {
+        return $this->holdRecordFor($school, $employmentRecordId, $from, $to, whole: true);
+    }
+
+    private function holdRecordFor(School $school, string $employmentRecordId, string $from, ?string $to, bool $whole): string
+    {
         if (DB::transactionLevel() === 0) {
             throw new LogicException('EmploymentCoverage::holdRecord() must run inside a database transaction.');
         }
 
-        return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $from, $to): string {
+        return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $from, $to, $whole): string {
             $record = EmploymentRecord::query()->where('school_id', $school->id)->whereKey($employmentRecordId)->first();
             if ($record === null) {
                 return self::RECORD_NOT_FOUND;
@@ -112,8 +129,9 @@ class EmploymentCoverage
                 ->where('school_id', $school->id)
                 ->whereKey($record->id)
                 ->whereIn('status', self::PLANNED_OR_CURRENT_STATUSES)
-                ->when($to !== null, fn ($q) => $q->where('starts_on', '<=', $to))
-                ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $from))
+                ->when($whole, fn ($q) => $q->where('starts_on', '<=', $from)->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $to)))
+                ->when(! $whole && $to !== null, fn ($q) => $q->where('starts_on', '<=', $to))
+                ->when(! $whole, fn ($q) => $q->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $from)))
                 ->sharedLock()
                 ->first();
 

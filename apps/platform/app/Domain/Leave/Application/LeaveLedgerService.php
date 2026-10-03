@@ -7,6 +7,7 @@ use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Infrastructure\LeaveAllocationRun;
 use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
 use App\Domain\Leave\Infrastructure\LeavePolicyAssignment;
+use App\Domain\Leave\Infrastructure\LeaveRequest;
 use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Leave\Infrastructure\LeaveYear;
 use App\Models\School;
@@ -21,11 +22,12 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * HRX.1 (ADR 0065 §4.5, owner decisions 2026-10-03): the ONE writer of the
- * append-only leave ledger in this checkpoint -- allocations (explicit and
- * by annual run) and adjustments. Request consumption and its reversal are
- * HRX.2's; carry-forward and expiry entries are HRX.2's year close
- * (CarryForwardCalculator holds the arithmetic).
+ * HRX.1/HRX.2 (ADR 0065 §4.5, §23): the ONE writer of the append-only
+ * leave ledger -- allocations (explicit and by annual run) and adjustments
+ * (HRX.1), and, for HRX.2's request and year-close services, consumption,
+ * reversal and the close's carry-forward/expiry movements
+ * (`record*()`: no capability of their own -- they run only inside the
+ * calling service's authorized, locked transaction).
  *
  * - Every quantity is a POSITIVE integer of half-day units; odd units only
  *   for a type that allows half-days.
@@ -185,6 +187,48 @@ class LeaveLedgerService
         }));
     }
 
+    /**
+     * HRX.2: an approval's consumption of one leave year. The database
+     * requires it to equal that year's chargeable-day evidence and refuses a
+     * negative balance or a second consumption of the same request x year.
+     * The caller holds the year (shared) and balance locks.
+     */
+    public function recordConsumption(School $school, LeaveRequest $request, string $leaveYearId, int $units, User $actor): LeaveLedgerEntry
+    {
+        return $this->append($school, [
+            'employment_record_id' => $request->employment_record_id, 'leave_type_id' => $request->leave_type_id, 'leave_year_id' => $leaveYearId,
+            'kind' => 'consumption', 'units' => $units, 'leave_request_id' => $request->id, 'actor_user_id' => $actor->id,
+        ]);
+    }
+
+    /** HRX.2: the reversal of exactly one consumption (one per entry, database-unique). */
+    public function recordReversal(School $school, LeaveLedgerEntry $consumption, User $actor): LeaveLedgerEntry
+    {
+        return $this->append($school, [
+            'employment_record_id' => $consumption->employment_record_id, 'leave_type_id' => $consumption->leave_type_id, 'leave_year_id' => $consumption->leave_year_id,
+            'kind' => 'reversal', 'units' => $consumption->units, 'reverses_entry_id' => $consumption->id, 'leave_request_id' => $consumption->leave_request_id,
+            'actor_user_id' => $actor->id,
+        ]);
+    }
+
+    /**
+     * HRX.2: a year close's (or a reconciliation's) `carry_forward_out`,
+     * `carry_forward_in` or `expiry` movement. Linked to the close, and to the
+     * reconciliation when it corrects a closed year.
+     */
+    public function recordCloseMovement(School $school, string $kind, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, int $units, string $yearCloseId, ?string $reconciliationId, User $actor): LeaveLedgerEntry
+    {
+        if (! in_array($kind, ['carry_forward_out', 'carry_forward_in', 'expiry'], true)) {
+            throw new \InvalidArgumentException("{$kind} is not a year-close movement.");
+        }
+
+        return $this->append($school, [
+            'employment_record_id' => $employmentRecordId, 'leave_type_id' => $leaveTypeId, 'leave_year_id' => $leaveYearId,
+            'kind' => $kind, 'units' => $units, 'year_close_id' => $yearCloseId, 'year_close_reconciliation_id' => $reconciliationId,
+            'actor_user_id' => $actor->id,
+        ]);
+    }
+
     /** @param  array<string, mixed>  $attributes */
     private function append(School $school, array $attributes): LeaveLedgerEntry
     {
@@ -194,10 +238,16 @@ class LeaveLedgerService
             if (str_contains($e->getMessage(), 'leave_ledger_entries_one_allocation')) {
                 throw LeaveException::conflict('LEAVE_ALREADY_ALLOCATED', 'This employment already has its allocation of this leave type for that year; use an adjustment.');
             }
+            if (str_contains($e->getMessage(), 'leave_ledger_entries_one_consumption') || str_contains($e->getMessage(), 'leave_ledger_entries_one_reversal')) {
+                throw LeaveException::conflict('LEAVE_REQUEST_ALREADY_DECIDED', 'This request has already been decided.');
+            }
             throw $e;
         } catch (QueryException $e) {
             if (str_contains($e->getMessage(), 'leave_balance_negative')) {
                 throw LeaveException::conflict('LEAVE_BALANCE_INSUFFICIENT', 'The leave balance cannot go below zero.');
+            }
+            if (str_contains($e->getMessage(), 'leave_year_closed')) {
+                throw LeaveException::conflict('LEAVE_YEAR_CLOSED', 'That leave year is closed.');
             }
             throw $e;
         }
@@ -275,6 +325,8 @@ class LeaveLedgerService
 
     private function lockKey(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId): void
     {
-        DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ["leave.balance:{$school->id}:{$employmentRecordId}:{$leaveTypeId}:{$leaveYearId}"]);
+        // The year (shared) before the key: the year close holds the year exclusively (ADR 0065 §23.10).
+        LeaveLocks::year($school, $leaveYearId);
+        LeaveLocks::balance($school, $employmentRecordId, $leaveTypeId, $leaveYearId);
     }
 }

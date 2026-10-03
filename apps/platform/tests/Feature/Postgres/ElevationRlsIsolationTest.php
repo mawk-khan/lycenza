@@ -88,8 +88,10 @@ class ElevationRlsIsolationTest extends TestCase
         // + leave_settings, leave_years, leave_types, leave_policies,
         // leave_policy_assignments, staff_working_weekdays, staff_holidays,
         // leave_allocation_runs and leave_ledger_entries (HRX.1, ADR 0065);
-        // + leave_year_start_changes (HRX.1 correction, ADR 0065 §22.1).
-        $this->assertSame(182, (int) DB::connection('pgsql_admin')->selectOne(
+        // + leave_year_start_changes (HRX.1 correction, ADR 0065 §22.1);
+        // + leave_requests, leave_request_days, leave_decisions, leave_year_closes,
+        // leave_year_close_items and leave_year_close_reconciliations (HRX.2, ADR 0065 §23).
+        $this->assertSame(188, (int) DB::connection('pgsql_admin')->selectOne(
             "select count(*) as c from pg_class where relrowsecurity and relforcerowsecurity and relnamespace = 'public'::regnamespace",
         )->c, 'No tenant table gained or lost RLS in Phase 0N.3.');
     }

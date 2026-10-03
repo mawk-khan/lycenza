@@ -209,6 +209,6 @@ class LeaveYearService
 
     private function lockSchedule(School $school): void
     {
-        DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ["leave.years:{$school->id}"]);
+        LeaveLocks::schedule($school);
     }
 }

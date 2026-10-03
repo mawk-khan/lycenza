@@ -3262,6 +3262,522 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/leave/requests:
+    get:
+      operationId: listLeaveRequests
+      summary: >
+        HRX.2: the School's leave requests, optionally by status or employment. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: status, in: query, required: false, schema: { type: string, enum: [submitted, approved, rejected, withdrawn, cancelled] } }
+        - { name: employment_record_id, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LeaveRequest" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: submitLeaveRequest
+      summary: >
+        HRX.2: submits a request on an employee's behalf (dates + day portions; closed reason code; no free text). Consumes nothing; refuses overlap with a live request. Requires hr.leave.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveRequestCreateInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_OVERLAP / LEAVE_YEAR_CLOSED / LEAVE_EMPLOYMENT_NOT_ELIGIBLE / LEAVE_TYPE_INACTIVE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/requests/{leaveRequestId}:
+    get:
+      operationId: getLeaveRequest
+      summary: >
+        HRX.2: one request with its immutable chargeable-day evidence, decisions and ledger effects. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequestDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/requests/{leaveRequestId}/approve:
+    post:
+      operationId: approveLeaveRequest
+      summary: >
+        HRX.2: administrative approval. Writes the chargeable-day snapshot and one consumption per leave year in one transaction. Never one's own request. Requires hr.leave.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_NOT_SUBMITTED / LEAVE_BALANCE_INSUFFICIENT / LEAVE_NO_POLICY_ASSIGNMENT / LEAVE_YEAR_NOT_OPEN / LEAVE_YEAR_CLOSED / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/requests/{leaveRequestId}/reject:
+    post:
+      operationId: rejectLeaveRequest
+      summary: >
+        HRX.2: administrative rejection with a closed reason code. Never one's own request. Requires hr.leave.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveRejectionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_NOT_SUBMITTED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/requests/{leaveRequestId}/withdraw:
+    post:
+      operationId: withdrawLeaveRequest
+      summary: >
+        HRX.2: withdraws a submitted request on the requester's behalf. Requires hr.leave.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveClosingInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_NOT_SUBMITTED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/requests/{leaveRequestId}/cancel:
+    post:
+      operationId: cancelLeaveRequest
+      summary: >
+        HRX.2: cancels an approved request. Every consumption is reversed by a new linked entry; a consumption in a closed year is reconciled under that close's policy terms. Nothing is rewritten. Requires hr.leave.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveClosingInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_NOT_APPROVED / LEAVE_CANCELLATION_CLOSE_CHAIN / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/approvals:
+    get:
+      operationId: listManagedLeaveRequests
+      summary: >
+        HRX.2: the acting manager's current direct reports' submitted and approved requests, resolved server-side. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LeaveRequest" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.approve (and the requester's CURRENT manager, resolved fresh) in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/approvals/{leaveRequestId}:
+    get:
+      operationId: getManagedLeaveRequest
+      summary: >
+        HRX.2: one direct report's request; anything else is the private 404. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh).
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequestDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.approve (and the requester's CURRENT manager, resolved fresh) in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/approvals/{leaveRequestId}/approve:
+    post:
+      operationId: approveManagedLeaveRequest
+      summary: >
+        HRX.2: manager approval -- capability AND fresh reporting ownership at decision time. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.approve (and the requester's CURRENT manager, resolved fresh) in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_NOT_SUBMITTED / LEAVE_BALANCE_INSUFFICIENT / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/approvals/{leaveRequestId}/reject:
+    post:
+      operationId: rejectManagedLeaveRequest
+      summary: >
+        HRX.2: manager rejection with a closed reason code. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveRejectionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.approve (and the requester's CURRENT manager, resolved fresh) in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_NOT_SUBMITTED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/year-closes:
+    get:
+      operationId: listLeaveYearCloses
+      summary: >
+        HRX.2: the School's executed leave-year closes. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LeaveYearClose" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: executeLeaveYearClose
+      summary: >
+        HRX.2: closes an ended leave year once -- carry forward up to the policy cap into the adjacent next year, lapse the rest. Refused while a submitted request overlaps the year, before the previous year is closed, or before the next year is open. Requires hr.leave.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveYearCloseInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveYearClose" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_YEAR_ALREADY_CLOSED / LEAVE_YEAR_NOT_ENDED / LEAVE_YEAR_CLOSE_ORDER / LEAVE_NEXT_YEAR_NOT_OPEN / LEAVE_YEAR_CLOSE_PENDING_REQUESTS / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/year-closes/preview:
+    get:
+      operationId: previewLeaveYearClose
+      summary: >
+        HRX.2: what a close would write now, with its blockers. Read-only. Requires hr.leave.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leave_year_id, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveYearClosePreview" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/year-closes/{leaveYearCloseId}:
+    get:
+      operationId: getLeaveYearClose
+      summary: >
+        HRX.2: one close with its items and later reconciliations. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveYearCloseId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveYearCloseDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School (or LEAVE_SELF_DECISION).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/enrollment-rollovers:
     get:
       operationId: listEnrollmentRollovers
@@ -15288,6 +15804,9 @@ components:
         reasonCode: { type: string, nullable: true }
         allocationRunId: { type: string, format: uuid, nullable: true }
         reversesEntryId: { type: string, format: uuid, nullable: true }
+        leaveRequestId: { type: string, format: uuid, nullable: true }
+        yearCloseId: { type: string, format: uuid, nullable: true }
+        yearCloseReconciliationId: { type: string, format: uuid, nullable: true }
         createdAt: { type: string, format: date-time, nullable: true }
     LeaveBalance:
       type: object
@@ -15297,6 +15816,130 @@ components:
         credits: { type: integer }
         debits: { type: integer }
         availableUnits: { type: integer, minimum: 0, description: "Derived from the ledger; never stored." }
+    LeaveRequest:
+      type: object
+      required: [id, employmentRecordId, leaveTypeId, startsOn, startPortion, endsOn, endPortion, submittedUnits, status]
+      properties:
+        id: { type: string, format: uuid }
+        employmentRecordId: { type: string, format: uuid }
+        leaveTypeId: { type: string, format: uuid }
+        startsOn: { type: string, format: date }
+        startPortion: { type: string, enum: [full, first_half, second_half] }
+        endsOn: { type: string, format: date }
+        endPortion: { type: string, enum: [full, first_half, second_half] }
+        reasonCode: { type: string, enum: [personal, family, official_duty, other], nullable: true }
+        submittedUnits: { type: integer, minimum: 1, description: "Integer half-day units computed at submission; the approval snapshot is authoritative." }
+        status: { type: string, enum: [submitted, approved, rejected, withdrawn, cancelled] }
+        submittedAt: { type: string, format: date-time, nullable: true }
+    LeaveRequestDetail:
+      allOf:
+        - { $ref: "#/components/schemas/LeaveRequest" }
+        - type: object
+          required: [days, decisions, ledgerEntries]
+          properties:
+            days:
+              type: array
+              description: The immutable chargeable-day evidence written at approval (empty until approved).
+              items:
+                type: object
+                required: [date, portion, units, leaveYearId]
+                properties:
+                  date: { type: string, format: date }
+                  portion: { type: string, enum: [full, first_half, second_half] }
+                  units: { type: integer, minimum: 1, maximum: 2 }
+                  leaveYearId: { type: string, format: uuid }
+                  leavePolicyAssignmentId: { type: string, format: uuid, nullable: true }
+                  leavePolicyId: { type: string, format: uuid, nullable: true }
+            decisions:
+              type: array
+              items:
+                type: object
+                required: [id, decision, path]
+                properties:
+                  id: { type: string, format: uuid }
+                  decision: { type: string, enum: [approved, rejected, withdrawn, cancelled] }
+                  path: { type: string, enum: [manager, administrative] }
+                  reasonCode: { type: string, nullable: true }
+                  decidedAt: { type: string, format: date-time, nullable: true }
+            ledgerEntries: { type: array, items: { $ref: "#/components/schemas/LeaveLedgerEntry" } }
+    LeaveRequestCreateInput:
+      type: object
+      required: [employment_record_id, leave_type_id, starts_on, start_portion, ends_on, end_portion]
+      description: "One day: equal portions. Several days: start full or second_half, end full or first_half."
+      properties:
+        employment_record_id: { type: string, format: uuid }
+        leave_type_id: { type: string, format: uuid }
+        starts_on: { type: string, format: date }
+        start_portion: { type: string, enum: [full, first_half, second_half] }
+        ends_on: { type: string, format: date }
+        end_portion: { type: string, enum: [full, first_half, second_half] }
+        reason_code: { type: string, enum: [personal, family, official_duty, other], nullable: true }
+    LeaveRejectionInput:
+      type: object
+      required: [reason_code]
+      properties:
+        reason_code: { type: string, enum: [staffing_need, policy_not_met, duplicate_request, entered_in_error, other] }
+    LeaveClosingInput:
+      type: object
+      required: [reason_code]
+      properties:
+        reason_code: { type: string, enum: [plans_changed, entered_in_error, administrative_correction, other] }
+    LeaveYearCloseInput:
+      type: object
+      required: [leave_year_id]
+      properties:
+        leave_year_id: { type: string, format: uuid }
+    LeaveYearClose:
+      type: object
+      required: [id, leaveYearId, nextLeaveYearId, itemCount, executedAt]
+      properties:
+        id: { type: string, format: uuid }
+        leaveYearId: { type: string, format: uuid }
+        nextLeaveYearId: { type: string, format: uuid }
+        itemCount: { type: integer, minimum: 0 }
+        executedAt: { type: string, format: date-time }
+    LeaveYearCloseItem:
+      type: object
+      required: [employmentRecordId, leaveTypeId, carryForwardAllowed, closingUnits, carriedUnits, lapsedUnits]
+      properties:
+        id: { type: string, format: uuid }
+        employmentRecordId: { type: string, format: uuid }
+        leaveTypeId: { type: string, format: uuid }
+        leavePolicyId: { type: string, format: uuid, nullable: true }
+        carryForwardAllowed: { type: boolean }
+        carryForwardCapUnits: { type: integer, nullable: true }
+        closingUnits: { type: integer, minimum: 0 }
+        carriedUnits: { type: integer, minimum: 0 }
+        lapsedUnits: { type: integer, minimum: 0 }
+        carriedExpiresOn: { type: string, format: date, nullable: true, description: "Recorded; the in-year lapse of carried units is not executed in HRX.2 (ADR 0065 §23.8)." }
+    LeaveYearClosePreview:
+      type: object
+      required: [blockers, items]
+      properties:
+        blockers: { type: array, items: { type: string } }
+        nextLeaveYearId: { type: string, format: uuid, nullable: true }
+        items: { type: array, items: { $ref: "#/components/schemas/LeaveYearCloseItem" } }
+    LeaveYearCloseDetail:
+      allOf:
+        - { $ref: "#/components/schemas/LeaveYearClose" }
+        - type: object
+          required: [items, reconciliations]
+          properties:
+            items: { type: array, items: { $ref: "#/components/schemas/LeaveYearCloseItem" } }
+            reconciliations:
+              type: array
+              items:
+                type: object
+                required: [id, yearCloseItemId, leaveRequestId, reversalEntryId, units, carriedDelta, lapsedDelta]
+                properties:
+                  id: { type: string, format: uuid }
+                  yearCloseItemId: { type: string, format: uuid }
+                  leaveRequestId: { type: string, format: uuid }
+                  reversalEntryId: { type: string, format: uuid }
+                  units: { type: integer, minimum: 1 }
+                  carriedDelta: { type: integer, minimum: 0 }
+                  lapsedDelta: { type: integer, minimum: 0 }
+                  createdAt: { type: string, format: date-time, nullable: true }
     TeachingAssignment:
       type: object
       description: >

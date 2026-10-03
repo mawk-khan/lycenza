@@ -1482,6 +1482,229 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/leave/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.2: the School's leave requests, optionally by status or employment. Requires hr.leave.view. */
+        get: operations["listLeaveRequests"];
+        put?: never;
+        /** HRX.2: submits a request on an employee's behalf (dates + day portions; closed reason code; no free text). Consumes nothing; refuses overlap with a live request. Requires hr.leave.manage. Idempotency-Key required. */
+        post: operations["submitLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/requests/{leaveRequestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.2: one request with its immutable chargeable-day evidence, decisions and ledger effects. Requires hr.leave.view. */
+        get: operations["getLeaveRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/requests/{leaveRequestId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.2: administrative approval. Writes the chargeable-day snapshot and one consumption per leave year in one transaction. Never one's own request. Requires hr.leave.manage. Idempotency-Key required. */
+        post: operations["approveLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/requests/{leaveRequestId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.2: administrative rejection with a closed reason code. Never one's own request. Requires hr.leave.manage. Idempotency-Key required. */
+        post: operations["rejectLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/requests/{leaveRequestId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.2: withdraws a submitted request on the requester's behalf. Requires hr.leave.manage. Idempotency-Key required. */
+        post: operations["withdrawLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/requests/{leaveRequestId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.2: cancels an approved request. Every consumption is reversed by a new linked entry; a consumption in a closed year is reconciled under that close's policy terms. Nothing is rewritten. Requires hr.leave.manage. Idempotency-Key required. */
+        post: operations["cancelLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.2: the acting manager's current direct reports' submitted and approved requests, resolved server-side. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). */
+        get: operations["listManagedLeaveRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/approvals/{leaveRequestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.2: one direct report's request; anything else is the private 404. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). */
+        get: operations["getManagedLeaveRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/approvals/{leaveRequestId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.2: manager approval -- capability AND fresh reporting ownership at decision time. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). Idempotency-Key required. */
+        post: operations["approveManagedLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/approvals/{leaveRequestId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.2: manager rejection with a closed reason code. Requires hr.leave.approve (and the requester's CURRENT manager, resolved fresh). Idempotency-Key required. */
+        post: operations["rejectManagedLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/year-closes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.2: the School's executed leave-year closes. Requires hr.leave.view. */
+        get: operations["listLeaveYearCloses"];
+        put?: never;
+        /** HRX.2: closes an ended leave year once -- carry forward up to the policy cap into the adjacent next year, lapse the rest. Refused while a submitted request overlaps the year, before the previous year is closed, or before the next year is open. Requires hr.leave.manage. Idempotency-Key required. */
+        post: operations["executeLeaveYearClose"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/year-closes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.2: what a close would write now, with its blockers. Read-only. Requires hr.leave.manage. */
+        get: operations["previewLeaveYearClose"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/year-closes/{leaveYearCloseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.2: one close with its items and later reconciliations. Requires hr.leave.view. */
+        get: operations["getLeaveYearClose"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/enrollment-rollovers": {
         parameters: {
             query?: never;
@@ -7685,6 +7908,12 @@ export interface components {
             allocationRunId?: string | null;
             /** Format: uuid */
             reversesEntryId?: string | null;
+            /** Format: uuid */
+            leaveRequestId?: string | null;
+            /** Format: uuid */
+            yearCloseId?: string | null;
+            /** Format: uuid */
+            yearCloseReconciliationId?: string | null;
             /** Format: date-time */
             createdAt?: string | null;
         };
@@ -7695,6 +7924,142 @@ export interface components {
             debits: number;
             /** @description Derived from the ledger; never stored. */
             availableUnits: number;
+        };
+        LeaveRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** Format: uuid */
+            leaveTypeId: string;
+            /** Format: date */
+            startsOn: string;
+            /** @enum {string} */
+            startPortion: "full" | "first_half" | "second_half";
+            /** Format: date */
+            endsOn: string;
+            /** @enum {string} */
+            endPortion: "full" | "first_half" | "second_half";
+            /** @enum {string|null} */
+            reasonCode?: "personal" | "family" | "official_duty" | "other" | null;
+            /** @description Integer half-day units computed at submission; the approval snapshot is authoritative. */
+            submittedUnits: number;
+            /** @enum {string} */
+            status: "submitted" | "approved" | "rejected" | "withdrawn" | "cancelled";
+            /** Format: date-time */
+            submittedAt?: string | null;
+        };
+        LeaveRequestDetail: components["schemas"]["LeaveRequest"] & {
+            /** @description The immutable chargeable-day evidence written at approval (empty until approved). */
+            days: {
+                /** Format: date */
+                date: string;
+                /** @enum {string} */
+                portion: "full" | "first_half" | "second_half";
+                units: number;
+                /** Format: uuid */
+                leaveYearId: string;
+                /** Format: uuid */
+                leavePolicyAssignmentId?: string | null;
+                /** Format: uuid */
+                leavePolicyId?: string | null;
+            }[];
+            decisions: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                decision: "approved" | "rejected" | "withdrawn" | "cancelled";
+                /** @enum {string} */
+                path: "manager" | "administrative";
+                reasonCode?: string | null;
+                /** Format: date-time */
+                decidedAt?: string | null;
+            }[];
+            ledgerEntries: components["schemas"]["LeaveLedgerEntry"][];
+        };
+        /** @description One day: equal portions. Several days: start full or second_half, end full or first_half. */
+        LeaveRequestCreateInput: {
+            /** Format: uuid */
+            employment_record_id: string;
+            /** Format: uuid */
+            leave_type_id: string;
+            /** Format: date */
+            starts_on: string;
+            /** @enum {string} */
+            start_portion: "full" | "first_half" | "second_half";
+            /** Format: date */
+            ends_on: string;
+            /** @enum {string} */
+            end_portion: "full" | "first_half" | "second_half";
+            /** @enum {string|null} */
+            reason_code?: "personal" | "family" | "official_duty" | "other" | null;
+        };
+        LeaveRejectionInput: {
+            /** @enum {string} */
+            reason_code: "staffing_need" | "policy_not_met" | "duplicate_request" | "entered_in_error" | "other";
+        };
+        LeaveClosingInput: {
+            /** @enum {string} */
+            reason_code: "plans_changed" | "entered_in_error" | "administrative_correction" | "other";
+        };
+        LeaveYearCloseInput: {
+            /** Format: uuid */
+            leave_year_id: string;
+        };
+        LeaveYearClose: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            leaveYearId: string;
+            /** Format: uuid */
+            nextLeaveYearId: string;
+            itemCount: number;
+            /** Format: date-time */
+            executedAt: string;
+        };
+        LeaveYearCloseItem: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** Format: uuid */
+            leaveTypeId: string;
+            /** Format: uuid */
+            leavePolicyId?: string | null;
+            carryForwardAllowed: boolean;
+            carryForwardCapUnits?: number | null;
+            closingUnits: number;
+            carriedUnits: number;
+            lapsedUnits: number;
+            /**
+             * Format: date
+             * @description Recorded; the in-year lapse of carried units is not executed in HRX.2 (ADR 0065 §23.8).
+             */
+            carriedExpiresOn?: string | null;
+        };
+        LeaveYearClosePreview: {
+            blockers: string[];
+            /** Format: uuid */
+            nextLeaveYearId?: string | null;
+            items: components["schemas"]["LeaveYearCloseItem"][];
+        };
+        LeaveYearCloseDetail: components["schemas"]["LeaveYearClose"] & {
+            items: components["schemas"]["LeaveYearCloseItem"][];
+            reconciliations: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                yearCloseItemId: string;
+                /** Format: uuid */
+                leaveRequestId: string;
+                /** Format: uuid */
+                reversalEntryId: string;
+                units: number;
+                carriedDelta: number;
+                lapsedDelta: number;
+                /** Format: date-time */
+                createdAt?: string | null;
+            }[];
         };
         /** @description TCH.2 -- one authoritative teaching-ownership period. Directory-tier labels only (no HR profile, contact or account field, no user ids). `state` is derived from the School-local date; the dates are authoritative and inclusive, and `endsOn` null means open-ended. */
         TeachingAssignment: {
@@ -14557,6 +14922,935 @@ export interface operations {
             };
             /** @description Validation failed. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listLeaveRequests: {
+        parameters: {
+            query?: {
+                status?: "submitted" | "approved" | "rejected" | "withdrawn" | "cancelled";
+                employment_record_id?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    submitLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveRequestCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_OVERLAP / LEAVE_YEAR_CLOSED / LEAVE_EMPLOYMENT_NOT_ELIGIBLE / LEAVE_TYPE_INACTIVE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequestDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    approveLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_NOT_SUBMITTED / LEAVE_BALANCE_INSUFFICIENT / LEAVE_NO_POLICY_ASSIGNMENT / LEAVE_YEAR_NOT_OPEN / LEAVE_YEAR_CLOSED / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    rejectLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveRejectionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_NOT_SUBMITTED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    withdrawLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveClosingInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_NOT_SUBMITTED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cancelLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveClosingInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_NOT_APPROVED / LEAVE_CANCELLATION_CLOSE_CHAIN / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listManagedLeaveRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.approve (and the requester's CURRENT manager, resolved fresh) in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getManagedLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequestDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.approve (and the requester's CURRENT manager, resolved fresh) in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    approveManagedLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.approve (and the requester's CURRENT manager, resolved fresh) in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_NOT_SUBMITTED / LEAVE_BALANCE_INSUFFICIENT / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    rejectManagedLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveRejectionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.approve (and the requester's CURRENT manager, resolved fresh) in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_NOT_SUBMITTED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listLeaveYearCloses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveYearClose"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    executeLeaveYearClose: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveYearCloseInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveYearClose"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_YEAR_ALREADY_CLOSED / LEAVE_YEAR_NOT_ENDED / LEAVE_YEAR_CLOSE_ORDER / LEAVE_NEXT_YEAR_NOT_OPEN / LEAVE_YEAR_CLOSE_PENDING_REQUESTS / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    previewLeaveYearClose: {
+        parameters: {
+            query: {
+                leave_year_id: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveYearClosePreview"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getLeaveYearClose: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveYearCloseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveYearCloseDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School (or LEAVE_SELF_DECISION). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

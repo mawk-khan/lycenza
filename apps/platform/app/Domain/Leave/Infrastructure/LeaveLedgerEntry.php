@@ -15,6 +15,14 @@ use Illuminate\Database\Eloquent\Model;
  *
  * @property string $id
  * @property string $school_id
+ * @property string $employment_record_id
+ * @property string $leave_type_id
+ * @property string $leave_year_id
+ * @property string $kind
+ * @property int $units
+ * @property string|null $leave_request_id
+ * @property string|null $year_close_id
+ * @property string|null $year_close_reconciliation_id
  */
 class LeaveLedgerEntry extends Model
 {
@@ -31,7 +39,7 @@ class LeaveLedgerEntry extends Model
 
     protected $table = 'leave_ledger_entries';
 
-    protected $fillable = ['school_id', 'employment_record_id', 'leave_type_id', 'tracks_balance', 'leave_year_id', 'leave_policy_assignment_id', 'kind', 'direction', 'units', 'reason_code', 'allocation_run_id', 'reverses_entry_id', 'source_type', 'source_id', 'actor_user_id'];
+    protected $fillable = ['school_id', 'employment_record_id', 'leave_type_id', 'tracks_balance', 'leave_year_id', 'leave_policy_assignment_id', 'kind', 'direction', 'units', 'reason_code', 'allocation_run_id', 'reverses_entry_id', 'source_type', 'source_id', 'actor_user_id', 'leave_request_id', 'year_close_id', 'year_close_reconciliation_id'];
 
     protected function casts(): array
     {

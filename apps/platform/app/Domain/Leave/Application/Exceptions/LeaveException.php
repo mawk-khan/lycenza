@@ -24,6 +24,11 @@ class LeaveException extends RuntimeException
         return new self(409, $code, $message);
     }
 
+    public static function forbidden(string $code, string $message): self
+    {
+        return new self(403, $code, $message);
+    }
+
     public static function invalid(string $code, string $message): self
     {
         return new self(422, $code, $message);

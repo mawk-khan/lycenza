@@ -848,22 +848,39 @@ close is irreversible: there is no reopen action, state or capability.
   - `Tests\Feature\Finance\FinancialPeriodCloseTest` (service allow/deny,
     including the default School Admin grant).
 
-## Leave administration (HRX.1, ADR 0065)
+## Leave administration and approval (HRX.1–HRX.2, ADR 0065)
 
-Three School capabilities, seeded in HRX.1 and granted by default to
-`school_admin` and `principal` only:
+Four School capabilities, granted by default to `school_admin` and
+`principal` only (`hr.leave.approve` added in HRX.2):
 
 | Capability | Allows |
 |---|---|
 | `hr.leave.view` | read leave settings, years, types, policies, the staff calendar, policy assignments, ledger entries and derived balances |
 | `hr.leave.configure` | leave-year start month (base, and prospective start-month changes), opening leave years, leave types, policies (versions), the weekly pattern and staff holidays |
-| `hr.leave.manage` | policy assignments, explicit allocations, allocation-run preview/execute, adjustments |
+| `hr.leave.manage` | policy assignments, explicit allocations, allocation-run preview/execute, adjustments; HRX.2: submit on behalf, administrative approve/reject, withdraw, cancel, year-close preview/execute |
+| `hr.leave.approve` | HRX.2: decide (approve/reject) a request of a CURRENT DIRECT REPORT only, and read those requests and leave-type names |
 
 - **Independent capabilities.** None implies another: `configure` does
   not read, and `manage` does not configure.
 - **Not granted to `teacher`.** The `teacher` role is unchanged (E33). The
   self-service bundle is a separate `staff_self_service` role created in
-  HRX.4. `hr.leave.approve` and `hr.leave.self` do not exist yet.
+  HRX.4. `hr.leave.self` does not exist yet. A manager in development or
+  tests receives `hr.leave.approve` through an ordinary School role grant,
+  never through `teacher`.
+- **Manager path = capability AND fresh ownership** (ADR 0065 §23.6):
+  - the acting Employee comes from `ActingEmployeeResolver::hold()`;
+  - it must be the requester's current manager, read FOR SHARE from HR's
+    `ReportingLine` at decision time, never snapshotted at submission;
+  - anything else — no relationship, an old manager, an ineligible actor —
+    is the private 404 on `/leave/approvals/...` and on the approvals page;
+  - the manager list is built server-side.
+- **Administrative path:** `hr.leave.manage` decides any request of the
+  School, recorded as `administrative`.
+- **No self-decision, on either path:** nobody approves or rejects their
+  own request (`LEAVE_SELF_DECISION`). The database derives the decider's
+  and the requester's Employees itself and refuses equality
+  (`leave_decisions_no_self_decision`). Withdrawing or cancelling one's own
+  request is permitted.
 - **Checks.** Every Leave Application service calls
   `authorizeCapabilityFor()` for the actor it is given; the routes add
   `capability:` middleware, `school-membership` and `private-no-store`.
@@ -872,8 +889,18 @@ Three School capabilities, seeded in HRX.1 and granted by default to
   School's id answers one 404. An elevated platform session is refused
   (no Leave route declares `school-context:elevated`).
 - **Tests.**
-  - `Tests\Feature\Leave\LeaveApiTest`: allow and deny for each family.
+  - `Tests\Feature\Leave\LeaveApiTest` and `LeaveRequestApiTest`:
+    allow and deny for each family.
   - `Tests\Feature\Leave\LeaveFoundationTest`: service-level denials.
+  - `Tests\Feature\Leave\LeaveApprovalAuthorizationTest`:
+    - current manager plus capability;
+    - old manager after a reporting change;
+    - capability without ownership;
+    - ownership without capability;
+    - the administrative path;
+    - self-decision, including raw SQL;
+    - cross-School.
+  - `Tests\Feature\App\LeaveAdminUiTest`: the pages.
 
 ## What is NOT yet implemented
 

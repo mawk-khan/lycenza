@@ -80,6 +80,8 @@ use App\Http\Controllers\App\Integrations\ApiClientController;
 use App\Http\Controllers\App\InventoryItemController;
 use App\Http\Controllers\App\InventoryLocationController;
 use App\Http\Controllers\App\InventoryStockController;
+use App\Http\Controllers\App\Leave\LeaveAdminController;
+use App\Http\Controllers\App\Leave\LeaveApprovalsController;
 use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
 use App\Http\Controllers\App\LMS\AssignmentController as LmsAssignmentController;
@@ -1382,6 +1384,48 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/', [TeachingAssignmentController::class, 'index'])->name('index');
         Route::post('/', [TeachingAssignmentController::class, 'store'])->name('store');
         Route::post('/{teachingAssignment}/end', [TeachingAssignmentController::class, 'end'])->name('end');
+    });
+
+    // HRX.2 (ADR 0065 §23.14) -- Leave administration (configuration,
+    // entitlements, requests, year close) and the manager's approvals page.
+    // Every page and command is capability-checked in its controller AND again
+    // in the Leave services; the approvals page lists only the acting
+    // manager's current direct reports (server-side) and answers the private
+    // 404 for anything else. No self-service and no Teacher-specific page.
+    Route::prefix('app/leave')->name('app.leave.')->group(function (): void {
+        Route::get('/configuration', [LeaveAdminController::class, 'configuration'])->name('configuration');
+        Route::post('/settings', [LeaveAdminController::class, 'updateSettings'])->name('settings.update');
+        Route::post('/year-start-changes', [LeaveAdminController::class, 'scheduleStartChange'])->name('year-start-changes.store');
+        Route::post('/years', [LeaveAdminController::class, 'openYear'])->name('years.store');
+        Route::post('/types', [LeaveAdminController::class, 'storeType'])->name('types.store');
+        Route::post('/types/{leaveType}/status', [LeaveAdminController::class, 'setTypeStatus'])->name('types.status');
+        Route::post('/policies', [LeaveAdminController::class, 'storePolicy'])->name('policies.store');
+        Route::post('/policies/{leavePolicy}/retire', [LeaveAdminController::class, 'retirePolicy'])->name('policies.retire');
+        Route::post('/calendar/weekdays', [LeaveAdminController::class, 'updateWeeklyPattern'])->name('calendar.weekdays');
+        Route::post('/calendar/holidays', [LeaveAdminController::class, 'storeHoliday'])->name('calendar.holidays.store');
+        Route::post('/calendar/holidays/{staffHoliday}/remove', [LeaveAdminController::class, 'destroyHoliday'])->name('calendar.holidays.remove');
+
+        Route::get('/entitlements', [LeaveAdminController::class, 'entitlements'])->name('entitlements');
+        Route::post('/assignments', [LeaveAdminController::class, 'storeAssignment'])->name('assignments.store');
+        Route::post('/assignments/{leavePolicyAssignment}/end', [LeaveAdminController::class, 'endAssignment'])->name('assignments.end');
+        Route::post('/allocations', [LeaveAdminController::class, 'allocate'])->name('allocations.store');
+        Route::post('/adjustments', [LeaveAdminController::class, 'adjust'])->name('adjustments.store');
+        Route::post('/allocation-runs', [LeaveAdminController::class, 'executeRun'])->name('allocation-runs.store');
+
+        Route::get('/requests', [LeaveAdminController::class, 'requests'])->name('requests');
+        Route::post('/requests', [LeaveAdminController::class, 'submitRequest'])->name('requests.store');
+        Route::get('/requests/{leaveRequest}', [LeaveAdminController::class, 'showRequest'])->name('requests.show');
+        foreach (['approve', 'reject', 'withdraw', 'cancel'] as $action) {
+            Route::post("/requests/{leaveRequest}/{$action}", [LeaveAdminController::class, 'decideRequest'])->defaults('action', $action)->name("requests.{$action}");
+        }
+
+        Route::get('/year-close', [LeaveAdminController::class, 'yearClose'])->name('year-close');
+        Route::post('/year-close', [LeaveAdminController::class, 'executeYearClose'])->name('year-close.store');
+
+        Route::get('/approvals', [LeaveApprovalsController::class, 'index'])->name('approvals');
+        foreach (['approve', 'reject'] as $action) {
+            Route::post("/approvals/{leaveRequest}/{$action}", [LeaveApprovalsController::class, 'decide'])->defaults('action', $action)->name("approvals.{$action}");
+        }
     });
 
     // Phase 0L.2-1 -- Analytics (ADR 0040). One read-only report; the

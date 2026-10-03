@@ -64,6 +64,7 @@ use App\Domain\Inventory\Http\Controllers\InventoryLocationController;
 use App\Domain\Inventory\Http\Controllers\InventoryStockController;
 use App\Domain\Leave\Http\Controllers\LeaveConfigurationController;
 use App\Domain\Leave\Http\Controllers\LeaveLedgerController;
+use App\Domain\Leave\Http\Controllers\LeaveRequestController;
 use App\Domain\Library\Http\Controllers\LibraryCopyController;
 use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
@@ -2252,7 +2253,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // entitlement writes `hr.leave.manage`. Creates, allocations, runs
             // and adjustments are `idempotent` (rule 29); entitlement writes
             // also complete the record inside their transaction (rule 33).
-            // No request, approval or self-service route exists yet (HRX.2+).
+            // HRX.2 (ADR 0065 §23): requests (submit on behalf, administrative
+            // decisions, withdrawal, cancellation) under `hr.leave.manage`; the
+            // manager surface `/approvals` under `hr.leave.approve` plus fresh
+            // reporting ownership checked in the service (private 404); year
+            // close under `hr.leave.manage`. Approval, cancellation and the
+            // year close complete their idempotency record inside the
+            // transaction (rule 33). No self-service route (HRX.4).
             Route::prefix('leave')->name('schools.leave.')->group(function (): void {
                 $view = ['private-no-store', 'capability:hr.leave.view'];
                 $configure = ['private-no-store', 'capability:hr.leave.configure', 'throttle:school-api-mutations'];
@@ -2285,6 +2292,23 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 Route::post('/adjustments', [LeaveLedgerController::class, 'adjust'])->middleware([...$manage, 'idempotent'])->name('adjustments.store');
                 Route::get('/ledger', [LeaveLedgerController::class, 'ledger'])->middleware($view)->name('ledger.index');
                 Route::get('/balances', [LeaveLedgerController::class, 'balances'])->middleware($view)->name('balances.index');
+
+                $approve = ['private-no-store', 'capability:hr.leave.approve', 'throttle:school-api-mutations'];
+                Route::get('/requests', [LeaveRequestController::class, 'index'])->middleware($view)->name('requests.index');
+                Route::post('/requests', [LeaveRequestController::class, 'store'])->middleware([...$manage, 'idempotent'])->name('requests.store');
+                Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show'])->middleware($view)->name('requests.show');
+                Route::post('/requests/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->middleware([...$manage, 'idempotent'])->name('requests.approve');
+                Route::post('/requests/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])->middleware([...$manage, 'idempotent'])->name('requests.reject');
+                Route::post('/requests/{leaveRequest}/withdraw', [LeaveRequestController::class, 'withdraw'])->middleware([...$manage, 'idempotent'])->name('requests.withdraw');
+                Route::post('/requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->middleware([...$manage, 'idempotent'])->name('requests.cancel');
+                Route::get('/approvals', [LeaveRequestController::class, 'managed'])->middleware(['private-no-store', 'capability:hr.leave.approve'])->name('approvals.index');
+                Route::get('/approvals/{leaveRequest}', [LeaveRequestController::class, 'managedShow'])->middleware(['private-no-store', 'capability:hr.leave.approve'])->name('approvals.show');
+                Route::post('/approvals/{leaveRequest}/approve', [LeaveRequestController::class, 'managedApprove'])->middleware([...$approve, 'idempotent'])->name('approvals.approve');
+                Route::post('/approvals/{leaveRequest}/reject', [LeaveRequestController::class, 'managedReject'])->middleware([...$approve, 'idempotent'])->name('approvals.reject');
+                Route::get('/year-closes', [LeaveRequestController::class, 'closes'])->middleware($view)->name('year-closes.index');
+                Route::get('/year-closes/preview', [LeaveRequestController::class, 'previewClose'])->middleware(['private-no-store', 'capability:hr.leave.manage'])->name('year-closes.preview');
+                Route::post('/year-closes', [LeaveRequestController::class, 'executeClose'])->middleware([...$manage, 'idempotent'])->name('year-closes.store');
+                Route::get('/year-closes/{leaveYearClose}', [LeaveRequestController::class, 'showClose'])->middleware($view)->name('year-closes.show');
             });
 
             // Phase 0H.4A (Examination Foundation -- the first

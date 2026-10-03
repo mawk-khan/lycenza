@@ -7,17 +7,24 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * HRX.1 (ADR 0065 §3, §10, §12, §13) static and schema guards. They fail
- * loudly the moment a change breaks a boundary this checkpoint relies on:
- * no health, biometric or free-text column; one-way dependencies; no
- * role-name authorization; one ledger writer; no stored balance; the
- * `teacher` role untouched (E33).
+ * HRX.1/HRX.2 (ADR 0065 §3, §10, §12, §13, §23) static and schema guards.
+ * They fail loudly the moment a change breaks a boundary these checkpoints
+ * rely on:
+ * - no health, biometric or free-text column;
+ * - one-way dependencies, with User -> Employee only through HR's
+ *   ActingEmployeeResolver, in the two request services;
+ * - no role-name authorization;
+ * - one ledger writer;
+ * - no stored balance;
+ * - the `teacher` role untouched (E33);
+ * - no self-service or Staff Attendance yet.
  */
 class LeaveArchitectureGuardTest extends TestCase
 {
     private const TABLES = [
         'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_types', 'leave_policies', 'leave_policy_assignments',
         'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs', 'leave_ledger_entries',
+        'leave_requests', 'leave_request_days', 'leave_decisions', 'leave_year_closes', 'leave_year_close_items', 'leave_year_close_reconciliations',
     ];
 
     /**
@@ -66,8 +73,12 @@ class LeaveArchitectureGuardTest extends TestCase
             foreach (['App\\Domain\\Payroll', 'App\\Domain\\Finance', 'App\\Domain\\Fees', 'App\\Domain\\Payments', 'App\\Domain\\Attendance', 'App\\Domain\\StaffAttendance', 'payroll_', 'fee_settings', 'financial_period'] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$file}: Leave never depends on {$forbidden}");
             }
-            foreach (['employees.user_id', "'user_id'", 'ActingEmployeeResolver', 'App\\Domain\\HR\\Infrastructure'] as $forbidden) {
-                $this->assertStringNotContainsString($forbidden, $code, "{$file}: Leave reads HR only through HR's Application services, and resolves no User");
+            foreach (['employees.user_id', "'user_id'", 'App\\Domain\\HR\\Infrastructure'] as $forbidden) {
+                $this->assertStringNotContainsString($forbidden, $code, "{$file}: Leave reads HR only through HR's Application services, and resolves no User itself");
+            }
+            // HRX.2: the acting manager is resolved only through HR's one resolver, in the two request services.
+            if (str_contains($code, 'ActingEmployeeResolver')) {
+                $this->assertContains(basename($file), ['LeaveRequestService.php', 'LeaveRequestReadService.php'], "{$file}: only the request services resolve the acting Employee");
             }
         }
         foreach (['Domain/HR', 'Domain/Payroll'] as $dir) {
@@ -82,23 +93,40 @@ class LeaveArchitectureGuardTest extends TestCase
     {
         foreach ($this->phpFiles('Domain/Leave') as $file) {
             $code = $this->code($file);
-            $this->assertDoesNotMatchRegularExpression('/->role\b|hasRole\(|role_key|\'teacher\'|\'manager\'|\'school_admin\'|\'principal\'/', $code, "{$file}: no role-name check");
+            // 'manager' is a decision PATH value here; a role comparison with it stays prohibited.
+            $this->assertDoesNotMatchRegularExpression('/->role\b|hasRole\(|role_key|\'teacher\'|role\s*={2,3}\s*\'manager\'|\'school_admin\'|\'principal\'/', $code, "{$file}: no role-name check");
         }
-        foreach (['LeaveYearService', 'LeaveTypeService', 'LeavePolicyService', 'LeavePolicyAssignmentService', 'StaffCalendarService', 'LeaveLedgerService', 'LeaveReadService'] as $service) {
+        foreach (['LeaveYearService', 'LeaveTypeService', 'LeavePolicyService', 'LeavePolicyAssignmentService', 'StaffCalendarService', 'LeaveLedgerService', 'LeaveReadService', 'LeaveRequestService', 'LeaveRequestReadService', 'LeaveYearCloseService'] as $service) {
             $this->assertStringContainsString('authorizeCapabilityFor(', $this->code(app_path("Domain/Leave/Application/{$service}.php")), "{$service} authorizes itself");
         }
     }
 
     #[Test]
-    public function the_ledger_has_one_writer_and_no_request_consumption_exists_yet(): void
+    public function the_ledger_has_one_writer_and_only_the_request_and_close_services_drive_it(): void
     {
+        $ledger = app_path('Domain/Leave/Application/LeaveLedgerService.php');
         $writers = array_values(array_filter($this->phpFiles(''), fn (string $f) => str_contains($this->code($f), 'LeaveLedgerEntry::query()->create(')));
-        $this->assertSame([app_path('Domain/Leave/Application/LeaveLedgerService.php')], $writers);
+        $this->assertSame([$ledger], $writers);
 
         foreach ($this->phpFiles('') as $file) {
-            $this->assertDoesNotMatchRegularExpression("/'kind'\\s*=>\\s*'(consumption|reversal|carry_forward_in|carry_forward_out|expiry)'/", $this->code($file), "{$file}: request consumption and year close are HRX.2");
+            if ($file !== $ledger) {
+                $this->assertDoesNotMatchRegularExpression("/'kind'\\s*=>\\s*'(consumption|reversal|carry_forward_in|carry_forward_out|expiry)'/", $this->code($file), "{$file}: only the ledger service writes consumption, reversal and close movements");
+            }
         }
-        $this->assertSame([], glob(app_path('Domain/Leave/Application/*Request*.php')) ?: [], 'no leave request workflow in HRX.1');
+        // HRX.2: the uncapable record*() entry points are called only from inside the two authorized services.
+        $callers = array_values(array_filter($this->phpFiles(''), fn (string $f) => $f !== $ledger && preg_match('/->record(Consumption|Reversal|CloseMovement)\(/', $this->code($f)) === 1));
+        $this->assertSame([app_path('Domain/Leave/Application/LeaveRequestService.php'), app_path('Domain/Leave/Application/LeaveYearCloseService.php')], $callers);
+    }
+
+    #[Test]
+    public function no_self_service_staff_attendance_or_payroll_coupling_exists_yet(): void
+    {
+        $this->assertDirectoryDoesNotExist(app_path('Domain/StaffAttendance'), 'Staff Attendance is HRX.3');
+        $routes = (string) file_get_contents(base_path('routes/api.php')).(string) file_get_contents(base_path('routes/web.php'));
+        $this->assertDoesNotMatchRegularExpression('#/my[-/]leave|hr\.leave\.self|staff_attendance#', $routes, 'self-service is HRX.4, attendance HRX.3');
+        foreach ($this->phpFiles('Domain/Payroll') as $file) {
+            $this->assertDoesNotMatchRegularExpression('/leave_(requests|request_days|decisions|ledger_entries|year_close)/', $this->code($file), "{$file}: Payroll never reads Leave tables (HRX.5 is a read contract)");
+        }
     }
 
     #[Test]
@@ -109,7 +137,7 @@ class LeaveArchitectureGuardTest extends TestCase
         $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $teacher, 'E33: the teacher role is unchanged');
 
         $leave = DB::table('capabilities')->where('key', 'like', 'hr.leave.%')->orderBy('key')->pluck('key')->all();
-        $this->assertSame(['hr.leave.configure', 'hr.leave.manage', 'hr.leave.view'], $leave, 'approve and self arrive with HRX.2/HRX.4');
+        $this->assertSame(['hr.leave.approve', 'hr.leave.configure', 'hr.leave.manage', 'hr.leave.view'], $leave, 'HRX.2 adds approve; self is HRX.4');
         $this->assertFalse(DB::table('roles')->where('key', 'staff_self_service')->exists(), 'the staff self-service role is HRX.4');
     }
 }

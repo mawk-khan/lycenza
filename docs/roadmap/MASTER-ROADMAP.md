@@ -75,7 +75,7 @@ contract checkpoint.
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
 | 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **DEVELOPMENT CLOSED** (TCH.0–TCH.6, 2026-10-01; ADR 0063 §38). Built: ActingEmployee identity (TCH.1), TeachingAssignment ownership (TCH.2), the production `teacher` role (four owned-scope capabilities, never a role-name check) and owned teacher access to Curriculum Delivery (TCH.3), Attendance (TCH.4), Learning Content (TCH.5C) and Assignments (TCH.5D) on the LMS owner/audience persistence (TCH.5B). Every owned access needs capability AND verified ActingEmployee AND TeachingAssignment; the role alone grants nothing, and Timetable is never authority. **Production readiness (ADR 0063 §39, 2026-10-01): PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — teacher Attendance is **BLOCKED by open legal/compliance determination TCH-L1** (now ADR 0058 register **E33**), enforced by process only. The one `teacher` role also carries `attendance.teacher`. **Owner decision (ADR 0063 §40): no production `teacher` role grants while E33 / TCH-L1 is OPEN**, and no role split or Attendance gate. The role is implemented and production-capable; the blocker is external, not a technical deficiency. TCH history retention waits on the platform-wide legal item **E21** (ADR 0058). TCH.6 fixed one closure defect (non-identical not-found bodies on owned surfaces). LMS Submission remains cancelled and outside TCH |
-| 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX.1 LEAVE FOUNDATION — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §22 final owner decisions). **HRX.2 — NOT STARTED.** Next: HRX.2 — Leave Requests & Approval. Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
+| 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX.1 LEAVE FOUNDATION — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §22 final owner decisions). **HRX.2 LEAVE REQUESTS & APPROVAL — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §23). **HRX.3 — NOT STARTED.** Next: HRX.3 — Staff Attendance Foundation. Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
@@ -259,10 +259,44 @@ outside it.
   - **HRX.2 forward invariant (ADR 0065 §22.6):** approved leave keeps its
     exact chargeable dates, portions and units. Later calendar, policy or
     leave-year changes never rewrite it.
-  - **Not built:** no admin UI (deferred to HRX.2), no requests, no
-    approvals, no Staff Attendance. HRX-L1–L4 stay open; see
+  - **Not built in HRX.1:** the admin UI, requests and approvals (all
+    delivered in HRX.2), and Staff Attendance. HRX-L1–L4 stay open; see
     `docs/security/HRX-L3-STATUTORY-LEAVE-APPLICABILITY-MATRIX.md`.
-- **HRX.2 — Leave Requests & Approval.** Not started.
+- **HRX.2 — Leave Requests & Approval.** Published / closed (2026-10-03,
+  ADR 0065 §23).
+  - **Requests:**
+    - submitted, then approved / rejected / withdrawn, then (approved)
+      cancelled; no draft, edit or partial cancellation;
+    - dates plus integer half-day portions;
+    - live requests never overlap (database);
+    - closed, neutral reason codes only.
+  - **Approval:**
+    - an immutable chargeable-day snapshot (calendar, year and policy
+      version per date);
+    - one consumption per leave year; cross-year requests are split by
+      date;
+    - cancellation is an append-only reversal.
+  - **Who decides:**
+    - the manager path is `hr.leave.approve` plus fresh reporting
+      ownership from HR's `ReportingLine` (private 404 otherwise);
+    - the administrative path is `hr.leave.manage`;
+    - no self-decision on either path (database CHECK).
+  - **Year close:**
+    - preview, then execute once;
+    - carry-forward up to the cap, the rest lapses;
+    - refused while submitted requests remain, out of order, or before the
+      next year is open;
+    - the closed year is sealed;
+    - a cancellation after the close is reconciled under the original
+      close's policy terms, never by rerunning the close.
+  - **Interfaces and evidence:**
+    - outbox events `leave.request.approved.v1` and
+      `leave.request.cancelled.v1` (not webhooks);
+    - the Leave administration UI and the manager approvals page;
+    - 40 Leave API operations.
+  - **Not executed:** the in-year lapse of carried units (recorded only).
+    Staff Attendance, self-service and Payroll loss-of-pay are not built.
+    HRX-L1–L4 stay open.
 - **HRX.3 — Staff Attendance Foundation.** Not started.
 - **HRX.4 — Staff Self-Service** (own leave, own attendance, own payslip).
   Not started.
