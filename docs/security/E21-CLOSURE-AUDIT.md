@@ -534,7 +534,11 @@ RATIFICATION.**
   (implemented). **Guardian links** go with G1.
 - **I5. User-identity erasure: POLICY UNRESOLVED.** It means anonymising
   audit actors and authority history, a qualified legal decision. This
-  is a final-ratification item; it adds no finite period.
+  is a final-ratification item; it adds no finite period. **E21-L1
+  (2026-10-03):** the decision package is
+  `E21-L1-USER-IDENTITY-DECISION-REQUEST.md` (inventory, fail-closed
+  behaviour, finding F1, options A–D, blank decision record). **Still
+  awaiting the qualified decision.**
 
 **Employees**
 - **E1.** **Payroll results** were the D8 blocker. Since E21.3A2 they are the recorded D8 × D9 intersection: D8 exists, but no Payroll D9 mechanism expires payroll results and postings, so they and their journal entries stay (ADR 0064 §21). **RESOLVED by E21.3F:** Payroll's own D9 expiry removes posted evidence and releases emptied runs' journal entries to D8 (`E21-RETENTION-DETERMINATION.md` §5.10).
