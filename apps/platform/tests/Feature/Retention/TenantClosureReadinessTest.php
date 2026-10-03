@@ -188,8 +188,14 @@ class TenantClosureReadinessTest extends TestCase
             $this->assertArrayHasKey($table, $tables, "{$table} is not a classified tenant table");
             $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$tables[$table]][0], $table);
         }
-        foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status]) {
-            $this->assertNotSame(TenantRetentionCatalog::MECHANISM_PENDING, $status, "{$category} still waits for a mechanism");
+        foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
+            // HRX.1 (ADR 0065 §18): new HRX evidence names its own scheduled purge checkpoint.
+            if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
+                $this->assertSame('leave_evidence', $category, "{$category} still waits for a mechanism");
+                $this->assertStringContainsString('HRX.6', $decision);
+
+                continue;
+            }
             $this->assertNotSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, $status, "{$category} is still a technical blocker");
         }
         foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules', 'academic_operations', 'communications', 'api_credentials', 'operational_logs', 'payroll_ledger'] as $category) {
@@ -212,8 +218,8 @@ class TenantClosureReadinessTest extends TestCase
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
             $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
             $this->assertNotSame('', trim($decision), "{$category} has no decision text");
-            if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
-                $this->fail("{$category}: E21.3E implemented the last pending mechanism");
+            if ($status === TenantRetentionCatalog::MECHANISM_PENDING && $category !== 'leave_evidence') {
+                $this->fail("{$category}: E21.3E implemented the last pending E21 mechanism; only HRX evidence (HRX.6) may wait");
             }
             if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {
                 $this->fail("{$category}: E21.3F resolved the last technical blocker (the D8 x D9 payroll ledger)");

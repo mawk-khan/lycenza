@@ -296,6 +296,12 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'hr.departments.manage', 'label' => 'Manage HR Departments', 'namespace' => 'school'],
             ['key' => 'hr.positions.view', 'label' => 'View Positions', 'namespace' => 'school'],
             ['key' => 'hr.positions.manage', 'label' => 'Manage Positions', 'namespace' => 'school'],
+            // HRX.1 (ADR 0065 §12): Leave foundation administration. Self-service
+            // (`hr.leave.self`) and manager approval (`hr.leave.approve`) arrive
+            // with HRX.2/HRX.4; the `teacher` role never gains these (E33).
+            ['key' => 'hr.leave.configure', 'label' => 'Configure leave types, policies, leave year and staff calendar', 'namespace' => 'school'],
+            ['key' => 'hr.leave.view', 'label' => 'View leave configuration, assignments, ledgers and balances', 'namespace' => 'school'],
+            ['key' => 'hr.leave.manage', 'label' => 'Assign leave policies, allocate and adjust leave', 'namespace' => 'school'],
             ['key' => 'hr.categories.view', 'label' => 'View Employee Categories', 'namespace' => 'school'],
             ['key' => 'hr.categories.manage', 'label' => 'Manage Employee Categories', 'namespace' => 'school'],
 
@@ -1170,6 +1176,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     // TCH.2 (ADR 0063 section 15): default administrators of
                     // TeachingAssignments are School Admin and Principal.
                     'teaching.assignments.view', 'teaching.assignments.manage',
+                    // HRX.1 (ADR 0065 §12): default Leave administrators.
+                    'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage',
                     // TCH.3: held so School Admin can GRANT the Teacher role --
                     // StaffRoleCatalog only lets an actor grant a role whose
                     // every capability they hold (no escalation). It adds no
@@ -1351,6 +1359,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     // school_admin -- a Principal routinely decides who
                     // teaches which class.
                     'teaching.assignments.view', 'teaching.assignments.manage',
+                    // HRX.1 (ADR 0065 §12): same default as school_admin.
+                    'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage',
                 ],
             ],
             // TCH.3 (ADR 0063 section 12, T1): the one minimum production

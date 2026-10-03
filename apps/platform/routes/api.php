@@ -62,6 +62,8 @@ use App\Domain\HR\Http\Controllers\PositionController;
 use App\Domain\Inventory\Http\Controllers\InventoryItemController;
 use App\Domain\Inventory\Http\Controllers\InventoryLocationController;
 use App\Domain\Inventory\Http\Controllers\InventoryStockController;
+use App\Domain\Leave\Http\Controllers\LeaveConfigurationController;
+use App\Domain\Leave\Http\Controllers\LeaveLedgerController;
 use App\Domain\Library\Http\Controllers\LibraryCopyController;
 use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
@@ -2240,6 +2242,48 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/teaching-assignments/{teachingAssignment}/end', [TeachingAssignmentController::class, 'end'])
                 ->middleware(['private-no-store', 'capability:teaching.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.teaching-assignments.end');
+
+            // HRX.1 (ADR 0065 §4): the Leave foundation -- leave-year settings
+            // and years, leave types and policies, the staff working calendar,
+            // policy assignments, allocations, allocation runs, adjustments,
+            // the append-only ledger and derived balances. Employee leave data
+            // is Sensitive: `private-no-store` outermost. Reads need
+            // `hr.leave.view`; configuration `hr.leave.configure`; Employee
+            // entitlement writes `hr.leave.manage`. Creates, allocations, runs
+            // and adjustments are `idempotent` (rule 29); entitlement writes
+            // also complete the record inside their transaction (rule 33).
+            // No request, approval or self-service route exists yet (HRX.2+).
+            Route::prefix('leave')->name('schools.leave.')->group(function (): void {
+                $view = ['private-no-store', 'capability:hr.leave.view'];
+                $configure = ['private-no-store', 'capability:hr.leave.configure', 'throttle:school-api-mutations'];
+                $manage = ['private-no-store', 'capability:hr.leave.manage', 'throttle:school-api-mutations'];
+
+                Route::get('/settings', [LeaveConfigurationController::class, 'settings'])->middleware($view)->name('settings.show');
+                Route::put('/settings', [LeaveConfigurationController::class, 'updateSettings'])->middleware($configure)->name('settings.update');
+                Route::get('/years', [LeaveConfigurationController::class, 'years'])->middleware($view)->name('years.index');
+                Route::post('/years', [LeaveConfigurationController::class, 'openYear'])->middleware([...$configure, 'idempotent'])->name('years.store');
+                Route::get('/types', [LeaveConfigurationController::class, 'types'])->middleware($view)->name('types.index');
+                Route::post('/types', [LeaveConfigurationController::class, 'storeType'])->middleware([...$configure, 'idempotent'])->name('types.store');
+                Route::patch('/types/{leaveType}', [LeaveConfigurationController::class, 'updateType'])->middleware($configure)->name('types.update');
+                Route::post('/types/{leaveType}/status', [LeaveConfigurationController::class, 'setTypeStatus'])->middleware($configure)->name('types.status');
+                Route::get('/policies', [LeaveConfigurationController::class, 'policies'])->middleware($view)->name('policies.index');
+                Route::post('/policies', [LeaveConfigurationController::class, 'storePolicy'])->middleware([...$configure, 'idempotent'])->name('policies.store');
+                Route::post('/policies/{leavePolicy}/retire', [LeaveConfigurationController::class, 'retirePolicy'])->middleware($configure)->name('policies.retire');
+                Route::get('/calendar', [LeaveConfigurationController::class, 'calendar'])->middleware($view)->name('calendar.show');
+                Route::put('/calendar/weekdays', [LeaveConfigurationController::class, 'updateWeeklyPattern'])->middleware($configure)->name('calendar.weekdays.update');
+                Route::post('/calendar/holidays', [LeaveConfigurationController::class, 'storeHoliday'])->middleware([...$configure, 'idempotent'])->name('calendar.holidays.store');
+                Route::delete('/calendar/holidays/{staffHoliday}', [LeaveConfigurationController::class, 'destroyHoliday'])->middleware($configure)->name('calendar.holidays.destroy');
+
+                Route::get('/assignments', [LeaveLedgerController::class, 'assignments'])->middleware($view)->name('assignments.index');
+                Route::post('/assignments', [LeaveLedgerController::class, 'storeAssignment'])->middleware([...$manage, 'idempotent'])->name('assignments.store');
+                Route::post('/assignments/{leavePolicyAssignment}/end', [LeaveLedgerController::class, 'endAssignment'])->middleware([...$manage, 'idempotent'])->name('assignments.end');
+                Route::post('/allocations', [LeaveLedgerController::class, 'allocate'])->middleware([...$manage, 'idempotent'])->name('allocations.store');
+                Route::get('/allocation-runs/preview', [LeaveLedgerController::class, 'previewRun'])->middleware(['private-no-store', 'capability:hr.leave.manage'])->name('allocation-runs.preview');
+                Route::post('/allocation-runs', [LeaveLedgerController::class, 'executeRun'])->middleware([...$manage, 'idempotent'])->name('allocation-runs.store');
+                Route::post('/adjustments', [LeaveLedgerController::class, 'adjust'])->middleware([...$manage, 'idempotent'])->name('adjustments.store');
+                Route::get('/ledger', [LeaveLedgerController::class, 'ledger'])->middleware($view)->name('ledger.index');
+                Route::get('/balances', [LeaveLedgerController::class, 'balances'])->middleware($view)->name('balances.index');
+            });
 
             // Phase 0H.4A (Examination Foundation -- the first
             // Examinations fact). Exactly FOUR operations: list/create

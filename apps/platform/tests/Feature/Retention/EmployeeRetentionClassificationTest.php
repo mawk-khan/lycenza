@@ -49,6 +49,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'payroll_run_results' => 'retained, blocks: posted payroll evidence until its D9 expiry (E21.3F)',
             'payroll_adjustments' => 'retained, blocks: posted payroll evidence until its D9 expiry (E21.3F)',
             'payroll_lwf_annual_charges' => 'retained, blocks: posted payroll evidence until its D9 expiry (E21.3F)',
+            'leave_policy_assignments' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §18)',
+            'leave_ledger_entries' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §18)',
         ],
         'employee_assignments' => [
             'employee_assignments' => 'retained, blocks: another Employee names it as manager (ON DELETE SET NULL would rewrite their history)',

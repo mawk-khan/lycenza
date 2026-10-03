@@ -3839,3 +3839,42 @@ ADR 0065 (HRX.0, docs only) is the contract for Leave and Staff Attendance.
   Employee until HRX.6's purge participant releases them.
 - No medical detail, free-text reason or biometrics in v1 (legal gates
   HRX-L1/L2).
+
+## HRX.1 — Leave Foundation (implemented, 2026-10-03)
+
+ADR 0065 (§22 records the final owner decisions and the as-built notes).
+Leave lives in `App\Domain\Leave` under HR ownership. HR does not depend
+on it.
+
+- **HR's one new contract:** `EmploymentCoverage::holdRecord($school,
+  $employmentRecordId, $from, $to)`. Inside the caller's transaction it
+  holds the Employee and the EmploymentRecord FOR SHARE. It answers
+  `covered`, `record_not_found`, `employee_unavailable` or `not_employed`;
+  `pre_joining`, `active` and `notice_period` count as employed. Leave uses
+  it for policy assignment, allocation and the annual run, so a concurrent
+  separation or merge is serialized against them.
+- **What attaches to the EmploymentRecord:**
+  - leave policy assignments (effective-dated, never overlapping per type);
+  - ledger entries.
+
+  Both use composite `(id, school_id)` foreign keys with RESTRICT; nothing
+  cascades from an Employee or EmploymentRecord. A rehire starts a new
+  record, and therefore a fresh entitlement.
+- **Leave year:**
+  - School-configured start month, default April. This is a product
+    default, not statutory, and Leave has no Finance dependency;
+  - materialized as frozen `leave_years` rows;
+  - the start month locks once any year exists.
+- **Units:** integer half-day units (`full` = 2, `first_half` = 1,
+  `second_half` = 1). No proration: a mid-year joiner receives an explicit
+  allocation of exact units.
+- **Balance:** derived from the append-only ledger. The database refuses
+  any entry that would make it negative.
+- **Retention:**
+  - assignments and the ledger are D9 employment evidence (`leave_evidence`,
+    purge participant HRX.6). Until then they keep the Employee
+    (`EmployeeRetentionClassificationTest`);
+  - configuration is tenant lifetime.
+- **Excluded:** no medical detail, certificate, free-text reason or
+  biometrics (HRX-L1/L2). Requests and approvals are HRX.2, Staff
+  Attendance is HRX.3, and self-service is HRX.4.

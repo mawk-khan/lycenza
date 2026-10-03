@@ -848,6 +848,33 @@ close is irreversible: there is no reopen action, state or capability.
   - `Tests\Feature\Finance\FinancialPeriodCloseTest` (service allow/deny,
     including the default School Admin grant).
 
+## Leave administration (HRX.1, ADR 0065)
+
+Three School capabilities, seeded in HRX.1 and granted by default to
+`school_admin` and `principal` only:
+
+| Capability | Allows |
+|---|---|
+| `hr.leave.view` | read leave settings, years, types, policies, the staff calendar, policy assignments, ledger entries and derived balances |
+| `hr.leave.configure` | leave-year start month, opening leave years, leave types, policies (versions), the weekly pattern and staff holidays |
+| `hr.leave.manage` | policy assignments, explicit allocations, allocation-run preview/execute, adjustments |
+
+- **Independent capabilities.** None implies another: `configure` does
+  not read, and `manage` does not configure.
+- **Not granted to `teacher`.** The `teacher` role is unchanged (E33). The
+  self-service bundle is a separate `staff_self_service` role created in
+  HRX.4. `hr.leave.approve` and `hr.leave.self` do not exist yet.
+- **Checks.** Every Leave Application service calls
+  `authorizeCapabilityFor()` for the actor it is given; the routes add
+  `capability:` middleware, `school-membership` and `private-no-store`.
+  There is no role-name check (`LeaveArchitectureGuardTest`).
+- **Order** (rule 32): membership → capability → idempotency. Another
+  School's id answers one 404. An elevated platform session is refused
+  (no Leave route declares `school-context:elevated`).
+- **Tests.**
+  - `Tests\Feature\Leave\LeaveApiTest`: allow and deny for each family.
+  - `Tests\Feature\Leave\LeaveFoundationTest`: service-level denials.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles (role *assignment* exists: Settings → Staff accounts

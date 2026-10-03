@@ -6,7 +6,7 @@ namespace App\Support\Retention\Erasure;
  * E21.4 (E21-L1 project-adopted, India-aligned development position,
  * pending qualified ratification): every foreign key to `users`, each with
  * exactly ONE minimization treatment. A literal closed list read from the
- * live catalog at E21.4 (87 references); `UserReferenceCatalogTest` fails
+ * live catalog at E21.4 (87 references; HRX.1 added 8 Leave actor references); `UserReferenceCatalogTest` fails
  * as soon as a migration adds, renames or drops one, so a new reference is
  * unclassified until someone decides it here. A User whose live schema has
  * an unclassified reference is never minimized (fail closed).
@@ -42,6 +42,14 @@ final class UserReferenceCatalog
 
     /** table => [column => treatment] */
     public const REFERENCES = [
+        // HRX.1 (ADR 0065): Leave actors are historical references.
+        'leave_settings' => ['updated_by_user_id' => self::RETAIN_REFERENCE],
+        'leave_policies' => ['created_by_user_id' => self::RETAIN_REFERENCE],
+        'leave_policy_assignments' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'ended_by_user_id' => self::RETAIN_REFERENCE],
+        'staff_working_weekdays' => ['updated_by_user_id' => self::RETAIN_REFERENCE],
+        'staff_holidays' => ['created_by_user_id' => self::RETAIN_REFERENCE],
+        'leave_allocation_runs' => ['executed_by_user_id' => self::RETAIN_REFERENCE],
+        'leave_ledger_entries' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'account_activation_credentials' => ['user_id' => self::DELETE_CHILD],
         'account_recovery_requests' => ['user_id' => self::DELETE_CHILD],
         'api_clients' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'revoked_by_user_id' => self::RETAIN_REFERENCE],

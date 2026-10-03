@@ -1,8 +1,10 @@
 # ADR 0065: HRX Leave and Staff Attendance Contract
 
 - Status: **Accepted as a contract (HRX.0, documentation only, closed).**
-  HRX implementation has **not started**. Decisions marked **[OWNER
-  DECISION]** carry a recommended default that HRX.1–HRX.6 implement unless
+  **Amended by HRX.1** (§22): the owner recorded final decisions on the
+  leave year (§4.3), mid-year joiners (§4.5), the self-service role (§13) and
+  the day-portion contract (§4.4); HRX.1 — Leave Foundation is built. The
+  remaining **[OWNER DECISION]** defaults still apply to HRX.2–HRX.6 unless
   the owner records a different choice before the checkpoint that needs it.
 - Date: 2026-10-03
 - Programme: **HRX — Leave & staff attendance**
@@ -154,7 +156,10 @@ HRX touches no TCH/E33 surface (§13).
   new effective-dated assignment), never an in-place edit of a used one.
 
 ### 4.3 Leave year
-- **[OWNER DECISION] Recommended default:** one **School-configured leave
+- **Superseded by the final owner decision in §22.1** (School-configured
+  start month, default April, independent of Finance). The original
+  recommendation is kept below for the record.
+- **[OWNER DECISION] Recommended default (superseded):** one **School-configured leave
   year** with a configurable start month, defaulting to the School's
   financial-year start month (`fee_settings`, default April). Alternatives:
   calendar year; academic year; employment anniversary. Not chosen by
@@ -164,6 +169,9 @@ HRX touches no TCH/E33 surface (§13).
   receipt-numbering precedent).
 
 ### 4.4 Units (exact)
+- **Final (§22.4):** the shared day-portion contract is `full` = 2,
+  `first_half` = 1, `second_half` = 1 integer units, used by Leave and, from
+  HRX.3, Staff Attendance.
 - **Decision:** quantities are **integer half-day units** (1 = half a day,
   2 = a full day). No float, no decimal fraction anywhere. Half-days are
   allowed only when the leave type `allows_half_day`; a half-day is
@@ -184,7 +192,10 @@ HRX touches no TCH/E33 surface (§13).
 - **Accrual (v1):** front-loaded annual allocation through an explicit,
   staff-triggered allocation run per leave year (preview → execute, the FEE
   assessment-run pattern). Monthly accrual is **out of v1**.
-- **[OWNER DECISION] Mid-year joiners — recommended default:** no automatic
+- **Superseded by §22.2:** a mid-year joiner gets an explicit `allocation`
+  of the exact units an administrator specifies — not a full allocation
+  corrected by a negative `adjustment`. The original text follows.
+- **[OWNER DECISION] Mid-year joiners — recommended default (superseded):** no automatic
   proration; the allocation run grants the policy's full annual allocation,
   and an administrator records an explicit `adjustment` where a lower grant
   is intended (mirrors FEE decision D1: no proration).
@@ -391,6 +402,10 @@ seeded in the checkpoint that first uses them, never earlier.
 
 ## 13. Teacher role freeze (E33)
 
+**Final (§22.3):** the self-service role is named **`staff_self_service`**
+(not `staff`); "`staff` role" below and in §12 reads as
+`staff_self_service`. It is created in HRX.4, not earlier.
+
 - The `teacher` role and its four capabilities are **not changed**. No HRX
   capability is added to it while E33 / TCH-L1 is open.
 - **[OWNER DECISION] Recommended default:** a **new system School role
@@ -543,3 +558,135 @@ and follows the rule 82 full-regression cadence.
   Attendance/LMS teacher authorization; E33 / TCH-L1 unchanged.
 - No E21 reopening; retention classification only.
 - No statutory leave claim and no production legal clearance.
+
+## 22. Amendment — HRX.1 final owner decisions and as-built notes (2026-10-03)
+
+Recorded at the start of HRX.1 (baseline `ce4c06a`). These are **final
+owner decisions**; they supersede the matching recommended defaults above.
+
+### 22.1 Leave year (supersedes §4.3)
+- The HRX leave year is **School-configured**:
+  `leave_settings.leave_year_start_month`, 1..12, **default 4 (April)**.
+- April is a **product default, not a statutory rule**; it implies no
+  jurisdiction's law (HRX-L3 stays open).
+- **No Leave → Finance dependency.** Leave never reads `fee_settings` or any
+  Finance period, and a Finance change can never alter a Leave period
+  (`LeaveArchitectureGuardTest`).
+- **Historical boundaries never move silently.** A leave year is
+  materialized as a `leave_years` row with frozen `starts_on`/`ends_on`/
+  `start_month` (UPDATE and DELETE revoked from the runtime role; a trigger
+  refuses overlap). The start month is locked by a database trigger once any
+  leave year exists (`LEAVE_YEAR_LOCKED`) — earlier than §4.3's "first
+  allocation", because an allocation always belongs to a materialized year.
+  A future change of start month needs an explicit transition design (a
+  later checkpoint), never an edit.
+
+### 22.2 Mid-year joiners (supersedes the §4.5 default)
+- **No automatic proration**, anywhere.
+- A mid-year joiner receives an **explicit `allocation` entry of the exact
+  units an administrator specifies** (`POST …/leave/allocations`). It is not a full
+  allocation followed by a negative adjustment.
+- At most one `allocation` per EmploymentRecord × leave type × leave year
+  (partial unique index). The annual run grants the policy's full annual
+  units only to employments that have no allocation yet, and skips any
+  explicit grant.
+- `adjustment` is reserved for **later corrections**, with a closed reason
+  code (`entitlement_change`, `allocation_correction`,
+  `administrative_correction`) and an explicit `credit`/`debit` direction.
+
+### 22.3 Self-service role (supersedes the §13 default)
+- HRX.4 creates a **separate `staff_self_service` role / capability bundle**
+  in the closed School role catalog.
+- The `teacher` role is **unchanged while E33 is open**: no HRX capability is
+  added to it.
+- Authorization **never checks a role name**; only capabilities (+
+  ownership where stated).
+- HRX.1 creates no `staff_self_service` role and no `.self`/`.approve`
+  capability (guarded by `LeaveArchitectureGuardTest`).
+
+### 22.4 Shared day-portion contract (refines §4.4)
+- `App\Domain\Leave\Application\DayPortion`: `full` = 2, `first_half` = 1,
+  `second_half` = 1 integer half-day units.
+- Never `0.5`, floating point or decimal. Every unit column is `integer`
+  with a `> 0` check (ledger) or `>= 0` (policy annual allocation).
+- A half-day always identifies **which** half. A weekly working pattern day
+  is `full`, `first_half` or `off`; a holiday is `full`, `first_half` or
+  `second_half`. `WorkingDayCalculator` counts the intersection of the
+  requested halves with the working halves.
+- HRX.3 Staff Attendance reuses this contract; it does not define its own.
+
+### 22.5 HRX.1 as built
+- **Namespace:** `app/Domain/Leave` (Application, Infrastructure, Http).
+  Leave depends on HR only through `EmploymentCoverage::holdRecord()`, a
+  new HR-owned Application method (FOR SHARE on the Employee and the
+  EmploymentRecord). HR and Payroll never depend on Leave.
+- **Tables (9):** `leave_settings`, `leave_years`, `leave_types`,
+  `leave_policies`, `leave_policy_assignments`, `staff_working_weekdays`,
+  `staff_holidays`, `leave_allocation_runs`, `leave_ledger_entries`. All of
+  them use forced RLS, composite `(id, school_id)` foreign keys and RESTRICT.
+  No Employee/EmploymentRecord cascade.
+- **Ledger shape:** each entry has a `kind` (closed list, §4.5) and
+  **positive** `units`; the sign follows from the kind (credit kinds:
+  `allocation`, `reversal`, `carry_forward_in`; an `adjustment` carries an
+  explicit `direction`). This replaces §4.5's "signed integer units": the
+  balance is still the sum. The ledger is append-only (UPDATE/DELETE
+  revoked).
+- **No negative balance, enforced by the database.** A trigger locks the
+  balance key (advisory transaction lock) and refuses any entry that would
+  take credits − debits below zero (`LEAVE_BALANCE_INSUFFICIENT`). It also
+  refuses a reversal that does not match exactly one consumption.
+- **Untracked types never reach the ledger.** A composite foreign key on
+  `(leave_type_id, school_id, tracks_balance = true)` makes this structural.
+- **Immutability triggers:**
+  - policies: only `active → retired`; a change is a new superseding
+    version;
+  - leave types: identity and rules freeze once used;
+  - assignments: only end or shorten; overlap is refused under an advisory
+    lock;
+  - leave years: frozen.
+- **Allocation run:**
+  - preview → execute, once per School × leave year × leave type
+    (`leave_allocation_runs_once`, `LEAVE_RUN_ALREADY_EXECUTED`);
+  - it is executed synchronously in one transaction, not as a queued job.
+    The School's staff count makes a queue unnecessary, and §14's
+    `TenantScoped` requirement applies when a queued run is introduced;
+  - the header is append-only and records the final count.
+- **Carry-forward/expiry:** the schema is in place (policy cap/expiry
+  terms; `carry_forward_in`/`carry_forward_out`/`expiry` kinds), and the pure
+  `CarryForwardCalculator` computes it. No code writes those kinds in HRX.1;
+  the year-close run is HRX.2.
+- **Working calendar:**
+  - a weekly pattern of all 7 ISO weekdays plus dated holidays;
+  - it fails closed (`LEAVE_CALENDAR_NOT_CONFIGURED`) until all seven days
+    are set.
+- **Capabilities:** only `hr.leave.configure`, `hr.leave.view` and
+  `hr.leave.manage`, granted to `school_admin` and `principal`.
+- **API:** 24 `/api/v1/schools/{school}/leave/…` operations, all
+  `private-no-store`. Every entitlement and configuration create is
+  `idempotent`; allocation, run and adjustment complete inside their
+  transaction (`completeWithin`, rule 33).
+- **Audit:** `leave.settings.changed`, `leave.year.opened`, `leave.type.*`,
+  `leave.policy.created/retired`, `leave.calendar.*`, `leave.policy.assigned`/`assignment_ended`,
+  `leave.allocation.granted`, `leave.allocation_run.executed`,
+  `leave.adjustment.recorded`. Metadata is ids and units only.
+- **Domain events:** none in HRX.1. Nothing consumes leave configuration yet,
+  so no outbox event is emitted; HRX.2 adds request/decision events
+  (not webhook-publishable, rule 77).
+- **Admin UI deferred to HRX.2.** HRX.1 ships the API and services only. The
+  administrative screens arrive with the request/approval UI in HRX.2, so
+  configuration and decisions share one surface.
+- **Retention:**
+  - `leave_configuration` (settings, years, types, policies, calendar, run
+    headers) is tenant lifetime;
+  - `leave_evidence` (assignments, ledger) is D9 employment evidence. Its
+    status is `MECHANISM_PENDING` until HRX.6 adds the purge participant;
+  - until then the Employee's evidence unit is `dependency_blocked`
+    (retained, the longest period wins).
+- **Health/biometric exclusion is structural:** no Leave column can hold a
+  diagnosis, medical reason, certificate, attachment, note, free text or
+  biometric. `reason_code` is a closed list, and there is no Document owner
+  for leave. This is guarded by `LeaveArchitectureGuardTest`.
+- **Legal gates unchanged:** HRX-L1, L2, L3 and L4 remain open. HRX-L3's
+  applicability matrix is
+  `docs/security/HRX-L3-STATUTORY-LEAVE-APPLICABILITY-MATRIX.md`, and no
+  jurisdiction is cleared.

@@ -609,6 +609,12 @@ The checkpoints are listed in §5.
     - Transport and Visitor rows;
     - another Employee's assignment naming one of its assignments as
       manager.
+    - HRX leave evidence (`leave_policy_assignments`,
+      `leave_ledger_entries`, HRX.1, ADR 0065 §18/§22). This is D9
+      employment evidence; its expiry mechanism is pending
+      (`leave_evidence`, `MECHANISM_PENDING`) until HRX.6 adds the purge
+      participant. Until then a leave-holding Employee is
+      `dependency_blocked` (kept). Leave configuration is tenant lifetime.
   - **A linked User blocks it.** Retention never unlinks a User (D10,
     E21.2F).
   - **Pinned:** the per-table classification is checked against the
