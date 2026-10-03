@@ -16,7 +16,7 @@ use Tests\TestCase;
 class LeaveArchitectureGuardTest extends TestCase
 {
     private const TABLES = [
-        'leave_settings', 'leave_years', 'leave_types', 'leave_policies', 'leave_policy_assignments',
+        'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_types', 'leave_policies', 'leave_policy_assignments',
         'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs', 'leave_ledger_entries',
     ];
 

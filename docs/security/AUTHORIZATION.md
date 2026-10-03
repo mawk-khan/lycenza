@@ -856,7 +856,7 @@ Three School capabilities, seeded in HRX.1 and granted by default to
 | Capability | Allows |
 |---|---|
 | `hr.leave.view` | read leave settings, years, types, policies, the staff calendar, policy assignments, ledger entries and derived balances |
-| `hr.leave.configure` | leave-year start month, opening leave years, leave types, policies (versions), the weekly pattern and staff holidays |
+| `hr.leave.configure` | leave-year start month (base, and prospective start-month changes), opening leave years, leave types, policies (versions), the weekly pattern and staff holidays |
 | `hr.leave.manage` | policy assignments, explicit allocations, allocation-run preview/execute, adjustments |
 
 - **Independent capabilities.** None implies another: `configure` does

@@ -3864,7 +3864,10 @@ on it.
   - School-configured start month, default April. This is a product
     default, not statutory, and Leave has no Finance dependency;
   - materialized as frozen `leave_years` rows;
-  - the start month locks once any year exists.
+  - prospectively configurable: once a year exists, a start-month change
+    takes effect on a future first-of-month boundary after every opened
+    year. An explicit transition year bridges to it, and no existing year
+    or ledger entry moves (ADR 0065 §22.1a).
 - **Units:** integer half-day units (`full` = 2, `first_half` = 1,
   `second_half` = 1). No proration: a mid-year joiner receives an explicit
   allocation of exact units.

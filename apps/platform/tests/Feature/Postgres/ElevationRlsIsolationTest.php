@@ -87,8 +87,9 @@ class ElevationRlsIsolationTest extends TestCase
         // + financial_period_expiries (E21.3A2, ADR 0064 §17);
         // + leave_settings, leave_years, leave_types, leave_policies,
         // leave_policy_assignments, staff_working_weekdays, staff_holidays,
-        // leave_allocation_runs and leave_ledger_entries (HRX.1, ADR 0065).
-        $this->assertSame(181, (int) DB::connection('pgsql_admin')->selectOne(
+        // leave_allocation_runs and leave_ledger_entries (HRX.1, ADR 0065);
+        // + leave_year_start_changes (HRX.1 correction, ADR 0065 §22.1).
+        $this->assertSame(182, (int) DB::connection('pgsql_admin')->selectOne(
             "select count(*) as c from pg_class where relrowsecurity and relforcerowsecurity and relnamespace = 'public'::regnamespace",
         )->c, 'No tenant table gained or lost RLS in Phase 0N.3.');
     }

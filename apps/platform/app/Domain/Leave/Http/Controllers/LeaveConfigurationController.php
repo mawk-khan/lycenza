@@ -3,6 +3,7 @@
 namespace App\Domain\Leave\Http\Controllers;
 
 use App\Domain\Leave\Application\DayPortion;
+use App\Domain\Leave\Application\LeaveCapabilities;
 use App\Domain\Leave\Application\LeavePolicyService;
 use App\Domain\Leave\Application\LeaveReadService;
 use App\Domain\Leave\Application\LeaveTypeService;
@@ -38,7 +39,18 @@ class LeaveConfigurationController extends Controller
         $validated = $request->validate(['leave_year_start_month' => ['required', 'integer', 'between:1,12']]);
         $years->setStartMonth($school, (int) $validated['leave_year_start_month'], $request->user());
 
-        return response()->json(['data' => $reads->settings($school, $request->user())]);
+        return response()->json(['data' => $reads->settings($school, $request->user(), LeaveCapabilities::CONFIGURE)]);
+    }
+
+    public function scheduleStartChange(Request $request, School $school, LeaveYearService $years, LeaveReadService $reads): JsonResponse
+    {
+        $validated = $request->validate([
+            'start_month' => ['required', 'integer', 'between:1,12'],
+            'effective_from' => ['required', 'date_format:Y-m-d'],
+        ]);
+        $years->scheduleStartChange($school, (int) $validated['start_month'], $validated['effective_from'], $request->user());
+
+        return response()->json(['data' => $reads->settings($school, $request->user(), LeaveCapabilities::CONFIGURE)], 201);
     }
 
     public function years(Request $request, School $school, LeaveReadService $reads): JsonResponse

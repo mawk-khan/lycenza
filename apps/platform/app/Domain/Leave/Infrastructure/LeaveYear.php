@@ -12,8 +12,13 @@ use Illuminate\Database\Eloquent\Model;
  * always resolves to the year it was recorded in. Append-only; never
  * overlapping (database-enforced). Created only by LeaveYearService.
  *
+ * A TRANSITION year (`is_transition`) is the explicit, shorter year that
+ * bridges the old schedule to a scheduled start-month change; it ends the
+ * day before the change takes effect (ADR 0065 §22.1).
+ *
  * @property string $id
  * @property string $school_id
+ * @property bool $is_transition
  */
 class LeaveYear extends Model
 {
@@ -23,10 +28,10 @@ class LeaveYear extends Model
 
     protected $table = 'leave_years';
 
-    protected $fillable = ['school_id', 'label', 'starts_on', 'ends_on', 'start_month'];
+    protected $fillable = ['school_id', 'label', 'starts_on', 'ends_on', 'start_month', 'is_transition'];
 
     protected function casts(): array
     {
-        return ['starts_on' => 'date', 'ends_on' => 'date', 'start_month' => 'integer'];
+        return ['starts_on' => 'date', 'ends_on' => 'date', 'start_month' => 'integer', 'is_transition' => 'boolean'];
     }
 }

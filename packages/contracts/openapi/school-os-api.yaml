@@ -2434,7 +2434,7 @@ paths:
     put:
       operationId: updateLeaveSettings
       summary: >
-        HRX.1: sets the leave-year start month (1..12). Refused (409 LEAVE_YEAR_LOCKED) once any leave year exists. Requires hr.leave.configure.
+        HRX.1: sets the BASE leave-year start month (1..12) while the School has no leave year and no scheduled change. Afterwards the start month changes only prospectively (POST year-start-changes); refused with 409 LEAVE_YEAR_LOCKED. Requires hr.leave.configure.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
       requestBody:
@@ -2462,6 +2462,44 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: Validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/year-start-changes:
+    post:
+      operationId: scheduleLeaveYearStartChange
+      summary: >
+        HRX.1 correction (ADR 0065 §22.1): schedules a PROSPECTIVE start-month change. It takes effect on effective_from, which must be the first day of the new month, in the School-local future, and strictly after every materialized leave year and every earlier change. The year bridging the old schedule to it is an explicit transition year. Materialized years never change. Requires hr.leave.configure. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveYearStartChangeInput" }
+      responses:
+        "201":
+          description: Scheduled; returns the updated settings.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveSettings" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.configure in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_YEAR_BOUNDARY_INVALID (not after every opened leave year and earlier change) / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (LEAVE_YEAR_EFFECTIVE_FROM_INVALID, LEAVE_YEAR_START_UNCHANGED, LEAVE_YEAR_MONTH_INVALID).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -15036,10 +15074,27 @@ components:
 
     LeaveSettings:
       type: object
-      required: [leaveYearStartMonth, yearsExist]
+      required: [leaveYearStartMonth, baseStartMonth, startChanges, yearsExist]
       properties:
-        leaveYearStartMonth: { type: integer, minimum: 1, maximum: 12 }
+        leaveYearStartMonth: { type: integer, minimum: 1, maximum: 12, description: "The start month for leave years after the latest scheduled change (the base month when none)." }
+        baseStartMonth: { type: integer, minimum: 1, maximum: 12 }
+        startChanges: { type: array, items: { $ref: "#/components/schemas/LeaveYearStartChange" } }
         yearsExist: { type: boolean }
+    LeaveYearStartChange:
+      type: object
+      required: [id, previousStartMonth, startMonth, effectiveFrom]
+      properties:
+        id: { type: string, format: uuid }
+        previousStartMonth: { type: integer, minimum: 1, maximum: 12 }
+        startMonth: { type: integer, minimum: 1, maximum: 12 }
+        effectiveFrom: { type: string, format: date }
+        createdAt: { type: string, format: date-time, nullable: true }
+    LeaveYearStartChangeInput:
+      type: object
+      required: [start_month, effective_from]
+      properties:
+        start_month: { type: integer, minimum: 1, maximum: 12 }
+        effective_from: { type: string, format: date, description: "The first day of start_month, in the future." }
     LeaveSettingsInput:
       type: object
       required: [leave_year_start_month]
@@ -15047,13 +15102,14 @@ components:
         leave_year_start_month: { type: integer, minimum: 1, maximum: 12 }
     LeaveYear:
       type: object
-      required: [id, label, startsOn, endsOn, startMonth]
+      required: [id, label, startsOn, endsOn, startMonth, isTransition]
       properties:
         id: { type: string, format: uuid }
         label: { type: string }
         startsOn: { type: string, format: date }
         endsOn: { type: string, format: date }
         startMonth: { type: integer }
+        isTransition: { type: boolean, description: "An explicit, shorter year bridging to a scheduled start-month change." }
     LeaveYearOpenInput:
       type: object
       required: ["on"]

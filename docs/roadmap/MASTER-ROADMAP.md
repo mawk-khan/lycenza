@@ -234,14 +234,17 @@ outside it.
   - **Final owner decisions (ADR 0065 §22):**
     - the leave year is School-configured, start month 1..12, default
       April. This is a product default, not statutory, and has no Finance
-      dependency; historical leave years are frozen;
+      dependency. It is prospectively configurable: materialized leave
+      years are immutable, and a start-month change takes effect on a
+      future first-of-month boundary after every opened year, through an
+      explicit transition year (§22.1a correction);
     - no automatic proration: a mid-year joiner gets an explicit
       allocation of exact units;
     - HRX.4 creates a separate `staff_self_service` role;
     - day portions are `full` = 2, `first_half` = 1, `second_half` = 1
       integer units.
   - **Built (`App\Domain\Leave`):**
-    - nine forced-RLS tables;
+    - ten forced-RLS tables;
     - leave types, versioned policies and effective-dated assignments on
       the EmploymentRecord;
     - the staff working calendar;
@@ -252,7 +255,10 @@ outside it.
     - carry-forward/expiry schema and pure calculation only (the
       year-close run is HRX.2);
     - capabilities `hr.leave.configure/.view/.manage`;
-    - 24 API operations.
+    - 25 API operations.
+  - **HRX.2 forward invariant (ADR 0065 §22.6):** approved leave keeps its
+    exact chargeable dates, portions and units. Later calendar, policy or
+    leave-year changes never rewrite it.
   - **Not built:** no admin UI (deferred to HRX.2), no requests, no
     approvals, no Staff Attendance. HRX-L1–L4 stay open; see
     `docs/security/HRX-L3-STATUTORY-LEAVE-APPLICABILITY-MATRIX.md`.

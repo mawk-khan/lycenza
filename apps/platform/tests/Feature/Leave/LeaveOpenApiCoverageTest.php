@@ -24,8 +24,8 @@ class LeaveOpenApiCoverageTest extends TestCase
         $this->assertSame([], array_values(array_diff($live, $documented)), 'Live Leave route(s) missing from the OpenAPI contract');
         $this->assertSame([], array_values(array_diff($documented, $live)), 'OpenAPI Leave operation(s) with no matching live route');
 
-        $this->assertCount(24, $live, 'Expected exactly 24 live Leave API routes -- update this pin (and the contract) deliberately.');
-        $this->assertCount(24, $documented);
+        $this->assertCount(25, $live, 'Expected exactly 25 live Leave API routes -- update this pin (and the contract) deliberately.');
+        $this->assertCount(25, $documented);
     }
 
     #[Test]

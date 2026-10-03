@@ -1146,9 +1146,26 @@ export interface paths {
         };
         /** HRX.1: the School's leave-year start month (default 4, April; independent of Finance). Requires hr.leave.view. */
         get: operations["getLeaveSettings"];
-        /** HRX.1: sets the leave-year start month (1..12). Refused (409 LEAVE_YEAR_LOCKED) once any leave year exists. Requires hr.leave.configure. */
+        /** HRX.1: sets the BASE leave-year start month (1..12) while the School has no leave year and no scheduled change. Afterwards the start month changes only prospectively (POST year-start-changes); refused with 409 LEAVE_YEAR_LOCKED. Requires hr.leave.configure. */
         put: operations["updateLeaveSettings"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/year-start-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.1 correction (ADR 0065 §22.1): schedules a PROSPECTIVE start-month change. It takes effect on effective_from, which must be the first day of the new month, in the School-local future, and strictly after every materialized leave year and every earlier change. The year bridging the old schedule to it is an explicit transition year. Materialized years never change. Requires hr.leave.configure. Idempotency-Key required. */
+        post: operations["scheduleLeaveYearStartChange"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7439,8 +7456,29 @@ export interface components {
             starts_on: string;
         };
         LeaveSettings: {
+            /** @description The start month for leave years after the latest scheduled change (the base month when none). */
             leaveYearStartMonth: number;
+            baseStartMonth: number;
+            startChanges: components["schemas"]["LeaveYearStartChange"][];
             yearsExist: boolean;
+        };
+        LeaveYearStartChange: {
+            /** Format: uuid */
+            id: string;
+            previousStartMonth: number;
+            startMonth: number;
+            /** Format: date */
+            effectiveFrom: string;
+            /** Format: date-time */
+            createdAt?: string | null;
+        };
+        LeaveYearStartChangeInput: {
+            start_month: number;
+            /**
+             * Format: date
+             * @description The first day of start_month, in the future.
+             */
+            effective_from: string;
         };
         LeaveSettingsInput: {
             leave_year_start_month: number;
@@ -7454,6 +7492,8 @@ export interface components {
             /** Format: date */
             endsOn: string;
             startMonth: number;
+            /** @description An explicit, shorter year bridging to a scheduled start-month change. */
+            isTransition: boolean;
         };
         LeaveYearOpenInput: {
             /** Format: date */
@@ -13096,6 +13136,72 @@ export interface operations {
                 };
             };
             /** @description Validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    scheduleLeaveYearStartChange: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveYearStartChangeInput"];
+            };
+        };
+        responses: {
+            /** @description Scheduled; returns the updated settings. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveSettings"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.configure in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_YEAR_BOUNDARY_INVALID (not after every opened leave year and earlier change) / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (LEAVE_YEAR_EFFECTIVE_FROM_INVALID, LEAVE_YEAR_START_UNCHANGED, LEAVE_YEAR_MONTH_INVALID). */
             422: {
                 headers: {
                     [name: string]: unknown;

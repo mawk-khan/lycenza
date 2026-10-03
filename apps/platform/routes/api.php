@@ -2260,6 +2260,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
                 Route::get('/settings', [LeaveConfigurationController::class, 'settings'])->middleware($view)->name('settings.show');
                 Route::put('/settings', [LeaveConfigurationController::class, 'updateSettings'])->middleware($configure)->name('settings.update');
+                // A prospective start-month change (ADR 0065 §22.1): append-only, never moves a materialized year.
+                Route::post('/year-start-changes', [LeaveConfigurationController::class, 'scheduleStartChange'])->middleware([...$configure, 'idempotent'])->name('year-start-changes.store');
                 Route::get('/years', [LeaveConfigurationController::class, 'years'])->middleware($view)->name('years.index');
                 Route::post('/years', [LeaveConfigurationController::class, 'openYear'])->middleware([...$configure, 'idempotent'])->name('years.store');
                 Route::get('/types', [LeaveConfigurationController::class, 'types'])->middleware($view)->name('types.index');

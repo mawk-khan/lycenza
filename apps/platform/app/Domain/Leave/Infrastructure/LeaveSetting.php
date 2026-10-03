@@ -7,10 +7,12 @@ use App\Support\Tenancy\BelongsToSchool;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * HRX.1 (ADR 0065 §4.3): the School's leave-year start month (1..12,
+ * HRX.1 (ADR 0065 §22.1): the School's BASE leave-year start month (1..12,
  * default April). A product default, not a statutory claim, and independent
- * of Finance's financial year. It can change only while the School has no
- * leave year (database trigger `trg_leave_settings_lock`).
+ * of Finance's financial year. The base changes directly only while the
+ * School has no leave year and no scheduled change (database trigger
+ * `trg_leave_settings_lock`); afterwards the start month changes only
+ * prospectively, through a LeaveYearStartChange.
  *
  * @property string $id
  * @property string $school_id

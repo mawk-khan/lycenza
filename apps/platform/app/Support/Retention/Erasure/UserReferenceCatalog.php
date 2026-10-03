@@ -6,7 +6,7 @@ namespace App\Support\Retention\Erasure;
  * E21.4 (E21-L1 project-adopted, India-aligned development position,
  * pending qualified ratification): every foreign key to `users`, each with
  * exactly ONE minimization treatment. A literal closed list read from the
- * live catalog at E21.4 (87 references; HRX.1 added 8 Leave actor references); `UserReferenceCatalogTest` fails
+ * live catalog at E21.4 (87 references; HRX.1 added 9 Leave actor references); `UserReferenceCatalogTest` fails
  * as soon as a migration adds, renames or drops one, so a new reference is
  * unclassified until someone decides it here. A User whose live schema has
  * an unclassified reference is never minimized (fail closed).
@@ -44,6 +44,7 @@ final class UserReferenceCatalog
     public const REFERENCES = [
         // HRX.1 (ADR 0065): Leave actors are historical references.
         'leave_settings' => ['updated_by_user_id' => self::RETAIN_REFERENCE],
+        'leave_year_start_changes' => ['created_by_user_id' => self::RETAIN_REFERENCE],
         'leave_policies' => ['created_by_user_id' => self::RETAIN_REFERENCE],
         'leave_policy_assignments' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'ended_by_user_id' => self::RETAIN_REFERENCE],
         'staff_working_weekdays' => ['updated_by_user_id' => self::RETAIN_REFERENCE],

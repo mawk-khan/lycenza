@@ -118,4 +118,33 @@ class LeaveConcurrencyTest extends TestCase
         $this->assertSame(24, $this->balance($w));
         $this->assertSame(1, DB::connection('pgsql_admin')->table('leave_allocation_runs')->where('school_id', $w['school']->id)->count());
     }
+
+    #[Test]
+    public function a_start_month_change_racing_an_open_year_it_would_cross_is_refused(): void
+    {
+        $w = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('open', $w['school']->id, '2027-06-01', $w['admin']->id),
+            $this->script('schedule', $w['school']->id, '1', '2028-01-01', $w['admin']->id),
+        );
+
+        $this->assertSame('ok:2027-04-01..2028-03-31', $holder);
+        $this->assertSame('rejected:LEAVE_YEAR_BOUNDARY_INVALID', $contender, 'the change waits for the year, then sees it ends after its boundary');
+        $this->assertSame(0, DB::connection('pgsql_admin')->table('leave_year_start_changes')->where('school_id', $w['school']->id)->count());
+    }
+
+    #[Test]
+    public function a_year_opened_while_a_change_is_being_scheduled_follows_the_committed_change(): void
+    {
+        $w = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('schedule', $w['school']->id, '1', '2028-01-01', $w['admin']->id),
+            $this->script('open', $w['school']->id, '2027-06-01', $w['admin']->id),
+        );
+
+        $this->assertSame('ok:2028-01-01', $holder);
+        $this->assertSame('ok:2027-04-01..2027-12-31:transition', $contender, 'never a full year across the new boundary');
+    }
 }

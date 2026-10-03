@@ -36,12 +36,29 @@ class LeaveReadService
         private readonly StaffCalendarService $calendar,
     ) {}
 
-    /** @return array<string, mixed> */
-    public function settings(School $school, User $actor): array
+    /**
+     * The leave-year settings. Read under `hr.leave.view`, or under
+     * `hr.leave.configure` when answering the configure holder's own settings
+     * write (a configure-only actor must not see a 403 for a committed write).
+     *
+     * @return array<string, mixed>
+     */
+    public function settings(School $school, User $actor, string $capability = LeaveCapabilities::VIEW): array
     {
-        $this->authorizeCapabilityFor($actor, LeaveCapabilities::VIEW, $school);
+        if (! in_array($capability, [LeaveCapabilities::VIEW, LeaveCapabilities::CONFIGURE], true)) {
+            throw new \InvalidArgumentException('Leave settings are read under hr.leave.view or hr.leave.configure.');
+        }
+        $this->authorizeCapabilityFor($actor, $capability, $school);
 
-        return ['leaveYearStartMonth' => $this->years->startMonth($school), 'yearsExist' => $this->read($school, fn () => LeaveYear::query()->where('school_id', $school->id)->exists())];
+        return [
+            'leaveYearStartMonth' => $this->years->startMonth($school),
+            'baseStartMonth' => $this->years->baseMonth($school),
+            'startChanges' => array_map(fn (array $c) => [
+                'id' => $c['id'], 'previousStartMonth' => $c['previous_start_month'], 'startMonth' => $c['start_month'],
+                'effectiveFrom' => $c['effective_from'], 'createdAt' => $c['created_at'],
+            ], $this->years->changes($school)),
+            'yearsExist' => $this->read($school, fn () => LeaveYear::query()->where('school_id', $school->id)->exists()),
+        ];
     }
 
     /** @return list<array<string, mixed>> */
@@ -139,7 +156,7 @@ class LeaveReadService
     /** @return array<string, mixed> */
     public static function year(LeaveYear $y): array
     {
-        return ['id' => $y->id, 'label' => $y->label, 'startsOn' => $y->starts_on->toDateString(), 'endsOn' => $y->ends_on->toDateString(), 'startMonth' => $y->start_month];
+        return ['id' => $y->id, 'label' => $y->label, 'startsOn' => $y->starts_on->toDateString(), 'endsOn' => $y->ends_on->toDateString(), 'startMonth' => $y->start_month, 'isTransition' => $y->is_transition];
     }
 
     /** @return array<string, mixed> */

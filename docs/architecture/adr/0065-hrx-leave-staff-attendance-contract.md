@@ -3,7 +3,10 @@
 - Status: **Accepted as a contract (HRX.0, documentation only, closed).**
   **Amended by HRX.1** (§22): the owner recorded final decisions on the
   leave year (§4.3), mid-year joiners (§4.5), the self-service role (§13) and
-  the day-portion contract (§4.4); HRX.1 — Leave Foundation is built. The
+  the day-portion contract (§4.4); HRX.1 — Leave Foundation is built. A
+  later HRX.1 correction clarifies the leave year as prospectively
+  configurable (§22.1a) and records the HRX.2 approved-leave invariant
+  (§22.6). The
   remaining **[OWNER DECISION]** defaults still apply to HRX.2–HRX.6 unless
   the owner records a different choice before the checkpoint that needs it.
 - Date: 2026-10-03
@@ -575,11 +578,55 @@ owner decisions**; they supersede the matching recommended defaults above.
 - **Historical boundaries never move silently.** A leave year is
   materialized as a `leave_years` row with frozen `starts_on`/`ends_on`/
   `start_month` (UPDATE and DELETE revoked from the runtime role; a trigger
-  refuses overlap). The start month is locked by a database trigger once any
-  leave year exists (`LEAVE_YEAR_LOCKED`) — earlier than §4.3's "first
-  allocation", because an allocation always belongs to a materialized year.
-  A future change of start month needs an explicit transition design (a
-  later checkpoint), never an edit.
+  refuses overlap).
+- **Corrected (HRX.1 leave-year configuration correction, 2026-10-03):** as
+  first built, HRX.1 froze the start month permanently once any leave year
+  existed. That was stronger than this decision and is replaced by §22.1a.
+
+### 22.1a Prospective leave-year configuration (clarifies §22.1)
+- **Leave-year configuration is prospectively configurable.**
+- **Materialized `leave_years` rows are immutable.** No UPDATE or DELETE
+  for the runtime role; the trigger refuses any update.
+- **Changing the future School setting never mutates, reinterprets or
+  relocates historical Leave evidence.** Ledger entries and policy
+  assignments stay on the years and employments they were recorded
+  against.
+- **Mechanism:**
+  - `leave_settings.leave_year_start_month` is the **base** start month. It
+    changes directly only while the School has no leave year and no
+    scheduled change (`LEAVE_YEAR_LOCKED`, database trigger on INSERT and
+    UPDATE).
+  - After that, a change is an append-only **`leave_year_start_changes`**
+    row: `previous_start_month`, `start_month` and `effective_from`
+    (`POST …/leave/year-start-changes`, `hr.leave.configure`,
+    idempotent).
+- **`effective_from` must be all of:**
+  - the **first day of the new start month**;
+  - strictly in the **School-local future**;
+  - strictly **after the end of every materialized leave year**;
+  - strictly **after every earlier change**.
+
+  Otherwise it is refused (`LEAVE_YEAR_EFFECTIVE_FROM_INVALID`,
+  `LEAVE_YEAR_BOUNDARY_INVALID`; a no-op change is
+  `LEAVE_YEAR_START_UNCHANGED`). The database enforces the boundary rules
+  again under the School's `leave.years` advisory lock.
+- **Transition year:**
+  - The year that would cross a change is cut short the day before it takes
+    effect. It is materialized as an explicit **transition year**
+    (`is_transition`, shorter than a full year, label `YYYY-MM/YYYY-MM`).
+  - From `effective_from` on, years follow the new start month.
+  - Consecutive years therefore never overlap and never leave a gap. No year
+    has zero length, and every date belongs to exactly one year.
+  - Example: April schedule, change to January effective 2028-01-01. The
+    years are 2026-27 (unchanged), then 2027-04-01..2027-12-31
+    (transition), then 2028.
+- **Database consistency.** The leave-year trigger refuses a year that
+  disagrees with the schedule in force:
+  - a start month other than the one governing its start date;
+  - a year crossing a change;
+  - a transition year that does not end the day before a recorded change.
+- **Unchanged:** default April (a product default), month 1..12, and no
+  Finance dependency.
 
 ### 22.2 Mid-year joiners (supersedes the §4.5 default)
 - **No automatic proration**, anywhere.
@@ -620,10 +667,11 @@ owner decisions**; they supersede the matching recommended defaults above.
   Leave depends on HR only through `EmploymentCoverage::holdRecord()`, a
   new HR-owned Application method (FOR SHARE on the Employee and the
   EmploymentRecord). HR and Payroll never depend on Leave.
-- **Tables (9):** `leave_settings`, `leave_years`, `leave_types`,
-  `leave_policies`, `leave_policy_assignments`, `staff_working_weekdays`,
-  `staff_holidays`, `leave_allocation_runs`, `leave_ledger_entries`. All of
-  them use forced RLS, composite `(id, school_id)` foreign keys and RESTRICT.
+- **Tables (10):** `leave_settings`, `leave_year_start_changes` (added by
+  the §22.1a correction), `leave_years`, `leave_types`, `leave_policies`,
+  `leave_policy_assignments`, `staff_working_weekdays`, `staff_holidays`,
+  `leave_allocation_runs`, `leave_ledger_entries`. All of them use forced
+  RLS, composite `(id, school_id)` foreign keys and RESTRICT.
   No Employee/EmploymentRecord cascade.
 - **Ledger shape:** each entry has a `kind` (closed list, §4.5) and
   **positive** `units`; the sign follows from the kind (credit kinds:
@@ -661,11 +709,14 @@ owner decisions**; they supersede the matching recommended defaults above.
     are set.
 - **Capabilities:** only `hr.leave.configure`, `hr.leave.view` and
   `hr.leave.manage`, granted to `school_admin` and `principal`.
-- **API:** 24 `/api/v1/schools/{school}/leave/…` operations, all
+- **API:** 25 `/api/v1/schools/{school}/leave/…` operations (24 + the
+  §22.1a start-month change), all
   `private-no-store`. Every entitlement and configuration create is
   `idempotent`; allocation, run and adjustment complete inside their
   transaction (`completeWithin`, rule 33).
-- **Audit:** `leave.settings.changed`, `leave.year.opened`, `leave.type.*`,
+- **Audit:** `leave.settings.changed`, `leave.year_start.change_scheduled`
+  (old and new month, `effectiveFrom`; actor, School and time are on the
+  event), `leave.year.opened`, `leave.type.*`,
   `leave.policy.created/retired`, `leave.calendar.*`, `leave.policy.assigned`/`assignment_ended`,
   `leave.allocation.granted`, `leave.allocation_run.executed`,
   `leave.adjustment.recorded`. Metadata is ids and units only.
@@ -690,3 +741,20 @@ owner decisions**; they supersede the matching recommended defaults above.
   applicability matrix is
   `docs/security/HRX-L3-STATUTORY-LEAVE-APPLICABILITY-MATRIX.md`, and no
   jurisdiction is cleared.
+
+### 22.6 HRX.2 forward invariant (recorded; not implemented in HRX.1)
+- **Approved leave must retain the exact chargeable dates, day portions and
+  integer units determined at approval/consumption time.**
+- A later change to any of these must never silently alter approved
+  historical leave evidence:
+  - the weekly working pattern;
+  - staff holidays;
+  - a leave policy;
+  - the leave-year configuration.
+- HRX.2 therefore **persists the chargeable-day calculation** as immutable
+  evidence at approval: per date, the portion and the units charged, with the
+  leave year. The `consumption` ledger entry carries exactly that total.
+  `WorkingDayCalculator` is never re-run to reinterpret an approved request.
+- A configuration change affects only requests not yet approved. Approved
+  leave is changed only by cancellation (`reversal`) and a new request
+  (§4.8).
