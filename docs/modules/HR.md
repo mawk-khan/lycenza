@@ -3823,3 +3823,19 @@ another blocker remains (a linked User, a manager reference, D6 history,
 other retained rows, a hold). Active, future-employed, notice-period and
 rehired Employees are never eligible, so ActingEmployee and Teacher
 authorization are unaffected.
+
+## HRX — Leave & Staff Attendance (contract, 2026-10-03)
+
+ADR 0065 (HRX.0, docs only) is the contract for Leave and Staff Attendance.
+**Nothing is implemented yet**; HRX.1 (Leave Foundation) is next. For HR:
+- Leave and Staff Attendance are separate namespaces (`App\Domain\Leave`,
+  `App\Domain\StaffAttendance`) that depend on HR; HR never depends on
+  them.
+- Leave policies attach to the **EmploymentRecord** (a rehire starts fresh);
+  manager approval reads `employee_assignments.manager_assignment_id`
+  fresh at decision time through HR; self-service resolves the actor only
+  through `ActingEmployeeResolver`.
+- Leave and attendance rows are D9 employment evidence and will keep an
+  Employee until HRX.6's purge participant releases them.
+- No medical detail, free-text reason or biometrics in v1 (legal gates
+  HRX-L1/L2).

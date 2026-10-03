@@ -937,3 +937,20 @@ kept **8 calendar years after the Employee's final separation**
   can remove posted evidence (`PayrollRetentionGuardTest`).
 - Holds count only; `--dry-run` uses the database's own verdict; daily at
   05:20.
+
+## HRX boundary (contract, 2026-10-03)
+
+ADR 0065 records the future Leave/Staff Attendance → Payroll contract;
+nothing changes in Payroll until **HRX.5**:
+- **Today:** NCP / loss-of-pay days are always 0 and partial periods are
+  manual overrides.
+- **HRX.5:** Payroll calls one explicit HRX read contract (unpaid half-day
+  units of approved unpaid leave and absent attendance in the period, with
+  an input fingerprint), snapshots it into Payroll's own evidence, and
+  never queries Leave or Staff Attendance tables. Posted payroll is never
+  rewritten: later leave or attendance changes surface as a pending
+  difference and flow only through a correction run. Automatic deduction
+  waits on legal gate HRX-L4.
+- **HRX.4:** own payslip self-service (`payroll.payslips.self`) reads the
+  existing payslip through `PayslipReadService` with an ownership path; the
+  Payroll evidence model is unchanged.

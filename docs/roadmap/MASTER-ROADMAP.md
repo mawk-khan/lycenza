@@ -75,7 +75,7 @@ contract checkpoint.
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
 | 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **DEVELOPMENT CLOSED** (TCH.0–TCH.6, 2026-10-01; ADR 0063 §38). Built: ActingEmployee identity (TCH.1), TeachingAssignment ownership (TCH.2), the production `teacher` role (four owned-scope capabilities, never a role-name check) and owned teacher access to Curriculum Delivery (TCH.3), Attendance (TCH.4), Learning Content (TCH.5C) and Assignments (TCH.5D) on the LMS owner/audience persistence (TCH.5B). Every owned access needs capability AND verified ActingEmployee AND TeachingAssignment; the role alone grants nothing, and Timetable is never authority. **Production readiness (ADR 0063 §39, 2026-10-01): PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — teacher Attendance is **BLOCKED by open legal/compliance determination TCH-L1** (now ADR 0058 register **E33**), enforced by process only. The one `teacher` role also carries `attendance.teacher`. **Owner decision (ADR 0063 §40): no production `teacher` role grants while E33 / TCH-L1 is OPEN**, and no role split or Attendance gate. The role is implemented and production-capable; the blocker is external, not a technical deficiency. TCH history retention waits on the platform-wide legal item **E21** (ADR 0058). TCH.6 fixed one closure defect (non-identical not-found bodies on owned surfaces). LMS Submission remains cancelled and outside TCH |
-| 3 | HRX — Leave & staff attendance | Not started |
+| 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX IMPLEMENTATION — NOT STARTED.** Next: HRX.1 — Leave Foundation. Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
@@ -214,6 +214,31 @@ TCH reopens only the ADR 0061 §2.3 item "teacher identity and
 ownership-based authorization". Lesson Planning, StudentMark/RES, POR, HRX,
 generic staff-role expansion, tenant-custom roles and LMS Submission stay
 outside it.
+
+**HRX checkpoints (ADR 0065 §20)** -- contract published; implementation
+not started:
+- **HRX.0 — Leave & Staff Attendance Contract** (ADR 0065, docs only).
+  Closed (2026-10-03). Decided: `App\Domain\Leave` and
+  `App\Domain\StaffAttendance` under HR ownership, one-way dependencies
+  (Payroll reads only an explicit HRX contract); School-configured leave
+  types and policies assigned per EmploymentRecord; an append-only,
+  integer half-day leave ledger (no stored mutable balance, no overdraft);
+  single-level manager approval from the reporting line (capability AND
+  fresh ownership, no self-approval) plus an administrative path; daily
+  staff attendance with compare-and-swap corrections and an append-only
+  history; no medical detail, no free-text reason and no biometrics in v1;
+  D9 retention for Employee evidence, tenant lifetime for configuration.
+  Owner decisions with recommended defaults: leave-year start month,
+  mid-year proration, and a new `staff` self-service role (the `teacher`
+  role is not changed while E33 is open).
+- **HRX.1 — Leave Foundation.** Not started.
+- **HRX.2 — Leave Requests & Approval.** Not started.
+- **HRX.3 — Staff Attendance Foundation.** Not started.
+- **HRX.4 — Staff Self-Service** (own leave, own attendance, own payslip).
+  Not started.
+- **HRX.5 — Payroll Loss-of-Pay Integration.** Not started; automatic
+  deduction gated by HRX-L4.
+- **HRX.6 — Retention, Readiness & Closure Audit.** Not started.
 
 **FEE checkpoints (ADR 0062 §25)** -- all built, development-closed
 2026-09-30:
