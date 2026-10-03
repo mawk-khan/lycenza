@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Laravel\Sanctum\HasApiTokens;
 use Laravel\Sanctum\NewAccessToken;
@@ -34,6 +35,7 @@ use LogicException;
  * @property string|null $password NULL: a credential-less bootstrap account (ADR 0059 section 4).
  * @property bool $is_disabled
  * @property int $credential_version ADR 0056: the security generation every session carries.
+ * @property Carbon|null $minimized_at E21.4: set once, by UserMinimizationService only; never cleared.
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
@@ -50,6 +52,7 @@ class User extends Authenticatable
             'is_disabled' => 'boolean',
             'disabled_at' => 'datetime',
             'credential_version' => 'integer',
+            'minimized_at' => 'datetime',
         ];
     }
 
@@ -117,6 +120,28 @@ class User extends Authenticatable
     public function mfaRecoveryCodes(): HasMany
     {
         return $this->hasMany(UserMfaRecoveryCode::class);
+    }
+
+    /**
+     * E21.4: a minimized (tombstoned) User: disabled for good, holding only
+     * the neutral name and a non-routable address the database derives from
+     * the id. It exists solely so retained history keeps a stable actor; it
+     * can never sign in, recover, hold a credential or become a current
+     * principal again (database-enforced).
+     */
+    public function isMinimized(): bool
+    {
+        return $this->minimized_at !== null;
+    }
+
+    /**
+     * E21.4: the address to show or send to -- null for a minimized User,
+     * whose stored address is only a non-routable placeholder. A historical
+     * reference then reads as "Former user" with no contact detail.
+     */
+    public function publicEmail(): ?string
+    {
+        return $this->isMinimized() ? null : $this->email;
     }
 
     /**

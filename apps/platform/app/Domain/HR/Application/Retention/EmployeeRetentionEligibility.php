@@ -158,6 +158,26 @@ final class EmployeeRetentionEligibility
     }
 
     /**
+     * E21.4 (User minimization, read-only): whether this School has a
+     * CURRENT Employee linked to the User (any EmploymentRecord not
+     * terminal, or a separation that is unresolved). HR stays the only
+     * module that resolves an Employee from a User (ADR 0063, TCH.1).
+     */
+    public function linksCurrentEmployee(School $school, string $userId): bool
+    {
+        return $this->context->withSchool($school, function () use ($userId): bool {
+            foreach (DB::table('employees')->where('user_id', $userId)->pluck('id') as $employeeId) {
+                $separation = self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on'])->all()));
+                if ($separation->state !== EmployeeSeparation::SEPARATED) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
+    /**
      * E21.2F (erasure planning, read-only): one Employee's separation,
      * without a lock. Null means the Employee is not in this School's
      * context.

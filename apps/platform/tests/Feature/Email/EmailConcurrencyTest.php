@@ -42,7 +42,10 @@ class EmailConcurrencyTest extends TestCase
         if ($this->school !== null) {
             $this->deleteSchoolAsAdmin($this->school); // cascades messages, attempts, references, invitations
         }
-        $this->admin?->delete();
+        // E21.4 (F1): only the migration role can delete a User (test cleanup).
+        if ($this->admin !== null) {
+            DB::connection('pgsql_admin')->table('users')->where('id', $this->admin->id)->delete();
+        }
 
         parent::tearDown();
     }

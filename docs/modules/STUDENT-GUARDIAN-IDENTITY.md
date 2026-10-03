@@ -1439,3 +1439,12 @@ action here.
   adopted basis yet (E21.2G).
 - No relationship, account link or membership is unlinked as a side
   effect.
+
+## User minimization (E21.4, 2026-10-03)
+
+The domain subject (Student, Guardian) and the authentication principal
+(User) are separate. An active Guardian/Student account link keeps its User
+current, so it cannot be minimized; once the User is minimized, the
+database refuses any new account link on its memberships. Minimizing a User
+never deletes or changes a Student, Guardian or link row: their own D7/G1
+retention governs them.

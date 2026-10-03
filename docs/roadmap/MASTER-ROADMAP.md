@@ -2272,6 +2272,21 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21.4 — User Identity Minimization & Database Safety (2026-10-03):
+  published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
+  §5.11, E21-L1 §10:
+  - F1 fixed: the runtime role cannot delete a User;
+  - non-login, immutable tombstone (`users.minimized_at`) that can never
+    become a current principal again (database-enforced);
+  - approved platform erasure cases only, blocked by any current purpose or
+    hold in any School; never scheduled; no physical deletion;
+  - all 87 User references classified, with a live-schema guard.
+
+  **E21 ENGINEERING: COMPLETE. E21 PROJECT POLICY: India-aligned,
+  project-adopted for development. Qualified legal/compliance
+  ratification: pending pre-production review.** Production retention
+  configuration pending deployment. Tenant destruction NOT AUTHORIZED. E33
+  / TCH-L1 open independently.
 - **E21.3F — Payroll Evidence Retention & Employee Release (2026-10-02):
   published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
   §5.10, ADR 0064 §25–§30:

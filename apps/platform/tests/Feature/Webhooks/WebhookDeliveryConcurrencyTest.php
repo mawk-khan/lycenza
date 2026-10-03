@@ -10,6 +10,7 @@ use App\Models\WebhookDeliveryAttempt;
 use App\Models\WebhookEndpoint;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Webhooks\WebhookSubscriptionService;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Uid\UuidV7;
@@ -53,7 +54,10 @@ class WebhookDeliveryConcurrencyTest extends TestCase
             DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
             $this->deleteSchoolAsAdmin($this->school); // cascades endpoint/subscription/delivery/attempts
         }
-        $this->user?->delete();
+        // E21.4 (F1): only the migration role can delete a User (test cleanup).
+        if ($this->user !== null) {
+            DB::connection('pgsql_admin')->table('users')->where('id', $this->user->id)->delete();
+        }
 
         parent::tearDown();
     }

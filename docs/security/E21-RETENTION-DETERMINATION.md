@@ -71,6 +71,15 @@
 > retention-mechanism checkpoint remains: E21 engineering is complete.** E21
 > stays **OPEN**: final ratification and the User-identity erasure legal
 > decision (closure audit §8 I5) remain.
+>
+> **E21.4 (2026-10-03, §5.11):** the project owner adopted an India-aligned
+> development position for User identity (E21-L1): category-specific
+> minimization into a non-login tombstone, only through an approved
+> platform erasure case and only when no current purpose and no hold
+> remains anywhere. It is implemented, with the F1 fix (the runtime role
+> can no longer delete a User). **This is a project position, not the
+> qualified decision:** the E21-L1 decision record stays blank and
+> qualified Indian legal/compliance ratification stays pending.
 > - Final ratification is deferred to the pre-production project closeout.
 > - The consolidated reference, with matrices, the D8 brief and the
 >   ratification package, is `docs/security/E21-CLOSURE-AUDIT.md`. Its §8
@@ -677,7 +686,10 @@ The checkpoints are listed in §5.
     - minimising the identity of a retained Student or Employee, and a
       Guardian's personal data, have no adopted basis;
     - erasing or minimising a User identity (audit actors, authority
-      history, links) has none either;
+      history, links) has none either. **E21.4 (§5.11):** project-adopted
+      development position, implemented: a User is minimized into a
+      non-login tombstone (never deleted; history keeps its reference);
+      the qualified decision is still pending;
     - Admissions applicants are not a subject type (no adopted trigger).
 
 ### E21-D11 — School / tenant closure
@@ -782,6 +794,7 @@ The checkpoints are listed in §5.
 | E21.3D | Year-bound academic operations (curriculum, timetable, LMS, attendance headers) | **Implemented** (§5.8; full isolated regression) |
 | E21.3E | Communications and platform residuals (never-sent and empty threads, visitors, automation, driver assignments, API credentials) | **Implemented** (§5.9; full isolated regression) |
 | E21.3F | Payroll Evidence Retention & Employee Release: Payroll D9 evidence expiry, releasing payroll-linked journal entries to D8 (ADR 0064 §21 amended) and paid Employees | **Implemented** (§5.10; full isolated regression). The last retention-mechanism checkpoint |
+| E21.4 | User Identity Minimization & Database Safety (E21-L1 project-adopted position; F1) | **Implemented** (§5.11; full isolated regression). Qualified decision pending |
 
 ### 5.1 The privileged retention path (E21.2B)
 
@@ -1269,6 +1282,66 @@ weakened: the longest period wins.
   runs; what it releases they take on their next run.
 - **Metrics:** `payroll_evidence` and `payroll_run`, in the existing
   `employee` family (no new label value).
+
+### 5.11 User identity minimization and database safety (E21.4)
+
+Implements the **project-adopted, India-aligned development position** for
+User erasure (E21-L1, owner authorization 2026-10-03). It is not the
+qualified decision: `E21-L1-USER-IDENTITY-DECISION-REQUEST.md` §8 stays
+blank, and qualified Indian legal/compliance ratification is pending.
+
+- **Jurisdiction profile:** an India-first compliance baseline, with
+  board- or state-specific deployment overlays where they differ. Nothing
+  here hard-codes one board's administrative rules (for example CBSE) as a
+  rule for all of India.
+- **F1 fixed:** the runtime role has no DELETE on `users`
+  (`DatabaseRoleVerifier::NO_RUNTIME_DELETE`, checked by
+  `platform:verify-database`); a raw delete fails with a permission error
+  even for a User nothing references. The FK actions (CASCADE memberships,
+  SET NULL audit and grant actors) are therefore unreachable; they are not
+  the minimization mechanism. Rollback keeps the revoke.
+- **Lifecycle:** `users.minimized_at` (NULL: current; set: minimized). The
+  database enforces the tombstone's shape (disabled, `Former user`,
+  `minimized-<id>@users.invalid`, no verification time, no remember token),
+  makes it immutable (never restored or re-enabled), and refuses it as a
+  current principal again: no membership (invited/active), School role
+  grant, account link, Employee link, platform or Group grant, elevation or
+  personal access token. A returning person gets a new User through the
+  normal invitation flows.
+- **What minimization removes:** the name and email (replaced, not copied
+  anywhere), verification time, password (replaced by the hash of a random
+  secret), remember token, human personal access tokens, MFA factors and
+  recovery codes, account-recovery and activation credentials, stored
+  sessions; it bumps the credential version (every session on every host
+  ends) and ends an active elevation. **What it keeps:** the row and its
+  id, the stable non-login actor that every retained audit event, D6
+  authority row, membership (tenant lifetime), Employee link, Finance and
+  Payroll operator column and erasure case references, unchanged.
+- **Classification:** all 87 foreign keys to `users` are classified in
+  `UserReferenceCatalog` (6 active-purpose blockers, 77 retained
+  references to the tombstone, 4 authentication children); a new one
+  fails `UserReferenceCatalogTest` and makes minimization fail closed
+  (`unclassified_user_reference`).
+- **Eligibility (`UserActivePurposes`, every School the User belonged
+  to):** blocked by an invited/active membership, a current Employee link,
+  an active Guardian/Student account link, an unrevoked platform or Group
+  grant, an active elevation, an enabled automation it owns; held by the
+  platform hold or a hold on any of those Schools. Never inferred from a
+  last login.
+- **Execution:** only an approved platform-scope erasure case
+  (`platform:erasure-case-*`, E21.2F) minimizes, after locking the User
+  FOR UPDATE and rechecking everything; never scheduled, never by age.
+  Outcomes for `user_identity`: `legal_hold`, `policy_unresolved`,
+  `dependency_blocked` (one per purpose), `eligible`, `completed`
+  (`minimized`), `error`; a rerun is safe. `user_record` is always
+  `physical_deletion_not_authorized`. A School-scope case (Student,
+  Guardian, Employee) never reaches the User or another School.
+- **Presentation:** a minimized User reads as "Former user" with no
+  address (staff directory, run pages and every name display); it is never
+  mailed (`EmailAddressResolver`).
+- **Not done:** physical User destruction (needs the expiry of every
+  retained dependency, the qualified decision and a designed purge);
+  platform audit IP address and user agent stay with their D1 event.
 
 ## 6. Production settings
 

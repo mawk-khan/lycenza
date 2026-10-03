@@ -8,6 +8,7 @@ use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -61,7 +62,10 @@ class IdempotencyRealConcurrencyTest extends TestCase
         // events/idempotency records/the demo counter (all school_id
         // foreign keys are cascadeOnDelete). See each table's migration.
         $this->deleteSchoolAsAdmin($this->school);
-        $this->user?->delete();
+        // E21.4 (F1): only the migration role can delete a User (test cleanup).
+        if ($this->user !== null) {
+            DB::connection('pgsql_admin')->table('users')->where('id', $this->user->id)->delete();
+        }
 
         parent::tearDown();
     }

@@ -1,6 +1,11 @@
 # E21-L1 — User Identity Erasure: Decision Request
 
-> ## STATUS: AWAITING QUALIFIED LEGAL/COMPLIANCE DECISION
+> ## STATUS: PROJECT-ADOPTED INDIA-ALIGNED DEVELOPMENT POSITION IMPLEMENTED (E21.4) — QUALIFIED DECISION: PENDING
+>
+> The project owner adopted a provisional development position on
+> 2026-10-03 (§10) and E21.4 implemented it. That is **not** the qualified
+> decision: §8 below stays blank until a qualified reviewer completes it,
+> and production legal clearance is not claimed.
 >
 > This document is the **decision package** for the qualified reviewer. It
 > records repository facts, the current fail-closed behaviour and the
@@ -67,6 +72,8 @@ The full list is reproducible with the catalog query in §9.
 ## 4. Finding for the reviewer and for any later implementation
 
 **F1 — the database alone would not preserve history on a raw User delete.**
+**RESOLVED by E21.4:** the runtime role no longer holds DELETE on `users`
+(raw-SQL test under the runtime role; `platform:verify-database`).
 The runtime role holds DELETE on `users` (no application code uses it). A
 raw `DELETE FROM users` is refused wherever a RESTRICT reference exists
 (finance, payroll, grants, teaching, elevations …). For a User who has
@@ -122,7 +129,9 @@ profile rather than one universal rule.
   change, then move E21 to final ratification and production configuration.
 - **APPROVED WITH CONDITIONS:** one bounded checkpoint, provisionally
   **E21.4 — User Identity Minimization**, implementing exactly §8's
-  conditions. Not started until §8 is complete.
+  conditions. *(E21.4 proceeded on 2026-10-03 under the owner's
+  project-adopted development position, §10; the qualified decision may
+  still amend it.)*
 - **REQUIRES REDESIGN:** record the required architecture; E21 stays OPEN.
 
 Even after a decision, production clearance also needs: final D0–D13
@@ -169,3 +178,34 @@ SELECT c.conrelid::regclass, a.attname, c.confdeltype
  ORDER BY 1, 2;
 -- confdeltype: r RESTRICT, a NO ACTION, n SET NULL, c CASCADE
 ```
+
+## 10. Project-adopted implementation position (E21.4, 2026-10-03)
+
+*Owner/compliance decision for development, India-aligned, pending the
+qualified decision in §8. It is not legal advice.*
+
+- **Model:** Option D (category-specific) built on Option C: a non-login
+  tombstoned User where retained evidence needs referential identity.
+  Never a hard delete because a request was approved.
+- **Treatment applied:**
+  - audit actor: reference kept, unchanged; the person's profile minimized;
+  - authority-history actor (grants, revocations, elevations): kept,
+    history never rewritten;
+  - membership: tenant lifetime unchanged; a historical membership points
+    at the tombstone; nothing cascades;
+  - Employee link: kept to the tombstone; never unlinked by E21.4;
+  - Guardian/Student link: the domain subject and the login principal are
+    separate; business history stays;
+  - compliance case: keeps the minimum User reference for its 7-year period,
+    no erased payload;
+  - Finance/Payroll operator (`created_by`, `approved_by`, `posted_by`,
+    `closed_by` ...): kept, read as "Former user";
+  - platform audit IP address / user agent: kept with the D1 event.
+- **Legal holds:** the platform hold or a hold on any School the User
+  belonged to blocks minimization.
+- **Cross-School:** only a platform-scope case minimizes the global User,
+  and only when no School (and no platform authority) still uses it. A
+  School's own request never reaches it or another School.
+- **Irreversible:** yes; no reversible mapping is kept (the removed values
+  are copied nowhere).
+- **Implementation:** `E21-RETENTION-DETERMINATION.md` §5.11.

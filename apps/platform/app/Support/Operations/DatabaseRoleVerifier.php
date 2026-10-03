@@ -46,6 +46,8 @@ class DatabaseRoleVerifier
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
         'payroll_adjustments', 'payroll_run_postings', 'payroll_statutory_run_postings',
+        // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
+        'users',
     ];
 
     /**

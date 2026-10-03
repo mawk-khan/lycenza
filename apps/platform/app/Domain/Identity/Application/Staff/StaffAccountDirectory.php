@@ -49,7 +49,8 @@ final class StaffAccountDirectory
                     'membershipId' => $m->id,
                     'userId' => $m->user_id,
                     'name' => $m->user?->name,
-                    'email' => $m->user?->email,
+                    // E21.4: a minimized former member shows as "Former user", with no address.
+                    'email' => $m->user?->publicEmail(),
                     'status' => $m->status,
                     'roles' => $active->map(fn (MembershipRoleAssignment $g) => ['key' => $g->role->key, 'name' => $g->role->name])->sortBy('name')->values()->all(),
                     'joinedAt' => $m->joined_at?->toIso8601String(),

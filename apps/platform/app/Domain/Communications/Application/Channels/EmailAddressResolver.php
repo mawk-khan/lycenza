@@ -18,7 +18,8 @@ final class EmailAddressResolver
 {
     public function resolve(User $user): ?string
     {
-        $email = trim((string) $user->email);
+        // E21.4: a minimized User receives nothing (its address is a placeholder).
+        $email = trim((string) $user->publicEmail());
 
         if ($email === '') {
             return null;

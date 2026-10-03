@@ -17,7 +17,9 @@ use InvalidArgumentException;
  * eligibility and locked purges:
  * - Student: D7;
  * - Employee: D9, with Payroll;
- * - Guardian and User: nothing executable, policy unresolved.
+ * - Guardian: G1 (E21.3C);
+ * - User: E21.4 minimization (a non-login tombstone), only when no current
+ *   purpose or hold remains anywhere; never physical deletion.
  *
  * There is no generic table or SQL executor. A subject type outside the
  * closed map fails closed.

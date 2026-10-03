@@ -32,6 +32,8 @@ use LogicException;
  *
  * MFA factors, secrets and recovery codes are NEVER touched.
  *
+ * E21.4: retire() is the one place a minimized User's credentials end.
+ *
  * Phase 0O.12B (ADR 0059 section 10): establishInitialPassword() is the one
  * place a FIRST password is written -- for a credential-less account at its
  * activation, or a brand-new staff User at invitation acceptance. It refuses
@@ -52,6 +54,34 @@ final class CredentialChangeService
             'password' => $plainPassword,
             'credential_version' => $lockedUser->credential_version + 1,
             'remember_token' => Str::random(60),
+        ])->save();
+
+        $revokedTokens = $lockedUser->tokens()->delete();
+        $endedElevation = $this->elevations->finishActiveFor($lockedUser, ElevationEndReason::CredentialReset);
+
+        return new CredentialChangeResult((int) $revokedTokens, $endedElevation);
+    }
+
+    /**
+     * E21.4 (User minimization): retires every credential of a User that is
+     * being minimized, with the same side effects as a change -- the version
+     * bump (every session ends; the database invalidates every recovery and
+     * activation credential), every human personal access token deleted and
+     * the active elevation ended (`credential_reset`) -- but the password
+     * becomes the hash of a random secret nobody ever sees, so the previous
+     * hash is gone and no password can match. The caller holds the User row
+     * lock inside its transaction. A credential-less account stays without one.
+     */
+    public function retire(User $lockedUser): CredentialChangeResult
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('A credential change runs inside the caller\'s transaction, with the User locked.');
+        }
+
+        $lockedUser->forceFill([
+            'password' => $lockedUser->hasLocalCredential() ? Str::random(64) : null,
+            'credential_version' => $lockedUser->credential_version + 1,
+            'remember_token' => null,
         ])->save();
 
         $revokedTokens = $lockedUser->tokens()->delete();

@@ -8,9 +8,12 @@ use App\Domain\HR\Application\EmployeeAddressService;
 use App\Domain\HR\Application\EmployeeCertificationService;
 use App\Domain\HR\Application\EmployeeDocumentService;
 use App\Domain\HR\Application\EmployeePersonalDetailService;
+use App\Domain\Identity\Application\Minimization\UserMinimizationService;
 use App\Models\SchoolAuditEvent;
+use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -137,24 +140,25 @@ class HrActivityTimelineDisclosureTest extends TestCase
     }
 
     #[Test]
-    public function a_deleted_actor_is_handled_safely_with_a_null_display_name(): void
+    public function a_minimized_actor_reads_as_a_former_user_never_a_stale_name(): void
     {
         $school = $this->createSchool();
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
 
         app(EmployeePersonalDetailService::class)->setDetails($employee, ['personal_email' => 'a@example.com'], $actor);
-        $actorId = $actor->id;
-        $actor->delete();
+        $staleName = $actor->name;
+        // E21.4: a User is never deleted (F1); an erased actor becomes a minimized tombstone.
+        DB::transaction(fn () => app(UserMinimizationService::class)->minimizeLocked(User::query()->whereKey($actor->id)->lockForUpdate()->firstOrFail()));
 
         $viewer = $this->fullHrActor($school);
         $result = app(EmployeeActivityTimelineService::class)->get($school, $employee->id, $viewer, new EmployeeActivityTimelineQuery);
 
         $entry = collect($result->items())->firstWhere('eventType', 'employee.personal_details.updated');
         $this->assertNotNull($entry);
-        // actor_user_id column is nullOnDelete -- confirm the entry
-        // still resolves without error and without a bogus name.
-        $this->assertNull($entry->actorDisplayName);
+        // The entry still resolves, to the neutral name, never the person's.
+        $this->assertSame(UserMinimizationService::FORMER_USER_NAME, $entry->actorDisplayName);
+        $this->assertNotSame($staleName, $entry->actorDisplayName);
     }
 
     #[Test]

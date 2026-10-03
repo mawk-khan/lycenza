@@ -1,6 +1,6 @@
 # E21 Closure Audit (E21.2G)
 
-> ## STATUS: E21 — OPEN / LEGAL DECISION REMAINS (E21 ENGINEERING COMPLETE, E21.3F)
+> ## STATUS: E21 — OPEN / QUALIFIED RATIFICATION PENDING (E21 ENGINEERING COMPLETE; E21.4 IMPLEMENTED THE PROJECT-ADOPTED USER-IDENTITY POSITION)
 >
 > *History: E21.2G recorded "OPEN / TECHNICAL BLOCKERS REMAIN"; E21.3A–E21.3F
 > resolved every technical blocker.*
@@ -14,7 +14,7 @@
 > No period here is claimed to be statutory, and no legal clearance is
 > claimed. This document consolidates the repository state at the E21.2G
 > audit (2026-10-01), updated at E21.3A/E21.3A2, E21.3B, E21.3C, E21.3D,
-> E21.3E and E21.3F (2026-10-02).
+> E21.3E and E21.3F (2026-10-02), and E21.4 (2026-10-03).
 > It is the project reference until the pre-production review.
 
 - **Inputs:**
@@ -30,11 +30,11 @@
 | Question | Answer |
 |---|---|
 | What is technically implemented? | D0–D7, D9 (classified data), D10 (reviewed erasure cases), D11 (freeze and readiness), D12 and D13 (repository side). See §2. |
-| What owner/project decisions remain unresolved? | **One:** erasing a User identity, i.e. anonymising audit actors and authority history. It needs a qualified legal decision (§8, I5). Every other category has a project decision. |
+| What owner/project decisions remain unresolved? | **None as project decisions.** E21.4 (2026-10-03) implemented the owner's India-aligned development position on User identity (E21-L1 §10: minimization into a non-login tombstone). The **qualified** User-identity decision (E21-L1 §8) is still pending, with the rest of final ratification. |
 | What engineering blockers remain? | **None.** D8 Finance is IMPLEMENTED (E21.3A + E21.3A2, ADR 0064). E21.3B (Student-linked evidence and modules), E21.3C (Admissions and Guardian lifecycle markers), E21.3D (year-bound academic operations) and E21.3E (communications and platform residuals) are IMPLEMENTED. **E21.3F resolved the last one, the D8 × D9 payroll intersection** (ADR 0064 §21 amended): posted payroll evidence expires 8 y after final separation, an emptied run releases its journal entries to D8, and paid Employees are no longer kept indefinitely. No retention-mechanism checkpoint remains (§7). |
 | What final legal/compliance ratification remains? | All of D0–D13 and the E21.2G decisions (§10). Deferred to the pre-production closeout. |
-| Can E21 close now? | **No.** Engineering is complete (E21.3F), but E21 closes on a qualified decision per v1 category (ADR 0058): User-identity erasure needs a legal decision (I5) and final ratification is pending. |
-| What must happen before E21 can close? | The User-identity erasure legal decision (I5), production configuration (§9) and final ratification (§10). Tenant purge additionally needs explicit authorization (§5). No engineering checkpoint remains. |
+| Can E21 close now? | **No.** Engineering is complete (E21.3F, E21.4), but E21 closes on a qualified decision per v1 category (ADR 0058): the qualified User-identity decision (E21-L1 §8) and final ratification are pending. |
+| What must happen before E21 can close? | Qualified Indian legal/compliance ratification of D0–D13, the E21.2G decisions and the E21-L1 position (§10), then production configuration (§9). Tenant purge additionally needs explicit authorization (§5). No engineering checkpoint remains. |
 
 ## 2. D0–D13 matrix
 
@@ -423,6 +423,7 @@ retention metric within its ceiling by consolidating operations.
 | **E21.3C — Admissions and Guardian lifecycle markers** | **Done (2026-10-02).** A database-owned, immutable `terminal_at` for rejected/withdrawn applications (1 y after it; undated legacy rows unresolved and kept; evidence backfill from the transition's own audit event). A durable Guardian `no_relationship_since` maintained by a relationship trigger (cleared on re-link, restarted on the next final unlink; evidence backfill only from complete audit history). Guardian personal data (Guardian, contacts, Documents, revoked account links past D6, its own consent and preferences) 1 y after it, unless a retained dependent remains. |
 | **E21.3D — Year-bound academic operations** | **Done (2026-10-02).** Curriculum deliveries, attendance register headers (once empty), timetable entries (once no header references them) and LMS Learning Content/Assignments (with audiences and Documents, past the D6 owner/audience minimum) 7 y after the end of their authoritative Academic Year (`platform:academic-retention-prune`); Academic Year dates frozen; Employee teaching references released by these rows' own expiry. Syllabus and examination configuration stay (A2). |
 | **E21.3E — Communications and platform residuals** | **Done (2026-10-02).** Never-sent cancelled/rejected announcements 1 y after `cancelled_at` / the rejection decision (`decided_at` of the latest, rejected, approval request); empty threads 1 y after `last_activity_at` (`communications-prune --only=residual`); ended driver assignments 7 y after `ends_on`, visits 1 y after `checked_out_at` (a visitor with its last visit), completed automation executions 1 y after `completed_at` (`operations-retention-prune`); ended API credentials 7 y after LEAST(revoked_at, expires_at) (`authority-history-prune`, narrow function). No new lifecycle marker was needed. Memberships, membership preferences and Inventory pinned tenant lifetime; notifications re-verified not applicable. |
+| **E21.4 — User Identity Minimization & Database Safety** | **Done (2026-10-03).** F1 fixed; `users.minimized_at` lifecycle with a database-enforced, immutable tombstone that can never become a current principal again; 87 User references classified (live-schema guard); approved platform erasure cases minimize only when no current purpose or hold remains anywhere; never scheduled; no physical deletion. Project-adopted position; qualified decision pending. |
 | **E21.3F — Payroll Evidence Retention & Employee Release** | **Done (2026-10-02).** The recorded D8 × D9 intersection (ADR 0064 §21 amended). Posted payroll evidence (results with lines and statutory results, adjustments, LWF charges) 8 calendar years after the Employee's final separation, once every run holding it and every posting is that old (`payroll-retention-prune`, `retention_expire_payroll_employee_evidence`); an emptied regular run with its corrections then loses its postings and runs (`retention_expire_payroll_run`), releasing its journal entries to D8, which expires them only once their period is 8 y closed. Paid Employees are released by the next `employee-retention-prune`. Payroll periods are tenant lifetime. **The last retention-mechanism checkpoint.** |
 
 ## 8. E21.2G project decisions
@@ -538,7 +539,11 @@ RATIFICATION.**
   (2026-10-03):** the decision package is
   `E21-L1-USER-IDENTITY-DECISION-REQUEST.md` (inventory, fail-closed
   behaviour, finding F1, options A–D, blank decision record). **Still
-  awaiting the qualified decision.**
+  awaiting the qualified decision.** **E21.4 (2026-10-03):** the
+  project-adopted India-aligned development position (E21-L1 §10) is
+  IMPLEMENTED: F1 fixed (no runtime DELETE on `users`), minimization into
+  a non-login tombstone via approved platform erasure cases only
+  (`E21-RETENTION-DETERMINATION.md` §5.11). Qualified decision: PENDING.
 
 **Employees**
 - **E1.** **Payroll results** were the D8 blocker. Since E21.3A2 they are the recorded D8 × D9 intersection: D8 exists, but no Payroll D9 mechanism expires payroll results and postings, so they and their journal entries stay (ADR 0064 §21). **RESOLVED by E21.3F:** Payroll's own D9 expiry removes posted evidence and releases emptied runs' journal entries to D8 (`E21-RETENTION-DETERMINATION.md` §5.10).

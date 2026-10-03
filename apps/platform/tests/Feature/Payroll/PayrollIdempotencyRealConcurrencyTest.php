@@ -19,6 +19,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -111,7 +112,8 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
             $this->poster->tokens()->delete();
 
             try {
-                $this->poster->delete();
+                // E21.4 (F1): only the migration role can delete a User (test cleanup).
+                DB::connection('pgsql_admin')->table('users')->where('id', $this->poster->id)->delete();
             } catch (\Throwable) {
                 // Best-effort: if the School cascade above failed and
                 // left payroll_runs referencing this user, leave it --

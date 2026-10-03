@@ -861,3 +861,18 @@ deliberately asked for only the *foundation*, proven by denial — see
 (Phase 0N.3) but no School operation accepts it yet), and any actor-category-specific UI beyond
 the minimal login/dashboard/settings pages proving the architecture
 (`docs/architecture/ARCHITECTURE.md`).
+
+## User identity minimization (E21.4, 2026-10-03)
+
+- A User is never hard-deleted: the runtime role has no DELETE on `users`
+  (F1). Historical authority (grants, revocations, elevations) keeps its
+  actor reference.
+- A minimized User (`users.minimized_at`) is disabled for good: every path
+  that already refuses a disabled User (login, MFA, bearer tokens, School
+  context, elevation, recovery, activation, invitation acceptance,
+  ActingEmployee) refuses it, and the database refuses it as a new
+  membership, School role grant, account link, Employee link, platform or
+  Group grant, elevation or personal access token.
+- Only an approved platform erasure case minimizes, and only when no
+  current purpose remains in any School (`E21-RETENTION-DETERMINATION.md`
+  §5.11). Capabilities and roles are unchanged.

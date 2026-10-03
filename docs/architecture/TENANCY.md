@@ -522,3 +522,14 @@ School memberships are authority provenance: suspended, never deleted (rule
 preferences (`communication_preferences`) follow their membership (C6). No E21
 mechanism expires either; `ResidualRetentionArchitectureGuardTest` pins it. A
 School closure freezes, it never expires memberships.
+
+## The global User and School erasure (E21.4, 2026-10-03)
+
+`users` is platform-global: one User can hold memberships in several
+Schools. A School-scope erasure case (Student, Guardian, Employee) acts only
+on that School's records and never reaches the User. Only a platform-scope
+case can minimize the User, and `UserActivePurposes` reads every School the
+User ever belonged to, each in its own tenant context: any current purpose
+or hold in any School keeps the User current. Minimization never deletes or
+rewrites a School's rows; they keep referencing the same (now non-login)
+User.

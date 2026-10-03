@@ -504,6 +504,17 @@ email recovery.
     `finance-retention-prune` (`FINANCE_RETENTION_ENABLED`), never through
     Payroll.
   - **Holds:** `RETENTION_HOLD_SCHOOL_IDS` stops it per School.
+- **E21.4 User identity minimization (2026-10-03):**
+  - **Migration** `2026_11_16_090000`: revokes the runtime role's DELETE on
+    `users` (checked by `platform:verify-database`), adds
+    `users.minimized_at` with its shape and immutability rules, and the
+    not-minimized guards. Its `down()` refuses once any User is minimized
+    and never re-grants DELETE.
+  - **No new task or setting:** minimization runs only from an approved
+    platform erasure case (`platform:erasure-case-execute`); it is never
+    scheduled. Run `platform:erasure-case-execute --dry-run` first.
+  - **Operators:** a minimized User cannot be restored; a returning person
+    is invited as a new User.
 
 ## 6. Seeding: production-safe versus demo
 

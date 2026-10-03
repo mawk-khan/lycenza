@@ -1228,3 +1228,20 @@ for:
   separate from code completion. No production legal clearance is claimed.
 - **Tenant destruction:** NOT AUTHORIZED. **E33 / TCH-L1:** open
   independently; no Teacher change.
+
+## Note — E21.4 User identity minimization and database safety (2026-10-03)
+
+**E21: still OPEN — QUALIFIED RATIFICATION PENDING. E21.4: IMPLEMENTED**
+(`docs/security/E21-RETENTION-DETERMINATION.md` §5.11).
+- **F1 resolved:** the runtime role cannot delete a User; a raw delete
+  would have nulled audit and grant actors and cascaded memberships.
+- The project owner's India-aligned development position for User identity
+  (E21-L1 §10) is implemented: an approved platform erasure case minimizes
+  a User into a non-login, immutable tombstone only when no current
+  purpose or hold remains in any School; retained history keeps its
+  reference; nothing is physically deleted.
+- **This is a project position, not the qualified decision** the E21 row
+  needs: E21-L1 §8 stays blank. Final ratification is deferred to the
+  pre-production closeout; production retention configuration is separate.
+- **E21 engineering: complete.** Tenant destruction NOT AUTHORIZED.
+  **E33 / TCH-L1:** open independently; no Teacher change.

@@ -109,7 +109,10 @@ class DemoLoginPanelTest extends TestCase
     #[Test]
     public function the_panel_is_absent_until_the_demo_accounts_exist(): void
     {
-        User::query()->whereIn('email', array_column(DemoAccountCatalog::loginShortcuts(), 'email'))->delete();
+        // E21.4 (F1): the runtime role can no longer delete a User; moving the demo
+        // addresses aside inside the test transaction removes the accounts just as well.
+        User::query()->whereIn('email', array_column(DemoAccountCatalog::loginShortcuts(), 'email'))->get()
+            ->each(fn (User $user) => $user->forceFill(['email' => 'moved-'.$user->id.'@example.test'])->save());
         $this->environment('local', 'true');
 
         $this->get('/login')->assertOk()->assertInertia(fn ($page) => $page->where('demo', null));

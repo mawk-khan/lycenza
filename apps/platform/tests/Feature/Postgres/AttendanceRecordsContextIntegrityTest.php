@@ -488,11 +488,11 @@ class AttendanceRecordsContextIntegrityTest extends TestCase
             'Deleting a Session that still has records must be rejected.',
         );
 
-        // The submitting User is RESTRICT-protected too. `users` is not
-        // tenant-scoped, so this one deletes through the admin role via
-        // the same savepoint-protected helper connection.
-        $this->assertRejectedBy(
-            'attendance_sessions_submitted_by_fk',
+        // The submitting User is RESTRICT-protected too. Since E21.4 (F1) the
+        // runtime role cannot delete any User at all, so the privilege check
+        // refuses first; the RESTRICT foreign key stays as a second line.
+        $this->assertRejectedByAnyOf(
+            ['attendance_sessions_submitted_by_fk', 'permission denied for table users'],
             fn () => DB::connection('pgsql')->table('users')->where('id', $w['actor']->id)->delete(),
             'Deleting the submitting User must be rejected.',
         );

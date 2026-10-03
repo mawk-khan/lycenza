@@ -41,7 +41,8 @@ class AccountRecoveryConcurrencyTest extends TestCase
     {
         if ($this->user !== null) {
             DB::table('personal_access_tokens')->where('tokenable_id', $this->user->id)->delete();
-            $this->user->delete(); // cascades its recovery requests
+            // E21.4 (F1): only the migration role can delete a User (test cleanup).
+            DB::connection('pgsql_admin')->table('users')->where('id', $this->user->id)->delete(); // cascades its recovery requests
         }
 
         // The winners' post-commit security notices were committed by the

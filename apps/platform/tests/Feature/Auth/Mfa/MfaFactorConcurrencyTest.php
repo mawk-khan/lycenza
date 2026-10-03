@@ -4,6 +4,7 @@ namespace Tests\Feature\Auth\Mfa;
 
 use App\Models\User;
 use App\Models\UserMfaFactor;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
@@ -29,7 +30,8 @@ class MfaFactorConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->user !== null) {
-            $this->user->delete();
+            // E21.4 (F1): only the migration role can delete a User (test cleanup).
+            DB::connection('pgsql_admin')->table('users')->where('id', $this->user->id)->delete();
         }
 
         parent::tearDown();
