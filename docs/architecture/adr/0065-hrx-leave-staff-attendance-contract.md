@@ -7,7 +7,10 @@
   later HRX.1 correction clarifies the leave year as prospectively
   configurable (§22.1a) and records the HRX.2 approved-leave invariant
   (§22.6). **HRX.2 — Leave Requests & Approval is built** (§23, decisions
-  recorded before coding; as-built notes in §23.15). The
+  recorded before coding; as-built notes in §23.15). **HRX.3 — Staff
+  Attendance is built** (§24: the per-half storage refinement of §7 and the
+  Leave ↔ Attendance mechanism, recorded before coding; as-built notes in
+  §24.16). The
   remaining **[OWNER DECISION]** defaults still apply to HRX.2–HRX.6 unless
   the owner records a different choice before the checkpoint that needs it.
 - Date: 2026-10-03
@@ -1045,3 +1048,296 @@ request lock (2.2) and the year locks for the years it touches.
   `leave.year_close.executed` and `leave.year_close.reconciled`.
 - **Recorded, not executed.** The in-year lapse of carried units
   (`carried_expires_on`), see §23.8.
+
+## 24. HRX.3 — Staff Attendance: decisions recorded before coding (2026-10-03)
+
+Baseline `52ce8c4`. This refines §7, §8, §16 and §17 for HRX.3. It adds no
+product scope: attendance stays **daily** and **administrative**, never
+clock-in/clock-out. Where it narrows a default above, this section governs.
+
+### 24.1 Why §7's single status is refined
+- §7 proposed one daily status (`present`, `absent`, `half_day_absent` +
+  which half). HRX.2 now approves **exact half-day leave**
+  (`first_half` / `second_half`, §22.4, §23.1).
+- One daily enum cannot reconcile safely with that. "Half-day absent, first
+  half" beside an approved second-half leave says nothing about the second
+  half, and "present" beside a first-half leave is ambiguous.
+- So the record stores **each half separately**.
+
+### 24.2 Storage: one row per EmploymentRecord × date, two halves
+- `staff_attendance_records`: exactly one row per School × EmploymentRecord
+  × `attendance_date` (database unique key).
+- `first_half_status` and `second_half_status`, each `present`, `absent`
+  or `NULL`. `NULL` means **Staff Attendance holds no evidence for that
+  half**. It never means leave, holiday or off-day.
+- **Never persisted as attendance:** leave, holiday, weekly off, sick,
+  medical, late, clocked-in/out, or any other value. The value list is
+  closed by a database CHECK, with no extensibility in v1.
+- A new record carries evidence for at least one half. A row with both
+  halves `NULL` can exist only after a correction (§24.8).
+- The record attaches to the **EmploymentRecord** (composite same-School
+  FK, RESTRICT). `employee_id` is derived from it by trigger, the
+  `leave_requests` precedent, for D9 retention queries. Never a User,
+  assignment, role or Teacher.
+- `version` starts at 1 and rises by exactly one per correction.
+
+### 24.3 The derived view (never stored)
+- Leave and the staff calendar keep owning leave, holidays and weekly
+  offs. The read model composes, **per half**:
+  - `leave`: an approved request's day evidence (`leave_request_days`)
+    covers the half;
+  - else `present` / `absent`: the recorded evidence;
+  - else `holiday`: a staff holiday covers the half today;
+  - else `off_day`: the weekly pattern makes it non-working today;
+  - else `unrecorded`: working time with no evidence.
+- Approved leave takes precedence in the **effective** state, but the
+  underlying evidence is always returned beside it (`recorded`). A later
+  cancellation makes it effective again. Nothing is rewritten.
+- A recorded half stays effective even when today's calendar calls that
+  half a holiday or off-day (a retrospective calendar change never hides
+  evidence). The current calendar classification is returned too.
+- The optional **daily summary**: `present` (both relevant halves present),
+  `absent`, `half_day_absent` (one present, one absent), `on_leave`,
+  `holiday`, `off_day`, `unrecorded`, `partially_recorded`, and `mixed`
+  (leave beside present/absent). Holiday and off-day halves are neutral, so
+  a Saturday morning present with an off afternoon is `present`. Mixed
+  combinations are never forced into a misleading single status; the two
+  halves are always returned.
+
+### 24.4 Ownership and one-way dependencies
+- `App\Domain\StaffAttendance` (Application / Infrastructure / Http, HR
+  bounded context).
+- `StaffAttendance → HR` through HR Application services only: a new
+  `EmploymentCoverage::holdRecordAttendable()` and a new
+  `EmploymentRoster` (directory-tier labels of a School's employments on a
+  date).
+- `StaffAttendance → Leave` through Leave Application contracts only:
+  - `LeaveCoverageReader` (new): approved-leave coverage per half;
+  - `StaffCalendarService::calculator()` with a new
+    `WorkingDayCalculator::halves()` classification;
+  - `LeaveLocks::staffDays()` (§24.6).
+- **Never** `Leave → StaffAttendance`, `HR → StaffAttendance`,
+  `StaffAttendance → Payroll` or `Payroll → StaffAttendance`. Neither
+  domain writes the other's tables, and StaffAttendance never reads a
+  Leave table directly.
+
+### 24.5 Leave's approval gate: a dependency-inverted port
+- §8 requires approval to refuse leave over recorded presence, but Leave
+  must not depend on StaffAttendance.
+- **Leave owns the port** `App\Domain\Leave\Application\AttendancePresenceConflictReader`:
+  `presentHalves(school, employment, dates)` returns, per date, the halves
+  with recorded `present` evidence.
+- **StaffAttendance implements it** (`StaffAttendancePresenceReader`). The
+  binding is registered in `AppServiceProvider`, the composition root (the
+  `FinancialPeriodCloseParticipant` precedent), so Leave names no
+  StaffAttendance class.
+- **Approval refuses** (`LEAVE_ATTENDANCE_PRESENT`, 409) when a
+  **chargeable** half of the request is recorded `present`.
+- **`absent` does not block.** The absence evidence stays untouched
+  underneath, and the effective view shows `leave`.
+- Submission, rejection and withdrawal do not consult attendance.
+
+### 24.6 One cross-domain day lock
+- Key `hrx.staff_day:{school}:{employment}:{date}`, an advisory
+  transaction lock, owned by `LeaveLocks::staffDays()`. It always takes
+  dates in **ascending** order, and a multi-employment writer takes them by
+  employment id, then date.
+- Taken by:
+  - leave approval and cancellation, for every date of the request;
+  - every attendance write (record, bulk register, correction).
+- Leave lock order (amends §23.10): School → request row → HR rows →
+  **staff days** → schedule → calendar → assignment → years → balances.
+- Attendance lock order: School → HR rows → **staff days** → calendar
+  (shared) → the record row.
+- Neither path takes a lock the other takes earlier in its own order, so
+  there is no deadlock. On a conflicting pair exactly one commits first;
+  the other then sees it.
+
+### 24.7 Writes
+- **Who:** `hr.staff_attendance.manage` only (§7): administrators, for any
+  Employee of the School. No manager recording, no self-marking, no
+  `hr.staff_attendance.self` (HRX.4).
+- **Eligibility:**
+  - initial recording needs an `active` / `notice_period` EmploymentRecord
+    whose dates contain the date, of an active Employee (§7);
+  - a correction needs only that the record's employment dates still
+    contain the date. Correcting history after separation is legitimate.
+- **No future date:** the date is on or before today in the School's
+  timezone (`SchoolTimezone`).
+- **Working time:** a half recorded `present` or `absent` must be working
+  time in today's staff calendar (`STAFF_ATTENDANCE_NOT_WORKING_TIME`).
+  There is no override in v1.
+- **Approved leave:** a half covered by approved leave cannot be recorded
+  `present` or `absent` (`STAFF_ATTENDANCE_ON_LEAVE`). The opposite half
+  stays independently recordable.
+- **Single record:** refused if a record already exists
+  (`STAFF_ATTENDANCE_ALREADY_RECORDED`). The unique key is the backstop.
+  An existing row changes only by correction.
+- **Bulk daily register:** one date, many EmploymentRecords. It is
+  **all-or-nothing** in one transaction. Every item is validated after the
+  locks (sorted by employment id); a duplicate item, an existing record or
+  any invalid item refuses the whole register. It is never an implicit
+  correction.
+
+### 24.8 Corrections: compare-and-swap + append-only history
+- **Command:** record id, `expected_version`, the new first and second
+  halves, and a closed `reason_code`. No free text.
+- **Closed, neutral reason codes:** `entered_in_error`, `late_information`,
+  `administrative_review`, `other`. None of them is health-related.
+- **Re-checked:**
+  - approved leave: a half changed to `present`/`absent` while approved
+    leave covers it is refused; cancel the leave first;
+  - working time: only for a half that gains evidence (it was `NULL`).
+    Changing existing evidence is allowed whatever today's calendar says;
+  - clearing a half to `NULL` is always allowed;
+  - clearing **both** halves needs `entered_in_error`.
+- **On success, in one transaction:**
+  - an append-only `staff_attendance_corrections` row (from/to version,
+    before/after of both halves, reason, actor);
+  - the conditional UPDATE `WHERE version = expected`;
+  - audit and the `staff_attendance.corrected.v1` event.
+- A stale version is `STAFF_ATTENDANCE_VERSION_STALE` (409). An unchanged
+  correction is refused (422).
+
+### 24.9 What the database enforces
+- one record per School × EmploymentRecord × date;
+- the closed half values;
+- `version >= 1`;
+- a new record has evidence;
+- same-School composite foreign keys, RESTRICT, no cascade from an
+  Employee or EmploymentRecord;
+- no DELETE for the runtime role on either table; corrections are
+  append-only (no UPDATE either);
+- a correction's from-version and before-values equal the record's current
+  ones, and the chain is unique per (record, from-version), with
+  to = from + 1;
+- **a record row changes only with its correction evidence.** An UPDATE
+  must raise the version by exactly one, change only the halves, and match
+  a correction row with the same versions and before/after values. A
+  deferred constraint trigger refuses, at commit, a correction that was
+  never applied. Raw SQL with the runtime role therefore cannot rewrite
+  history without evidence.
+
+### 24.10 Idempotency, audit, events
+- **Idempotency:** record, bulk register and correction are `idempotent`,
+  each completing its record inside the business transaction (rule 33).
+- **Audit:** structured ids, date, halves, version, reason and counts only:
+  - `staff_attendance.recorded`, per record, with its source `single` or
+    `bulk`;
+  - `staff_attendance.bulk_recorded` (date, count);
+  - `staff_attendance.corrected`.
+- **Outbox:** `staff_attendance.corrected.v1`, carrying the record,
+  employment, Employee, date, from/to version, before/after halves and the
+  reason code. It carries no leave detail, is not webhook-publishable, and
+  is consumed by nothing before HRX.5. No Payroll event.
+
+### 24.11 Reads and Leave privacy
+- `hr.staff_attendance.view`: the daily register, an employment's history
+  and one record with its corrections.
+- A leave-covered half shows `leave`. The leave request id and leave-type
+  name are added **only** when the reader also holds `hr.leave.view`.
+- Never shown: the request reason, decisions, approver, policy terms or
+  balance.
+- Mutation responses are built from the written record and need only
+  `hr.staff_attendance.manage`. The two capabilities are independent; no
+  capability implies another.
+
+### 24.12 Capabilities
+- `hr.staff_attendance.view` and `hr.staff_attendance.manage`, granted to
+  `school_admin` and `principal`.
+- Never added to `teacher` (E33). `hr.staff_attendance.self` is HRX.4.
+
+### 24.13 Retention (E21-D9)
+- Both tables are D9 employment evidence: 8 years after the Employee's
+  final separation.
+- They form a new catalog category, `staff_attendance_evidence`, with
+  status `MECHANISM_PENDING` until HRX.6. Until then they keep the Employee
+  (`dependency_blocked`; the longest period wins).
+- Both reference users as retained actor references.
+
+### 24.14 Boundaries kept
+- No clock-in/out, shift, overtime, late arrival, break, device, GPS,
+  photo, biometric, medical, note or attachment.
+- No hours inferred from halves.
+- No Payroll read, NCP or loss-of-pay: HRX.5 adds the §9 contract.
+- Staff Attendance is not Student `attendance_records`, and shares no
+  code, capability or table with it.
+- HRX-L1 to HRX-L4 stay open.
+
+### 24.15 Admin UI
+- Session pages under `/app/staff-attendance`:
+  - the daily register (date selector, per-half state with
+    leave/holiday/off-day overlays, single record, bulk save, correction);
+  - an employment's history with correction evidence.
+- Each page is checked server-side again. There is no self-service,
+  Teacher or clock page.
+
+### 24.16 HRX.3 as built
+- **Namespace:** `app/Domain/StaffAttendance` (Application, Infrastructure,
+  Events, Http).
+- **Tables (2), forced RLS, composite same-School RESTRICT FKs:**
+  - `staff_attendance_records`:
+    - unique `staff_attendance_records_one_per_day`;
+    - shape CHECK: the closed half values, `version >= 1`, and evidence
+      unless corrected;
+    - the guard trigger: version 1 on insert, `employee_id` derived, only
+      the halves change, version + 1, matching correction required;
+    - DELETE revoked.
+  - `staff_attendance_corrections`:
+    - unique chain `(record, from_version)`, CHECK `to = from + 1`;
+    - a real change only, the closed reason codes, and clearing both
+      halves only with `entered_in_error`;
+    - the guard trigger locks the record and requires its current version
+      and values;
+    - a deferred `trg_staff_attendance_corrections_applied`;
+    - UPDATE and DELETE revoked.
+- **Contracts added:**
+  - HR: `EmploymentCoverage::holdRecordAttendable()`, `EmploymentRoster`.
+  - Leave:
+    - `AttendancePresenceConflictReader` (port);
+    - `LeaveCoverageReader` (approved coverage per half, from
+      `leave_request_days`);
+    - `WorkingDayCalculator::halves()`;
+    - `LeaveLocks::staffDays()`.
+  - StaffAttendance implements the port (`StaffAttendancePresenceReader`),
+    bound in `AppServiceProvider`.
+- **Leave changes:**
+  - `LeaveRequestService` takes the staff-day locks in approval (after HR
+    rows, before the schedule lock) and in cancellation;
+  - approval refuses `LEAVE_ATTENDANCE_PRESENT` for a chargeable half
+    recorded `present`;
+  - nothing else in Leave changed.
+- **Error codes:**
+  - `STAFF_ATTENDANCE_DATE_INVALID` / `_DATE_IN_FUTURE` / `_EMPTY` /
+    `_STATUS_INVALID` / `_REGISTER_SIZE` / `_DUPLICATE_ITEM` /
+    `_EMPLOYMENT_UNKNOWN` / `_REASON_INVALID` / `_CLEAR_REASON` /
+    `_CORRECTION_UNCHANGED` / `_RANGE_INVALID` (422);
+  - `STAFF_ATTENDANCE_ALREADY_RECORDED` / `_ON_LEAVE` /
+    `_NOT_WORKING_TIME` / `_EMPLOYMENT_NOT_ELIGIBLE` / `_VERSION_STALE`
+    (409);
+  - an unconfigured staff week surfaces Leave's
+    `LEAVE_CALENDAR_NOT_CONFIGURED` (409).
+- **API:** 6 operations under `/api/v1/schools/{school}/staff-attendance`,
+  all `private-no-store`:
+  - `GET register`, `POST register` (bulk), `GET history` (at most 93
+    days);
+  - `POST records`, `GET records/{id}`, `POST records/{id}/corrections`.
+  - The three mutations are `idempotent` with `completeWithin()` (rule 33).
+- **UI:**
+  - `/app/staff-attendance` (daily register: per-row save, bulk save of
+    the marked rows, correction form);
+  - `/app/staff-attendance/history` (an employment's days with correction
+    history);
+  - a Dashboard link gated by `hr.staff_attendance.view`.
+- **Guards:**
+  - `StaffAttendanceArchitectureGuardTest`;
+  - `LeaveArchitectureGuardTest` (Leave never names StaffAttendance or its
+    tables);
+  - Student `AttendanceArchitectureGuardTest`, scoped to Student
+    attendance so the Staff module's names and closed reason code are not
+    mistaken for Student writes.
+- **Pins:** ElevationRls forced-RLS count 190; `UserReferenceCatalog` 102
+  (92 retained); `EmployeeRetentionClassificationTest` gains
+  `staff_attendance_records` under `employees` and `employment_records`.
+- **Recorded, not built:** own attendance (HRX.4), the HRX.5 unpaid-days
+  contract, and the D9 purge (HRX.6).

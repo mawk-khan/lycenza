@@ -75,7 +75,7 @@ contract checkpoint.
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
 | 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **DEVELOPMENT CLOSED** (TCH.0–TCH.6, 2026-10-01; ADR 0063 §38). Built: ActingEmployee identity (TCH.1), TeachingAssignment ownership (TCH.2), the production `teacher` role (four owned-scope capabilities, never a role-name check) and owned teacher access to Curriculum Delivery (TCH.3), Attendance (TCH.4), Learning Content (TCH.5C) and Assignments (TCH.5D) on the LMS owner/audience persistence (TCH.5B). Every owned access needs capability AND verified ActingEmployee AND TeachingAssignment; the role alone grants nothing, and Timetable is never authority. **Production readiness (ADR 0063 §39, 2026-10-01): PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — teacher Attendance is **BLOCKED by open legal/compliance determination TCH-L1** (now ADR 0058 register **E33**), enforced by process only. The one `teacher` role also carries `attendance.teacher`. **Owner decision (ADR 0063 §40): no production `teacher` role grants while E33 / TCH-L1 is OPEN**, and no role split or Attendance gate. The role is implemented and production-capable; the blocker is external, not a technical deficiency. TCH history retention waits on the platform-wide legal item **E21** (ADR 0058). TCH.6 fixed one closure defect (non-identical not-found bodies on owned surfaces). LMS Submission remains cancelled and outside TCH |
-| 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX.1 LEAVE FOUNDATION — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §22 final owner decisions). **HRX.2 LEAVE REQUESTS & APPROVAL — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §23). **HRX.3 — NOT STARTED.** Next: HRX.3 — Staff Attendance Foundation. Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
+| 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX.1 LEAVE FOUNDATION — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §22 final owner decisions). **HRX.2 LEAVE REQUESTS & APPROVAL — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §23). **HRX.3 STAFF ATTENDANCE — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §24: exact half-day evidence, CAS corrections with append-only history, Leave ↔ Attendance through application contracts). **HRX.4 — NOT STARTED.** Next: HRX.4 — Staff Self-Service. Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
@@ -295,9 +295,40 @@ outside it.
     - the Leave administration UI and the manager approvals page;
     - 40 Leave API operations.
   - **Not executed:** the in-year lapse of carried units (recorded only).
-    Staff Attendance, self-service and Payroll loss-of-pay are not built.
-    HRX-L1–L4 stay open.
-- **HRX.3 — Staff Attendance Foundation.** Not started.
+    Self-service and Payroll loss-of-pay are not built (Staff Attendance
+    followed in HRX.3). HRX-L1–L4 stay open.
+- **HRX.3 — Staff Attendance.** Published / closed (2026-10-03, ADR 0065
+  §24, decisions recorded before coding).
+  - **Model:** one record per EmploymentRecord × date, each half
+    `present`, `absent` or null (no evidence). Leave, holidays and weekly
+    offs are never stored; the read model derives them per half, with a
+    daily summary, and never hides the recorded evidence underneath.
+  - **Writes** (`hr.staff_attendance.manage`, administrative only): single
+    record and the all-or-nothing bulk daily register. No future date, only
+    working halves, only an employment in force, never a half on approved
+    leave. An existing record changes only by correction.
+  - **Corrections:** compare-and-swap on the version plus an append-only
+    correction row (both halves before/after, closed neutral reason). The
+    database refuses any other UPDATE and every DELETE, including raw SQL
+    with the runtime role.
+  - **Leave relationship:**
+    - recorded presence blocks approving leave over the same half, through
+      Leave's own dependency-inverted port;
+    - recorded absence never blocks and stays underneath the leave;
+    - approved leave blocks attendance on the same half only;
+    - one cross-domain day lock serializes the two;
+    - neither domain writes the other's tables.
+  - **Interfaces and evidence:**
+    - `hr.staff_attendance.view` / `.manage` on `school_admin` and
+      `principal`;
+    - 6 API operations and the `/app/staff-attendance` register and history
+      pages;
+    - audit, and the outbox event `staff_attendance.corrected.v1` (not a
+      webhook);
+    - forced RLS on two tables; D9 retention (`staff_attendance_evidence`,
+      purge in HRX.6).
+  - **Not built:** own-attendance self-service, Payroll loss-of-pay, clock
+    times, devices and biometrics. HRX-L1–L4 stay open.
 - **HRX.4 — Staff Self-Service** (own leave, own attendance, own payslip).
   Not started.
 - **HRX.5 — Payroll Loss-of-Pay Integration.** Not started; automatic

@@ -305,6 +305,11 @@ class CapabilityAndRoleSeeder extends Seeder
             // HRX.2 (ADR 0065 §23.12): decide a DIRECT REPORT's leave request --
             // always together with a fresh reporting relationship. Never on `teacher` (E33).
             ['key' => 'hr.leave.approve', 'label' => "Approve or reject direct reports' leave requests", 'namespace' => 'school'],
+            // HRX.3 (ADR 0065 §24.12): administrative daily Staff Attendance.
+            // Independent of each other and of Leave/Payroll; own attendance
+            // (`hr.staff_attendance.self`) is HRX.4. Never on `teacher` (E33).
+            ['key' => 'hr.staff_attendance.view', 'label' => 'View staff attendance (daily register, history, corrections)', 'namespace' => 'school'],
+            ['key' => 'hr.staff_attendance.manage', 'label' => 'Record and correct staff attendance', 'namespace' => 'school'],
             ['key' => 'hr.categories.view', 'label' => 'View Employee Categories', 'namespace' => 'school'],
             ['key' => 'hr.categories.manage', 'label' => 'Manage Employee Categories', 'namespace' => 'school'],
 
@@ -1181,6 +1186,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'teaching.assignments.view', 'teaching.assignments.manage',
                     // HRX.1 (ADR 0065 §12): default Leave administrators.
                     'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage', 'hr.leave.approve',
+                    // HRX.3 (ADR 0065 §24.12): default Staff Attendance administrators.
+                    'hr.staff_attendance.view', 'hr.staff_attendance.manage',
                     // TCH.3: held so School Admin can GRANT the Teacher role --
                     // StaffRoleCatalog only lets an actor grant a role whose
                     // every capability they hold (no escalation). It adds no
@@ -1364,6 +1371,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'teaching.assignments.view', 'teaching.assignments.manage',
                     // HRX.1 (ADR 0065 §12): same default as school_admin.
                     'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage', 'hr.leave.approve',
+                    // HRX.3 (ADR 0065 §24.12): same default as school_admin.
+                    'hr.staff_attendance.view', 'hr.staff_attendance.manage',
                 ],
             ],
             // TCH.3 (ADR 0063 section 12, T1): the one minimum production

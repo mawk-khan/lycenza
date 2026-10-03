@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
  * triggers take.
  *
  * Every writer acquires them in this order:
+ * 0. staff days (HRX.3, the cross-domain day lock, ascending);
  * 1. schedule;
  * 2. calendar;
  * 3. assignment;
@@ -21,6 +22,25 @@ use Illuminate\Support\Facades\DB;
  */
 final class LeaveLocks
 {
+    /**
+     * HRX.3 (ADR 0065 §24.6): THE cross-domain lock serializing leave approval
+     * and cancellation against Staff Attendance writes for one School x
+     * EmploymentRecord x date. Leave owns the key; StaffAttendance takes it
+     * through this method (StaffAttendance -> Leave is the permitted
+     * direction). Dates are always taken ascending; a writer spanning several
+     * employments takes them by employment id, then date.
+     *
+     * @param  list<string>  $dates  School-local Y-m-d
+     */
+    public static function staffDays(School $school, string $employmentRecordId, array $dates): void
+    {
+        $dates = array_values(array_unique($dates));
+        sort($dates);
+        foreach ($dates as $date) {
+            self::take("hrx.staff_day:{$school->id}:{$employmentRecordId}:{$date}", shared: false);
+        }
+    }
+
     /** Exclusive for schedule writers (opening years, start-month changes); shared for readers that must see one schedule. */
     public static function schedule(School $school, bool $shared = false): void
     {

@@ -11,8 +11,12 @@ complete after this checkpoint (`docs/roadmap/MASTER-ROADMAP.md` is
 authoritative).
 
 **"Attendance" here means Student class attendance, and nothing else.**
-Staff/Employee attendance is a Phase 0J/HR concern and appears nowhere
-in this module. Section 16 lists everything else deliberately excluded.
+Staff/Employee attendance appears nowhere in this module. It is HRX.3's
+separate `App\Domain\StaffAttendance` (daily per-half employment
+attendance, `hr.staff_attendance.*` capabilities, `staff_attendance_*`
+tables, ADR 0065 §24; `docs/modules/HR.md`), which shares no code,
+capability or table with Student attendance. Section 16 lists everything
+else deliberately excluded.
 
 **Amended by TCH.4 (ADR 0063 §32).** An owned teacher (Tier 2) path now
 exists alongside the administrative one — see section 18. The "admin-only"

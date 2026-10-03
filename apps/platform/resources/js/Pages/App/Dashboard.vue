@@ -67,6 +67,7 @@ interface Props {
         canViewTeachingAssignments: boolean;
         canViewLeave: boolean;
         canUseLeaveApprovals: boolean;
+        canViewStaffAttendance: boolean;
         canUseMyCurriculumDelivery: boolean;
         canUseMyAttendance: boolean;
         canUseMyLearningContent: boolean;
@@ -278,6 +279,9 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canUseLeaveApprovals">
                     <a class="underline" href="/app/leave/approvals">Leave Approvals</a>
+                </li>
+                <li v-if="nav.canViewStaffAttendance">
+                    <a class="underline" href="/app/staff-attendance">Staff Attendance</a>
                 </li>
                 <li v-if="nav.canUseMyCurriculumDelivery">
                     <a class="underline" href="/app/my-curriculum-delivery"

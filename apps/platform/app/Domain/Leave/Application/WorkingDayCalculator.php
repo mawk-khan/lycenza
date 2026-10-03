@@ -53,6 +53,25 @@ final class WorkingDayCalculator
         return DayPortion::fromHalves(array_values(array_intersect($requested->halves(), $working)));
     }
 
+    /**
+     * HRX.3 (ADR 0065 §24.3): today's classification of each half of a date,
+     * for Staff Attendance's working-time check and read model. A half off in
+     * the weekly pattern is `off`; otherwise a staff holiday covering it makes
+     * it `holiday` (the dated fact wins over the weekly pattern only where the
+     * pattern would have worked); otherwise `working`.
+     *
+     * @return array{1: 'working'|'holiday'|'off', 2: 'working'|'holiday'|'off'}
+     */
+    public function halves(string $date): array
+    {
+        $weekday = CarbonImmutable::createFromFormat('!Y-m-d', $date)->dayOfWeekIso;
+        $working = self::WEEKDAY_HALVES[$this->weekdays[$weekday]];
+        $holiday = isset($this->holidays[$date]) ? DayPortion::from($this->holidays[$date])->halves() : [];
+        $state = fn (int $half) => ! in_array($half, $working, true) ? 'off' : (in_array($half, $holiday, true) ? 'holiday' : 'working');
+
+        return [1 => $state(1), 2 => $state(2)];
+    }
+
     public function isWorkingDay(string $date): bool
     {
         return $this->units($date, DayPortion::Full) > 0;

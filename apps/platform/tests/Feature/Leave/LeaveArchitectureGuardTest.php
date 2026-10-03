@@ -17,7 +17,8 @@ use Tests\TestCase;
  * - one ledger writer;
  * - no stored balance;
  * - the `teacher` role untouched (E33);
- * - no self-service or Staff Attendance yet.
+ * - no self-service yet; Staff Attendance (HRX.3) reached only through
+ *   Leave's own port.
  */
 class LeaveArchitectureGuardTest extends TestCase
 {
@@ -70,7 +71,8 @@ class LeaveArchitectureGuardTest extends TestCase
     {
         foreach ($this->phpFiles('Domain/Leave') as $file) {
             $code = $this->code($file);
-            foreach (['App\\Domain\\Payroll', 'App\\Domain\\Finance', 'App\\Domain\\Fees', 'App\\Domain\\Payments', 'App\\Domain\\Attendance', 'App\\Domain\\StaffAttendance', 'payroll_', 'fee_settings', 'financial_period'] as $forbidden) {
+            // HRX.3: Leave reaches Staff Attendance only through its own port (AttendancePresenceConflictReader), bound in AppServiceProvider.
+            foreach (['App\\Domain\\Payroll', 'App\\Domain\\Finance', 'App\\Domain\\Fees', 'App\\Domain\\Payments', 'App\\Domain\\Attendance', 'App\\Domain\\StaffAttendance', 'staff_attendance_', 'payroll_', 'fee_settings', 'financial_period'] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$file}: Leave never depends on {$forbidden}");
             }
             foreach (['employees.user_id', "'user_id'", 'App\\Domain\\HR\\Infrastructure'] as $forbidden) {
@@ -119,11 +121,10 @@ class LeaveArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function no_self_service_staff_attendance_or_payroll_coupling_exists_yet(): void
+    public function no_self_service_or_payroll_coupling_exists_yet(): void
     {
-        $this->assertDirectoryDoesNotExist(app_path('Domain/StaffAttendance'), 'Staff Attendance is HRX.3');
         $routes = (string) file_get_contents(base_path('routes/api.php')).(string) file_get_contents(base_path('routes/web.php'));
-        $this->assertDoesNotMatchRegularExpression('#/my[-/]leave|hr\.leave\.self|staff_attendance#', $routes, 'self-service is HRX.4, attendance HRX.3');
+        $this->assertDoesNotMatchRegularExpression('#/my[-/](leave|staff[-_]attendance|payslips?)|hr\.leave\.self|hr\.staff_attendance\.self#', $routes, 'self-service is HRX.4');
         foreach ($this->phpFiles('Domain/Payroll') as $file) {
             $this->assertDoesNotMatchRegularExpression('/leave_(requests|request_days|decisions|ledger_entries|year_close)/', $this->code($file), "{$file}: Payroll never reads Leave tables (HRX.5 is a read contract)");
         }

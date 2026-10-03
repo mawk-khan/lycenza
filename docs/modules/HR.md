@@ -3910,3 +3910,36 @@ authorize nothing on their own.
   items reference the EmploymentRecord and Employee with RESTRICT. A
   manager's decision also keeps the deciding manager's Employee. All of it
   is D9 leave evidence until HRX.6 (`EmployeeRetentionClassificationTest`).
+
+## HRX.3 — Staff Attendance (implemented, 2026-10-03)
+
+ADR 0065 §24. `App\Domain\StaffAttendance` records daily, administrative
+presence evidence per EmploymentRecord, one half at a time. It is not
+Student class attendance (`docs/modules/ATTENDANCE.md`) and shares no
+code, capability or table with it. HR depends on none of it. HRX.3 adds two
+HR Application contracts, both authorizing nothing on their own.
+
+- **`EmploymentCoverage::holdRecordAttendable()`.** May attendance be held
+  for this EmploymentRecord on this date? The record's dates must contain
+  the date.
+  - With `currentOnly` (initial recording), the employment must also be
+    `active` / `notice_period` of an active Employee.
+  - Without it (a correction of existing evidence), any status qualifies.
+  - It reads the Employee and the record FOR SHARE in the caller's
+    transaction.
+- **`EmploymentRoster`.** Directory-tier labels of the School's
+  employments spanning a date (any status but `draft`): EmploymentRecord
+  id, Employee id, number, name, status, and whether it is in force today.
+  It also gives the same labels for given ids. Never contact, HR profile,
+  compensation or account data.
+- **What is stored.** `staff_attendance_records` holds one row per
+  EmploymentRecord × date, each half `present`, `absent` or null.
+  `staff_attendance_corrections` is the append-only history. Leave,
+  holidays and weekly offs are derived from Leave, never stored.
+- **Who.** `hr.staff_attendance.view` / `.manage` (`school_admin`,
+  `principal`). No manager recording, no self-marking (HRX.4 adds
+  own-attendance reads), no Teacher path.
+- **Retention.** Both tables reference the EmploymentRecord (and the
+  record the Employee) with RESTRICT. They are D9 staff attendance evidence
+  (`staff_attendance_evidence`) and keep the Employee until HRX.6's purge
+  participant (`EmployeeRetentionClassificationTest`).

@@ -90,6 +90,7 @@ use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryIdentifierController;
 use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryPfStatusController;
 use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryRuleStatusController;
 use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryTaxProfileController;
+use App\Domain\StaffAttendance\Http\Controllers\StaffAttendanceController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
@@ -2309,6 +2310,25 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 Route::get('/year-closes/preview', [LeaveRequestController::class, 'previewClose'])->middleware(['private-no-store', 'capability:hr.leave.manage'])->name('year-closes.preview');
                 Route::post('/year-closes', [LeaveRequestController::class, 'executeClose'])->middleware([...$manage, 'idempotent'])->name('year-closes.store');
                 Route::get('/year-closes/{leaveYearClose}', [LeaveRequestController::class, 'showClose'])->middleware($view)->name('year-closes.show');
+            });
+
+            // HRX.3 (ADR 0065 §24): daily, administrative Staff Attendance --
+            // exact per-half evidence, never clock-in/out. Employee data is
+            // Sensitive: `private-no-store` outermost. Reads need
+            // `hr.staff_attendance.view`; recording (single and the bulk daily
+            // register) and corrections need `hr.staff_attendance.manage` and are
+            // `idempotent`, completing the record inside the transaction (rule
+            // 33). No own-attendance route (HRX.4), no Payroll route (HRX.5).
+            Route::prefix('staff-attendance')->name('schools.staff-attendance.')->group(function (): void {
+                $view = ['private-no-store', 'capability:hr.staff_attendance.view'];
+                $manage = ['private-no-store', 'capability:hr.staff_attendance.manage', 'throttle:school-api-mutations', 'idempotent'];
+
+                Route::get('/register', [StaffAttendanceController::class, 'register'])->middleware($view)->name('register.show');
+                Route::post('/register', [StaffAttendanceController::class, 'storeRegister'])->middleware($manage)->name('register.store');
+                Route::get('/history', [StaffAttendanceController::class, 'history'])->middleware($view)->name('history');
+                Route::post('/records', [StaffAttendanceController::class, 'store'])->middleware($manage)->name('records.store');
+                Route::get('/records/{staffAttendanceRecord}', [StaffAttendanceController::class, 'show'])->middleware($view)->name('records.show');
+                Route::post('/records/{staffAttendanceRecord}/corrections', [StaffAttendanceController::class, 'correct'])->middleware($manage)->name('records.corrections.store');
             });
 
             // Phase 0H.4A (Examination Foundation -- the first

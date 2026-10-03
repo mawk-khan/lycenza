@@ -110,6 +110,7 @@ use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
 use App\Http\Controllers\App\Staff\StaffAccountController;
+use App\Http\Controllers\App\StaffAttendance\StaffAttendanceAdminController;
 use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
@@ -1426,6 +1427,18 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         foreach (['approve', 'reject'] as $action) {
             Route::post("/approvals/{leaveRequest}/{$action}", [LeaveApprovalsController::class, 'decide'])->defaults('action', $action)->name("approvals.{$action}");
         }
+    });
+
+    // HRX.3 (ADR 0065 §24.15) -- Staff Attendance administration: the daily
+    // register (single record, bulk save, correction) and an employment's
+    // history. Capability-checked in the controller AND again in the
+    // services. No self-service, Teacher or clock page.
+    Route::prefix('app/staff-attendance')->name('app.staff-attendance.')->group(function (): void {
+        Route::get('/', [StaffAttendanceAdminController::class, 'register'])->name('register');
+        Route::post('/register', [StaffAttendanceAdminController::class, 'storeRegister'])->name('register.store');
+        Route::get('/history', [StaffAttendanceAdminController::class, 'history'])->name('history');
+        Route::post('/records', [StaffAttendanceAdminController::class, 'store'])->name('records.store');
+        Route::post('/records/{staffAttendanceRecord}/corrections', [StaffAttendanceAdminController::class, 'correct'])->name('records.corrections.store');
     });
 
     // Phase 0L.2-1 -- Analytics (ADR 0040). One read-only report; the

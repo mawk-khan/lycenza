@@ -191,7 +191,7 @@ class TenantClosureReadinessTest extends TestCase
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
             // HRX.1 (ADR 0065 §18): new HRX evidence names its own scheduled purge checkpoint.
             if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
-                $this->assertSame('leave_evidence', $category, "{$category} still waits for a mechanism");
+                $this->assertContains($category, ['leave_evidence', 'staff_attendance_evidence'], "{$category} still waits for a mechanism");
                 $this->assertStringContainsString('HRX.6', $decision);
 
                 continue;
@@ -218,7 +218,7 @@ class TenantClosureReadinessTest extends TestCase
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
             $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
             $this->assertNotSame('', trim($decision), "{$category} has no decision text");
-            if ($status === TenantRetentionCatalog::MECHANISM_PENDING && $category !== 'leave_evidence') {
+            if ($status === TenantRetentionCatalog::MECHANISM_PENDING && ! in_array($category, ['leave_evidence', 'staff_attendance_evidence'], true)) {
                 $this->fail("{$category}: E21.3E implemented the last pending E21 mechanism; only HRX evidence (HRX.6) may wait");
             }
             if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {

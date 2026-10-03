@@ -40,6 +40,7 @@ class EmployeeRetentionClassificationTest extends TestCase
             'visitor_visits' => 'retained, blocks: as host until the visit itself expires (O3, E21.3E: 1 y after checkout)',
             'leave_requests' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
             'leave_decisions' => 'retained, blocks: D9 leave evidence -- as requester, and as the deciding manager -- until HRX.6 (ADR 0065 §23.13)',
+            'staff_attendance_records' => 'retained, blocks: D9 staff attendance evidence until HRX.6 adds its purge participant (ADR 0065 §24.13)',
         ],
         'employment_records' => [
             'employee_assignments' => 'D9 evidence (8 y): employment history, purged with the Employee',
@@ -55,6 +56,7 @@ class EmployeeRetentionClassificationTest extends TestCase
             'leave_ledger_entries' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §18)',
             'leave_requests' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
             'leave_year_close_items' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
+            'staff_attendance_records' => 'retained, blocks: D9 staff attendance evidence (corrections follow their record) until HRX.6 (ADR 0065 §24.13)',
         ],
         'employee_assignments' => [
             'employee_assignments' => 'retained, blocks: another Employee names it as manager (ON DELETE SET NULL would rewrite their history)',

@@ -43,6 +43,9 @@ class EmploymentCoverage
     /** Statuses that make an EmploymentRecord a planned or current engagement. */
     public const array PLANNED_OR_CURRENT_STATUSES = ['pre_joining', 'active', 'notice_period'];
 
+    /** HRX.3: an engagement that is in force today (ActingEmployee's eligible statuses). */
+    public const array CURRENT_STATUSES = ['active', 'notice_period'];
+
     public function __construct(private readonly TenantContext $context) {}
 
     /**
@@ -106,6 +109,51 @@ class EmploymentCoverage
     public function holdRecordCovering(School $school, string $employmentRecordId, string $from, string $to): string
     {
         return $this->holdRecordFor($school, $employmentRecordId, $from, $to, whole: true);
+    }
+
+    /**
+     * HRX.3 (ADR 0065 §24.7): may Staff Attendance hold evidence for this
+     * EmploymentRecord on this date? The record's dates must contain the
+     * date. With `$currentOnly` (initial recording, ADR 0065 §7) the
+     * employment must also be `active` or `notice_period`, of an active
+     * Employee. Without it (a correction of existing evidence) any status
+     * qualifies -- correcting history after separation is legitimate.
+     *
+     * Reads the Employee and the record FOR SHARE in the caller's
+     * transaction, like holdRecord(). HR depends on no consumer of this
+     * answer.
+     *
+     * @param  string  $date  School-local Y-m-d
+     * @return self::COVERED|self::RECORD_NOT_FOUND|self::EMPLOYEE_UNAVAILABLE|self::NOT_EMPLOYED
+     */
+    public function holdRecordAttendable(School $school, string $employmentRecordId, string $date, bool $currentOnly = true): string
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('EmploymentCoverage::holdRecordAttendable() must run inside a database transaction.');
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $employmentRecordId, $date, $currentOnly): string {
+            $record = EmploymentRecord::query()->where('school_id', $school->id)->whereKey($employmentRecordId)->first();
+            if ($record === null) {
+                return self::RECORD_NOT_FOUND;
+            }
+
+            $employee = Employee::query()->where('school_id', $school->id)->whereKey($record->employee_id)->sharedLock()->first();
+            if ($employee === null || ($currentOnly && ! $employee->isActive())) {
+                return self::EMPLOYEE_UNAVAILABLE;
+            }
+
+            $covered = EmploymentRecord::query()
+                ->where('school_id', $school->id)
+                ->whereKey($record->id)
+                ->where('starts_on', '<=', $date)
+                ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $date))
+                ->when($currentOnly, fn ($q) => $q->whereIn('status', self::CURRENT_STATUSES))
+                ->sharedLock()
+                ->first();
+
+            return $covered !== null ? self::COVERED : self::NOT_EMPLOYED;
+        });
     }
 
     private function holdRecordFor(School $school, string $employmentRecordId, string $from, ?string $to, bool $whole): string

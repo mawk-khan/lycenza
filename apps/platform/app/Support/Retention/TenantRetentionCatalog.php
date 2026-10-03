@@ -139,6 +139,9 @@ final class TenantRetentionCatalog
             'leave_policy_assignments', 'leave_ledger_entries', 'leave_requests', 'leave_request_days', 'leave_decisions',
             'leave_year_close_items', 'leave_year_close_reconciliations',
         ]],
+        'staff_attendance_evidence' => [self::MECHANISM_PENDING, 'HRX.3 (ADR 0065 §24.13): Staff Attendance records and their append-only corrections -- D9 employment evidence, 8 y after the Employee\'s final separation; kept with the Employee (they block its purge) until HRX.6 adds the D9 purge participant', [
+            'staff_attendance_records', 'staff_attendance_corrections',
+        ]],
         'student_operational_modules' => [self::ADOPTED, 'E21.2G O1: D7 operational history, 7 y after the Student\'s final exit; returned loans and ended assignments expire through platform:student-retention-prune (E21.3B, implemented); an open loan or assignment keeps the Student', [
             'hostel_residency_assignments', 'library_loans', 'transport_student_assignments',
         ]],

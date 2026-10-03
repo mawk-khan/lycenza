@@ -618,6 +618,12 @@ The checkpoints are listed in §5.
       (`leave_evidence`, `MECHANISM_PENDING`) until HRX.6 adds the purge
       participant. Until then a leave-holding Employee is
       `dependency_blocked` (kept). Leave configuration is tenant lifetime.
+    - HRX staff attendance evidence (`staff_attendance_records`,
+      `staff_attendance_corrections`, HRX.3; ADR 0065 §24.13). The same D9
+      period (8 y after final separation); its expiry mechanism is pending
+      (`staff_attendance_evidence`, `MECHANISM_PENDING`) until HRX.6. Until
+      then an Employee with attendance evidence is `dependency_blocked`
+      (kept).
   - **A linked User blocks it.** Retention never unlinks a User (D10,
     E21.2F).
   - **Pinned:** the per-table classification is checked against the

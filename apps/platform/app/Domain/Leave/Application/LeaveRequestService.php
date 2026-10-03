@@ -59,13 +59,19 @@ use Illuminate\Support\Facades\DB;
  * Cancellation reverses each consumption. If its year is closed, the
  * cancellation reconciles it in the same transaction (LeaveYearCloseService).
  *
- * Lock order (ADR 0065 §23.10):
+ * HRX.3 (ADR 0065 §24.5): approval refuses a request whose chargeable half
+ * is recorded `present` in Staff Attendance, read through Leave's own port
+ * (AttendancePresenceConflictReader). Recorded absence never blocks, and
+ * neither approval nor cancellation ever writes attendance.
+ *
+ * Lock order (ADR 0065 §23.10, §24.6):
  * 1. School;
  * 2. the request row;
  * 3. HR rows;
- * 4. schedule (shared), then calendar (shared), then assignment;
- * 5. years (shared, ascending);
- * 6. balance keys.
+ * 4. staff days (the cross-domain day lock, ascending);
+ * 5. schedule (shared), then calendar (shared), then assignment;
+ * 6. years (shared, ascending);
+ * 7. balance keys.
  */
 class LeaveRequestService
 {
@@ -81,6 +87,7 @@ class LeaveRequestService
         private readonly StaffCalendarService $calendar,
         private readonly LeaveLedgerService $ledger,
         private readonly LeaveYearCloseService $closes,
+        private readonly AttendancePresenceConflictReader $presence,
     ) {}
 
     /** An administrator submits on an employee's behalf. HRX.4's self-service reuses submit(). */
@@ -140,6 +147,8 @@ class LeaveRequestService
                 throw LeaveException::conflict('LEAVE_REQUEST_NOT_APPROVED', 'Only an approved request can be cancelled.');
             }
             $type = LeaveType::query()->where('school_id', $school->id)->findOrFail($request->leave_type_id);
+            // Staff Attendance writes on these dates wait for (or precede) the cancellation (ADR 0065 §24.6).
+            LeaveLocks::staffDays($school, $request->employment_record_id, array_keys(LeaveRequestShape::of($request->starts_on->toDateString(), $request->start_portion, $request->ends_on->toDateString(), $request->end_portion)->days()));
 
             $consumptions = LeaveLedgerEntry::query()->where('school_id', $school->id)->where('leave_request_id', $request->id)->where('kind', 'consumption')->get();
             $years = $this->yearsWithNext($school, $consumptions->pluck('leave_year_id')->all());
@@ -281,12 +290,19 @@ class LeaveRequestService
         $type = LeaveType::query()->where('school_id', $school->id)->sharedLock()->findOrFail($request->leave_type_id);
         $shape = LeaveRequestShape::of($request->starts_on->toDateString(), $request->start_portion, $request->ends_on->toDateString(), $request->end_portion);
         $this->requireEmployment($school, $request->employment_record_id, $shape);
+        LeaveLocks::staffDays($school, $request->employment_record_id, array_keys($shape->days()));
 
         LeaveLocks::schedule($school, shared: true);
         LeaveLocks::calendar($school, shared: true);
         $chargeable = $shape->chargeable($this->calendar->calculator($school, $shape->startsOn, $shape->endsOn));
         if ($chargeable === []) {
             throw LeaveException::conflict('LEAVE_REQUEST_NO_WORKING_DAYS', 'Under the current staff calendar the request covers no working time.');
+        }
+        $present = $this->presence->presentHalves($school, $request->employment_record_id, array_keys($chargeable));
+        foreach ($chargeable as $date => $portion) {
+            if (array_intersect($portion->halves(), $present[$date] ?? []) !== []) {
+                throw LeaveException::conflict('LEAVE_ATTENDANCE_PRESENT', "Staff attendance records the employee present on {$date}; correct that attendance before approving.");
+            }
         }
 
         $years = $this->yearsOverlapping($school, $shape);

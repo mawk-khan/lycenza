@@ -3778,6 +3778,220 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/staff-attendance/register:
+    get:
+      operationId: getStaffAttendanceRegister
+      summary: >
+        HRX.3: the School's daily staff attendance register for one date -- every employment spanning the date, each half's derived state (present, absent, leave, holiday, off_day, unrecorded) beside its recorded evidence and today's calendar, plus a derived daily summary. Leave identifiers appear only for readers also holding hr.leave.view. Requires hr.staff_attendance.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StaffAttendanceRegister" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.staff_attendance.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: recordStaffAttendanceRegister
+      summary: >
+        HRX.3: the bulk daily register -- several employments on one date, all or nothing. Any invalid or duplicate item, or an employment already recorded that day, refuses the whole register (never an implicit correction). Requires hr.staff_attendance.manage (not .view). Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffAttendanceRegisterInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/StaffAttendanceRecord" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.staff_attendance.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: STAFF_ATTENDANCE_ALREADY_RECORDED / STAFF_ATTENDANCE_ON_LEAVE / STAFF_ATTENDANCE_NOT_WORKING_TIME / STAFF_ATTENDANCE_EMPLOYMENT_NOT_ELIGIBLE / LEAVE_CALENDAR_NOT_CONFIGURED / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/staff-attendance/history:
+    get:
+      operationId: getStaffAttendanceHistory
+      summary: >
+        HRX.3: one employment's composed days over a range of at most 93 days. Requires hr.staff_attendance.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: employment_record_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StaffAttendanceHistory" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.staff_attendance.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/staff-attendance/records:
+    post:
+      operationId: recordStaffAttendance
+      summary: >
+        HRX.3: records one employment's attendance on one past-or-present date -- each half present, absent or null (no evidence). A half must be working time today and not covered by approved leave. An existing record is corrected, never recorded again. Requires hr.staff_attendance.manage (not .view). Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffAttendanceRecordInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StaffAttendanceRecord" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.staff_attendance.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: STAFF_ATTENDANCE_ALREADY_RECORDED / STAFF_ATTENDANCE_ON_LEAVE / STAFF_ATTENDANCE_NOT_WORKING_TIME / STAFF_ATTENDANCE_EMPLOYMENT_NOT_ELIGIBLE / LEAVE_CALENDAR_NOT_CONFIGURED / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/staff-attendance/records/{staffAttendanceRecordId}:
+    get:
+      operationId: getStaffAttendanceRecord
+      summary: >
+        HRX.3: one record's stored evidence with its append-only correction history (from/to version, both halves before and after, closed reason code). Requires hr.staff_attendance.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: staffAttendanceRecordId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StaffAttendanceRecordDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.staff_attendance.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/staff-attendance/records/{staffAttendanceRecordId}/corrections:
+    post:
+      operationId: correctStaffAttendance
+      summary: >
+        HRX.3: compare-and-swap correction -- expected_version, both new halves and a closed neutral reason code (no free text). Writes an append-only correction row and raises the version by one; a half covered by approved leave cannot be changed to present/absent; clearing both halves needs entered_in_error. Emits staff_attendance.corrected.v1 (not webhook-publishable). Requires hr.staff_attendance.manage (not .view). Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: staffAttendanceRecordId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffAttendanceCorrectionInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StaffAttendanceRecord" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.staff_attendance.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one private 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: STAFF_ATTENDANCE_VERSION_STALE / STAFF_ATTENDANCE_ON_LEAVE / STAFF_ATTENDANCE_NOT_WORKING_TIME / STAFF_ATTENDANCE_EMPLOYMENT_NOT_ELIGIBLE / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/enrollment-rollovers:
     get:
       operationId: listEnrollmentRollovers
@@ -15940,6 +16154,155 @@ components:
                   carriedDelta: { type: integer, minimum: 0 }
                   lapsedDelta: { type: integer, minimum: 0 }
                   createdAt: { type: string, format: date-time, nullable: true }
+    StaffAttendanceHalfStatus:
+      type: string
+      nullable: true
+      enum: [present, absent, null]
+      description: >
+        HRX.3 -- the ONLY stored half values. null means Staff Attendance holds no evidence for that half; leave, holidays and weekly offs are never stored (they are derived).
+    StaffAttendanceRecord:
+      type: object
+      description: HRX.3 -- the stored evidence of one employment on one date, as written (no derived state).
+      required: [id, employmentRecordId, employeeId, date, firstHalf, secondHalf, version, recordedAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        employmentRecordId: { type: string, format: uuid }
+        employeeId: { type: string, format: uuid }
+        date: { type: string, format: date }
+        firstHalf: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+        secondHalf: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+        version: { type: integer, minimum: 1 }
+        recordedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    StaffAttendanceCorrection:
+      type: object
+      required: [id, fromVersion, toVersion, before, after, reasonCode, correctedAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromVersion: { type: integer, minimum: 1 }
+        toVersion: { type: integer, minimum: 2 }
+        before: { $ref: "#/components/schemas/StaffAttendanceHalves" }
+        after: { $ref: "#/components/schemas/StaffAttendanceHalves" }
+        reasonCode: { type: string, enum: [entered_in_error, late_information, administrative_review, other] }
+        correctedAt: { type: string, format: date-time }
+    StaffAttendanceHalves:
+      type: object
+      required: [firstHalf, secondHalf]
+      properties:
+        firstHalf: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+        secondHalf: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+    StaffAttendanceRecordDetail:
+      allOf:
+        - { $ref: "#/components/schemas/StaffAttendanceRecord" }
+        - type: object
+          required: [corrections]
+          properties:
+            corrections: { type: array, items: { $ref: "#/components/schemas/StaffAttendanceCorrection" } }
+    StaffAttendanceHalfView:
+      type: object
+      description: >
+        HRX.3 -- one half's derived state. `state` is leave (approved leave covers it), else the recorded present/absent, else holiday / off_day from today's staff calendar, else unrecorded. `recorded` is the stored evidence underneath (kept even under leave); `calendar` is today's classification (null while the calendar is unconfigured). `leave` carries the request id and leave-type name only for a reader also holding hr.leave.view.
+      required: [state, recorded, calendar, onLeave, leave]
+      properties:
+        state: { type: string, enum: [present, absent, leave, holiday, off_day, unrecorded] }
+        recorded: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+        calendar: { type: string, nullable: true, enum: [working, holiday, "off", null] }
+        onLeave: { type: boolean }
+        leave:
+          type: object
+          nullable: true
+          required: [leaveRequestId, leaveTypeName]
+          properties:
+            leaveRequestId: { type: string, format: uuid }
+            leaveTypeName: { type: string }
+    StaffAttendanceDay:
+      type: object
+      required: [date, record, firstHalf, secondHalf, summary]
+      properties:
+        date: { type: string, format: date }
+        record:
+          type: object
+          nullable: true
+          required: [id, version]
+          properties:
+            id: { type: string, format: uuid }
+            version: { type: integer, minimum: 1 }
+        firstHalf: { $ref: "#/components/schemas/StaffAttendanceHalfView" }
+        secondHalf: { $ref: "#/components/schemas/StaffAttendanceHalfView" }
+        summary: { type: string, enum: [present, absent, half_day_absent, on_leave, holiday, off_day, unrecorded, partially_recorded, mixed] }
+    StaffAttendanceEmployment:
+      type: object
+      description: HRX.3 -- directory-tier labels only (no contact, HR profile, compensation or account field). `recordable` is true when initial recording is allowed today (active/notice_period of an active Employee).
+      required: [employmentRecordId, employeeId, employeeNumber, fullName, status, recordable]
+      properties:
+        employmentRecordId: { type: string, format: uuid }
+        employeeId: { type: string, format: uuid }
+        employeeNumber: { type: string, nullable: true }
+        fullName: { type: string, nullable: true }
+        status: { type: string }
+        recordable: { type: boolean }
+    StaffAttendanceRegister:
+      type: object
+      required: [date, calendarConfigured, calendar, rows]
+      properties:
+        date: { type: string, format: date }
+        calendarConfigured: { type: boolean }
+        calendar:
+          type: object
+          nullable: true
+          required: [firstHalf, secondHalf]
+          properties:
+            firstHalf: { type: string, enum: [working, holiday, "off"] }
+            secondHalf: { type: string, enum: [working, holiday, "off"] }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [employment, day]
+            properties:
+              employment: { $ref: "#/components/schemas/StaffAttendanceEmployment" }
+              day: { $ref: "#/components/schemas/StaffAttendanceDay" }
+    StaffAttendanceHistory:
+      type: object
+      required: [employment, from, to, calendarConfigured, days]
+      properties:
+        employment: { $ref: "#/components/schemas/StaffAttendanceEmployment" }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        calendarConfigured: { type: boolean }
+        days: { type: array, items: { $ref: "#/components/schemas/StaffAttendanceDay" } }
+    StaffAttendanceRecordInput:
+      type: object
+      required: [employment_record_id, date, first_half, second_half]
+      properties:
+        employment_record_id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        first_half: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+        second_half: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+    StaffAttendanceRegisterInput:
+      type: object
+      required: [date, items]
+      properties:
+        date: { type: string, format: date }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            type: object
+            required: [employment_record_id, first_half, second_half]
+            properties:
+              employment_record_id: { type: string, format: uuid }
+              first_half: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+              second_half: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+    StaffAttendanceCorrectionInput:
+      type: object
+      required: [expected_version, first_half, second_half, reason_code]
+      properties:
+        expected_version: { type: integer, minimum: 1 }
+        first_half: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+        second_half: { $ref: "#/components/schemas/StaffAttendanceHalfStatus" }
+        reason_code: { type: string, enum: [entered_in_error, late_information, administrative_review, other] }
     TeachingAssignment:
       type: object
       description: >

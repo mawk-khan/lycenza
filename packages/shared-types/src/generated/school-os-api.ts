@@ -1705,6 +1705,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/staff-attendance/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.3: the School's daily staff attendance register for one date -- every employment spanning the date, each half's derived state (present, absent, leave, holiday, off_day, unrecorded) beside its recorded evidence and today's calendar, plus a derived daily summary. Leave identifiers appear only for readers also holding hr.leave.view. Requires hr.staff_attendance.view. */
+        get: operations["getStaffAttendanceRegister"];
+        put?: never;
+        /** HRX.3: the bulk daily register -- several employments on one date, all or nothing. Any invalid or duplicate item, or an employment already recorded that day, refuses the whole register (never an implicit correction). Requires hr.staff_attendance.manage (not .view). Idempotency-Key required. */
+        post: operations["recordStaffAttendanceRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/staff-attendance/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.3: one employment's composed days over a range of at most 93 days. Requires hr.staff_attendance.view. */
+        get: operations["getStaffAttendanceHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/staff-attendance/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.3: records one employment's attendance on one past-or-present date -- each half present, absent or null (no evidence). A half must be working time today and not covered by approved leave. An existing record is corrected, never recorded again. Requires hr.staff_attendance.manage (not .view). Idempotency-Key required. */
+        post: operations["recordStaffAttendance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/staff-attendance/records/{staffAttendanceRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.3: one record's stored evidence with its append-only correction history (from/to version, both halves before and after, closed reason code). Requires hr.staff_attendance.view. */
+        get: operations["getStaffAttendanceRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/staff-attendance/records/{staffAttendanceRecordId}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.3: compare-and-swap correction -- expected_version, both new halves and a closed neutral reason code (no free text). Writes an append-only correction row and raises the version by one; a half covered by approved leave cannot be changed to present/absent; clearing both halves needs entered_in_error. Emits staff_attendance.corrected.v1 (not webhook-publishable). Requires hr.staff_attendance.manage (not .view). Idempotency-Key required. */
+        post: operations["correctStaffAttendance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/enrollment-rollovers": {
         parameters: {
             query?: never;
@@ -8060,6 +8146,135 @@ export interface components {
                 /** Format: date-time */
                 createdAt?: string | null;
             }[];
+        };
+        /**
+         * @description HRX.3 -- the ONLY stored half values. null means Staff Attendance holds no evidence for that half; leave, holidays and weekly offs are never stored (they are derived).
+         * @enum {string|null}
+         */
+        StaffAttendanceHalfStatus: "present" | "absent" | null;
+        /** @description HRX.3 -- the stored evidence of one employment on one date, as written (no derived state). */
+        StaffAttendanceRecord: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** Format: uuid */
+            employeeId: string;
+            /** Format: date */
+            date: string;
+            firstHalf: components["schemas"]["StaffAttendanceHalfStatus"];
+            secondHalf: components["schemas"]["StaffAttendanceHalfStatus"];
+            version: number;
+            /** Format: date-time */
+            recordedAt: string | null;
+            /** Format: date-time */
+            updatedAt: string | null;
+        };
+        StaffAttendanceCorrection: {
+            /** Format: uuid */
+            id: string;
+            fromVersion: number;
+            toVersion: number;
+            before: components["schemas"]["StaffAttendanceHalves"];
+            after: components["schemas"]["StaffAttendanceHalves"];
+            /** @enum {string} */
+            reasonCode: "entered_in_error" | "late_information" | "administrative_review" | "other";
+            /** Format: date-time */
+            correctedAt: string;
+        };
+        StaffAttendanceHalves: {
+            firstHalf: components["schemas"]["StaffAttendanceHalfStatus"];
+            secondHalf: components["schemas"]["StaffAttendanceHalfStatus"];
+        };
+        StaffAttendanceRecordDetail: components["schemas"]["StaffAttendanceRecord"] & {
+            corrections: components["schemas"]["StaffAttendanceCorrection"][];
+        };
+        /** @description HRX.3 -- one half's derived state. `state` is leave (approved leave covers it), else the recorded present/absent, else holiday / off_day from today's staff calendar, else unrecorded. `recorded` is the stored evidence underneath (kept even under leave); `calendar` is today's classification (null while the calendar is unconfigured). `leave` carries the request id and leave-type name only for a reader also holding hr.leave.view. */
+        StaffAttendanceHalfView: {
+            /** @enum {string} */
+            state: "present" | "absent" | "leave" | "holiday" | "off_day" | "unrecorded";
+            recorded: components["schemas"]["StaffAttendanceHalfStatus"];
+            /** @enum {string|null} */
+            calendar: "working" | "holiday" | "off" | null;
+            onLeave: boolean;
+            leave: {
+                /** Format: uuid */
+                leaveRequestId: string;
+                leaveTypeName: string;
+            } | null;
+        };
+        StaffAttendanceDay: {
+            /** Format: date */
+            date: string;
+            record: {
+                /** Format: uuid */
+                id: string;
+                version: number;
+            } | null;
+            firstHalf: components["schemas"]["StaffAttendanceHalfView"];
+            secondHalf: components["schemas"]["StaffAttendanceHalfView"];
+            /** @enum {string} */
+            summary: "present" | "absent" | "half_day_absent" | "on_leave" | "holiday" | "off_day" | "unrecorded" | "partially_recorded" | "mixed";
+        };
+        /** @description HRX.3 -- directory-tier labels only (no contact, HR profile, compensation or account field). `recordable` is true when initial recording is allowed today (active/notice_period of an active Employee). */
+        StaffAttendanceEmployment: {
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** Format: uuid */
+            employeeId: string;
+            employeeNumber: string | null;
+            fullName: string | null;
+            status: string;
+            recordable: boolean;
+        };
+        StaffAttendanceRegister: {
+            /** Format: date */
+            date: string;
+            calendarConfigured: boolean;
+            calendar: {
+                /** @enum {string} */
+                firstHalf: "working" | "holiday" | "off";
+                /** @enum {string} */
+                secondHalf: "working" | "holiday" | "off";
+            } | null;
+            rows: {
+                employment: components["schemas"]["StaffAttendanceEmployment"];
+                day: components["schemas"]["StaffAttendanceDay"];
+            }[];
+        };
+        StaffAttendanceHistory: {
+            employment: components["schemas"]["StaffAttendanceEmployment"];
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            calendarConfigured: boolean;
+            days: components["schemas"]["StaffAttendanceDay"][];
+        };
+        StaffAttendanceRecordInput: {
+            /** Format: uuid */
+            employment_record_id: string;
+            /** Format: date */
+            date: string;
+            first_half: components["schemas"]["StaffAttendanceHalfStatus"];
+            second_half: components["schemas"]["StaffAttendanceHalfStatus"];
+        };
+        StaffAttendanceRegisterInput: {
+            /** Format: date */
+            date: string;
+            items: {
+                /** Format: uuid */
+                employment_record_id: string;
+                first_half: components["schemas"]["StaffAttendanceHalfStatus"];
+                second_half: components["schemas"]["StaffAttendanceHalfStatus"];
+            }[];
+        };
+        StaffAttendanceCorrectionInput: {
+            expected_version: number;
+            first_half: components["schemas"]["StaffAttendanceHalfStatus"];
+            second_half: components["schemas"]["StaffAttendanceHalfStatus"];
+            /** @enum {string} */
+            reason_code: "entered_in_error" | "late_information" | "administrative_review" | "other";
         };
         /** @description TCH.2 -- one authoritative teaching-ownership period. Directory-tier labels only (no HR profile, contact or account field, no user ids). `state` is derived from the School-local date; the dates are authoritative and inclusive, and `endsOn` null means open-ended. */
         TeachingAssignment: {
@@ -15851,6 +16066,389 @@ export interface operations {
             };
             /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getStaffAttendanceRegister: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StaffAttendanceRegister"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.staff_attendance.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    recordStaffAttendanceRegister: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAttendanceRegisterInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StaffAttendanceRecord"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.staff_attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description STAFF_ATTENDANCE_ALREADY_RECORDED / STAFF_ATTENDANCE_ON_LEAVE / STAFF_ATTENDANCE_NOT_WORKING_TIME / STAFF_ATTENDANCE_EMPLOYMENT_NOT_ELIGIBLE / LEAVE_CALENDAR_NOT_CONFIGURED / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getStaffAttendanceHistory: {
+        parameters: {
+            query: {
+                employment_record_id: string;
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StaffAttendanceHistory"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.staff_attendance.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    recordStaffAttendance: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAttendanceRecordInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StaffAttendanceRecord"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.staff_attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description STAFF_ATTENDANCE_ALREADY_RECORDED / STAFF_ATTENDANCE_ON_LEAVE / STAFF_ATTENDANCE_NOT_WORKING_TIME / STAFF_ATTENDANCE_EMPLOYMENT_NOT_ELIGIBLE / LEAVE_CALENDAR_NOT_CONFIGURED / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getStaffAttendanceRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                staffAttendanceRecordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StaffAttendanceRecordDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.staff_attendance.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    correctStaffAttendance: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                staffAttendanceRecordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffAttendanceCorrectionInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["StaffAttendanceRecord"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.staff_attendance.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description STAFF_ATTENDANCE_VERSION_STALE / STAFF_ATTENDANCE_ON_LEAVE / STAFF_ATTENDANCE_NOT_WORKING_TIME / STAFF_ATTENDANCE_EMPLOYMENT_NOT_ELIGIBLE / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (closed value lists; STAFF_ATTENDANCE_DATE_INVALID / STAFF_ATTENDANCE_DATE_IN_FUTURE / STAFF_ATTENDANCE_EMPTY / STAFF_ATTENDANCE_RANGE_INVALID ...). */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

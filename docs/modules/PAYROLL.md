@@ -943,7 +943,9 @@ kept **8 calendar years after the Employee's final separation**
 ADR 0065 records the future Leave/Staff Attendance → Payroll contract;
 nothing changes in Payroll until **HRX.5**:
 - **Today:** NCP / loss-of-pay days are always 0 and partial periods are
-  manual overrides.
+  manual overrides. That stays true after HRX.3: Staff Attendance (built)
+  stores per-half `present`/`absent` evidence that Payroll neither reads
+  nor is written by, and no absence is marked deductible.
 - **HRX.5:** Payroll calls one explicit HRX read contract (unpaid half-day
   units of approved unpaid leave and absent attendance in the period, with
   an input fingerprint), snapshots it into Payroll's own evidence, and

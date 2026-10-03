@@ -155,6 +155,8 @@ class DashboardController extends Controller
                 // HRX.2: Leave administration and the manager's approvals page.
                 'canViewLeave' => $school !== null && $capabilities->canInSchool($user, 'hr.leave.view', $school),
                 'canUseLeaveApprovals' => $school !== null && $capabilities->canInSchool($user, 'hr.leave.approve', $school),
+                // HRX.3: Staff Attendance administration.
+                'canViewStaffAttendance' => $school !== null && $capabilities->canInSchool($user, 'hr.staff_attendance.view', $school),
                 'canUseMyCurriculumDelivery' => $school !== null && $capabilities->canInSchool($user, 'curriculum.delivery.teacher', $school),
                 'canUseMyAttendance' => $school !== null && $capabilities->canInSchool($user, 'attendance.teacher', $school),
                 // TCH.5C: the owned Learning Content page, by capability (never the role key).

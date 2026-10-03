@@ -902,6 +902,42 @@ Four School capabilities, granted by default to `school_admin` and
     - cross-School.
   - `Tests\Feature\App\LeaveAdminUiTest`: the pages.
 
+## Staff Attendance administration (HRX.3, ADR 0065 §24)
+
+Two School capabilities, granted by default to `school_admin` and
+`principal` only:
+
+| Capability | Allows |
+|---|---|
+| `hr.staff_attendance.view` | read the daily register, an employment's history, and one record with its correction history |
+| `hr.staff_attendance.manage` | record attendance (single record and the bulk daily register) and correct it |
+
+- **Independent capabilities.** Neither implies the other, and neither
+  implies, or is implied by, any Leave or Payroll capability.
+  - A mutation answers from the record it wrote, so a manage-only actor
+    never gets a 403 after a committed write (`StaffAttendanceApiTest`).
+  - Leave identifiers on the register (request id, leave-type name) are
+    shown only to a reader who also holds `hr.leave.view`. Everyone else
+    sees "on leave" only.
+- **Administrative only.** Managing an Employee grants nothing here.
+  Recording needs `hr.staff_attendance.manage`, never a reporting
+  relationship. `hr.staff_attendance.self` does not exist yet (HRX.4).
+- **Not granted to `teacher`.** The `teacher` role is unchanged (E33).
+- **Checks.**
+  - `StaffAttendanceService` and `StaffAttendanceReadService` call
+    `authorizeCapabilityFor()`.
+  - The routes add `capability:` middleware, `school-membership` and
+    `private-no-store`.
+  - There is no role-name check (`StaffAttendanceArchitectureGuardTest`).
+- **Order** (rule 32): membership → capability → idempotency. Another
+  School's id answers one 404. An elevated platform session is refused
+  (no Staff Attendance route declares `school-context:elevated`).
+- **Tests.**
+  - `Tests\Feature\StaffAttendance\StaffAttendanceApiTest`: allow and
+    deny per capability, manage without view, Leave/Teacher capabilities
+    refused, cross-School 404.
+  - `Tests\Feature\App\StaffAttendanceAdminUiTest`: the pages.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles (role *assignment* exists: Settings → Staff accounts

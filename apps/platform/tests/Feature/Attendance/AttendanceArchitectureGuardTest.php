@@ -57,9 +57,10 @@ class AttendanceArchitectureGuardTest extends TestCase
         $allowed = ['AttendanceSubmissionService.php', 'AttendanceCorrectionService.php'];
 
         foreach (['AttendanceRecord::query()->insert', 'AttendanceRecord::query()->create', 'AttendanceRecord::create('] as $pattern) {
+            // HRX.3: StaffAttendanceRecord is Staff (employment) attendance, a separate module with its own guard.
             $hits = array_filter(
                 $this->grep($pattern, $this->appPath()),
-                fn (string $line) => ! array_filter($allowed, fn ($f) => str_contains($line, $f)),
+                fn (string $line) => ! array_filter($allowed, fn ($f) => str_contains($line, $f)) && ! str_contains($line, 'StaffAttendanceRecord::'),
             );
             $this->assertSame([], array_values($hits),
                 "AttendanceRecord writes are restricted to the Attendance services ({$pattern}): ".implode("\n", $hits));
@@ -121,7 +122,9 @@ class AttendanceArchitectureGuardTest extends TestCase
         // Health-tier data into a Sensitive-tier table.
         $forbidden = ['reason', 'note', 'remark', 'medical', 'health', 'diagnosis', 'certificate', 'minutes_late', 'biometric'];
 
-        $migrations = glob(base_path('database/migrations/*attendance*.php'));
+        // HRX.3: Staff Attendance migrations belong to a separate module (closed `reason_code` on corrections,
+        // ADR 0065 §24.8) and are guarded by StaffAttendanceArchitectureGuardTest.
+        $migrations = array_filter(glob(base_path('database/migrations/*attendance*.php')), fn (string $m) => ! str_contains(basename($m), 'staff_attendance'));
         $this->assertNotEmpty($migrations);
 
         foreach ($migrations as $migration) {
