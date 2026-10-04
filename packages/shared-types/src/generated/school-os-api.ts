@@ -1705,6 +1705,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/my/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.4: the acting Employee's own leave overview -- requestable leave types and the ledger-derived balances (integer half-day units) of their current EmploymentRecord in the leave year containing today. No policy, ledger or anyone else's data. Requires hr.leave.self plus a resolvable ActingEmployee. */
+        get: operations["getMyLeaveOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/leave/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.4: the acting Employee's own leave requests. Requires hr.leave.self plus a resolvable ActingEmployee. */
+        get: operations["listMyLeaveRequests"];
+        put?: never;
+        /** HRX.4: submits a leave request for the acting Employee's own current EmploymentRecord through the same HRX.2 rules (calendar, portions, overlap, type, employment). The client never names an Employee, EmploymentRecord or School. Requires hr.leave.self. Idempotency-Key required. */
+        post: operations["submitMyLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/leave/requests/{leaveRequestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.4: one own request with its chargeable days and decisions (decision, path, reason code, time). Never the ledger entries or the decider. Requires hr.leave.self. */
+        get: operations["getMyLeaveRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/leave/requests/{leaveRequestId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.4: the requester withdraws their own submitted request (decision path `self`). Requires hr.leave.self. Idempotency-Key required. */
+        post: operations["withdrawMyLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/leave/requests/{leaveRequestId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.4: the requester cancels their own approved request before it starts (decision path `self`), through the same HRX.2 reversal and reconciliation. Requires hr.leave.self. Idempotency-Key required. */
+        post: operations["cancelMyLeaveRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/staff-attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.4: the acting Employee's own staff attendance, READ ONLY -- the HRX.3 per-half composition (present, absent, leave, holiday, off_day, unrecorded) for their current EmploymentRecord over at most 93 days inside its dates, without internal record ids or correction history. There is no own-attendance write. Requires hr.staff_attendance.self. */
+        get: operations["getMyStaffAttendance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/payslips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.4: the acting Employee's own payslips of POSTED payroll runs (period, run and status only; no amounts). Requires payroll.payslips.self plus a resolvable ActingEmployee. */
+        get: operations["listMyPayslips"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/my/payslips/{payrollRunId}/{employmentRecordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.4: one own posted payslip through PayslipReadService's ownership path -- the same assembly as the administrative payslip, never recalculated; own statutory deductions with masked identifiers. Audited as payroll.payslip.self_viewed. Anything unowned, unposted or unknown is one identical private 404. Requires payroll.payslips.self. */
+        get: operations["getMyPayslip"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/staff-attendance/register": {
         parameters: {
             query?: never;
@@ -8146,6 +8283,99 @@ export interface components {
                 /** Format: date-time */
                 createdAt?: string | null;
             }[];
+        };
+        /** @description HRX.4 -- the acting Employee's own leave overview (School-configured entitlements; no statutory claim). */
+        MyLeaveOverview: {
+            /** Format: date */
+            asOf: string;
+            leaveYear: components["schemas"]["LeaveYear"] | null;
+            types: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                name: string;
+                isPaid: boolean;
+                tracksBalance: boolean;
+                allowsHalfDay: boolean;
+            }[];
+            balances: {
+                /** Format: uuid */
+                leaveTypeId: string;
+                leaveTypeCode: string | null;
+                leaveTypeName: string | null;
+                credits: number;
+                debits: number;
+                /** @description Integer half-day units (2 = one full day). */
+                availableUnits: number;
+            }[];
+        };
+        MyLeaveRequestInput: {
+            /** Format: uuid */
+            leave_type_id: string;
+            /** Format: date */
+            starts_on: string;
+            /** @enum {string} */
+            start_portion: "full" | "first_half" | "second_half";
+            /** Format: date */
+            ends_on: string;
+            /** @enum {string} */
+            end_portion: "full" | "first_half" | "second_half";
+            /** @enum {string|null} */
+            reason_code?: "personal" | "family" | "official_duty" | "other" | null;
+        };
+        MyLeaveRequestDetail: components["schemas"]["LeaveRequest"] & {
+            days: {
+                /** Format: date */
+                date: string;
+                /** @enum {string} */
+                portion: "full" | "first_half" | "second_half";
+                /** @enum {integer} */
+                units: 1 | 2;
+                /** Format: uuid */
+                leaveYearId: string;
+            }[];
+            decisions: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                decision: "approved" | "rejected" | "withdrawn" | "cancelled";
+                /** @enum {string} */
+                path: "manager" | "administrative" | "self";
+                reasonCode: string | null;
+                /** Format: date-time */
+                decidedAt: string;
+            }[];
+        };
+        MyStaffAttendanceDay: {
+            /** Format: date */
+            date: string;
+            firstHalf: components["schemas"]["StaffAttendanceHalfView"];
+            secondHalf: components["schemas"]["StaffAttendanceHalfView"];
+            /** @enum {string} */
+            summary: "present" | "absent" | "half_day_absent" | "on_leave" | "holiday" | "off_day" | "unrecorded" | "partially_recorded" | "mixed";
+        };
+        MyStaffAttendance: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            calendarConfigured: boolean;
+            days: components["schemas"]["MyStaffAttendanceDay"][];
+        };
+        MyPayslipSummary: {
+            /** Format: uuid */
+            payrollRunId: string;
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** @enum {string} */
+            runKind: "regular" | "correction";
+            /** Format: date */
+            periodMonth: string;
+            /** Format: date */
+            paymentDate: string | null;
+            /** Format: date-time */
+            postedAt: string | null;
+            isReversed: boolean;
         };
         /**
          * @description HRX.3 -- the ONLY stored half values. null means Staff Attendance holds no evidence for that half; leave, holidays and weekly offs are never stored (they are derived).
@@ -16065,6 +16295,542 @@ export interface operations {
                 };
             };
             /** @description Unknown, malformed or other-School id -- and, on /approvals, any request that is not a current direct report's (one private 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getMyLeaveOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLeaveOverview"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listMyLeaveRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    submitMyLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyLeaveRequestInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_OVERLAP / LEAVE_YEAR_CLOSED / LEAVE_EMPLOYMENT_NOT_ELIGIBLE / LEAVE_TYPE_INACTIVE / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (closed value lists; employee_id / employment_record_id / school_id / requester_user_id / manager_id are prohibited -- identity is the ActingEmployee's). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getMyLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyLeaveRequestDetail"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    withdrawMyLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveClosingInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_NOT_SUBMITTED / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (closed value lists; employee_id / employment_record_id / school_id / requester_user_id / manager_id are prohibited -- identity is the ActingEmployee's). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cancelMyLeaveRequest: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                leaveRequestId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveClosingInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveRequest"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_REQUEST_NOT_APPROVED / LEAVE_SELF_CANCEL_STARTED / LEAVE_CANCELLATION_CLOSE_CHAIN / IDEMPOTENCY_KEY_CONFLICT. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (closed value lists; employee_id / employment_record_id / school_id / requester_user_id / manager_id are prohibited -- identity is the ActingEmployee's). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getMyStaffAttendance: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyStaffAttendance"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.staff_attendance.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    listMyPayslips: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MyPayslipSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking payroll.payslips.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getMyPayslip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                payrollRunId: string;
+                employmentRecordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description The administrative payslip shape (PayslipPresenter), for the caller's own posted payslip. */
+                        data: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking payroll.payslips.self in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School. */
             404: {
                 headers: {
                     [name: string]: unknown;

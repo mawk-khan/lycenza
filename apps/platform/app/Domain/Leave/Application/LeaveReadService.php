@@ -2,6 +2,7 @@
 
 namespace App\Domain\Leave\Application;
 
+use App\Domain\HR\Application\ActingEmployee;
 use App\Domain\Leave\Infrastructure\LeaveAllocationRun;
 use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
 use App\Domain\Leave\Infrastructure\LeavePolicy;
@@ -149,6 +150,45 @@ class LeaveReadService
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::VIEW, $school);
 
+        return $this->balanceRows($school, $employmentRecordId, $leaveYearId);
+    }
+
+    /**
+     * HRX.4 (ADR 0065 §25.4): the acting Employee's own leave overview -- the
+     * active leave types they can request (id, code, name, paid, tracked,
+     * half-day) and the balances of their CURRENT EmploymentRecord in the leave
+     * year containing today, by the same ledger-derived calculation as
+     * administration. Never policies, ledger entries, allocations or anyone
+     * else. The ActingEmployee comes only from ActingEmployeeResolver
+     * (LeaveRequestReadService::ownOverview()).
+     *
+     * @return array<string, mixed>
+     */
+    public function ownOverview(School $school, ActingEmployee $acting, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::SELF, $school);
+
+        return $this->read($school, function () use ($school, $acting) {
+            $year = LeaveYear::query()->where('school_id', $school->id)->where('starts_on', '<=', $acting->asOf)->where('ends_on', '>=', $acting->asOf)->first();
+            $types = LeaveType::query()->where('school_id', $school->id)->where('status', 'active')->orderBy('code')->get();
+            $names = LeaveType::query()->where('school_id', $school->id)->get(['id', 'code', 'name'])->keyBy('id');
+
+            return [
+                'asOf' => $acting->asOf,
+                'leaveYear' => $year === null ? null : self::year($year),
+                'types' => $types->map(fn (LeaveType $t) => [
+                    'id' => $t->id, 'code' => $t->code, 'name' => $t->name, 'isPaid' => $t->is_paid, 'tracksBalance' => $t->tracks_balance, 'allowsHalfDay' => $t->allows_half_day,
+                ])->values()->all(),
+                'balances' => $year === null ? [] : array_map(fn (array $b) => $b + [
+                    'leaveTypeCode' => $names[$b['leaveTypeId']]->code ?? null, 'leaveTypeName' => $names[$b['leaveTypeId']]->name ?? null,
+                ], $this->balanceRows($school, $acting->employmentRecordId, $year->id)),
+            ];
+        });
+    }
+
+    /** @return list<array{leaveTypeId: string, credits: int, debits: int, availableUnits: int}> */
+    private function balanceRows(School $school, string $employmentRecordId, string $leaveYearId): array
+    {
         return $this->read($school, fn () => array_map(fn ($r) => [
             'leaveTypeId' => (string) $r->leave_type_id,
             'credits' => (int) $r->credits,

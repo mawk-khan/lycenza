@@ -5,6 +5,7 @@ namespace Tests\Feature\StaffAttendance;
 use App\Domain\Leave\Application\AttendancePresenceConflictReader;
 use App\Domain\StaffAttendance\Application\StaffAttendancePresenceReader;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -17,8 +18,9 @@ use Tests\TestCase;
  *   Application contracts only; never Leave/HR/Payroll -> StaffAttendance,
  *   never StaffAttendance -> Payroll; Leave's port bound in the composition
  *   root;
- * - no role-name authorization; two independent capabilities; no `.self`;
- * - the `teacher` role untouched (E33); no self-service route;
+ * - no role-name authorization; independent capabilities; HRX.4's `.self`
+ *   is read only;
+ * - the `teacher` role untouched (E33); no own-attendance write;
  * - Staff Attendance is not Student attendance.
  */
 class StaffAttendanceArchitectureGuardTest extends TestCase
@@ -74,8 +76,12 @@ class StaffAttendanceArchitectureGuardTest extends TestCase
     {
         foreach ($this->phpFiles('Domain/StaffAttendance') as $file) {
             $code = $this->code($file);
-            foreach (['App\\Domain\\Payroll', 'App\\Domain\\Finance', 'App\\Domain\\Attendance\\', 'App\\Domain\\HR\\Infrastructure', 'App\\Domain\\Leave\\Infrastructure', 'payroll_', 'leave_requests', 'leave_request_days', 'leave_ledger', 'employees.user_id', "'user_id'", 'ActingEmployeeResolver'] as $forbidden) {
+            foreach (['App\\Domain\\Payroll', 'App\\Domain\\Finance', 'App\\Domain\\Attendance\\', 'App\\Domain\\HR\\Infrastructure', 'App\\Domain\\Leave\\Infrastructure', 'payroll_', 'leave_requests', 'leave_request_days', 'leave_ledger', 'employees.user_id', "'user_id'"] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$file}: Staff Attendance never depends on {$forbidden}");
+            }
+            // HRX.4: the acting Employee is resolved through HR's one resolver, in the read service only.
+            if (str_contains($code, 'ActingEmployeeResolver')) {
+                $this->assertSame('StaffAttendanceReadService.php', basename($file), "{$file}: only the read service resolves the acting Employee");
             }
             preg_match_all('/App\\\\Domain\\\\Leave\\\\[A-Za-z\\\\]+/', $code, $m);
             foreach (array_unique($m[0]) as $class) {
@@ -116,22 +122,30 @@ class StaffAttendanceArchitectureGuardTest extends TestCase
         }
 
         $keys = DB::table('capabilities')->where('key', 'like', 'hr.staff_attendance.%')->orderBy('key')->pluck('key')->all();
-        $this->assertSame(['hr.staff_attendance.manage', 'hr.staff_attendance.view'], $keys, 'own attendance (.self) is HRX.4');
+        $this->assertSame(['hr.staff_attendance.manage', 'hr.staff_attendance.self', 'hr.staff_attendance.view'], $keys, 'HRX.4 adds the read-only own capability');
         $teacher = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')
             ->where('r.key', 'teacher')->pluck('rc.capability_key')->sort()->values()->all();
         $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $teacher, 'E33: the teacher role is unchanged');
-        foreach (['school_admin', 'principal'] as $role) {
-            $granted = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', $role)->where('rc.capability_key', 'like', 'hr.staff_attendance.%')->count();
-            $this->assertSame(2, $granted, "{$role} holds both Staff Attendance capabilities by default");
+        // school_admin also holds `.self` only so it can grant staff_self_service (HRX.4, no escalation).
+        foreach (['school_admin' => ['hr.staff_attendance.manage', 'hr.staff_attendance.self', 'hr.staff_attendance.view'], 'principal' => ['hr.staff_attendance.manage', 'hr.staff_attendance.view']] as $role => $expected) {
+            $granted = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', $role)->where('rc.capability_key', 'like', 'hr.staff_attendance.%')->orderBy('rc.capability_key')->pluck('rc.capability_key')->all();
+            $this->assertSame($expected, $granted, "{$role}'s default Staff Attendance capabilities");
         }
-        $this->assertFalse(DB::table('roles')->where('key', 'staff_self_service')->exists(), 'the staff self-service role is HRX.4');
+        $this->assertSame(0, DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', 'staff_self_service')
+            ->whereIn('rc.capability_key', ['hr.staff_attendance.view', 'hr.staff_attendance.manage'])->count(), 'HRX.4: self-service never carries attendance administration');
     }
 
     #[Test]
-    public function no_self_service_payroll_or_device_surface_exists_and_student_attendance_is_separate(): void
+    public function own_attendance_is_read_only_no_device_surface_exists_and_student_attendance_is_separate(): void
     {
         $routes = (string) file_get_contents(base_path('routes/api.php')).(string) file_get_contents(base_path('routes/web.php'));
-        $this->assertDoesNotMatchRegularExpression('#hr\.staff_attendance\.self|/my[-/]staff[-_]attendance|staff-attendance/(clock|punch|check-in|device|biometric|kiosk|ncp|loss-of-pay)#', $routes);
+        $this->assertDoesNotMatchRegularExpression('#staff-attendance/(clock|punch|check-in|device|biometric|kiosk|ncp|loss-of-pay)#', $routes);
+        // HRX.4: own attendance is READ ONLY -- no write of any kind on an own-attendance route.
+        $own = collect(Route::getRoutes())->filter(fn ($r) => preg_match('#my[-/]staff-attendance#', $r->uri()) === 1)->values();
+        $this->assertNotEmpty($own);
+        foreach ($own as $route) {
+            $this->assertSame([], array_values(array_diff($route->methods(), ['GET', 'HEAD'])), "{$route->uri()}: own attendance is read only");
+        }
         foreach ($this->phpFiles('Domain/Attendance') as $file) {
             $this->assertStringNotContainsString('StaffAttendance', $this->code($file), "{$file}: Student attendance shares nothing with Staff Attendance");
         }

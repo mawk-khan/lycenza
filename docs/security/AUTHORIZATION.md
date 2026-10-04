@@ -938,6 +938,41 @@ Two School capabilities, granted by default to `school_admin` and
     refused, cross-School 404.
   - `Tests\Feature\App\StaffAttendanceAdminUiTest`: the pages.
 
+## Staff Self-Service (HRX.4, ADR 0065 §25)
+
+Three School capabilities, each reaching ONLY the holder's own data:
+
+| Capability | Allows |
+|---|---|
+| `hr.leave.self` | own leave overview and requests; submit for one's current EmploymentRecord; withdraw a submitted request; cancel an approved one before it starts |
+| `hr.staff_attendance.self` | read one's own staff attendance (no write of any kind) |
+| `payroll.payslips.self` | list and view one's own payslips of posted runs |
+
+- **Capability AND ownership, always.**
+  - The actor is resolved only through `ActingEmployeeResolver`
+    (`hold()` inside writes).
+  - The client never names an Employee, EmploymentRecord, School or User;
+    naming one on submission is a 422 (`prohibited`).
+  - Anything not owned (unknown, another Employee's, another School's, no
+    ActingEmployee) is one identical private 404.
+- **The `staff_self_service` role** bundles exactly the three. No code
+  checks the role key (`StaffSelfServiceArchitectureGuardTest`), and a
+  direct capability grant behaves identically.
+  - `school_admin` holds the three only so it can grant the role (no
+    escalation, the TCH.3 precedent).
+  - `teacher` (E33) and `principal` are unchanged.
+- **Independent of administration and approval.** None of the three
+  implies, or is implied by, `hr.leave.view/.manage/.approve`,
+  `hr.staff_attendance.view/.manage` or any Payroll capability.
+  - Self-service withdrawals and cancellations are recorded with decision
+    path `self`. The database allows it only for the requester's own
+    request (trigger-derived Employees), and never for approve or reject.
+- **Order** (rule 32): membership → capability → ActingEmployee →
+  idempotency. School switching re-resolves; nothing is cached.
+- **Tests:** `Tests\Feature\StaffSelfService\*` (capability only,
+  ownership only, both; cross-School; no ActingEmployee; School switching;
+  role vs direct grant) and `Tests\Feature\App\StaffSelfServiceUiTest`.
+
 ## What is NOT yet implemented
 
 Tenant-custom roles (role *assignment* exists: Settings → Staff accounts

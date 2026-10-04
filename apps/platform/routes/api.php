@@ -65,6 +65,7 @@ use App\Domain\Inventory\Http\Controllers\InventoryStockController;
 use App\Domain\Leave\Http\Controllers\LeaveConfigurationController;
 use App\Domain\Leave\Http\Controllers\LeaveLedgerController;
 use App\Domain\Leave\Http\Controllers\LeaveRequestController;
+use App\Domain\Leave\Http\Controllers\MyLeaveController;
 use App\Domain\Library\Http\Controllers\LibraryCopyController;
 use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
@@ -76,6 +77,7 @@ use App\Domain\Payments\Http\Controllers\LateFeeRunController;
 use App\Domain\Payments\Http\Controllers\PaymentController;
 use App\Domain\Payments\Http\Controllers\PaymentReceiptController;
 use App\Domain\Payroll\Http\Controllers\CompensationAssignmentController;
+use App\Domain\Payroll\Http\Controllers\MyPayslipController;
 use App\Domain\Payroll\Http\Controllers\PayrollAccountingConfigurationController;
 use App\Domain\Payroll\Http\Controllers\PayrollPeriodController;
 use App\Domain\Payroll\Http\Controllers\PayrollRunController;
@@ -90,6 +92,7 @@ use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryIdentifierController;
 use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryPfStatusController;
 use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryRuleStatusController;
 use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryTaxProfileController;
+use App\Domain\StaffAttendance\Http\Controllers\MyStaffAttendanceController;
 use App\Domain\StaffAttendance\Http\Controllers\StaffAttendanceController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
@@ -2310,6 +2313,31 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 Route::get('/year-closes/preview', [LeaveRequestController::class, 'previewClose'])->middleware(['private-no-store', 'capability:hr.leave.manage'])->name('year-closes.preview');
                 Route::post('/year-closes', [LeaveRequestController::class, 'executeClose'])->middleware([...$manage, 'idempotent'])->name('year-closes.store');
                 Route::get('/year-closes/{leaveYearClose}', [LeaveRequestController::class, 'showClose'])->middleware($view)->name('year-closes.show');
+            });
+
+            // HRX.4 (ADR 0065 §25): Staff Self-Service -- the acting Employee's
+            // OWN leave, attendance and posted payslips. A `/my/` family: no
+            // route names an Employee, EmploymentRecord or School in its input.
+            // Each needs its `.self` capability (outer check) AND ActingEmployee
+            // ownership (in the service); anything unowned is one identical 404.
+            // Attendance is read-only. Leave submit/withdraw are `idempotent`;
+            // cancel completes inside its transaction (rule 33). No Payroll
+            // loss-of-pay route (HRX.5).
+            Route::prefix('my')->name('schools.my.')->group(function (): void {
+                $leave = ['private-no-store', 'capability:hr.leave.self'];
+                $leaveWrite = [...$leave, 'throttle:school-api-mutations', 'idempotent'];
+
+                Route::get('/leave', [MyLeaveController::class, 'overview'])->middleware($leave)->name('leave.overview');
+                Route::get('/leave/requests', [MyLeaveController::class, 'index'])->middleware($leave)->name('leave.requests.index');
+                Route::post('/leave/requests', [MyLeaveController::class, 'store'])->middleware($leaveWrite)->name('leave.requests.store');
+                Route::get('/leave/requests/{leaveRequest}', [MyLeaveController::class, 'show'])->middleware($leave)->name('leave.requests.show');
+                Route::post('/leave/requests/{leaveRequest}/withdraw', [MyLeaveController::class, 'withdraw'])->middleware($leaveWrite)->name('leave.requests.withdraw');
+                Route::post('/leave/requests/{leaveRequest}/cancel', [MyLeaveController::class, 'cancel'])->middleware($leaveWrite)->name('leave.requests.cancel');
+
+                Route::get('/staff-attendance', [MyStaffAttendanceController::class, 'index'])->middleware(['private-no-store', 'capability:hr.staff_attendance.self'])->name('staff-attendance.index');
+
+                Route::get('/payslips', [MyPayslipController::class, 'index'])->middleware(['private-no-store', 'capability:payroll.payslips.self'])->name('payslips.index');
+                Route::get('/payslips/{payrollRun}/{employmentRecord}', [MyPayslipController::class, 'show'])->middleware(['private-no-store', 'capability:payroll.payslips.self'])->name('payslips.show');
             });
 
             // HRX.3 (ADR 0065 §24): daily, administrative Staff Attendance --

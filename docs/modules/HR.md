@@ -3943,3 +3943,24 @@ HR Application contracts, both authorizing nothing on their own.
   record the Employee) with RESTRICT. They are D9 staff attendance evidence
   (`staff_attendance_evidence`) and keep the Employee until HRX.6's purge
   participant (`EmployeeRetentionClassificationTest`).
+
+## HRX.4 — Staff Self-Service (implemented, 2026-10-04)
+
+ADR 0065 §25. HR gains no dependency and no new contract beyond
+`EmploymentRoster::span()` (one EmploymentRecord's dates, for clipping own
+attendance). HR's role is identity:
+
+- **`ActingEmployeeResolver` is the only User → Employee path** for every
+  self-service read and write: `resolve()` for reads, `hold()` inside
+  Leave's write transactions.
+- **One current employment.** It yields exactly one current EmploymentRecord
+  (`active`/`notice_period`, dates containing today) and fails closed on
+  zero or several. That one record is the self-service EmploymentRecord; no
+  client ever names one.
+- **No portal after employment.** A separated or archived Employee, a
+  suspended membership or a disabled User has no self-service. History
+  stays with administrators.
+- **Provisioning.** The `staff_self_service` School role (own leave, own
+  attendance, own payslips) is granted through Settings → Staff accounts
+  like any School role. Having an Employee record never grants it, and
+  holding it without a linked current Employee reaches nobody's data.

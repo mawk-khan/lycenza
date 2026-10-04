@@ -2,7 +2,9 @@
 
 namespace App\Domain\StaffAttendance\Application;
 
+use App\Domain\HR\Application\ActingEmployeeResolver;
 use App\Domain\HR\Application\EmploymentRoster;
+use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\LeaveCapabilities;
 use App\Domain\Leave\Application\LeaveCoverageReader;
@@ -17,6 +19,7 @@ use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Collection;
 
 /**
  * HRX.3 (ADR 0065 §24.3, §24.11): the composed Staff Attendance view, under
@@ -52,7 +55,48 @@ class StaffAttendanceReadService
         private readonly StaffCalendarService $calendar,
         private readonly LeaveCoverageReader $leave,
         private readonly CapabilityResolver $capabilities,
+        private readonly ActingEmployeeResolver $acting,
     ) {}
+
+    /**
+     * HRX.4 (ADR 0065 §25.6): the acting Employee's OWN attendance over [from,
+     * to] (at most MAX_HISTORY_DAYS), clipped to their current EmploymentRecord's
+     * dates. The same per-half composition as administration, with their own
+     * leave-type name, but no internal record id/version and no correction
+     * history. Read-only: there is no own-attendance write. No ActingEmployee is
+     * the private 404.
+     *
+     * @return array{from: string, to: string, calendarConfigured: bool, days: list<array<string, mixed>>}
+     */
+    public function own(School $school, string $from, string $to, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, StaffAttendanceCapabilities::SELF, $school);
+        $this->requireRange($from, $to);
+        try {
+            $acting = $this->acting->resolve($actor, $school);
+        } catch (ActingEmployeeUnavailableException) {
+            throw new ModelNotFoundException('No query results for the attendance.');
+        }
+        $span = $this->roster->span($school, $acting->employmentRecordId) ?? throw new ModelNotFoundException('No query results for the attendance.');
+        $from = max($from, $span['startsOn']);
+        $to = $span['endsOn'] === null ? $to : min($to, $span['endsOn']);
+        if ($from > $to) {
+            return ['from' => $from, 'to' => $to, 'calendarConfigured' => true, 'days' => []];
+        }
+
+        $records = $this->recordsBetween($school, $acting->employmentRecordId, $from, $to);
+        $calendar = $this->calendarHalves($school, $from, $to);
+        $coverage = $this->leave->approvedCoverage($school, [$acting->employmentRecordId], $from, $to)[$acting->employmentRecordId] ?? [];
+        $days = [];
+        for ($d = CarbonImmutable::createFromFormat('!Y-m-d', $from); $d->toDateString() <= $to; $d = $d->addDay()) {
+            $date = $d->toDateString();
+            $day = self::day($date, $records[$date] ?? null, $calendar === [] ? null : $calendar[$date], $coverage[$date] ?? [], leaveDetail: true);
+            unset($day['record']);
+            $days[] = $day;
+        }
+
+        return ['from' => $from, 'to' => $to, 'calendarConfigured' => $calendar !== [], 'days' => $days];
+    }
 
     /**
      * The School's daily register: every employment spanning the date, plus
@@ -94,18 +138,10 @@ class StaffAttendanceReadService
     public function history(School $school, string $employmentRecordId, string $from, string $to, User $actor): array
     {
         $this->authorizeCapabilityFor($actor, StaffAttendanceCapabilities::VIEW, $school);
-        self::requireDate($from);
-        self::requireDate($to);
-        $start = CarbonImmutable::createFromFormat('!Y-m-d', $from);
-        $end = CarbonImmutable::createFromFormat('!Y-m-d', $to);
-        if ($from > $to || $start->diffInDays($end) >= self::MAX_HISTORY_DAYS) {
-            throw StaffAttendanceException::invalid('STAFF_ATTENDANCE_RANGE_INVALID', 'Choose a range of 1 to '.self::MAX_HISTORY_DAYS.' days, from before to.');
-        }
+        [$start, $end] = $this->requireRange($from, $to);
         $label = $this->roster->labels($school, [$employmentRecordId])[0] ?? throw new ModelNotFoundException('No query results for the employment.');
 
-        $records = $this->context->withSchool($school, fn () => StaffAttendanceRecord::query()->where('school_id', $school->id)
-            ->where('employment_record_id', $employmentRecordId)->whereBetween('attendance_date', [$from, $to])->get()
-            ->keyBy(fn (StaffAttendanceRecord $r) => $r->attendance_date->toDateString()));
+        $records = $this->recordsBetween($school, $employmentRecordId, $from, $to);
         $calendar = $this->calendarHalves($school, $from, $to);
         $coverage = $this->leave->approvedCoverage($school, [$employmentRecordId], $from, $to)[$employmentRecordId] ?? [];
         $detail = $this->leaveDetail($school, $actor);
@@ -261,6 +297,28 @@ class StaffAttendanceReadService
         }
 
         return $halves;
+    }
+
+    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
+    private function requireRange(string $from, string $to): array
+    {
+        self::requireDate($from);
+        self::requireDate($to);
+        $start = CarbonImmutable::createFromFormat('!Y-m-d', $from);
+        $end = CarbonImmutable::createFromFormat('!Y-m-d', $to);
+        if ($from > $to || $start->diffInDays($end) >= self::MAX_HISTORY_DAYS) {
+            throw StaffAttendanceException::invalid('STAFF_ATTENDANCE_RANGE_INVALID', 'Choose a range of 1 to '.self::MAX_HISTORY_DAYS.' days, from before to.');
+        }
+
+        return [$start, $end];
+    }
+
+    /** @return Collection<string, StaffAttendanceRecord> date => record */
+    private function recordsBetween(School $school, string $employmentRecordId, string $from, string $to)
+    {
+        return $this->context->withSchool($school, fn () => StaffAttendanceRecord::query()->where('school_id', $school->id)
+            ->where('employment_record_id', $employmentRecordId)->whereBetween('attendance_date', [$from, $to])->get()
+            ->keyBy(fn (StaffAttendanceRecord $r) => $r->attendance_date->toDateString()));
     }
 
     /** ADR 0065 §24.11: leave identifiers only for a reader who may read leave records anyway. */

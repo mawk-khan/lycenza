@@ -670,9 +670,13 @@ final class DemoDataBuilder
         // Employee's TeachingAssignment (G8-A Mathematics, created in
         // DemoModuleData::teachingAssignments()).
         $teacher = $this->user('Kavya Reddy (Teacher)', 'teacher@example.test');
-        $this->assignSchoolRole($this->member($teacher, $this->school), 'teacher');
+        $teacherMembership = $this->member($teacher, $this->school);
+        $this->assignSchoolRole($teacherMembership, 'teacher');
+        // HRX.4 (ADR 0065 §25.2): Staff Self-Service is a SEPARATE role grant -- the
+        // `teacher` bundle itself is unchanged (E33).
+        $this->assignSchoolRole($teacherMembership, 'staff_self_service');
         $this->inSchool(fn () => $this->employees['MATH']->forceFill(['user_id' => $teacher->id])->save());
-        $this->account('Teacher', $teacher, $this->school->name, 'Teacher role, linked to Employee EMP-000003; My Curriculum Delivery, My Attendance, My Learning Content and My Assignments for G8-A Mathematics only');
+        $this->account('Teacher', $teacher, $this->school->name, 'Teacher role + Staff Self-Service role, linked to Employee EMP-000003; My Curriculum Delivery, My Attendance, My Learning Content and My Assignments for G8-A Mathematics only; My Leave, My Staff Attendance and My Payslips for herself');
 
         // Student: School member linked to a Student record (Phase 5B).
         $studentRecord = $this->studentsBySection['G8-A'][0];

@@ -25,6 +25,9 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php leave-op.php approve|reject|withdraw|cancel <schoolId> <requestId> <actorId>
 //   php leave-op.php close    <schoolId> <yearId> <actorId>
 //   php leave-op.php monday   <schoolId> <portion> <actorId>   (Monday's portion; the rest Mon-Fri full, weekend off)
+//   php leave-op.php submit-own <schoolId> <typeId> <from> <to> <actorId>          (HRX.4 self-service)
+//   php leave-op.php withdraw-own|cancel-own <schoolId> <requestId> <actorId>     (HRX.4 self-service)
+//   php leave-op.php manager-approve <schoolId> <requestId> <actorId>             (HRX.2 manager path)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -50,6 +53,10 @@ try {
         'reject' => 'ok:'.$requests->reject($school, $args[1], 'staffing_need', User::query()->findOrFail($args[2]))->status,
         'withdraw' => 'ok:'.$requests->withdraw($school, $args[1], 'plans_changed', User::query()->findOrFail($args[2]))->status,
         'cancel' => 'ok:'.$requests->cancel($school, $args[1], 'plans_changed', User::query()->findOrFail($args[2]))->status,
+        'submit-own' => 'ok:'.$requests->submitOwn($school, $args[1], $args[2], 'full', $args[3], 'full', null, User::query()->findOrFail($args[4]))->status,
+        'withdraw-own' => 'ok:'.$requests->withdrawOwn($school, $args[1], 'plans_changed', User::query()->findOrFail($args[2]))->status,
+        'cancel-own' => 'ok:'.$requests->cancelOwn($school, $args[1], 'plans_changed', User::query()->findOrFail($args[2]))->status,
+        'manager-approve' => 'ok:'.$requests->approveAsManager($school, $args[1], User::query()->findOrFail($args[2]))->status,
         'close' => 'ok:'.$app->make(LeaveYearCloseService::class)->execute($school, $args[1], User::query()->findOrFail($args[2]))->item_count,
         'monday' => (function () use ($app, $school, $args) {
             $app->make(StaffCalendarService::class)->setWeeklyPattern($school, [1 => $args[1], 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], User::query()->findOrFail($args[2]));

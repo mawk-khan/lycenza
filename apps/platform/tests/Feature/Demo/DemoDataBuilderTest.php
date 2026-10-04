@@ -163,8 +163,12 @@ class DemoDataBuilderTest extends TestCase
 
         // TCH.3: the demo teacher holds the production Teacher role -- exactly
         // one owned-scope capability, reaching only what her
-        // TeachingAssignment (G8-A Mathematics) covers.
-        $this->assertEqualsCanonicalizing(['curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher'], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
+        // TeachingAssignment (G8-A Mathematics) covers. HRX.4: plus the
+        // SEPARATE staff_self_service role (own leave, attendance, payslips).
+        $this->assertEqualsCanonicalizing([
+            'curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher',
+            'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
+        ], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
 
         // Operations desks: a demo-only, non-system role holding EXACTLY
         // one existing capability family, in the Demo School only.

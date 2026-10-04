@@ -109,6 +109,7 @@ use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
+use App\Http\Controllers\App\SelfService\StaffSelfServiceController;
 use App\Http\Controllers\App\Staff\StaffAccountController;
 use App\Http\Controllers\App\StaffAttendance\StaffAttendanceAdminController;
 use App\Http\Controllers\App\StudentAccountLinkController;
@@ -1428,6 +1429,22 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
             Route::post("/approvals/{leaveRequest}/{$action}", [LeaveApprovalsController::class, 'decide'])->defaults('action', $action)->name("approvals.{$action}");
         }
     });
+
+    // HRX.4 (ADR 0065 §25) -- Staff Self-Service: My Leave, My Attendance
+    // (read only), My Payslips. Each page needs its `.self` capability; the
+    // services add ActingEmployee ownership. Fixed action paths (never a
+    // constrained route parameter).
+    Route::prefix('app/my-leave')->name('app.my-leave.')->group(function (): void {
+        Route::get('/', [StaffSelfServiceController::class, 'leave'])->name('index');
+        Route::post('/requests', [StaffSelfServiceController::class, 'submitLeave'])->name('requests.store');
+        Route::get('/requests/{leaveRequest}', [StaffSelfServiceController::class, 'leaveRequest'])->name('requests.show');
+        foreach (['withdraw', 'cancel'] as $action) {
+            Route::post("/requests/{leaveRequest}/{$action}", [StaffSelfServiceController::class, 'decideLeave'])->defaults('action', $action)->name("requests.{$action}");
+        }
+    });
+    Route::get('/app/my-staff-attendance', [StaffSelfServiceController::class, 'attendance'])->name('app.my-staff-attendance.index');
+    Route::get('/app/my-payslips', [StaffSelfServiceController::class, 'payslips'])->name('app.my-payslips.index');
+    Route::get('/app/my-payslips/{payrollRun}/{employmentRecord}', [StaffSelfServiceController::class, 'payslip'])->name('app.my-payslips.show');
 
     // HRX.3 (ADR 0065 §24.15) -- Staff Attendance administration: the daily
     // register (single record, bulk save, correction) and an employment's

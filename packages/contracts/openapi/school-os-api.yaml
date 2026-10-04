@@ -3778,6 +3778,302 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/my/leave:
+    get:
+      operationId: getMyLeaveOverview
+      summary: >
+        HRX.4: the acting Employee's own leave overview -- requestable leave types and the ledger-derived balances (integer half-day units) of their current EmploymentRecord in the leave year containing today. No policy, ledger or anyone else's data. Requires hr.leave.self plus a resolvable ActingEmployee.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyLeaveOverview" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/my/leave/requests:
+    get:
+      operationId: listMyLeaveRequests
+      summary: >
+        HRX.4: the acting Employee's own leave requests. Requires hr.leave.self plus a resolvable ActingEmployee.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LeaveRequest" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: submitMyLeaveRequest
+      summary: >
+        HRX.4: submits a leave request for the acting Employee's own current EmploymentRecord through the same HRX.2 rules (calendar, portions, overlap, type, employment). The client never names an Employee, EmploymentRecord or School. Requires hr.leave.self. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MyLeaveRequestInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_OVERLAP / LEAVE_YEAR_CLOSED / LEAVE_EMPLOYMENT_NOT_ELIGIBLE / LEAVE_TYPE_INACTIVE / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (closed value lists; employee_id / employment_record_id / school_id / requester_user_id / manager_id are prohibited -- identity is the ActingEmployee's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/my/leave/requests/{leaveRequestId}:
+    get:
+      operationId: getMyLeaveRequest
+      summary: >
+        HRX.4: one own request with its chargeable days and decisions (decision, path, reason code, time). Never the ledger entries or the decider. Requires hr.leave.self.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyLeaveRequestDetail" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/my/leave/requests/{leaveRequestId}/withdraw:
+    post:
+      operationId: withdrawMyLeaveRequest
+      summary: >
+        HRX.4: the requester withdraws their own submitted request (decision path `self`). Requires hr.leave.self. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveClosingInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_NOT_SUBMITTED / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (closed value lists; employee_id / employment_record_id / school_id / requester_user_id / manager_id are prohibited -- identity is the ActingEmployee's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/my/leave/requests/{leaveRequestId}/cancel:
+    post:
+      operationId: cancelMyLeaveRequest
+      summary: >
+        HRX.4: the requester cancels their own approved request before it starts (decision path `self`), through the same HRX.2 reversal and reconciliation. Requires hr.leave.self. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leaveRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveClosingInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveRequest" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_REQUEST_NOT_APPROVED / LEAVE_SELF_CANCEL_STARTED / LEAVE_CANCELLATION_CLOSE_CHAIN / IDEMPOTENCY_KEY_CONFLICT.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (closed value lists; employee_id / employment_record_id / school_id / requester_user_id / manager_id are prohibited -- identity is the ActingEmployee's).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/my/staff-attendance:
+    get:
+      operationId: getMyStaffAttendance
+      summary: >
+        HRX.4: the acting Employee's own staff attendance, READ ONLY -- the HRX.3 per-half composition (present, absent, leave, holiday, off_day, unrecorded) for their current EmploymentRecord over at most 93 days inside its dates, without internal record ids or correction history. There is no own-attendance write. Requires hr.staff_attendance.self.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: from, in: query, required: false, schema: { type: string, format: date } }
+        - { name: to, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/MyStaffAttendance" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.staff_attendance.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/my/payslips:
+    get:
+      operationId: listMyPayslips
+      summary: >
+        HRX.4: the acting Employee's own payslips of POSTED payroll runs (period, run and status only; no amounts). Requires payroll.payslips.self plus a resolvable ActingEmployee.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/MyPayslipSummary" } } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.payslips.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/my/payslips/{payrollRunId}/{employmentRecordId}:
+    get:
+      operationId: getMyPayslip
+      summary: >
+        HRX.4: one own posted payslip through PayslipReadService's ownership path -- the same assembly as the administrative payslip, never recalculated; own statutory deductions with masked identifiers. Audited as payroll.payslip.self_viewed. Anything unowned, unposted or unknown is one identical private 404. Requires payroll.payslips.self.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: payrollRunId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: employmentRecordId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: object, additionalProperties: true, description: "The administrative payslip shape (PayslipPresenter), for the caller's own posted payslip." } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.payslips.self in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Private 404 -- one identical body for an unknown, malformed, unowned or other-School id, and for an actor with no resolvable ActingEmployee in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/staff-attendance/register:
     get:
       operationId: getStaffAttendanceRegister
@@ -16154,6 +16450,101 @@ components:
                   carriedDelta: { type: integer, minimum: 0 }
                   lapsedDelta: { type: integer, minimum: 0 }
                   createdAt: { type: string, format: date-time, nullable: true }
+    MyLeaveOverview:
+      type: object
+      description: HRX.4 -- the acting Employee's own leave overview (School-configured entitlements; no statutory claim).
+      required: [asOf, leaveYear, types, balances]
+      properties:
+        asOf: { type: string, format: date }
+        leaveYear: { allOf: [{ $ref: "#/components/schemas/LeaveYear" }], nullable: true }
+        types:
+          type: array
+          items:
+            type: object
+            required: [id, code, name, isPaid, tracksBalance, allowsHalfDay]
+            properties:
+              id: { type: string, format: uuid }
+              code: { type: string }
+              name: { type: string }
+              isPaid: { type: boolean }
+              tracksBalance: { type: boolean }
+              allowsHalfDay: { type: boolean }
+        balances:
+          type: array
+          items:
+            type: object
+            required: [leaveTypeId, leaveTypeCode, leaveTypeName, credits, debits, availableUnits]
+            properties:
+              leaveTypeId: { type: string, format: uuid }
+              leaveTypeCode: { type: string, nullable: true }
+              leaveTypeName: { type: string, nullable: true }
+              credits: { type: integer, minimum: 0 }
+              debits: { type: integer, minimum: 0 }
+              availableUnits: { type: integer, description: "Integer half-day units (2 = one full day)." }
+    MyLeaveRequestInput:
+      type: object
+      required: [leave_type_id, starts_on, start_portion, ends_on, end_portion]
+      properties:
+        leave_type_id: { type: string, format: uuid }
+        starts_on: { type: string, format: date }
+        start_portion: { type: string, enum: [full, first_half, second_half] }
+        ends_on: { type: string, format: date }
+        end_portion: { type: string, enum: [full, first_half, second_half] }
+        reason_code: { type: string, nullable: true, enum: [personal, family, official_duty, other, null] }
+    MyLeaveRequestDetail:
+      allOf:
+        - { $ref: "#/components/schemas/LeaveRequest" }
+        - type: object
+          required: [days, decisions]
+          properties:
+            days:
+              type: array
+              items:
+                type: object
+                required: [date, portion, units, leaveYearId]
+                properties:
+                  date: { type: string, format: date }
+                  portion: { type: string, enum: [full, first_half, second_half] }
+                  units: { type: integer, enum: [1, 2] }
+                  leaveYearId: { type: string, format: uuid }
+            decisions:
+              type: array
+              items:
+                type: object
+                required: [id, decision, path, reasonCode, decidedAt]
+                properties:
+                  id: { type: string, format: uuid }
+                  decision: { type: string, enum: [approved, rejected, withdrawn, cancelled] }
+                  path: { type: string, enum: [manager, administrative, self] }
+                  reasonCode: { type: string, nullable: true }
+                  decidedAt: { type: string, format: date-time }
+    MyStaffAttendanceDay:
+      type: object
+      required: [date, firstHalf, secondHalf, summary]
+      properties:
+        date: { type: string, format: date }
+        firstHalf: { $ref: "#/components/schemas/StaffAttendanceHalfView" }
+        secondHalf: { $ref: "#/components/schemas/StaffAttendanceHalfView" }
+        summary: { type: string, enum: [present, absent, half_day_absent, on_leave, holiday, off_day, unrecorded, partially_recorded, mixed] }
+    MyStaffAttendance:
+      type: object
+      required: [from, to, calendarConfigured, days]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        calendarConfigured: { type: boolean }
+        days: { type: array, items: { $ref: "#/components/schemas/MyStaffAttendanceDay" } }
+    MyPayslipSummary:
+      type: object
+      required: [payrollRunId, employmentRecordId, runKind, periodMonth, paymentDate, postedAt, isReversed]
+      properties:
+        payrollRunId: { type: string, format: uuid }
+        employmentRecordId: { type: string, format: uuid }
+        runKind: { type: string, enum: [regular, correction] }
+        periodMonth: { type: string, format: date }
+        paymentDate: { type: string, format: date, nullable: true }
+        postedAt: { type: string, format: date-time, nullable: true }
+        isReversed: { type: boolean }
     StaffAttendanceHalfStatus:
       type: string
       nullable: true

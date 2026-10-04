@@ -60,9 +60,11 @@ interface Payslip {
 
 interface Props {
     payslip: Payslip;
+    /** HRX.4: the own-payslip page links back to My Payslips instead of the run. */
+    back?: { href: string; label: string } | null;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), { back: null });
 
 const earningLines = props.payslip.lines.filter((l) => l.componentType === 'earning');
 const deductionLines = props.payslip.lines.filter((l) => l.componentType === 'deduction');
@@ -75,7 +77,8 @@ function print(): void {
 <template>
     <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900 print:p-0">
         <div class="flex items-start justify-between gap-4 print:hidden">
-            <a class="text-sm underline" :href="`/app/payroll/runs/${payslip.payrollRunId}`">
+            <a v-if="back" class="text-sm underline" :href="back.href">← {{ back.label }}</a>
+            <a v-else class="text-sm underline" :href="`/app/payroll/runs/${payslip.payrollRunId}`">
                 ← Back to run
             </a>
             <button

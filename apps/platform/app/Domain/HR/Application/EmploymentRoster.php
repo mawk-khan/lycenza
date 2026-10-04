@@ -52,6 +52,20 @@ class EmploymentRoster
     }
 
     /**
+     * HRX.4: one EmploymentRecord's dates (inclusive; `endsOn` null = open-ended), or null for another School's / an unknown id.
+     *
+     * @return array{startsOn: string, endsOn: ?string}|null
+     */
+    public function span(School $school, string $employmentRecordId): ?array
+    {
+        return $this->context->withSchool($school, function () use ($school, $employmentRecordId): ?array {
+            $record = EmploymentRecord::query()->where('school_id', $school->id)->find($employmentRecordId);
+
+            return $record === null ? null : ['startsOn' => $record->starts_on->toDateString(), 'endsOn' => $record->ends_on?->toDateString()];
+        });
+    }
+
+    /**
      * @param  callable(Builder<EmploymentRecord>): mixed  $filter
      * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool}>
      */

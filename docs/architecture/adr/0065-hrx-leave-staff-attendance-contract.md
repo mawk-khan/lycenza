@@ -10,7 +10,8 @@
   recorded before coding; as-built notes in §23.15). **HRX.3 — Staff
   Attendance is built** (§24: the per-half storage refinement of §7 and the
   Leave ↔ Attendance mechanism, recorded before coding; as-built notes in
-  §24.16). The
+  §24.16). **HRX.4 — Staff Self-Service is built** (§25, decisions
+  recorded before coding; as-built notes in §25.13). The
   remaining **[OWNER DECISION]** defaults still apply to HRX.2–HRX.6 unless
   the owner records a different choice before the checkpoint that needs it.
 - Date: 2026-10-03
@@ -1341,3 +1342,182 @@ clock-in/clock-out. Where it narrows a default above, this section governs.
   `staff_attendance_records` under `employees` and `employment_records`.
 - **Recorded, not built:** own attendance (HRX.4), the HRX.5 unpaid-days
   contract, and the D9 purge (HRX.6).
+
+## 25. HRX.4 — Staff Self-Service: decisions recorded before coding (2026-10-04)
+
+Baseline `0689569`. This closes the open details of §11 and §13 for HRX.4.
+Where it narrows a default above, this section governs.
+
+### 25.1 Identity: ActingEmployee only
+- **Every self-service read and write starts from the authenticated User
+  and the trusted School context**, resolved through
+  `ActingEmployeeResolver` only: `resolve()` for reads, `hold()` inside a
+  write's transaction. No second resolver, and never an email, role,
+  Teacher record, or client-supplied Employee, EmploymentRecord or School
+  id.
+- **The resolver yields exactly one current EmploymentRecord**
+  (`active`/`notice_period`, dates containing today). It fails closed on
+  zero or several. Self-service submission therefore always uses
+  `ActingEmployee::employmentRecordId`; the client never names an
+  EmploymentRecord, and there is nothing to guess.
+- **The capability gives permission; ActingEmployee gives ownership.** Both
+  are always required.
+
+### 25.2 Capabilities and the `staff_self_service` role
+- **Capabilities** (§12): `hr.leave.self`, `hr.staff_attendance.self`,
+  `payroll.payslips.self`. None implies, or is implied by, any
+  administrative, manager or Payroll capability.
+- **`staff_self_service`** (§22.3) is a system School role carrying exactly
+  those three. It is a capability bundle only; no code checks the role key.
+- **Grants.** It joins the closed School role catalog (ADR 0059) and is
+  granted and revoked through Settings → Staff accounts like any School
+  role. It is never provisioned automatically because an Employee exists,
+  and a direct capability grant works the same way.
+- **`school_admin`** also holds the three capabilities. This is solely so
+  it can grant the role (`StaffRoleCatalog` lets an actor grant only a role
+  whose every capability they hold — the TCH.3 precedent). On its own, a
+  capability still reaches only the holder's own ActingEmployee data.
+- **Unchanged:** `principal` and `teacher` (E33). A Teacher who needs
+  self-service is granted `staff_self_service` separately.
+  `hr.leave.approve` stays separate (§23.6).
+
+### 25.3 Lifecycle (narrowest safe decision)
+- **No post-employment portal.** Every self-service read and write
+  requires a resolvable ActingEmployee **today**. A separated, retired or
+  terminated Employee, an archived Employee, a suspended membership or a
+  disabled User has no self-service access. Their historical leave,
+  attendance and payslips stay available to administrators.
+- **Scope of each read:**
+  - leave requests: the Employee's own (all their EmploymentRecords in this
+    School);
+  - leave balances: the acting EmploymentRecord in the leave year
+    containing today;
+  - attendance: the acting EmploymentRecord, inside its employment dates;
+  - payslips: posted runs of any of the Employee's EmploymentRecords in
+    this School.
+- **School switching** re-resolves everything. Nothing is cached, and
+  identity never crosses Schools.
+
+### 25.4 Own leave
+- **Read:** balances (the same ledger-derived calculation as
+  administration, in integer units), active leave types (id, code, name,
+  paid, tracked, half-day), own requests, and a request's chargeable days
+  and decisions (decision, path, reason code, time). Never the ledger
+  entries, other Employees, policies, allocations, year close or approval
+  queues.
+- **Submit:** `LeaveRequestService::submit()`, the same code as the
+  administrative path, for the acting EmploymentRecord. Input is the leave
+  type, dates, portions and an optional closed reason code only.
+- **Withdraw:** own `submitted` request.
+- **Cancel:** own `approved` request **before it starts** (School-local
+  today < `starts_on`, §5; otherwise `LEAVE_SELF_CANCEL_STARTED`, 409).
+  This is the same cancellation code: reversals, reconciliation, the close
+  chain refusal, locks and the event.
+- **Never:** approving or rejecting anything on this path. Self-decision
+  stays refused by the database.
+- **Decision path `self`.** A requester's own withdrawal or cancellation is
+  recorded with path `self`, a new value amending §23.5. The database
+  allows `self` only for `withdrawn`/`cancelled` and only when the decider's
+  Employee equals the requester's. Both Employees are trigger-derived, so
+  raw SQL cannot forge it.
+- **Audit and events:** the same events, with `source`/`path` metadata.
+  There are no new or duplicate outbox events.
+
+### 25.5 Private 404
+- An unknown id, another Employee's request or payslip, another School's
+  id, or an actor without an ActingEmployee all answer **one identical
+  404 body** (the TCH.6 rule).
+- Lists need no identifier at all (`/my/...`), so there is nothing to
+  enumerate.
+
+### 25.6 Own attendance (read-only)
+- The HRX.3 composed per-half view (`StaffAttendanceReadService`) for the
+  acting EmploymentRecord, over at most 93 days inside its employment
+  dates.
+- It shows the effective state, the recorded value underneath, today's
+  calendar classification, and the employee's own leave-type name.
+- It omits internal record ids/versions and the correction history.
+- There is no own-attendance mutation of any kind.
+
+### 25.7 Own payslips
+- **Through `PayslipReadService` only**, with a new ownership path
+  `renderOwn()` sharing the existing assembly code. Nothing is copied into
+  HRX, and nothing is recalculated.
+- **Posted runs only** (`status = 'posted'`). Approved-not-posted, draft
+  and calculated runs are excluded. Results expired by retention are
+  simply absent. A reversed run shows its flag.
+- **Statutory section.** The employee's own statutory deductions are
+  included, with identifiers masked as today.
+- **Audit.** Each payslip view records `payroll.payslip.self_viewed`
+  (§16). The list carries period, run and status only, with no amounts,
+  and is not audited.
+
+### 25.8 Routes
+- **API:** `/api/v1/schools/{school}/my/leave` (overview),
+  `/my/leave/requests` (list, submit), `/my/leave/requests/{id}` (show),
+  `.../withdraw`, `.../cancel`, `/my/staff-attendance`, `/my/payslips`, and
+  `/my/payslips/{payrollRun}/{employmentRecord}`.
+- **Pages:** `/app/my-leave`, `/app/my-staff-attendance`, `/app/my-payslips`
+  (the payslip view reuses the printable payslip page).
+- **Middleware:** every route has `private-no-store`, its `.self`
+  capability middleware and School membership, and every service checks
+  again.
+
+### 25.9 Idempotency and concurrency
+- Submit and withdraw are `idempotent` (the generic completion, as on the
+  administrative path). Cancel completes inside its transaction (rule 33).
+- **No new race semantics:** the self path calls the same locked
+  operations, in the §24.6 lock order, with ActingEmployee held as the HR
+  rows.
+
+### 25.10 Storage and legal boundaries
+- **No new table.** There is one CHECK amendment on `leave_decisions` (the
+  `self` path) and no retention change.
+- No health, free-text, biometric, device, clock, statutory-entitlement or
+  loss-of-pay behaviour. HRX-L1 to HRX-L4 stay open.
+
+### 25.13 HRX.4 as built
+- **No new module and no new table.** The ownership paths live where the
+  data lives:
+  - Leave: `LeaveRequestService::submitOwn()` / `withdrawOwn()` /
+    `cancelOwn()`; `LeaveRequestReadService::ownOverview()` / `own()` /
+    `ownShow()`; `LeaveReadService::ownOverview()`, which shares
+    `balanceRows()` with the administrative balance read.
+  - StaffAttendance: `StaffAttendanceReadService::own()`, sharing the HRX.3
+    composition.
+  - Payroll: `PayslipReadService::ownPayslips()` / `renderOwn()`, sharing
+    `assemble()` with `render()`.
+- **Migration** `2026_11_21_090000_allow_self_leave_decisions`: the
+  `leave_decisions_shape_check` CHECK now allows path `self` only for
+  `withdrawn`/`cancelled` with `decider_employee_id = requester_employee_id`
+  (both trigger-derived). `down()` refuses once a `self` decision exists.
+- **Identity.**
+  - Writes hold ActingEmployee inside the transaction (after the request
+    row, as the HR rows, §23.10 order).
+  - The owned paths (manager and self) now answer an unknown request id
+    exactly like an unowned one (`LeaveRequestService::privateNotFound()`).
+  - Self submission refuses `employee_id`, `employment_record_id`,
+    `school_id`, `requester_user_id` and `manager_id` (422).
+- **Seeded:**
+  - the three `.self` capabilities;
+  - the `staff_self_service` system School role;
+  - the three also on `school_admin` (grant reason only);
+  - the demo Teacher account gains `staff_self_service` as a separate
+    grant, with the `teacher` role unchanged.
+- **API:** 9 operations under `/api/v1/schools/{school}/my/...`.
+  - Leave writes are `idempotent`; cancel uses `completeWithin()`.
+  - Own attendance and payslips are GET only.
+- **Pages:** `/app/my-leave` (+ `/requests/{id}`), `/app/my-staff-attendance`
+  and `/app/my-payslips` (+ `/{run}/{employmentRecord}`, reusing the
+  printable payslip page with a `back` link). Dashboard links follow each
+  `.self` capability separately. An actor without an ActingEmployee sees an
+  "unavailable" state.
+- **Payroll presentation:** `PayslipPresenter` replaces the two duplicated
+  presenters in the administrative payslip controllers. The output is
+  unchanged.
+- **Guards:**
+  - `StaffSelfServiceArchitectureGuardTest`: no code names the role;
+    routes are capability-gated, private and identifier-free; ownership
+    only through ActingEmployee; no HRX.5 concept; no table.
+  - `StaffSelfServiceOpenApiCoverageTest`.
+  - Leave and Staff Attendance guards updated to the HRX.4 shape.

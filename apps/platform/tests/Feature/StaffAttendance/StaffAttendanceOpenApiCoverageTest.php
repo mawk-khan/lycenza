@@ -36,8 +36,6 @@ class StaffAttendanceOpenApiCoverageTest extends TestCase
     #[Test]
     public function the_contract_documents_no_self_service_payroll_device_or_delete_operation(): void
     {
-        $contract = (string) file_get_contents($this->contractPath());
-        $this->assertStringNotContainsString('hr.staff_attendance.self', $contract);
         foreach ($this->documentedOperations() as $operation) {
             $this->assertDoesNotMatchRegularExpression('#/me\b|/my\b|self|payslip|payroll|ncp|loss-of-pay|clock|punch|device|biometric|kiosk|geo#i', $operation, 'HRX.4/HRX.5 and device attendance are not part of HRX.3');
             $this->assertStringStartsNotWith('DELETE ', $operation, 'attendance evidence is corrected, never deleted');

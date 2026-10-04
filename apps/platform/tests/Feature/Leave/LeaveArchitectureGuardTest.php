@@ -3,6 +3,7 @@
 namespace Tests\Feature\Leave;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -17,8 +18,8 @@ use Tests\TestCase;
  * - one ledger writer;
  * - no stored balance;
  * - the `teacher` role untouched (E33);
- * - no self-service yet; Staff Attendance (HRX.3) reached only through
- *   Leave's own port.
+ * - self-service (HRX.4) only as an owned `/my/leave` family; Staff
+ *   Attendance (HRX.3) reached only through Leave's own port.
  */
 class LeaveArchitectureGuardTest extends TestCase
 {
@@ -121,24 +122,31 @@ class LeaveArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function no_self_service_or_payroll_coupling_exists_yet(): void
+    public function self_service_is_owned_and_no_payroll_coupling_exists(): void
     {
-        $routes = (string) file_get_contents(base_path('routes/api.php')).(string) file_get_contents(base_path('routes/web.php'));
-        $this->assertDoesNotMatchRegularExpression('#/my[-/](leave|staff[-_]attendance|payslips?)|hr\.leave\.self|hr\.staff_attendance\.self#', $routes, 'self-service is HRX.4');
+        // HRX.4: own leave is a `/my/leave` family under `hr.leave.self`; no route names an Employee or EmploymentRecord.
+        $mine = collect(Route::getRoutes())->filter(fn ($r) => str_contains($r->uri(), '/my/leave'))->values();
+        $this->assertCount(6, $mine);
+        foreach ($mine as $route) {
+            $this->assertContains('capability:hr.leave.self', $route->gatherMiddleware(), $route->uri());
+            $this->assertDoesNotMatchRegularExpression('/\{(employee|employmentRecord|employment|user)/i', $route->uri(), 'self-service never takes an Employee identifier');
+            $this->assertDoesNotMatchRegularExpression('#/(approve|reject)$#', $route->uri(), 'nobody decides on the self path');
+        }
         foreach ($this->phpFiles('Domain/Payroll') as $file) {
             $this->assertDoesNotMatchRegularExpression('/leave_(requests|request_days|decisions|ledger_entries|year_close)/', $this->code($file), "{$file}: Payroll never reads Leave tables (HRX.5 is a read contract)");
         }
     }
 
     #[Test]
-    public function the_teacher_role_is_untouched_and_no_self_service_capability_exists_yet(): void
+    public function the_teacher_role_is_untouched_and_self_service_is_a_separate_bundle(): void
     {
         $teacher = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')
             ->where('r.key', 'teacher')->pluck('rc.capability_key')->sort()->values()->all();
         $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $teacher, 'E33: the teacher role is unchanged');
 
         $leave = DB::table('capabilities')->where('key', 'like', 'hr.leave.%')->orderBy('key')->pluck('key')->all();
-        $this->assertSame(['hr.leave.approve', 'hr.leave.configure', 'hr.leave.manage', 'hr.leave.view'], $leave, 'HRX.2 adds approve; self is HRX.4');
-        $this->assertFalse(DB::table('roles')->where('key', 'staff_self_service')->exists(), 'the staff self-service role is HRX.4');
+        $this->assertSame(['hr.leave.approve', 'hr.leave.configure', 'hr.leave.manage', 'hr.leave.self', 'hr.leave.view'], $leave, 'HRX.2 adds approve; HRX.4 adds self');
+        $bundle = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', 'staff_self_service')->pluck('rc.capability_key')->sort()->values()->all();
+        $this->assertSame(['hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'], $bundle, 'HRX.4: the self-service bundle, and nothing administrative');
     }
 }

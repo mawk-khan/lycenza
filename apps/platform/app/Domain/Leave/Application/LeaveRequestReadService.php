@@ -2,6 +2,7 @@
 
 namespace App\Domain\Leave\Application;
 
+use App\Domain\HR\Application\ActingEmployee;
 use App\Domain\HR\Application\ActingEmployeeResolver;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
 use App\Domain\HR\Application\ReportingLine;
@@ -26,6 +27,8 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
  *   Employee's current direct reports, resolved server-side from HR's
  *   ReportingLine. Anything else is the private 404, so a capability
  *   without the relationship discovers nothing.
+ * - Own reads (HRX.4) need `hr.leave.self` and see ONLY the acting
+ *   Employee's requests; anything else is the same private 404.
  * - An approved request shows its stored chargeable-day evidence, never a
  *   recalculation.
  */
@@ -39,7 +42,69 @@ class LeaveRequestReadService
         private readonly TenantContext $context,
         private readonly ActingEmployeeResolver $acting,
         private readonly ReportingLine $reporting,
+        private readonly LeaveReadService $leaveReads,
     ) {}
+
+    /**
+     * HRX.4 (ADR 0065 §25.4): the acting Employee's own leave overview (types
+     * and current balances). No ActingEmployee is the private 404.
+     *
+     * @return array<string, mixed>
+     */
+    public function ownOverview(School $school, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::SELF, $school);
+
+        return $this->leaveReads->ownOverview($school, $this->ownActing($school, $actor), $actor);
+    }
+
+    /**
+     * HRX.4: the acting Employee's own requests, across their EmploymentRecords in this School.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function own(School $school, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::SELF, $school);
+        $acting = $this->ownActing($school, $actor);
+
+        return $this->context->withSchool($school, fn () => LeaveRequest::query()->where('school_id', $school->id)
+            ->where('employee_id', $acting->employeeId)
+            ->orderByDesc('starts_on')->orderByDesc('id')->limit(self::LIST_LIMIT)->get()
+            ->map(fn (LeaveRequest $r) => self::request($r))->values()->all());
+    }
+
+    /**
+     * HRX.4: one OWN request with its chargeable days and decisions (never the
+     * ledger entries, never who decided). Anything not owned -- unknown,
+     * another Employee's, another School's -- is the same private 404.
+     *
+     * @return array<string, mixed>
+     */
+    public function ownShow(School $school, string $leaveRequestId, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::SELF, $school);
+        $acting = $this->ownActing($school, $actor);
+
+        return $this->context->withSchool($school, function () use ($school, $leaveRequestId, $acting) {
+            $request = LeaveRequest::query()->where('school_id', $school->id)->where('employee_id', $acting->employeeId)->find($leaveRequestId)
+                ?? throw LeaveRequestService::privateNotFound();
+            $detail = $this->detail($school, $request);
+            unset($detail['ledgerEntries']);
+            $detail['days'] = array_map(fn (array $d) => ['date' => $d['date'], 'portion' => $d['portion'], 'units' => $d['units'], 'leaveYearId' => $d['leaveYearId']], $detail['days']);
+
+            return $detail;
+        });
+    }
+
+    private function ownActing(School $school, User $actor): ActingEmployee
+    {
+        try {
+            return $this->acting->resolve($actor, $school);
+        } catch (ActingEmployeeUnavailableException) {
+            throw LeaveRequestService::privateNotFound();
+        }
+    }
 
     /**
      * @param  array{status?: string, employment_record_id?: string}  $filters

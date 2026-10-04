@@ -2,6 +2,7 @@
 
 namespace App\Domain\Leave\Application;
 
+use App\Domain\HR\Application\ActingEmployee;
 use App\Domain\HR\Application\ActingEmployeeResolver;
 use App\Domain\HR\Application\EmploymentCoverage;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
@@ -43,7 +44,12 @@ use Illuminate\Support\Facades\DB;
  *   That is read fresh from HR's ReportingLine and never snapshotted.
  *   Anything else is the private 404.
  * - **Administrative path:** `hr.leave.manage`, any request of the School.
- * - **Nobody** approves or rejects their own request, on either path
+ * - **Self-service path (HRX.4):** `hr.leave.self` AND the acting Employee
+ *   (ActingEmployeeResolver::hold()) owns the request: submit for the acting
+ *   EmploymentRecord, withdraw a submitted request, cancel an approved one
+ *   before it starts. Recorded with path `self`; anything not owned is the
+ *   same private 404 as an unknown id.
+ * - **Nobody** approves or rejects their own request, on any path
  *   (service check plus database CHECK).
  *
  * Approval is one transaction:
@@ -98,6 +104,36 @@ class LeaveRequestService
         return $this->submit($school, $employmentRecordId, $leaveTypeId, $startsOn, $startPortion, $endsOn, $endPortion, $reasonCode, $actor);
     }
 
+    /** HRX.4: the acting Employee submits for their own current EmploymentRecord -- the same submit(), never a second rule set. */
+    public function submitOwn(School $school, string $leaveTypeId, string $startsOn, string $startPortion, string $endsOn, string $endPortion, ?string $reasonCode, User $actor): LeaveRequest
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::SELF, $school);
+
+        return $this->submit($school, null, $leaveTypeId, $startsOn, $startPortion, $endsOn, $endPortion, $reasonCode, $actor);
+    }
+
+    /** HRX.4: the requester withdraws their own submitted request. */
+    public function withdrawOwn(School $school, string $leaveRequestId, string $reasonCode, User $actor): LeaveRequest
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::SELF, $school);
+
+        return $this->decide($school, $leaveRequestId, 'withdrawn', $reasonCode, 'self', $actor);
+    }
+
+    /** HRX.4: the requester cancels their own approved request before it starts (ADR 0065 §5); every consumption is reversed. */
+    public function cancelOwn(School $school, string $leaveRequestId, string $reasonCode, User $actor): LeaveRequest
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::SELF, $school);
+
+        return $this->cancelOnPath($school, $leaveRequestId, $reasonCode, 'self', $actor);
+    }
+
+    /** The one answer for a request the actor may not see on an owned path: identical for unknown, foreign and other-School ids. */
+    public static function privateNotFound(): ModelNotFoundException
+    {
+        return new ModelNotFoundException('No query results for the leave request.');
+    }
+
     public function approve(School $school, string $leaveRequestId, User $actor): LeaveRequest
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::MANAGE, $school);
@@ -138,13 +174,23 @@ class LeaveRequestService
     public function cancel(School $school, string $leaveRequestId, string $reasonCode, User $actor): LeaveRequest
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::MANAGE, $school);
+
+        return $this->cancelOnPath($school, $leaveRequestId, $reasonCode, 'administrative', $actor);
+    }
+
+    private function cancelOnPath(School $school, string $leaveRequestId, string $reasonCode, string $path, User $actor): LeaveRequest
+    {
         $this->requireReason($reasonCode, LeaveDecision::CLOSING_REASONS);
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $leaveRequestId, $reasonCode, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $leaveRequestId, $reasonCode, $path, $actor) {
             $this->guard->requireOperational($school->id);
-            $request = $this->lockRequest($school, $leaveRequestId);
+            $request = $this->lockRequest($school, $leaveRequestId, private: $path === 'self');
+            $owner = $path === 'self' ? $this->requireOwner($school, $request, $actor) : null;
             if ($request->status !== 'approved') {
                 throw LeaveException::conflict('LEAVE_REQUEST_NOT_APPROVED', 'Only an approved request can be cancelled.');
+            }
+            if ($owner !== null && $owner->asOf >= $request->starts_on->toDateString()) {
+                throw LeaveException::conflict('LEAVE_SELF_CANCEL_STARTED', 'Leave that has started can only be cancelled by an administrator.');
             }
             $type = LeaveType::query()->where('school_id', $school->id)->findOrFail($request->leave_type_id);
             // Staff Attendance writes on these dates wait for (or precede) the cancellation (ADR 0065 §24.6).
@@ -173,10 +219,10 @@ class LeaveRequestService
                 $reversed[] = ['leaveYearId' => $consumption->leave_year_id, 'units' => $consumption->units];
             }
 
-            $this->recordDecision($school, $request, 'cancelled', 'administrative', $reasonCode, $actor);
+            $this->recordDecision($school, $request, 'cancelled', $path, $reasonCode, $actor);
             $this->transition($request, 'approved', 'cancelled');
             $this->audit->school($school, 'leave.request.cancelled', actor: $actor, subject: $request, metadata: [
-                'path' => 'administrative', 'reasonCode' => $reasonCode, 'reversed' => $reversed,
+                'path' => $path, 'reasonCode' => $reasonCode, 'reversed' => $reversed,
             ]);
             event(new LeaveRequestCancelled($school->id, $request->id, $request->employment_record_id, $request->employee_id, $request->leave_type_id, $type->is_paid, $type->tracks_balance, $reversed));
 
@@ -184,7 +230,8 @@ class LeaveRequestService
         }));
     }
 
-    private function submit(School $school, string $employmentRecordId, string $leaveTypeId, string $startsOn, string $startPortion, string $endsOn, string $endPortion, ?string $reasonCode, User $actor): LeaveRequest
+    /** @param  string|null  $employmentRecordId  null = the acting Employee's own current EmploymentRecord (self-service) */
+    private function submit(School $school, ?string $employmentRecordId, string $leaveTypeId, string $startsOn, string $startPortion, string $endsOn, string $endPortion, ?string $reasonCode, User $actor): LeaveRequest
     {
         $shape = LeaveRequestShape::of($startsOn, $startPortion, $endsOn, $endPortion);
         if ($reasonCode !== null) {
@@ -193,6 +240,9 @@ class LeaveRequestService
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $leaveTypeId, $shape, $reasonCode, $actor) {
             $this->guard->requireOperational($school->id);
+            $source = $employmentRecordId === null ? 'self_service' : 'administrative';
+            // Self-service: the employment is the acting Employee's own, held FOR SHARE (HR rows), never client-supplied.
+            $employmentRecordId ??= $this->holdActing($school, $actor)->employmentRecordId;
             $type = LeaveType::query()->where('school_id', $school->id)->sharedLock()->findOrFail($leaveTypeId);
             if ($type->status !== 'active') {
                 throw LeaveException::conflict('LEAVE_TYPE_INACTIVE', 'This leave type is inactive.');
@@ -232,7 +282,7 @@ class LeaveRequestService
             $this->audit->school($school, 'leave.request.submitted', actor: $actor, subject: $request, metadata: [
                 'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'startsOn' => $shape->startsOn,
                 'startPortion' => $shape->startPortion->value, 'endsOn' => $shape->endsOn, 'endPortion' => $shape->endPortion->value,
-                'submittedUnits' => $units, 'reasonCode' => $reasonCode,
+                'submittedUnits' => $units, 'reasonCode' => $reasonCode, 'source' => $source,
             ]);
 
             return $request;
@@ -250,9 +300,14 @@ class LeaveRequestService
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $leaveRequestId, $decision, $reasonCode, $path, $actor) {
             $this->guard->requireOperational($school->id);
-            $request = $this->lockRequest($school, $leaveRequestId);
+            // Owned paths (manager, self) answer an unknown id exactly like an unowned one.
+            $request = $this->lockRequest($school, $leaveRequestId, private: $path !== 'administrative');
 
-            $deciderEmployeeId = $path === 'manager' ? $this->requireManager($school, $request, $actor) : $this->linkedEmployee($school, $actor);
+            $deciderEmployeeId = match ($path) {
+                'manager' => $this->requireManager($school, $request, $actor),
+                'self' => $this->requireOwner($school, $request, $actor)->employeeId,
+                default => $this->linkedEmployee($school, $actor),
+            };
             if (in_array($decision, ['approved', 'rejected'], true) && $deciderEmployeeId === $request->employee_id) {
                 throw LeaveException::forbidden('LEAVE_SELF_DECISION', 'Nobody approves or rejects their own leave request.');
             }
@@ -364,14 +419,34 @@ class LeaveRequestService
         try {
             $acting = $this->acting->hold($actor, $school);
         } catch (ActingEmployeeUnavailableException) {
-            throw new ModelNotFoundException('No query results for the leave request.');
+            throw self::privateNotFound();
         }
         $manager = $this->reporting->holdManagerOf($school, $request->employment_record_id, $acting->asOf);
         if ($manager === null || $manager !== $acting->employeeId) {
-            throw new ModelNotFoundException('No query results for the leave request.');
+            throw self::privateNotFound();
         }
 
         return $acting->employeeId;
+    }
+
+    /** The self-service path's ownership: the acting Employee IS the requester, or the private 404. */
+    private function requireOwner(School $school, LeaveRequest $request, User $actor): ActingEmployee
+    {
+        $acting = $this->holdActing($school, $actor);
+        if ($request->employee_id !== $acting->employeeId) {
+            throw self::privateNotFound();
+        }
+
+        return $acting;
+    }
+
+    private function holdActing(School $school, User $actor): ActingEmployee
+    {
+        try {
+            return $this->acting->hold($actor, $school);
+        } catch (ActingEmployeeUnavailableException) {
+            throw self::privateNotFound();
+        }
     }
 
     /** The decider's own Employee on the administrative path, for the self-decision refusal (the database derives it too). */
@@ -411,8 +486,13 @@ class LeaveRequestService
         }
     }
 
-    private function lockRequest(School $school, string $leaveRequestId): LeaveRequest
+    /** @param  bool  $private  an owned path: an unknown id answers exactly like a foreign one */
+    private function lockRequest(School $school, string $leaveRequestId, bool $private = false): LeaveRequest
     {
+        if ($private) {
+            return LeaveRequest::query()->where('school_id', $school->id)->lockForUpdate()->find($leaveRequestId) ?? throw self::privateNotFound();
+        }
+
         return LeaveRequest::query()->where('school_id', $school->id)->lockForUpdate()->findOrFail($leaveRequestId);
     }
 

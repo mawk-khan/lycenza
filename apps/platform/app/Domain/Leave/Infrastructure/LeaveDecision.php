@@ -20,7 +20,8 @@ class LeaveDecision extends Model
 {
     use BelongsToSchool, GeneratesUuidV7;
 
-    public const PATHS = ['manager', 'administrative'];
+    /** HRX.4 (ADR 0065 §25.4): `self` -- the requester's own withdrawal or cancellation. */
+    public const PATHS = ['manager', 'administrative', 'self'];
 
     /** ADR 0065 §23.3. */
     public const REJECTION_REASONS = ['staffing_need', 'policy_not_met', 'duplicate_request', 'entered_in_error', 'other'];

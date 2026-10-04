@@ -68,6 +68,9 @@ interface Props {
         canViewLeave: boolean;
         canUseLeaveApprovals: boolean;
         canViewStaffAttendance: boolean;
+        canUseMyLeave: boolean;
+        canUseMyStaffAttendance: boolean;
+        canUseMyPayslips: boolean;
         canUseMyCurriculumDelivery: boolean;
         canUseMyAttendance: boolean;
         canUseMyLearningContent: boolean;
@@ -282,6 +285,15 @@ function activate(schoolId: string) {
                 </li>
                 <li v-if="nav.canViewStaffAttendance">
                     <a class="underline" href="/app/staff-attendance">Staff Attendance</a>
+                </li>
+                <li v-if="nav.canUseMyLeave">
+                    <a class="underline" href="/app/my-leave">My Leave</a>
+                </li>
+                <li v-if="nav.canUseMyStaffAttendance">
+                    <a class="underline" href="/app/my-staff-attendance">My Staff Attendance</a>
+                </li>
+                <li v-if="nav.canUseMyPayslips">
+                    <a class="underline" href="/app/my-payslips">My Payslips</a>
                 </li>
                 <li v-if="nav.canUseMyCurriculumDelivery">
                     <a class="underline" href="/app/my-curriculum-delivery"

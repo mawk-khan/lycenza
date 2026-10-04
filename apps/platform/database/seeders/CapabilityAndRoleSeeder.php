@@ -310,6 +310,12 @@ class CapabilityAndRoleSeeder extends Seeder
             // (`hr.staff_attendance.self`) is HRX.4. Never on `teacher` (E33).
             ['key' => 'hr.staff_attendance.view', 'label' => 'View staff attendance (daily register, history, corrections)', 'namespace' => 'school'],
             ['key' => 'hr.staff_attendance.manage', 'label' => 'Record and correct staff attendance', 'namespace' => 'school'],
+            // HRX.4 (ADR 0065 §25.2): Staff Self-Service -- each reaches ONLY the
+            // holder's own ActingEmployee data, never School-wide records; no
+            // administrative, manager or Payroll capability is implied.
+            ['key' => 'hr.leave.self', 'label' => 'View own leave and submit, withdraw or cancel own leave requests', 'namespace' => 'school'],
+            ['key' => 'hr.staff_attendance.self', 'label' => 'View own staff attendance (read only)', 'namespace' => 'school'],
+            ['key' => 'payroll.payslips.self', 'label' => 'View own posted payslips', 'namespace' => 'school'],
             ['key' => 'hr.categories.view', 'label' => 'View Employee Categories', 'namespace' => 'school'],
             ['key' => 'hr.categories.manage', 'label' => 'Manage Employee Categories', 'namespace' => 'school'],
 
@@ -1188,6 +1194,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.leave.configure', 'hr.leave.view', 'hr.leave.manage', 'hr.leave.approve',
                     // HRX.3 (ADR 0065 §24.12): default Staff Attendance administrators.
                     'hr.staff_attendance.view', 'hr.staff_attendance.manage',
+                    // HRX.4 (ADR 0065 §25.2): held so School Admin can GRANT the
+                    // staff_self_service role (StaffRoleCatalog: no escalation, the
+                    // TCH.3 precedent). Each reaches only the holder's OWN
+                    // ActingEmployee data -- no School-wide reach.
+                    'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
                     // TCH.3: held so School Admin can GRANT the Teacher role --
                     // StaffRoleCatalog only lets an actor grant a role whose
                     // every capability they hold (no escalation). It adds no
@@ -1398,6 +1409,22 @@ class CapabilityAndRoleSeeder extends Seeder
                     'lms.content.teacher',
                     // TCH.5D: owned Assignments (ADR 0063 section 37).
                     'lms.assignments.teacher',
+                ],
+            ],
+            // HRX.4 (ADR 0065 §22.3, §25.2): Staff Self-Service -- a convenience
+            // bundle of the three OWN-data capabilities, NEVER an enforcement
+            // condition (no code asks for this role key). The role alone reaches
+            // nothing: every capability still requires a verified ActingEmployee
+            // and ownership. Granted and revoked through the ordinary staff role
+            // path; never provisioned automatically. Separate from `teacher`
+            // (unchanged, E33) and from `hr.leave.approve`.
+            'staff_self_service' => [
+                'name' => 'Staff Self-Service',
+                'scope' => 'school',
+                'capabilities' => [
+                    'hr.leave.self',
+                    'hr.staff_attendance.self',
+                    'payroll.payslips.self',
                 ],
             ],
         ];

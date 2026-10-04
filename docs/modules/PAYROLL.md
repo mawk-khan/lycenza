@@ -953,6 +953,19 @@ nothing changes in Payroll until **HRX.5**:
   rewritten: later leave or attendance changes surface as a pending
   difference and flow only through a correction run. Automatic deduction
   waits on legal gate HRX-L4.
-- **HRX.4:** own payslip self-service (`payroll.payslips.self`) reads the
-  existing payslip through `PayslipReadService` with an ownership path; the
-  Payroll evidence model is unchanged.
+- **HRX.4 (built, ADR 0065 §25.7):** own payslip self-service
+  (`payroll.payslips.self`).
+  - `PayslipReadService::ownPayslips()` / `renderOwn()` add an ownership
+    path that shares the administrative assembly. Nothing is copied or
+    recalculated.
+  - Only `posted` runs (never approved-not-posted), results not expired by
+    retention, and EmploymentRecords of the acting Employee
+    (`ActingEmployeeResolver`) in this School.
+  - The employee's own statutory section is shown, identifiers masked.
+  - Each view records `payroll.payslip.self_viewed`. The list holds period,
+    run and status only (no amounts) and is not audited.
+  - Anything else is one identical private 404.
+  - The Payroll evidence model, the administrative payslip
+    (`payroll.compensation.sensitive.view`, `payroll.payslip.viewed`) and
+    the run states are unchanged. `PayslipPresenter` is now the one shape
+    both payslip transports share. No loss-of-pay or NCP (HRX.5).
