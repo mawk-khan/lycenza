@@ -3,8 +3,10 @@
 namespace App\Domain\StaffAttendance\Application\Retention;
 
 use App\Domain\HR\Application\Retention\EmployeeRetentionEligibility;
+use App\Domain\HR\Application\Retention\EmployeeSeparation;
 use App\Models\School;
 use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionMetrics;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -52,8 +54,9 @@ final class StaffAttendanceEvidenceRetentionService
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
     public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
-        // The retention identity's connection: the runtime role cannot execute the purge function.
-        return $this->expiry->privileged(fn (): array => $this->employees->purgeSeparatedBefore(
+        // E21-RH.2: the whole unit runs as the dedicated retention identity (the runtime role cannot execute the
+        // purge function). Its recheck is a plain read: the function locks the Employee and re-proves it.
+        return $this->expiry->privileged(RetentionMetrics::STAFF_ATTENDANCE_EVIDENCE, $dryRun, fn (): array => $this->employees->purgeSeparatedBefore(
             $school,
             $cutoffDate,
             $batch,
@@ -62,6 +65,7 @@ final class StaffAttendanceEvidenceRetentionService
             fn (string $employeeId): array => $this->kept(fn () => $this->expiry->hrxEmployeeEvidence('staff_attendance', $school, $employeeId, $cutoffDate, true)),
             fn (string $employeeId): ?array => $this->expiry->hrxEmployeeEvidence('staff_attendance', $school, $employeeId, $cutoffDate, false) > 0 ? [] : null,
             $only,
+            fn (string $employeeId): ?EmployeeSeparation => $this->employees->readSeparation($employeeId),
         ));
     }
 

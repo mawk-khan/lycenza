@@ -44,3 +44,22 @@ ALTER DEFAULT PRIVILEGES FOR ROLE school_os IN SCHEMA public
 
 ALTER DEFAULT PRIVILEGES FOR ROLE school_os IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO school_os_app;
+
+-- E21-RH.2 (ADR 0066): the dedicated retention identity. It executes the
+-- destructive retention functions migrated to it (EXECUTE and the few
+-- column-level SELECTs its orchestration reads are granted explicitly by
+-- migrations). It deliberately receives NO default privileges, owns
+-- nothing and is a member of no other role. Idempotent: re-run safely on
+-- an already-initialized database to add the role.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'school_os_retention') THEN
+        CREATE ROLE school_os_retention LOGIN PASSWORD 'school_os_retention_local_only_password'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+    END IF;
+END
+$$;
+ALTER ROLE school_os_retention NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+
+GRANT CONNECT ON DATABASE school_os TO school_os_retention;
+GRANT USAGE ON SCHEMA public TO school_os_retention;

@@ -79,6 +79,16 @@ psql_q "alter role school_os_app createdb" >/dev/null
 if bootstrap "$MIGRATION_ROLE" "$DATABASE" >/dev/null 2>&1; then fail "refuses an existing runtime role with unexpected attributes"; else pass "refuses an existing runtime role with unexpected attributes"; fi
 psql_q "alter role school_os_app nocreatedb" >/dev/null
 
+# E21-RH.2 (ADR 0066): the dedicated retention identity -- same narrow attributes, no password, no
+# membership in the migration or runtime role, no default privileges; a dangerous attribute is refused.
+attrs="$(psql_q "select rolcanlogin, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolinherit, rolreplication, rolpassword is null from pg_authid where rolname = 'school_os_retention'")"
+[[ "$attrs" == "t|f|f|f|f|f|f|t" ]] && pass "retention role attributes, no password set by the script" || fail "retention role attributes ($attrs)"
+[[ "$(psql_q "select pg_has_role('school_os_retention', '$MIGRATION_ROLE', 'MEMBER') or pg_has_role('school_os_retention', 'school_os_app', 'MEMBER')")" == "f" ]] && pass "retention role not a member of the migration or runtime role" || fail "retention role membership"
+[[ "$(psql_q "select count(*) from pg_default_acl where defaclacl::text like '%school_os_retention=%'")" == "0" ]] && pass "retention role has no default privileges" || fail "retention role default privileges"
+psql_q "alter role school_os_retention bypassrls" >/dev/null
+if bootstrap "$MIGRATION_ROLE" "$DATABASE" >/dev/null 2>&1; then fail "refuses an existing retention role with unexpected attributes"; else pass "refuses an existing retention role with unexpected attributes"; fi
+psql_q "alter role school_os_retention nobypassrls" >/dev/null
+
 # Out of band, as an operator would with \password (never a file or argv in production).
 psql_q "alter role school_os_app password '${APP_PASSWORD}'" >/dev/null
 

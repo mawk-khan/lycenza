@@ -78,6 +78,9 @@ health endpoints and the **secret groups** it receives. Guarded by
 - long-running roles (web, workers, scheduler, Gateway) never receive
   `database_admin` (`DB_ADMIN_USERNAME`, `DB_ADMIN_PASSWORD`); only
   `release` and `operator-console` do;
+- only `scheduler` and `operator-console` receive `database_retention`
+  (E21-RH.2, ADR 0066): the scheduler runs retention without the migration
+  credential;
 - every secret-shaped setting the configuration reads is in a secret group;
 - every recovery sweep (`RecoverQueuedWork::SOURCES`) is scheduled.
 
@@ -85,6 +88,7 @@ health endpoints and the **secret groups** it receives. Guarded by
 |---|---|---|
 | `app_runtime` | `APP_KEY`, `APP_PREVIOUS_KEYS`, `MAIL_PASSWORD`, `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (or none: the platform's credential chain), `AI_GATEWAY_CONTEXT_SIGNING_KEY`, `AI_GATEWAY_SERVICE_SIGNING_KEY` (Laravel's `platform` Ed25519 key, ADR 0053; only where the Gateway is deployed), both lookup HMAC keys | web, workers, scheduler, release, operator console |
 | `database_admin` | `DB_ADMIN_USERNAME`, `DB_ADMIN_PASSWORD` | release, operator console only |
+| `database_retention` | `DB_RETENTION_USERNAME`, `DB_RETENTION_PASSWORD` (the dedicated `school_os_retention` login, E21-RH.2) | scheduler, operator console only |
 | `gateway` | `SERVICE_SIGNING_KEY` (the Gateway's `ai-gateway` Ed25519 key, ADR 0053) | AI Gateway only |
 
 The verification rings (`AI_GATEWAY_INBOUND_VERIFICATION_KEYS` for Laravel,

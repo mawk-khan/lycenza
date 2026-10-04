@@ -1,9 +1,10 @@
 # ADR 0066: Retention Execution Identity and Database-Enforced Holds
 
 - Status: **Accepted as the E21-RH target architecture (E21-RH.1,
-  2026-10-04).** It is not yet implemented. The slices E21-RH.2–RH.6
-  (§9) implement it; until each slice lands, the current state in §2
-  stands.
+  2026-10-04).** The slices E21-RH.2–RH.6 (§9) implement it; until each
+  slice lands, the current state in §2 stands for what it has not reached.
+  **E21-RH.2 implemented (2026-10-04, §10):** the dedicated retention
+  identity exists, and HRX runs on it.
 - Date: 2026-10-04
 - Programme: **E21-RH — retention privilege hardening.** A
   pre-production security blocker, separate from HRX (closed at
@@ -245,3 +246,63 @@ transaction that deletes, so no freshness window exists.
     paths.
 
 E21-RH stays a pre-production blocker until E21-RH.6 closes.
+
+## 10. E21-RH.2 as built (2026-10-04)
+- **Identity.** `school_os_retention`: LOGIN, NOSUPERUSER, NOBYPASSRLS,
+  NOCREATEDB, NOCREATEROLE, NOINHERIT, NOREPLICATION; a member of no role
+  and nothing a member of it; owns nothing; no default privileges.
+- **Provisioning** (role creation is cluster-level, never in a migration):
+  - Docker init `01-roles.sql` / `03-test-database-roles.sql`;
+  - `ddev test` and `ddev demo-reset`;
+  - CI (which runs the init scripts);
+  - `bin/safe-test` (re-asserts the init scripts on every run, because the
+    isolated volume persists);
+  - `infrastructure/postgres/production-bootstrap.sql`, plus its verifier;
+  - `.env.example`, `.ddev/config.yaml`, `phpunit.xml`;
+  - the `database_retention` secret group (scheduler, operator console).
+- **Grants** (migration `2026_11_26_090000_move_hrx_retention_to_dedicated_identity`,
+  which refuses while the role is missing or not narrow):
+  - EXECUTE on the two HRX functions;
+  - column-level SELECT on exactly what the HRX unit reads:
+    - `employees(id, school_id)`;
+    - `employment_records(id, employee_id, status, ends_on)`;
+    - `leave_requests(employee_id)`;
+    - `leave_policy_assignments`, `leave_ledger_entries` and
+      `leave_year_close_items` (`employment_record_id`);
+    - `staff_attendance_records(employee_id)`;
+    - `retention_school_holds(school_id)`.
+  - Nothing else.
+- **Authorization.** The HRX prologue accepts exactly
+  `session_user = 'school_os_retention'`, the authenticated login.
+  Membership, `SET ROLE` and client settings cannot satisfy it, so the
+  runtime role, the owner and any other login are refused
+  (`retention_privilege`).
+- **Execution.** `RetentionExpiry::privileged()` runs each HRX unit wholly
+  on `pgsql_retention`, after proving that connection's
+  `session_user = school_os_retention` and that it is unelevated.
+  - There is no fallback. With an unset, unreachable or mismatched
+    credential, the unit refuses, logs a closed reason and deletes nothing.
+  - The PHP recheck is a plain read (`readSeparation()`). Row locks are
+    taken only by the definer function (shared D9 floor plus HRX advisory
+    locks), so the role needs no UPDATE privilege. The dry run's locks are
+    kept, in the released savepoint, for the destructive call.
+- **Hold transition** (§6.1, before RH.3):
+  - Writing the `retention_school_holds` mirror is operator maintenance
+    (`platform:retention-holds-sync`, migration connection).
+  - A destructive scheduled run refuses while any configured hold is
+    unrecorded (`retention_hold_state_stale`). A recorded hold stays
+    enforced until the operator records its release.
+- **`pgsql_admin`** is no longer used by any scheduled retention path.
+- **Verifier:**
+  - existing: `retention_functions_narrow`,
+    `privileged_retention_functions_closed`;
+  - new: `retention_role_narrow`, `retention_role_read_only`,
+    `retention_role_functions_exact` (the approved set =
+    `PRIVILEGED_RETENTION_FUNCTIONS`, extended by later slices) and
+    `retention_connection_identity`.
+- **Guards:**
+  - `TestDatabaseGuard` covers `pgsql_retention`;
+  - `ProductionConfigurationGuard` refuses a configured retention login
+    equal to the runtime or migration login
+    (`retention_identity_not_distinct`) and requires TLS.
+- The 18 legacy functions are unchanged.

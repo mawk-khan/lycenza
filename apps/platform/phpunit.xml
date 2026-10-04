@@ -103,6 +103,10 @@
         <env name="DB_PASSWORD" value="school_os_app_local_only_password" force="true"/>
         <env name="DB_ADMIN_USERNAME" value="school_os" force="true"/>
         <env name="DB_ADMIN_PASSWORD" value="school_os" force="true"/>
+        <!-- E21-RH.2 (ADR 0066): the dedicated retention identity; the same local-only login in every test environment. -->
+        <env name="DB_RETENTION_USERNAME" value="school_os_retention" force="true"/>
+        <env name="DB_RETENTION_PASSWORD" value="school_os_retention_local_only_password" force="true"/>
+        <env name="DB_RETENTION_URL" value="" force="true"/>
         <env name="DB_URL" value="" force="true"/>
         <env name="INERTIA_SSR_ENABLED" value="false" force="true"/>
         <env name="MAIL_MAILER" value="array" force="true"/>

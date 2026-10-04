@@ -150,7 +150,13 @@ Its rows are counted as held, and nothing of it is deleted.
   hold policy and its semantics are unchanged.
   - The other E21 functions keep the original model (runtime EXECUTE, hold
     checked by the command), pending a separate E21 decision.
-- **Target hold and identity model (E21-RH.1, ADR 0066; not yet
+- **E21-RH.2 (2026-10-04, ADR 0066 §10).**
+  - The HRX purge functions are executed only by the dedicated
+    `school_os_retention` login.
+  - The configured School holds are recorded in the database by the
+    operator command `platform:retention-holds-sync`. A destructive HRX run
+    refuses while one is unrecorded.
+- **Target hold and identity model (E21-RH.1, ADR 0066; RH.3–RH.6 not yet
   implemented).**
   - PostgreSQL hold state becomes authoritative, for School and platform
     holds alike. It is placed and released only by an audited operator

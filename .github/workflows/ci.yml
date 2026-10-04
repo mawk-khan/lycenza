@@ -180,6 +180,10 @@ jobs:
           DB_PASSWORD: school_os_app_local_only_password
           DB_ADMIN_USERNAME: school_os
           DB_ADMIN_PASSWORD: school_os
+          # E21-RH.2 (ADR 0066): the dedicated retention identity, created by
+          # 01-roles.sql above (phpunit.xml forces the same local-only values).
+          DB_RETENTION_USERNAME: school_os_retention
+          DB_RETENTION_PASSWORD: school_os_retention_local_only_password
           REDIS_HOST: 127.0.0.1
           # phpunit.xml force="true"s DB_HOST to the docker-compose
           # service alias; CI's service container is on 127.0.0.1, so it

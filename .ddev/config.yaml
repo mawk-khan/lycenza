@@ -53,8 +53,13 @@ web_environment:
     - DB_PASSWORD=school_os_app_local_only_password
     - DB_ADMIN_USERNAME=db
     - DB_ADMIN_PASSWORD=db
+    # E21-RH.2 (ADR 0066): the dedicated retention identity, created by
+    # `ddev demo-reset` / `ddev test`; never the runtime or migration login.
+    - DB_RETENTION_USERNAME=school_os_retention
+    - DB_RETENTION_PASSWORD=school_os_retention_local_only_password
     - DB_URL=
     - DB_ADMIN_URL=
+    - DB_RETENTION_URL=
     - REDIS_CLIENT=predis
     - REDIS_HOST=redis
     - REDIS_PORT=6379

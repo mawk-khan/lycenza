@@ -13,6 +13,7 @@
 -- never reaches a file, shell history or the process list:
 --
 --   psql ... -c '\password school_os_app'
+--   psql ... -c '\password school_os_retention'   (E21-RH.2, ADR 0066)
 --
 -- (or whatever credential mechanism the managed service provides), and
 -- store it only in the secret store (ADR 0050 section 4).
@@ -27,6 +28,13 @@
 --     difference -- it never silently "fixes" an unexpected role (a
 --     managed service may not even permit altering SUPERUSER/BYPASSRLS);
 --   * removes any membership of school_os_app in the migration role;
+--   * E21-RH.2 (ADR 0066): creates `school_os_retention` (the dedicated
+--     retention identity) the same way -- LOGIN, NOSUPERUSER, NOBYPASSRLS,
+--     NOCREATEDB, NOCREATEROLE, NOINHERIT, NOREPLICATION, NO password --
+--     verifies an existing one, refuses any membership in the migration role
+--     or in school_os_app, and grants it only CONNECT and USAGE. It gets NO
+--     default privileges: migrations grant its few column-level SELECTs and
+--     its EXECUTE on the retention functions explicitly;
 --   * grants CONNECT on the database and USAGE on schema public;
 --   * sets ALTER DEFAULT PRIVILEGES FOR ROLE <migration role> so every table
 --     and sequence the migrations create is usable by the runtime role
@@ -109,10 +117,34 @@ BEGIN
 END
 $$;
 
+-- E21-RH.2 (ADR 0066): the dedicated retention identity.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'school_os_retention') THEN
+        CREATE ROLE school_os_retention LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION;
+        RAISE NOTICE 'production-bootstrap: created school_os_retention (no password -- set it with \password)';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM pg_roles WHERE rolname = 'school_os_retention'
+           AND NOT (rolcanlogin AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb
+                    AND NOT rolcreaterole AND NOT rolinherit AND NOT rolreplication)
+    ) THEN
+        RAISE EXCEPTION 'production-bootstrap: school_os_retention exists with unexpected attributes (needs LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION) -- fix it deliberately, then re-run';
+    END IF;
+    IF pg_has_role('school_os_retention', current_setting('lycenza.migration_role'), 'MEMBER')
+       OR pg_has_role('school_os_retention', 'school_os_app', 'MEMBER')
+       OR pg_has_role('school_os_app', 'school_os_retention', 'MEMBER') THEN
+        RAISE EXCEPTION 'production-bootstrap: school_os_retention shares a membership with the migration role or school_os_app -- remove it deliberately';
+    END IF;
+END
+$$;
+SELECT format('GRANT CONNECT ON DATABASE %I TO school_os_retention', :'app_database') \gexec
+GRANT USAGE ON SCHEMA public TO school_os_retention;
+
 SELECT format('GRANT CONNECT ON DATABASE %I TO school_os_app', :'app_database') \gexec
 GRANT USAGE ON SCHEMA public TO school_os_app;
 
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO school_os_app', :'migration_role') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO school_os_app', :'migration_role') \gexec
 
-\echo 'production-bootstrap: done. Next: set the school_os_app password out of band, run migrations as the migration role, then php artisan platform:verify-database.'
+\echo 'production-bootstrap: done. Next: set the school_os_app and school_os_retention passwords out of band, run migrations as the migration role, then php artisan platform:verify-database.'

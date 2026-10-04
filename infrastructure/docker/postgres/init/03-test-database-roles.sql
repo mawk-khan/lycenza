@@ -12,3 +12,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE school_os IN SCHEMA public
 
 ALTER DEFAULT PRIVILEGES FOR ROLE school_os IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO school_os_app;
+
+-- E21-RH.2 (ADR 0066): the dedicated retention identity (created in
+-- 01-roles.sql) may connect; it gets no default privileges.
+GRANT CONNECT ON DATABASE school_os_test TO school_os_retention;
+GRANT USAGE ON SCHEMA public TO school_os_retention;

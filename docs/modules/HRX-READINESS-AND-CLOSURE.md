@@ -108,6 +108,16 @@ not the code path that happens to call the functions.
   E21-RH.2 moves HRX to the dedicated retention identity. The
   `retention_school_holds` mirror becomes the authoritative hold table in
   E21-RH.3.
+- **Amended 2026-10-04 (E21-RH.2, ADR 0066 §10).** The table above
+  describes the post-HRX.6 state. Since E21-RH.2:
+  - the authorized retention execution identity is `school_os_retention`
+    on `pgsql_retention`, accepted by the prologue by exact
+    `session_user`, not owner membership;
+  - the scheduler holds only the `database_retention` credential, never
+    the migration one;
+  - the hold mirror is written only by `platform:retention-holds-sync`
+    (operator console), and a destructive run refuses while a configured
+    hold is unrecorded.
 
 ## 4. Capabilities and roles
 

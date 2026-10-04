@@ -63,6 +63,8 @@ DB_TEST_USERNAME="school_os_app"
 DB_TEST_PASSWORD="school_os_app_local_only_password"
 DB_ADMIN_USERNAME="school_os"
 DB_ADMIN_PASSWORD="school_os"
+DB_RETENTION_USERNAME="school_os_retention"
+DB_RETENTION_PASSWORD="school_os_retention_local_only_password"
 
 # The one safety-critical override set. Every value here is exactly
 # what phpunit.xml's force="true" block already declares -- passing it
@@ -79,6 +81,9 @@ SAFE_ENV=(
   -e "DB_PASSWORD=${DB_TEST_PASSWORD}"
   -e "DB_ADMIN_USERNAME=${DB_ADMIN_USERNAME}"
   -e "DB_ADMIN_PASSWORD=${DB_ADMIN_PASSWORD}"
+  -e "DB_RETENTION_USERNAME=${DB_RETENTION_USERNAME}"
+  -e "DB_RETENTION_PASSWORD=${DB_RETENTION_PASSWORD}"
+  -e "DB_RETENTION_URL="
   -e "CACHE_STORE=array"
   -e "SESSION_DRIVER=array"
   -e "QUEUE_CONNECTION=sync"
@@ -175,6 +180,14 @@ docker_exec() {
 # existing "test" script already clears config for this exact reason;
 # this mirrors it.
 docker_exec php artisan config:clear --ansi >&2
+
+# E21-RH.2 (ADR 0066): re-assert the role provisioning idempotently. The
+# init scripts run only on a FRESH Compose volume, and the isolated
+# project's volume persists between runs, so a role added after the
+# volume was created (school_os_retention) would otherwise be missing.
+echo "[safe-test] re-asserting PostgreSQL role provisioning (idempotent)..." >&2
+compose exec -T postgres psql -v ON_ERROR_STOP=1 -X -q -U school_os -d school_os -f /docker-entrypoint-initdb.d/01-roles.sql >&2
+compose exec -T postgres psql -v ON_ERROR_STOP=1 -X -q -U school_os -d school_os -f /docker-entrypoint-initdb.d/03-test-database-roles.sql >&2
 
 echo "[safe-test] validating resolved test configuration..." >&2
 if ! docker_exec php artisan platform:env-diagnostic; then

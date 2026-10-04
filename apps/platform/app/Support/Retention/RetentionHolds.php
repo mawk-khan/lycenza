@@ -13,11 +13,15 @@ use Illuminate\Support\Str;
  * one group by RETENTION_HOLD_PLATFORM (platformHeld()).
  *
  * HRX.6 hardening: `retention_school_holds` is the DATABASE side of the same
- * School hold. The privileged retention path mirrors the configured holds
- * into it (synchronize()) before it purges, and the HRX purge functions
- * refuse a School recorded there, so the hold is enforced at the
- * destructive boundary itself, not only here. Only the retention identity
- * (the migration/owner connection) can write the table.
+ * School hold, and the HRX purge functions refuse a School recorded there,
+ * so the hold is enforced at the destructive boundary itself.
+ *
+ * E21-RH.2 (ADR 0066 §6.1 transition): writing the mirror is OPERATOR
+ * maintenance (`platform:retention-holds-sync`, on the migration/owner
+ * connection), never part of a scheduled run. The retention identity can
+ * only read it: a destructive run refuses when a configured hold is not
+ * recorded (RetentionExpiry::privileged()), and a recorded hold stays
+ * enforced until the operator synchronizes its release.
  */
 final class RetentionHolds
 {
@@ -38,15 +42,21 @@ final class RetentionHolds
         return (bool) config('retention.hold_platform', false);
     }
 
+    /** Operator maintenance only (ADR 0021): the connection that may write the hold mirror. */
+    public const MAINTENANCE_CONNECTION = 'pgsql_admin';
+
     /**
      * Makes the database hold mirror equal the configured School holds
      * (RETENTION_HOLD_SCHOOL_IDS stays the operator's source): records every
      * configured School that exists, releases every `config` row no longer
-     * configured. Runs on the retention identity's connection only.
+     * configured. OPERATOR maintenance on the migration/owner connection
+     * (`platform:retention-holds-sync`); never called by a scheduled run.
+     *
+     * @return list<string> configured ids that are not an existing School (not recorded; a destructive run keeps refusing until the configuration is fixed)
      */
-    public function synchronize(): void
+    public function synchronize(): array
     {
-        $admin = DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION);
+        $admin = DB::connection(self::MAINTENANCE_CONNECTION);
         $held = $admin->table('schools')->whereIn('id', array_values(array_filter($this->heldSchoolIds(), fn (string $id) => Str::isUuid($id))))->pluck('id')->all();
 
         $admin->transaction(function () use ($admin, $held): void {
@@ -55,6 +65,8 @@ final class RetentionHolds
                 $admin->table('retention_school_holds')->insertOrIgnore(['school_id' => $schoolId, 'source' => 'config']);
             }
         });
+
+        return array_values(array_diff($this->heldSchoolIds(), $held));
     }
 
     /** @return list<string> */

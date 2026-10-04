@@ -27,6 +27,8 @@ from typing import Any
 CANARIES = (
     "Demo1234!",
     "school_os_app_local_only_password",
+    # E21-RH.2 (ADR 0066): the committed local-only retention identity password.
+    "school_os_retention_local_only_password",
     "school_os_secret",
     "minioadmin",
     "dev-local-only-token",

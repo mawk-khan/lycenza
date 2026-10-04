@@ -144,7 +144,7 @@ class HrxRetentionGuardTest extends TestCase
         $w = $this->pastWorld();
         $leaver = $this->pastLeaver($w);
         $before = $this->hrxRows($w['school'], $leaver['employeeId']);
-        $admin = DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION);
+        $admin = DB::connection(RetentionHolds::MAINTENANCE_CONNECTION);
 
         // Defense in depth: simulate a mistaken GRANT, then always restore the closed state.
         $admin->statement('GRANT EXECUTE ON FUNCTION retention_expire_leave_employee_evidence(uuid, uuid, date, boolean) TO school_os_app');
@@ -170,7 +170,7 @@ class HrxRetentionGuardTest extends TestCase
         // 1-2. Old enough for D9, and the School is held through the real E21 hold (config, mirrored to the database).
         config(['retention.hold_school_ids' => [$w['school']->id]]);
         app(RetentionHolds::class)->synchronize();
-        $this->assertSame(1, DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION)->table('retention_school_holds')->where('school_id', $w['school']->id)->count());
+        $this->assertSame(1, DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_school_holds')->where('school_id', $w['school']->id)->count());
 
         // 3-4. The authorized retention identity calls the primitive directly: refused, nothing removed.
         foreach (['leave', 'staff_attendance'] as $kind) {
@@ -182,12 +182,18 @@ class HrxRetentionGuardTest extends TestCase
         $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']));
         $this->assertTrue($this->inSchool($w['school'], fn () => DB::table('employees')->where('id', $leaver['employeeId'])->exists()), 'held HRX evidence keeps the Employee');
 
-        // 5-7. Release through the legitimate path; the authorized run purges the eligible evidence.
+        // 5-7. Release through the legitimate path (configuration, then the operator's sync on the
+        // maintenance connection); the scheduled run, as the retention identity, then purges.
         config(['retention.hold_school_ids' => []]);
+        $this->artisan('platform:employee-retention-prune', ['--only' => 'evidence'])
+            ->expectsOutputToContain('Deleted leave evidence of 0 Employee(s) and staff attendance evidence of 0 Employee(s) (dependency-blocked: 2')
+            ->assertSuccessful();
+        $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']), 'a recorded hold stays enforced until the operator records its release');
+        $this->artisan('platform:retention-holds-sync')->expectsOutputToContain('Recorded 0 configured School hold(s)')->assertSuccessful();
         $this->artisan('platform:employee-retention-prune', ['--only' => 'evidence'])
             ->expectsOutputToContain('Deleted leave evidence of 1 Employee(s) and staff attendance evidence of 1 Employee(s) (dependency-blocked: 0, held: 0, errors: 0)')
             ->assertSuccessful();
-        $this->assertSame(0, DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION)->table('retention_school_holds')->count(), 'the run mirrored the release');
+        $this->assertSame(0, DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_school_holds')->count(), 'the sync recorded the release');
         $this->assertSame(array_fill_keys(self::HRX_EVIDENCE, 0), $this->hrxRows($w['school'], $leaver['employeeId']));
         $this->assertFalse($this->inSchool($w['school'], fn () => DB::table('employees')->where('id', $leaver['employeeId'])->exists()), 'purged HRX no longer blocks the Employee');
     }
@@ -202,7 +208,7 @@ class HrxRetentionGuardTest extends TestCase
         $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->where('school_id', $school->id)->delete()));
         $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->insert(['school_id' => $this->school()->id])));
         $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->count()));
-        $this->assertSame(1, DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION)->table('retention_school_holds')->where('school_id', $school->id)->count());
+        $this->assertSame(1, DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_school_holds')->where('school_id', $school->id)->count());
     }
 
     #[Test]

@@ -171,7 +171,7 @@ check "demo seeders excluded (guard only)" test "$(in_app 'ls /var/www/app/datab
 check "test-database reset command excluded" in_app 'test ! -e /var/www/app/app/Console/Commands/ResetTestDatabase.php'
 check "no cached configuration or routes baked in" in_app 'test ! -e /var/www/app/bootstrap/cache/config.php && ! ls /var/www/app/bootstrap/cache/routes-*.php'
 check "built assets present" in_app 'test -s /var/www/app/public/build/manifest.json'
-check "no demo password or committed local credential" test -z "$(in_app 'grep -rlF -e "Demo1234!" -e "school_os_app_local_only_password" /var/www/app /usr/local/etc 2>/dev/null')"
+check "no demo password or committed local credential" test -z "$(in_app 'grep -rlF -e "Demo1234!" -e "school_os_app_local_only_password" -e "school_os_retention_local_only_password" /var/www/app /usr/local/etc 2>/dev/null')"
 leaked="$(in_app 'grep -rlF -e "dev-local-only-token" -e "school_os_secret" /var/www/app --include=*.php 2>/dev/null' | grep -v '^/var/www/app/app/Support/Configuration/ProductionConfigurationGuard.php$' || true)"
 check "development token/placeholder only in the guard that refuses them" test -z "$leaked"
 check "OPcache timestamp validation off" in_app 'php -i | grep -q "opcache.validate_timestamps => Off"'

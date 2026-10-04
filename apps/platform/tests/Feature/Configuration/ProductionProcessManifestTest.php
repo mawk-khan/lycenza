@@ -133,6 +133,23 @@ class ProductionProcessManifestTest extends TestCase
     }
 
     #[Test]
+    public function only_the_scheduler_and_the_operator_console_receive_the_retention_credential(): void
+    {
+        // E21-RH.2 (ADR 0066 §5): the dedicated retention login reaches only the processes that run
+        // destructive retention (scheduled runs; reviewed erasure cases from the operator console).
+        $manifest = $this->manifest();
+        $this->assertSame(['DB_RETENTION_USERNAME', 'DB_RETENTION_PASSWORD'], $manifest['secret_groups']['database_retention']);
+
+        $retention = array_column(array_filter($this->processes(), fn ($p) => in_array('database_retention', $p['secret_groups'], true)), 'role');
+        sort($retention);
+        $this->assertSame(['operator-console', 'scheduler'], $retention);
+
+        // The scheduler runs retention without the migration credential.
+        $scheduler = array_values(array_filter($this->processes(), fn ($p) => $p['role'] === 'scheduler'))[0];
+        $this->assertNotContains('database_admin', $scheduler['secret_groups']);
+    }
+
+    #[Test]
     public function long_running_roles_never_receive_database_admin_credentials(): void
     {
         $manifest = $this->manifest();

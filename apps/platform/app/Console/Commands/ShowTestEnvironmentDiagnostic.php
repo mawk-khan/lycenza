@@ -38,6 +38,8 @@ class ShowTestEnvironmentDiagnostic extends Command
             ['DB_DATABASE (pgsql)', config('database.connections.pgsql.database')],
             ['DB_DATABASE (pgsql_admin)', config('database.connections.pgsql_admin.database')],
             ['DB_USERNAME (pgsql)', config('database.connections.pgsql.username')],
+            ['DB_DATABASE (pgsql_retention)', config('database.connections.pgsql_retention.database')],
+            ['DB_RETENTION_USERNAME (pgsql_retention)', config('database.connections.pgsql_retention.username') ?: '(not set)'],
             ['database.testing_database (approved)', config('database.testing_database')],
             ['CACHE_STORE', config('cache.default')],
             ['SESSION_DRIVER', config('session.driver')],

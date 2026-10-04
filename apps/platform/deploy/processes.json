@@ -8,6 +8,7 @@
     "secret_groups": {
         "app_runtime": ["APP_KEY", "METRICS_SCRAPE_TOKEN", "APP_PREVIOUS_KEYS", "MAIL_PASSWORD", "DB_PASSWORD", "REDIS_PASSWORD", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AI_GATEWAY_CONTEXT_SIGNING_KEY", "AI_GATEWAY_SERVICE_SIGNING_KEY", "CONTACT_LOOKUP_HMAC_KEY", "STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY", "DOMAIN_PROBE_KEY", "MAIL_SUPPRESSION_HMAC_KEY", "MAIL_SUPPRESSION_HMAC_PREVIOUS_KEY", "MAIL_PROVIDER_EVENT_SECRET", "MAIL_PROVIDER_EVENT_PREVIOUS_SECRET"],
         "database_admin": ["DB_ADMIN_USERNAME", "DB_ADMIN_PASSWORD"],
+        "database_retention": ["DB_RETENTION_USERNAME", "DB_RETENTION_PASSWORD"],
         "gateway": ["SERVICE_SIGNING_KEY"]
     },
     "processes": [
@@ -15,9 +16,9 @@
         { "role": "worker-default", "image": "app", "command": ["worker", "default"], "long_running": true, "queue": "default", "secret_groups": ["app_runtime"] },
         { "role": "worker-integrations", "image": "app", "command": ["worker", "integrations"], "long_running": true, "queue": "integrations", "secret_groups": ["app_runtime"] },
         { "role": "worker-notifications", "image": "app", "command": ["worker", "notifications"], "long_running": true, "queue": "notifications", "secret_groups": ["app_runtime"] },
-        { "role": "scheduler", "image": "app", "command": ["scheduler"], "long_running": true, "singleton": true, "secret_groups": ["app_runtime"] },
+        { "role": "scheduler", "image": "app", "command": ["scheduler"], "long_running": true, "singleton": true, "secret_groups": ["app_runtime", "database_retention"] },
         { "role": "ai-gateway", "image": "ai-gateway", "command": [], "long_running": true, "public": false, "health": { "liveness": "/health/live", "readiness": "/health/ready" }, "secret_groups": ["gateway"] },
         { "role": "release", "image": "app", "command": ["console", "migrate", "--database=pgsql_admin", "--force"], "long_running": false, "secret_groups": ["app_runtime", "database_admin"] },
-        { "role": "operator-console", "image": "app", "command": ["console"], "long_running": false, "secret_groups": ["app_runtime", "database_admin"] }
+        { "role": "operator-console", "image": "app", "command": ["console"], "long_running": false, "secret_groups": ["app_runtime", "database_admin", "database_retention"] }
     ]
 }

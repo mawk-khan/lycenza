@@ -221,10 +221,10 @@ Schedule::command('platform:operations-retention-prune')
 // evidence (8 y) after final separation. No default: until configured it
 // deletes nothing. Each purge rechecks under its own lock, so correctness
 // does not depend on the order.
-// TEMPORARY (ADR 0021 amendment 2026-10-04, ADR 0066): its HRX participants
-// run on pgsql_admin (ADR 0065 §27.10), so this scheduler process currently
-// needs the migration credentials. E21-RH.2 moves them to the dedicated
-// retention identity; scheduled retention must never select pgsql_admin.
+// E21-RH.2 (ADR 0066 §10): its HRX participants run as the dedicated
+// retention identity on pgsql_retention (DB_RETENTION_*, the scheduler's
+// database_retention secret group) -- never pgsql_admin. Without that
+// credential they refuse (errors, nothing deleted) while the rest runs.
 Schedule::command('platform:employee-retention-prune')
     ->dailyAt('04:50')
     ->withoutOverlapping()

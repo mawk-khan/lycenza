@@ -126,12 +126,13 @@ migration/owner role.
   credential is provisioned only to the process that runs scheduled
   retention. Without it, destructive retention fails safe and never
   falls back to another identity.
-- **Known temporary deviation.** Since `dc8b50a` (ADR 0065 §27.10) the
-  HRX retention participants of the scheduled
-  `platform:employee-retention-prune` run on `pgsql_admin`, so that
-  scheduler process needs the migration credentials. This contradicts
-  the "Used by" column above. It is recorded here as temporary and is
-  removed in E21-RH.2, once the dedicated identity exists.
+- **Known temporary deviation (resolved by E21-RH.2, 2026-10-04).** From
+  `dc8b50a` (ADR 0065 §27.10) the HRX retention participants of the
+  scheduled `platform:employee-retention-prune` ran on `pgsql_admin`, which
+  contradicted the "Used by" column above. E21-RH.2 moved them to the
+  dedicated `school_os_retention` login on `pgsql_retention` (ADR 0066
+  §10). No scheduled code path selects `pgsql_admin` any more, and the
+  scheduler holds no migration credential.
 - E21-RH.1 also revoked the runtime role's unused UPDATE/DELETE on
   `payroll_lwf_annual_charges`. The default privileges above remain the
   baseline, and individual tables are narrowed by verifier-guarded

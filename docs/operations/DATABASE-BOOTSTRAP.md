@@ -9,6 +9,7 @@ privileges on a real database is performed by an authorized operator.
 |---|---|---|---|
 | Migration/admin | any name the deployment chooses (e.g. the managed service's owner role) — **not** `school_os_app` | owns the schema; can CREATE in `public` | `pgsql_admin`: the release step and the operator console only |
 | Runtime | **exactly `school_os_app`** (fixed v1 contract, O6) | `LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION`, never a member of the migration role | `pgsql`: web, workers, scheduler |
+| Retention (E21-RH.2, ADR 0066) | **exactly `school_os_retention`** | same attributes; a member of no role (nor the migration role nor `school_os_app`); owns nothing; **no default privileges** -- migrations grant it only column-level SELECTs and EXECUTE on the approved retention functions | `pgsql_retention`: the destructive steps of scheduled retention (scheduler) and reviewed erasure cases (operator console) |
 
 Production requires PostgreSQL 16+ and TLS (`DB_SSLMODE=require` or
 stricter for both connections; the application refuses to boot otherwise).
@@ -35,6 +36,19 @@ stricter for both connections; the application refuses to boot otherwise).
 3. Set the runtime password **out of band**, interactively, and store it
    only in the secret store: `psql … -c '\password school_os_app'` (or the
    provider's credential mechanism). The script never sets a password.
+   Do the same for the retention identity (E21-RH.2):
+   `psql … -c '\password school_os_retention'`, stored only as
+   `DB_RETENTION_USERNAME`/`DB_RETENTION_PASSWORD` in the
+   `database_retention` secret group (scheduler, operator console). The
+   bootstrap creates `school_os_retention` like `school_os_app` (verifies an
+   existing one, refuses any membership, grants only `CONNECT`/`USAGE`), and
+   the migrations refuse to run until it exists.
+   - Without the retention credential, destructive retention units refuse
+     (counted as errors, nothing deleted). They never fall back to the
+     migration or runtime login.
+   - After changing `RETENTION_HOLD_SCHOOL_IDS`, record it with
+     `console platform:retention-holds-sync` (operator console). A
+     destructive run refuses while a configured hold is unrecorded.
 4. Release step: `console migrate --database=pgsql_admin --force`, then
    `console db:seed --force` (production-safe catalogs,
    `PRODUCTION-RELEASE.md` step 7).

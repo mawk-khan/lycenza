@@ -15,6 +15,12 @@ class DatabaseRoleVerifier
 {
     public const RUNTIME_ROLE = 'school_os_app';
 
+    /** E21-RH.2 (ADR 0066 §3.1): the dedicated retention identity. */
+    public const RETENTION_ROLE = 'school_os_retention';
+
+    /** E21-RH.2: the connection authenticated as RETENTION_ROLE (checked only where its credential is configured). */
+    public const RETENTION_CONNECTION = 'pgsql_retention';
+
     public const MINIMUM_SERVER_VERSION = 160000;
 
     /**
@@ -102,11 +108,13 @@ class DatabaseRoleVerifier
     ];
 
     /**
-     * HRX.6 hardening: destructive retention functions the runtime role must
-     * NOT execute. SECURITY DEFINER, `search_path` pinned, not owned by the
-     * runtime role, never PUBLIC; only the retention identity (the
-     * migration/owner connection) calls them, and they refuse any other
-     * session user and any held School themselves.
+     * HRX.6 hardening / E21-RH.2: destructive retention functions the
+     * runtime role must NOT execute -- the APPROVED set for the dedicated
+     * retention identity, which must hold EXECUTE on exactly these and on no
+     * other destructive retention function. SECURITY DEFINER, `search_path`
+     * pinned, not owned by the runtime role, never PUBLIC; they refuse any
+     * other session user and any held School themselves. Later E21-RH slices
+     * extend this list (and move entries out of RETENTION_FUNCTIONS).
      */
     public const PRIVILEGED_RETENTION_FUNCTIONS = [
         // One Employee's Leave / Staff Attendance evidence, separation-floored and hold-checked
@@ -210,6 +218,7 @@ class DatabaseRoleVerifier
             && $f->prosecdef && str_contains($f->config, 'search_path=') && $f->owner !== $role && ! $f->runtime_exec && ! $f->public_exec);
         $holds = DB::selectOne("select has_table_privilege(?, 'retention_school_holds', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') as any", [$role]);
         $results[] = CheckResult::of('privileged_retention_functions_closed', count($closed) === count(self::PRIVILEGED_RETENTION_FUNCTIONS) && ! $holds->any);
+        $results = [...$results, ...$this->retentionIdentityChecks()];
 
         $finance = DB::select(
             "select p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config,
@@ -221,6 +230,77 @@ class DatabaseRoleVerifier
         $narrowFinance = array_filter($finance, fn ($f) => in_array($f->proname, self::FINANCE_FUNCTIONS, true)
             && str_contains($f->config, 'search_path=') && $f->owner !== $role && $f->runtime_exec && ! $f->public_exec);
         $results[] = CheckResult::of('finance_period_functions_narrow', count($narrowFinance) === count(self::FINANCE_FUNCTIONS) && count($finance) === count(self::FINANCE_FUNCTIONS));
+
+        return $results;
+    }
+
+    /**
+     * E21-RH.2 (ADR 0066 §3.1): the dedicated retention identity is narrow,
+     * shares no role with the runtime or owner role, owns nothing, writes
+     * nothing directly, executes exactly the approved destructive retention
+     * functions -- and, where this process holds its credential, the
+     * retention connection really authenticates as it.
+     *
+     * @return list<CheckResult>
+     */
+    private function retentionIdentityChecks(): array
+    {
+        $role = self::RETENTION_ROLE;
+        $attrs = DB::selectOne('select oid, rolcanlogin, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolinherit, rolreplication from pg_roles where rolname = ?', [$role]);
+        if ($attrs === null) {
+            return [CheckResult::of('retention_role_narrow', false, 'missing')];
+        }
+
+        $owner = DB::selectOne("select relowner::regrole::text as owner from pg_class where oid = 'public.employees'::regclass")->owner;
+        $shared = DB::selectOne(
+            'select exists (select 1 from pg_auth_members m where m.member = ? or m.roleid = ?) as any,
+                    pg_has_role(?, ?, ?) or pg_has_role(?, ?, ?) or pg_has_role(?, ?, ?) as reach',
+            [$attrs->oid, $attrs->oid, $role, $owner, 'MEMBER', $role, self::RUNTIME_ROLE, 'MEMBER', self::RUNTIME_ROLE, $role, 'MEMBER'],
+        );
+        $owns = DB::selectOne(
+            'select (select count(*) from pg_class where relowner = ?) + (select count(*) from pg_proc where proowner = ?)
+                  + (select count(*) from pg_namespace where nspowner = ?) as n',
+            [$attrs->oid, $attrs->oid, $attrs->oid],
+        )->n;
+        $results = [CheckResult::of('retention_role_narrow', $attrs->rolcanlogin && ! $attrs->rolsuper && ! $attrs->rolbypassrls && ! $attrs->rolcreatedb
+            && ! $attrs->rolcreaterole && ! $attrs->rolinherit && ! $attrs->rolreplication && ! $shared->any && ! $shared->reach && (int) $owns === 0)];
+
+        // Read-only: no table-level grant at all beyond SELECT, and no column-level write.
+        // Raw ACLs: information_schema only shows grants involving the CURRENT role.
+        $writes = DB::selectOne(
+            "select (select count(*) from pg_class c cross join lateral aclexplode(c.relacl) a where a.grantee = ? and a.privilege_type <> 'SELECT')
+                  + (select count(*) from pg_attribute t cross join lateral aclexplode(t.attacl) a where a.grantee = ? and a.privilege_type <> 'SELECT') as n",
+            [$attrs->oid, $attrs->oid],
+        )->n;
+        $results[] = CheckResult::of('retention_role_read_only', (int) $writes === 0, (int) $writes === 0 ? '' : $writes.' grant(s)');
+
+        // EXECUTE on exactly the approved destructive retention functions; never a legacy one.
+        $executable = array_column(DB::select(
+            "select p.proname from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'retention\\_%'
+                and has_function_privilege(?, p.oid, 'EXECUTE')",
+            [$role],
+        ), 'proname');
+        sort($executable);
+        $approved = self::PRIVILEGED_RETENTION_FUNCTIONS;
+        sort($approved);
+        $results[] = CheckResult::of('retention_role_functions_exact', $executable === $approved, $executable === $approved ? '' : count(array_diff($executable, $approved)).' unexpected, '.count(array_diff($approved, $executable)).' missing');
+
+        // Where this process holds the credential: the connection is really the retention login, unelevated.
+        $username = config('database.connections.'.self::RETENTION_CONNECTION.'.username');
+        if (! is_string($username) || trim($username) === '') {
+            $results[] = new CheckResult('retention_connection_identity', CheckResult::EVIDENCE, 'not configured in this process');
+        } else {
+            try {
+                $identity = DB::connection(self::RETENTION_CONNECTION)->selectOne(
+                    'select session_user::text as login, r.rolsuper or r.rolbypassrls as elevated from pg_roles r where r.rolname = session_user',
+                );
+                $results[] = CheckResult::of('retention_connection_identity', $identity !== null && $identity->login === $role && ! $identity->elevated);
+            } catch (Throwable) {
+                $results[] = CheckResult::of('retention_connection_identity', false, 'unreachable');
+            } finally {
+                DB::purge(self::RETENTION_CONNECTION);
+            }
+        }
 
         return $results;
     }

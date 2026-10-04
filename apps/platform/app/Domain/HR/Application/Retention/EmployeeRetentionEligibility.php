@@ -86,13 +86,19 @@ final class EmployeeRetentionEligibility
      * @param  Closure(string): list<string>  $blockers  retained dependents (read-only)
      * @param  Closure(string): (list<object{storage_disk: string, storage_path: string}>|null)  $purge
      * @param  string|null  $only  narrows the walk to one Employee (an erasure case)
+     * @param  (Closure(string): ?EmployeeSeparation)|null  $recheck  E21-RH.2: the in-transaction recheck. Default: lockSeparation() (a row
+     *                                                                lock, which needs UPDATE privilege). A unit whose database function takes the
+     *                                                                Employee locks itself (and re-proves the separation under them) passes
+     *                                                                readSeparation(), so a SELECT-only identity can run it.
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
-    public function purgeSeparatedBefore(School $school, string $cutoffDate, int $batch, bool $dryRun, ?Closure $withRows, Closure $blockers, Closure $purge, ?string $only = null): array
+    public function purgeSeparatedBefore(School $school, string $cutoffDate, int $batch, bool $dryRun, ?Closure $withRows, Closure $blockers, Closure $purge, ?string $only = null, ?Closure $recheck = null): array
     {
         $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
 
-        $this->context->withSchool($school, function () use ($school, $cutoffDate, $batch, $dryRun, $withRows, $blockers, $purge, $only, &$result): void {
+        $recheck ??= fn (string $employeeId): ?EmployeeSeparation => $this->lockSeparation($employeeId);
+
+        $this->context->withSchool($school, function () use ($school, $cutoffDate, $batch, $dryRun, $withRows, $blockers, $purge, $only, $recheck, &$result): void {
             $query = DB::table('employees')->where('school_id', $school->id)->select('id');
             if ($only !== null) {
                 // E21.2F: one reviewed erasure case's subject only.
@@ -102,7 +108,7 @@ final class EmployeeRetentionEligibility
                 $withRows($query);
             }
 
-            $query->orderBy('id')->chunkById($batch, function ($employees) use ($cutoffDate, $dryRun, $blockers, $purge, &$result): void {
+            $query->orderBy('id')->chunkById($batch, function ($employees) use ($cutoffDate, $dryRun, $blockers, $purge, $recheck, &$result): void {
                 $employments = DB::table('employment_records')->whereIn('employee_id', $employees->pluck('id')->all())
                     ->get(['employee_id', 'status', 'ends_on'])->groupBy('employee_id');
 
@@ -115,7 +121,7 @@ final class EmployeeRetentionEligibility
                         RetentionUnit::purge(
                             $result,
                             $dryRun,
-                            fn (): bool => $this->lockSeparation($employee->id)?->separatedBefore($cutoffDate) === true,
+                            fn (): bool => $recheck($employee->id)?->separatedBefore($cutoffDate) === true,
                             fn (): array => $blockers($employee->id),
                             fn (): ?array => $purge($employee->id),
                         );
@@ -206,6 +212,22 @@ final class EmployeeRetentionEligibility
         }
 
         if (DB::table('employees')->where('id', $employeeId)->lockForUpdate()->first(['id']) === null) {
+            return null;
+        }
+
+        return self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on'])->all()));
+    }
+
+    /**
+     * E21-RH.2: the separation as currently committed, WITHOUT a row lock, in
+     * the caller's tenant context. Only for a purge unit whose database
+     * function locks the Employee and its EmploymentRecords FOR UPDATE and
+     * re-proves the separation itself (the HRX functions, through the shared
+     * D9 Employee floor): this read only decides whether to call it.
+     */
+    public function readSeparation(string $employeeId): ?EmployeeSeparation
+    {
+        if (DB::table('employees')->where('id', $employeeId)->first(['id']) === null) {
             return null;
         }
 

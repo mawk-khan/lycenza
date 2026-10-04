@@ -160,6 +160,28 @@ return [
             'options' => [PDO::ATTR_TIMEOUT => max(2, (int) env('DB_CONNECT_TIMEOUT', 5))],
         ],
 
+        // E21-RH.2 (ADR 0066, ADR 0021 amendment): the DEDICATED retention
+        // identity (`school_os_retention`: NOSUPERUSER, NOBYPASSRLS, owns
+        // nothing). Selected only by RetentionExpiry::privileged() for the
+        // destructive retention units migrated to it. Its credentials have
+        // NO fallback: never the runtime (DB_USERNAME) nor the migration
+        // (DB_ADMIN_*) login. Unset, the destructive steps refuse.
+        'pgsql_retention' => [
+            'driver' => 'pgsql',
+            'url' => env('DB_RETENTION_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => env('DB_DATABASE', 'laravel'),
+            'username' => env('DB_RETENTION_USERNAME'),
+            'password' => env('DB_RETENTION_PASSWORD'),
+            'charset' => env('DB_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'options' => [PDO::ATTR_TIMEOUT => max(2, (int) env('DB_CONNECT_TIMEOUT', 5))],
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

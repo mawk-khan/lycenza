@@ -1907,6 +1907,12 @@ It contradicts ADR 0021 for a scheduled command and is broader than the
 task needs. E21-RH.2 replaces it with the dedicated retention identity,
 and replaces the session-user owner-membership check with
 retention-role membership. HRX itself stays closed at `dc8b50a`.
+*Amended 2026-10-04 (E21-RH.2, ADR 0066 §10):* done.
+- The HRX units now run on `pgsql_retention` as `school_os_retention`.
+- The prologue accepts exactly that login (`session_user`).
+- Writing the hold mirror became operator maintenance
+  (`platform:retention-holds-sync`). A destructive run refuses while a
+  configured hold is unrecorded.
 
 - **Problem.** The runtime role had no DELETE on HRX evidence, but it held
   EXECUTE on the two SECURITY DEFINER functions, which delete with their

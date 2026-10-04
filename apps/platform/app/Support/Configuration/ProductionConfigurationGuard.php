@@ -239,7 +239,21 @@ final class ProductionConfigurationGuard
             $violations[] = 'maintenance_mode_not_shared';
         }
 
-        foreach (['pgsql', 'pgsql_admin'] as $connection) {
+        // E21-RH.2 (ADR 0066 §5): where the retention credential is configured, it is its own login --
+        // never the runtime or the migration login (platform:verify-database proves the identity).
+        $retention = $this->config->get('database.connections.pgsql_retention.username');
+        if (is_string($retention) && trim($retention) !== '' && in_array($retention, [
+            $this->config->get('database.connections.pgsql.username'),
+            $this->config->get('database.connections.pgsql_admin.username'),
+        ], true)) {
+            $violations[] = 'retention_identity_not_distinct';
+        }
+
+        $connections = ['pgsql', 'pgsql_admin'];
+        if (is_string($retention) && trim($retention) !== '') {
+            $connections[] = 'pgsql_retention';
+        }
+        foreach ($connections as $connection) {
             $mode = $this->config->get("database.connections.{$connection}.sslmode");
             if (! in_array($mode, self::SECURE_DB_SSLMODES, true)) {
                 $violations[] = 'database_tls_not_required';

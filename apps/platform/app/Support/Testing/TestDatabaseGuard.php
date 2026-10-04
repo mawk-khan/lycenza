@@ -46,7 +46,8 @@ class TestDatabaseGuard
      *
      * @var array<int, string>
      */
-    private const GUARDED_CONNECTIONS = ['pgsql', 'pgsql_admin'];
+    // E21-RH.2: pgsql_retention deletes through the retention functions, so it is guarded too.
+    private const GUARDED_CONNECTIONS = ['pgsql', 'pgsql_admin', 'pgsql_retention'];
 
     public function assertSafe(): void
     {

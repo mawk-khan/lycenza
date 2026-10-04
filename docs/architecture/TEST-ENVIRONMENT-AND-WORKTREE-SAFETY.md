@@ -145,7 +145,12 @@ boot via `App\Providers\AppServiceProvider::register()`, checks
 `config('database.connections.{pgsql,pgsql_admin}.database')` against
 `config('database.testing_database')` whenever
 `app()->environment('testing')`, and refuses to let the application
-boot at all on mismatch. Deliberately config-only (never opens a
+boot at all on mismatch. *E21-RH.2 (2026-10-04):* it also checks
+`pgsql_retention` (the dedicated retention login, ADR 0066), whose
+retention functions delete. `bin/safe-test` re-asserts the PostgreSQL role
+provisioning (`01-roles.sql`, `03-test-database-roles.sql`, idempotent) on
+every run, because a persisted Compose volume never re-runs its init
+scripts. Deliberately config-only (never opens a
 database connection to evaluate itself), which is also what makes it
 immune to `config:cache` staleness creating a bypass: it reads exactly
 the same frozen config the application would use for a real

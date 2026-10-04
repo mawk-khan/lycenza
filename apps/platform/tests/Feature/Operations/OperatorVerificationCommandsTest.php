@@ -66,6 +66,7 @@ class OperatorVerificationCommandsTest extends TestCase
             'runtime_role_not_owner_member', 'runtime_schema_access', 'runtime_table_privileges', 'runtime_destructive_privileges_restricted',
             'default_privileges_for_migration_role', 'tenant_tables_force_rls', 'platform_root_boundary',
             'retention_functions_narrow', 'privileged_retention_functions_closed', 'finance_period_functions_narrow',
+            'retention_role_narrow', 'retention_role_read_only', 'retention_role_functions_exact', 'retention_connection_identity',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

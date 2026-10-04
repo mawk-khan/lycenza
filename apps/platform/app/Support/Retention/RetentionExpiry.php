@@ -6,9 +6,12 @@ use App\Models\School;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use PDOException;
 use Symfony\Component\Uid\UuidV7;
 
 /**
@@ -238,29 +241,87 @@ final class RetentionExpiry
     public const REFUSED_HELD = 'retention_hold';
 
     /**
-     * HRX.6 hardening: the authorized retention execution identity -- the
-     * existing migration/owner connection (rule 54). The runtime role holds
-     * no EXECUTE on the HRX purge functions, which also refuse any session
-     * user without the owner's privileges.
+     * E21-RH.2 (ADR 0066 §3, §5): the dedicated retention identity and its
+     * connection. The runtime role holds no EXECUTE on the destructive
+     * functions migrated to it, the migration/owner connection is never
+     * selected here, and the functions refuse any other session user.
      */
-    public const PRIVILEGED_CONNECTION = 'pgsql_admin';
+    public const PRIVILEGED_CONNECTION = 'pgsql_retention';
+
+    public const RETENTION_ROLE = 'school_os_retention';
+
+    /** @var array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private const REFUSED_UNIT = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 1];
 
     /**
-     * Runs one HRX retention participant entirely on the retention identity's
-     * connection (its reads, locks, unit transactions and the purge function
-     * share one session; the tenant context follows the default connection),
-     * after mirroring the configured School holds into the database.
+     * Runs one destructive retention participant entirely on the dedicated
+     * retention connection: its reads, unit transactions, the function calls
+     * and the locks those functions take share one session (the tenant
+     * context follows the default connection). Before anything runs it
+     * proves the connection authenticates as exactly the retention identity
+     * (never an elevated or other login) and, for a destructive run, that
+     * every configured School hold is recorded in the database (ADR 0066
+     * §6.1, add-only transition). Otherwise it deletes nothing and reports
+     * one error. There is no fallback to any other connection.
      *
-     * @template T
-     *
-     * @param  callable(): T  $participant
-     * @return T
+     * @param  callable(): array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}  $participant
+     * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
-    public function privileged(callable $participant): mixed
+    public function privileged(string $category, bool $dryRun, callable $participant): array
     {
-        $this->holds->synchronize();
+        try {
+            $this->assertRetentionIdentity();
+            if (! $dryRun) {
+                $this->assertHoldStateCurrent();
+            }
+        } catch (RetentionRefused $e) {
+            // The caller's totals carry the one error into the metrics; the log names the closed reason only.
+            Log::warning('retention.unit_refused', ['category' => $category, 'reason' => $e->reason]);
+
+            return self::REFUSED_UNIT;
+        }
 
         return DB::usingConnection(self::PRIVILEGED_CONNECTION, $participant);
+    }
+
+    /** The retention connection is configured and authenticates as exactly the retention identity, unelevated. */
+    private function assertRetentionIdentity(): void
+    {
+        $username = config('database.connections.'.self::PRIVILEGED_CONNECTION.'.username');
+        if (! is_string($username) || trim($username) === '') {
+            throw new RetentionRefused(RetentionRefused::UNCONFIGURED);
+        }
+
+        try {
+            $identity = DB::connection(self::PRIVILEGED_CONNECTION)->selectOne(
+                'SELECT session_user::text AS login, r.rolsuper OR r.rolbypassrls OR r.rolcreaterole OR r.rolcreatedb AS elevated
+                   FROM pg_catalog.pg_roles r WHERE r.rolname = session_user',
+            );
+        } catch (QueryException|PDOException) {
+            DB::purge(self::PRIVILEGED_CONNECTION);
+
+            throw new RetentionRefused(RetentionRefused::UNREACHABLE);
+        }
+
+        if ($identity === null || $identity->login !== self::RETENTION_ROLE || (bool) $identity->elevated) {
+            DB::purge(self::PRIVILEGED_CONNECTION);
+
+            throw new RetentionRefused(RetentionRefused::MISMATCH);
+        }
+    }
+
+    /** Every configured School hold is recorded in the database the functions read (fail closed). */
+    private function assertHoldStateCurrent(): void
+    {
+        $configured = array_values(array_filter($this->holds->heldSchoolIds(), fn (string $id) => Str::isUuid($id)));
+        if ($configured === []) {
+            return;
+        }
+
+        $recorded = DB::connection(self::PRIVILEGED_CONNECTION)->table('retention_school_holds')->whereIn('school_id', $configured)->pluck('school_id')->all();
+        if (array_diff($configured, $recorded) !== []) {
+            throw new RetentionRefused(RetentionRefused::HOLD_STATE_STALE);
+        }
     }
 
     /**

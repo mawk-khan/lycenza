@@ -107,6 +107,10 @@ class ProductionConfigurationGuardTest extends TestCase
             'runtime db tls disabled' => [['database.connections.pgsql.sslmode' => 'disable'], 'database_tls_not_required'],
             'admin db tls allow' => [['database.connections.pgsql_admin.sslmode' => 'allow'], 'database_tls_not_required'],
             'admin db tls unset' => [['database.connections.pgsql_admin.sslmode' => null], 'database_tls_not_required'],
+            // E21-RH.2 (ADR 0066 §5): a configured retention credential is its own login, over TLS.
+            'retention login = runtime login' => [['database.connections.pgsql.username' => 'school_os_app', 'database.connections.pgsql_retention.username' => 'school_os_app', 'database.connections.pgsql_retention.sslmode' => 'require'], 'retention_identity_not_distinct'],
+            'retention login = migration login' => [['database.connections.pgsql_admin.username' => 'lycenza_owner', 'database.connections.pgsql_retention.username' => 'lycenza_owner', 'database.connections.pgsql_retention.sslmode' => 'require'], 'retention_identity_not_distinct'],
+            'retention db tls prefer' => [['database.connections.pgsql_retention.username' => 'school_os_retention', 'database.connections.pgsql_retention.sslmode' => 'prefer'], 'database_tls_not_required'],
             'redis password missing' => [['database.redis.default.password' => null], 'redis_password_missing'],
             'redis password literal null' => [['database.redis.default.password' => 'null'], 'redis_password_missing'],
             'redis cache password blank' => [['database.redis.cache.password' => ''], 'redis_password_missing'],
@@ -131,6 +135,8 @@ class ProductionConfigurationGuardTest extends TestCase
             ['trustedproxy.proxies' => []],
             ['trustedproxy.proxies' => ['10.0.0.0/8', '2001:db8::/32']],
             ['database.connections.pgsql.sslmode' => 'verify-ca'],
+            // E21-RH.2: a distinct retention login over TLS (an unset one is simply absent and fails safe at run time).
+            ['database.connections.pgsql_retention.username' => 'school_os_retention', 'database.connections.pgsql_retention.sslmode' => 'require'],
             ['filesystems.disks.s3.endpoint' => null],
             ['filesystems.disks.s3.endpoint' => 'HTTPS://objects.example.net'],
             ['filesystems.disks.s3.key' => 'AKIAEXAMPLE', 'filesystems.disks.s3.secret' => 'a-real-secret-value'],

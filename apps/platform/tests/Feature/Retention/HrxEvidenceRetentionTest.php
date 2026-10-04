@@ -225,7 +225,16 @@ class HrxEvidenceRetentionTest extends TestCase
         $leaverB = $this->pastLeaver($b);
         config(['retention.hold_school_ids' => [$b['school']->id]]);
         $beforeB = $this->hrxRows($b['school'], $leaverB['employeeId']);
+        $beforeA = $this->hrxRows($a['school'], $leaverA['employeeId']);
 
+        // E21-RH.2 fail closed: a configured hold the database does not record yet refuses every destructive HRX unit.
+        // One refused unit per unheld School and participant (the run walks every School, committed residue included).
+        $errors = 2 * (School::query()->count() - 1);
+        $this->prune()->expectsOutputToContain("Deleted leave evidence of 0 Employee(s) and staff attendance evidence of 0 Employee(s) (dependency-blocked: 0, held: 2, errors: {$errors})")->assertSuccessful();
+        $this->assertSame($beforeA, $this->hrxRows($a['school'], $leaverA['employeeId']), 'nothing deleted while the hold state is stale');
+
+        // The operator records the hold (maintenance connection); the run then proceeds for the other School only.
+        $this->artisan('platform:retention-holds-sync')->assertSuccessful();
         $this->prune()->expectsOutputToContain('Deleted leave evidence of 1 Employee(s) and staff attendance evidence of 1 Employee(s) (dependency-blocked: 0, held: 2, errors: 0)')->assertSuccessful();
 
         $this->assertSame(array_fill_keys(self::HRX_EVIDENCE, 0), $this->hrxRows($a['school'], $leaverA['employeeId']));
