@@ -10,6 +10,7 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 |---|---|
 | [PRODUCTION-IMAGES-AND-PROCESSES.md](PRODUCTION-IMAGES-AND-PROCESSES.md) | The two images, the process manifest, roles, secrets per process, health, local verification |
 | [DATABASE-BOOTSTRAP.md](DATABASE-BOOTSTRAP.md) | Production PostgreSQL roles, default privileges, verification |
+| [RETENTION-HOLDS.md](RETENTION-HOLDS.md) | E21 retention holds: placing, releasing, reconciling, attribution (E21-RH.3) |
 | [MAINTENANCE-WINDOW-RELEASE.md](MAINTENANCE-WINDOW-RELEASE.md) | The v1 single-version release sequence and how maintenance mode behaves |
 | [REDIS-LOSS-RECOVERY.md](REDIS-LOSS-RECOVERY.md) | What a Redis loss costs and how queued work is rebuilt from PostgreSQL |
 | [BACKUP-AND-RESTORE.md](BACKUP-AND-RESTORE.md) | PostgreSQL and object-storage backup requirements, the restore procedure, restore validation |

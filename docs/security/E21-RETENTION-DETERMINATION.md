@@ -150,6 +150,17 @@ Its rows are counted as held, and nothing of it is deleted.
   hold policy and its semantics are unchanged.
   - The other E21 functions keep the original model (runtime EXECUTE, hold
     checked by the command), pending a separate E21 decision.
+- **E21-RH.3 (2026-10-04, ADR 0066 §11): PostgreSQL hold state is
+  authoritative.**
+  - Holds live in `retention_holds`, with indefinite history.
+  - They are placed and released only through the audited operator
+    commands (`docs/operations/RETENTION-HOLDS.md`).
+  - Configuration may add holds during the transition
+    (`platform:retention-holds-reconcile`). Configuration removal never
+    releases one, and release requires an explicit operator action.
+  - The database platform hold is global (School and School-less).
+  - HRX enforces both in the database. The legacy commands read the same
+    state in PHP, and fail closed when it cannot be read.
 - **E21-RH.2 (2026-10-04, ADR 0066 §10).**
   - The HRX purge functions are executed only by the dedicated
     `school_os_retention` login.

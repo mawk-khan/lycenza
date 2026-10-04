@@ -310,16 +310,25 @@ final class RetentionExpiry
         }
     }
 
-    /** Every configured School hold is recorded in the database the functions read (fail closed). */
+    /**
+     * E21-RH.3: the database decides (the destructive function refuses a
+     * held School or an active platform hold itself). This check can only
+     * add refusals: a transitional configured hold that has not been placed
+     * yet (platform:retention-holds-reconcile), or hold state that cannot be
+     * read, refuses the destructive run before it starts (fail closed).
+     */
     private function assertHoldStateCurrent(): void
     {
-        $configured = array_values(array_filter($this->holds->heldSchoolIds(), fn (string $id) => Str::isUuid($id)));
-        if ($configured === []) {
+        $database = $this->holds->databaseHolds();
+        if ($database === null) {
+            throw new RetentionRefused(RetentionRefused::HOLD_STATE_UNAVAILABLE);
+        }
+        if ($database['platform']) {
             return;
         }
 
-        $recorded = DB::connection(self::PRIVILEGED_CONNECTION)->table('retention_school_holds')->whereIn('school_id', $configured)->pluck('school_id')->all();
-        if (array_diff($configured, $recorded) !== []) {
+        $configured = array_values(array_filter($this->holds->heldSchoolIds(), fn (string $id) => Str::isUuid($id)));
+        if (array_diff($configured, $database['schools']) !== [] || (bool) config('retention.hold_platform', false)) {
             throw new RetentionRefused(RetentionRefused::HOLD_STATE_STALE);
         }
     }

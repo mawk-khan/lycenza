@@ -411,6 +411,9 @@ outside it.
       them on the migration/owner connection;
     - the functions refuse any session user without the owner's
       privileges;
+    - (E21-RH.3, ADR 0066 §11: superseded by authoritative `retention_holds`;
+      HRX refuses an active School or platform hold in the database;
+      explicit audited release only)
     - they refuse a School held in `retention_school_holds`, the database
       mirror of `RETENTION_HOLD_SCHOOL_IDS`.
   - **Kept:** School configuration (tenant lifetime), audit, outbox, and

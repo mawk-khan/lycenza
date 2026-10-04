@@ -27,6 +27,8 @@ APP_IMAGE="${APP_IMAGE:-lycenza-app:verify}"
 RUN_ID="lycenza-pgverify-$$"
 NETWORK="${RUN_ID}-net"
 DB="${RUN_ID}-db"
+REDIS="${RUN_ID}-redis"
+REDIS_PASSWORD="$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | cut -c1-32)"
 CERTS="$(mktemp -d)"
 MIGRATION_ROLE=lycenza_owner
 DATABASE=lycenza
@@ -39,7 +41,7 @@ pass() { printf 'PASS  %s\n' "$1"; }
 fail() { printf 'FAIL  %s\n' "$1"; failures=$((failures + 1)); }
 
 cleanup() {
-    docker rm -f "$DB" >/dev/null 2>&1 || true
+    docker rm -f "$DB" "$REDIS" >/dev/null 2>&1 || true
     docker network rm "$NETWORK" >/dev/null 2>&1 || true
     rm -rf "$CERTS"
 }
@@ -49,6 +51,10 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=${DB}" \
     -keyout "$CERTS/server.key" -out "$CERTS/server.crt" >/dev/null 2>&1
 
 docker network create "$NETWORK" >/dev/null
+# The production guard requires a Redis-backed cache for the cross-host session handoff (ADR 0054,
+# added after this script; without it the image refuses to boot): a throwaway Redis, as verify-images.sh uses.
+docker run -d --name "$REDIS" --network "$NETWORK" \
+    redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 redis-server --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
 docker run -d --name "$DB" --network "$NETWORK" \
     -e POSTGRES_USER="$MIGRATION_ROLE" -e POSTGRES_PASSWORD="$OWNER_PASSWORD" -e POSTGRES_DB="$DATABASE" \
     -v "$CERTS:/certs:ro" --entrypoint bash postgres:16 -c '
@@ -98,7 +104,7 @@ ENV_ARGS=(
     -e METRICS_SCRAPE_TOKEN="$(random)$(random)"
     -e DB_HOST="$DB" -e DB_DATABASE="$DATABASE" -e DB_SSLMODE=require
     -e DB_USERNAME=school_os_app -e DB_PASSWORD="$APP_PASSWORD"
-    -e REDIS_PASSWORD="$(random)" -e CACHE_STORE=array -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync
+    -e REDIS_HOST="$REDIS" -e REDIS_PASSWORD="$REDIS_PASSWORD" -e CACHE_STORE=redis -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync
     -e DOCUMENTS_DISK=s3 -e COMMUNICATION_ATTACHMENTS_DISK=s3
     -e AWS_BUCKET=lycenza-verify -e AWS_DEFAULT_REGION=us-east-1 -e AWS_ENDPOINT=https://objects.invalid
 )

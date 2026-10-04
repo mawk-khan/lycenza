@@ -43,7 +43,7 @@ final class StaffAttendanceEvidenceRetentionService
     private const KEEP = [
         RetentionExpiry::REFUSED_HRX_YOUNGER_ROW => 'staff_attendance_records',
         RetentionExpiry::REFUSED_EMPLOYEE_NOT_SEPARATED => 'employment_records',
-        RetentionExpiry::REFUSED_HELD => 'retention_school_holds',
+        RetentionExpiry::REFUSED_HELD => 'retention_holds',
     ];
 
     public function __construct(

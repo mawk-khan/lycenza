@@ -115,6 +115,10 @@ not the code path that happens to call the functions.
     `session_user`, not owner membership;
   - the scheduler holds only the `database_retention` credential, never
     the migration one;
+  - *(superseded by E21-RH.3, ADR 0066 §11: holds are authoritative
+    database state in `retention_holds`; HRX refuses an active School OR
+    platform hold through `retention_assert_not_held()`; release is an
+    explicit audited operator command; configuration is add-only)*
   - the hold mirror is written only by `platform:retention-holds-sync`
     (operator console), and a destructive run refuses while a configured
     hold is unrecorded.

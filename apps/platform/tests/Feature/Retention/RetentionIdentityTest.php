@@ -117,7 +117,6 @@ class RetentionIdentityTest extends TestCase
             'leave_policy_assignments' => ['employment_record_id'],
             'leave_requests' => ['employee_id'],
             'leave_year_close_items' => ['employment_record_id'],
-            'retention_school_holds' => ['school_id'],
             'staff_attendance_records' => ['employee_id'],
         ], $columns);
         $this->assertSame(0, (int) DB::selectOne("select count(*) as n from pg_attribute t cross join lateral aclexplode(t.attacl) a where a.grantee = ? and a.privilege_type <> 'SELECT'", [$oid])->n);

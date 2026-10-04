@@ -3,6 +3,7 @@
 namespace Tests\Feature\Retention;
 
 use App\Models\School;
+use App\Support\Retention\RetentionHolds;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ForcesConcurrentOverlap;
@@ -117,5 +118,80 @@ class HrxRetentionConcurrencyTest extends TestCase
         $this->assertSame(0, $this->admin('leave_requests', 'employee_id', $t['leaver']['employeeId']));
         $this->assertSame(0, $this->admin('staff_attendance_records', 'employee_id', $t['leaver']['employeeId']));
         $this->assertSame(0, $this->admin('leave_ledger_entries', 'employment_record_id', $t['leaver']['employment']->id));
+    }
+
+    /** The current platform hold rows (maintenance connection). */
+    private function platformHolds(): array
+    {
+        return DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_holds')->where('scope', 'platform')->orderBy('placed_at')->get(['released_at'])->map(fn ($r) => $r->released_at === null ? 'active' : 'released')->all();
+    }
+
+    #[Test]
+    public function a_platform_hold_placed_concurrently_makes_the_waiting_purge_refuse(): void
+    {
+        $t = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('place-platform', $t['w']['school']->id),
+            $this->script('prune', $t['w']['school']->id),
+        );
+
+        $this->assertSame('placed:created', $holder);
+        $this->assertSame('deleted:0/0 blocked:1/1 errors:0', $contender, 'the purge waited on the hold lock, then saw the committed hold');
+        $this->assertSame(1, $this->admin('staff_attendance_records', 'id', $t['record']->id));
+        $this->assertSame(['active'], $this->platformHolds());
+    }
+
+    #[Test]
+    public function a_purge_already_past_the_check_finishes_and_the_placement_waits_for_it(): void
+    {
+        $t = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('prune', $t['w']['school']->id),
+            $this->script('place-platform', $t['w']['school']->id),
+        );
+
+        $this->assertSame('deleted:1/1 blocked:0/0 errors:0', $holder);
+        $this->assertSame('placed:created', $contender, 'the placement became effective only after the purge committed');
+        $this->assertSame(0, $this->admin('staff_attendance_records', 'id', $t['record']->id));
+        $this->assertSame(['active'], $this->platformHolds());
+    }
+
+    #[Test]
+    public function a_concurrent_release_lets_the_waiting_purge_proceed_once_committed(): void
+    {
+        $t = $this->world();
+        app(RetentionHolds::class)->place(null, 'regulatory_inquiry', 'RACE-0');
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('release-platform', $t['w']['school']->id),
+            $this->script('prune', $t['w']['school']->id),
+        );
+
+        $this->assertSame('released', $holder);
+        $this->assertSame('deleted:1/1 blocked:0/0 errors:0', $contender);
+        $this->assertSame(['released'], $this->platformHolds());
+    }
+
+    #[Test]
+    public function two_operators_placing_the_same_hold_create_exactly_one_and_two_releases_release_once(): void
+    {
+        $t = $this->world();
+
+        [$first, $second] = $this->raceWithHeldHolder(
+            $this->script('place-platform', $t['w']['school']->id),
+            $this->script('place-platform', $t['w']['school']->id),
+        );
+        $this->assertSame(['placed:created', 'placed:existing'], [$first, $second]);
+        $this->assertSame(['active'], $this->platformHolds());
+
+        [$first, $second] = $this->raceWithHeldHolder(
+            $this->script('release-platform', $t['w']['school']->id),
+            $this->script('release-platform', $t['w']['school']->id),
+        );
+        $this->assertSame('released', $first);
+        $this->assertStringStartsWith('rejected:', $second, 'the second release finds no active hold');
+        $this->assertSame(['released'], $this->platformHolds());
     }
 }

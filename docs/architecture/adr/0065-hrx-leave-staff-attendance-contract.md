@@ -1911,7 +1911,10 @@ retention-role membership. HRX itself stays closed at `dc8b50a`.
 - The HRX units now run on `pgsql_retention` as `school_os_retention`.
 - The prologue accepts exactly that login (`session_user`).
 - Writing the hold mirror became operator maintenance
-  (`platform:retention-holds-sync`). A destructive run refuses while a
+  (`platform:retention-holds-sync`; *superseded 2026-10-04 by E21-RH.3,
+  ADR 0066 §11: authoritative `retention_holds`, the prologue calls
+  `retention_assert_not_held()` -- School or platform hold --, explicit
+  audited release only*). A destructive run refuses while a
   configured hold is unrecorded.
 
 - **Problem.** The runtime role had no DELETE on HRX evidence, but it held

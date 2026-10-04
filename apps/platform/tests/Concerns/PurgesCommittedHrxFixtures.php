@@ -18,7 +18,10 @@ use Illuminate\Support\Facades\DB;
  * - the `test.capability_grant.*` roles `createUserWithCapabilities()`
  *   minted since setUp, with their `role_capabilities`;
  * - School-less platform audit rows written since setUp (e.g. an erasure
- *   case's `platform.erasure_case.*` events).
+ *   case's `platform.erasure_case.*` events);
+ * - E21-RH.3: retention hold rows placed since setUp (a platform hold has
+ *   no School, so the School purge does not reach it; replica mode lets the
+ *   cleanup bypass the history guard -- test database only).
  *
  * Shared baseline fixtures of the canonical seed (capabilities, the seeded
  * roles and their grants, the seeded User) existed before setUp and are
@@ -27,11 +30,11 @@ use Illuminate\Support\Facades\DB;
  */
 trait PurgesCommittedHrxFixtures
 {
-    /** @var array{users: list<string>, roles: list<string>, platform_audit: list<string>, counts: array<string, int>}|null */
+    /** @var array{users: list<string>, roles: list<string>, platform_audit: list<string>, holds: list<string>, counts: array<string, int>}|null */
     private ?array $durableSnapshot = null;
 
     /** Global tables a committed race fixture can leave rows in. */
-    private const DURABLE_TABLES = ['schools', 'users', 'roles', 'role_capabilities', 'school_memberships', 'membership_role_assignments', 'platform_audit_events'];
+    private const DURABLE_TABLES = ['schools', 'users', 'roles', 'role_capabilities', 'school_memberships', 'membership_role_assignments', 'platform_audit_events', 'retention_holds'];
 
     protected function snapshotDurableFixtures(): void
     {
@@ -40,6 +43,7 @@ trait PurgesCommittedHrxFixtures
             'users' => $admin->table('users')->pluck('id')->all(),
             'roles' => $admin->table('roles')->pluck('id')->all(),
             'platform_audit' => $admin->table('platform_audit_events')->pluck('id')->all(),
+            'holds' => $admin->table('retention_holds')->pluck('id')->all(),
             'counts' => $this->durableCounts(),
         ];
     }
@@ -48,7 +52,7 @@ trait PurgesCommittedHrxFixtures
     protected function purgeCommittedHrxSchools(array $schools): void
     {
         $admin = DB::connection('pgsql_admin');
-        $snapshot = $this->durableSnapshot ?? ['users' => [], 'roles' => [], 'platform_audit' => null];
+        $snapshot = $this->durableSnapshot ?? ['users' => [], 'roles' => [], 'platform_audit' => null, 'holds' => null];
         $schoolIds = array_map(fn (School $s) => $s->id, $schools);
 
         $users = array_values(array_unique([
@@ -79,6 +83,9 @@ trait PurgesCommittedHrxFixtures
             $admin->table('users')->whereIn('id', $users)->delete();
             if ($snapshot['platform_audit'] !== null) {
                 $admin->table('platform_audit_events')->whereNotIn('id', $snapshot['platform_audit'])->delete();
+            }
+            if ($snapshot['holds'] !== null) {
+                $admin->table('retention_holds')->whereNotIn('id', $snapshot['holds'])->delete();
             }
         });
     }

@@ -33,8 +33,8 @@ class DatabaseRoleVerifier
         'school_domains', 'school_elevations', 'school_group_members', 'school_memberships',
         // E21.2F: platform compliance cases (operator console; scoped by School in code).
         'erasure_cases',
-        // HRX.6 hardening: the database School-hold mirror; the runtime role has no privilege on it at all.
-        'retention_school_holds',
+        // E21-RH.3: the authoritative retention holds; the runtime role has no privilege on them at all.
+        'retention_holds',
     ];
 
     /** Tables whose history the runtime role must never delete. */
@@ -120,6 +120,15 @@ class DatabaseRoleVerifier
         // One Employee's Leave / Staff Attendance evidence, separation-floored and hold-checked
         'retention_expire_leave_employee_evidence', 'retention_expire_staff_attendance_employee_evidence',
     ];
+
+    /**
+     * E21-RH.3: read-only functions the retention identity also executes:
+     * the active hold scopes (no history, no attribution) its PHP side reads.
+     */
+    public const RETENTION_READ_FUNCTIONS = ['retention_hold_active_scopes'];
+
+    /** E21-RH.3: the hold writers -- owner (operator maintenance) only, never PUBLIC, runtime or retention. */
+    public const HOLD_MAINTENANCE_FUNCTIONS = ['retention_hold_place', 'retention_hold_release', 'retention_assert_not_held'];
 
     /**
      * @return list<CheckResult>
@@ -216,7 +225,7 @@ class DatabaseRoleVerifier
         $results[] = CheckResult::of('retention_functions_narrow', count($narrow) === count(self::RETENTION_FUNCTIONS) && $unexpected === []);
         $closed = array_filter($functions, fn ($f) => in_array($f->proname, self::PRIVILEGED_RETENTION_FUNCTIONS, true)
             && $f->prosecdef && str_contains($f->config, 'search_path=') && $f->owner !== $role && ! $f->runtime_exec && ! $f->public_exec);
-        $holds = DB::selectOne("select has_table_privilege(?, 'retention_school_holds', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') as any", [$role]);
+        $holds = DB::selectOne("select has_table_privilege(?, 'retention_holds', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') as any", [$role]);
         $results[] = CheckResult::of('privileged_retention_functions_closed', count($closed) === count(self::PRIVILEGED_RETENTION_FUNCTIONS) && ! $holds->any);
         $results = [...$results, ...$this->retentionIdentityChecks()];
 
@@ -281,9 +290,11 @@ class DatabaseRoleVerifier
             [$role],
         ), 'proname');
         sort($executable);
-        $approved = self::PRIVILEGED_RETENTION_FUNCTIONS;
+        $approved = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::RETENTION_READ_FUNCTIONS];
         sort($approved);
         $results[] = CheckResult::of('retention_role_functions_exact', $executable === $approved, $executable === $approved ? '' : count(array_diff($executable, $approved)).' unexpected, '.count(array_diff($approved, $executable)).' missing');
+
+        $results[] = $this->authoritativeHoldsCheck($attrs->oid, (string) $owner);
 
         // Where this process holds the credential: the connection is really the retention login, unelevated.
         $username = config('database.connections.'.self::RETENTION_CONNECTION.'.username');
@@ -303,5 +314,42 @@ class DatabaseRoleVerifier
         }
 
         return $results;
+    }
+
+    /**
+     * E21-RH.3 (ADR 0066 §6): the authoritative hold store is owned by the
+     * schema owner, granted to nobody (no PUBLIC, runtime or retention
+     * privilege), its history guard is enabled, the writers and the assert
+     * helper are owner-only invokers, and the retention identity's only hold
+     * access is the read-only active-scopes definer.
+     */
+    private function authoritativeHoldsCheck(string $retentionOid, string $owner): CheckResult
+    {
+        $table = DB::selectOne(
+            "select relowner::regrole::text as owner, exists (select 1 from aclexplode(relacl) a where a.grantee <> relowner) as granted,
+                    (select count(*) from pg_trigger where tgrelid = c.oid and tgname in ('trg_retention_holds_guard', 'trg_retention_holds_no_truncate') and tgenabled = 'O') as guards
+               from pg_class c where oid = to_regclass('public.retention_holds')",
+        );
+        if ($table === null) {
+            return CheckResult::of('retention_holds_authoritative', false, 'missing');
+        }
+
+        $functions = collect(DB::select(
+            "select p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config, pg_get_userbyid(p.proowner) as owner,
+                    has_function_privilege(?, p.oid, 'EXECUTE') as runtime, has_function_privilege(?::oid, p.oid, 'EXECUTE') as retention,
+                    exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0) as public
+               from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = any (?::text[])",
+            [self::RUNTIME_ROLE, $retentionOid, '{'.implode(',', [...self::HOLD_MAINTENANCE_FUNCTIONS, ...self::RETENTION_READ_FUNCTIONS]).'}'],
+        ))->keyBy('proname');
+
+        $ok = $table->owner === $owner && ! $table->granted && (int) $table->guards === 2
+            && $functions->count() === count(self::HOLD_MAINTENANCE_FUNCTIONS) + count(self::RETENTION_READ_FUNCTIONS);
+        foreach ($functions as $name => $f) {
+            $read = in_array($name, self::RETENTION_READ_FUNCTIONS, true);
+            $ok = $ok && $f->owner === $owner && str_contains($f->config, 'search_path=') && ! $f->public && ! $f->runtime
+                && (bool) $f->prosecdef === $read && (bool) $f->retention === $read;
+        }
+
+        return CheckResult::of('retention_holds_authoritative', $ok);
     }
 }

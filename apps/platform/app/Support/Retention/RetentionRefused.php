@@ -21,8 +21,11 @@ final class RetentionRefused extends RuntimeException
     /** The connection authenticated as some other (or an elevated) login. */
     public const MISMATCH = 'retention_identity_mismatch';
 
-    /** A configured School hold is not recorded in the database (run platform:retention-holds-sync). */
+    /** A configured hold is not yet placed in the authoritative database state (run platform:retention-holds-reconcile). */
     public const HOLD_STATE_STALE = 'retention_hold_state_stale';
+
+    /** The authoritative database hold state could not be read. */
+    public const HOLD_STATE_UNAVAILABLE = 'retention_hold_state_unavailable';
 
     public function __construct(public readonly string $reason)
     {

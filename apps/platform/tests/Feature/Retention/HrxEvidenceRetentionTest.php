@@ -9,7 +9,6 @@ use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceRecord;
 use App\Models\School;
 use App\Support\Retention\Erasure\ErasureCaseService;
 use App\Support\Retention\Erasure\ErasureCategory;
-use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionMetrics;
 use App\Support\Retention\TenantRetentionCatalog;
 use Carbon\CarbonImmutable;
@@ -51,7 +50,6 @@ class HrxEvidenceRetentionTest extends TestCase
     protected function tearDown(): void
     {
         config(['retention.hold_school_ids' => []]);
-        app(RetentionHolds::class)->synchronize();
         $this->purgeCommittedHrxSchools($this->schools);
         try {
             $this->assertDurableFixturesRestored();
@@ -234,7 +232,7 @@ class HrxEvidenceRetentionTest extends TestCase
         $this->assertSame($beforeA, $this->hrxRows($a['school'], $leaverA['employeeId']), 'nothing deleted while the hold state is stale');
 
         // The operator records the hold (maintenance connection); the run then proceeds for the other School only.
-        $this->artisan('platform:retention-holds-sync')->assertSuccessful();
+        $this->artisan('platform:retention-holds-reconcile')->assertSuccessful();
         $this->prune()->expectsOutputToContain('Deleted leave evidence of 1 Employee(s) and staff attendance evidence of 1 Employee(s) (dependency-blocked: 0, held: 2, errors: 0)')->assertSuccessful();
 
         $this->assertSame(array_fill_keys(self::HRX_EVIDENCE, 0), $this->hrxRows($a['school'], $leaverA['employeeId']));

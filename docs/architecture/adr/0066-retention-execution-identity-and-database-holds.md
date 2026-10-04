@@ -4,7 +4,9 @@
   2026-10-04).** The slices E21-RH.2–RH.6 (§9) implement it; until each
   slice lands, the current state in §2 stands for what it has not reached.
   **E21-RH.2 implemented (2026-10-04, §10):** the dedicated retention
-  identity exists, and HRX runs on it.
+  identity exists, and HRX runs on it. **E21-RH.3 implemented (2026-10-04,
+  §11):** PostgreSQL retention holds are authoritative, and the platform
+  hold is global (amends §6.3).
 - Date: 2026-10-04
 - Programme: **E21-RH — retention privilege hardening.** A
   pre-production security blocker, separate from HRX (closed at
@@ -195,6 +197,13 @@ transaction that deletes, so no freshness window exists.
   School-less category) refuses while it is active.
 - School-scoped functions are governed by the School hold. A platform
   hold covers School-less rows only, as E21 §2 already defines.
+- *Amended 2026-10-04 (E21-RH.3):* the **database** platform hold is
+  **global**. It also blocks every School-scoped destructive operation, so
+  one runs only when no platform hold AND no hold of its School is active.
+  Only the transitional, unreconciled `RETENTION_HOLD_PLATFORM`
+  configuration value keeps the legacy School-less-only reading in the PHP
+  check of the legacy commands; once reconciled it becomes the global
+  database hold.
 
 ## 7. Consequences
 - The 18 legacy functions move only slice by slice (§9), because
@@ -306,3 +315,87 @@ E21-RH stays a pre-production blocker until E21-RH.6 closes.
     equal to the runtime or migration login
     (`retention_identity_not_distinct`) and requires TLS.
 - The 18 legacy functions are unchanged.
+
+## 11. E21-RH.3 as built (2026-10-04)
+**PostgreSQL hold state is authoritative. Configuration may add holds
+during the transition. Configuration removal never releases a hold.
+Release requires an explicit, audited operator action.**
+
+- **Store.** `retention_holds` (migration
+  `2026_11_27_090000_make_retention_holds_authoritative`) replaces the RH.2
+  mirror.
+  - Columns: `id`, `scope` (`school` | `platform`), `school_id` (FK
+    `schools`, RESTRICT), `reason_code`, `reference`, `placed_via`
+    (`operator_command` | `configuration_reconciliation` | `migration`),
+    `placed_by_login`, `placed_at`, then `released_at`,
+    `released_by_login`, `release_reason_code`, `release_reference`.
+  - CHECKs: the scope shape (`school` ⇔ `school_id`), closed reason codes,
+    constrained reference tokens, and an all-or-nothing release.
+  - Partial unique indexes: one active hold per School, and one active
+    platform hold.
+  - Owned by the schema owner and granted to nobody (no PUBLIC, runtime or
+    retention privilege).
+- **History.** `trg_retention_holds_guard` / `trg_retention_holds_no_truncate`,
+  for every role:
+  - an INSERT is a placement, and the database sets `placed_by_login` from
+    `session_user` and the time;
+  - the only UPDATE is the one release of an active hold (database-set
+    login and time);
+  - DELETE and TRUNCATE are refused.
+- **Functions** (search path pinned, never PUBLIC):
+
+| Function | Kind | Executable by | Role |
+|---|---|---|---|
+| `retention_hold_place()` | invoker | owner only | the only placement path; exclusive hold lock |
+| `retention_hold_release()` | invoker | owner only | the only release path; exclusive hold lock |
+| `retention_assert_not_held(school)` | invoker | owner only | called inside the destructive definers; shared hold lock held to the end of the transaction; refuses an active platform hold or that School's hold (`retention_hold`); fails closed if unreadable |
+| `retention_hold_active_scopes()` | definer, read-only | retention identity only | active (scope, School) pairs; no history or attribution |
+
+- **HRX.** The prologue (`retention_lock_hrx_employee`) now calls
+  `retention_assert_not_held(p_school_id)` in place of the mirror lookup.
+  Everything else is unchanged: identity, tenant, floor, locks, age.
+- **Operator commands** (operator console, migration connection; each
+  change audited to `platform_audit_events`):
+  - `platform:retention-hold-place --school=|--platform --reason= --reference=`
+    (idempotent);
+  - `platform:retention-hold-release ... [--force]` (typed confirmation;
+    explicit only);
+  - `platform:retention-holds [--history]`;
+  - `platform:retention-holds-reconcile`, which is add-only: it places the
+    configured School and platform holds and never releases anything.
+
+  The `platform:retention-holds-sync` command of RH.2 is removed.
+- **Attribution.** The maintenance login comes from `session_user`; the
+  human attribution is the operator's change reference. A shared login is
+  not presented as a person.
+- **PHP.** `RetentionHolds` reads the authoritative state as the retention
+  identity (`retention_hold_active_scopes()`):
+  - `isHeld()` is the configured School, OR an active School hold, OR an
+    active platform hold;
+  - `platformHeld()` is the configured flag OR an active platform hold;
+  - unreadable state means held (fail closed).
+
+  `RetentionExpiry::privileged()` can only add refusals before a
+  destructive run: hold state unreadable, or a configured hold not yet
+  reconciled. The database alone decides what is held.
+- **Concurrency** (two-process tests):
+  - a placement concurrent with a purge makes the waiting purge refuse;
+  - a purge already past the check finishes first, then the placement
+    lands;
+  - a concurrent release lets the waiting purge proceed;
+  - two identical placements create one hold, and two releases release
+    once.
+- **Migration and rollback.** Every mirror row becomes an active School
+  hold (`migration`), verified before the mirror is dropped. Rollback
+  restores exactly the active School holds and the RH.2 prologue byte for
+  byte, and refuses while a platform hold or any release history exists
+  (a hold is never released by a rollback).
+- **Verifier.** New check `retention_holds_authoritative`:
+  - ownership, no grants, guards enabled;
+  - writer and assert ACLs and security mode;
+  - the read definer's ACL.
+
+  The approved retention-identity function set gains
+  `RETENTION_READ_FUNCTIONS`.
+- **Unchanged.** The 18 legacy functions (owners, ACLs, bodies) and their
+  PHP-only hold behaviour, which is still an RH.4–RH.6 blocker.

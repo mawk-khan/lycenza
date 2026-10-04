@@ -46,9 +46,9 @@ stricter for both connections; the application refuses to boot otherwise).
    - Without the retention credential, destructive retention units refuse
      (counted as errors, nothing deleted). They never fall back to the
      migration or runtime login.
-   - After changing `RETENTION_HOLD_SCHOOL_IDS`, record it with
-     `console platform:retention-holds-sync` (operator console). A
-     destructive run refuses while a configured hold is unrecorded.
+   - Retention holds are database state (E21-RH.3, ADR 0066 §6). See
+     [RETENTION-HOLDS.md](RETENTION-HOLDS.md) for placing, releasing and
+     reconciling them; configuration removal never releases one.
 4. Release step: `console migrate --database=pgsql_admin --force`, then
    `console db:seed --force` (production-safe catalogs,
    `PRODUCTION-RELEASE.md` step 7).

@@ -51,7 +51,6 @@ class HrxRetentionGuardTest extends TestCase
     protected function tearDown(): void
     {
         config(['retention.hold_school_ids' => []]);
-        app(RetentionHolds::class)->synchronize();
         $this->purgeCommittedHrxSchools($this->schools);
         try {
             $this->assertDurableFixturesRestored();
@@ -160,55 +159,59 @@ class HrxRetentionGuardTest extends TestCase
     }
 
     #[Test]
-    public function a_held_school_cannot_be_purged_by_a_direct_authorized_call_until_the_hold_is_released(): void
+    public function a_held_school_cannot_be_purged_by_a_direct_authorized_call_until_the_hold_is_explicitly_released(): void
     {
         $w = $this->pastWorld();
         $leaver = $this->pastLeaver($w);
         $before = $this->hrxRows($w['school'], $leaver['employeeId']);
         $args = [$w['school']->id, $leaver['employeeId'], '2018-01-01'];
+        $active = fn (): int => DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_holds')->where('school_id', $w['school']->id)->whereNull('released_at')->count();
 
-        // 1-2. Old enough for D9, and the School is held through the real E21 hold (config, mirrored to the database).
+        // 1-2. Old enough for D9; the School is held: the transitional configuration, reconciled ADD-ONLY into the authoritative store.
         config(['retention.hold_school_ids' => [$w['school']->id]]);
-        app(RetentionHolds::class)->synchronize();
-        $this->assertSame(1, DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_school_holds')->where('school_id', $w['school']->id)->count());
+        $this->artisan('platform:retention-holds-reconcile')->expectsOutputToContain('Placed 1 hold(s) from configuration')->assertSuccessful();
+        $this->assertSame(1, $active());
 
         // 3-4. The authorized retention identity calls the primitive directly: refused, nothing removed.
         foreach (['leave', 'staff_attendance'] as $kind) {
             $this->assertStringContainsString('retention_hold', (string) $this->asRetention($w['school'], fn () => DB::select($this->purgeSql($kind), $args)), "{$kind}: the hold is enforced at the destructive boundary");
         }
         $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']), 'zero HRX rows removed');
-        // The command counts a held School and deletes nothing either.
         $this->artisan('platform:employee-retention-prune', ['--only' => 'evidence'])->expectsOutputToContain('held: 2')->assertSuccessful();
-        $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']));
         $this->assertTrue($this->inSchool($w['school'], fn () => DB::table('employees')->where('id', $leaver['employeeId'])->exists()), 'held HRX evidence keeps the Employee');
 
-        // 5-7. Release through the legitimate path (configuration, then the operator's sync on the
-        // maintenance connection); the scheduled run, as the retention identity, then purges.
+        // 5. Removing it from configuration releases NOTHING (also not after another reconciliation).
         config(['retention.hold_school_ids' => []]);
-        $this->artisan('platform:employee-retention-prune', ['--only' => 'evidence'])
-            ->expectsOutputToContain('Deleted leave evidence of 0 Employee(s) and staff attendance evidence of 0 Employee(s) (dependency-blocked: 2')
-            ->assertSuccessful();
-        $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']), 'a recorded hold stays enforced until the operator records its release');
-        $this->artisan('platform:retention-holds-sync')->expectsOutputToContain('Recorded 0 configured School hold(s)')->assertSuccessful();
+        $this->artisan('platform:retention-holds-reconcile')->expectsOutputToContain('Placed 0 hold(s) from configuration; released none')->assertSuccessful();
+        $this->artisan('platform:employee-retention-prune', ['--only' => 'evidence'])->expectsOutputToContain('held: 2')->assertSuccessful();
+        $this->assertSame(1, $active(), 'configuration removal never releases a database hold');
+        $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']));
+
+        // 6-7. Only the explicit, audited release does; the scheduled run, as the retention identity, then purges.
+        $this->artisan('platform:retention-hold-release', ['--school' => $w['school']->id, '--reason' => 'matter_concluded', '--reference' => 'CHG-1001', '--force' => true])
+            ->expectsOutputToContain('Released hold')->assertSuccessful();
+        $this->assertSame(0, $active());
         $this->artisan('platform:employee-retention-prune', ['--only' => 'evidence'])
             ->expectsOutputToContain('Deleted leave evidence of 1 Employee(s) and staff attendance evidence of 1 Employee(s) (dependency-blocked: 0, held: 0, errors: 0)')
             ->assertSuccessful();
-        $this->assertSame(0, DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_school_holds')->count(), 'the sync recorded the release');
         $this->assertSame(array_fill_keys(self::HRX_EVIDENCE, 0), $this->hrxRows($w['school'], $leaver['employeeId']));
         $this->assertFalse($this->inSchool($w['school'], fn () => DB::table('employees')->where('id', $leaver['employeeId'])->exists()), 'purged HRX no longer blocks the Employee');
     }
 
     #[Test]
-    public function the_runtime_role_can_neither_place_nor_release_a_hold(): void
+    public function the_runtime_role_can_neither_read_place_nor_release_a_hold(): void
     {
         $school = $this->school();
-        config(['retention.hold_school_ids' => [$school->id]]);
-        app(RetentionHolds::class)->synchronize();
+        app(RetentionHolds::class)->place($school->id, 'audit', 'CHG-1002');
 
-        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->where('school_id', $school->id)->delete()));
-        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->insert(['school_id' => $this->school()->id])));
-        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->count()));
-        $this->assertSame(1, DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_school_holds')->where('school_id', $school->id)->count());
+        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_holds')->where('school_id', $school->id)->delete()));
+        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_holds')->where('school_id', $school->id)->update(['release_reason_code' => 'other'])));
+        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_holds')->insert(['scope' => 'platform', 'reason_code' => 'other', 'placed_via' => 'operator_command', 'placed_by_login' => 'x', 'placed_at' => now()])));
+        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_holds')->count()));
+        foreach (["retention_hold_place('platform', null, 'other', null, 'operator_command')", "retention_hold_release('school', '{$school->id}', 'other', null)", 'retention_hold_active_scopes()', "retention_assert_not_held('{$school->id}')"] as $call) {
+            $this->assertStringContainsString('permission denied for function', $this->refusal($school, fn () => DB::select("SELECT * FROM {$call}")), $call);
+        }
+        $this->assertSame(1, DB::connection(RetentionHolds::MAINTENANCE_CONNECTION)->table('retention_holds')->where('school_id', $school->id)->whereNull('released_at')->count());
     }
 
     #[Test]
