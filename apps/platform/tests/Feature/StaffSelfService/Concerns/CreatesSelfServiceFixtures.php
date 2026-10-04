@@ -85,6 +85,9 @@ trait CreatesSelfServiceFixtures
             $period = $periods->open($periods->createPeriod($school, Carbon::parse($month), null, $runManager), $runManager);
             $runs = app(PayrollRunAdministrationService::class);
             $run = $runs->createRun($period, $runManager);
+            if ($finalStatus === 'draft') {
+                return $run->id;
+            }
             $runs->calculate($run, $runManager);
             if (in_array($finalStatus, ['approved', 'posted'], true)) {
                 $runs->approve($run->refresh(), $approver);

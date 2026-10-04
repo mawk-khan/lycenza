@@ -4090,6 +4090,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/payroll-runs/{payrollRunId}/hrx-inputs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HRX.5: the HRX absence EVIDENCE captured beside each result of a regular run (contract hrx_payroll_input.v1: integer half-day units of approved paid/unpaid leave, recorded absence/presence, unresolved working time; completeness; fingerprint), beside a fresh read compared by fingerprint. For an approved/posted run a difference means the HRX source changed after approval -- the run stays frozen and money is corrected only through the existing correction run. Evidence only: no deduction, non-payable or NCP figure (payrollPolicy pending_hrx_l4). Requires payroll.runs.prepare. */
+        get: operations["getPayrollRunHrxInputs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/payroll-runs/{payrollRunId}/hrx-inputs/difference-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HRX.5: compares every captured HRX input of the run with the current HRX evidence and records payroll.hrx_input.difference_detected for each change. Never recalculates, reposts or rewrites a run. Requires payroll.runs.prepare. Idempotency-Key required. */
+        post: operations["checkPayrollRunHrxInputDifferences"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/payroll-runs/{payrollRunId}/post": {
         parameters: {
             query?: never;
@@ -8282,6 +8316,65 @@ export interface components {
                 lapsedDelta: number;
                 /** Format: date-time */
                 createdAt?: string | null;
+            }[];
+        };
+        /** @description HRX.5 -- integer half-day units (2 = one full day). Evidence, never a monetary or NCP figure. */
+        PayrollHrxUnits: {
+            requiredWorkingHalfUnits: number | null;
+            approvedPaidLeaveHalfUnits: number;
+            approvedUnpaidLeaveHalfUnits: number;
+            recordedAbsenceHalfUnits: number;
+            recordedPresenceHalfUnits: number;
+            unresolvedWorkingHalfUnits: number;
+        };
+        PayrollRunHrxInputs: {
+            /** Format: uuid */
+            payrollRunId: string;
+            /** @enum {string} */
+            runKind: "regular" | "correction";
+            /** @enum {string} */
+            runStatus: "draft" | "calculated" | "approved" | "posted";
+            /** @enum {string} */
+            contractVersion: "hrx_payroll_input.v1";
+            /**
+             * @description No payroll policy turns HRX evidence into a non-payable quantity until HRX-L4 is qualified.
+             * @enum {string}
+             */
+            payrollPolicy: "pending_hrx_l4";
+            frozen: boolean;
+            /** @enum {string} */
+            differenceState: "none" | "source_changed_after_approval" | "recalculate_to_refresh";
+            inputs: {
+                /** Format: uuid */
+                employmentRecordId: string;
+                employee: {
+                    employeeNumber: string | null;
+                    fullName: string | null;
+                };
+                contractVersion: string;
+                fingerprint: string;
+                /** @enum {string} */
+                completeness: "complete" | "input_incomplete";
+                incompleteReasons: ("calendar_not_configured" | "unrecorded_working_time")[];
+                /** Format: date */
+                periodStartsOn: string;
+                /** Format: date */
+                periodEndsOn: string;
+                /** Format: date */
+                coveredFrom: string | null;
+                /** Format: date */
+                coveredTo: string | null;
+                units: components["schemas"]["PayrollHrxUnits"];
+                /** Format: date-time */
+                capturedAt: string;
+                sourceChanged: boolean;
+                current: {
+                    fingerprint: string;
+                    /** @enum {string} */
+                    completeness: "complete" | "input_incomplete";
+                    incompleteReasons: string[];
+                    units: components["schemas"]["PayrollHrxUnits"];
+                };
             }[];
         };
         /** @description HRX.4 -- the acting Employee's own leave overview (School-configured entitlements; no statutory claim). */
@@ -25145,6 +25238,116 @@ export interface operations {
             };
             /** @description PAYROLL_RUN_NOT_ELIGIBLE_FOR_PAYSLIP -- the run is still draft/calculated. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    getPayrollRunHrxInputs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                payrollRunId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PayrollRunHrxInputs"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking payroll.runs.prepare in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School payroll run. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    checkPayrollRunHrxInputDifferences: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                payrollRunId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            /** Format: uuid */
+                            payrollRunId: string;
+                            checked: number;
+                            changed: number;
+                        };
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking payroll.runs.prepare in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School payroll run. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

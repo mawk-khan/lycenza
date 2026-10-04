@@ -11,7 +11,9 @@
   Attendance is built** (§24: the per-half storage refinement of §7 and the
   Leave ↔ Attendance mechanism, recorded before coding; as-built notes in
   §24.16). **HRX.4 — Staff Self-Service is built** (§25, decisions
-  recorded before coding; as-built notes in §25.13). The
+  recorded before coding; as-built notes in §25.13). **HRX.5 — the HRX →
+  Payroll evidence mechanism is built; legal activation is blocked by
+  HRX-L4** (§26, recorded before coding; as-built notes in §26.14). The
   remaining **[OWNER DECISION]** defaults still apply to HRX.2–HRX.6 unless
   the owner records a different choice before the checkpoint that needs it.
 - Date: 2026-10-03
@@ -1521,3 +1523,244 @@ Where it narrows a default above, this section governs.
     only through ActingEmployee; no HRX.5 concept; no table.
   - `StaffSelfServiceOpenApiCoverageTest`.
   - Leave and Staff Attendance guards updated to the HRX.4 shape.
+
+## 26. HRX.5 — Payroll absence evidence: decisions recorded before coding (2026-10-04)
+
+Baseline `2b0b1f5`. This implements §9 as an **evidence** boundary. It does
+not clear HRX-L4. The qualified-review record is
+`docs/security/HRX-L4-PAYROLL-LOSS-OF-PAY-DETERMINATION.md`. Where this
+narrows §9, this section governs.
+
+### 26.1 Audit of Payroll before HRX.5 [FACT at `2b0b1f5`]
+- **ECR NCP.** `StatutoryEcrExportService::buildRow()` writes the literal
+  `'0'` as NCP Days for every member. Nothing stores an NCP value; the
+  export emits it at generation time. Its docblock already disclosed this
+  as a gap.
+- **Part-month pay.**
+  - `PayrollRunService::resolveEmploymentRecord()` sends an employment to
+    a **manual override** when it starts or ends inside the period, or when
+    its compensation assignment changes inside the period.
+  - Without an override row (`payroll_adjustments.mode = manual_override`,
+    append-only, latest row per component wins), the employment stays
+    unresolved and the run stays `draft`.
+- **Immutability.**
+  - `calculate()` replaces the whole result set while the run is `draft`
+    or `calculated`; it locks the run row FOR UPDATE.
+  - `approve()` (`calculated -> approved`) is the immutability boundary.
+    Results, their lines and statutory results are frozen by trigger from
+    `approved` on.
+  - Posting (`approved -> posted`) writes `payroll_run_postings` and the
+    journal.
+- **Corrections.** A posted regular run is corrected by a separate
+  `correction` run whose per-employment `correction_delta` adjustments
+  are entered by a payroll administrator. Posted history is never edited.
+- **Periods.** Payroll periods are calendar months (`starts_on` /
+  `ends_on` derived from `period_month`). The HRX contract nevertheless
+  takes the period's explicit dates.
+- **No HRX input** of any kind existed.
+
+### 26.2 Four concepts, never one field
+1. **HRX absence evidence.** Facts in integer half-day units: approved
+   paid leave, approved unpaid leave, recorded absence, recorded presence,
+   unresolved working time. Owned by HRX and read through §26.3.
+2. **Payroll non-payable input.** What Payroll would treat as not payable.
+   This needs a validated, versioned payroll policy (HRX-L4). **None
+   exists in v1.** Payroll stores the evidence (1) with policy status
+   `pending_hrx_l4`, and no "non-payable" quantity is derived anywhere.
+3. **Monetary loss-of-pay deduction.** **Disabled.** No code path takes
+   HRX evidence into gross, basic, net, EPF or EPS wages, or into any
+   statutory base (guarded, §26.11).
+4. **EPFO NCP days.** **Unchanged.** The ECR export keeps its legacy
+   default `0`, **pending a validated HRX-L4/EPFO mapping**. It is not
+   claimed to be legally correct. There is no half-day → day conversion
+   anywhere (guarded, §26.11).
+
+### 26.3 The HRX read contract (one-way)
+- **`App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidenceReader`.**
+  StaffAttendance already composes approved leave (through Leave's
+  `LeaveCoverageReader`) with attendance and the staff calendar, so the one
+  contract lives there.
+- **Dependencies:**
+  - Payroll → this contract, its DTO and the HR span contract only;
+  - never HRX → Payroll;
+  - never Payroll → any `leave_*` or `staff_attendance_*` table or model.
+- **Input:** School, EmploymentRecord, period `starts_on`, `ends_on`. Never
+  a User.
+- **Two entry points:**
+  - `read()`: fresh, no locks, for comparisons and screens;
+  - `captureForPayroll()`: inside Payroll's transaction, under the §26.9
+    locks, for snapshots.
+- **Contract version:** `hrx_payroll_input.v1`.
+
+### 26.4 Classification: one effective class per half (HRX.3 precedence)
+- **Within coverage**, each half is exactly one of:
+  - `leave_paid` / `leave_unpaid`: approved leave day evidence, by the
+    leave type's `is_paid`. That flag is frozen once the type is used
+    (§22.5);
+  - `present` / `absent`: recorded evidence, not covered by leave;
+  - `holiday` / `off_day`: today's staff calendar, no record, no leave;
+  - `unrecorded`: working time with neither;
+  - `calendar_unknown`: the staff week is unconfigured.
+- **No double counting.** A recorded `absent` half under approved leave
+  counts as leave only. The underlying record id, version and value stay
+  in the half's source facts.
+- **Never counted as absence:** holidays, off-days and unrecorded halves.
+  Unrecorded is never present or absent.
+- **Paid leave never becomes non-payable.**
+- **Unpaid leave and recorded absence are facts only.** Neither is labelled
+  loss-of-pay, deductible or NCP.
+
+### 26.5 Coverage and the period
+- The half-days counted are those of the period **intersected with the
+  EmploymentRecord's own dates** (HR `EmploymentRoster::span()`, the one
+  employment-date source). Dates before joining or after separation are
+  never absence. A period with no overlap is empty and complete.
+- Leave years play no part. The leave year only funds units; it never
+  splits a payroll period.
+
+### 26.6 Completeness
+- **`complete`** only when the calendar is configured and no working half
+  in coverage is `unrecorded`.
+- Otherwise **`input_incomplete`**, with reasons `calendar_not_configured`
+  and/or `unrecorded_working_time`.
+- Nothing is guessed, and there is no override of source evidence. With
+  monetary use disabled, incompleteness is shown and audited, and it
+  blocks nothing in v1. Any future monetary policy must refuse incomplete
+  input.
+
+### 26.7 Fingerprint
+- **SHA-256 of canonical JSON** over:
+  - the contract version, EmploymentRecord, period and coverage;
+  - whether the calendar is configured;
+  - per half in coverage: date, half, class, calendar working flag, and the
+    source facts (approved leave request id + `is_paid`; attendance record
+    id + version + recorded value).
+- **Equal source state gives an equal fingerprint.** Any change in
+  approval, cancellation, recorded value, correction version, or calendar
+  working status of a half changes it.
+- **Excluded:** names, codes, timestamps and other presentation.
+
+### 26.8 The Payroll snapshot: `payroll_run_hrx_inputs`
+- **One row per payroll run result** (regular runs only). It is captured
+  when `calculate()` persists each result, and replaced with the result on
+  recalculation (results are delete-and-reinsert while the run is
+  `draft`/`calculated`).
+- **It holds:** contract version, fingerprint, completeness + reasons,
+  period and coverage dates, the integer unit counts, the per-half evidence
+  (jsonb), the capturing actor and `captured_at`.
+- **FK:** a composite foreign key to its result ON DELETE CASCADE. It
+  follows its result, including E21.3F payroll retention (which deletes
+  results inside its privileged function).
+- **Frozen like results:**
+  - no runtime UPDATE or DELETE (append-only by privilege);
+  - a trigger refuses insert, update or cascade delete once the run is
+    `approved`/`posted`, except inside the E21.3F retention function.
+- **Never cascades from** an Employee, Leave or StaffAttendance; it has no
+  foreign key to them.
+
+### 26.9 Locks (one consistent HRX read)
+- **New HRX lock:** `hrx.staff_employment:{school}:{employment}`
+  (`LeaveLocks::staffEmployment()`). Every HRX writer takes it **shared**,
+  after its HR rows and before the staff days:
+  - leave approval and cancellation;
+  - attendance record, bulk register and correction.
+- **`captureForPayroll()`** takes it **exclusively** for every employment
+  of the run (sorted by id), then the calendar lock shared, then reads.
+- **Result:** the calculation sees each employment's HRX state either
+  wholly before or wholly after any concurrent HRX write, never a mix.
+- **No deadlock:**
+  - Payroll holds the run row and these locks only;
+  - HRX writers never wait on a Payroll lock;
+  - Payroll takes the calendar lock only after all employment locks.
+
+### 26.10 Pending differences and corrections
+- **Comparison:** the captured fingerprint against a fresh `read()` of the
+  same period and employment. Equal means no difference.
+- **Run states:**
+  - for an `approved`/`posted` run, a difference is **"HRX source changed
+    after approval"**. The snapshot and results stay frozen;
+  - for a `draft`/`calculated` run, the remedy is recalculation.
+- **Read** (`GET …/payroll-runs/{run}/hrx-inputs`): the snapshot and live
+  comparison.
+- **Check** (`POST …/hrx-inputs/difference-checks`, `idempotent`): records
+  `payroll.hrx_input.difference_detected` per changed employment.
+- **Both** need `payroll.runs.prepare` (attendance-derived personal data,
+  not "non-sensitive" run detail).
+- **Correction** of money remains the existing correction run with
+  administrator-entered deltas. HRX.5 adds no new financial mechanism and
+  never reposts or rewrites a run.
+
+### 26.11 Legal-activation guards
+- **Code:** no Payroll calculation, statutory calculation or ECR export
+  code reads the snapshot or the reader. Only the capture step in
+  `PayrollRunService` and the HRX-input read service do.
+- **Tests:**
+  - unpaid leave and recorded absence leave gross, net and statutory
+    figures unchanged;
+  - the ECR NCP stays `0`;
+  - no expression rounds half-day units into days (`intdiv`, `ceil`,
+    `floor`, `round`, `/ 2` on half-day quantities) in Payroll, Leave or
+    StaffAttendance.
+
+### 26.12 Authorization, classification, retention
+- **Authorization:** payroll administration only (`payroll.runs.prepare`
+  for capture, which is `calculate()`, and for reads and checks). Never
+  `staff_self_service` or `teacher`; own payslips are unchanged and never
+  show HRX inputs.
+- **Classification:** the snapshot is Payroll evidence, Highly Sensitive
+  with the result it supports (§15). No new tier.
+- **Retention:** E21-D9 payroll evidence in the `payroll_ledger` category
+  with its result (8 y after final separation, E21.3F). It is deleted with
+  its result by the existing privileged expiry. The E21 policy is
+  unchanged.
+
+### 26.13 Part-month composition
+- **Coverage first, then classification.** The HRX evidence counts only
+  halves inside the employment's dates.
+- **The manual override stays authoritative for money** in v1, and HRX
+  evidence never changes an amount, so nothing is reduced twice.
+- **For a future validated policy:** coverage (joining/separation) and
+  absence (within coverage) are separate inputs and must stay separate;
+  the denominator is the required working time of the covered period,
+  never a fixed 30/31 or calendar days, unless a validated rule says so.
+
+### 26.14 HRX.5 as built
+- **Contract:** `StaffAttendance\Application\Payroll\PayrollAbsenceEvidenceReader`
+  (`read()`, `captureForPayroll()`) and the `PayrollAbsenceEvidence` DTO.
+  Leave's `LeaveCoverageReader` now also returns the frozen `isPaid`.
+- **Lock:** `LeaveLocks::staffEmployment()`. HRX writers take it shared
+  after their HR rows and before the staff days:
+  - leave approval and cancellation;
+  - attendance record, register and correction.
+
+  Capture takes it exclusively for every employment of the run, sorted,
+  then the calendar lock shared.
+- **Payroll:**
+  - `PayrollRunService::captureHrxInputs()` runs after every result is
+    persisted, for regular runs only, and records one
+    `payroll.hrx_input.captured` audit per calculation;
+  - `PayrollHrxInputReadService` (`forRun()`, `checkDifferences()`);
+  - `PayrollHrxInputController`;
+  - an HRX evidence panel on the run page (`payroll.runs.prepare`).
+- **Migration** `2026_11_22_090000_create_payroll_run_hrx_inputs`:
+  - adds the unique `payroll_run_results_identity_key` on
+    `(id, school_id, payroll_run_id, employment_record_id)` for the
+    composite cascade key;
+  - creates `payroll_run_hrx_inputs`: shape CHECK; one row per result;
+    `trg_payroll_run_hrx_inputs_freeze` (regular runs only, never UPDATE,
+    nothing after approval except inside the E21.3F function); forced RLS;
+    append-only.
+  - `down()` refuses while rows exist.
+- **ECR:** unchanged (`'0'`). The docblock now says "legacy default pending
+  validated HRX-L4/EPFO mapping".
+- **Catalogs:** `payroll_ledger` gains the table; `UserReferenceCatalog`
+  is 103 (93 retained); the forced-RLS count is 191.
+- **Guards:**
+  - `PayrollHrxArchitectureGuardTest`: one contract; no HRX table in
+    Payroll; HRX never depends on Payroll; evidence never reaches money,
+    statutory or ECR code; no half-day rounding; NCP default kept;
+  - `PayrollHrxOpenApiCoverageTest`;
+  - Staff Attendance's guard now allows Payroll only that contract's
+    namespace and bans Payroll *tables*, not the word.
+- **HRX-L4 stays OPEN.** Monetary use, the payroll non-payable policy and
+  the EPFO NCP adapter are not built.

@@ -48,9 +48,14 @@ use Illuminate\Support\Carbon;
  *     employer's 12% NOT diverted to EPS) -- this checkpoint's
  *     interpretation of that column name; verify against the live
  *     portal template before real use.
- *   - NCP Days: always `0` -- no attendance/loss-of-pay integration is
- *     wired to statutory calculation yet (a disclosed gap, not a
- *     fabricated figure).
+ *   - NCP Days: always `0` -- the LEGACY DEFAULT, kept unchanged pending a
+ *     validated HRX-L4 / EPFO mapping (ADR 0065 §26.2; docs/security/
+ *     HRX-L4-PAYROLL-LOSS-OF-PAY-DETERMINATION.md). It is NOT claimed to be
+ *     legally correct. HRX.5 captures HRX absence evidence beside each
+ *     payroll result, but current EPFO material accepts whole NCP days only
+ *     and nothing establishes how half-day absence or unpaid leave converts,
+ *     so no conversion is implemented and this export never reads that
+ *     evidence (guarded).
  *   - Refund of Advances: always `0.00` -- no advance-refund tracking
  *     exists yet (a disclosed gap).
  *

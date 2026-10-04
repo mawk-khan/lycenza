@@ -21,10 +21,13 @@ use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\PayrollAdjustment;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
+use App\Domain\Payroll\Infrastructure\PayrollRunHrxInput;
 use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Domain\Payroll\Infrastructure\PayrollRunResult;
 use App\Domain\Payroll\Infrastructure\PayrollRunResultLine;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
+use App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidence;
+use App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidenceReader;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -60,6 +63,7 @@ class PayrollRunService
         private readonly TenantContext $context,
         private readonly CompensationService $compensation,
         private readonly PayrollCalculationEngine $engine,
+        private readonly PayrollAbsenceEvidenceReader $hrx,
     ) {}
 
     public function createRun(PayrollPeriod $period, User $actor): PayrollRun
@@ -281,7 +285,7 @@ class PayrollRunService
 
                 [$resolved, $unresolved] = $locked->isCorrection()
                     ? $this->calculateCorrectionRun($school, $run)
-                    : $this->calculateRegularRun($school, $run);
+                    : $this->calculateRegularRun($school, $run, $actor);
 
                 $transitioned = false;
                 if (empty($unresolved) && ! empty($resolved)) {
@@ -305,7 +309,7 @@ class PayrollRunService
     /**
      * @return array{0: list<string>, 1: list<string>} [resolved employment record ids, unresolved]
      */
-    private function calculateRegularRun(School $school, PayrollRun $run): array
+    private function calculateRegularRun(School $school, PayrollRun $run, User $actor): array
     {
         $period = $run->period;
 
@@ -320,6 +324,7 @@ class PayrollRunService
 
         $resolved = [];
         $unresolved = [];
+        $persisted = [];
 
         foreach ($employmentRecordIds as $employmentRecordId) {
             $employmentRecord = EmploymentRecord::query()->findOrFail($employmentRecordId);
@@ -333,11 +338,53 @@ class PayrollRunService
             }
 
             $this->assertNonNegativeNet($employmentRecordId, $result);
-            $this->persistResult($school, $run, $employmentRecord, $result);
+            $persisted[$employmentRecordId] = $this->persistResult($school, $run, $employmentRecord, $result);
             $resolved[] = $employmentRecordId;
         }
 
+        $this->captureHrxInputs($school, $run, $period, $persisted, $actor);
+
         return [$resolved, $unresolved];
+    }
+
+    /**
+     * HRX.5 (ADR 0065 §26.8, §26.11): snapshots the HRX absence EVIDENCE beside
+     * each result just persisted -- AFTER every amount is final, and never read
+     * back by any calculation. HRX-L4 is open: no unit here reduces gross,
+     * basic, net, EPF or EPS wages, and nothing becomes NCP. The evidence is
+     * read under the HRX employment locks (captureForPayroll()), so each
+     * employment is seen wholly before or after a concurrent HRX write.
+     *
+     * @param  array<string, PayrollRunResult>  $results  employment record id => result
+     */
+    private function captureHrxInputs(School $school, PayrollRun $run, PayrollPeriod $period, array $results, User $actor): void
+    {
+        if ($results === []) {
+            return;
+        }
+        $evidence = $this->hrx->captureForPayroll($school, array_keys($results), $period->starts_on->toDateString(), $period->ends_on->toDateString());
+
+        $captured = [];
+        foreach ($evidence as $employmentRecordId => $e) {
+            PayrollRunHrxInput::query()->create([
+                'school_id' => $school->id, 'payroll_run_result_id' => $results[$employmentRecordId]->id, 'payroll_run_id' => $run->id,
+                'employment_record_id' => $employmentRecordId, 'contract_version' => $e->contractVersion, 'fingerprint' => $e->fingerprint,
+                'completeness' => $e->completeness, 'incomplete_reasons' => $e->incompleteReasons,
+                'period_starts_on' => $e->periodStartsOn, 'period_ends_on' => $e->periodEndsOn, 'covered_from' => $e->coveredFrom, 'covered_to' => $e->coveredTo,
+                'required_working_half_units' => $e->requiredWorkingHalfUnits, 'approved_paid_leave_half_units' => $e->approvedPaidLeaveHalfUnits,
+                'approved_unpaid_leave_half_units' => $e->approvedUnpaidLeaveHalfUnits, 'recorded_absence_half_units' => $e->recordedAbsenceHalfUnits,
+                'recorded_presence_half_units' => $e->recordedPresenceHalfUnits, 'unresolved_working_half_units' => $e->unresolvedWorkingHalfUnits,
+                'evidence' => $e->halves, 'captured_by_user_id' => $actor->id, 'captured_at' => now(),
+            ]);
+            $captured[] = ['employmentRecordId' => $employmentRecordId, 'fingerprint' => $e->fingerprint, 'completeness' => $e->completeness] + $e->units();
+        }
+
+        $this->audit->school($school, 'payroll.hrx_input.captured', actor: $actor, subject: $run, metadata: [
+            'contractVersion' => PayrollAbsenceEvidenceReader::CONTRACT_VERSION,
+            'count' => count($captured),
+            'incompleteCount' => count(array_filter($captured, fn (array $c) => $c['completeness'] !== PayrollAbsenceEvidence::COMPLETE)),
+            'inputs' => $captured,
+        ]);
     }
 
     /**
@@ -585,7 +632,7 @@ class PayrollRunService
         }
     }
 
-    private function persistResult(School $school, PayrollRun $run, EmploymentRecord $employmentRecord, CalculatedResult $result): void
+    private function persistResult(School $school, PayrollRun $run, EmploymentRecord $employmentRecord, CalculatedResult $result): PayrollRunResult
     {
         $payrollResult = PayrollRunResult::query()->create([
             'school_id' => $school->id,
@@ -608,5 +655,7 @@ class PayrollRunService
                 'currency' => self::CURRENCY,
             ]);
         }
+
+        return $payrollResult;
     }
 }

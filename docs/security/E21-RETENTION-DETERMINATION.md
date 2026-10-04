@@ -1228,6 +1228,7 @@ weakened: the longest period wins.
   | `payroll_statutory_calculation_results` | E: statutory payroll evidence (PF/ESI/PT/LWF/TDS per result) | as its result | by cascade with the result |
   | `payroll_adjustments` | F: manual overrides / correction deltas (how a result was determined) | as the Employee's results | with the Employee's unit, never on their own |
   | `payroll_lwf_annual_charges` | G: once-per-cycle LWF marker (payroll evidence; the amount is in the statutory result and the ledger) | as its result | with the Employee's unit |
+  | `payroll_run_hrx_inputs` | HRX.5 (ADR 0065 §26.12): the HRX absence evidence captured beside a regular-run result (half-day units, fingerprint; no amount) | as its result | by cascade with the result, inside the same privileged expiry |
   | `payroll_run_postings`, `payroll_statutory_run_postings` | H: the journal linkage (run-level, all Employees) | the run is emptied, every run and posting older than the cutoff | with the emptied run group, reversals first |
   | `payroll_runs` (regular + its corrections) | run header (no amount, no personal data) | as its postings | with the emptied group |
   | `journal_entries` / lines | I: Finance evidence | D8 (8 y after its period closes) | **Finance only**, once no payroll posting references it |

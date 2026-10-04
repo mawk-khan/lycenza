@@ -74,7 +74,7 @@ use Illuminate\Support\Facades\DB;
  * 1. School;
  * 2. the request row;
  * 3. HR rows;
- * 4. staff days (the cross-domain day lock, ascending);
+ * 4. staff employment (shared, HRX.5), then staff days (ascending);
  * 5. schedule (shared), then calendar (shared), then assignment;
  * 6. years (shared, ascending);
  * 7. balance keys.
@@ -193,7 +193,8 @@ class LeaveRequestService
                 throw LeaveException::conflict('LEAVE_SELF_CANCEL_STARTED', 'Leave that has started can only be cancelled by an administrator.');
             }
             $type = LeaveType::query()->where('school_id', $school->id)->findOrFail($request->leave_type_id);
-            // Staff Attendance writes on these dates wait for (or precede) the cancellation (ADR 0065 §24.6).
+            // Staff Attendance writes on these dates, and a Payroll evidence capture, wait for (or precede) the cancellation (ADR 0065 §24.6, §26.9).
+            LeaveLocks::staffEmployment($school, $request->employment_record_id, shared: true);
             LeaveLocks::staffDays($school, $request->employment_record_id, array_keys(LeaveRequestShape::of($request->starts_on->toDateString(), $request->start_portion, $request->ends_on->toDateString(), $request->end_portion)->days()));
 
             $consumptions = LeaveLedgerEntry::query()->where('school_id', $school->id)->where('leave_request_id', $request->id)->where('kind', 'consumption')->get();
@@ -345,6 +346,7 @@ class LeaveRequestService
         $type = LeaveType::query()->where('school_id', $school->id)->sharedLock()->findOrFail($request->leave_type_id);
         $shape = LeaveRequestShape::of($request->starts_on->toDateString(), $request->start_portion, $request->ends_on->toDateString(), $request->end_portion);
         $this->requireEmployment($school, $request->employment_record_id, $shape);
+        LeaveLocks::staffEmployment($school, $request->employment_record_id, shared: true);
         LeaveLocks::staffDays($school, $request->employment_record_id, array_keys($shape->days()));
 
         LeaveLocks::schedule($school, shared: true);

@@ -938,21 +938,45 @@ kept **8 calendar years after the Employee's final separation**
 - Holds count only; `--dry-run` uses the database's own verdict; daily at
   05:20.
 
-## HRX boundary (contract, 2026-10-03)
+## HRX boundary (HRX.5 built, 2026-10-04)
 
-ADR 0065 records the future Leave/Staff Attendance → Payroll contract;
-nothing changes in Payroll until **HRX.5**:
-- **Today:** NCP / loss-of-pay days are always 0 and partial periods are
-  manual overrides. That stays true after HRX.3: Staff Attendance (built)
-  stores per-half `present`/`absent` evidence that Payroll neither reads
-  nor is written by, and no absence is marked deductible.
-- **HRX.5:** Payroll calls one explicit HRX read contract (unpaid half-day
-  units of approved unpaid leave and absent attendance in the period, with
-  an input fingerprint), snapshots it into Payroll's own evidence, and
-  never queries Leave or Staff Attendance tables. Posted payroll is never
-  rewritten: later leave or attendance changes surface as a pending
-  difference and flow only through a correction run. Automatic deduction
-  waits on legal gate HRX-L4.
+ADR 0065 §26 and
+`docs/security/HRX-L4-PAYROLL-LOSS-OF-PAY-DETERMINATION.md`.
+- **The evidence boundary is built; legal activation is blocked by
+  HRX-L4.** Four concepts are kept apart:
+  - HRX absence evidence (built);
+  - a payroll "non-payable" input (none: no validated policy, status
+    `pending_hrx_l4`);
+  - monetary loss-of-pay (disabled);
+  - EPFO NCP days (unchanged).
+- **The contract.** `calculate()` calls the one HRX contract
+  (`App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidenceReader`,
+  `hrx_payroll_input.v1`) for every regular-run result, after the amounts
+  are final.
+  - It returns integer half-day units of approved paid and unpaid leave,
+    recorded absence and presence, unresolved working time and required
+    working time.
+  - It returns completeness and a fingerprint.
+  - It is snapshotted into `payroll_run_hrx_inputs`.
+  - Payroll never reads a Leave or Staff Attendance table.
+- **The snapshot** follows its result:
+  - it is replaced on recalculation;
+  - it is frozen from approval, with no runtime UPDATE or DELETE and the
+    trigger refusing anything after approval;
+  - it is deleted only with its result, including E21.3F retention.
+- **No effect on money:** evidence never changes gross, net, statutory
+  wages or contributions (guarded and tested).
+- **Partial periods** remain manual overrides; HRX evidence is clipped to
+  the employment's dates and reduces nothing.
+- **ECR NCP Days stays `0`:** the legacy default, pending a validated
+  HRX-L4 / EPFO mapping. Current EPFO material accepts whole days only;
+  no half-day conversion exists. It is not claimed to be correct.
+- **Posted payroll is never rewritten.** A later HRX change is a
+  fingerprint difference ("HRX source changed after approval"), read at
+  `GET …/payroll-runs/{run}/hrx-inputs` and recorded by the idempotent
+  `POST …/hrx-inputs/difference-checks` (`payroll.hrx_input.difference_detected`),
+  both `payroll.runs.prepare`. Money is corrected only through the
+  existing correction run.
 - **HRX.4 (built, ADR 0065 §25.7):** own payslip self-service
   (`payroll.payslips.self`).
   - `PayslipReadService::ownPayslips()` / `renderOwn()` add an ownership

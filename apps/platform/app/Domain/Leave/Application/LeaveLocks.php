@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\DB;
  * triggers take.
  *
  * Every writer acquires them in this order:
- * 0. staff days (HRX.3, the cross-domain day lock, ascending);
+ * 0a. staff employment (HRX.5, shared for HRX writers; exclusive only for a
+ *     Payroll evidence capture);
+ * 0b. staff days (HRX.3, the cross-domain day lock, ascending);
  * 1. schedule;
  * 2. calendar;
  * 3. assignment;
@@ -39,6 +41,21 @@ final class LeaveLocks
         foreach ($dates as $date) {
             self::take("hrx.staff_day:{$school->id}:{$employmentRecordId}:{$date}", shared: false);
         }
+    }
+
+    /**
+     * HRX.5 (ADR 0065 §26.9): one EmploymentRecord's HRX evidence as a whole.
+     * Every HRX writer (leave approval and cancellation; attendance record,
+     * register and correction) takes it SHARED, after its HR rows and before
+     * the staff days; Payroll's evidence capture
+     * (`PayrollAbsenceEvidenceReader::captureForPayroll()`) takes it
+     * EXCLUSIVELY for each employment of a run, sorted by id, so a payroll
+     * calculation sees each employment's evidence wholly before or wholly
+     * after a concurrent write -- never a mix.
+     */
+    public static function staffEmployment(School $school, string $employmentRecordId, bool $shared): void
+    {
+        self::take("hrx.staff_employment:{$school->id}:{$employmentRecordId}", $shared);
     }
 
     /** Exclusive for schedule writers (opening years, start-month changes); shared for readers that must see one schedule. */

@@ -83,9 +83,52 @@ interface Props {
     canPost: boolean;
     accountingReadiness: AccountingReadiness | null;
     canReverse: boolean;
+    hrxInputs: HrxInputs | null;
+}
+
+/** HRX.5 -- integer half-day units of HRX absence EVIDENCE; never a deduction or NCP figure. */
+interface HrxUnits {
+    requiredWorkingHalfUnits: number | null;
+    approvedPaidLeaveHalfUnits: number;
+    approvedUnpaidLeaveHalfUnits: number;
+    recordedAbsenceHalfUnits: number;
+    recordedPresenceHalfUnits: number;
+    unresolvedWorkingHalfUnits: number;
+}
+
+interface HrxInputs {
+    contractVersion: string;
+    payrollPolicy: string;
+    frozen: boolean;
+    differenceState: 'none' | 'source_changed_after_approval' | 'recalculate_to_refresh';
+    inputs: Array<{
+        employmentRecordId: string;
+        employee: { employeeNumber: string | null; fullName: string | null };
+        fingerprint: string;
+        completeness: 'complete' | 'input_incomplete';
+        incompleteReasons: string[];
+        coveredFrom: string | null;
+        coveredTo: string | null;
+        units: HrxUnits;
+        sourceChanged: boolean;
+        current: { fingerprint: string; units: HrxUnits };
+    }>;
 }
 
 const props = defineProps<Props>();
+
+const checkingHrx = ref(false);
+function checkHrxDifferences(): void {
+    checkingHrx.value = true;
+    router.post(
+        `/app/payroll/runs/${props.run.id}/hrx-inputs/difference-checks`,
+        {},
+        {
+            preserveScroll: true,
+            onFinish: () => (checkingHrx.value = false),
+        },
+    );
+}
 
 // Phase 9.10 -- a payslip is only ever eligible once the run has
 // crossed the SAME immutability boundary PayslipReadService itself
@@ -637,6 +680,83 @@ const reversalPosting = computed(
         </section>
 
         <!-- Create correction run -->
+        <!-- HRX.5: HRX absence evidence (ADR 0065 §26) -->
+        <section v-if="hrxInputs" class="mt-6 border-t border-slate-200 pt-4">
+            <h2 class="text-sm font-medium text-slate-900">HRX absence evidence</h2>
+            <p class="mt-1 text-xs text-slate-500">
+                Leave and staff attendance evidence captured with this calculation, in half-day
+                units ({{ hrxInputs.contractVersion }}). Evidence only: payroll policy pending legal
+                review (HRX-L4) -- these units do not change any pay figure or ECR NCP days.
+            </p>
+            <p
+                v-if="hrxInputs.differenceState === 'source_changed_after_approval'"
+                role="status"
+                class="mt-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+                HRX source changed after approval. This run stays exactly as it is; any pay
+                correction is a separate correction run.
+                <button
+                    type="button"
+                    class="ml-2 underline"
+                    :disabled="checkingHrx"
+                    @click="checkHrxDifferences"
+                >
+                    Record difference check
+                </button>
+            </p>
+            <p
+                v-else-if="hrxInputs.differenceState === 'recalculate_to_refresh'"
+                class="mt-2 rounded border border-slate-300 bg-slate-50 p-3 text-sm"
+            >
+                HRX evidence changed since this calculation. Recalculate to refresh it.
+            </p>
+            <p v-if="hrxInputs.inputs.length === 0" class="mt-2 text-sm text-slate-500">
+                No HRX evidence has been captured yet (it is captured when results are calculated).
+            </p>
+            <table v-else class="mt-2 w-full border-collapse text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                        <th class="py-1">Employee</th>
+                        <th class="py-1">Required</th>
+                        <th class="py-1">Paid leave</th>
+                        <th class="py-1">Unpaid leave</th>
+                        <th class="py-1">Recorded absence</th>
+                        <th class="py-1">Recorded presence</th>
+                        <th class="py-1">Unrecorded</th>
+                        <th class="py-1">Evidence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr
+                        v-for="i in hrxInputs.inputs"
+                        :key="i.employmentRecordId"
+                        class="border-b border-slate-100"
+                    >
+                        <td class="py-1">
+                            {{ i.employee.fullName ?? '—' }} ({{
+                                i.employee.employeeNumber ?? '—'
+                            }})
+                        </td>
+                        <td class="py-1">{{ i.units.requiredWorkingHalfUnits ?? '—' }}</td>
+                        <td class="py-1">{{ i.units.approvedPaidLeaveHalfUnits }}</td>
+                        <td class="py-1">{{ i.units.approvedUnpaidLeaveHalfUnits }}</td>
+                        <td class="py-1">{{ i.units.recordedAbsenceHalfUnits }}</td>
+                        <td class="py-1">{{ i.units.recordedPresenceHalfUnits }}</td>
+                        <td class="py-1">{{ i.units.unresolvedWorkingHalfUnits }}</td>
+                        <td class="py-1">
+                            {{ i.completeness === 'complete' ? 'Complete' : 'Incomplete' }}
+                            <span v-if="i.sourceChanged" class="ml-1 text-amber-700"
+                                >· source changed</span
+                            >
+                            <span class="ml-1 font-mono text-slate-400">{{
+                                i.fingerprint.slice(0, 8)
+                            }}</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
         <section
             v-if="canPrepare && run.status === 'posted' && !run.isReversed"
             class="mt-6 border-t border-slate-200 pt-4"

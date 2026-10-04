@@ -1669,6 +1669,7 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/runs/{payrollRun}/manual-overrides', [PayrollRunController::class, 'manualOverride'])->name('runs.manual-overrides.store');
         Route::post('/runs/{payrollRun}/correction-deltas', [PayrollRunController::class, 'correctionDelta'])->name('runs.correction-deltas.store');
         Route::post('/runs/{payrollRun}/correction', [PayrollRunController::class, 'storeCorrection'])->name('runs.correction.store');
+        Route::post('/runs/{payrollRun}/hrx-inputs/difference-checks', [PayrollRunController::class, 'checkHrxDifferences'])->name('runs.hrx-inputs.difference-checks');
         Route::post('/runs/{payrollRun}/approve', [PayrollRunController::class, 'approve'])->name('runs.approve');
         Route::post('/runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])->name('runs.post');
         Route::post('/runs/{payrollRun}/reverse', [PayrollRunPostingController::class, 'reverse'])->name('runs.reverse');

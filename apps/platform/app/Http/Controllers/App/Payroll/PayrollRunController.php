@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App\Payroll;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Payroll\Application\CorrectionDeltaInput;
+use App\Domain\Payroll\Application\PayrollHrxInputReadService;
 use App\Domain\Payroll\Application\PayrollRunAdministrationService;
 use App\Domain\Payroll\Application\PayrollRunReadService;
 use App\Domain\Payroll\Application\PayrollRunResultDetail;
@@ -136,6 +137,16 @@ class PayrollRunController extends Controller
         $service->recordCorrectionDelta($run, $employmentRecord, $lines, $validated['reason'], $context->actor());
 
         return redirect("/app/payroll/runs/{$run->id}");
+    }
+
+    /** HRX.5 (ADR 0065 §26.10): records an audit event for every HRX source change after capture; never recalculates or reposts. */
+    public function checkHrxDifferences(TenantContext $context, string $payrollRun, PayrollHrxInputReadService $hrx): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $run = PayrollRun::query()->findOrFail($payrollRun);
+        $result = $hrx->checkDifferences($school, $run->id, $context->actor());
+
+        return redirect("/app/payroll/runs/{$run->id}")->with('status', "HRX evidence checked: {$result['changed']} of {$result['checked']} changed since capture.");
     }
 
     public function approve(Request $request, TenantContext $context, string $payrollRun, PayrollRunAdministrationService $service): RedirectResponse
@@ -321,6 +332,12 @@ class PayrollRunController extends Controller
                 'type' => $c->type,
             ], array_values(array_filter($components, fn (SalaryComponentSummary $c) => $c->status === 'active'))),
             'canPrepare' => $capabilities->canInSchool($actor, 'payroll.runs.prepare', $school),
+            // HRX.5 (ADR 0065 §26.10): the captured HRX absence EVIDENCE and its live
+            // comparison -- for payroll preparers only (attendance-derived personal data),
+            // never a deduction or NCP figure (HRX-L4 open).
+            'hrxInputs' => $summary->runKind === 'regular' && $capabilities->canInSchool($actor, PayrollHrxInputReadService::CAPABILITY, $school)
+                ? app(PayrollHrxInputReadService::class)->forRun($school, $run->id, $actor)
+                : null,
             'canApprove' => $capabilities->canInSchool($actor, 'payroll.runs.approve', $school)
                 && $summary->preparedByUserId !== $actor->id,
             'isSelfPrepared' => $summary->preparedByUserId === $actor->id,

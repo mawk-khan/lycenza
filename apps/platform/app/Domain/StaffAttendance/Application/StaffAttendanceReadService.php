@@ -236,7 +236,7 @@ class StaffAttendanceReadService
 
     /**
      * @param  array{1: string, 2: string}|null  $calendar  today's classification of each half (null: calendar not configured)
-     * @param  array<int, array{leaveRequestId: string, leaveTypeId: string, leaveTypeCode: string, leaveTypeName: string}>  $coverage
+     * @param  array<int, array{leaveRequestId: string, leaveTypeId: string, leaveTypeCode: string, leaveTypeName: string, isPaid: bool}>  $coverage
      * @return array<string, mixed>
      */
     private static function day(string $date, ?StaffAttendanceRecord $record, ?array $calendar, array $coverage, bool $leaveDetail): array

@@ -9022,6 +9022,73 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/hrx-inputs:
+    get:
+      operationId: getPayrollRunHrxInputs
+      summary: >
+        HRX.5: the HRX absence EVIDENCE captured beside each result of a regular run (contract hrx_payroll_input.v1: integer half-day units of approved paid/unpaid leave, recorded absence/presence, unresolved working time; completeness; fingerprint), beside a fresh read compared by fingerprint. For an approved/posted run a difference means the HRX source changed after approval -- the run stays frozen and money is corrected only through the existing correction run. Evidence only: no deduction, non-payable or NCP figure (payrollPolicy pending_hrx_l4). Requires payroll.runs.prepare.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: payrollRunId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/PayrollRunHrxInputs" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.prepare in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School payroll run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/payroll-runs/{payrollRunId}/hrx-inputs/difference-checks:
+    post:
+      operationId: checkPayrollRunHrxInputDifferences
+      summary: >
+        HRX.5: compares every captured HRX input of the run with the current HRX evidence and records payroll.hrx_input.difference_detected for each change. Never recalculates, reposts or rewrites a run. Requires payroll.runs.prepare. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: payrollRunId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [payrollRunId, checked, changed]
+                    properties:
+                      payrollRunId: { type: string, format: uuid }
+                      checked: { type: integer, minimum: 0 }
+                      changed: { type: integer, minimum: 0 }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking payroll.runs.prepare in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School payroll run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/payroll-runs/{payrollRunId}/post:
     post:
       operationId: postPayrollRun
@@ -16450,6 +16517,60 @@ components:
                   carriedDelta: { type: integer, minimum: 0 }
                   lapsedDelta: { type: integer, minimum: 0 }
                   createdAt: { type: string, format: date-time, nullable: true }
+    PayrollHrxUnits:
+      type: object
+      description: HRX.5 -- integer half-day units (2 = one full day). Evidence, never a monetary or NCP figure.
+      required: [requiredWorkingHalfUnits, approvedPaidLeaveHalfUnits, approvedUnpaidLeaveHalfUnits, recordedAbsenceHalfUnits, recordedPresenceHalfUnits, unresolvedWorkingHalfUnits]
+      properties:
+        requiredWorkingHalfUnits: { type: integer, nullable: true, minimum: 0 }
+        approvedPaidLeaveHalfUnits: { type: integer, minimum: 0 }
+        approvedUnpaidLeaveHalfUnits: { type: integer, minimum: 0 }
+        recordedAbsenceHalfUnits: { type: integer, minimum: 0 }
+        recordedPresenceHalfUnits: { type: integer, minimum: 0 }
+        unresolvedWorkingHalfUnits: { type: integer, minimum: 0 }
+    PayrollRunHrxInputs:
+      type: object
+      required: [payrollRunId, runKind, runStatus, contractVersion, payrollPolicy, frozen, differenceState, inputs]
+      properties:
+        payrollRunId: { type: string, format: uuid }
+        runKind: { type: string, enum: [regular, correction] }
+        runStatus: { type: string, enum: [draft, calculated, approved, posted] }
+        contractVersion: { type: string, enum: [hrx_payroll_input.v1] }
+        payrollPolicy: { type: string, enum: [pending_hrx_l4], description: "No payroll policy turns HRX evidence into a non-payable quantity until HRX-L4 is qualified." }
+        frozen: { type: boolean }
+        differenceState: { type: string, enum: [none, source_changed_after_approval, recalculate_to_refresh] }
+        inputs:
+          type: array
+          items:
+            type: object
+            required: [employmentRecordId, employee, contractVersion, fingerprint, completeness, incompleteReasons, periodStartsOn, periodEndsOn, coveredFrom, coveredTo, units, capturedAt, sourceChanged, current]
+            properties:
+              employmentRecordId: { type: string, format: uuid }
+              employee:
+                type: object
+                required: [employeeNumber, fullName]
+                properties:
+                  employeeNumber: { type: string, nullable: true }
+                  fullName: { type: string, nullable: true }
+              contractVersion: { type: string }
+              fingerprint: { type: string, pattern: "^[0-9a-f]{64}$" }
+              completeness: { type: string, enum: [complete, input_incomplete] }
+              incompleteReasons: { type: array, items: { type: string, enum: [calendar_not_configured, unrecorded_working_time] } }
+              periodStartsOn: { type: string, format: date }
+              periodEndsOn: { type: string, format: date }
+              coveredFrom: { type: string, format: date, nullable: true }
+              coveredTo: { type: string, format: date, nullable: true }
+              units: { $ref: "#/components/schemas/PayrollHrxUnits" }
+              capturedAt: { type: string, format: date-time }
+              sourceChanged: { type: boolean }
+              current:
+                type: object
+                required: [fingerprint, completeness, incompleteReasons, units]
+                properties:
+                  fingerprint: { type: string, pattern: "^[0-9a-f]{64}$" }
+                  completeness: { type: string, enum: [complete, input_incomplete] }
+                  incompleteReasons: { type: array, items: { type: string } }
+                  units: { $ref: "#/components/schemas/PayrollHrxUnits" }
     MyLeaveOverview:
       type: object
       description: HRX.4 -- the acting Employee's own leave overview (School-configured entitlements; no statutory claim).

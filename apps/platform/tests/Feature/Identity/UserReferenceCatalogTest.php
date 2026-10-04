@@ -53,13 +53,13 @@ class UserReferenceCatalogTest extends TestCase
         sort($catalog);
 
         $this->assertSame($this->live(), $catalog, 'a new, renamed or dropped foreign key to users must be classified in UserReferenceCatalog');
-        $this->assertCount(102, $catalog, 'E21.4: 87; HRX.1: +8 Leave actor references; HRX.1 correction: +1 (leave_year_start_changes); HRX.2: +4 (requests, decisions, closes, reconciliations); HRX.3: +2 (staff attendance recorder, corrector)');
+        $this->assertCount(103, $catalog, 'E21.4: 87; HRX.1: +8 Leave actor references; HRX.1 correction: +1 (leave_year_start_changes); HRX.2: +4 (requests, decisions, closes, reconciliations); HRX.3: +2 (staff attendance recorder, corrector); HRX.5: +1 (HRX input capturer)');
         $this->assertSame([], UserReferenceCatalog::unclassified($this->live()));
 
         $counts = array_count_values(UserReferenceCatalog::treatments());
         $this->assertSame(6, $counts[UserReferenceCatalog::ACTIVE_PURPOSE_BLOCKER]);
         $this->assertSame(4, $counts[UserReferenceCatalog::DELETE_CHILD]);
-        $this->assertSame(92, $counts[UserReferenceCatalog::RETAIN_REFERENCE]);
+        $this->assertSame(93, $counts[UserReferenceCatalog::RETAIN_REFERENCE]);
         // Audit, D6 authority and Finance/Payroll operator references are kept, never nulled.
         foreach (['school_audit_events.actor_user_id', 'platform_audit_events.actor_user_id', 'membership_role_assignments.assigned_by_user_id',
             'platform_role_assignments.granted_by_user_id', 'school_elevations.actor_user_id', 'payroll_runs.posted_by_user_id', 'payments.recorded_by_user_id',

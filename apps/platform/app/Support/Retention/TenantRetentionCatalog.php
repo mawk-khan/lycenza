@@ -67,6 +67,8 @@ final class TenantRetentionCatalog
         'payroll_ledger' => [self::ADOPTED, 'D9 x D8 (E21.3F, implemented): posted payroll evidence (results with lines and statutory results, adjustments, LWF charges) 8 y after the Employee\'s final separation, once every run holding it and every posting is that old too (platform:payroll-retention-prune); an emptied run with its corrections then loses its postings, which releases its journal entries to D8 (they expire only once their financial period is 8 y closed); draft, calculated and approved runs are working state', [
             'payroll_runs', 'payroll_run_results', 'payroll_run_result_lines', 'payroll_run_postings',
             'payroll_statutory_calculation_results', 'payroll_statutory_run_postings', 'payroll_adjustments', 'payroll_lwf_annual_charges',
+            // HRX.5 (ADR 0065 §26.12): the HRX evidence snapshot leaves with its result (FK cascade inside the same privileged expiry).
+            'payroll_run_hrx_inputs',
         ]],
         'payroll_calendar' => [self::TENANT_LIFETIME, 'E21.3F: monthly payroll period headers (dates and status; no personal data, no amount), School payroll configuration kept with the School', ['payroll_periods']],
         'finance_configuration' => [self::TENANT_LIFETIME, 'interprets the retained ledger', [

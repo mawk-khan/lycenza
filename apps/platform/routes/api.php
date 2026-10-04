@@ -79,6 +79,7 @@ use App\Domain\Payments\Http\Controllers\PaymentReceiptController;
 use App\Domain\Payroll\Http\Controllers\CompensationAssignmentController;
 use App\Domain\Payroll\Http\Controllers\MyPayslipController;
 use App\Domain\Payroll\Http\Controllers\PayrollAccountingConfigurationController;
+use App\Domain\Payroll\Http\Controllers\PayrollHrxInputController;
 use App\Domain\Payroll\Http\Controllers\PayrollPeriodController;
 use App\Domain\Payroll\Http\Controllers\PayrollRunController;
 use App\Domain\Payroll\Http\Controllers\PayrollRunPostingController;
@@ -1793,6 +1794,18 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/payroll-runs/{payrollRun}/payslips/{employmentRecord}', [PayslipController::class, 'show'])
                 ->middleware('capability:payroll.compensation.sensitive.view')
                 ->name('schools.payroll-runs.payslips.show');
+
+            // HRX.5 (ADR 0065 §26.10): the run's captured HRX absence EVIDENCE
+            // (attendance-derived personal data: `payroll.runs.prepare`,
+            // `private-no-store`) beside a fresh read, and the idempotent
+            // difference check that audits each source change after approval.
+            // Evidence only -- no deduction or NCP endpoint (HRX-L4 open).
+            Route::get('/payroll-runs/{payrollRun}/hrx-inputs', [PayrollHrxInputController::class, 'index'])
+                ->middleware(['private-no-store', 'capability:payroll.runs.prepare'])
+                ->name('schools.payroll-runs.hrx-inputs.index');
+            Route::post('/payroll-runs/{payrollRun}/hrx-inputs/difference-checks', [PayrollHrxInputController::class, 'check'])
+                ->middleware(['private-no-store', 'capability:payroll.runs.prepare', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.payroll-runs.hrx-inputs.difference-checks');
 
             Route::post('/payroll-runs/{payrollRun}/post', [PayrollRunPostingController::class, 'post'])
                 ->middleware(['capability:payroll.runs.post', 'throttle:school-api-mutations', 'idempotent'])

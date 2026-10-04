@@ -59,6 +59,8 @@ final class UserReferenceCatalog
         // HRX.3 (ADR 0065 §24.13): who recorded and who corrected staff attendance.
         'staff_attendance_records' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'staff_attendance_corrections' => ['corrected_by_user_id' => self::RETAIN_REFERENCE],
+        // HRX.5 (ADR 0065 §26.8): who calculated the run that captured the HRX evidence.
+        'payroll_run_hrx_inputs' => ['captured_by_user_id' => self::RETAIN_REFERENCE],
         'account_activation_credentials' => ['user_id' => self::DELETE_CHILD],
         'account_recovery_requests' => ['user_id' => self::DELETE_CHILD],
         'api_clients' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'revoked_by_user_id' => self::RETAIN_REFERENCE],

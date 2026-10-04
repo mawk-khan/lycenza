@@ -973,6 +973,19 @@ Three School capabilities, each reaching ONLY the holder's own data:
   ownership only, both; cross-School; no ActingEmployee; School switching;
   role vs direct grant) and `Tests\Feature\App\StaffSelfServiceUiTest`.
 
+## Payroll HRX evidence (HRX.5, ADR 0065 §26)
+
+No new capability.
+- **Capture** happens inside `calculate()` (`payroll.runs.prepare`).
+- **The evidence view and the difference check** (`GET`/`POST
+  …/payroll-runs/{run}/hrx-inputs`) need `payroll.runs.prepare`.
+  `payroll.runs.view` is not enough: the evidence is attendance-derived
+  personal data.
+- **Never reached by** `staff_self_service`, `teacher`, or the Leave or
+  Staff Attendance administrators. Own payslips never show HRX inputs.
+- **No operation** deducts wages, sets NCP days or overrides evidence
+  (HRX-L4 open; `PayrollHrxOpenApiCoverageTest`).
+
 ## What is NOT yet implemented
 
 Tenant-custom roles (role *assignment* exists: Settings → Staff accounts

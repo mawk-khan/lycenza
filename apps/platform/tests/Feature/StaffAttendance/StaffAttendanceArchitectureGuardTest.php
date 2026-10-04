@@ -76,9 +76,11 @@ class StaffAttendanceArchitectureGuardTest extends TestCase
     {
         foreach ($this->phpFiles('Domain/StaffAttendance') as $file) {
             $code = $this->code($file);
-            foreach (['App\\Domain\\Payroll', 'App\\Domain\\Finance', 'App\\Domain\\Attendance\\', 'App\\Domain\\HR\\Infrastructure', 'App\\Domain\\Leave\\Infrastructure', 'payroll_', 'leave_requests', 'leave_request_days', 'leave_ledger', 'employees.user_id', "'user_id'"] as $forbidden) {
+            foreach (['App\\Domain\\Payroll', 'App\\Domain\\Finance', 'App\\Domain\\Attendance\\', 'App\\Domain\\HR\\Infrastructure', 'App\\Domain\\Leave\\Infrastructure', 'leave_requests', 'leave_request_days', 'leave_ledger', 'employees.user_id', "'user_id'"] as $forbidden) {
                 $this->assertStringNotContainsString($forbidden, $code, "{$file}: Staff Attendance never depends on {$forbidden}");
             }
+            // HRX.5: Staff Attendance serves Payroll (one read contract) but never reads or writes a Payroll table.
+            $this->assertDoesNotMatchRegularExpression('/\bpayroll_(runs?|run_[a-z_]+|periods|adjustments|lwf_[a-z_]+|statutory_[a-z_]+|structures?|components?)\b/', $code, "{$file}: Staff Attendance never touches a Payroll table");
             // HRX.4: the acting Employee is resolved through HR's one resolver, in the read service only.
             if (str_contains($code, 'ActingEmployeeResolver')) {
                 $this->assertSame('StaffAttendanceReadService.php', basename($file), "{$file}: only the read service resolves the acting Employee");
@@ -91,8 +93,12 @@ class StaffAttendanceArchitectureGuardTest extends TestCase
         foreach (['Domain/Leave', 'Domain/HR', 'Domain/Payroll'] as $dir) {
             foreach ($this->phpFiles($dir) as $file) {
                 $code = $this->code($file);
-                $this->assertStringNotContainsString('App\\Domain\\StaffAttendance', $code, "{$file}: {$dir} never depends on Staff Attendance");
                 $this->assertStringNotContainsString('staff_attendance_', $code, "{$file}: {$dir} never reads Staff Attendance tables");
+                preg_match_all('/App\\\\Domain\\\\StaffAttendance\\\\[A-Za-z\\\\]+/', $code, $m);
+                foreach (array_unique($m[0]) as $class) {
+                    // HRX.5 (ADR 0065 §26.3): Payroll reaches Staff Attendance ONLY through the one payroll read contract.
+                    $this->assertTrue($dir === 'Domain/Payroll' && str_starts_with($class, 'App\\Domain\\StaffAttendance\\Application\\Payroll\\'), "{$file}: {$dir} never depends on Staff Attendance ({$class})");
+                }
             }
         }
         $this->assertInstanceOf(StaffAttendancePresenceReader::class, app(AttendancePresenceConflictReader::class), 'Leave\'s port is bound to Staff Attendance in the composition root');

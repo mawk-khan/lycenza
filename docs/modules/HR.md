@@ -3964,3 +3964,13 @@ attendance). HR's role is identity:
   attendance, own payslips) is granted through Settings → Staff accounts
   like any School role. Having an Employee record never grants it, and
   holding it without a linked current Employee reaches nobody's data.
+
+## HRX.5 — Payroll absence evidence (implemented; legal activation blocked, 2026-10-04)
+
+ADR 0065 §26. HR is unchanged. Payroll's HRX evidence uses HR only through
+`EmploymentRoster::span()`, the one source of an EmploymentRecord's dates,
+so dates before joining or after separation are never absence. HR depends
+on neither HRX nor Payroll.
+
+HRX writers now also take the `hrx.staff_employment` lock (shared) after
+their HR rows, which leaves HR's own lock order untouched.

@@ -40,8 +40,9 @@ use Illuminate\Support\Facades\DB;
  *
  * It never writes a Leave table, and Leave never writes attendance.
  *
- * Lock order (ADR 0065 §24.6): School -> HR rows -> staff days (ascending;
- * several employments by id) -> calendar (shared) -> the record row.
+ * Lock order (ADR 0065 §24.6, §26.9): School -> HR rows -> staff employment
+ * (shared) -> staff days (ascending; several employments by id) -> calendar
+ * (shared) -> the record row.
  */
 class StaffAttendanceService
 {
@@ -68,6 +69,7 @@ class StaffAttendanceService
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $date, $item, $actor) {
             $this->guard->requireOperational($school->id);
             $this->holdEmployment($school, $item, $date);
+            LeaveLocks::staffEmployment($school, $item['employmentRecordId'], shared: true);
             LeaveLocks::staffDays($school, $item['employmentRecordId'], [$date]);
 
             return $this->write($school, $date, [$item], 'single', $actor)[0];
@@ -107,6 +109,9 @@ class StaffAttendanceService
                 $this->holdEmployment($school, $item, $date);
             }
             foreach ($validated as $item) {
+                LeaveLocks::staffEmployment($school, $item['employmentRecordId'], shared: true);
+            }
+            foreach ($validated as $item) {
                 LeaveLocks::staffDays($school, $item['employmentRecordId'], [$date]);
             }
 
@@ -140,6 +145,7 @@ class StaffAttendanceService
             $identity = StaffAttendanceRecord::query()->where('school_id', $school->id)->findOrFail($recordId);
             $date = $identity->attendance_date->toDateString();
             $this->holdEmployment($school, ['employmentRecordId' => $identity->employment_record_id, 'position' => null], $date, currentOnly: false);
+            LeaveLocks::staffEmployment($school, $identity->employment_record_id, shared: true);
             LeaveLocks::staffDays($school, $identity->employment_record_id, [$date]);
             LeaveLocks::calendar($school, shared: true);
 

@@ -16,7 +16,8 @@ use App\Support\Tenancy\TenantContext;
  * (`leave_request_days`, §22.6), never a recalculation; a cancelled request
  * covers nothing, so its dates fall back to whatever attendance evidence lies
  * underneath. Each covered half carries only the operational facts: the
- * request id and the leave type's id, code and name. Never the reason, the
+ * request id, the leave type's id, code and name, and (HRX.5) whether the
+ * type is paid. Never the reason, the
  * decisions, the approver, the policy or a balance.
  *
  * It authorizes nothing: the consumer authorizes its own read, and decides
@@ -30,7 +31,7 @@ class LeaveCoverageReader
      * Employment => date => half (1 = first, 2 = second) => the approved request covering it.
      *
      * @param  list<string>  $employmentRecordIds
-     * @return array<string, array<string, array<int, array{leaveRequestId: string, leaveTypeId: string, leaveTypeCode: string, leaveTypeName: string}>>>
+     * @return array<string, array<string, array<int, array{leaveRequestId: string, leaveTypeId: string, leaveTypeCode: string, leaveTypeName: string, isPaid: bool}>>>
      */
     public function approvedCoverage(School $school, array $employmentRecordIds, string $from, string $to): array
     {
@@ -46,7 +47,7 @@ class LeaveCoverageReader
                 return [];
             }
             $types = LeaveType::query()->where('school_id', $school->id)->whereIn('id', $requests->pluck('leave_type_id')->unique()->values())
-                ->get(['id', 'code', 'name'])->keyBy('id');
+                ->get(['id', 'code', 'name', 'is_paid'])->keyBy('id');
 
             $coverage = [];
             LeaveRequestDay::query()->where('school_id', $school->id)->whereIn('leave_request_id', $requests->keys())
@@ -57,6 +58,8 @@ class LeaveCoverageReader
                     foreach (DayPortion::from($day->portion)->halves() as $half) {
                         $coverage[$request->employment_record_id][$day->leave_date->toDateString()][$half] = [
                             'leaveRequestId' => $request->id, 'leaveTypeId' => $type->id, 'leaveTypeCode' => $type->code, 'leaveTypeName' => $type->name,
+                            // HRX.5: frozen once the type is used (ADR 0065 §22.5), so it is the classification the approval was made under.
+                            'isPaid' => (bool) $type->is_paid,
                         ];
                     }
                 });
