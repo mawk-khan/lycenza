@@ -102,6 +102,12 @@ not the code path that happens to call the functions.
 - **Residual, outside HRX.** The other E21 retention functions keep the
   E21.2B model: runtime EXECUTE, with the hold checked in PHP. Changing them
   is a separate E21 decision.
+- **Amended 2026-10-04 (E21-RH.1, ADR 0066).** Using `pgsql_admin` as the
+  retention identity is temporary: it contradicts ADR 0021 for the
+  scheduled command, and the scheduler needs migration credentials.
+  E21-RH.2 moves HRX to the dedicated retention identity. The
+  `retention_school_holds` mirror becomes the authoritative hold table in
+  E21-RH.3.
 
 ## 4. Capabilities and roles
 

@@ -1,6 +1,8 @@
 # ADR 0021: Separate PostgreSQL Roles for Migrations vs. Runtime
 
-- Status: Accepted
+- Status: Accepted. **Amended 2026-10-04 (E21-RH.1):** a third,
+  dedicated retention identity is the target for destructive retention;
+  see "Amendment — retention execution identity" below and ADR 0066.
 - Date: 2026-08-22 (Phase 0B)
 
 ## Context
@@ -103,3 +105,35 @@ whatever credential/role-provisioning mechanism that environment uses
 issuing scoped credentials, etc.) — the two-role model, not the literal
 `school_os`/`school_os_app` names or the plaintext local passwords, is
 the durable decision this ADR records.
+
+## Amendment — retention execution identity (2026-10-04, E21-RH.1)
+
+The two-role model stays. It gains one bounded exception, decided in
+ADR 0066: destructive E21 retention functions will be executed by a
+**dedicated retention identity**, neither the runtime role nor this
+migration/owner role.
+
+- **Runtime role (`school_os_app`):** unchanged for every request, queue
+  worker and ordinary scheduled command. It must hold **no** EXECUTE on
+  a destructive retention function and **no** DELETE/UPDATE privilege
+  that exists only for retention.
+- **Migration/owner role (`pgsql_admin`):** migrations and operator-run
+  privileged maintenance only. **No scheduled retention code path may
+  select it**, and neither the application nor the retention scheduler
+  may require its credentials.
+- **Dedicated retention identity** (E21-RH.2): NOSUPERUSER, NOBYPASSRLS,
+  not an owner and not a member of either role above. Its own
+  credential is provisioned only to the process that runs scheduled
+  retention. Without it, destructive retention fails safe and never
+  falls back to another identity.
+- **Known temporary deviation.** Since `dc8b50a` (ADR 0065 §27.10) the
+  HRX retention participants of the scheduled
+  `platform:employee-retention-prune` run on `pgsql_admin`, so that
+  scheduler process needs the migration credentials. This contradicts
+  the "Used by" column above. It is recorded here as temporary and is
+  removed in E21-RH.2, once the dedicated identity exists.
+- E21-RH.1 also revoked the runtime role's unused UPDATE/DELETE on
+  `payroll_lwf_annual_charges`. The default privileges above remain the
+  baseline, and individual tables are narrowed by verifier-guarded
+  REVOKEs (`DatabaseRoleVerifier::NO_RUNTIME_DELETE` /
+  `NO_RUNTIME_UPDATE`).

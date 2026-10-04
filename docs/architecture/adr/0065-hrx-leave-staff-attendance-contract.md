@@ -1901,6 +1901,13 @@ Nothing here activates a legal gate: HRX-L1–L4 stay **OPEN**.
   pins updated.
 
 ### 27.10 Hardening: the purge privilege boundary (2026-10-04)
+*Amended 2026-10-04 (E21-RH.1, ADR 0066):* the "authorized retention
+execution identity" below, `pgsql_admin`, is a **temporary** arrangement.
+It contradicts ADR 0021 for a scheduled command and is broader than the
+task needs. E21-RH.2 replaces it with the dedicated retention identity,
+and replaces the session-user owner-membership check with
+retention-role membership. HRX itself stays closed at `dc8b50a`.
+
 - **Problem.** The runtime role had no DELETE on HRX evidence, but it held
   EXECUTE on the two SECURITY DEFINER functions, which delete with their
   owner's privileges. A direct `SELECT retention_expire_...(...)` on a

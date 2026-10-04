@@ -150,6 +150,16 @@ Its rows are counted as held, and nothing of it is deleted.
   hold policy and its semantics are unchanged.
   - The other E21 functions keep the original model (runtime EXECUTE, hold
     checked by the command), pending a separate E21 decision.
+- **Target hold and identity model (E21-RH.1, ADR 0066; not yet
+  implemented).**
+  - PostgreSQL hold state becomes authoritative, for School and platform
+    holds alike. It is placed and released only by an audited operator
+    command; the configuration values become an add-only input; and
+    destructive retention fails closed when hold state cannot be
+    established.
+  - Destructive functions move, slice by slice, to a dedicated retention
+    identity. The runtime role keeps no EXECUTE.
+  - The periods, triggers and ratification status are unchanged.
 
 ## 3. Triggers
 

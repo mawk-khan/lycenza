@@ -48,8 +48,21 @@ class DatabaseRoleVerifier
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
         'payroll_adjustments', 'payroll_run_postings', 'payroll_statutory_run_postings',
+        // E21-RH.1: posted LWF annual charges leave only through retention_expire_payroll_employee_evidence.
+        'payroll_lwf_annual_charges',
         // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
         'users',
+    ];
+
+    /**
+     * E21-RH.1: tables whose rows the runtime role must never rewrite. The
+     * destructive-privilege check covers both lists (privilege => tables);
+     * a table joins this list only with evidence that no runtime path updates
+     * it.
+     */
+    public const NO_RUNTIME_UPDATE = [
+        // E21-RH.1: posted LWF annual charges are insert-once evidence.
+        'payroll_lwf_annual_charges',
     ];
 
     /**
@@ -148,13 +161,15 @@ class DatabaseRoleVerifier
         $tables = DB::selectOne("select has_table_privilege(?, 'schools', 'SELECT') and has_table_privilege(?, 'campuses', 'SELECT,INSERT,UPDATE') and has_table_privilege(?, 'domain_event_outbox', 'SELECT,INSERT,UPDATE') as ok", [$role, $role, $role]);
         $results[] = CheckResult::of('runtime_table_privileges', (bool) $tables->ok);
 
-        $deletable = [];
-        foreach (self::NO_RUNTIME_DELETE as $table) {
-            if (DB::selectOne('select has_table_privilege(?, ?, ?) as d', [$role, $table, 'DELETE'])->d) {
-                $deletable[] = $table;
+        $granted = [];
+        foreach (['DELETE' => self::NO_RUNTIME_DELETE, 'UPDATE' => self::NO_RUNTIME_UPDATE] as $privilege => $tables) {
+            foreach ($tables as $table) {
+                if (DB::selectOne('select has_table_privilege(?, ?, ?) as d', [$role, $table, $privilege])->d) {
+                    $granted[] = "{$table}:{$privilege}";
+                }
             }
         }
-        $results[] = CheckResult::of('runtime_destructive_privileges_restricted', $deletable === [], $deletable === [] ? '' : count($deletable).' table(s)');
+        $results[] = CheckResult::of('runtime_destructive_privileges_restricted', $granted === [], $granted === [] ? '' : count($granted).' grant(s)');
 
         $defaults = DB::selectOne(
             "select bool_or(defaclobjtype = 'r' and defaclacl::text like '%' || ? || '=arwd/%') as tables,
