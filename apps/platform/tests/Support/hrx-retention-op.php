@@ -5,9 +5,11 @@ use App\Domain\StaffAttendance\Application\Retention\StaffAttendanceEvidenceRete
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for HrxRetentionConcurrencyTest (HRX.6):
@@ -28,23 +30,24 @@ $context = $app->make(TenantContext::class);
 
 try {
     $school = School::query()->findOrFail($args[0]);
-    echo $context->withSchool($school, fn () => HeldTransaction::run(function () use ($app, $operation, $args, $school): string {
-        return match ($operation) {
-            'prune' => (function () use ($app, $school): string {
-                $cutoff = CarbonImmutable::now($school->timezone)->subYearsNoOverflow(8)->toDateString();
-                $leave = $app->make(LeaveEvidenceRetentionService::class)->prune($school, $cutoff, 100, false);
-                $attendance = $app->make(StaffAttendanceEvidenceRetentionService::class)->prune($school, $cutoff, 100, false);
+    $held = fn (callable $operation): string => $context->withSchool($school, fn () => HeldTransaction::run($operation));
+    echo match ($operation) {
+        // The purge runs as the retention identity (the migration/owner connection), so its held
+        // transaction is on that connection too; the late correction is an ordinary runtime write.
+        'prune' => DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $held(function () use ($app, $school): string {
+            $cutoff = CarbonImmutable::now($school->timezone)->subYearsNoOverflow(8)->toDateString();
+            $leave = $app->make(LeaveEvidenceRetentionService::class)->prune($school, $cutoff, 100, false);
+            $attendance = $app->make(StaffAttendanceEvidenceRetentionService::class)->prune($school, $cutoff, 100, false);
 
-                return "deleted:{$leave['deleted']}/{$attendance['deleted']} blocked:{$leave['dependency_blocked']}/{$attendance['dependency_blocked']} errors:".($leave['errors'] + $attendance['errors']);
-            })(),
-            'correct' => (function () use ($app, $school, $args): string {
-                $app->make(StaffAttendanceService::class)->correct($school, $args[1], (int) $args[2], 'present', 'present', 'late_information', User::query()->findOrFail($args[3]));
+            return "deleted:{$leave['deleted']}/{$attendance['deleted']} blocked:{$leave['dependency_blocked']}/{$attendance['dependency_blocked']} errors:".($leave['errors'] + $attendance['errors']);
+        })),
+        'correct' => $held(function () use ($app, $school, $args): string {
+            $app->make(StaffAttendanceService::class)->correct($school, $args[1], (int) $args[2], 'present', 'present', 'late_information', User::query()->findOrFail($args[3]));
 
-                return 'corrected';
-            })(),
-            default => throw new InvalidArgumentException("unknown operation {$operation}"),
-        };
-    }));
+            return 'corrected';
+        }),
+        default => throw new InvalidArgumentException("unknown operation {$operation}"),
+    };
 } catch (Throwable $e) {
     echo 'rejected:'.class_basename($e);
 }

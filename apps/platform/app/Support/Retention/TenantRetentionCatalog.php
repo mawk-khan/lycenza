@@ -36,6 +36,12 @@ namespace App\Support\Retention;
  * (E21.3C implemented the last such rows; the list is empty, the rule
  * stays for the next mixed table.)
  *
+ * HRX.6 hardening: `retention_school_holds` (the database mirror of the E21
+ * School hold) is deliberately absent. It is platform hold governance, not
+ * tenant data; the runtime role has no privilege on it, so it is not a
+ * tenant table this map (or readiness) can see. A row lives exactly as long
+ * as its hold (`RetentionHolds::synchronize()`).
+ *
  * E21.3C: UNRESOLVED_ROWS names, the same way, the rows of an implemented
  * category whose trigger is unknown (legacy rows the marker backfill found
  * no trustworthy evidence for). They are kept forever until resolved, and

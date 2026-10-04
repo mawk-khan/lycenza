@@ -27,6 +27,8 @@ class DatabaseRoleVerifier
         'school_domains', 'school_elevations', 'school_group_members', 'school_memberships',
         // E21.2F: platform compliance cases (operator console; scoped by School in code).
         'erasure_cases',
+        // HRX.6 hardening: the database School-hold mirror; the runtime role has no privilege on it at all.
+        'retention_school_holds',
     ];
 
     /** Tables whose history the runtime role must never delete. */
@@ -84,7 +86,17 @@ class DatabaseRoleVerifier
         'retention_expire_api_client_credentials',
         // E21.3F (E21-D9): one Employee's posted payroll evidence, separation-floored; one emptied payroll run
         'retention_expire_payroll_employee_evidence', 'retention_expire_payroll_run',
-        // HRX.6 (E21-D9): one Employee's Leave / Staff Attendance evidence, separation-floored
+    ];
+
+    /**
+     * HRX.6 hardening: destructive retention functions the runtime role must
+     * NOT execute. SECURITY DEFINER, `search_path` pinned, not owned by the
+     * runtime role, never PUBLIC; only the retention identity (the
+     * migration/owner connection) calls them, and they refuse any other
+     * session user and any held School themselves.
+     */
+    public const PRIVILEGED_RETENTION_FUNCTIONS = [
+        // One Employee's Leave / Staff Attendance evidence, separation-floored and hold-checked
         'retention_expire_leave_employee_evidence', 'retention_expire_staff_attendance_employee_evidence',
     ];
 
@@ -179,6 +191,10 @@ class DatabaseRoleVerifier
         // of the sanctioned, narrow ones (the assert helpers are not executable).
         $unexpected = array_filter($functions, fn ($f) => $f->runtime_exec && ! in_array($f->proname, self::RETENTION_FUNCTIONS, true));
         $results[] = CheckResult::of('retention_functions_narrow', count($narrow) === count(self::RETENTION_FUNCTIONS) && $unexpected === []);
+        $closed = array_filter($functions, fn ($f) => in_array($f->proname, self::PRIVILEGED_RETENTION_FUNCTIONS, true)
+            && $f->prosecdef && str_contains($f->config, 'search_path=') && $f->owner !== $role && ! $f->runtime_exec && ! $f->public_exec);
+        $holds = DB::selectOne("select has_table_privilege(?, 'retention_school_holds', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') as any", [$role]);
+        $results[] = CheckResult::of('privileged_retention_functions_closed', count($closed) === count(self::PRIVILEGED_RETENTION_FUNCTIONS) && ! $holds->any);
 
         $finance = DB::select(
             "select p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config,

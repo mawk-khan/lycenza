@@ -9,6 +9,7 @@ use App\Models\School;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\PurgesCommittedHrxFixtures;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
 use Tests\TestCase;
 
@@ -21,12 +22,29 @@ use Tests\TestCase;
  */
 class HrxPayrollRetentionIndependenceTest extends TestCase
 {
-    use CreatesPayrollRetentionFixtures;
+    use CreatesPayrollRetentionFixtures, PurgesCommittedHrxFixtures;
+
+    /** @var array<int, string> COMMITTED fixtures: the retention identity's connection cannot see an open test transaction. */
+    protected $connectionsToTransact = [];
+
+    /** @var list<School> */
+    private array $schools = [];
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->snapshotDurableFixtures();
         $this->enablePayrollRetention();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->purgeCommittedHrxSchools($this->schools);
+        try {
+            $this->assertDurableFixturesRestored();
+        } finally {
+            parent::tearDown();
+        }
     }
 
     /** @return list<array<string, mixed>> the run's frozen HRX snapshots, every column */
@@ -39,6 +57,7 @@ class HrxPayrollRetentionIndependenceTest extends TestCase
     public function the_hrx_purge_leaves_payrolls_frozen_snapshot_and_payroll_retention_removes_it_with_its_result(): void
     {
         $school = $this->createSchool();
+        $this->schools[] = $school;
         $setup = $this->payrollSetup($school);
         $employee = $this->paidEmployee($school, $setup);
         $employmentId = (string) $this->inSchool($school, fn () => DB::table('employment_records')->where('employee_id', $employee->id)->value('id'));

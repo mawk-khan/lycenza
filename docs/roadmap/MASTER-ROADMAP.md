@@ -406,6 +406,13 @@ outside it.
     older than the cutoff (a late write keeps its unit). The runtime role
     gains no DELETE; no cascade is added; causally complete, idempotent,
     tenant-safe; counts-only metrics and dry run.
+  - **Hardened (ADR 0065 §27.10):**
+    - the runtime role cannot EXECUTE the purge functions; the run calls
+      them on the migration/owner connection;
+    - the functions refuse any session user without the owner's
+      privileges;
+    - they refuse a School held in `retention_school_holds`, the database
+      mirror of `RETENTION_HOLD_SCHOOL_IDS`.
   - **Kept:** School configuration (tenant lifetime), audit, outbox, and
     `payroll_run_hrx_inputs` (Payroll evidence, E21.3F). A manager's
     decision stays with the requester's request.

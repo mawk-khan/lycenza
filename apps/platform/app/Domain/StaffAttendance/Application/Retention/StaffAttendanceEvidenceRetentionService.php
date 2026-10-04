@@ -41,6 +41,7 @@ final class StaffAttendanceEvidenceRetentionService
     private const KEEP = [
         RetentionExpiry::REFUSED_HRX_YOUNGER_ROW => 'staff_attendance_records',
         RetentionExpiry::REFUSED_EMPLOYEE_NOT_SEPARATED => 'employment_records',
+        RetentionExpiry::REFUSED_HELD => 'retention_school_holds',
     ];
 
     public function __construct(
@@ -51,7 +52,8 @@ final class StaffAttendanceEvidenceRetentionService
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
     public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
-        return $this->employees->purgeSeparatedBefore(
+        // The retention identity's connection: the runtime role cannot execute the purge function.
+        return $this->expiry->privileged(fn (): array => $this->employees->purgeSeparatedBefore(
             $school,
             $cutoffDate,
             $batch,
@@ -60,7 +62,7 @@ final class StaffAttendanceEvidenceRetentionService
             fn (string $employeeId): array => $this->kept(fn () => $this->expiry->hrxEmployeeEvidence('staff_attendance', $school, $employeeId, $cutoffDate, true)),
             fn (string $employeeId): ?array => $this->expiry->hrxEmployeeEvidence('staff_attendance', $school, $employeeId, $cutoffDate, false) > 0 ? [] : null,
             $only,
-        );
+        ));
     }
 
     /**

@@ -9,12 +9,14 @@ use App\Domain\StaffAttendance\Infrastructure\StaffAttendanceRecord;
 use App\Models\School;
 use App\Support\Retention\Erasure\ErasureCaseService;
 use App\Support\Retention\Erasure\ErasureCategory;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionMetrics;
 use App\Support\Retention\TenantRetentionCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\PurgesCommittedHrxFixtures;
 use Tests\Feature\Retention\Concerns\CreatesHrxRetentionFixtures;
 use Tests\Feature\Timetable\Concerns\CreatesTimetableFixtures;
 use Tests\TestCase;
@@ -29,14 +31,33 @@ use Tests\TestCase;
  */
 class HrxEvidenceRetentionTest extends TestCase
 {
-    use CreatesHrxRetentionFixtures, CreatesTimetableFixtures {
+    use CreatesHrxRetentionFixtures, CreatesTimetableFixtures, PurgesCommittedHrxFixtures {
         CreatesHrxRetentionFixtures::inSchool insteadof CreatesTimetableFixtures;
     }
+
+    /** @var array<int, string> COMMITTED fixtures: the retention identity's connection cannot see an open test transaction. */
+    protected $connectionsToTransact = [];
+
+    /** @var list<School> */
+    private array $schools = [];
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->snapshotDurableFixtures();
         config(['retention.employee_ancillary_years' => 2, 'retention.employee_evidence_years' => 8, 'retention.hold_school_ids' => []]);
+    }
+
+    protected function tearDown(): void
+    {
+        config(['retention.hold_school_ids' => []]);
+        app(RetentionHolds::class)->synchronize();
+        $this->purgeCommittedHrxSchools($this->schools);
+        try {
+            $this->assertDurableFixturesRestored();
+        } finally {
+            parent::tearDown();
+        }
     }
 
     private function prune(array $options = ['--only' => 'evidence']): PendingCommand

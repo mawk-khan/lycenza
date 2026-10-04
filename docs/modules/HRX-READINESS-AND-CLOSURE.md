@@ -44,9 +44,12 @@ Every one of these 19 tables is tenant-owned with **forced RLS**.
   Payroll's per-employment rows → **Leave** → **Staff Attendance** → HR's
   Employee root. The reviewed erasure case uses the same participants.
   One D9 setting (`EMPLOYEE_EVIDENCE_RETENTION_YEARS`); no HRX setting.
-- **Privileged path.** `retention_expire_leave_employee_evidence` and
+- **Privileged path** (§3a). `retention_expire_leave_employee_evidence` and
   `retention_expire_staff_attendance_employee_evidence` (SECURITY DEFINER,
-  pinned `search_path`, runtime EXECUTE only, never PUBLIC). Each re-proves:
+  pinned `search_path`, never PUBLIC, **not executable by the runtime
+  role**). Each re-proves:
+  - the authorized retention identity (session user);
+  - no retention hold on the School;
   - the tenant;
   - the 8-year floor against real `now()`;
   - the final separation, with the Employee and EmploymentRecords locked
@@ -75,6 +78,30 @@ Every one of these 19 tables is tenant-owned with **forced RLS**.
   - Other domains (for example a timetable entry) still block
     independently.
   - Never a cascade.
+
+## 3a. Retention privilege model (hardened, ADR 0065 §27.10)
+
+The security controls are database privileges and in-function checks,
+not the code path that happens to call the functions.
+
+| Layer | Identity | Control |
+|---|---|---|
+| Runtime application role | `school_os_app` | No DELETE on HRX evidence; no EXECUTE on the purge functions or their prologue; no privilege on `retention_school_holds`. It cannot purge HRX evidence, or place or release a hold. |
+| Authorized retention execution identity | the existing migration/owner connection `pgsql_admin` | `platform:employee-retention-prune` (and the reviewed erasure case) run the HRX participants on it, through `RetentionExpiry::privileged()`. |
+| SECURITY DEFINER function owner | the migration role (table owner) | Executes the deletes; pinned `search_path`, qualified tables, never owned by the runtime role. |
+| Legal-hold enforcement | `retention_lock_hrx_employee`, inside both functions | Refuses unless the session user holds the owner's privileges, and refuses a School recorded in `retention_school_holds` -- the database mirror of `RETENTION_HOLD_SCHOOL_IDS`, synchronized before every HRX run. |
+
+- **Verifier.** `DatabaseRoleVerifier` check
+  `privileged_retention_functions_closed`: both functions are definers with
+  a pinned `search_path`, not owned by, not executable by and not PUBLIC to
+  the runtime role, and the runtime role has no privilege on the hold
+  mirror.
+- **Operational requirement.** The process running the employee retention
+  command needs the migration/owner credentials (`DB_ADMIN_*`). This joins
+  the pending production retention configuration.
+- **Residual, outside HRX.** The other E21 retention functions keep the
+  E21.2B model: runtime EXECUTE, with the hold checked in PHP. Changing them
+  is a separate E21 decision.
 
 ## 4. Capabilities and roles
 
@@ -119,8 +146,9 @@ Attendance code.
 | INSERT, SELECT, UPDATE (guarded by triggers) | `leave_requests`, `leave_policy_assignments`, `staff_attendance_records`, `leave_policies`, `leave_types`, `leave_settings` |
 | DELETE allowed (configuration) | `staff_holidays`, `staff_working_weekdays` only |
 
-- **No DELETE on any HRX evidence table.** Evidence leaves only through
-  the two retention functions (`HrxRetentionGuardTest`).
+- **No DELETE on any HRX evidence table, and no EXECUTE on the HRX purge
+  functions.** Evidence leaves only through the two retention functions,
+  called by the retention identity (§3a, `HrxRetentionGuardTest`).
 - **FK / cascade:**
   - every FK out of an HRX evidence table is RESTRICT; only
     `school_id → schools` cascades;

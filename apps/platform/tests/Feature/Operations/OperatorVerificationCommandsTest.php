@@ -65,7 +65,7 @@ class OperatorVerificationCommandsTest extends TestCase
             'postgres_version_supported', 'runtime_connection_uses_runtime_role', 'runtime_role_exists', 'runtime_role_attributes',
             'runtime_role_not_owner_member', 'runtime_schema_access', 'runtime_table_privileges', 'runtime_destructive_privileges_restricted',
             'default_privileges_for_migration_role', 'tenant_tables_force_rls', 'platform_root_boundary',
-            'retention_functions_narrow', 'finance_period_functions_narrow',
+            'retention_functions_narrow', 'privileged_retention_functions_closed', 'finance_period_functions_narrow',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

@@ -10,6 +10,8 @@ use App\Domain\Leave\Application\LeaveYearCloseService;
 use App\Domain\Leave\Application\LeaveYearService;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Retention\RetentionExpiry;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\Feature\StaffAttendance\Concerns\CreatesStaffAttendanceFixtures;
@@ -51,6 +53,10 @@ trait CreatesHrxRetentionFixtures
     {
         $this->at('2015-04-06 10:00:00');
         $school ??= $this->createSchool();
+        // Committed-fixture tests (the retention identity's connection cannot see an open test transaction) track it for cleanup.
+        if (property_exists($this, 'schools')) {
+            $this->schools[] = $school;
+        }
         $admin = $this->createUserWithCapabilities($school, ['hr.leave.configure', 'hr.leave.view', 'hr.leave.manage']);
         $type = $this->leaveType($school, $admin);
         $policy = $this->leavePolicy($school, $type, $admin);
@@ -140,6 +146,20 @@ trait CreatesHrxRetentionFixtures
     protected function pastLeaver(array &$w, ?string $separatedOn = '2016-04-30'): array
     {
         return $this->pastLeavers($w, ['leaver' => $separatedOn])['leaver'];
+    }
+
+    /**
+     * Runs $statement as the authorized retention identity (the migration /
+     * owner connection) inside $school's tenant context, in its own
+     * transaction: its result, or the database's refusal message.
+     */
+    protected function asRetention(School $school, callable $statement): mixed
+    {
+        try {
+            return DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $this->inSchool($school, fn () => DB::transaction($statement)));
+        } catch (QueryException $e) {
+            return $e->getMessage();
+        }
     }
 
     /** @return array<string, int> table => the leaver's rows */

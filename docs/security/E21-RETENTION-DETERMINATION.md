@@ -141,6 +141,15 @@ Its rows are counted as held, and nothing of it is deleted.
   Nothing School-less is ever purged without a hold key.
 - Finer holds (per subject, per record) are designed in the checkpoint
   whose category needs them (§5).
+- **Database enforcement (HRX.6 hardening, ADR 0065 §27.10).**
+  `retention_school_holds` mirrors the configured School holds in the
+  database. `RetentionHolds::synchronize()` runs on the migration/owner
+  connection before every HRX retention participant. The HRX purge
+  functions refuse a held School themselves (`retention_hold`) and are not
+  executable by the runtime role. The configuration stays the source; the
+  hold policy and its semantics are unchanged.
+  - The other E21 functions keep the original model (runtime EXECUTE, hold
+    checked by the command), pending a separate E21 decision.
 
 ## 3. Triggers
 
@@ -619,7 +628,9 @@ The checkpoints are listed in §5.
       `platform:employee-retention-prune` run, through
       `retention_expire_leave_employee_evidence` (tenant, the D9 Employee
       floor, the HRX locks, every row older than the cutoff; leaves first,
-      causally complete). A decision made as another Employee's MANAGER
+      causally complete), which the runtime role cannot execute and which
+      refuses any held School or non-owner session (ADR 0065 §27.10).
+      A decision made as another Employee's MANAGER
       belongs to that Employee's request: it stays, and keeps the deciding
       manager's Employee until that request itself expires. Leave
       configuration is tenant lifetime.

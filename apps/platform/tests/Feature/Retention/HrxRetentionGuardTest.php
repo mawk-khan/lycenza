@@ -3,28 +3,64 @@
 namespace Tests\Feature\Retention;
 
 use App\Models\School;
+use App\Support\Operations\CheckResult;
 use App\Support\Operations\DatabaseRoleVerifier;
 use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionHolds;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\PurgesCommittedHrxFixtures;
 use Tests\Feature\Retention\Concerns\CreatesHrxRetentionFixtures;
 use Tests\TestCase;
 
 /**
- * HRX.6 (E21-D9, ADR 0065 §27): Leave and Staff Attendance evidence leaves
- * ONLY through the two narrow retention functions, which re-prove every
- * unit in the database. The runtime role gains no privilege, no cascade is
- * added, Payroll's HRX snapshot and School configuration are out of reach,
- * and only the employee retention run reaches the mechanism.
+ * HRX.6 (E21-D9, ADR 0065 §27, §27.10 hardening): Leave and Staff
+ * Attendance evidence leaves ONLY through the two narrow retention
+ * functions, and only for the authorized retention identity (the
+ * migration/owner connection). The runtime role has neither DELETE on the
+ * tables nor EXECUTE on the functions; the functions themselves refuse any
+ * other session user and any School under a retention hold, and re-prove
+ * the tenant, the floor, the separation and the row age. No cascade is
+ * added, Payroll's HRX snapshot and School configuration are out of reach.
+ *
+ * COMMITTED fixtures: the retention identity's connection cannot see an
+ * open test transaction (PurgesCommittedHrxFixtures cleans up, hermetically).
  */
 class HrxRetentionGuardTest extends TestCase
 {
-    use CreatesHrxRetentionFixtures;
+    use CreatesHrxRetentionFixtures, PurgesCommittedHrxFixtures;
 
     private const MIGRATION = 'migrations/2026_11_23_090000_add_hrx_evidence_retention.php';
 
-    /** The database's refusal message for $statement, run as the runtime role in a savepoint ('' when it succeeds). */
+    private const HARDENING = 'migrations/2026_11_24_090000_harden_hrx_retention_privileges.php';
+
+    /** @var array<int, string> */
+    protected $connectionsToTransact = [];
+
+    /** @var list<School> */
+    private array $schools = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->snapshotDurableFixtures();
+        config(['retention.employee_ancillary_years' => 2, 'retention.employee_evidence_years' => 8, 'retention.hold_school_ids' => []]);
+    }
+
+    protected function tearDown(): void
+    {
+        config(['retention.hold_school_ids' => []]);
+        app(RetentionHolds::class)->synchronize();
+        $this->purgeCommittedHrxSchools($this->schools);
+        try {
+            $this->assertDurableFixturesRestored();
+        } finally {
+            parent::tearDown();
+        }
+    }
+
+    /** The database's refusal message for $statement, run as the RUNTIME role in a savepoint ('' when it succeeds). */
     private function refusal(School $school, callable $statement): string
     {
         try {
@@ -34,6 +70,22 @@ class HrxRetentionGuardTest extends TestCase
         } catch (QueryException $e) {
             return $e->getMessage();
         }
+    }
+
+    private function school(): School
+    {
+        $school = $this->createSchool();
+        $this->schools[] = $school;
+
+        return $school;
+    }
+
+    /** The SQL calling one purge function directly (destructive unless $dryRun); bindings: School, Employee, cutoff date. */
+    private function purgeSql(string $kind, bool $dryRun = false): string
+    {
+        $function = $kind === 'leave' ? 'retention_expire_leave_employee_evidence' : 'retention_expire_staff_attendance_employee_evidence';
+
+        return "SELECT {$function}(?, ?, ?, ".($dryRun ? 'true' : 'false').') AS n';
     }
 
     private function code(string $file): string
@@ -68,43 +120,131 @@ class HrxRetentionGuardTest extends TestCase
     }
 
     #[Test]
-    public function the_functions_re_prove_tenant_floor_separation_and_age_themselves(): void
+    public function the_runtime_role_cannot_execute_the_purge_functions_or_the_prologue_even_in_its_own_tenant_context(): void
+    {
+        $w = $this->pastWorld();
+        $leaver = $this->pastLeaver($w);
+        $before = $this->hrxRows($w['school'], $leaver['employeeId']);
+        $args = [$w['school']->id, $leaver['employeeId'], '2018-01-01'];
+
+        foreach (['leave', 'staff_attendance'] as $kind) {
+            foreach ([false, true] as $dryRun) {
+                $this->assertStringContainsString('permission denied for function', $this->refusal($w['school'], fn () => DB::select($this->purgeSql($kind, $dryRun), $args)), "{$kind}: no runtime EXECUTE");
+            }
+            // Through the PHP gateway on the runtime connection too: the database decides, not the caller.
+            $this->assertStringContainsString('permission denied for function', $this->refusal($w['school'], fn () => app(RetentionExpiry::class)->hrxEmployeeEvidence($kind, $w['school'], $leaver['employeeId'], '2018-01-01', false)));
+        }
+        $this->assertStringContainsString('permission denied for function', $this->refusal($w['school'], fn () => DB::select('SELECT retention_lock_hrx_employee(?, ?, ?)', $args)));
+        $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']), 'nothing removed');
+    }
+
+    #[Test]
+    public function even_an_accidental_execute_grant_cannot_make_the_runtime_role_a_retention_identity(): void
+    {
+        $w = $this->pastWorld();
+        $leaver = $this->pastLeaver($w);
+        $before = $this->hrxRows($w['school'], $leaver['employeeId']);
+        $admin = DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION);
+
+        // Defense in depth: simulate a mistaken GRANT, then always restore the closed state.
+        $admin->statement('GRANT EXECUTE ON FUNCTION retention_expire_leave_employee_evidence(uuid, uuid, date, boolean) TO school_os_app');
+        try {
+            $refusal = $this->refusal($w['school'], fn () => DB::select($this->purgeSql('leave'), [$w['school']->id, $leaver['employeeId'], '2018-01-01']));
+        } finally {
+            $admin->statement('REVOKE EXECUTE ON FUNCTION retention_expire_leave_employee_evidence(uuid, uuid, date, boolean) FROM school_os_app');
+        }
+
+        $this->assertStringContainsString('retention_privilege', $refusal, 'the session user is checked, not the caller\'s claim');
+        $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']));
+        $this->assertFalse((bool) DB::selectOne("SELECT has_function_privilege('school_os_app', 'retention_expire_leave_employee_evidence(uuid, uuid, date, boolean)', 'EXECUTE') AS e")->e);
+    }
+
+    #[Test]
+    public function a_held_school_cannot_be_purged_by_a_direct_authorized_call_until_the_hold_is_released(): void
+    {
+        $w = $this->pastWorld();
+        $leaver = $this->pastLeaver($w);
+        $before = $this->hrxRows($w['school'], $leaver['employeeId']);
+        $args = [$w['school']->id, $leaver['employeeId'], '2018-01-01'];
+
+        // 1-2. Old enough for D9, and the School is held through the real E21 hold (config, mirrored to the database).
+        config(['retention.hold_school_ids' => [$w['school']->id]]);
+        app(RetentionHolds::class)->synchronize();
+        $this->assertSame(1, DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION)->table('retention_school_holds')->where('school_id', $w['school']->id)->count());
+
+        // 3-4. The authorized retention identity calls the primitive directly: refused, nothing removed.
+        foreach (['leave', 'staff_attendance'] as $kind) {
+            $this->assertStringContainsString('retention_hold', (string) $this->asRetention($w['school'], fn () => DB::select($this->purgeSql($kind), $args)), "{$kind}: the hold is enforced at the destructive boundary");
+        }
+        $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']), 'zero HRX rows removed');
+        // The command counts a held School and deletes nothing either.
+        $this->artisan('platform:employee-retention-prune', ['--only' => 'evidence'])->expectsOutputToContain('held: 2')->assertSuccessful();
+        $this->assertSame($before, $this->hrxRows($w['school'], $leaver['employeeId']));
+        $this->assertTrue($this->inSchool($w['school'], fn () => DB::table('employees')->where('id', $leaver['employeeId'])->exists()), 'held HRX evidence keeps the Employee');
+
+        // 5-7. Release through the legitimate path; the authorized run purges the eligible evidence.
+        config(['retention.hold_school_ids' => []]);
+        $this->artisan('platform:employee-retention-prune', ['--only' => 'evidence'])
+            ->expectsOutputToContain('Deleted leave evidence of 1 Employee(s) and staff attendance evidence of 1 Employee(s) (dependency-blocked: 0, held: 0, errors: 0)')
+            ->assertSuccessful();
+        $this->assertSame(0, DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION)->table('retention_school_holds')->count(), 'the run mirrored the release');
+        $this->assertSame(array_fill_keys(self::HRX_EVIDENCE, 0), $this->hrxRows($w['school'], $leaver['employeeId']));
+        $this->assertFalse($this->inSchool($w['school'], fn () => DB::table('employees')->where('id', $leaver['employeeId'])->exists()), 'purged HRX no longer blocks the Employee');
+    }
+
+    #[Test]
+    public function the_runtime_role_can_neither_place_nor_release_a_hold(): void
+    {
+        $school = $this->school();
+        config(['retention.hold_school_ids' => [$school->id]]);
+        app(RetentionHolds::class)->synchronize();
+
+        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->where('school_id', $school->id)->delete()));
+        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->insert(['school_id' => $this->school()->id])));
+        $this->assertStringContainsString('permission denied', $this->refusal($school, fn () => DB::table('retention_school_holds')->count()));
+        $this->assertSame(1, DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION)->table('retention_school_holds')->where('school_id', $school->id)->count());
+    }
+
+    #[Test]
+    public function the_functions_re_prove_tenant_floor_separation_and_age_even_for_the_retention_identity(): void
     {
         $w = $this->pastWorld();
         ['old' => $old, 'current' => $current, 'early' => $early] = $this->pastLeavers($w, ['old' => '2016-04-30', 'current' => null, 'early' => '2016-01-31']);
-        $other = $this->createSchool();
-        $expiry = app(RetentionExpiry::class);
+        $other = $this->pastWorld();
+        $otherLeaver = $this->pastLeaver($other);
+        $otherBefore = $this->hrxRows($other['school'], $otherLeaver['employeeId']);
         $cutoff = '2018-01-01';
 
         foreach (['leave', 'staff_attendance'] as $kind) {
-            // Wrong School context: the School must be the current tenant.
-            $this->assertStringContainsString('retention_tenant', $this->refusal($other, fn () => $expiry->hrxEmployeeEvidence($kind, $w['school'], $old['employeeId'], $cutoff, true)));
-            // Another School's Employee under this School's context is not proven separated here.
-            $this->assertStringContainsString('retention_payroll_employee', $this->refusal($other, fn () => $expiry->hrxEmployeeEvidence($kind, $other, $old['employeeId'], $cutoff, true)));
+            // Wrong School context, even under the elevated identity: the School must be the current tenant.
+            $this->assertStringContainsString('retention_tenant', (string) $this->asRetention($other['school'], fn () => DB::select($this->purgeSql($kind), [$w['school']->id, $old['employeeId'], $cutoff])));
+            // School A's context and id with School B's Employee: not proven separated in A, nothing of B removed.
+            $this->assertStringContainsString('retention_payroll_employee', (string) $this->asRetention($w['school'], fn () => DB::select($this->purgeSql($kind), [$w['school']->id, $otherLeaver['employeeId'], $cutoff])));
             // A cutoff younger than 8 calendar years is refused, whatever the caller computed.
-            $this->assertStringContainsString('retention_floor', $this->refusal($w['school'], fn () => $expiry->hrxEmployeeEvidence($kind, $w['school'], $old['employeeId'], now()->subYears(7)->toDateString(), true)));
+            $this->assertStringContainsString('retention_floor', (string) $this->asRetention($w['school'], fn () => DB::select($this->purgeSql($kind), [$w['school']->id, $old['employeeId'], now()->subYears(7)->toDateString()])));
             // A current Employee is refused.
-            $this->assertStringContainsString('retention_payroll_employee', $this->refusal($w['school'], fn () => $expiry->hrxEmployeeEvidence($kind, $w['school'], $current['employeeId'], $cutoff, true)));
+            $this->assertStringContainsString('retention_payroll_employee', (string) $this->asRetention($w['school'], fn () => DB::select($this->purgeSql($kind), [$w['school']->id, $current['employeeId'], $cutoff])));
         }
+        $this->assertSame($otherBefore, $this->hrxRows($other['school'], $otherLeaver['employeeId']), 'School B is untouched');
 
         // Separated in January 2016, but the close and the cancellation were written in April: with a
         // March cutoff that Leave unit is younger than the cutoff and kept; its attendance (2015: one record, one correction) is not.
-        $this->assertStringContainsString('retention_hrx_dependency', $this->refusal($w['school'], fn () => $expiry->hrxEmployeeEvidence('leave', $w['school'], $early['employeeId'], '2016-03-01', true)));
-        $this->assertSame(2, $this->inSchool($w['school'], fn () => $expiry->hrxEmployeeEvidence('staff_attendance', $w['school'], $early['employeeId'], '2016-03-01', true)));
+        $this->assertStringContainsString('retention_hrx_dependency', (string) $this->asRetention($w['school'], fn () => DB::select($this->purgeSql('leave', true), [$w['school']->id, $early['employeeId'], '2016-03-01'])));
+        $this->assertSame(2, (int) $this->asRetention($w['school'], fn () => DB::selectOne($this->purgeSql('staff_attendance', true), [$w['school']->id, $early['employeeId'], '2016-03-01'])->n));
 
-        // The proper unit is accepted: a dry run counts every row it would remove.
+        // The proper unit is accepted: a dry run counts every row it would remove, and removes none.
         $rows = $this->hrxRows($w['school'], $old['employeeId']);
         $leave = array_sum(array_intersect_key($rows, array_flip(array_filter(self::HRX_EVIDENCE, fn ($t) => str_starts_with($t, 'leave_')))));
-        $this->assertSame($leave, $this->inSchool($w['school'], fn () => $expiry->hrxEmployeeEvidence('leave', $w['school'], $old['employeeId'], $cutoff, true)));
-        $this->assertSame($rows['staff_attendance_records'] + $rows['staff_attendance_corrections'], $this->inSchool($w['school'], fn () => $expiry->hrxEmployeeEvidence('staff_attendance', $w['school'], $old['employeeId'], $cutoff, true)));
+        $this->assertSame($leave, (int) $this->asRetention($w['school'], fn () => DB::selectOne($this->purgeSql('leave', true), [$w['school']->id, $old['employeeId'], $cutoff])->n));
+        $this->assertSame($rows['staff_attendance_records'] + $rows['staff_attendance_corrections'], (int) $this->asRetention($w['school'], fn () => DB::selectOne($this->purgeSql('staff_attendance', true), [$w['school']->id, $old['employeeId'], $cutoff])->n));
         $this->assertSame($rows, $this->hrxRows($w['school'], $old['employeeId']), 'a dry run deletes nothing');
     }
 
     #[Test]
-    public function the_functions_are_narrow_definers_executable_by_the_runtime_role_only_and_registered(): void
+    public function the_functions_are_narrow_definers_closed_to_the_runtime_role_and_verified(): void
     {
         $rows = DB::select(
-            "SELECT p.proname, p.prosecdef, array_to_string(p.proconfig, ',') AS config,
+            "SELECT p.proname, p.prosecdef, array_to_string(p.proconfig, ',') AS config, pg_get_userbyid(p.proowner) AS owner,
                     has_function_privilege('school_os_app', p.oid, 'EXECUTE') AS runtime,
                     EXISTS (SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE') AS public
                FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
@@ -114,14 +254,25 @@ class HrxRetentionGuardTest extends TestCase
         $this->assertCount(3, $rows);
         foreach ($rows as $row) {
             $this->assertFalse((bool) $row->public, "{$row->proname}: never PUBLIC");
+            $this->assertFalse((bool) $row->runtime, "{$row->proname}: never the runtime role");
+            $this->assertNotSame('school_os_app', $row->owner, "{$row->proname}: not owned by the runtime role");
             $this->assertStringContainsString('search_path=pg_catalog, pg_temp', (string) $row->config, "{$row->proname}: pinned search_path");
-            $expected = $row->proname !== 'retention_lock_hrx_employee';
-            $this->assertSame($expected, (bool) $row->prosecdef, "{$row->proname}: definer only where it deletes");
-            $this->assertSame($expected, (bool) $row->runtime, "{$row->proname}: the lock helper is not callable by the runtime role");
+            $this->assertSame($row->proname !== 'retention_lock_hrx_employee', (bool) $row->prosecdef, "{$row->proname}: definer only where it deletes");
         }
         foreach (['retention_expire_leave_employee_evidence', 'retention_expire_staff_attendance_employee_evidence'] as $function) {
-            $this->assertContains($function, DatabaseRoleVerifier::RETENTION_FUNCTIONS);
+            $this->assertContains($function, DatabaseRoleVerifier::PRIVILEGED_RETENTION_FUNCTIONS);
+            $this->assertNotContains($function, DatabaseRoleVerifier::RETENTION_FUNCTIONS);
         }
+        $checks = collect(app(DatabaseRoleVerifier::class)->verify())->keyBy('code');
+        $this->assertSame(CheckResult::PASS, $checks['privileged_retention_functions_closed']->status);
+        $this->assertSame(CheckResult::PASS, $checks['retention_functions_narrow']->status);
+
+        $hardening = (string) file_get_contents(database_path(self::HARDENING));
+        $this->assertStringContainsString('session_user', $hardening, 'the authorization is the unforgeable session user');
+        $this->assertStringNotContainsString('current_setting', $hardening, 'never a client-settable session variable');
+        $up = strstr($hardening, 'public function down', true);
+        $this->assertStringNotContainsString('GRANT', (string) $up, 'the hardening grants nothing');
+        $this->assertStringNotContainsString('DELETE FROM', $hardening, 'and deletes nothing');
     }
 
     #[Test]

@@ -16,6 +16,8 @@
   HRX-L4** (§26, recorded before coding; as-built notes in §26.14).
   **HRX.6 — Retention, Readiness & Closure is built** (§27): Leave and
   Staff Attendance evidence join the existing E21-D9 employee retention run;
+  the purge boundary is hardened (§27.10: no runtime EXECUTE, retention
+  identity and School hold enforced in the database);
   the HRX implementation programme is **closed**, with HRX.5's legal
   activation still gated (HRX-L1–L4 open). Closure record:
   `docs/modules/HRX-READINESS-AND-CLOSURE.md`.
@@ -1794,11 +1796,14 @@ Nothing here activates a legal gate: HRX-L1–L4 stay **OPEN**.
 - The runtime role gains **no** privilege. It has no DELETE on any HRX
   evidence table; the ledger, decisions, request days, close items,
   reconciliations and attendance corrections stay append-only.
-- Two fixed-purpose functions in the E21.2B pattern (SECURITY DEFINER,
-  pinned `search_path`, qualified tables, EXECUTE for the runtime role only,
-  never PUBLIC, reached only through `RetentionExpiry::hrxEmployeeEvidence()`):
+- Two fixed-purpose functions (SECURITY DEFINER, pinned `search_path`,
+  qualified tables, never PUBLIC):
   - `retention_expire_leave_employee_evidence`;
   - `retention_expire_staff_attendance_employee_evidence`.
+
+  *As first built they followed the E21.2B grant (runtime EXECUTE). That is
+  **superseded by §27.10**: the runtime role has no EXECUTE, and the
+  functions themselves enforce the retention identity and the School hold.*
 - Each re-proves the unit in the database:
   - the School is the current tenant (`retention_assert_tenant`);
   - the shared D9 Employee floor (`retention_assert_payroll_employee_floor`,
@@ -1894,3 +1899,48 @@ Nothing here activates a legal gate: HRX-L1–L4 stay **OPEN**.
   `HrxRetentionConcurrencyTest` (two real processes),
   `HrxPayrollRetentionIndependenceTest`; the classification and readiness
   pins updated.
+
+### 27.10 Hardening: the purge privilege boundary (2026-10-04)
+- **Problem.** The runtime role had no DELETE on HRX evidence, but it held
+  EXECUTE on the two SECURITY DEFINER functions, which delete with their
+  owner's privileges. A direct `SELECT retention_expire_...(...)` on a
+  runtime connection could therefore purge eligible evidence, and the E21
+  legal hold (`RETENTION_HOLD_SCHOOL_IDS`) was enforced only in PHP.
+- **Final privilege model** (migration
+  `2026_11_24_090000_harden_hrx_retention_privileges`):
+
+| Layer | Identity | What it can do |
+|---|---|---|
+| Runtime application role | `school_os_app` (every request/queue connection) | No DELETE on HRX evidence; **no EXECUTE** on either function or on `retention_lock_hrx_employee`; no privilege on `retention_school_holds`. It cannot purge, place or release a hold. |
+| Authorized retention execution identity | the existing migration/owner connection `pgsql_admin` (rule 54; no new role) | `RetentionExpiry::privileged()` runs each HRX participant's whole unit (reads, locks, unit transactions, the function call) on it, after mirroring the configured holds. |
+| SECURITY DEFINER function owner | the migration role that ran the migration (table owner) | Deletes; the functions are not owned by the runtime role, pin `search_path = pg_catalog, pg_temp` and qualify every table. |
+| Database enforcement inside the function | `retention_lock_hrx_employee` (shared prologue, not runtime-executable) | Refuses unless the **session user** is a member of the HR tables' owner (`retention_privilege`; `SET ROLE` cannot change `session_user`), refuses a **held School** (`retention_hold`), then the tenant, floor, separation, locks and row-age checks. |
+
+- **Legal hold at the destructive boundary.** `retention_school_holds`
+  (`school_id` PK, `source = 'config'`, `held_since`) is the database side
+  of the existing E21 School hold. `RetentionHolds::synchronize()` makes it
+  equal to `RETENTION_HOLD_SCHOOL_IDS` on the retention identity's
+  connection before every HRX participant runs (the configuration stays the
+  operator's source; a release is a configuration change, mirrored on the
+  next run). A direct call by an otherwise authorized caller for a held
+  School is refused, deleting nothing. Rollback refuses while a hold is
+  recorded.
+- **Dry run and reporting** keep their semantics: a held School is counted
+  `held` and nothing is deleted; a refusal maps to "kept", never an error.
+- **Not changed:** the D9 policy, trigger, floor, purge order, the
+  Employee-deletion behaviour and every legal gate. The other E21 retention
+  functions keep the E21.2B model (runtime EXECUTE, PHP-side hold); moving
+  them is a separate E21 decision, not part of HRX.
+- **Tests:** `HrxRetentionGuardTest` proves, on raw SQL:
+  - runtime direct DELETE and runtime direct function calls (both
+    functions, dry and destructive, and the prologue) are denied;
+  - a simulated accidental runtime EXECUTE grant is still refused
+    (`retention_privilege`);
+  - a held School survives a direct authorized call (zero rows removed);
+    after the release the authorized run purges it;
+  - School A's elevated context cannot touch School B;
+  - the runtime role cannot read, place or release a hold.
+
+  The HRX retention tests now commit their fixtures, because the retention
+  identity's connection cannot see an open test transaction, and they
+  clean up through `PurgesCommittedHrxFixtures`.

@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\DB;
  * - the Users the test created (members of those Schools, or created since
  *   setUp);
  * - the `test.capability_grant.*` roles `createUserWithCapabilities()`
- *   minted since setUp, with their `role_capabilities`.
+ *   minted since setUp, with their `role_capabilities`;
+ * - School-less platform audit rows written since setUp (e.g. an erasure
+ *   case's `platform.erasure_case.*` events).
  *
  * Shared baseline fixtures of the canonical seed (capabilities, the seeded
  * roles and their grants, the seeded User) existed before setUp and are
@@ -25,11 +27,11 @@ use Illuminate\Support\Facades\DB;
  */
 trait PurgesCommittedHrxFixtures
 {
-    /** @var array{users: list<string>, roles: list<string>, counts: array<string, int>}|null */
+    /** @var array{users: list<string>, roles: list<string>, platform_audit: list<string>, counts: array<string, int>}|null */
     private ?array $durableSnapshot = null;
 
     /** Global tables a committed race fixture can leave rows in. */
-    private const DURABLE_TABLES = ['schools', 'users', 'roles', 'role_capabilities', 'school_memberships', 'membership_role_assignments'];
+    private const DURABLE_TABLES = ['schools', 'users', 'roles', 'role_capabilities', 'school_memberships', 'membership_role_assignments', 'platform_audit_events'];
 
     protected function snapshotDurableFixtures(): void
     {
@@ -37,6 +39,7 @@ trait PurgesCommittedHrxFixtures
         $this->durableSnapshot = [
             'users' => $admin->table('users')->pluck('id')->all(),
             'roles' => $admin->table('roles')->pluck('id')->all(),
+            'platform_audit' => $admin->table('platform_audit_events')->pluck('id')->all(),
             'counts' => $this->durableCounts(),
         ];
     }
@@ -45,7 +48,7 @@ trait PurgesCommittedHrxFixtures
     protected function purgeCommittedHrxSchools(array $schools): void
     {
         $admin = DB::connection('pgsql_admin');
-        $snapshot = $this->durableSnapshot ?? ['users' => [], 'roles' => []];
+        $snapshot = $this->durableSnapshot ?? ['users' => [], 'roles' => [], 'platform_audit' => null];
         $schoolIds = array_map(fn (School $s) => $s->id, $schools);
 
         $users = array_values(array_unique([
@@ -58,7 +61,7 @@ trait PurgesCommittedHrxFixtures
             ...$admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->whereNotIn('id', $snapshot['roles'])->pluck('id')->all(),
         ]));
 
-        $admin->transaction(function () use ($admin, $schoolIds, $users, $roles): void {
+        $admin->transaction(function () use ($admin, $schoolIds, $users, $roles, $snapshot): void {
             $admin->statement("SET LOCAL session_replication_role = 'replica'");
             if ($schoolIds !== []) {
                 $tables = $admin->select(
@@ -74,6 +77,9 @@ trait PurgesCommittedHrxFixtures
             $admin->table('role_capabilities')->whereIn('role_id', $roles)->delete();
             $admin->table('roles')->whereIn('id', $roles)->delete();
             $admin->table('users')->whereIn('id', $users)->delete();
+            if ($snapshot['platform_audit'] !== null) {
+                $admin->table('platform_audit_events')->whereNotIn('id', $snapshot['platform_audit'])->delete();
+            }
         });
     }
 

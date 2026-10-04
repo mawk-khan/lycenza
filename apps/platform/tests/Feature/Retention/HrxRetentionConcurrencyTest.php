@@ -53,7 +53,6 @@ class HrxRetentionConcurrencyTest extends TestCase
     private function world(): array
     {
         $w = $this->pastWorld();
-        $this->schools[] = $w['school'];
         $leaver = $this->pastLeaver($w);
         $record = DB::connection('pgsql_admin')->table('staff_attendance_records')->where('employee_id', $leaver['employeeId'])->first(['id', 'version']);
 

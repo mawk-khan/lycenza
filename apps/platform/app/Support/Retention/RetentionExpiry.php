@@ -230,10 +230,38 @@ final class RetentionExpiry
         return $this->call('retention_expire_payroll_employee_evidence', [$school->id, $employeeId, $cutoffDate, $dryRun]);
     }
 
-    /** HRX.6: the database's "keep" refusals of the HRX functions -- the D9 Employee floor (shared with Payroll's), a row younger than the cutoff. */
+    /** HRX.6: the database's "keep" refusals of the HRX functions -- the D9 Employee floor (shared with Payroll's), a row younger than the cutoff, a School hold. */
     public const REFUSED_EMPLOYEE_NOT_SEPARATED = 'retention_payroll_employee';
 
     public const REFUSED_HRX_YOUNGER_ROW = 'retention_hrx_dependency';
+
+    public const REFUSED_HELD = 'retention_hold';
+
+    /**
+     * HRX.6 hardening: the authorized retention execution identity -- the
+     * existing migration/owner connection (rule 54). The runtime role holds
+     * no EXECUTE on the HRX purge functions, which also refuse any session
+     * user without the owner's privileges.
+     */
+    public const PRIVILEGED_CONNECTION = 'pgsql_admin';
+
+    /**
+     * Runs one HRX retention participant entirely on the retention identity's
+     * connection (its reads, locks, unit transactions and the purge function
+     * share one session; the tenant context follows the default connection),
+     * after mirroring the configured School holds into the database.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $participant
+     * @return T
+     */
+    public function privileged(callable $participant): mixed
+    {
+        $this->holds->synchronize();
+
+        return DB::usingConnection(self::PRIVILEGED_CONNECTION, $participant);
+    }
 
     /**
      * HRX.6 (E21-D9): removes ONE Employee's Leave evidence (`leave`: policy
