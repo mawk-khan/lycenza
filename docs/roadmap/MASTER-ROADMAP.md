@@ -75,7 +75,7 @@ contract checkpoint.
 |---|---|---|
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
 | 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **DEVELOPMENT CLOSED** (TCH.0–TCH.6, 2026-10-01; ADR 0063 §38). Built: ActingEmployee identity (TCH.1), TeachingAssignment ownership (TCH.2), the production `teacher` role (four owned-scope capabilities, never a role-name check) and owned teacher access to Curriculum Delivery (TCH.3), Attendance (TCH.4), Learning Content (TCH.5C) and Assignments (TCH.5D) on the LMS owner/audience persistence (TCH.5B). Every owned access needs capability AND verified ActingEmployee AND TeachingAssignment; the role alone grants nothing, and Timetable is never authority. **Production readiness (ADR 0063 §39, 2026-10-01): PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — teacher Attendance is **BLOCKED by open legal/compliance determination TCH-L1** (now ADR 0058 register **E33**), enforced by process only. The one `teacher` role also carries `attendance.teacher`. **Owner decision (ADR 0063 §40): no production `teacher` role grants while E33 / TCH-L1 is OPEN**, and no role split or Attendance gate. The role is implemented and production-capable; the blocker is external, not a technical deficiency. TCH history retention waits on the platform-wide legal item **E21** (ADR 0058). TCH.6 fixed one closure defect (non-identical not-found bodies on owned surfaces). LMS Submission remains cancelled and outside TCH |
-| 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX.1 LEAVE FOUNDATION — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §22 final owner decisions). **HRX.2 LEAVE REQUESTS & APPROVAL — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §23). **HRX.3 STAFF ATTENDANCE — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §24: exact half-day evidence, CAS corrections with append-only history, Leave ↔ Attendance through application contracts). **HRX.4 STAFF SELF-SERVICE — PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §25: ActingEmployee-only identity, own leave view/submit/withdraw/cancel, read-only own attendance, posted own payslips, separate `staff_self_service` bundle). **HRX.5 PAYROLL LOSS-OF-PAY INTEGRATION — MECHANISM PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §26: HRX→Payroll evidence contract implemented, versioned, fingerprinted and snapshotted; posted payroll immutable; differences detected; **automatic wage deduction disabled / not legally activated; EPFO NCP conversion pending current-rule validation; HRX-L4 legal activation pending**). **HRX.6 — NOT STARTED.** Next: HRX.6 — Retention, Readiness & Closure Audit. Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
+| 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX.1 LEAVE FOUNDATION — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §22 final owner decisions). **HRX.2 LEAVE REQUESTS & APPROVAL — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §23). **HRX.3 STAFF ATTENDANCE — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §24: exact half-day evidence, CAS corrections with append-only history, Leave ↔ Attendance through application contracts). **HRX.4 STAFF SELF-SERVICE — PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §25: ActingEmployee-only identity, own leave view/submit/withdraw/cancel, read-only own attendance, posted own payslips, separate `staff_self_service` bundle). **HRX.5 PAYROLL LOSS-OF-PAY INTEGRATION — MECHANISM PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §26: HRX→Payroll evidence contract implemented, versioned, fingerprinted and snapshotted; posted payroll immutable; differences detected; **automatic wage deduction disabled / not legally activated; EPFO NCP conversion pending current-rule validation; HRX-L4 legal activation pending**). **HRX.6 RETENTION, READINESS & CLOSURE — PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §27: Leave and Staff Attendance evidence join the existing E21-D9 employee retention run through two narrow, separation-floored database functions; no runtime DELETE, no cascade; Payroll's HRX snapshot follows Payroll retention). **HRX — LEAVE & STAFF ATTENDANCE IMPLEMENTATION PUBLISHED / CLOSED. HRX.5 MECHANISM CLOSED / LEGAL ACTIVATION GATED.** HRX-L1–L4 remain OPEN; E21 qualified ratification and production retention configuration pending (`docs/modules/HRX-READINESS-AND-CLOSURE.md`). Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
@@ -215,7 +215,7 @@ ownership-based authorization". Lesson Planning, StudentMark/RES, POR, HRX,
 generic staff-role expansion, tenant-custom roles and LMS Submission stay
 outside it.
 
-**HRX checkpoints (ADR 0065 §20)** -- contract published; HRX.1 built:
+**HRX checkpoints (ADR 0065 §20)** -- all built; **HRX — LEAVE & STAFF ATTENDANCE IMPLEMENTATION PUBLISHED / CLOSED** (HRX.6, 2026-10-04); **HRX.5 MECHANISM CLOSED / LEGAL ACTIVATION GATED**:
 - **HRX.0 — Leave & Staff Attendance Contract** (ADR 0065, docs only).
   Closed (2026-10-03). Decided: `App\Domain\Leave` and
   `App\Domain\StaffAttendance` under HR ownership, one-way dependencies
@@ -326,7 +326,7 @@ outside it.
     - audit, and the outbox event `staff_attendance.corrected.v1` (not a
       webhook);
     - forced RLS on two tables; D9 retention (`staff_attendance_evidence`,
-      purge in HRX.6).
+      purge implemented in HRX.6).
   - **Not built:** Payroll loss-of-pay, clock times, devices and
     biometrics (own attendance followed in HRX.4). HRX-L1–L4 stay open.
 - **HRX.4 — Staff Self-Service.** Published / closed (2026-10-04, ADR 0065
@@ -365,7 +365,8 @@ outside it.
     Dashboard link per own capability. No new table; one CHECK amendment
     on `leave_decisions`.
   - **Not built:** Payroll loss-of-pay / NCP (HRX.5), statutory automation,
-    biometrics, devices, clock-in/out and the HRX retention purge (HRX.6).
+    biometrics, devices and clock-in/out (the HRX retention purge followed
+    in HRX.6).
     HRX-L1–L4 stay open.
 - **HRX.5 — Payroll Loss-of-Pay Integration.** **Mechanism published /
   closed** (2026-10-04, ADR 0065 §26, decisions recorded before coding).
@@ -390,7 +391,36 @@ outside it.
     capture one consistent view of each employment's evidence.
   - **Record:** the legal baseline and the open questions are in
     `docs/security/HRX-L4-PAYROLL-LOSS-OF-PAY-DETERMINATION.md`.
-- **HRX.6 — Retention, Readiness & Closure Audit.** Not started.
+- **HRX.6 — Retention, Readiness & Closure Audit.** **Published / closed**
+  (2026-10-04, ADR 0065 §27). **HRX — LEAVE & STAFF ATTENDANCE
+  IMPLEMENTATION PUBLISHED / CLOSED. HRX.5 MECHANISM CLOSED / LEGAL
+  ACTIVATION GATED.**
+  - **E21-D9 for HRX:** one Employee's Leave evidence (assignments, ledger,
+    requests with days and decisions, close items and reconciliations) and
+    Staff Attendance evidence (records with their corrections) expire 8
+    years after final separation, as participants of
+    `platform:employee-retention-prune` (and the reviewed erasure case),
+    before HR's own purge. No second engine, no HRX setting.
+  - **Privileged path only:** two SECURITY DEFINER functions re-prove the
+    tenant, the D9 Employee floor, the HRX locks and that every row is
+    older than the cutoff (a late write keeps its unit). The runtime role
+    gains no DELETE; no cascade is added; causally complete, idempotent,
+    tenant-safe; counts-only metrics and dry run.
+  - **Kept:** School configuration (tenant lifetime), audit, outbox, and
+    `payroll_run_hrx_inputs` (Payroll evidence, E21.3F). A manager's
+    decision stays with the requester's request.
+  - **Employee deletion:** unexpired or expired-but-unpurged HRX evidence
+    blocks it; after the HRX purge HRX no longer blocks; other domains
+    still block independently.
+  - **Test isolation:** the HRX race tests are hermetic (shared
+    `PurgesCommittedHrxFixtures`, durable-count assertion).
+  - **Catalog:** `leave_evidence` and `staff_attendance_evidence` adopted;
+    no `mechanism_pending` category remains.
+  - **Open:** HRX-L1–L4 (no jurisdiction cleared), E21 qualified
+    ratification, production retention configuration. Deferred: in-year
+    carried-leave expiry (recorded, not executed);
+    `LEAVE_CANCELLATION_CLOSE_CHAIN`. Closure record:
+    `docs/modules/HRX-READINESS-AND-CLOSURE.md`.
 
 **FEE checkpoints (ADR 0062 §25)** -- all built, development-closed
 2026-09-30:

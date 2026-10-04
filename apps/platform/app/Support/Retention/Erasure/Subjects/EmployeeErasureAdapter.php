@@ -5,7 +5,9 @@ namespace App\Support\Retention\Erasure\Subjects;
 use App\Domain\HR\Application\Retention\EmployeeRecordRetentionService;
 use App\Domain\HR\Application\Retention\EmployeeRetentionEligibility;
 use App\Domain\HR\Application\Retention\EmployeeSeparation;
+use App\Domain\Leave\Application\Retention\LeaveEvidenceRetentionService;
 use App\Domain\Payroll\Application\Retention\PayrollEmployeeRetentionService;
+use App\Domain\StaffAttendance\Application\Retention\StaffAttendanceEvidenceRetentionService;
 use App\Models\School;
 use App\Support\Retention\Erasure\ErasureCategory;
 use App\Support\Retention\Erasure\ErasurePeriods;
@@ -24,6 +26,8 @@ use Illuminate\Support\Facades\DB;
  * - active, future-employed and rehired Employees are current and kept;
  * - payroll results (ledger, D8), teaching history and a linked User
  *   block;
+ * - Leave and Staff Attendance evidence (HRX.6) goes with the employment
+ *   evidence, through its own D9 participants, before HR's purge;
  * - the School hold wins.
  *
  * Personal details are never minimised earlier: they go with the
@@ -36,6 +40,8 @@ final class EmployeeErasureAdapter implements ErasureSubjectAdapter
         private readonly EmployeeRetentionEligibility $eligibility,
         private readonly EmployeeRecordRetentionService $records,
         private readonly PayrollEmployeeRetentionService $payroll,
+        private readonly LeaveEvidenceRetentionService $leave,
+        private readonly StaffAttendanceEvidenceRetentionService $attendance,
         private readonly RetentionHolds $holds,
     ) {}
 
@@ -76,9 +82,12 @@ final class EmployeeErasureAdapter implements ErasureSubjectAdapter
         $evidence = $this->period($school, 'employee_evidence', $separation, $evidenceYears, function () use ($school, $subjectId, $evidenceYears): ErasureCategory {
             $cutoff = ErasurePeriods::cutoff($school, (int) $evidenceYears);
             $payroll = $this->payroll->prune($school, $cutoff, 1, true, $subjectId);
-            $record = $this->records->pruneEvidence($school, $cutoff, 1, true, PayrollEmployeeRetentionService::TABLES, $subjectId);
+            $leave = $this->leave->prune($school, $cutoff, 1, true, $subjectId);
+            $attendance = $this->attendance->prune($school, $cutoff, 1, true, $subjectId);
+            $cleared = [...PayrollEmployeeRetentionService::TABLES, ...LeaveEvidenceRetentionService::TABLES, ...StaffAttendanceEvidenceRetentionService::TABLES];
+            $record = $this->records->pruneEvidence($school, $cutoff, 1, true, $cleared, $subjectId);
 
-            return $payroll['dependency_blocked'] + $record['dependency_blocked'] > 0
+            return $payroll['dependency_blocked'] + $leave['dependency_blocked'] + $attendance['dependency_blocked'] + $record['dependency_blocked'] > 0
                 ? new ErasureCategory('employee_evidence', ErasureCategory::DEPENDENCY_BLOCKED, 'retained_dependency')
                 : new ErasureCategory('employee_evidence', ErasureCategory::ELIGIBLE, 'period_passed');
         });
@@ -100,6 +109,8 @@ final class EmployeeErasureAdapter implements ErasureSubjectAdapter
         if ($school !== null && $eligible('employee_evidence')) {
             $cutoff = ErasurePeriods::cutoff($school, (int) ErasurePeriods::years('employee_evidence_years'));
             $this->payroll->prune($school, $cutoff, 100, false, $subjectId);
+            $this->leave->prune($school, $cutoff, 100, false, $subjectId);
+            $this->attendance->prune($school, $cutoff, 100, false, $subjectId);
             $this->records->pruneEvidence($school, $cutoff, 100, false, [], $subjectId);
         }
 

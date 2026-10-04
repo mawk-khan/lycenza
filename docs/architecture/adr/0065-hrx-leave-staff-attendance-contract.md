@@ -13,9 +13,12 @@
   §24.16). **HRX.4 — Staff Self-Service is built** (§25, decisions
   recorded before coding; as-built notes in §25.13). **HRX.5 — the HRX →
   Payroll evidence mechanism is built; legal activation is blocked by
-  HRX-L4** (§26, recorded before coding; as-built notes in §26.14). The
-  remaining **[OWNER DECISION]** defaults still apply to HRX.2–HRX.6 unless
-  the owner records a different choice before the checkpoint that needs it.
+  HRX-L4** (§26, recorded before coding; as-built notes in §26.14).
+  **HRX.6 — Retention, Readiness & Closure is built** (§27): Leave and
+  Staff Attendance evidence join the existing E21-D9 employee retention run;
+  the HRX implementation programme is **closed**, with HRX.5's legal
+  activation still gated (HRX-L1–L4 open). Closure record:
+  `docs/modules/HRX-READINESS-AND-CLOSURE.md`.
 - Date: 2026-10-03
 - Programme: **HRX — Leave & staff attendance**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes",
@@ -1764,3 +1767,130 @@ narrows §9, this section governs.
     namespace and bans Payroll *tables*, not the word.
 - **HRX-L4 stays OPEN.** Monetary use, the payroll non-payable policy and
   the EPFO NCP adapter are not built.
+
+## 27. HRX.6 — Retention, readiness & closure (2026-10-04)
+
+Recorded before coding; as-built notes in §27.9. Baseline `48a2f5f`.
+Nothing here activates a legal gate: HRX-L1–L4 stay **OPEN**.
+
+### 27.1 One D9 mechanism, two participants
+- Leave and Staff Attendance evidence is D9 employment evidence (§18): kept
+  **8 calendar years after the Employee's final separation**
+  (`EmployeeRetentionEligibility`, the one canonical answer;
+  `EMPLOYEE_EVIDENCE_RETENTION_YEARS`, the one D9 setting). There is no HRX
+  retention setting and no second engine.
+- Each module owns a participant of the existing run
+  `platform:employee-retention-prune` (evidence phase), which now runs:
+  1. Payroll's per-employment rows (unchanged);
+  2. **Leave** (`LeaveEvidenceRetentionService`);
+  3. **Staff Attendance** (`StaffAttendanceEvidenceRetentionService`);
+  4. HR's own evidence purge (the Employee root), unchanged.
+- The reviewed Employee erasure case (E21.2F) calls the same participants
+  in the same order, never earlier than D9.
+- Payroll's posted evidence keeps its own run (`platform:payroll-retention-prune`,
+  E21.3F); nothing there changed.
+
+### 27.2 The privileged path
+- The runtime role gains **no** privilege. It has no DELETE on any HRX
+  evidence table; the ledger, decisions, request days, close items,
+  reconciliations and attendance corrections stay append-only.
+- Two fixed-purpose functions in the E21.2B pattern (SECURITY DEFINER,
+  pinned `search_path`, qualified tables, EXECUTE for the runtime role only,
+  never PUBLIC, reached only through `RetentionExpiry::hrxEmployeeEvidence()`):
+  - `retention_expire_leave_employee_evidence`;
+  - `retention_expire_staff_attendance_employee_evidence`.
+- Each re-proves the unit in the database:
+  - the School is the current tenant (`retention_assert_tenant`);
+  - the shared D9 Employee floor (`retention_assert_payroll_employee_floor`,
+    E21.3F): the cutoff is at least 8 calendar years back (real `now()`);
+    the Employee and its EmploymentRecords are locked FOR UPDATE; every
+    EmploymentRecord is terminal with an `ends_on` before the cutoff;
+  - each employment's `hrx.staff_employment` lock, EXCLUSIVELY, sorted;
+  - **every row of the unit was written before the cutoff.** A late write
+    (a cancellation, a correction, a close reconciliation) is new evidence
+    with its own clock: the unit is kept (`retention_hrx_dependency`,
+    counted `dependency_blocked`) until it is itself old enough.
+- A non-definer helper (`retention_lock_hrx_employee`) holds the shared
+  prologue and is not executable by the runtime role.
+- No cascade is added anywhere. Every FK out of an HRX evidence table stays
+  RESTRICT (only `school_id → schools` cascades, as before).
+
+### 27.3 Deterministic, causally complete purge order
+- **Leave**, for the Employee's EmploymentRecords and requests:
+  1. ledger entries a close reconciliation produced;
+  2. the reconciliations (of its close items or requests);
+  3. the remaining ledger entries, leaves first (an entry that no remaining
+     entry reverses, repeated), so a reversal always goes before what it
+     reverses;
+  4. request days, decisions, requests;
+  5. close items, policy assignments.
+- **Staff Attendance:** the corrections, then the records -- a record and
+  its whole correction history together, never one without the other.
+- Each function verifies nothing of the unit remains
+  (`retention_hrx_unit`), returns the rows removed, and with dry run only
+  proves and counts.
+
+### 27.4 What is never touched
+- School configuration (tenant lifetime): `leave_settings`, `leave_years`,
+  `leave_year_start_changes`, `leave_types`, `leave_policies`,
+  `staff_working_weekdays`, `staff_holidays`, `leave_allocation_runs`, the
+  `leave_year_closes` header.
+- Audit events (D1) and outbox rows (their own lifecycle).
+- `payroll_run_hrx_inputs`: **Payroll evidence**. It references no HRX row,
+  survives the raw HRX purge unchanged, and leaves only with its payroll
+  result through E21.3F. After the purge the run's HRX panel truthfully
+  reports the source as changed; nothing is rewritten.
+- A decision this Employee made as another Employee's **manager** belongs
+  to that Employee's request. It stays, and keeps the manager's Employee
+  root until that request itself expires (longest period wins).
+
+### 27.5 Employee deletion
+- HR's purge is still kept by the live FK catalog (`ReferencingRows`) while
+  any HRX row references the Employee: unexpired HRX evidence blocks it,
+  expired-but-unpurged HRX evidence blocks it, and once the participants
+  have run HRX no longer blocks. Every other domain still blocks
+  independently. Employee deletion never cascades through HRX.
+- The dry run counts Leave/Staff Attendance tables as cleared first
+  (`$clearedFirst`), except `leave_decisions` (a manager's decision may
+  stay), so it is conservative.
+
+### 27.6 Observability
+- Counts only: `lycenza_retention_rows_total{operation="employee", outcome}`
+  with two new categories, `leave_evidence` and `staff_attendance_evidence`
+  (no new family). The command prints one HRX line; logs carry categories,
+  never identifiers.
+
+### 27.7 Test isolation (closure fix)
+- The HRX.1–HRX.4 race tests left committed `test.capability_grant.*` roles
+  and their `role_capabilities` behind. One shared trait,
+  `Tests\Concerns\PurgesCommittedHrxFixtures`, now removes every durable
+  fixture (School rows, the test's Users, the roles minted since setUp) and
+  asserts the durable counts equal the setUp snapshot. Canonical seed rows
+  existed before setUp and are never touched.
+
+### 27.8 Closure
+- **HRX — LEAVE & STAFF ATTENDANCE IMPLEMENTATION PUBLISHED / CLOSED.**
+- **HRX.5 MECHANISM CLOSED / LEGAL ACTIVATION GATED** (HRX-L4).
+- HRX-L1 (health data), HRX-L2 (biometric/device attendance), HRX-L3
+  (statutory leave) and HRX-L4 (loss of pay / EPFO NCP) remain **OPEN**.
+  The E21 policy is project-adopted; qualified legal ratification and the
+  production retention configuration remain pending.
+- Deferred, not executed: in-year expiry of carried leave
+  (`carried_expires_on` is recorded only, §23.8); a cancellation across two
+  closed years is refused (`LEAVE_CANCELLATION_CLOSE_CHAIN`, §23.9).
+
+### 27.9 HRX.6 as built
+- **Migration** `2026_11_23_090000_add_hrx_evidence_retention`: the two
+  functions and the lock helper; grants as above. `down()` drops the
+  mechanism only (no column, marker or privilege to restore).
+- **Code:** `RetentionExpiry::hrxEmployeeEvidence()` with the two refusal
+  constants; the two participants; `PruneEmployeeRecords` and
+  `EmployeeErasureAdapter` wiring; HR's dry run accepts cleared tables for
+  the Employee root as well; `RetentionMetrics` categories;
+  `DatabaseRoleVerifier::RETENTION_FUNCTIONS`; `TenantRetentionCatalog`
+  `leave_evidence` and `staff_attendance_evidence` → **adopted** (no
+  `mechanism_pending` category remains).
+- **Tests:** `HrxEvidenceRetentionTest`, `HrxRetentionGuardTest`,
+  `HrxRetentionConcurrencyTest` (two real processes),
+  `HrxPayrollRetentionIndependenceTest`; the classification and readiness
+  pins updated.

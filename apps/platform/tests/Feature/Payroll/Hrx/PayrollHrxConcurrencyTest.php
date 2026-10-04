@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\ForcesConcurrentOverlap;
+use Tests\Concerns\PurgesCommittedHrxFixtures;
 use Tests\Feature\Payroll\Hrx\Concerns\CreatesPayrollHrxFixtures;
 use Tests\TestCase;
 
@@ -27,7 +28,7 @@ use Tests\TestCase;
  */
 class PayrollHrxConcurrencyTest extends TestCase
 {
-    use CreatesPayrollHrxFixtures, ForcesConcurrentOverlap;
+    use CreatesPayrollHrxFixtures, ForcesConcurrentOverlap, PurgesCommittedHrxFixtures;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -35,28 +36,22 @@ class PayrollHrxConcurrencyTest extends TestCase
     /** @var list<School> */
     private array $schools = [];
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->snapshotDurableFixtures();
+    }
+
     protected function tearDown(): void
     {
-        // Committed evidence is append-only and RESTRICT: it goes with its School through the migration role in replica mode (test database only).
-        // The ad hoc capability roles go too -- a payroll capability left on a committed role would leak into global role checks.
-        $admin = DB::connection('pgsql_admin');
-        foreach ($this->schools as $school) {
-            $users = $admin->table('school_memberships')->where('school_id', $school->id)->pluck('user_id')->all();
-            $roles = $admin->table('membership_role_assignments as a')->join('roles as r', 'r.id', '=', 'a.role_id')
-                ->where('a.school_id', $school->id)->where('r.key', 'like', 'test.capability_grant.%')->distinct()->pluck('r.id')->all();
-            $admin->transaction(function () use ($admin, $school, $users, $roles) {
-                $admin->statement("SET LOCAL session_replication_role = 'replica'");
-                foreach ($admin->select("SELECT c.table_name FROM information_schema.columns c JOIN pg_class t ON t.relname = c.table_name AND t.relkind = 'r' AND t.relnamespace = 'public'::regnamespace WHERE c.table_schema = 'public' AND c.column_name = 'school_id'") as $row) {
-                    $admin->table($row->table_name)->where('school_id', $school->id)->delete();
-                }
-                $admin->table('schools')->where('id', $school->id)->delete();
-                $admin->table('role_capabilities')->whereIn('role_id', $roles)->delete();
-                $admin->table('roles')->whereIn('id', $roles)->delete();
-                $admin->table('users')->whereIn('id', $users)->delete();
-            });
+        // Committed evidence is append-only and RESTRICT: it goes with its School, the test's Users
+        // and its ad hoc capability roles (HRX.6: hermetic; never the canonical seed's).
+        $this->purgeCommittedHrxSchools($this->schools);
+        try {
+            $this->assertDurableFixturesRestored();
+        } finally {
+            parent::tearDown();
         }
-
-        parent::tearDown();
     }
 
     private function payroll(string ...$args): array

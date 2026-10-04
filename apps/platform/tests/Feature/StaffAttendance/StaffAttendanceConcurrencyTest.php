@@ -7,6 +7,7 @@ use App\Models\School;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ForcesConcurrentOverlap;
+use Tests\Concerns\PurgesCommittedHrxFixtures;
 use Tests\Feature\StaffAttendance\Concerns\CreatesStaffAttendanceFixtures;
 use Tests\TestCase;
 
@@ -22,7 +23,7 @@ use Tests\TestCase;
  */
 class StaffAttendanceConcurrencyTest extends TestCase
 {
-    use CreatesStaffAttendanceFixtures, ForcesConcurrentOverlap;
+    use CreatesStaffAttendanceFixtures, ForcesConcurrentOverlap, PurgesCommittedHrxFixtures;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -30,23 +31,22 @@ class StaffAttendanceConcurrencyTest extends TestCase
     /** @var list<School> */
     private array $schools = [];
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->snapshotDurableFixtures();
+    }
+
     protected function tearDown(): void
     {
-        // Committed evidence is append-only and RESTRICT: it goes with its School through the migration role in replica mode (test database only).
-        $admin = DB::connection('pgsql_admin');
-        foreach ($this->schools as $school) {
-            $users = $admin->table('school_memberships')->where('school_id', $school->id)->pluck('user_id')->all();
-            $admin->transaction(function () use ($admin, $school, $users) {
-                $admin->statement("SET LOCAL session_replication_role = 'replica'");
-                foreach ($admin->select("SELECT c.table_name FROM information_schema.columns c JOIN pg_class t ON t.relname = c.table_name AND t.relkind = 'r' AND t.relnamespace = 'public'::regnamespace WHERE c.table_schema = 'public' AND c.column_name = 'school_id'") as $row) {
-                    $admin->table($row->table_name)->where('school_id', $school->id)->delete();
-                }
-                $admin->table('schools')->where('id', $school->id)->delete();
-                $admin->table('users')->whereIn('id', $users)->delete();
-            });
+        // Committed evidence is append-only and RESTRICT: it goes with its School, the test's Users
+        // and its ad hoc capability roles (HRX.6: hermetic; never the canonical seed's).
+        $this->purgeCommittedHrxSchools($this->schools);
+        try {
+            $this->assertDurableFixturesRestored();
+        } finally {
+            parent::tearDown();
         }
-
-        parent::tearDown();
     }
 
     private function attendance(string ...$args): array

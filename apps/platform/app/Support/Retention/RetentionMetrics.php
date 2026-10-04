@@ -87,6 +87,11 @@ final class RetentionMetrics
 
     public const PAYROLL_RUN = 'payroll_run';
 
+    /** HRX.6 (E21-D9): one Employee's Leave / Staff Attendance evidence (units: Employees). */
+    public const LEAVE_EVIDENCE = 'leave_evidence';
+
+    public const STAFF_ATTENDANCE_EVIDENCE = 'staff_attendance_evidence';
+
     /** E21.3A2 (E21-D8): settled Finance units of periods closed >= 8 years ago. */
     public const FINANCE_UNIT = 'finance_unit';
 
@@ -139,6 +144,9 @@ final class RetentionMetrics
         // E21.3F: payroll evidence is D9 employment evidence; no new family.
         self::PAYROLL_EVIDENCE => 'employee',
         self::PAYROLL_RUN => 'employee',
+        // HRX.6: Leave and Staff Attendance evidence is D9 employment evidence; no new family.
+        self::LEAVE_EVIDENCE => 'employee',
+        self::STAFF_ATTENDANCE_EVIDENCE => 'employee',
         self::FINANCE_UNIT => 'finance',
     ];
 

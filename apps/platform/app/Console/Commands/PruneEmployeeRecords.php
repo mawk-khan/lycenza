@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Domain\HR\Application\Retention\EmployeeRecordRetentionService;
+use App\Domain\Leave\Application\Retention\LeaveEvidenceRetentionService;
 use App\Domain\Payroll\Application\Retention\PayrollEmployeeRetentionService;
+use App\Domain\StaffAttendance\Application\Retention\StaffAttendanceEvidenceRetentionService;
 use App\Models\School;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Retention\RetentionHolds;
@@ -26,8 +28,10 @@ use InvalidArgumentException;
  *   emergency contacts, notes, qualifications, experience and
  *   certifications (HR);
  * - EVIDENCE, EMPLOYEE_EVIDENCE_RETENTION_YEARS (adopted: 8): Payroll's
- *   compensation and statutory rows (Payroll), then the Employee with its
- *   employment records, assignments, personal details and Documents (HR).
+ *   compensation and statutory rows (Payroll), then the Employee's Leave
+ *   evidence (Leave) and Staff Attendance evidence (StaffAttendance; HRX.6),
+ *   then the Employee with its employment records, assignments, personal
+ *   details and Documents (HR).
  *   It runs only when no other retained row references the Employee.
  *   Posted payroll results are not deleted here: they have their own D9
  *   expiry (`platform:payroll-retention-prune`, E21.3F), and this command
@@ -52,6 +56,8 @@ class PruneEmployeeRecords extends Command
     public function handle(
         EmployeeRecordRetentionService $records,
         PayrollEmployeeRetentionService $payroll,
+        LeaveEvidenceRetentionService $leave,
+        StaffAttendanceEvidenceRetentionService $attendance,
         RetentionHolds $holds,
         MetricsRecorder $metrics,
     ): int {
@@ -90,9 +96,13 @@ class PruneEmployeeRecords extends Command
         $dryRun = (bool) $this->option('dry-run');
         $batch = max(1, (int) config('retention.batch_size'));
         $zero = ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
-        $totals = array_fill_keys([RetentionMetrics::EMPLOYEE_ANCILLARY, RetentionMetrics::PAYROLL_EMPLOYEE_RECORD, RetentionMetrics::EMPLOYEE_EVIDENCE], $zero);
+        $totals = array_fill_keys([
+            RetentionMetrics::EMPLOYEE_ANCILLARY, RetentionMetrics::PAYROLL_EMPLOYEE_RECORD,
+            RetentionMetrics::LEAVE_EVIDENCE, RetentionMetrics::STAFF_ATTENDANCE_EVIDENCE, RetentionMetrics::EMPLOYEE_EVIDENCE,
+        ], $zero);
+        $clearedFirst = [...PayrollEmployeeRetentionService::TABLES, ...LeaveEvidenceRetentionService::TABLES, ...StaffAttendanceEvidenceRetentionService::TABLES];
 
-        School::query()->orderBy('id')->chunk(100, function ($schools) use ($records, $payroll, $holds, $ancillaryYears, $evidenceYears, $dryRun, $batch, &$totals): void {
+        School::query()->orderBy('id')->chunk(100, function ($schools) use ($records, $payroll, $leave, $attendance, $holds, $ancillaryYears, $evidenceYears, $dryRun, $batch, $clearedFirst, &$totals): void {
             foreach ($schools as $school) {
                 $held = $holds->isHeld($school->id);
                 $today = CarbonImmutable::now(SchoolTimezone::resolve($school));
@@ -106,7 +116,9 @@ class PruneEmployeeRecords extends Command
                 if ($evidenceYears !== null) {
                     $cutoff = $today->subYearsNoOverflow($evidenceYears)->toDateString();
                     $this->add($totals[RetentionMetrics::PAYROLL_EMPLOYEE_RECORD], $payroll->prune($school, $cutoff, $batch, $count), $held);
-                    $this->add($totals[RetentionMetrics::EMPLOYEE_EVIDENCE], $records->pruneEvidence($school, $cutoff, $batch, $count, PayrollEmployeeRetentionService::TABLES), $held);
+                    $this->add($totals[RetentionMetrics::LEAVE_EVIDENCE], $leave->prune($school, $cutoff, $batch, $count), $held);
+                    $this->add($totals[RetentionMetrics::STAFF_ATTENDANCE_EVIDENCE], $attendance->prune($school, $cutoff, $batch, $count), $held);
+                    $this->add($totals[RetentionMetrics::EMPLOYEE_EVIDENCE], $records->pruneEvidence($school, $cutoff, $batch, $count, $clearedFirst), $held);
                 }
             }
         });
@@ -126,7 +138,10 @@ class PruneEmployeeRecords extends Command
         if ($evidenceYears !== null) {
             $p = $totals[RetentionMetrics::PAYROLL_EMPLOYEE_RECORD];
             $e = $totals[RetentionMetrics::EMPLOYEE_EVIDENCE];
+            $l = $totals[RetentionMetrics::LEAVE_EVIDENCE];
+            $s = $totals[RetentionMetrics::STAFF_ATTENDANCE_EVIDENCE];
             $this->info("{$verb} payroll records of {$this->n($p, $dryRun)} Employee(s) and the employment evidence of {$this->n($e, $dryRun)} Employee(s) (unresolved separation: {$e['unresolved']}, dependency-blocked: ".($p['dependency_blocked'] + $e['dependency_blocked']).', held: '.$e['held'].', errors: '.($p['errors'] + $e['errors']).').');
+            $this->info("{$verb} leave evidence of {$this->n($l, $dryRun)} Employee(s) and staff attendance evidence of {$this->n($s, $dryRun)} Employee(s) (dependency-blocked: ".($l['dependency_blocked'] + $s['dependency_blocked']).', held: '.($l['held'] + $s['held']).', errors: '.($l['errors'] + $s['errors']).').');
         }
 
         return self::SUCCESS;

@@ -35,7 +35,10 @@ use Illuminate\Support\Facades\DB;
  *   Payroll's own compensation and
  *   statutory rows until Payroll's own purge removes them, TeachingAssignments
  *   (D6), Attendance sessions, timetable entries, LMS ownership,
- *   transport and visitor rows, and another Employee's assignment that
+ *   transport and visitor rows, Leave and Staff Attendance evidence (until
+ *   their own D9 participants remove it, HRX.6, earlier in the same run;
+ *   a leave decision this Employee made as another Employee's manager
+ *   stays with that request), and another Employee's assignment that
  *   names one of these assignments as its manager. Nothing is cascaded,
  *   so D6 and TCH history stay interpretable;
  * - a linked User blocks it. Retention never unlinks a User (that is D10,
@@ -137,7 +140,7 @@ final class EmployeeRecordRetentionService
             return 'users';
         }
 
-        $blocker = $this->references->first('employees', $schoolId, [$employeeId], self::EVIDENCE_HANDLED);
+        $blocker = $this->references->first('employees', $schoolId, [$employeeId], [...self::EVIDENCE_HANDLED, ...$cleared]);
         if ($blocker !== null) {
             return $blocker;
         }

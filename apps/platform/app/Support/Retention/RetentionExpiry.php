@@ -230,6 +230,36 @@ final class RetentionExpiry
         return $this->call('retention_expire_payroll_employee_evidence', [$school->id, $employeeId, $cutoffDate, $dryRun]);
     }
 
+    /** HRX.6: the database's "keep" refusals of the HRX functions -- the D9 Employee floor (shared with Payroll's), a row younger than the cutoff. */
+    public const REFUSED_EMPLOYEE_NOT_SEPARATED = 'retention_payroll_employee';
+
+    public const REFUSED_HRX_YOUNGER_ROW = 'retention_hrx_dependency';
+
+    /**
+     * HRX.6 (E21-D9): removes ONE Employee's Leave evidence (`leave`: policy
+     * assignments, ledger, requests with their days and decisions, close
+     * items and reconciliations) or Staff Attendance evidence
+     * (`staff_attendance`: records with their corrections) through its fixed
+     * function, which re-proves in the database: tenant context; the
+     * Employee locked and finally separated before a cutoff at least 8
+     * calendar years back; each employment's HRX lock held exclusively;
+     * every row of the unit written before the cutoff. School configuration
+     * and Payroll's HRX snapshots are never touched. Runs inside the
+     * caller's School context and unit transaction.
+     *
+     * @param  string  $cutoffDate  the School-local cutoff (Y-m-d)
+     */
+    public function hrxEmployeeEvidence(string $kind, School $school, string $employeeId, string $cutoffDate, bool $dryRun): int
+    {
+        $function = ['leave' => 'retention_expire_leave_employee_evidence', 'staff_attendance' => 'retention_expire_staff_attendance_employee_evidence'][$kind]
+            ?? throw new InvalidArgumentException("Not an HRX evidence kind: {$kind}");
+        if (! Str::isUuid($employeeId)) {
+            throw new InvalidArgumentException('Not a uuid.');
+        }
+
+        return $this->call($function, [$school->id, $employeeId, $cutoffDate, $dryRun]);
+    }
+
     /**
      * E21.3F (E21-D9 x E21-D8): removes ONE emptied regular payroll run with
      * its correction runs and their postings (payroll and statutory), which

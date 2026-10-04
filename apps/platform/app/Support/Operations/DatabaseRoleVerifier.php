@@ -84,6 +84,8 @@ class DatabaseRoleVerifier
         'retention_expire_api_client_credentials',
         // E21.3F (E21-D9): one Employee's posted payroll evidence, separation-floored; one emptied payroll run
         'retention_expire_payroll_employee_evidence', 'retention_expire_payroll_run',
+        // HRX.6 (E21-D9): one Employee's Leave / Staff Attendance evidence, separation-floored
+        'retention_expire_leave_employee_evidence', 'retention_expire_staff_attendance_employee_evidence',
     ];
 
     /**

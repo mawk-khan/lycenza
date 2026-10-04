@@ -3835,8 +3835,8 @@ ADR 0065 (HRX.0, docs only) is the contract for Leave and Staff Attendance.
   manager approval reads `employee_assignments.manager_assignment_id`
   fresh at decision time through HR; self-service resolves the actor only
   through `ActingEmployeeResolver`.
-- Leave and attendance rows are D9 employment evidence and will keep an
-  Employee until HRX.6's purge participant releases them.
+- Leave and attendance rows are D9 employment evidence. They keep an
+  Employee until their own purge participants (HRX.6) release them.
 - No medical detail, free-text reason or biometrics in v1 (legal gates
   HRX-L1/L2).
 
@@ -3875,8 +3875,8 @@ on it.
   any entry that would make it negative.
 - **Retention:**
   - assignments and the ledger are D9 employment evidence (`leave_evidence`,
-    purge participant HRX.6). Until then they keep the Employee
-    (`EmployeeRetentionClassificationTest`);
+    purged by Leave's own participant, HRX.6). Until then they keep the
+    Employee (`EmployeeRetentionClassificationTest`);
   - configuration is tenant lifetime.
 - **Excluded:** no medical detail, certificate, free-text reason or
   biometrics (HRX-L1/L2). Requests and approvals are HRX.2, Staff
@@ -3909,7 +3909,9 @@ authorize nothing on their own.
 - **Retention.** Leave requests, decisions, chargeable days and year-close
   items reference the EmploymentRecord and Employee with RESTRICT. A
   manager's decision also keeps the deciding manager's Employee. All of it
-  is D9 leave evidence until HRX.6 (`EmployeeRetentionClassificationTest`).
+  is D9 leave evidence, purged by Leave's participant (HRX.6); a decision
+  made as another Employee's manager stays with that request
+  (`EmployeeRetentionClassificationTest`).
 
 ## HRX.3 — Staff Attendance (implemented, 2026-10-03)
 
@@ -3941,8 +3943,9 @@ HR Application contracts, both authorizing nothing on their own.
   own-attendance reads), no Teacher path.
 - **Retention.** Both tables reference the EmploymentRecord (and the
   record the Employee) with RESTRICT. They are D9 staff attendance evidence
-  (`staff_attendance_evidence`) and keep the Employee until HRX.6's purge
-  participant (`EmployeeRetentionClassificationTest`).
+  (`staff_attendance_evidence`) and keep the Employee until Staff
+  Attendance's own purge participant (HRX.6) releases them
+  (`EmployeeRetentionClassificationTest`).
 
 ## HRX.4 — Staff Self-Service (implemented, 2026-10-04)
 
@@ -3974,3 +3977,27 @@ on neither HRX nor Payroll.
 
 HRX writers now also take the `hrx.staff_employment` lock (shared) after
 their HR rows, which leaves HR's own lock order untouched.
+
+## HRX.6 — Retention, readiness & closure (implemented, 2026-10-04)
+
+ADR 0065 §27; closure record `docs/modules/HRX-READINESS-AND-CLOSURE.md`.
+**HRX — Leave & Staff Attendance implementation published / closed;
+HRX.5 mechanism closed / legal activation gated** (HRX-L1–L4 open).
+
+- **D9 participants, not a second engine.** `platform:employee-retention-prune`
+  (evidence phase) now runs Payroll's per-employment rows, then
+  `LeaveEvidenceRetentionService`, then
+  `StaffAttendanceEvidenceRetentionService`, then HR's own evidence purge.
+  The reviewed Employee erasure case calls the same participants.
+- **The Employee root.** HR still keeps it while any HRX row references
+  the Employee (live FK catalog). Once the participants have removed the
+  Employee's own Leave and attendance evidence, HRX no longer blocks; any
+  other domain still does. A leave decision the Employee made as another
+  Employee's manager stays with that request and keeps the root until the
+  request itself expires.
+- **HR depends on no HRX module.** HR's dry run accepts the participants'
+  tables as "cleared first" for the Employee root too (conservative for
+  `leave_decisions`).
+- **Lock order unchanged for HR.** The purge locks the Employee and its
+  EmploymentRecords FOR UPDATE (the shared D9 floor), then each
+  employment's `hrx.staff_employment` lock exclusively.

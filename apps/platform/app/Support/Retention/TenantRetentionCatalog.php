@@ -20,8 +20,9 @@ namespace App\Support\Retention;
  *   since E21.3F: the last one (the D8 x D9 payroll ledger) is now adopted;
  * - `mechanism_pending`: a project period is adopted (E21.2G closure audit,
  *   pending ratification) but its expiry mechanism ships in a named follow-up
- *   checkpoint (E21.3B-E21.3F). The rows are kept until it does. Unused
- *   since E21.3F: every adopted period has its mechanism;
+ *   checkpoint (E21.3B-E21.3F; HRX.1-HRX.3 for Leave and Staff Attendance
+ *   evidence). The rows are kept until it does. Unused since HRX.6: every
+ *   adopted period has its mechanism;
  * - `policy_unresolved`: no adopted period;
  * - `tenant_lifetime`: School configuration that lives as long as the
  *   School itself. It goes only with a future authorized tenant purge.
@@ -137,11 +138,11 @@ final class TenantRetentionCatalog
         'leave_configuration' => [self::TENANT_LIFETIME, 'HRX.1 (ADR 0065 §18): leave settings and prospective start-month changes, materialized leave years, leave types and policies, the staff working calendar and allocation-run headers -- School configuration without per-Employee amounts', [
             'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_year_closes', 'leave_types', 'leave_policies', 'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs',
         ]],
-        'leave_evidence' => [self::MECHANISM_PENDING, 'HRX.1 (ADR 0065 §18): D9 employment evidence, 8 y after the Employee\'s final separation; kept with the Employee (they block its purge) until HRX.6 adds the D9 purge participant', [
+        'leave_evidence' => [self::ADOPTED, 'HRX.1 (ADR 0065 §18, §27): D9 employment evidence, 8 y after the Employee\'s final separation; one Employee\'s unit (assignments, ledger, requests with days and decisions, close items and reconciliations) expires through its narrow, separation-floored function in platform:employee-retention-prune before HR\'s purge (HRX.6, implemented); a decision made as another Employee\'s manager stays with that request', [
             'leave_policy_assignments', 'leave_ledger_entries', 'leave_requests', 'leave_request_days', 'leave_decisions',
             'leave_year_close_items', 'leave_year_close_reconciliations',
         ]],
-        'staff_attendance_evidence' => [self::MECHANISM_PENDING, 'HRX.3 (ADR 0065 §24.13): Staff Attendance records and their append-only corrections -- D9 employment evidence, 8 y after the Employee\'s final separation; kept with the Employee (they block its purge) until HRX.6 adds the D9 purge participant', [
+        'staff_attendance_evidence' => [self::ADOPTED, 'HRX.3 (ADR 0065 §24.13, §27): Staff Attendance records and their append-only corrections -- D9 employment evidence, 8 y after the Employee\'s final separation; a record with its whole correction history expires through its narrow, separation-floored function in platform:employee-retention-prune before HR\'s purge (HRX.6, implemented)', [
             'staff_attendance_records', 'staff_attendance_corrections',
         ]],
         'student_operational_modules' => [self::ADOPTED, 'E21.2G O1: D7 operational history, 7 y after the Student\'s final exit; returned loans and ended assignments expire through platform:student-retention-prune (E21.3B, implemented); an open loan or assignment keeps the Student', [

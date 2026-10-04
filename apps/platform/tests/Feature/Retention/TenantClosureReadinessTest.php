@@ -188,21 +188,19 @@ class TenantClosureReadinessTest extends TestCase
             $this->assertArrayHasKey($table, $tables, "{$table} is not a classified tenant table");
             $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$tables[$table]][0], $table);
         }
-        foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
-            // HRX.1 (ADR 0065 §18): new HRX evidence names its own scheduled purge checkpoint.
-            if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
-                $this->assertContains($category, ['leave_evidence', 'staff_attendance_evidence'], "{$category} still waits for a mechanism");
-                $this->assertStringContainsString('HRX.6', $decision);
-
-                continue;
-            }
+        foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status]) {
+            // HRX.6: Leave and Staff Attendance evidence, the last pending mechanisms, are implemented.
+            $this->assertNotSame(TenantRetentionCatalog::MECHANISM_PENDING, $status, "{$category} still waits for a mechanism");
             $this->assertNotSame(TenantRetentionCatalog::TECHNICAL_BLOCKER, $status, "{$category} is still a technical blocker");
+        }
+        foreach (['leave_evidence', 'staff_attendance_evidence'] as $category) {
+            $this->assertStringContainsString('HRX.6, implemented', TenantRetentionCatalog::CATEGORIES[$category][1]);
         }
         foreach (['guardians', 'admissions', 'communication_consent', 'identity_subject_links', 'processing_authorizations', 'student_operational_modules', 'academic_operations', 'communications', 'api_credentials', 'operational_logs', 'payroll_ledger'] as $category) {
             $this->assertSame(TenantRetentionCatalog::ADOPTED, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
         // Tenant lifetime by decision, never age-pruned: memberships, membership preferences, Inventory, notifications, academic configuration, payroll periods.
-        foreach (['identity', 'communication_configuration', 'inventory_history', 'notifications', 'academic_configuration', 'payroll_calendar'] as $category) {
+        foreach (['identity', 'communication_configuration', 'inventory_history', 'notifications', 'academic_configuration', 'payroll_calendar', 'leave_configuration'] as $category) {
             $this->assertSame(TenantRetentionCatalog::TENANT_LIFETIME, TenantRetentionCatalog::CATEGORIES[$category][0], $category);
         }
         $this->assertStringContainsString('D9 x D8 (E21.3F, implemented)', TenantRetentionCatalog::CATEGORIES['payroll_ledger'][1]);
@@ -218,8 +216,8 @@ class TenantClosureReadinessTest extends TestCase
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
             $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
             $this->assertNotSame('', trim($decision), "{$category} has no decision text");
-            if ($status === TenantRetentionCatalog::MECHANISM_PENDING && ! in_array($category, ['leave_evidence', 'staff_attendance_evidence'], true)) {
-                $this->fail("{$category}: E21.3E implemented the last pending E21 mechanism; only HRX evidence (HRX.6) may wait");
+            if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {
+                $this->fail("{$category}: HRX.6 implemented the last pending mechanism (Leave and Staff Attendance evidence)");
             }
             if ($status === TenantRetentionCatalog::TECHNICAL_BLOCKER) {
                 $this->fail("{$category}: E21.3F resolved the last technical blocker (the D8 x D9 payroll ledger)");

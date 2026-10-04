@@ -3,7 +3,9 @@
 namespace Tests\Feature\Retention;
 
 use App\Domain\HR\Application\Retention\EmployeeRecordRetentionService;
+use App\Domain\Leave\Application\Retention\LeaveEvidenceRetentionService;
 use App\Domain\Payroll\Application\Retention\PayrollEmployeeRetentionService;
+use App\Domain\StaffAttendance\Application\Retention\StaffAttendanceEvidenceRetentionService;
 use App\Support\Retention\ReferencingRows;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -38,9 +40,9 @@ class EmployeeRetentionClassificationTest extends TestCase
             'assignments' => 'retained, blocks: LMS owner until the resource expires (A1 + D6 minimum, E21.3D)',
             'transport_route_assignments' => 'retained, blocks: until the driver assignment itself expires (O2, E21.3E: 7 y after ends_on)',
             'visitor_visits' => 'retained, blocks: as host until the visit itself expires (O3, E21.3E: 1 y after checkout)',
-            'leave_requests' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
-            'leave_decisions' => 'retained, blocks: D9 leave evidence -- as requester, and as the deciding manager -- until HRX.6 (ADR 0065 §23.13)',
-            'staff_attendance_records' => 'retained, blocks: D9 staff attendance evidence until HRX.6 adds its purge participant (ADR 0065 §24.13)',
+            'leave_requests' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
+            'leave_decisions' => 'retained, blocks: as the deciding MANAGER of another Employee\'s request, until that request\'s own D9 expiry (its own decisions go with its requests, HRX.6, ADR 0065 §27)',
+            'staff_attendance_records' => 'D9 evidence (8 y): Staff Attendance, purged by Staff Attendance first (HRX.6, ADR 0065 §27)',
         ],
         'employment_records' => [
             'employee_assignments' => 'D9 evidence (8 y): employment history, purged with the Employee',
@@ -52,11 +54,11 @@ class EmployeeRetentionClassificationTest extends TestCase
             'payroll_run_results' => 'retained, blocks: posted payroll evidence until its D9 expiry (E21.3F)',
             'payroll_adjustments' => 'retained, blocks: posted payroll evidence until its D9 expiry (E21.3F)',
             'payroll_lwf_annual_charges' => 'retained, blocks: posted payroll evidence until its D9 expiry (E21.3F)',
-            'leave_policy_assignments' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §18)',
-            'leave_ledger_entries' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §18)',
-            'leave_requests' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
-            'leave_year_close_items' => 'retained, blocks: D9 leave evidence until HRX.6 adds its purge participant (ADR 0065 §23.13)',
-            'staff_attendance_records' => 'retained, blocks: D9 staff attendance evidence (corrections follow their record) until HRX.6 (ADR 0065 §24.13)',
+            'leave_policy_assignments' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
+            'leave_ledger_entries' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
+            'leave_requests' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
+            'leave_year_close_items' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
+            'staff_attendance_records' => 'D9 evidence (8 y): Staff Attendance, purged by Staff Attendance first, corrections with their record (HRX.6, ADR 0065 §27)',
         ],
         'employee_assignments' => [
             'employee_assignments' => 'retained, blocks: another Employee names it as manager (ON DELETE SET NULL would rewrite their history)',
@@ -110,5 +112,14 @@ class EmployeeRetentionClassificationTest extends TestCase
         $tables = PayrollEmployeeRetentionService::TABLES;
         sort($tables);
         $this->assertSame($tables, $payroll);
+
+        // HRX.6: every HRX table that references the Employee or an employment is purged by its own participant first.
+        foreach (['Leave' => LeaveEvidenceRetentionService::TABLES, 'Staff Attendance' => StaffAttendanceEvidenceRetentionService::TABLES] as $module => $own) {
+            foreach (['employees', 'employment_records'] as $parent) {
+                foreach (array_keys(array_filter(self::CLASSIFICATION[$parent], fn (string $t) => str_contains($t, "purged by {$module} first"))) as $table) {
+                    $this->assertContains($table, $own, "{$table} is purged by {$module}'s participant");
+                }
+            }
+        }
     }
 }

@@ -613,17 +613,26 @@ The checkpoints are listed in §5.
       `leave_ledger_entries`, HRX.1; `leave_requests`, `leave_request_days`,
       `leave_decisions`, `leave_year_close_items`,
       `leave_year_close_reconciliations`, HRX.2; ADR 0065 §18/§22/§23.13).
-      A manager's decision also keeps the deciding manager's Employee. This is D9
-      employment evidence; its expiry mechanism is pending
-      (`leave_evidence`, `MECHANISM_PENDING`) until HRX.6 adds the purge
-      participant. Until then a leave-holding Employee is
-      `dependency_blocked` (kept). Leave configuration is tenant lifetime.
+      This is D9 employment evidence (`leave_evidence`, **adopted; HRX.6
+      implemented**): Leave's own participant expires one Employee's unit
+      8 y after final separation, earlier in the same
+      `platform:employee-retention-prune` run, through
+      `retention_expire_leave_employee_evidence` (tenant, the D9 Employee
+      floor, the HRX locks, every row older than the cutoff; leaves first,
+      causally complete). A decision made as another Employee's MANAGER
+      belongs to that Employee's request: it stays, and keeps the deciding
+      manager's Employee until that request itself expires. Leave
+      configuration is tenant lifetime.
     - HRX staff attendance evidence (`staff_attendance_records`,
       `staff_attendance_corrections`, HRX.3; ADR 0065 §24.13). The same D9
-      period (8 y after final separation); its expiry mechanism is pending
-      (`staff_attendance_evidence`, `MECHANISM_PENDING`) until HRX.6. Until
-      then an Employee with attendance evidence is `dependency_blocked`
-      (kept).
+      period (8 y after final separation), **adopted; HRX.6 implemented**:
+      `retention_expire_staff_attendance_employee_evidence` removes each
+      record with its whole correction history, in the same run, before
+      HR's purge. A row written less than the period ago (a late
+      correction or cancellation) is new evidence and keeps its unit
+      (`dependency_blocked`). Payroll's `payroll_run_hrx_inputs` snapshot
+      is Payroll evidence: it references no HRX row and leaves only with
+      its payroll result (E21.3F).
   - **A linked User blocks it.** Retention never unlinks a User (D10,
     E21.2F).
   - **Pinned:** the per-table classification is checked against the
